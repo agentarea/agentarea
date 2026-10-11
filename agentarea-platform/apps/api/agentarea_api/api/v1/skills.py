@@ -60,8 +60,10 @@ class SkillCreateRequest(BaseModel):
 
     content: str | None = Field(None, description="Raw markdown content")
     github_url: str | None = Field(None, description="GitHub repository URL")
-    name: str | None = Field(None, description="Optional name override")
-    description: str | None = Field(None, description="Optional description override")
+    name: str | None = Field(None, max_length=255, description="Optional name override")
+    description: str | None = Field(
+        None, max_length=1000, description="Optional description override"
+    )
 
     def model_post_init(self, __context) -> None:
         """Validate that exactly one source is provided."""
@@ -74,8 +76,8 @@ class SkillCreateRequest(BaseModel):
 class SkillUpdateRequest(BaseModel):
     """Request to update a skill."""
 
-    name: str | None = Field(None, description="New name")
-    description: str | None = Field(None, description="New description")
+    name: str | None = Field(None, min_length=1, max_length=255, description="New name")
+    description: str | None = Field(None, max_length=1000, description="New description")
     content: str | None = Field(None, description="New content (only for content-type skills)")
 
 
@@ -150,7 +152,12 @@ class SkillMemberAddRequest(BaseModel):
     """Request to add a child skill member."""
 
     child_skill_id: UUID = Field(..., description="ID of the child skill to add")
-    order: int = Field(0, description="Execution order hint")
+    order: int = Field(
+        0,
+        ge=-(2**31),
+        le=2**31 - 1,
+        description="Execution order hint (a 32-bit integer)",
+    )
     is_required: bool = Field(True, description="Whether this child is required")
     dependencies: list[str] = Field(
         default_factory=list,
@@ -232,8 +239,8 @@ async def create_skill(
 async def upload_skill(
     skill_service: SkillServiceDep,
     file: UploadFile = File(..., description="ZIP file containing the skill package"),
-    name: str | None = None,
-    description: str | None = None,
+    name: str | None = Query(None, max_length=255),
+    description: str | None = Query(None, max_length=1000),
 ):
     """Upload a skill package as a ZIP file."""
     if not file.filename or not file.filename.lower().endswith(".zip"):

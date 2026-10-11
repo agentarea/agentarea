@@ -65,6 +65,8 @@
           },
           "name": {
             "description": "Human-friendly label for this API key",
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -1821,6 +1823,7 @@
           "display_name": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -1841,6 +1844,7 @@
           },
           "name": {
             "description": "Stable package identifier (idempotency key).",
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -1911,6 +1915,7 @@
           "display_name": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -1931,6 +1936,7 @@
           },
           "name": {
             "description": "Stable package identifier (idempotency key).",
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -2003,6 +2009,7 @@
             "title": "Model"
           },
           "name": {
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -2170,6 +2177,7 @@
           },
           "name": {
             "description": "Instance display name created in the workspace.",
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -2372,6 +2380,7 @@
             "type": "string"
           },
           "name": {
+            "maxLength": 255,
             "minLength": 1,
             "title": "Name",
             "type": "string"
@@ -3190,6 +3199,8 @@
             "title": "Description"
           },
           "name": {
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
@@ -3289,6 +3300,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -3384,12 +3397,15 @@
           "email": {
             "anyOf": [
               {
+                "maxLength": 320,
+                "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
+            "description": "Address the invitation is for; omit for an open link anyone can accept",
             "title": "Email"
           },
           "expires_in_days": {
@@ -4397,6 +4413,36 @@
           "timeline"
         ],
         "title": "ExecutionTimelineResponse",
+        "type": "object"
+      },
+      "ExternalIdentityResponse": {
+        "properties": {
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "linked_at": {
+            "format": "date-time",
+            "title": "Linked At",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "external_id",
+          "linked_at"
+        ],
+        "title": "ExternalIdentityResponse",
         "type": "object"
       },
       "FailedTaskBlocker": {
@@ -10724,6 +10770,18 @@
       },
       "RestoredFileResponse": {
         "properties": {
+          "archived_current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trash path of the file that occupied `path` and was archived to make room for the restore; null when the path was free.",
+            "title": "Archived Current"
+          },
           "path": {
             "title": "Path",
             "type": "string"
@@ -11417,6 +11475,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
@@ -11441,6 +11500,7 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
                 "type": "string"
               },
               {
@@ -11531,7 +11591,9 @@
           },
           "order": {
             "default": 0,
-            "description": "Execution order hint",
+            "description": "Execution order hint (a 32-bit integer)",
+            "maximum": 2147483647.0,
+            "minimum": -2147483648.0,
             "title": "Order",
             "type": "integer"
           }
@@ -11709,6 +11771,7 @@
           "description": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "type": "string"
               },
               {
@@ -11721,6 +11784,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -13298,6 +13363,39 @@
           "created_at"
         ],
         "title": "TaskWithAgent",
+        "type": "object"
+      },
+      "TelegramLinkRequest": {
+        "properties": {
+          "bot": {
+            "description": "The bot to open the link in",
+            "pattern": "^[A-Za-z0-9_]{5,32}$",
+            "title": "Bot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bot"
+        ],
+        "title": "TelegramLinkRequest",
+        "type": "object"
+      },
+      "TelegramLinkResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_in"
+        ],
+        "title": "TelegramLinkResponse",
         "type": "object"
       },
       "TokenPolicy": {
@@ -15727,6 +15825,12 @@
             },
             "title": "Files",
             "type": "array"
+          },
+          "truncated": {
+            "default": false,
+            "description": "True when the workspace holds more than 10000 objects and only the first 10000 are listed.",
+            "title": "Truncated",
+            "type": "boolean"
           }
         },
         "required": [
@@ -17329,6 +17433,130 @@
         ]
       }
     },
+    "/v1/me/external-identities": {
+      "get": {
+        "operationId": "list_external_identities_v1_me_external_identities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalIdentityResponse"
+                  },
+                  "title": "Response List External Identities V1 Me External Identities Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List External Identities",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
+    "/v1/me/external-identities/telegram/link": {
+      "post": {
+        "description": "A deep link that offers the caller's account to whoever opens it in Telegram.",
+        "operationId": "start_telegram_link_v1_me_external_identities_telegram_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelegramLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelegramLinkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Telegram Link",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
+    "/v1/me/external-identities/{identity_id}": {
+      "delete": {
+        "operationId": "unlink_external_identity_v1_me_external_identities__identity_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "identity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Identity Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unlink External Identity",
+        "tags": [
+          "v1",
+          "protected",
+          "external-identities"
+        ]
+      }
+    },
     "/v1/pricing/currency": {
       "get": {
         "description": "Return the billing currency of this deployment.",
@@ -17622,7 +17850,7 @@
     },
     "/v1/workspaces/{workspace}/access-control/relationships": {
       "delete": {
-        "description": "Revoke a resource-ownership relation from the configured graph backend.",
+        "description": "Revoke a resource-ownership relation from the configured graph backend.\n\nIdempotent: revoking a grant that is already gone answers 204 without\ntouching the graph or the audit trail.",
         "operationId": "delete_relationship_v1_access_control_relationships_delete",
         "parameters": [
           {
@@ -17745,7 +17973,7 @@
         ]
       },
       "post": {
-        "description": "Grant a resource-ownership relation via the configured graph backend.",
+        "description": "Grant a resource-ownership relation via the configured graph backend.\n\nIdempotent: a grant the subject already holds (also under a legacy alias\nsuch as ``viewers`` for ``reader``) succeeds without changing the graph,\nand is not audited again.",
         "operationId": "create_relationship_v1_access_control_relationships_post",
         "parameters": [
           {
@@ -18510,7 +18738,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}/overview": {
       "get": {
-        "description": "Aggregate stats + upcoming work for one agent.",
+        "description": "Aggregate stats + upcoming work for one agent; 404 if it is not in the workspace.",
         "operationId": "get_agent_overview_v1_agents__agent_id__overview_get",
         "parameters": [
           {
@@ -22768,7 +22996,7 @@
     },
     "/v1/workspaces/{workspace}/files/restore/{file_path}": {
       "post": {
-        "description": "Move an archived file back to the path it was archived from.",
+        "description": "Move an archived file back to the path it was archived from.\n\nA file that has taken that path since is archived first, as a delete would,\nand its trash path comes back as ``archived_current`` \u2014 a restore never\ndestroys anything. A path a write could not take (a file among its parents,\na folder at it) is a 409.",
         "operationId": "restore_workspace_file_v1_files_restore__file_path__post",
         "parameters": [
           {
@@ -26095,6 +26323,8 @@
             "name": "user_id",
             "required": true,
             "schema": {
+              "maxLength": 255,
+              "minLength": 1,
               "title": "User Id",
               "type": "string"
             }
@@ -32741,6 +32971,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 255,
                   "type": "string"
                 },
                 {
@@ -32757,6 +32988,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 1000,
                   "type": "string"
                 },
                 {
@@ -33773,7 +34005,7 @@
     },
     "/v1/workspaces/{workspace}/streams/{stream_id}": {
       "delete": {
-        "description": "Refused (409) while a live webhook trigger's source feeds the stream.",
+        "description": "Delete a stream with its events, sources and subscriptions.\n\nRefused with 409 while a live webhook trigger's source feeds the stream,\nwhile a trigger subscribes to it (delete the trigger first), or while a\nforward of any stream writes into it (remove that forward first).",
         "operationId": "delete_stream_v1_streams__stream_id__delete",
         "parameters": [
           {
@@ -33924,6 +34156,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
                   "minimum": 0,
                   "type": "integer"
                 },
@@ -33943,6 +34176,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maximum": 9223372036854775807,
                   "minimum": 1,
                   "type": "integer"
                 },
@@ -34021,6 +34255,8 @@
             "name": "sequence",
             "required": true,
             "schema": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
               "title": "Sequence",
               "type": "integer"
             }
@@ -34413,6 +34649,73 @@
           }
         ],
         "summary": "List Subscriptions",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}": {
+      "delete": {
+        "description": "Remove a forward. The caller must be able to edit every output stream, as to create it.\n\nA trigger's subscription is refused with 409: it goes when the trigger is deleted.",
+        "operationId": "delete_forward_v1_streams__stream_id__subscriptions__subscription_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Forward",
         "tags": [
           "v1",
           "protected",
@@ -35511,7 +35814,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle, except\nthe Telegram secret token, which is kept. A channel webhook is registered\nwith its provider before anything is saved; if the provider refuses, the\ncall fails with 502 and nothing changes.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails.",
+        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle, except\nthe Telegram secret token, which is kept. A channel webhook is registered\nwith its provider before anything is saved; if the provider refuses, the\ncall fails with 502 and nothing changes.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails; 409 if the\n        update changes the filter of a trigger that has no stream\n        subscription left.",
         "operationId": "update_trigger_v1_triggers__trigger_id__put",
         "parameters": [
           {

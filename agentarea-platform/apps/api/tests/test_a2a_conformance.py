@@ -34,7 +34,13 @@ from a2a.types import (
     TaskPushNotificationConfig,
     TaskState,
 )
-from a2a.utils.errors import TaskNotCancelableError, TaskNotFoundError, UnsupportedOperationError
+from a2a.utils.errors import (
+    InternalError,
+    TaskNotCancelableError,
+    TaskNotFoundError,
+    UnsupportedOperationError,
+)
+from a2a.utils.task import encode_page_token
 from agentarea_api.api.deps.services import (
     get_agent_service,
     get_secret_manager,
@@ -46,6 +52,7 @@ from agentarea_common.auth.dependencies import get_optional_principal
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_STARTED
 from agentarea_common.events.task_stream import TaskEventEnvelope
+from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.domain.models import AgentTask
 from fastapi import FastAPI, Request
 from google.protobuf.json_format import MessageToDict
@@ -469,6 +476,68 @@ async def test_list_tasks_pages_through_this_agents_tasks(client, services):
     )
     assert len(second.tasks) == 1
     assert second.next_page_token == ""
+
+
+async def _rpc(app: FastAPI, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    body = {"jsonrpc": "2.0", "id": "1", "method": method, "params": params}
+    response = await _http(app, MEMBER_BEARER).post(
+        f"{AGENT_BASE}/a2a/rpc", json=body, headers={"A2A-Version": "1.0"}
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cursor", ["999999999999999999999999", "\u00b2", "-1", "1 "])
+async def test_list_tasks_refuses_a_page_token_we_never_issued(app, services, cursor):
+    services.tasks.get_agent_tasks = AsyncMock(side_effect=AssertionError("not queried"))
+
+    reply = await _rpc(app, "ListTasks", {"pageToken": encode_page_token(cursor)})
+
+    assert reply["error"]["code"] == -32602
+    assert reply["error"]["message"] == "Invalid page token"
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_failure_does_not_reach_the_caller(app, services):
+    leak = 'value out of int64 range [SQL: SELECT * FROM tasks OFFSET $1] [parameters: ("ws-acme",)]'
+    services.tasks.get_agent_tasks = AsyncMock(side_effect=RuntimeError(leak))
+
+    reply = await _rpc(app, "ListTasks", {})
+
+    assert (reply["error"]["code"], reply["error"]["message"]) == (-32603, "Internal error")
+    assert "SQL" not in str(reply)
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_failure_mid_stream_does_not_reach_the_caller(app, services):
+    services.tasks.submit_task = AsyncMock(side_effect=RuntimeError("SELECT secret FROM vault"))
+
+    with pytest.raises(InternalError) as raised:
+        await _send_one_via(app, _send("hello"))
+
+    assert raised.value.message == "Internal error"
+
+
+async def _send_one_via(app: FastAPI, request: SendMessageRequest):
+    http = _http(app, MEMBER_BEARER)
+    card = await A2ACardResolver(http, AGENT_BASE).get_agent_card()
+    async with ClientFactory(ClientConfig(httpx_client=http, streaming=True)).create(card) as c:
+        return [r async for r in c.send_message(request)]
+
+
+@pytest.mark.asyncio
+async def test_send_message_to_an_agent_without_a_model_is_invalid_params(app, services):
+    services.tasks.submit_task = AsyncMock(side_effect=AgentModelNotConfiguredError(AGENT_ID))
+
+    reply = await _rpc(
+        app,
+        "SendMessage",
+        {"message": {"messageId": "m1", "role": "ROLE_USER", "parts": [{"text": "hi"}]}},
+    )
+
+    assert reply["error"]["code"] == -32602
+    assert "no model configured" in reply["error"]["message"]
 
 
 @pytest.mark.asyncio

@@ -15,6 +15,7 @@ import {
   FolderUp,
   Upload,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState/EmptyState";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -105,6 +106,7 @@ export function FileBrowser({
   onNewFolder,
   onBrowseFiles,
   onBrowseFolder,
+  rootLabel,
   className,
 }: {
   files: BrowsedFile[];
@@ -130,6 +132,8 @@ export function FileBrowser({
   onNewFolder?: () => void;
   onBrowseFiles?: () => void;
   onBrowseFolder?: () => void;
+  /** What the files are, above the tree; the workspace by default. */
+  rootLabel?: string;
   className?: string;
 }) {
   const t = useTranslations("FilesPage");
@@ -161,6 +165,10 @@ export function FileBrowser({
     )
     .map((node) => ({ ...node, id: node.path }));
   const folderName = folder.split("/").filter(Boolean).at(-1) || t("allFiles");
+  // Decided over the whole listing rather than the folder on screen, so the
+  // table keeps its columns while moving between folders.
+  const hasDates = files.some((file) => Boolean(file.last_modified));
+  const hasSizes = files.some((file) => typeof file.size === "number");
   const canCreate = Boolean(onNewFolder);
   // An empty writable folder turns its whole area into the upload affordance.
   // It then owns the drag feedback, so the pane-wide overlay stands down
@@ -191,7 +199,10 @@ export function FileBrowser({
 
   return (
     <div
-      className={cn("flex h-full min-h-0 min-w-0 flex-col bg-background", className)}
+      className={cn(
+        "flex h-full min-h-0 min-w-0 flex-col bg-background",
+        className
+      )}
       aria-label={t("fileManager")}
     >
       {(title || actions) && (
@@ -218,7 +229,7 @@ export function FileBrowser({
           >
             <div className="flex items-center justify-between gap-1 pb-1 pl-2 pr-1 pt-1">
               <span className="text-xs text-muted-foreground">
-                {t("workspace")}
+                {rootLabel ?? t("workspace")}
               </span>
               {canCreate && (
                 <TooltipProvider>
@@ -341,16 +352,20 @@ export function FileBrowser({
                     </div>
                   )}
                 {error ? (
-                  <div
-                    role="alert"
-                    className="flex flex-wrap items-center gap-3 rounded border border-destructive/30 p-4 text-sm"
-                  >
-                    <span>{error}</span>
-                    {onRetry && (
-                      <Button variant="outline" size="sm" onClick={onRetry}>
-                        {t("retry")}
-                      </Button>
-                    )}
+                  // The same empty state as an empty folder, so a failed
+                  // listing reads as the folder's state rather than a banner.
+                  <div role="alert">
+                    <EmptyState
+                      icons={[FolderOpen]}
+                      title={t("listLoadFailed")}
+                      description={error}
+                      className="border-0 bg-transparent py-12 shadow-none"
+                      action={
+                        onRetry
+                          ? { label: t("retry"), onClick: onRetry }
+                          : undefined
+                      }
+                    />
                   </div>
                 ) : (
                   <FolderTable
@@ -367,6 +382,8 @@ export function FileBrowser({
                     showUploadZone={showUploadZone}
                     isDragging={dnd.isDragging}
                     emptyMessage={folder ? undefined : emptyMessage}
+                    showModified={hasDates}
+                    showSize={hasSizes}
                   />
                 )}
               </section>
@@ -398,7 +415,6 @@ export function FileBrowser({
                       fetchUrl={fetchUrl}
                       fetchHistory={fetchHistory}
                       onDelete={onDelete}
-                      onClose={() => setTabs(closeTab(tabs, path))}
                     />
                   )}
                 </TabsContent>

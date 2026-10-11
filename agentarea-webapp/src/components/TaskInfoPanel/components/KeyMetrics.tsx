@@ -5,6 +5,9 @@ import Section from "./Section";
 
 interface KeyMetricsProps {
   currentStatus: string;
+  /** Whether the run itself is working, waiting or done; the task status
+   * says how it went, this says what it is doing now. */
+  executionStatus?: string | null;
   isActive: boolean;
   executionTime: string;
   formattedStart: string;
@@ -13,12 +16,28 @@ interface KeyMetricsProps {
 
 export default function KeyMetrics({
   currentStatus,
+  executionStatus,
   isActive,
   executionTime,
   formattedStart,
   formattedEnd,
 }: KeyMetricsProps) {
   const t = useTranslations("TaskInfoPanel");
+  // Under the status, in words: what the run is doing. A completed task that
+  // waits is waiting for a follow-up; any other wait is for a reply.
+  const execution = !executionStatus
+    ? isActive
+      ? t("taskActive")
+      : t("taskNotRunning")
+    : executionStatus === "running"
+      ? t("execution.running")
+      : executionStatus === "waiting"
+        ? currentStatus === "completed"
+          ? t("execution.waitingFollowUp")
+          : t("execution.waitingInput")
+        : executionStatus === "finished"
+          ? t("execution.finished")
+          : t("execution.other", { status: executionStatus });
 
   return (
     <Section
@@ -32,9 +51,7 @@ export default function KeyMetrics({
         <div className="flex items-center gap-2">
           <TaskStatus status={currentStatus} />
         </div>
-        <div className="text-[10px] text-muted-foreground">
-          {isActive ? t("taskActive") : t("taskNotRunning")}
-        </div>
+        <div className="text-[10px] text-muted-foreground">{execution}</div>
       </div>
 
       <div className="space-y-1">

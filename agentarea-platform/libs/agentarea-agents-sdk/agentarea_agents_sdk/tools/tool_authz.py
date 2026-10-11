@@ -104,6 +104,33 @@ def requires_workspace_admin() -> Callable[[Any], Any]:
     return _enforcing({"action": "administer", "resource_type": "workspace"}, check)
 
 
+def requires_user_session(action: str) -> Callable[[Any], Any]:
+    """Refuse an API key: the tool hands out or takes away access.
+
+    The tool counterpart of ``route_authz.requires_user_session``. It narrows
+    the tool's own marker to callers that are not keys and declares none of
+    its own. ``action`` completes "An API key cannot ...".
+    """
+
+    def decorate(func: Any) -> Any:
+        @functools.wraps(func)
+        async def guarded(*args: Any, **kwargs: Any) -> Any:
+            from agentarea_common.auth.context import UserSessionRequiredError
+            from agentarea_common.auth.dependencies import ensure_user_session
+
+            from ..mcp_server.auth import get_mcp_user_context
+
+            try:
+                ensure_user_session(get_mcp_user_context(), action)
+            except UserSessionRequiredError as exc:
+                return json.dumps({"error": str(exc)})
+            return await func(*args, **kwargs)
+
+        return guarded
+
+    return decorate
+
+
 def enforced_in_handler(reason: str) -> Callable[[Any], Any]:
     """Declare that the body, or the service it calls, makes the decision.
 

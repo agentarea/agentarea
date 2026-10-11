@@ -10,6 +10,8 @@ are cleaned up per-endpoint.
 
 from __future__ import annotations
 
+import uuid
+
 import httpx
 import pytest
 import schemathesis
@@ -52,6 +54,13 @@ except (httpx.HTTPError, LoaderError) as exc:
 BaseWorkflow = _schema.as_state_machine()
 
 
+def _new_workspace() -> str:
+    """Create a workspace owned by the fuzz caller and return its slug."""
+    with httpx.Client(base_url=API_URL, headers=_CALLER.auth(), timeout=10.0) as client:
+        response = client.post("/v1/workspaces", json={"name": f"stateful {uuid.uuid4().hex[:8]}"})
+        return response.raise_for_status().json()["slug"]
+
+
 @settings(
     max_examples=20,
     stateful_step_count=6,
@@ -63,8 +72,18 @@ BaseWorkflow = _schema.as_state_machine()
     ],
 )
 class AgentareaWorkflow(BaseWorkflow):  # type: ignore[misc, valid-type]
+    def setup(self):  # type: ignore[override]
+        # Each scenario runs in a workspace of its own. Hypothesis replays the
+        # choices of earlier scenarios, and schemathesis files every response
+        # under its status code, so a replayed create must answer as it did the
+        # first time: in a shared workspace it meets what earlier scenarios
+        # left behind (a name taken, a stream held by a forward), answers 409
+        # instead of 201, and enables other rules, which Hypothesis rejects as
+        # FlakyStrategyDefinition.
+        self.workspace = _new_workspace()
+
     def before_call(self, case):  # type: ignore[override]
-        pin_workspace(case, _CALLER.slug)
+        pin_workspace(case, self.workspace)
 
     def get_call_kwargs(self, case):  # type: ignore[override]
         # The schema loader's headers only fetch the spec; each call carries its own.

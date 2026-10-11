@@ -14,6 +14,8 @@ from agentarea_streams.domain import SubscriptionKind
 from agentarea_streams.infrastructure.di_container import setup_streams_di
 from agentarea_streams.infrastructure.partitions import PartitionMaintainer
 from agentarea_streams.infrastructure.waker import RedisStreamWaker, RedisWakeListener
+from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
+from agentarea_triggers.channels.sender_admission import build_telegram_sender_admission
 from agentarea_triggers.stream_subscriber import ConfigurerAuthority, TriggerSubscriptionHandler
 
 
@@ -49,6 +51,16 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
         )
     waker = setup_streams_di(settings)
     session_factory = get_database().async_session_factory
+    authority = ConfigurerAuthority(
+        graph=get_workspace_membership_graph(),
+        permissions=resolve(PermissionService),
+    )
+    sender_admission = build_telegram_sender_admission(
+        may_run=authority.may_run,
+        secret_reader=LazySecretReader(dependencies.secret_manager_factory),
+        redis_url=settings.broker.REDIS_URL,
+        app_url=settings.app.APP_URL,
+    )
     dispatcher = StreamDispatcher(
         session_factory=session_factory,
         settings=settings.streams,
@@ -57,10 +69,8 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
                 event_broker=dependencies.event_broker,
                 secret_manager_factory=dependencies.secret_manager_factory,
                 workflow_executor=dependencies.workflow_executor,
-                authority=ConfigurerAuthority(
-                    graph=get_workspace_membership_graph(),
-                    permissions=resolve(PermissionService),
-                ),
+                authority=authority,
+                sender_admission=sender_admission,
             ),
             SubscriptionKind.FORWARD: ForwardHandler(settings.streams),
         },

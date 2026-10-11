@@ -2,102 +2,49 @@ import { getTranslations } from "next-intl/server";
 import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
-import OffsetPagination from "@/components/OffsetPagination";
-import {
-  getAllTasks,
-  listTriggerCatalog,
-  resolvePrincipals,
-  type TaskWithAgent,
-} from "@/lib/api";
-import { pageHref, pageWindow, takePage } from "@/lib/offsetPage";
-import { getTaskSource } from "@/lib/taskSource";
-import type { TaskStatusValue } from "@/lib/taskStatusFilter";
-import TasksList from "./TasksList";
-
-const TASKS_PAGE_SIZE = 50;
+import { listTriggerCatalog } from "@/lib/api";
+import { fetchTasksPage, type TasksQuery } from "../actions";
+import TasksInfiniteList from "./TasksInfiniteList";
 
 interface TasksDataProps {
-  searchQuery?: string;
-  /** tasks.created_by to narrow the list to, from the "Started by" cell's link. */
-  creator?: string;
-  statuses: TaskStatusValue[];
-  page: number;
-  searchParams: Record<string, string | string[] | undefined>;
+  query: TasksQuery;
   viewMode?: string;
 }
 
 export async function TasksData({
-  searchQuery = "",
-  creator = "",
-  statuses,
-  page,
-  searchParams,
+  query,
   viewMode = "table",
 }: TasksDataProps) {
   const t = await getTranslations("TasksPage");
   const tCommon = await getTranslations("Common");
 
-  let tasks: TaskWithAgent[] = [];
-  let hasNext = false;
-  let error: string | null = null;
   // The catalog names and draws the channel a task came from. Fetched here so
   // the listing never has to know which channels exist; an empty one only
   // costs the chip its artwork.
-  let catalog: TriggerCatalogEntry[] = [];
+  const [firstPage, catalogResponse] = await Promise.all([
+    fetchTasksPage(query, 1),
+    listTriggerCatalog().catch(() => null),
+  ]);
+  const catalog = (catalogResponse?.data ?? []) as TriggerCatalogEntry[];
 
-  try {
-    const [{ data: tasksData, error: tasksError }, catalogResponse] =
-      await Promise.all([
-        getAllTasks({
-          ...pageWindow(page, TASKS_PAGE_SIZE),
-          status: statuses.length > 0 ? statuses : undefined,
-          search: searchQuery.trim() || undefined,
-          created_by: creator.trim() || undefined,
-        }),
-        listTriggerCatalog(),
-      ]);
-    if (tasksError) {
-      error = t("error.loadFailedDescription");
-    } else {
-      ({ rows: tasks, hasNext } = takePage(tasksData || [], TASKS_PAGE_SIZE));
-    }
-    catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
-  } catch {
-    error = t("error.loadFailedDescription");
-  }
-
-  // Checked before the empty branches: a failed load also leaves `tasks`
-  // empty, and reporting that as "no tasks yet" hid every backend failure
-  // behind a new-workspace message.
-  if (error) {
+  // Checked before the empty branches: reporting a failed load as "no tasks
+  // yet" hid every backend failure behind a new-workspace message.
+  if (!firstPage) {
     return (
       <RetryEmptyState
         title={t("error.loadFailed")}
-        description={error}
+        description={t("error.loadFailedDescription")}
         iconsType="tasks"
       />
     );
   }
 
+  const searchQuery = query.search.trim();
   const filtered = Boolean(
-    searchQuery.trim() || creator.trim() || statuses.length > 0
+    searchQuery || query.creator.trim() || query.statuses.length > 0
   );
 
-  if (tasks.length === 0 && page > 1) {
-    return (
-      <EmptyState
-        title={t("noMatchingTasks")}
-        description={t("noTasksOnPageDescription")}
-        iconsType="tasks"
-        action={{
-          label: t("firstPage"),
-          href: pageHref("/tasks", searchParams, 1),
-        }}
-      />
-    );
-  }
-
-  if (tasks.length === 0 && !filtered) {
+  if (firstPage.tasks.length === 0 && !filtered) {
     return (
       <EmptyState
         title={t("noTasks")}
@@ -116,10 +63,10 @@ export async function TasksData({
     );
   }
 
-  if (tasks.length === 0) {
+  if (firstPage.tasks.length === 0) {
     // Filtering by creator without a search term would otherwise render
     // `No tasks match your search ""` -- a quoted empty string.
-    const description = searchQuery.trim()
+    const description = searchQuery
       ? t("noMatchingTasksDescription", { query: searchQuery })
       : t("noTasksByCreatorDescription");
     return (
@@ -132,44 +79,12 @@ export async function TasksData({
     );
   }
 
-  // Joined here rather than served alongside each task: only the rows actually
-  // being rendered need a name, and distinct principals are usually a handful
-  // even on a full page. An id the backend cannot resolve is absent from the
-  // map, and the cell renders it as unknown.
-  //
-  // Both kinds of principal a row can mention go in one batch: the task's own
-  // creator, and whatever its source points at — for a delegated task, the
-  // agent that delegated it.
-  const principals = await resolvePrincipals([
-    ...new Set(
-      tasks
-        .flatMap((task) => [
-          task.created_by,
-          getTaskSource(task.parameters ?? undefined).principalId,
-        ])
-        .filter((id): id is string => Boolean(id))
-    ),
-  ]);
-  const principalNames = Object.fromEntries(
-    (principals.data ?? [])
-      .filter((principal) => principal.display_name)
-      .map((principal) => [principal.id, principal.display_name as string])
-  );
-
   return (
-    <>
-      <TasksList
-        principalNames={principalNames}
-        initialTasks={tasks}
-        viewMode={viewMode}
-        catalog={catalog}
-      />
-      <OffsetPagination
-        path="/tasks"
-        page={page}
-        hasNext={hasNext}
-        searchParams={searchParams}
-      />
-    </>
+    <TasksInfiniteList
+      firstPage={firstPage}
+      query={query}
+      viewMode={viewMode}
+      catalog={catalog}
+    />
   );
 }

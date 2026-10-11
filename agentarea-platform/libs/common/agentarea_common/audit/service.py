@@ -106,6 +106,12 @@ class AuditService:
         event_metadata: dict[str, Any] | None,
     ) -> AuditEventORM:
         ctx = get_audit_context()
+        metadata = dict(event_metadata or {})
+        # A key acts as its creator, so the actor is that user either way; the
+        # key that did it is the one thing the actor alone cannot tell.
+        api_key_id = getattr(self._user_context, "api_key_id", None)
+        if isinstance(api_key_id, str):
+            metadata.setdefault("api_key_id", api_key_id)
         return AuditEventORM(
             actor_id=actor_id or self._user_context.user_id,
             actor_type=actor_type,
@@ -117,7 +123,7 @@ class AuditService:
             resource_type=resource_type,
             resource_id=str(resource_id) if resource_id else None,
             changes=changes,
-            event_metadata=event_metadata or {},
+            event_metadata=metadata,
         )
 
     async def _forward(self, event: AuditEventORM) -> None:

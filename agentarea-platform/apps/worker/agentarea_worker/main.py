@@ -348,6 +348,8 @@ class AgentAreaWorker:
         from agentarea_triggers.channels.inbound_subscriber import InboundMessageStreamConsumer
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
         from agentarea_triggers.channels.origin_guard import TriggerWorkspaceGuard
+        from agentarea_triggers.channels.sender_admission import build_telegram_sender_admission
+        from agentarea_triggers.stream_subscriber import ConfigurerAuthority
 
         settings = get_settings()
         redis_url = _redis_url(settings)
@@ -370,12 +372,26 @@ class AgentAreaWorker:
         )
 
         # Inbound: event-service webhook/polling → Redis Streams → Python task execution
+        from agentarea_common.auth.permission import PermissionService
+        from agentarea_common.di.container import resolve
+        from agentarea_common.workspaces import get_workspace_membership_graph
+
+        sender_admission = build_telegram_sender_admission(
+            may_run=ConfigurerAuthority(
+                graph=get_workspace_membership_graph(),
+                permissions=resolve(PermissionService),
+            ).may_run,
+            secret_reader=LazySecretReader(dependencies.secret_manager_factory),
+            redis_url=redis_url,
+            app_url=settings.app.APP_URL,
+        )
         self.inbound_subscriber = InboundMessageStreamConsumer(
             broker=self._broker,
             dedup=self._inbound_dedup,
             event_broker=dependencies.event_broker,
             secret_manager_factory=dependencies.secret_manager_factory,
             workflow_executor=dependencies.workflow_executor,
+            sender_admission=sender_admission,
             stream=delivery_cfg.IN_STREAM,
             group=delivery_cfg.IN_GROUP,
             dlq_stream=delivery_cfg.IN_DLQ,

@@ -142,13 +142,13 @@ async def test_generic_without_a_secret_still_skips_verification():
 
 
 @pytest.mark.asyncio
-async def test_telegram_has_no_signature_scheme_in_this_framework():
-    # Telegram validates via its own secret_token header, handled elsewhere;
-    # it carries no entry in SIGNING_SECRET_KEYS or VERIFIER_REGISTRY.
+async def test_telegram_without_a_secret_token_is_refused():
+    # The secret token is the only thing telling Telegram's requests from a
+    # forged update naming any sender; a bot without one is not answered.
     result = await verify_webhook_signature(
         "telegram", {}, {}, {}, BODY, _EMPTY_READER, _UNUSED_TRIGGER_ID
     )
-    assert result is None
+    assert result is False
 
 
 @pytest.mark.asyncio
@@ -394,7 +394,7 @@ class _BrokenSecretReader:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("webhook_type", ["telegram", "generic", "email"])
+@pytest.mark.parametrize("webhook_type", ["generic", "email"])
 async def test_unreadable_secret_store_rejects_instead_of_accepting_unsigned(webhook_type):
     # These types accept unsigned requests when no secret is configured. A
     # store that cannot answer is not "no secret": treating it as one would
@@ -443,7 +443,7 @@ async def test_signing_status_matches_what_the_endpoint_enforces():
 
     assert await status("generic") == "unsigned"
     assert await status("generic", signed_reader) == "signed"
-    assert await status("telegram") == "unsigned"
+    assert await status("telegram") == "signed"
     # A registered scheme refuses requests even before its secret is set.
     assert await status("github") == "signed"
     # No verification is implemented for these providers at all.

@@ -183,7 +183,21 @@ class MCPOAuthClientService:
             2. Parse resource_metadata URL from the header
             3. Fetch Protected Resource Metadata (RFC 9728)
             4. Fetch Authorization Server Metadata (RFC 8414)
+
+        Every way it can fail -- the host is unreachable or refused by the
+        outbound policy, a document is not the JSON object the RFCs describe --
+        is an ``MCPOAuthDiscoveryError``: the remote server is someone else's,
+        and what it answers is never our 500.
         """
+        try:
+            return await self._discover_auth_server(mcp_url)
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
+            logger.info("OAuth discovery could not reach %s", mcp_url, exc_info=True)
+            raise MCPOAuthDiscoveryError(
+                f"Could not reach {mcp_url}: {exc or type(exc).__name__}"
+            ) from exc
+
+    async def _discover_auth_server(self, mcp_url: str) -> AuthServerMetadata:
         async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             # Step 1: Probe the MCP endpoint for an auth challenge. The challenge is
             # only a shortcut to the metadata URL, never a precondition: servers
@@ -252,11 +266,25 @@ class MCPOAuthClientService:
                     f"an object. The server may not support automated OAuth discovery."
                 )
 
-            resource = pr_meta.get("resource", mcp_url)
+            resource = pr_meta.get("resource") or mcp_url
+            if not isinstance(resource, str):
+                raise MCPOAuthDiscoveryError(
+                    f"OAuth protected-resource metadata at {resource_metadata_url} has a "
+                    "resource that is not a string."
+                )
             auth_servers = pr_meta.get("authorization_servers", [])
             if not auth_servers:
                 raise MCPOAuthDiscoveryError(
                     f"No authorization_servers in protected resource metadata at {resource_metadata_url}"
+                )
+            if (
+                not isinstance(auth_servers, list)
+                or not isinstance(auth_servers[0], str)
+                or not auth_servers[0].strip()
+            ):
+                raise MCPOAuthDiscoveryError(
+                    f"authorization_servers in protected resource metadata at "
+                    f"{resource_metadata_url} is not a list of URLs."
                 )
 
             as_base = auth_servers[0].rstrip("/")
@@ -293,31 +321,19 @@ class MCPOAuthClientService:
         for url in urls:
             try:
                 resp = await client.get(url)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    advertised = data.get("scopes_supported") or []
-                    registration_endpoint = data.get("registration_endpoint")
-                    return AuthServerMetadata(
-                        issuer=data.get("issuer", as_base),
-                        authorization_endpoint=_validate_endpoint_url(
-                            data["authorization_endpoint"], "authorization_endpoint"
-                        ),
-                        token_endpoint=_validate_endpoint_url(
-                            data["token_endpoint"], "token_endpoint"
-                        ),
-                        registration_endpoint=(
-                            _validate_endpoint_url(registration_endpoint, "registration_endpoint")
-                            if registration_endpoint
-                            else None
-                        ),
-                        scopes_supported=list(advertised),
-                        code_challenge_methods_supported=data.get(
-                            "code_challenge_methods_supported", ["S256"]
-                        ),
-                        offline_access_supported="offline_access" in advertised,
-                    )
-            except (httpx.HTTPError, KeyError):
+            except httpx.HTTPError:
                 continue
+            if resp.status_code != 200:
+                continue
+            try:
+                data = resp.json()
+            except ValueError:
+                # Not JSON (an SPA index, an error page): not the document, so
+                # the next well-known URL may still be.
+                continue
+            metadata = _as_metadata_from(data, as_base)
+            if metadata is not None:
+                return metadata
 
         raise MCPOAuthDiscoveryError(
             f"Could not fetch AS metadata from {as_base} (tried {', '.join(urls)})"
@@ -444,6 +460,47 @@ class MCPOAuthDiscoveryError(Exception):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _string_list(value: object) -> list[str]:
+    """The strings of a metadata list; anything that is not a list has none."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _as_metadata_from(data: object, as_base: str) -> AuthServerMetadata | None:
+    """RFC 8414 metadata from a decoded document, or None when it is not one.
+
+    A document without both endpoints as strings is not usable metadata. An
+    endpoint that is a string but not a safe URL raises: the server named a
+    destination we refuse, which is an answer, not a missing document.
+    """
+    if not isinstance(data, dict):
+        return None
+    authorization_endpoint = data.get("authorization_endpoint")
+    token_endpoint = data.get("token_endpoint")
+    if not isinstance(authorization_endpoint, str) or not isinstance(token_endpoint, str):
+        return None
+    issuer = data.get("issuer", as_base)
+    registration_endpoint = data.get("registration_endpoint")
+    advertised = _string_list(data.get("scopes_supported"))
+    methods = data.get("code_challenge_methods_supported", ["S256"])
+    return AuthServerMetadata(
+        issuer=issuer if isinstance(issuer, str) and issuer else as_base,
+        authorization_endpoint=_validate_endpoint_url(
+            authorization_endpoint, "authorization_endpoint"
+        ),
+        token_endpoint=_validate_endpoint_url(token_endpoint, "token_endpoint"),
+        registration_endpoint=(
+            _validate_endpoint_url(registration_endpoint, "registration_endpoint")
+            if isinstance(registration_endpoint, str) and registration_endpoint
+            else None
+        ),
+        scopes_supported=advertised,
+        code_challenge_methods_supported=_string_list(methods),
+        offline_access_supported="offline_access" in advertised,
+    )
 
 
 def _parse_resource_metadata_url(www_authenticate: str) -> str | None:

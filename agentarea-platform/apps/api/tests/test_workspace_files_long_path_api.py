@@ -67,6 +67,13 @@ class StoredObjects(ObjectStore):
         self._check(CopySource["Key"], "CopyObject")
         self._check(Key, "CopyObject")
 
+    def get_paginator(self, _operation):
+        class Paginator:
+            def paginate(self, **_):
+                yield {"Contents": []}
+
+        return Paginator()
+
 
 def _artifact_service(store: ObjectStore | None = None) -> ArtifactService:
     store = store or ObjectStore()

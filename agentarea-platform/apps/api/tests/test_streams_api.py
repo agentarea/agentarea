@@ -14,7 +14,14 @@ from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config.database import get_db_session
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
-from agentarea_streams.domain import ForwardLoopError, JournaledEvent, StreamNameTakenError
+from agentarea_streams.domain import (
+    ForwardLoopError,
+    JournaledEvent,
+    NotAForwardError,
+    StreamNameTakenError,
+    StreamNotFoundError,
+    SubscriptionNotFoundError,
+)
 from httpx import ASGITransport, AsyncClient
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
@@ -143,6 +150,76 @@ async def test_a_forward_into_itself_is_a_400(client, service, graph):
     assert "own input" in response.json()["detail"]
 
 
+def _forward(stream_id, outputs):
+    return SimpleNamespace(
+        id=uuid4(),
+        stream_id=stream_id,
+        kind="forward",
+        trigger_id=None,
+        output_stream_ids=[str(o) for o in outputs],
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_forward_is_removed_by_whoever_may_edit_its_outputs(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    forward = _forward(stream, [output])
+    service.get_forward.return_value = forward
+    service.existing_outputs.return_value = [output]
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{forward.id}"
+    )
+    assert response.status_code == 204, response.text
+    service.delete_forward.assert_awaited_once_with(stream, forward.id)
+    checked = {call.kwargs["object"] for call in graph.check.await_args_list}
+    assert {str(stream), str(output)} <= checked
+
+
+@pytest.mark.asyncio
+async def test_a_forward_into_a_stream_the_caller_may_not_edit_stays(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    forward = _forward(stream, [output])
+    service.get_forward.return_value = forward
+    service.existing_outputs.return_value = [output]
+    graph.check.side_effect = lambda **kw: SimpleNamespace(allowed=kw["object"] != str(output))
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{forward.id}"
+    )
+    assert response.status_code == 403, response.text
+    service.delete_forward.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_triggers_subscription_is_not_removed_as_a_forward(client, service, graph):
+    stream, subscription, trigger = uuid4(), uuid4(), uuid4()
+    service.get_forward.side_effect = NotAForwardError(subscription, trigger)
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{subscription}"
+    )
+    assert response.status_code == 409, response.text
+    assert str(trigger) in response.json()["detail"]
+    assert "deleting the trigger" in response.json()["detail"]
+    service.delete_forward.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_removing_an_unknown_subscription_is_a_404(client, service, graph):
+    stream, subscription = uuid4(), uuid4()
+    service.get_forward.side_effect = SubscriptionNotFoundError(subscription)
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/subscriptions/{subscription}"
+    )
+    assert response.status_code == 404, response.text
+
+
+@pytest.mark.asyncio
+async def test_an_event_of_a_stream_that_is_gone_is_a_404(client, service, graph):
+    stream = uuid4()
+    service.list_events.side_effect = StreamNotFoundError(stream)
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream}/events/1")
+    assert response.status_code == 404, response.text
+
+
 @pytest.mark.asyncio
 async def test_a_webhook_source_shows_its_public_url(client, service, graph, monkeypatch):
     monkeypatch.setattr(
@@ -173,3 +250,45 @@ async def test_a_stream_name_already_taken_is_a_conflict(client, service, graph)
     response = await client.post("/v1/workspaces/acme/streams/", json={"name": "orders"})
     assert response.status_code == 409, response.text
     assert "orders" in response.json()["detail"]
+
+
+# Sequences live in a Postgres BIGINT. A cursor past it, or a path sequence whose
+# ``sequence - 1`` underflows it, used to reach the database and come back a 500.
+@pytest.mark.parametrize(
+    "query",
+    [
+        "after=9223372036854775808",
+        "before=9223372036854775808",
+        "after=99999999999999999999999",
+        "after=-1",
+        "before=0",
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_event_cursor_outside_a_bigint_is_a_422(client, service, graph, query):
+    stream = _stream()
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events?{query}")
+    assert response.status_code == 422, response.text
+    service.list_events.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "sequence",
+    ["-9223372036854775808", "-9223372036854775809", "9223372036854775808", "0", "-5"],
+)
+@pytest.mark.asyncio
+async def test_an_event_sequence_that_cannot_exist_is_a_422(client, service, graph, sequence):
+    stream = _stream()
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events/{sequence}")
+    assert response.status_code == 422, response.text
+    service.list_events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_largest_sequence_is_still_looked_up(client, service, graph):
+    stream = _stream()
+    service.list_events.return_value = []
+    largest = 9223372036854775807
+    response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events/{largest}")
+    assert response.status_code == 404, response.text
+    assert service.list_events.await_args.kwargs["after"] == largest - 1

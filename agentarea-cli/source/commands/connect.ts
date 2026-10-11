@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import * as sdk from '@agentarea/api-client';
 import {
+	assertAlias,
+	assertMcpUrl,
 	attachMcpInstance,
 	codexProjectConfigPath,
 	codexSeesServer,
@@ -223,12 +225,14 @@ export async function connectClient(
 		client = await getClient(client.id);
 	}
 
-	const mcpUrl = client.mcp_endpoint_url;
-	if (!mcpUrl) {
+	if (!client.mcp_endpoint_url) {
 		throw new Error(
 			`The API returned no mcp_endpoint_url for client ${client.id}; check AGENTAREA_API_URL on the server`,
 		);
 	}
+
+	// It is written into the harness's config: only a plain http(s) URL goes.
+	const mcpUrl = assertMcpUrl(client.mcp_endpoint_url);
 
 	const bundle = [
 		`${client.mcp_instances?.length ?? 0} MCP instance(s)`,
@@ -241,7 +245,7 @@ export async function connectClient(
 		);
 	}
 
-	const alias = options.alias ?? mcpAlias('default');
+	const alias = assertAlias(options.alias ?? mcpAlias('default'));
 	if (harness === 'codex' && scope === 'project') {
 		// `codex mcp add` only ever writes the user-wide config, so a project
 		// scope has to be written as the file codex itself resolves: it walks up

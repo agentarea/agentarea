@@ -398,9 +398,24 @@
         {
             "metadata": {
                 "relations": {
+                    "can_invoke": {},
                     "can_manage": {},
                     "can_read": {},
                     "can_write": {},
+                    "invoker": {
+                        "directly_related_user_types": [
+                            {
+                                "type": "User"
+                            },
+                            {
+                                "type": "Agent"
+                            },
+                            {
+                                "relation": "members",
+                                "type": "Workspace"
+                            }
+                        ]
+                    },
                     "manager": {
                         "directly_related_user_types": [
                             {
@@ -448,6 +463,11 @@
                 }
             },
             "relations": {
+                "can_invoke": {
+                    "computedUserset": {
+                        "relation": "invoker"
+                    }
+                },
                 "can_manage": {
                     "union": {
                         "child": [
@@ -540,6 +560,9 @@
                             }
                         ]
                     }
+                },
+                "invoker": {
+                    "this": {}
                 },
                 "manager": {
                     "this": {}

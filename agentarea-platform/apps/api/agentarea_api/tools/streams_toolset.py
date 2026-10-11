@@ -125,7 +125,9 @@ class StreamsToolset(Toolset):
     async def delete(self, stream_id: str) -> str:
         """Delete a stream and its events, sources and subscriptions.
 
-        Refused while a live webhook trigger's source feeds it: delete the trigger first.
+        Refused while a live webhook trigger's source feeds it or a trigger subscribes
+        to it (delete the trigger first), or while a forward of any stream writes into
+        it (remove that forward with ``delete_forward`` first).
         """
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
@@ -248,6 +250,27 @@ class StreamsToolset(Toolset):
             except StreamError as error:
                 return json.dumps({"error": str(error)})
             return _subscription(row).model_dump_json()
+
+    @tool_method(effect="destructive")
+    @requires("edit", "stream", id_param="stream_id")
+    async def delete_forward(self, stream_id: str, subscription_id: str) -> str:
+        """Remove a forward of this stream; ``subscription_id`` is from ``list_subscriptions``.
+
+        The caller must be able to edit every output stream, as to create it. A
+        trigger's subscription is refused: it goes when the trigger is deleted.
+        """
+        async with platform_context() as (_s, user_ctx, repo_factory, _b, _sec):
+            service = _service(repo_factory)
+            try:
+                forward = await service.get_forward(UUID(stream_id), UUID(subscription_id))
+                for output in await service.existing_outputs(forward):
+                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                await service.delete_forward(UUID(stream_id), UUID(subscription_id))
+            except HTTPException as exc:
+                return json.dumps({"error": exc.detail})
+            except StreamError as error:
+                return json.dumps({"error": str(error)})
+            return json.dumps({"deleted": True})
 
     @tool_method(effect="read")
     @requires("read", "stream", id_param="stream_id")

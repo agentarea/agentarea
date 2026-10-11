@@ -31,6 +31,11 @@ _PLACEHOLDER_RE = re.compile(r"\$\{setup\.([a-zA-Z0-9_]+)\}")
 
 _KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*$")
 
+# Entity names land in String(255) columns (skills, agents, MCP instances,
+# installed bundles); a longer one is refused here, at analyze, rather than
+# failing its insert halfway through an install.
+MAX_NAME_LENGTH = 255
+
 
 def setup_refs(value: Any) -> list[str]:
     """Return the setup-field keys referenced by ``${setup.x}`` in a string."""
@@ -104,7 +109,11 @@ class BundleMcp(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1, description="In-package reference key (agents point at this).")
-    name: str = Field(min_length=1, description="Instance display name created in the workspace.")
+    name: str = Field(
+        min_length=1,
+        max_length=MAX_NAME_LENGTH,
+        description="Instance display name created in the workspace.",
+    )
     json_spec: dict[str, Any] = Field(
         description="Native MCP runtime spec. Must include 'type' (command|docker|url)."
     )
@@ -130,7 +139,7 @@ class BundleSkill(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1)
-    name: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
     # v0.1.0 supports inline content and github; zip/s3 import comes later.
     source_type: Literal["content", "github"] = "content"
     content: str | None = Field(
@@ -160,7 +169,7 @@ class BundleAgent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1)
-    name: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
     instruction: str = Field(default="", max_length=20000)
     # Literal provider model id (e.g. "gpt-4o") or a ${setup.x} reference.
     model: str | None = Field(default=None)
@@ -303,8 +312,12 @@ class Bundle(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str = Field(default=SCHEMA_VERSION)
-    name: str = Field(min_length=1, description="Stable package identifier (idempotency key).")
-    display_name: str | None = Field(default=None)
+    name: str = Field(
+        min_length=1,
+        max_length=MAX_NAME_LENGTH,
+        description="Stable package identifier (idempotency key).",
+    )
+    display_name: str | None = Field(default=None, max_length=MAX_NAME_LENGTH)
     description: str = Field(default="")
     metadata: BundleMetadata = Field(default_factory=BundleMetadata)
     setup: list[SetupField] = Field(default_factory=list)

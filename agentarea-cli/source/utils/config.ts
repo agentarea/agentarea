@@ -5,13 +5,14 @@ import Conf from 'conf';
 import {type CLIConfig} from '../types/index.js';
 import {logger} from './logger.js';
 import {ConfigError} from './error.js';
+import {DEFAULT_API_URL} from './apiUrl.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Default configuration values
 const defaultConfig: CLIConfig = {
-	apiBaseUrl: process.env['AGENTAREA_API_URL'] || 'http://localhost:8000',
+	apiBaseUrl: process.env['AGENTAREA_API_URL'] || DEFAULT_API_URL,
 	apiTimeout: Number(process.env['AGENTAREA_API_TIMEOUT']) || 30000,
 	maxRetries: Number(process.env['AGENTAREA_MAX_RETRIES']) || 3,
 	retryDelay: Number(process.env['AGENTAREA_RETRY_DELAY']) || 1000,

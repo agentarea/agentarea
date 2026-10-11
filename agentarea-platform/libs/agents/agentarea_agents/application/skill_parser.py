@@ -65,6 +65,7 @@ class SkillParser:
     MISSING_SKILL_MESSAGE: ClassVar[str] = (
         "No SKILL.md found at package root. Skills must include a SKILL.md file."
     )
+    NOT_A_ZIP_MESSAGE: ClassVar[str] = "Skill package is not a valid ZIP archive"
 
     def parse_content(self, content: str) -> ParsedSkill:
         """Parse raw markdown content with frontmatter.
@@ -192,11 +193,18 @@ class SkillParser:
 
         Returns:
             SkillPackageManifest with file information.
+
+        Raises:
+            ValueError: If the data is not a ZIP archive or is over budget.
         """
         if isinstance(zip_data, bytes):
             zip_data = io.BytesIO(zip_data)
 
-        with zipfile.ZipFile(zip_data, "r") as zf:
+        try:
+            zf = zipfile.ZipFile(zip_data, "r")
+        except zipfile.BadZipFile as e:
+            raise ValueError(self.NOT_A_ZIP_MESSAGE) from e
+        with zf:
             check_zip_budget(zf)
             file_paths = []
             file_sizes = {}
@@ -259,11 +267,20 @@ class SkillParser:
             Tuple of (parsed skill, manifest).
 
         Raises:
-            ValueError: If no skill file is found in the ZIP.
+            ValueError: If the data is not a ZIP archive or no skill file is
+                found in it.
         """
         if isinstance(zip_data, bytes):
             zip_data = io.BytesIO(zip_data)
 
+        try:
+            return self._extract_main_skill_from_zip(zip_data)
+        except zipfile.BadZipFile as e:
+            raise ValueError(self.NOT_A_ZIP_MESSAGE) from e
+
+    def _extract_main_skill_from_zip(
+        self, zip_data: BinaryIO
+    ) -> tuple[ParsedSkill, SkillPackageManifest]:
         manifest = self.build_manifest_from_zip(zip_data)
 
         if not manifest.main_skill_path:

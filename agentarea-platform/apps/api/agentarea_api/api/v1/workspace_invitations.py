@@ -23,6 +23,7 @@ from agentarea_common.auth.identity_directory import (
 )
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
+    requires_user_session,
     requires_workspace_admin,
     unrestricted,
 )
@@ -37,6 +38,7 @@ from agentarea_common.workspaces import (
     InvitationNotFound,
     InvitationRevoked,
     LastMemberRemovalRejected,
+    MemberNotFound,
     MembershipRemovalForbidden,
     OwnerRemovalRejected,
     WorkspaceInvitation,
@@ -55,7 +57,7 @@ from agentarea_common.workspaces.memberships import (
     get_workspace_membership_graph,
     list_workspace_member_ids,
 )
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,8 +105,20 @@ MembershipServiceDep = Annotated[WorkspaceMembershipService, Depends(get_members
 # ---------------------------------------------------------------------------
 
 
+# One ``@``, something on either side, a dot in the domain, no whitespace: the
+# same check the invite dialog runs. Deliverability is the mail server's call.
+INVITATION_EMAIL_PATTERN = r"^[^\s@]+@[^\s@]+\.[^\s@]+$"
+# RFC 5321 caps a forward path at 320 octets; the column is sized to match.
+INVITATION_EMAIL_MAX_LENGTH = 320
+
+
 class CreateInvitationBody(BaseModel):
-    email: str | None = None
+    email: str | None = Field(
+        default=None,
+        max_length=INVITATION_EMAIL_MAX_LENGTH,
+        pattern=INVITATION_EMAIL_PATTERN,
+        description="Address the invitation is for; omit for an open link anyone can accept",
+    )
     expires_in_days: int | None = Field(default=None, ge=1, le=365)
 
 
@@ -294,7 +308,7 @@ principal_router = APIRouter(tags=["workspace-invitations"])
     "/invitations",
     response_model=InvitationCreatedResponse,
     status_code=201,
-    dependencies=[requires_workspace_admin()],
+    dependencies=[requires_user_session("invite members"), requires_workspace_admin()],
 )
 async def create_invitation(
     body: CreateInvitationBody,
@@ -351,7 +365,7 @@ async def list_invitations(
 @router.delete(
     "/invitations/{invitation_id}",
     status_code=204,
-    dependencies=[requires_workspace_admin()],
+    dependencies=[requires_user_session("revoke invitations"), requires_workspace_admin()],
 )
 async def revoke_invitation(
     invitation_id: UUID,
@@ -506,10 +520,13 @@ async def list_members(
             "description": "Membership ended; graph access is still being revoked",
         }
     },
-    dependencies=[enforced_in_handler("owner-only, enforced by MembershipService.remove")],
+    dependencies=[
+        requires_user_session("remove members"),
+        enforced_in_handler("owner-only, enforced by MembershipService.remove"),
+    ],
 )
 async def remove_member(
-    user_id: str,
+    user_id: Annotated[str, Path(min_length=1, max_length=255)],
     user: UserContextDep,
     memberships: MembershipServiceDep,
     audit: AuditServiceDep,
@@ -529,6 +546,8 @@ async def remove_member(
         )
     except MembershipRemovalForbidden as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except MemberNotFound as exc:
+        raise HTTPException(status_code=404, detail="Member not found") from exc
     except (OwnerRemovalRejected, LastMemberRemovalRejected) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except OpenFGAError as exc:

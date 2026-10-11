@@ -10,6 +10,7 @@ import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
@@ -137,3 +138,12 @@ async def test_tool_calls_waiting_on_approval_are_listed_with_their_link(
     assert approval["url"] == "https://app.example/w/acme/approve/a-1"
     assert (approval["connector"], approval["tool"]) == ("Instantly", "create_campaign")
     assert narrowed["tool_call_approvals"] == []
+
+
+async def test_the_total_is_narrowed_to_the_agent_the_items_are(repository) -> None:
+    agent_id = uuid4()
+
+    await InboxToolset().list(agent_id=str(agent_id))
+
+    assert repository.list_by_statuses.await_args.kwargs["agent_id"] == agent_id
+    assert repository.count_by_statuses.await_args.kwargs["agent_id"] == agent_id

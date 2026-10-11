@@ -67,6 +67,8 @@ type resource
     define can_read: reader or can_read from role_assignment or can_read from project
     define can_write: writer or can_write from role_assignment or can_write from project
     define can_manage: manager or can_manage from role_assignment or can_manage from project
+    define invoker: [User, Agent, Workspace#members]
+    define can_invoke: invoker
 ```
 
 Identity types are PascalCase; governance types are lowercase. Object references
@@ -123,6 +125,8 @@ objects amplifies its bits across all of them.
 | `role_assignment` | `role_assignment` | Bundled grants. |
 | `reader` / `writer` / `manager` | `User`, `Agent` | Direct grant of the matching bit. |
 | `can_read` / `can_write` / `can_manage` | computed | Direct relation, or the same bit from an assignment, or from `project`. |
+| `invoker` | `User`, `Agent`, `Workspace#members` | Who may run the agent. Granted explicitly: an agent's creator holds it from creation, and nothing else implies it. |
+| `can_invoke` | computed | `invoker` only. Reading, managing or administering the workspace does not let anyone run an agent. |
 
 Agents, skills, MCP servers and registered clients are all `resource:<uuid>`.
 Which kind a resource is lives in the database, not the graph.

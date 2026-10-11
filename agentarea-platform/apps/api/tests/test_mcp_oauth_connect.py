@@ -220,6 +220,50 @@ async def test_preflight_answers_unsupported_instead_of_failing(monkeypatch):
     assert "no protected-resource metadata" in result.detail
 
 
+def _unreachable_mcp_host(monkeypatch):
+    """Every outbound request the discovery makes fails to connect."""
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Connection refused", request=request)
+
+    monkeypatch.setattr(
+        "agentarea_mcp.application.oauth_client_service.safe_async_client",
+        lambda **kwargs: httpx.AsyncClient(transport=httpx.MockTransport(refuse), **kwargs),
+    )
+
+
+@pytest.mark.asyncio
+async def test_authorize_answers_502_when_the_mcp_host_is_unreachable(monkeypatch):
+    """The connection error escaped discovery, which ``oauth_authorize`` did
+    not catch, so an unreachable MCP host answered 500."""
+    _patch_instance_lookup(monkeypatch)
+    _unreachable_mcp_host(monkeypatch)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await mcp_oauth_connect.oauth_authorize(
+            MCPOAuthAuthorizeRequest(instance_id=uuid4()),
+            _user_context(),
+            AsyncMock(),
+            AsyncMock(),
+        )
+
+    assert excinfo.value.status_code == 502
+    assert "Could not reach" in excinfo.value.detail
+
+
+@pytest.mark.asyncio
+async def test_preflight_answers_unsupported_when_the_mcp_host_is_unreachable(monkeypatch):
+    _patch_instance_lookup(monkeypatch)
+    _unreachable_mcp_host(monkeypatch)
+
+    result = await mcp_oauth_connect.oauth_preflight(
+        _user_context(), AsyncMock(), instance_id=uuid4()
+    )
+
+    assert result.status == "unsupported"
+    assert "Could not reach" in result.detail
+
+
 @pytest.mark.asyncio
 async def test_preflight_reports_unsupported_for_an_instance_without_a_remote_url(monkeypatch):
     _patch_instance_lookup(monkeypatch, remote_url=None)

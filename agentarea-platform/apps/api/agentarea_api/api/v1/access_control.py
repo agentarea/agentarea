@@ -35,7 +35,7 @@ from agentarea_common.auth import (
 from agentarea_common.auth import (
     assert_workspace_admin as _assert_workspace_admin,
 )
-from agentarea_common.auth.route_authz import enforced_in_handler
+from agentarea_common.auth.route_authz import enforced_in_handler, requires_user_session
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
@@ -45,6 +45,8 @@ from agentarea_common.rebac import (
     OpenFGAError,
     RelationQuery,
     RelationTuple,
+    ResourceOwnershipError,
+    delete_tuple_idempotent,
     write_tuple_idempotent,
 )
 from agentarea_common.workspaces.models import Workspace, WorkspaceMembership
@@ -88,7 +90,7 @@ _VERB_TO_BIT = {
     "read": "can_read",
     "operate": "can_read",
     "connect": "can_read",
-    "execute": "can_read",
+    "execute": "can_invoke",
     "configure": "can_write",
     "edit": "can_write",
     "write": "can_write",
@@ -625,7 +627,8 @@ async def list_relationships(
     "/relationships",
     status_code=201,
     dependencies=[
-        enforced_in_handler("workspace admin, asserted before any graph or database read")
+        requires_user_session("grant access"),
+        enforced_in_handler("workspace admin, asserted before any graph or database read"),
     ],
 )
 async def create_relationship(
@@ -633,18 +636,23 @@ async def create_relationship(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> dict:
-    """Grant a resource-ownership relation via the configured graph backend."""
+    """Grant a resource-ownership relation via the configured graph backend.
+
+    Idempotent: a grant the subject already holds (also under a legacy alias
+    such as ``viewers`` for ``reader``) succeeds without changing the graph,
+    and is not audited again.
+    """
     graph_client = get_graph_client()
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id or "", user_context, db_session)
     relationship = _to_resource_grant(payload)
     try:
-        await graph_client.write_tuple(relationship)
-    except OpenFGAError as exc:
-        logger.exception("Failed to write graph relationship %s", relationship)
+        written = await write_tuple_idempotent(graph_client, relationship)
+    except ResourceOwnershipError as exc:
         raise HTTPException(status_code=503, detail="Graph authorization write failed") from exc
-    await _audit_grant("access.grant", payload, user_context, db_session)
+    if written:
+        await _audit_grant("access.grant", payload, user_context, db_session)
     return {"ok": True}
 
 
@@ -652,7 +660,8 @@ async def create_relationship(
     "/relationships",
     status_code=204,
     dependencies=[
-        enforced_in_handler("workspace admin, asserted before any graph or database read")
+        requires_user_session("revoke access"),
+        enforced_in_handler("workspace admin, asserted before any graph or database read"),
     ],
 )
 async def delete_relationship(
@@ -660,17 +669,21 @@ async def delete_relationship(
     user_context: UserContextDep,
     db_session: DatabaseSessionDep,
 ) -> None:
-    """Revoke a resource-ownership relation from the configured graph backend."""
+    """Revoke a resource-ownership relation from the configured graph backend.
+
+    Idempotent: revoking a grant that is already gone answers 204 without
+    touching the graph or the audit trail.
+    """
     graph_client = get_graph_client()
     await _assert_workspace_admin(user_context)
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     relationship = _to_resource_grant(payload)
     try:
-        await graph_client.delete_tuple(relationship)
-    except OpenFGAError as exc:
-        logger.exception("Failed to delete graph relationship %s", relationship)
+        deleted = await delete_tuple_idempotent(graph_client, relationship)
+    except ResourceOwnershipError as exc:
         raise HTTPException(status_code=503, detail="Graph authorization delete failed") from exc
-    await _audit_grant("access.revoke", payload, user_context, db_session)
+    if deleted:
+        await _audit_grant("access.revoke", payload, user_context, db_session)
 
 
 async def _audit_grant(
@@ -710,7 +723,7 @@ async def check_permission(
     await _assert_object_in_workspace(payload.namespace, payload.object, user_context, db_session)
     await _assert_subject_in_workspace(payload.subject_id, user_context, db_session)
     bit = _VERB_TO_BIT.get(payload.relation, payload.relation)
-    if bit not in {"can_read", "can_write", "can_manage"}:
+    if bit not in {"can_read", "can_write", "can_manage", "can_invoke"}:
         return CheckResponse(allowed=False)
     try:
         result = await graph_client.check(

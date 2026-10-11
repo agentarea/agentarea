@@ -34,7 +34,11 @@ from agentarea_common.artifacts.audit import (
     ArtifactActor,
     ArtifactEventRecorder,
 )
-from agentarea_common.artifacts.service import sha256_hex_from_head
+from agentarea_common.artifacts.service import (
+    WorkspaceConflictError,
+    WorkspaceError,
+    sha256_hex_from_head,
+)
 from agentarea_common.config.aws import get_aws_settings, get_s3_client
 
 WORKSPACE_SCHEMA_VERSION = 1
@@ -44,19 +48,6 @@ DEFAULT_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
 DEFAULT_LEASE_SECONDS = 3600
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-
-
-class WorkspaceError(RuntimeError):
-    """Base error carrying a stable machine-readable failure code."""
-
-    code = "workspace_error"
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-
-
-class WorkspaceConflictError(WorkspaceError):
-    code = "workspace_conflict"
 
 
 class WorkspaceValidationError(WorkspaceError):

@@ -20,7 +20,11 @@ from agentarea_common.config.database import get_db_session
 from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_secrets.catalog_service import SecretAccessDeniedError
-from agentarea_streams.domain import SourceFedByTriggerError, StreamSourceNotFoundError
+from agentarea_streams.domain import (
+    SourceFedByTriggerError,
+    StreamInUseError,
+    StreamSourceNotFoundError,
+)
 from httpx import ASGITransport, AsyncClient
 
 NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
@@ -190,6 +194,16 @@ async def test_a_secret_the_caller_may_not_use_is_refused(client, env, graph):
             "no setting a",
         ),
         ({"webhook_type": "gitlab"}, "Unknown source type"),
+        # Accepted once, then every delivery failed verification on a digest
+        # the verifier has no hashlib function for.
+        (
+            {"webhook_type": "generic", "config": {"signature_algorithm": "sha-256"}},
+            "signature_algorithm must be one of",
+        ),
+        (
+            {"webhook_type": "generic", "config": {"signature_algorithm": "md5"}},
+            "signature_algorithm must be one of",
+        ),
     ],
 )
 async def test_a_source_its_verifier_cannot_run_for_is_refused(client, env, graph, payload, says):
@@ -234,6 +248,18 @@ async def test_a_generic_source_reports_the_scheme_its_settings_choose(client, e
         "prefix": "sha256=",
     }
     assert sentry["signature_scheme"] is None
+
+
+@pytest.mark.parametrize("algorithm", ["sha1", "sha256", "sha384", "sha512"])
+async def test_a_generic_source_takes_every_digest_the_verifier_supports(
+    client, env, graph, algorithm
+):
+    response = await client.post(
+        f"{BASE}/sources",
+        json={"webhook_type": "generic", "config": {"signature_algorithm": algorithm}},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["signature_scheme"]["algorithm"] == algorithm
 
 
 async def test_a_secret_given_for_an_optional_field_is_kept_and_never_returned(client, env, graph):
@@ -314,16 +340,36 @@ async def test_deleting_an_unknown_source_is_a_404(client, env, graph):
 
 async def test_a_stream_a_live_trigger_feeds_cannot_be_deleted(client, env, graph):
     trigger_id = uuid4()
-    env.service.triggers_feeding.return_value = {uuid4(): trigger_id}
+    env.service.ensure_deletable.side_effect = SourceFedByTriggerError(
+        f"Stream {STREAM}", [trigger_id]
+    )
     response = await client.delete(BASE)
     assert response.status_code == 409
     assert str(trigger_id) in response.json()["detail"]
     env.service.delete_stream.assert_not_called()
 
 
+async def test_a_stream_triggers_or_forwards_depend_on_is_refused_before_anything_is_released(
+    client, env, graph
+):
+    trigger_id, forward_id, source_stream = uuid4(), uuid4(), uuid4()
+    env.service.ensure_deletable.side_effect = StreamInUseError(
+        STREAM, [trigger_id], [(forward_id, source_stream)]
+    )
+    env.service.list_sources.return_value = [_row("github")]
+    response = await client.delete(BASE)
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert str(trigger_id) in detail
+    assert "delete the trigger" in detail
+    assert str(forward_id) in detail
+    assert str(source_stream) in detail
+    assert env.secrets.deleted == []
+    env.service.delete_stream.assert_not_called()
+
+
 async def test_deleting_a_stream_releases_its_standalone_sources(client, env, graph):
     standalone, owned = _row("github"), _row("github", trigger_id=uuid4())
-    env.service.triggers_feeding.return_value = {}
     env.service.list_sources.return_value = [standalone, owned]
     response = await client.delete(BASE)
     assert response.status_code == 204, response.text

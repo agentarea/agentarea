@@ -14,12 +14,14 @@ logger = logging.getLogger(__name__)
 _UNGOVERNED_RESOURCE_TYPES = {"model_instance", "model"}
 
 # Generic verb -> independent permission bit on the ``resource`` model. The bits
-# do NOT imply each other (no roll-up): a creator is granted all three at create.
+# do NOT imply each other (no roll-up): a creator is granted each one at create.
+# ``execute`` is running an agent, which nothing but an explicit invoker grant
+# allows -- seeing an agent is not running it.
 _BIT_BY_PERMISSION = {
     "view": "can_read",
     "use": "can_read",
     "read": "can_read",
-    "execute": "can_read",
+    "execute": "can_invoke",
     "operate": "can_read",
     "connect": "can_read",
     "edit": "can_write",

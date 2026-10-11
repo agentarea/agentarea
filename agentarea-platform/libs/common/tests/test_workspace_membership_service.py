@@ -10,12 +10,14 @@ Two properties are pinned here:
 """
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from agentarea_common.rebac import CheckResult, RelationTuple
 from agentarea_common.workspaces import (
     LastMemberRemovalRejected,
+    MemberNotFound,
     MembershipRemovalForbidden,
     OwnerRemovalRejected,
     Workspace,
@@ -300,3 +302,28 @@ async def test_owner_can_remove_another_member():
     await service.remove(workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER)
 
     assert graph.member_ids() == {OWNER}
+
+
+async def test_removing_someone_who_is_not_a_member_is_not_found():
+    """No row and no graph tuple: nothing is ended, nothing is queued."""
+    graph = FakeGraph([OWNER, MEMBER])
+    memberships = FakeMembershipRepository([_membership(MEMBER, datetime(2026, 1, 1))])
+    memberships.end = AsyncMock()  # type: ignore[method-assign]
+    service = _service(graph=graph, memberships=memberships)
+
+    with pytest.raises(MemberNotFound):
+        await service.remove(workspace_id=WORKSPACE, target_user_id=OUTSIDER, actor_user_id=OWNER)
+
+    memberships.end.assert_not_awaited()
+    assert graph.member_ids() == {OWNER, MEMBER}
+
+
+async def test_a_member_known_only_by_their_row_can_still_be_removed():
+    """A row whose graph grant never landed is a membership to end, not a 404."""
+    graph = FakeGraph([OWNER])
+    memberships = FakeMembershipRepository([_membership(MEMBER, datetime(2026, 1, 1))])
+    service = _service(graph=graph, memberships=memberships)
+
+    await service.remove(workspace_id=WORKSPACE, target_user_id=MEMBER, actor_user_id=OWNER)
+
+    assert memberships.rows == []

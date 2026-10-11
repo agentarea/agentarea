@@ -36,20 +36,26 @@ class AuditToolset(Toolset):
     ) -> str:
         """List audit events. Time fields use ISO 8601. Returns next_cursor for pagination."""
         async with platform_read_context() as (session, user_ctx, _repo, _broker, _secret):
-            from agentarea_common.audit.repository import AuditRepository
+            from agentarea_common.audit.repository import AuditRepository, UnknownAuditCursorError
 
+            # The page the repository actually returns, so a full page is
+            # recognised as one when next_cursor is decided below.
+            limit = max(1, min(limit, 100))
             repo = AuditRepository(session)
-            events = await repo.query(
-                workspace_id=user_ctx.workspace_id,
-                action=action or None,
-                actor_id=actor_id or None,
-                resource_type=resource_type or None,
-                resource_id=resource_id or None,
-                since=datetime.fromisoformat(since) if since else None,
-                until=datetime.fromisoformat(until) if until else None,
-                cursor=UUID(cursor) if cursor else None,
-                limit=limit,
-            )
+            try:
+                events = await repo.query(
+                    workspace_id=user_ctx.workspace_id,
+                    action=action or None,
+                    actor_id=actor_id or None,
+                    resource_type=resource_type or None,
+                    resource_id=resource_id or None,
+                    since=datetime.fromisoformat(since) if since else None,
+                    until=datetime.fromisoformat(until) if until else None,
+                    cursor=UUID(cursor) if cursor else None,
+                    limit=limit,
+                )
+            except UnknownAuditCursorError as error:
+                return json.dumps({"error": str(error)})
             items = [
                 {
                     "id": str(e.id),
@@ -66,7 +72,7 @@ class AuditToolset(Toolset):
             return json.dumps(
                 {
                     "events": items,
-                    "next_cursor": str(events[-1].id) if events else None,
+                    "next_cursor": str(events[-1].id) if len(events) == limit else None,
                 },
                 default=str,
             )

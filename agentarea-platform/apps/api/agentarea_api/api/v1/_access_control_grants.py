@@ -12,6 +12,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from agentarea_common.rebac import (
+    OWNER_RELATIONS,
     RelationTuple,
     ResourceOwnershipError,
     resolve_graph_client,
@@ -33,6 +34,7 @@ async def grant_resource_owner(
     resource_id: UUID | str,
     workspace_id: str,
     user_id: str,
+    relations: tuple[str, ...] = OWNER_RELATIONS,
 ) -> None:
     """Assert ownership from a request handler, surfacing failure as a 503.
 
@@ -42,7 +44,10 @@ async def grant_resource_owner(
     """
     try:
         await _grant_resource_owner(
-            resource_id=resource_id, workspace_id=workspace_id, user_id=user_id
+            resource_id=resource_id,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            relations=relations,
         )
     except ResourceOwnershipError as exc:
         raise _as_http(exc) from exc

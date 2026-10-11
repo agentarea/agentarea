@@ -1955,6 +1955,8 @@ export type ContinueTaskPayload = {
 export type CreateInvitationBody = {
     /**
      * Email
+     *
+     * Address the invitation is for; omit for an open link anyone can accept
      */
     email?: string | null;
     /**
@@ -2523,6 +2525,28 @@ export type ExecutionTimelineResponse = {
      * Trigger Id
      */
     trigger_id: string;
+};
+
+/**
+ * ExternalIdentityResponse
+ */
+export type ExternalIdentityResponse = {
+    /**
+     * External Id
+     */
+    external_id: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Linked At
+     */
+    linked_at: string;
+    /**
+     * Provider
+     */
+    provider: string;
 };
 
 /**
@@ -6170,6 +6194,12 @@ export type ResolveResponse = {
  */
 export type RestoredFileResponse = {
     /**
+     * Archived Current
+     *
+     * Trash path of the file that occupied `path` and was archived to make room for the restore; null when the path was free.
+     */
+    archived_current?: string | null;
+    /**
      * Path
      */
     path: string;
@@ -6688,7 +6718,7 @@ export type SkillMemberAddRequest = {
     /**
      * Order
      *
-     * Execution order hint
+     * Execution order hint (a 32-bit integer)
      */
     order?: number;
 };
@@ -7693,6 +7723,32 @@ export type TaskWithAgent = {
      * Total Cost
      */
     total_cost?: number | null;
+};
+
+/**
+ * TelegramLinkRequest
+ */
+export type TelegramLinkRequest = {
+    /**
+     * Bot
+     *
+     * The bot to open the link in
+     */
+    bot: string;
+};
+
+/**
+ * TelegramLinkResponse
+ */
+export type TelegramLinkResponse = {
+    /**
+     * Expires In
+     */
+    expires_in: number;
+    /**
+     * Url
+     */
+    url: string;
 };
 
 /**
@@ -9110,6 +9166,12 @@ export type WorkspaceFileListResponse = {
      * Files
      */
     files: Array<WorkspaceFileInfo>;
+    /**
+     * Truncated
+     *
+     * True when the workspace holds more than 10000 objects and only the first 10000 are listed.
+     */
+    truncated?: boolean;
 };
 
 /**
@@ -9991,6 +10053,79 @@ export type ProxyInstanceV1McpInstanceIdMcpPostResponses = {
      */
     200: unknown;
 };
+
+export type ListExternalIdentitiesV1MeExternalIdentitiesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities';
+};
+
+export type ListExternalIdentitiesV1MeExternalIdentitiesGetResponses = {
+    /**
+     * Response List External Identities V1 Me External Identities Get
+     *
+     * Successful Response
+     */
+    200: Array<ExternalIdentityResponse>;
+};
+
+export type ListExternalIdentitiesV1MeExternalIdentitiesGetResponse = ListExternalIdentitiesV1MeExternalIdentitiesGetResponses[keyof ListExternalIdentitiesV1MeExternalIdentitiesGetResponses];
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData = {
+    body: TelegramLinkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/me/external-identities/telegram/link';
+};
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostError = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors];
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: TelegramLinkResponse;
+};
+
+export type StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse = StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses[keyof StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses];
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Identity Id
+         */
+        identity_id: string;
+    };
+    query?: never;
+    url: '/v1/me/external-identities/{identity_id}';
+};
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteError = UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors[keyof UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors];
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse = UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses[keyof UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses];
 
 export type GetPricingCurrencyV1PricingCurrencyGetData = {
     body?: never;
@@ -17535,6 +17670,40 @@ export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses = {
 };
 
 export type ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponse = ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses[keyof ListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponses];
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}';
+};
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteError = DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors[keyof DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors];
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponse = DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses[keyof DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses];
 
 export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetData = {
     body?: never;

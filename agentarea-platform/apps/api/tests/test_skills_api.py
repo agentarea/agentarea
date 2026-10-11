@@ -371,3 +371,58 @@ async def test_get_skill_file_returns_url(async_client, mock_skill_service):
     data = response.json()
     assert data["url"] == "https://example.com/file.txt"
     mock_skill_service.get_skill_file_url.assert_called_once_with(skill_id, "templates/file.txt")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["q" * 256, ""], ids=["too-long", "empty"])
+async def test_update_skill_with_a_name_the_column_cannot_hold_is_422(
+    async_client, mock_skill_service, monkeypatch, name
+):
+    monkeypatch.setattr("agentarea_api.api.v1.skills.require_permission", AsyncMock())
+
+    response = await async_client.put(f"/v1/workspaces/acme/skills/{uuid4()}", json={"name": name})
+
+    assert response.status_code == 422
+    mock_skill_service.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_skill_with_a_name_override_over_the_limit_is_422(
+    async_client, mock_skill_service
+):
+    response = await async_client.post(
+        "/v1/workspaces/acme/skills", json={"content": "# a", "name": "n" * 256}
+    )
+
+    assert response.status_code == 422
+    mock_skill_service.create_from_content.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_add_member_with_an_order_past_int32_is_422(async_client, mock_skill_service):
+    from agentarea_common.testing import allow_all_permissions
+
+    allow_all_permissions()
+    response = await async_client.post(
+        f"/v1/workspaces/acme/skills/{uuid4()}/members",
+        json={"child_skill_id": str(uuid4()), "order": 2**40},
+    )
+
+    assert response.status_code == 422
+    mock_skill_service.add_member.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_uploading_a_file_that_is_not_a_zip_is_400(
+    async_client, mock_skill_service, mock_user_context
+):
+    real = SkillService(repository_factory=MagicMock(), user_context=mock_user_context)
+    mock_skill_service.create_from_zip.side_effect = real.create_from_zip
+
+    response = await async_client.post(
+        "/v1/workspaces/acme/skills/upload",
+        files={"file": ("skill.zip", b"this is not a zip archive", "application/zip")},
+    )
+
+    assert response.status_code == 400
+    assert "not a valid ZIP" in response.json()["detail"]

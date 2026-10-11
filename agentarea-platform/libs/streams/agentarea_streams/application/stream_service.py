@@ -13,10 +13,13 @@ from agentarea_common.di.container import resolve
 from ..domain.enums import StreamKind, SubscriptionKind
 from ..domain.errors import (
     ForwardLoopError,
+    NotAForwardError,
     SourceFedByTriggerError,
+    StreamInUseError,
     StreamNameTakenError,
     StreamNotFoundError,
     StreamSourceNotFoundError,
+    SubscriptionNotFoundError,
     TriggerSubscriptionNotFoundError,
 )
 from ..domain.filters import EventFilter
@@ -111,11 +114,28 @@ class StreamService:
     ) -> list[StreamORM]:
         return await self._streams().list_all(limit=limit, offset=offset, ids=ids)
 
-    async def delete_stream(self, stream_id: UUID) -> None:
-        """Refused while a live webhook trigger's source feeds the stream."""
-        await self.get_stream(stream_id)
+    async def ensure_deletable(self, stream_id: UUID) -> None:
+        """Raise unless the stream can go without stranding what depends on it.
+
+        Refused while a live webhook trigger's source feeds the stream
+        (``SourceFedByTriggerError``), or while a trigger subscribes to it or a
+        forward writes into it (``StreamInUseError``): the subscription would
+        cascade away and leave its trigger active but deaf, and a forward's
+        outputs are not a foreign key, so it would keep retrying a missing stream.
+        The stream row stays locked until commit, so none is added meanwhile.
+        """
+        if await self._streams().lock_for_delete(stream_id) is None:
+            raise StreamNotFoundError(stream_id)
         if fed := await self.triggers_feeding(stream_id):
             raise SourceFedByTriggerError(f"Stream {stream_id}", sorted(set(fed.values())))
+        triggers = await self._subscriptions().trigger_ids_on_stream(stream_id)
+        forwards = await self._subscriptions().forwards_into(stream_id)
+        if triggers or forwards:
+            raise StreamInUseError(stream_id, triggers, [(f.id, f.stream_id) for f in forwards])
+
+    async def delete_stream(self, stream_id: UUID) -> None:
+        """Refused while anything depends on the stream; see ``ensure_deletable``."""
+        await self.ensure_deletable(stream_id)
         if not await self._streams().delete_in_workspace(stream_id):
             raise StreamNotFoundError(stream_id)
 
@@ -268,9 +288,14 @@ class StreamService:
             raise ForwardLoopError("A forward needs at least one output stream")
         if stream_id in output_stream_ids:
             raise ForwardLoopError("A forward may not write into its own input stream")
+        output_stream_ids = list(dict.fromkeys(output_stream_ids))
         await self.get_stream(stream_id)
+        # Locked, not just read: a stream deleted meanwhile would leave the forward
+        # writing into nothing, since its outputs are not a foreign key.
+        found = await self._streams().lock_existing(output_stream_ids)
         for output in output_stream_ids:
-            await self.get_stream(output)
+            if output not in found:
+                raise StreamNotFoundError(output)
         return await self._subscriptions().add_subscription(
             stream_id=stream_id,
             kind=SubscriptionKind.FORWARD,
@@ -279,6 +304,27 @@ class StreamService:
             output_stream_ids=output_stream_ids,
             cursor_sequence=await self._journal().last_sequence(stream_id),
         )
+
+    async def get_forward(self, stream_id: UUID, subscription_id: UUID) -> StreamSubscriptionORM:
+        """A forward of the stream; a trigger's subscription is refused, it goes with its trigger."""
+        subscription = await self._subscriptions().get_in_stream(stream_id, subscription_id)
+        if subscription is None:
+            raise SubscriptionNotFoundError(subscription_id)
+        if subscription.kind != SubscriptionKind.FORWARD.value:
+            raise NotAForwardError(subscription_id, subscription.trigger_id)
+        return subscription
+
+    async def existing_outputs(self, forward: StreamSubscriptionORM) -> list[UUID]:
+        """The forward's outputs that still exist; older releases let an output be deleted."""
+        outputs = [UUID(str(s)) for s in forward.output_stream_ids]
+        found = await self._streams().lock_existing(outputs)
+        return [o for o in outputs if o in found]
+
+    async def delete_forward(self, stream_id: UUID, subscription_id: UUID) -> None:
+        """Remove a forward; its outcomes go with it, the events it copied stay."""
+        forward = await self.get_forward(stream_id, subscription_id)
+        if not await self._subscriptions().delete_in_workspace(forward.id):
+            raise SubscriptionNotFoundError(subscription_id)
 
     async def trigger_subscription(self, trigger_id: UUID) -> StreamSubscriptionORM | None:
         return await self._subscriptions().get_for_trigger(trigger_id)

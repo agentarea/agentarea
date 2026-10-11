@@ -21,6 +21,9 @@ MAX_PAGE = 1_000_000
 # The same bound for routes that page by ``offset``: past int64 the database
 # rejects the query and the route answered 500 instead of 422.
 MAX_OFFSET = 1_000_000_000
+# The largest Postgres BIGINT: a keyset cursor (a sequence or an id) past it
+# overflows inside the database, so routes bound such parameters by it.
+MAX_BIGINT = 2**63 - 1
 
 
 class PaginationParams:

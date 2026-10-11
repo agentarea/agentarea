@@ -11,7 +11,7 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import ServicePrincipal, UserContext
-from ..rebac.ownership import grant_resource_owner, revoke_resource
+from ..rebac.ownership import grant_resource_owner, owner_relations, revoke_resource
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +279,7 @@ class WorkspaceScopedRepository[T]:
             resource_id=record_id,
             workspace_id=self.user_context.workspace_id,
             user_id=self.user_context.user_id,
+            relations=owner_relations(self.model_class),
         )
 
     async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:

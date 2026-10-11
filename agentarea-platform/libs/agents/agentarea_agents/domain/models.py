@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Any
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
+from agentarea_common.rebac.ownership import INVOKER_RELATION, OWNER_RELATIONS
 from sqlalchemy import JSON, Boolean, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +19,8 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     #: Governed by the authorization graph: creating one writes
     #: ``resource:<id>`` tuples so its creator can reach it afterwards.
     __graph_resource__ = True
+    # Running an agent is its own grant; its creator holds it from the start.
+    __graph_owner_relations__ = (*OWNER_RELATIONS, INVOKER_RELATION)
 
     @property
     def is_catalog(self) -> bool:

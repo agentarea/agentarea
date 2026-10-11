@@ -629,6 +629,127 @@ class TestDiscoverAuthServer:
             await svc.discover_auth_server("https://mcp.example.com/sse")
 
 
+def _discovery_handler(*, protected_resource: object, as_metadata: httpx.Response | None = None):
+    """A server whose challenge points at its RFC 9728 document."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == "https://mcp.example.com/sse":
+            return httpx.Response(
+                401,
+                headers={
+                    "WWW-Authenticate": (
+                        "Bearer resource_metadata="
+                        '"https://mcp.example.com/.well-known/oauth-protected-resource"'
+                    )
+                },
+            )
+        if url.endswith("/.well-known/oauth-protected-resource"):
+            return httpx.Response(200, json=protected_resource)
+        if as_metadata is not None:
+            return as_metadata
+        raise AssertionError(f"unexpected request: {url}")
+
+    return handler
+
+
+@pytest.mark.asyncio
+class TestDiscoveryNeverFailsWithAnythingElse:
+    """Whatever the remote server does, discovery answers MCPOAuthDiscoveryError.
+
+    Anything else escaped ``oauth_authorize`` (which catches only that) as a 500.
+    """
+
+    async def test_an_unreachable_host_is_a_discovery_error(self, monkeypatch):
+        def handler(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("Connection refused", request=request)
+
+        _patch_httpx(monkeypatch, handler)
+
+        with pytest.raises(MCPOAuthDiscoveryError, match="Could not reach") as raised:
+            await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/sse")
+        assert isinstance(raised.value.__cause__, httpx.ConnectError)
+
+    @pytest.mark.parametrize(
+        "authorization_servers", [[123], [None], [""], {"0": "https://as.example.com"}]
+    )
+    async def test_authorization_servers_that_are_not_urls(
+        self, monkeypatch, authorization_servers
+    ):
+        _patch_httpx(
+            monkeypatch,
+            _discovery_handler(
+                protected_resource={"authorization_servers": authorization_servers}
+            ),
+        )
+
+        with pytest.raises(MCPOAuthDiscoveryError, match="authorization_servers"):
+            await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/sse")
+
+    async def test_a_resource_that_is_not_a_string(self, monkeypatch):
+        _patch_httpx(
+            monkeypatch,
+            _discovery_handler(
+                protected_resource={
+                    "resource": {"x": 1},
+                    "authorization_servers": ["https://as.example.com"],
+                }
+            ),
+        )
+
+        with pytest.raises(MCPOAuthDiscoveryError, match="resource"):
+            await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/sse")
+
+    @pytest.mark.parametrize(
+        "as_metadata",
+        [
+            httpx.Response(200, text="<html>not json</html>"),
+            httpx.Response(200, json=["not", "an", "object"]),
+            httpx.Response(200, json="a string"),
+            httpx.Response(
+                200, json={"authorization_endpoint": 1, "token_endpoint": ["https://x"]}
+            ),
+        ],
+    )
+    async def test_as_metadata_that_is_not_an_rfc8414_document(self, monkeypatch, as_metadata):
+        _patch_httpx(
+            monkeypatch,
+            _discovery_handler(
+                protected_resource={"authorization_servers": ["https://as.example.com"]},
+                as_metadata=as_metadata,
+            ),
+        )
+
+        with pytest.raises(MCPOAuthDiscoveryError, match="Could not fetch AS metadata"):
+            await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/sse")
+
+    async def test_malformed_optional_fields_are_ignored(self, monkeypatch):
+        _patch_httpx(
+            monkeypatch,
+            _discovery_handler(
+                protected_resource={"authorization_servers": ["https://as.example.com"]},
+                as_metadata=httpx.Response(
+                    200,
+                    json={
+                        "issuer": 7,
+                        "authorization_endpoint": "https://as.example.com/authorize",
+                        "token_endpoint": "https://as.example.com/token",
+                        "registration_endpoint": {"x": 1},
+                        "scopes_supported": "offline_access",
+                        "code_challenge_methods_supported": 5,
+                    },
+                ),
+            ),
+        )
+
+        meta = await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/sse")
+
+        assert meta.issuer == "https://as.example.com"
+        assert meta.registration_endpoint is None
+        assert meta.scopes_supported == []
+        assert meta.offline_access_supported is False
+
+
 # ---------------------------------------------------------------------------
 # Dynamic Client Registration
 # ---------------------------------------------------------------------------
@@ -912,10 +1033,11 @@ class TestAssess:
 @pytest.mark.asyncio
 class TestDiscoveryStaysOnPublicAddresses:
     async def test_an_mcp_url_at_the_metadata_address_is_never_fetched(self):
-        with pytest.raises(UnsafeUrlError):
+        with pytest.raises(MCPOAuthDiscoveryError) as raised:
             await MCPOAuthClientService().discover_auth_server(
                 "http://169.254.169.254/latest/meta-data/"
             )
+        assert isinstance(raised.value.__cause__, UnsafeUrlError)
 
     async def test_a_challenge_pointing_at_an_internal_host_is_not_followed(self, monkeypatch):
         fetched: list[str] = []
@@ -942,8 +1064,9 @@ class TestDiscoveryStaysOnPublicAddresses:
             "agentarea_mcp.application.oauth_client_service.safe_async_client", client
         )
 
-        with pytest.raises(UnsafeUrlError):
+        with pytest.raises(MCPOAuthDiscoveryError) as raised:
             await MCPOAuthClientService().discover_auth_server("https://mcp.example.com/mcp")
+        assert isinstance(raised.value.__cause__, UnsafeUrlError)
         assert fetched == ["mcp.example.com"]
 
 

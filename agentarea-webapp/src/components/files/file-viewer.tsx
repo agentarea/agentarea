@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import {
   Bot,
+  Check,
   ChevronDown,
+  CircleX,
+  Copy,
   Download,
   FileText,
   History,
   Loader2,
   Trash2,
   User,
-  X,
 } from "lucide-react";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,7 @@ import {
 } from "@/lib/api-errors";
 import { cn } from "@/lib/utils";
 import { parseUtcTimestamp } from "@/utils/dateUtils";
+import { formatFileSize } from "@/utils/fileUtils";
 import {
   concatBytes,
   looksTextual,
@@ -29,8 +32,8 @@ import {
   readProbe,
   type MediaKind,
 } from "./content-sniff";
-import { TextPreview } from "./text-preview";
 import type { BrowsedFile } from "./file-tree";
+import { TextPreview } from "./text-preview";
 
 type ViewerKind = MediaKind | "text" | "binary";
 
@@ -167,6 +170,9 @@ function ProvenanceStrip({
 }) {
   const t = useTranslations("FilesPage");
   const format = useFormatter();
+  // An explicit clock for "5 minutes ago": without one next-intl falls back to
+  // the render's own time and warns; ticking each minute keeps it current.
+  const now = useNow({ updateInterval: 60_000 });
   const { events, error, loading } = useProvenance(file, fetchHistory);
   const [expanded, setExpanded] = useState(false);
 
@@ -191,7 +197,7 @@ function ProvenanceStrip({
   };
   const when = (iso: string) => {
     const date = parseUtcTimestamp(iso);
-    return date ? format.relativeTime(date) : iso;
+    return date ? format.relativeTime(date, now) : iso;
   };
 
   if (loading) {
@@ -238,7 +244,10 @@ function ProvenanceStrip({
           <span className="shrink-0 tabular-nums">{events.length}</span>
         )}
         <ChevronDown
-          className={cn("h-3.5 w-3.5 shrink-0 transition-transform", expanded && "rotate-180")}
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 transition-transform",
+            expanded && "rotate-180"
+          )}
         />
       </button>
       {expanded && (
@@ -260,7 +269,9 @@ function ProvenanceStrip({
                     dateStyle: "medium",
                     timeStyle: "short",
                   })}
-                  {event.task_id ? ` · ${t("fromTask", { id: event.task_id })}` : ""}
+                  {event.task_id
+                    ? ` · ${t("fromTask", { id: event.task_id })}`
+                    : ""}
                 </span>
               </div>
             </li>
@@ -271,21 +282,69 @@ function ProvenanceStrip({
   );
 }
 
+/**
+ * Copy a text file's contents. The icon answers for a moment: a tick when it
+ * worked, a cross (and the reason in its label) when the clipboard refused.
+ */
+function CopyContentsButton({ text }: { text: string }) {
+  const t = useTranslations("FilesPage");
+  const tCommon = useTranslations("Common");
+  const [outcome, setOutcome] = useState<"copied" | "failed" | null>(null);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setOutcome("copied");
+    } catch (err) {
+      console.error("Failed to copy file contents", err);
+      setOutcome("failed");
+    }
+    setTimeout(() => setOutcome(null), 2000);
+  };
+
+  const label =
+    outcome === "copied"
+      ? t("copied")
+      : outcome === "failed"
+        ? tCommon("copyFailed")
+        : t("copyContents");
+
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      className="h-7 w-7 shrink-0 text-muted-foreground"
+      aria-label={label}
+      title={label}
+      onClick={() => void copy()}
+    >
+      {outcome === "copied" ? (
+        <Check className="h-4 w-4" />
+      ) : outcome === "failed" ? (
+        <CircleX className="h-4 w-4 text-destructive" />
+      ) : (
+        <Copy className="h-4 w-4" />
+      )}
+    </Button>
+  );
+}
+
+/**
+ * One open file: where it is and what it is above, then its preview. Closing
+ * belongs to its tab, which already carries the cross.
+ */
 export function FileViewerContent({
   file,
   fetchUrl,
   fetchHistory,
   onDelete,
-  onClose,
 }: {
   file: BrowsedFile;
   fetchUrl: FetchUrlFn;
   fetchHistory?: FetchHistoryFn;
   onDelete?: (file: BrowsedFile) => void;
-  onClose?: () => void;
 }) {
   const t = useTranslations("FilesPage");
-  const tCommon = useTranslations("Common");
   const [resolvedUrl, setResolvedUrl] = useState<{
     path: string;
     url: string;
@@ -362,6 +421,17 @@ export function FileViewerContent({
   const url = resolvedUrl?.path === file.path ? resolvedUrl.url : null;
 
   const fileName = file.path.split("/").pop() || file.path;
+  // The folders above it, for a file opened from deep in the tree.
+  const folders = file.path.split("/").slice(0, -1).filter(Boolean);
+  const extension = fileName.includes(".")
+    ? fileName.split(".").pop()?.toUpperCase()
+    : undefined;
+  const meta = [
+    typeof file.size === "number" ? formatFileSize(file.size) : null,
+    extension,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const handleDownload = () => {
     if (!url) return;
@@ -376,8 +446,19 @@ export function FileViewerContent({
       <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate text-sm" title={file.path}>
+          {folders.length > 0 && (
+            <span className="text-muted-foreground">
+              {folders.join(" / ")} /{" "}
+            </span>
+          )}
           {fileName}
         </span>
+        {meta && (
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground max-sm:hidden">
+            {meta}
+          </span>
+        )}
+        {kind === "text" && text !== null && <CopyContentsButton text={text} />}
         <Button
           size="icon"
           variant="ghost"
@@ -397,17 +478,6 @@ export function FileViewerContent({
             onClick={() => onDelete(file)}
           >
             <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
-        {onClose && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 shrink-0"
-            aria-label={tCommon("close")}
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -441,7 +511,11 @@ export function FileViewerContent({
         )}
 
         {!loading && !error && url && kind === "pdf" && (
-          <iframe src={url} title={fileName} className="h-full w-full border-0" />
+          <iframe
+            src={url}
+            title={fileName}
+            className="h-full w-full border-0"
+          />
         )}
 
         {!loading && !error && url && kind === "video" && (
@@ -457,7 +531,12 @@ export function FileViewerContent({
 
         {!loading && !error && url && kind === "audio" && (
           <div className="flex h-full items-center justify-center p-8">
-            <MediaPreview kind="audio" url={url} name={fileName} className="w-full" />
+            <MediaPreview
+              kind="audio"
+              url={url}
+              name={fileName}
+              className="w-full"
+            />
           </div>
         )}
 

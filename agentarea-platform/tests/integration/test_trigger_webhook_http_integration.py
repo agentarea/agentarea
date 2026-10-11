@@ -478,7 +478,10 @@ class TestWebhookHTTPIntegration:
     async def test_telegram_webhook_message(
         self, webhook_client, trigger_service, mock_task_service, journal, sample_agent_id
     ):
-        """A Telegram update is recorded under its update_id, and fires the trigger."""
+        """A Telegram update carrying the bot's secret token is recorded and fires the trigger."""
+        # Telegram echoes the secret_token given to setWebhook in a header; it is
+        # what tells its updates from a forged one naming any sender.
+        secret = "telegram-secret-token"  # noqa: S105  # pragma: allowlist secret
         trigger_data = TriggerCreate(
             name="Telegram Bot Webhook",
             description="Handle Telegram bot updates",
@@ -488,6 +491,7 @@ class TestWebhookHTTPIntegration:
             webhook_type=WebhookType.TELEGRAM,
             allowed_methods=["POST"],
             task_parameters={"platform": "telegram", "auto_reply": True},
+            validation_rules={"secret_token": secret},
             created_by="test_user",
             workspace_id="webhook-test-workspace",
         )
@@ -524,10 +528,11 @@ class TestWebhookHTTPIntegration:
             headers={
                 "Content-Type": "application/json",
                 "User-Agent": "TelegramBot (like TwitterBot)",
+                "X-Telegram-Bot-Api-Secret-Token": secret,
             },
         )
 
-        assert response.status_code == 202
+        assert response.status_code == 202, response.text
         assert response.json()["status"] == "accepted"
         [(_, event, event_key)] = journal.events
         assert event_key == "telegram:123456789"
@@ -540,6 +545,33 @@ class TestWebhookHTTPIntegration:
         assert task_params["platform"] == "telegram"
         assert task_params["auto_reply"] is True
         assert task_params["trigger_data"]["text"] == "Hello bot! Can you help me?"
+
+    async def test_telegram_webhook_without_its_secret_token_is_refused(
+        self, webhook_client, trigger_service, journal, sample_agent_id
+    ):
+        """An update without the bot's secret token could name any sender; it is refused."""
+        trigger = await trigger_service.create_trigger(
+            TriggerCreate(
+                name="Telegram Bot Webhook",
+                agent_id=sample_agent_id,
+                trigger_type=TriggerType.WEBHOOK,
+                webhook_id=str(uuid4()),
+                webhook_type=WebhookType.TELEGRAM,
+                allowed_methods=["POST"],
+                validation_rules={"secret_token": "telegram-secret-token"},  # noqa: S106
+                created_by="test_user",
+                workspace_id="webhook-test-workspace",
+            )
+        )
+
+        response = webhook_client.post(
+            f"/webhooks/{trigger.webhook_id}",
+            json={"update_id": 1, "message": {"message_id": 1, "text": "hi"}},
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 400
+        assert journal.events == []
 
     # Error Handling and Edge Cases
 

@@ -20,7 +20,7 @@ export const zA2UiActionPayload = z.object({
 export const zApiKeyCreateRequest = z.object({
   agent_id: z.string().uuid().nullish(),
   expires_in_days: z.number().int().gte(1).lte(3650).nullish(),
-  name: z.string(),
+  name: z.string().min(1).max(255),
 });
 
 /**
@@ -332,7 +332,7 @@ export const zBundleAgent = z.object({
   key: z.string().min(1),
   mcps: z.array(z.string()).optional(),
   model: z.string().nullish(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   skills: z.array(z.string()).optional(),
   toolsets: z.array(z.string()).optional(),
 });
@@ -387,7 +387,7 @@ export const zBundleMcp = z.object({
   bindings: z.record(z.string()).optional(),
   json_spec: z.record(z.unknown()),
   key: z.string().min(1),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
 });
 
 /**
@@ -441,7 +441,7 @@ export const zBundlePolicy = z.object({
 export const zBundleSkill = z.object({
   content: z.string().nullish(),
   key: z.string().min(1),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   source_type: z.enum(["content", "github"]).optional().default("content"),
   source_url: z.string().nullish(),
 });
@@ -644,7 +644,7 @@ export const zCodeToolConfig = z.object({
  */
 export const zCollectionCreateRequest = z.object({
   description: z.string().nullish(),
-  name: z.string(),
+  name: z.string().min(1).max(255),
 });
 
 /**
@@ -662,7 +662,7 @@ export const zCollectionSummaryResponse = z.object({
  */
 export const zCollectionUpdateRequest = z.object({
   description: z.string().nullish(),
-  name: z.string().nullish(),
+  name: z.string().min(1).max(255).nullish(),
 });
 
 /**
@@ -709,7 +709,11 @@ export const zContinueTaskPayload = z.object({
  * CreateInvitationBody
  */
 export const zCreateInvitationBody = z.object({
-  email: z.string().nullish(),
+  email: z
+    .string()
+    .max(320)
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
+    .nullish(),
   expires_in_days: z.number().int().gte(1).lte(365).nullish(),
 });
 
@@ -863,6 +867,16 @@ export const zExecutionTimelineResponse = z.object({
   period_hours: z.number().int(),
   timeline: z.array(z.record(z.unknown())),
   trigger_id: z.string().uuid(),
+});
+
+/**
+ * ExternalIdentityResponse
+ */
+export const zExternalIdentityResponse = z.object({
+  external_id: z.string(),
+  id: z.string().uuid(),
+  linked_at: z.string().datetime(),
+  provider: z.string(),
 });
 
 /**
@@ -2467,6 +2481,7 @@ export const zResolveResponse = z.object({
  * RestoredFileResponse
  */
 export const zRestoredFileResponse = z.object({
+  archived_current: z.string().nullish(),
   path: z.string(),
   restored_from: z.string(),
 });
@@ -2656,10 +2671,10 @@ export const zBundleInput = z.object({
   automations: z.array(zBundleAutomation).optional(),
   channels: z.array(zBundleChannel).optional(),
   description: z.string().optional().default(""),
-  display_name: z.string().nullish(),
+  display_name: z.string().max(255).nullish(),
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   policies: z.array(zBundlePolicy).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
@@ -2676,10 +2691,10 @@ export const zBundleOutput = z.object({
   automations: z.array(zBundleAutomation).optional(),
   channels: z.array(zBundleChannel).optional(),
   description: z.string().optional().default(""),
-  display_name: z.string().nullish(),
+  display_name: z.string().max(255).nullish(),
   mcps: z.array(zBundleMcp).optional(),
   metadata: zBundleMetadata.optional(),
-  name: z.string().min(1),
+  name: z.string().min(1).max(255),
   policies: z.array(zBundlePolicy).optional(),
   schema_version: z.string().optional().default("0.1.0"),
   setup: z.array(zSetupField).optional(),
@@ -2727,9 +2742,9 @@ export const zSkillContentResponse = z.object({
  */
 export const zSkillCreateRequest = z.object({
   content: z.string().nullish(),
-  description: z.string().nullish(),
+  description: z.string().max(1000).nullish(),
   github_url: z.string().nullish(),
-  name: z.string().nullish(),
+  name: z.string().max(255).nullish(),
 });
 
 /**
@@ -2762,7 +2777,13 @@ export const zSkillMemberAddRequest = z.object({
   child_skill_id: z.string().uuid(),
   dependencies: z.array(z.string()).optional(),
   is_required: z.boolean().optional().default(true),
-  order: z.number().int().optional().default(0),
+  order: z
+    .number()
+    .int()
+    .gte(-2147483648)
+    .lte(2147483647)
+    .optional()
+    .default(0),
 });
 
 /**
@@ -2835,8 +2856,8 @@ export const zPaginatedResponseSkillResponse = z.object({
  */
 export const zSkillUpdateRequest = z.object({
   content: z.string().nullish(),
-  description: z.string().nullish(),
-  name: z.string().nullish(),
+  description: z.string().max(1000).nullish(),
+  name: z.string().min(1).max(255).nullish(),
 });
 
 /**
@@ -3185,6 +3206,21 @@ export const zInboxResponse = z.object({
   page: z.number().int(),
   page_size: z.number().int(),
   total: z.number().int(),
+});
+
+/**
+ * TelegramLinkRequest
+ */
+export const zTelegramLinkRequest = z.object({
+  bot: z.string().regex(/^[A-Za-z0-9_]{5,32}$/),
+});
+
+/**
+ * TelegramLinkResponse
+ */
+export const zTelegramLinkResponse = z.object({
+  expires_in: z.number().int(),
+  url: z.string(),
 });
 
 /**
@@ -3934,6 +3970,7 @@ export const zWorkspaceFileInfo = z.object({
 export const zWorkspaceFileListResponse = z.object({
   directories: z.array(z.string()).optional(),
   files: z.array(zWorkspaceFileInfo),
+  truncated: z.boolean().optional().default(false),
 });
 
 /**
@@ -4200,6 +4237,35 @@ export const zProxyInstanceV1McpInstanceIdMcpGetPath = z.object({
 export const zProxyInstanceV1McpInstanceIdMcpPostPath = z.object({
   instance_id: z.string(),
 });
+
+/**
+ * Response List External Identities V1 Me External Identities Get
+ *
+ * Successful Response
+ */
+export const zListExternalIdentitiesV1MeExternalIdentitiesGetResponse = z.array(
+  zExternalIdentityResponse
+);
+
+export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostBody =
+  zTelegramLinkRequest;
+
+/**
+ * Successful Response
+ */
+export const zStartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponse =
+  zTelegramLinkResponse;
+
+export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeletePath =
+  z.object({
+    identity_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse =
+  z.void();
 
 /**
  * Successful Response
@@ -5384,7 +5450,7 @@ export const zDeployMcpServerV1McpServersServerIdDeployPostPath = z.object({
 export const zListMembersV1MembersGetResponse = z.array(zMemberResponse);
 
 export const zRemoveMemberV1MembersUserIdDeletePath = z.object({
-  user_id: z.string(),
+  user_id: z.string().min(1).max(255),
 });
 
 export const zRemoveMemberV1MembersUserIdDeleteResponse = z.union([
@@ -6366,8 +6432,8 @@ export const zUploadSkillV1SkillsUploadPostBody =
   zBodyUploadSkillV1SkillsUploadPost;
 
 export const zUploadSkillV1SkillsUploadPostQuery = z.object({
-  name: z.string().nullish(),
-  description: z.string().nullish(),
+  name: z.string().max(255).nullish(),
+  description: z.string().max(1000).nullish(),
 });
 
 /**
@@ -6536,8 +6602,8 @@ export const zListEventsV1StreamsStreamIdEventsGetPath = z.object({
 });
 
 export const zListEventsV1StreamsStreamIdEventsGetQuery = z.object({
-  after: z.number().int().gte(0).nullish(),
-  before: z.number().int().gte(1).nullish(),
+  after: z.number().int().gte(0).lte(9223372036854776000).nullish(),
+  before: z.number().int().gte(1).lte(9223372036854776000).nullish(),
   limit: z.number().int().gte(1).lte(200).optional().default(50),
 });
 
@@ -6548,7 +6614,7 @@ export const zListEventsV1StreamsStreamIdEventsGetResponse = zStreamEventPage;
 
 export const zGetEventV1StreamsStreamIdEventsSequenceGetPath = z.object({
   stream_id: z.string().uuid(),
-  sequence: z.number().int(),
+  sequence: z.number().int().gte(1).lte(9223372036854776000),
 });
 
 /**
@@ -6621,6 +6687,18 @@ export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetPath = z.object(
  */
 export const zListSubscriptionsV1StreamsStreamIdSubscriptionsGetResponse =
   z.array(zSubscriptionResponse);
+
+export const zDeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeletePath =
+  z.object({
+    stream_id: z.string().uuid(),
+    subscription_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponse =
+  z.void();
 
 export const zListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetPath =
   z.object({

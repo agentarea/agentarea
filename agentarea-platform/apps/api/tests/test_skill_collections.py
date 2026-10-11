@@ -485,3 +485,46 @@ async def test_sync_grants_is_idempotent_over_members_already_in_the_graph(
         result = await access_control.sync_grants(context, session)
 
         assert result.written == 1
+
+
+@pytest.fixture
+async def collections_client(session_factory):
+    from agentarea_api.main import app
+    from agentarea_common.auth.dependencies import get_user_context
+    from agentarea_common.config.database import get_db_session
+    from httpx import ASGITransport, AsyncClient
+
+    async def _user_context():
+        return _context()
+
+    async def _db_session():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_user_context] = _user_context
+    app.dependency_overrides[get_db_session] = _db_session
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_user_context, None)
+        app.dependency_overrides.pop(get_db_session, None)
+
+
+@pytest.mark.parametrize("name", ["", "x" * 256], ids=["empty", "too-long"])
+async def test_api_refuses_a_collection_name_the_column_cannot_hold(
+    collections_client, session_factory, name
+):
+    base = "/v1/workspaces/acme/skill-collections"
+    created = await collections_client.post(f"{base}/", json={"name": "c1"})
+    assert created.status_code == 201
+
+    assert (await collections_client.post(f"{base}/", json={"name": name})).status_code == 422
+    renamed = await collections_client.put(
+        f"{base}/{created.json()['id']}", json={"name": name}
+    )
+    assert renamed.status_code == 422
+
+    async with session_factory() as session:
+        service = SkillCollectionService(RepositoryFactory(session, _context()))
+        assert [s.collection.name for s in await service.list_collections()] == ["c1"]

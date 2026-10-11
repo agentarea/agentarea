@@ -1,9 +1,12 @@
 import React, {useEffect} from 'react';
 import {signalHandler} from './utils/signals.js';
 import {logger} from './utils/logger.js';
-import {configManager} from './utils/config.js';
 import {apiClient} from './services/apiClient.js';
-import {initApiClient, setRuntimeToken} from './services/apiRuntime.js';
+import {
+	applyApiUrlFlag,
+	initApiClient,
+	setRuntimeToken,
+} from './services/apiRuntime.js';
 import {ErrorBoundary} from './components/ErrorBoundary.js';
 import TUI from './tui.js';
 
@@ -13,12 +16,8 @@ interface AppProps {
 }
 
 export default function App({token: cliToken, apiUrl}: AppProps) {
-	// Initialize config with provided API URL if specified
-	if (apiUrl) {
-		process.env['AGENTAREA_API_URL'] = apiUrl;
-		configManager.reinitialize();
-		apiClient.reinitialize();
-	}
+	// `--api-url` outranks AGENTAREA_API_URL and the saved config.
+	applyApiUrlFlag(apiUrl);
 
 	// Configure the shared API client for SDK-backed calls in the TUI.
 	initApiClient();

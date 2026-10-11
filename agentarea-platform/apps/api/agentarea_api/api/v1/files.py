@@ -34,11 +34,12 @@ from agentarea_common.artifacts import (
     normalize_workspace_path,
     secure_download_headers,
 )
+from agentarea_common.artifacts.service import ensure_no_file_ancestors
 from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.artifacts.workspace_writes import (
     MAX_UPLOADS_PER_PLAN,
+    RESERVED_PREFIXES,
     WorkspaceReadOnlyError,
-    ensure_no_file_ancestors,
     ensure_not_read_only,
     is_reserved_path,
     plan_uploads,
@@ -64,6 +65,9 @@ logger = logging.getLogger(__name__)
 # workspace enforces; size/quota are re-checked at attach time.
 MAX_ATTACHMENT_BYTES = DEFAULT_MAX_FILE_BYTES
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+# The most objects one workspace listing returns. Past it the response says it
+# was cut short instead of passing a partial workspace off as the whole one.
+MAX_LISTED_FILES = 10_000
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -80,6 +84,13 @@ class WorkspaceFileListResponse(BaseModel):
     files: list[WorkspaceFileInfo]
     # Trailing-slash paths keep user-created and project folders visible when empty.
     directories: list[str] = Field(default_factory=list)
+    truncated: bool = Field(
+        default=False,
+        description=(
+            f"True when the workspace holds more than {MAX_LISTED_FILES} objects and "
+            f"only the first {MAX_LISTED_FILES} are listed."
+        ),
+    )
 
 
 class CreateWorkspaceDirectoryRequest(BaseModel):
@@ -159,6 +170,13 @@ class ArchivedFileResponse(BaseModel):
 class RestoredFileResponse(BaseModel):
     path: str
     restored_from: str
+    archived_current: str | None = Field(
+        default=None,
+        description=(
+            "Trash path of the file that occupied `path` and was archived to make room for "
+            "the restore; null when the path was free."
+        ),
+    )
 
 
 class ArtifactEventResponse(BaseModel):
@@ -252,8 +270,15 @@ async def list_workspace_files(
     even though ``tasks/{id}/workspace/{path}`` remains readable by that name.
     """
     svc = _get_artifact_service()
-    objects = await svc.list(user_context.workspace_id)
-    visible_objects = [obj for obj in objects if not is_reserved_path(obj.path)]
+    # Reserved roots are skipped by the listing itself, so a workspace full of
+    # task output cannot use up the budget before a person's own files are read.
+    objects = await svc.list(
+        user_context.workspace_id,
+        max_items=MAX_LISTED_FILES + 1,
+        exclude_roots=RESERVED_PREFIXES,
+    )
+    truncated = len(objects) > MAX_LISTED_FILES
+    visible_objects = [obj for obj in objects[:MAX_LISTED_FILES] if not is_reserved_path(obj.path)]
     files = [
         WorkspaceFileInfo(
             path=obj.path,
@@ -269,7 +294,7 @@ async def list_workspace_files(
         {obj.path for obj in visible_objects if obj.path.endswith("/")}
         | {f"projects/{p.id}/" for p in projects}
     )
-    return WorkspaceFileListResponse(files=files, directories=directories)
+    return WorkspaceFileListResponse(files=files, directories=directories, truncated=truncated)
 
 
 @router.post(
@@ -421,7 +446,9 @@ async def move_workspace_file(
         await svc.move(workspace_id, source, destination)
         return MovedFileResponse(source=source, destination=destination, moved=1)
 
-    contents = await svc.list(workspace_id, prefix=f"{source}/")
+    # Every key beneath the folder, however many: a capped listing would move
+    # the first page and leave the rest behind at the old path.
+    contents = await svc.list(workspace_id, prefix=f"{source}/", max_items=None)
     if not contents:
         raise HTTPException(status_code=404, detail="File not found")
     # Refuse the whole move before copying anything if one child cannot land.
@@ -484,7 +511,13 @@ async def restore_workspace_file(
     file_path: str,
     user_context: UserContextDep,
 ) -> RestoredFileResponse:
-    """Move an archived file back to the path it was archived from."""
+    """Move an archived file back to the path it was archived from.
+
+    A file that has taken that path since is archived first, as a delete would,
+    and its trash path comes back as ``archived_current`` — a restore never
+    destroys anything. A path a write could not take (a file among its parents,
+    a folder at it) is a 409.
+    """
     clean = file_path.lstrip("/")
     if not clean.startswith(TRASH_PREFIX):
         raise HTTPException(status_code=400, detail="Not an archived file")
@@ -495,10 +528,16 @@ async def restore_workspace_file(
         actor=ArtifactActor(user_id=user_context.user_id),
     )
     try:
-        original = await svc.restore(user_context.workspace_id, clean)
+        restored = await svc.restore(user_context.workspace_id, clean)
     except (FileNotFoundError, InvalidArtifactPathError):
         raise HTTPException(status_code=404, detail="File not found") from None
-    return RestoredFileResponse(path=original, restored_from=clean)
+    except WorkspaceConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return RestoredFileResponse(
+        path=restored.path,
+        restored_from=restored.restored_from,
+        archived_current=restored.archived_current,
+    )
 
 
 @router.get(

@@ -58,10 +58,82 @@ export function mcpAlias(name: string): string {
 	return `agentarea_${suffix || 'default'}`;
 }
 
+// C0 controls and DEL: none belongs in a URL, an alias or a TOML basic string.
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/;
+
+/**
+ * The MCP endpoint the server returned, accepted only as an http(s) URL with no
+ * control characters. It is written into a harness's config, so a value that
+ * could break out of its field is refused rather than escaped into place.
+ */
+export function assertMcpUrl(url: string): string {
+	if (CONTROL_CHARACTERS.test(url)) {
+		throw new Error(
+			`Refusing MCP endpoint URL ${JSON.stringify(
+				url,
+			)}: it contains control characters`,
+		);
+	}
+
+	let parsed: URL;
+	try {
+		parsed = new URL(url);
+	} catch {
+		throw new Error(
+			`Refusing MCP endpoint URL ${JSON.stringify(url)}: not a valid URL`,
+		);
+	}
+
+	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+		throw new Error(
+			`Refusing MCP endpoint URL ${JSON.stringify(
+				url,
+			)}: only http and https are allowed`,
+		);
+	}
+
+	return url;
+}
+
+/**
+ * The local server name, accepted only as a TOML bare key (letters, digits,
+ * `_`, `-`) that does not start with `-`, so it can sit in a table header and
+ * in a harness's argv without being read as anything else.
+ */
+export function assertAlias(alias: string): string {
+	if (!/^[A-Za-z\d_][\w-]*$/.test(alias)) {
+		throw new Error(
+			`Invalid alias ${JSON.stringify(
+				alias,
+			)}: use letters, digits, "_" and "-" (not leading)`,
+		);
+	}
+
+	return alias;
+}
+
+/**
+ * *value* as a TOML basic string: backslash and double quote escaped, control
+ * characters refused (TOML would need them escaped; none is legitimate here).
+ */
+export function tomlString(value: string): string {
+	if (CONTROL_CHARACTERS.test(value)) {
+		throw new Error(
+			`Refusing to write ${JSON.stringify(
+				value,
+			)} to TOML: it contains control characters`,
+		);
+	}
+
+	return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
 export function harnessAddArgs(
 	harness: Harness,
 	options: {alias: string; url: string; scope: Scope},
 ): string[] {
+	assertAlias(options.alias);
+	assertMcpUrl(options.url);
 	if (harness === 'codex') {
 		return ['mcp', 'add', options.alias, '--url', options.url];
 	}
@@ -86,6 +158,7 @@ export function harnessLoginArgs(
 	harness: Harness,
 	alias: string,
 ): string[] | null {
+	assertAlias(alias);
 	return harness === 'codex' ? ['mcp', 'login', alias] : null;
 }
 
@@ -217,10 +290,11 @@ export function upsertCodexServer(
 	alias: string,
 	url: string,
 ): string {
+	assertAlias(alias);
 	const block = [
 		managedStart(alias),
 		`[mcp_servers.${alias}]`,
-		`url = "${url}"`,
+		`url = ${tomlString(assertMcpUrl(url))}`,
 		// Codex defaults to a 10s startup budget, and it drops a server that
 		// misses it without a word in the log. A bundle aggregates every member
 		// MCP's tools on `tools/list`, which measured ~15s for a single member
@@ -238,7 +312,8 @@ export function upsertCodexServer(
 		'm',
 	);
 	if (managed.test(existing)) {
-		return existing.replace(managed, block);
+		// A replacer function, so `$&`/`$'` in the URL stay literal text.
+		return existing.replace(managed, () => block);
 	}
 
 	const table = new RegExp(`^\\[mcp_servers\\.${escapeForRegExp(alias)}]`, 'm');

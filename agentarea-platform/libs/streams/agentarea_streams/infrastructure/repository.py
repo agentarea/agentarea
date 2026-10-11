@@ -8,6 +8,8 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import ColumnElement, CursorResult, delete, select, update
+from sqlalchemy import cast as sql_cast
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError, NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,6 +70,27 @@ class StreamRepository(WorkspaceScopedRepository[StreamORM]):
             select(StreamORM).where(StreamORM.name == name, self._get_workspace_filter())
         )
         return result.scalar_one_or_none()
+
+    async def lock_for_delete(self, stream_id: UUID) -> StreamORM | None:
+        """The row, locked until commit: a subscription or forward added to it meanwhile waits."""
+        result = await self.session.execute(
+            select(StreamORM)
+            .where(StreamORM.id == stream_id, self._get_workspace_filter())
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def lock_existing(self, stream_ids: list[UUID]) -> set[UUID]:
+        """Which of ``stream_ids`` exist here, each kept from deletion until commit."""
+        if not stream_ids:
+            return set()
+        result = await self.session.execute(
+            select(StreamORM.id)
+            .where(StreamORM.id.in_(stream_ids), self._get_workspace_filter())
+            .order_by(StreamORM.id)
+            .with_for_update(key_share=True)
+        )
+        return set(result.scalars().all())
 
     async def delete_in_workspace(self, stream_id: UUID) -> bool:
         result = await self.session.execute(
@@ -309,6 +332,51 @@ class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionO
             .order_by(StreamSubscriptionORM.created_at)
         )
         return list(result.scalars().all())
+
+    async def get_in_stream(
+        self, stream_id: UUID, subscription_id: UUID
+    ) -> StreamSubscriptionORM | None:
+        result = await self.session.execute(
+            select(StreamSubscriptionORM).where(
+                StreamSubscriptionORM.id == subscription_id,
+                StreamSubscriptionORM.stream_id == stream_id,
+                self._get_workspace_filter(),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def trigger_ids_on_stream(self, stream_id: UUID) -> list[UUID]:
+        result = await self.session.execute(
+            select(StreamSubscriptionORM.trigger_id)
+            .where(
+                StreamSubscriptionORM.stream_id == stream_id,
+                StreamSubscriptionORM.kind == SubscriptionKind.TRIGGER.value,
+                self._get_workspace_filter(),
+            )
+            .order_by(StreamSubscriptionORM.created_at)
+        )
+        return [t for t in result.scalars().all() if t is not None]
+
+    async def forwards_into(self, stream_id: UUID) -> list[StreamSubscriptionORM]:
+        """Forwards of any stream here that list ``stream_id`` among their outputs."""
+        result = await self.session.execute(
+            select(StreamSubscriptionORM)
+            .where(
+                StreamSubscriptionORM.kind == SubscriptionKind.FORWARD.value,
+                sql_cast(StreamSubscriptionORM.output_stream_ids, JSONB).contains([str(stream_id)]),
+                self._get_workspace_filter(),
+            )
+            .order_by(StreamSubscriptionORM.created_at)
+        )
+        return list(result.scalars().all())
+
+    async def delete_in_workspace(self, subscription_id: UUID) -> bool:
+        result = await self.session.execute(
+            delete(StreamSubscriptionORM).where(
+                StreamSubscriptionORM.id == subscription_id, self._get_workspace_filter()
+            )
+        )
+        return cast(CursorResult[Any], result).rowcount == 1
 
 
 class SubscriptionOutcomeRepository(WorkspaceScopedRepository[SubscriptionOutcomeORM]):

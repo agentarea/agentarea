@@ -17,7 +17,7 @@ from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -27,13 +27,14 @@ router = APIRouter(prefix="/skill-collections", tags=["skill-collections"])
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
+# ``skill_collections.name`` is String(255).
 class CollectionCreateRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=255)
     description: str | None = None
 
 
 class CollectionUpdateRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
 
 

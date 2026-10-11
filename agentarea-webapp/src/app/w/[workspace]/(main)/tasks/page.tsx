@@ -7,7 +7,6 @@ import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { ViewModeTabs } from "@/components/HeaderTabs";
 import SearchInput from "@/components/SearchInput";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
-import { parsePageParam } from "@/lib/offsetPage";
 import { statusesForFilter } from "@/lib/taskStatusFilter";
 import { TasksData } from "./components/TasksData";
 import TasksSkeleton from "./components/TasksSkeleton";
@@ -16,8 +15,6 @@ import TasksStatusFilter from "./components/TasksStatusFilter";
 export const metadata: Metadata = {
   title: "Tasks",
 };
-
-const RESET_ON_SEARCH = ["page"];
 
 interface TasksPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -43,8 +40,6 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
         ? statusesForFilter(rawStatus)
         : null;
   if (statuses === null) notFound();
-  const page = parsePageParam(resolvedSearchParams.page);
-  if (page === null) notFound();
 
   // Read tab from URL or fallback to cookie
   const cookieStore = await cookies();
@@ -71,11 +66,7 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       subheader={
         <SubheaderToolbar
           search={
-            <SearchInput
-              urlParamName="search"
-              urlPath="/tasks"
-              resetParamNames={RESET_ON_SEARCH}
-            />
+            <SearchInput urlParamName="search" urlPath="/tasks" />
           }
           controls={
             <>
@@ -87,15 +78,11 @@ export default async function TasksPage({ searchParams }: TasksPageProps) {
       }
     >
       <Suspense
-        key={`${searchQuery}-${creator}-${statuses.join(",")}-${page}-${tab}`}
+        key={`${searchQuery}-${creator}-${statuses.join(",")}-${tab}`}
         fallback={<TasksSkeleton viewMode={tab} columns={skeletonColumns} />}
       >
         <TasksData
-          searchQuery={searchQuery}
-          creator={creator}
-          statuses={statuses}
-          page={page}
-          searchParams={resolvedSearchParams}
+          query={{ search: searchQuery, creator, statuses }}
           viewMode={tab}
         />
       </Suspense>

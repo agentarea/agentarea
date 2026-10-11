@@ -196,7 +196,7 @@ function FolderRow({
             >
               <ChevronRight
                 className={cn(
-                  "h-3.5 w-3.5 text-muted-foreground",
+                  "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
                   expanded && "rotate-90"
                 )}
               />
@@ -249,7 +249,9 @@ function FolderRow({
           </button>
         </CollapsibleTrigger>
       )}
-      <CollapsibleContent>
+      {/* The sidebar's own fold: the folder's contents slide to their
+          measured height instead of jumping in. */}
+      <CollapsibleContent className="aa-collapsible">
         {sortedChildren(node).map((child) =>
           child.isFile ? (
             <FileRow

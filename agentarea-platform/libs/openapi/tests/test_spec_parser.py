@@ -2,7 +2,11 @@
 
 import pytest
 
-from agentarea_openapi.application.spec_parser import parse_openapi_operations, parse_openapi_spec
+from agentarea_openapi.application.spec_parser import (
+    openapi_spec_info,
+    parse_openapi_operations,
+    parse_openapi_spec,
+)
 
 
 SAMPLE_SPEC = {
@@ -368,3 +372,97 @@ class TestConfiguredQueryParams:
         [_, hits] = parse_openapi_spec(COLLECT_SPEC)
 
         assert set(hits["inputSchema"]["properties"]) == {"ms", "dl"}
+
+
+_MALFORMED_SPECS = {
+    "operation is a string": {"openapi": "3.0.0", "paths": {"/a": {"get": "x"}}},
+    "operation parameters is a string": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"get": {"parameters": "x"}}},
+    },
+    "a parameter is a string": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"get": {"parameters": ["x"]}}},
+    },
+    "path parameters is an object": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"parameters": {"name": "x"}, "get": {}}},
+    },
+    "a parameter name is not text": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"get": {"parameters": [{"name": ["x"], "in": "query"}]}}},
+    },
+    "a parameter schema is a string": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"get": {"parameters": [{"name": "q", "schema": "string"}]}}},
+    },
+    "operationId is not text": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"get": {"operationId": 7}}},
+    },
+    "summary is not text": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"get": {"summary": {"x": 1}}}},
+    },
+    "requestBody is a string": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"post": {"requestBody": "x"}}},
+    },
+    "requestBody content is a list": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"post": {"requestBody": {"content": ["application/json"]}}}},
+    },
+    "a media type is a string": {
+        "openapi": "3.0.0",
+        "paths": {"/a": {"post": {"requestBody": {"content": {"application/json": "x"}}}}},
+    },
+    "a body schema is a list": {
+        "openapi": "3.0.0",
+        "paths": {
+            "/a": {"post": {"requestBody": {"content": {"text/plain": {"schema": ["x"]}}}}}
+        },
+    },
+    "paths is a list": {"openapi": "3.0.0", "paths": ["/a"]},
+    "openapi is a number": {"openapi": 3.0, "paths": {}},
+    "the spec is a list": ["openapi", "3.0.0"],
+    "info is a string": {"openapi": "3.0.0", "info": "str", "paths": {}},
+    "servers is a string": {"openapi": "3.0.0", "servers": "notalist", "paths": {}},
+    "a server is a string": {"openapi": "3.0.0", "servers": ["x"], "paths": {}},
+    "a server url is not text": {"openapi": "3.0.0", "servers": [{"url": 1}], "paths": {}},
+}
+
+
+@pytest.mark.parametrize("spec", _MALFORMED_SPECS.values(), ids=_MALFORMED_SPECS.keys())
+def test_a_malformed_spec_is_a_value_error(spec):
+    """Every malformed spec is the ValueError the routes answer 400 with.
+
+    These raised AttributeError/TypeError (``.get`` on a string), which the
+    preview and create routes do not map, so a member's bad document was a 500.
+    """
+    with pytest.raises(ValueError, match="OpenAPI"):
+        parse_openapi_spec(spec)  # type: ignore[arg-type]
+
+
+def test_spec_info_reads_title_version_and_first_server():
+    spec = {
+        "openapi": "3.0.0",
+        "info": {"title": "T", "description": "D", "version": 1.0},
+        "servers": [{"url": "https://api.example.com"}, {"url": "https://b.example.com"}],
+        "paths": {},
+    }
+
+    assert openapi_spec_info(spec) == {
+        "title": "T",
+        "description": "D",
+        "version": "1.0",
+        "base_url": "https://api.example.com",
+    }
+
+
+def test_spec_info_of_a_spec_without_info_or_servers():
+    assert openapi_spec_info({"openapi": "3.0.0"}) == {
+        "title": None,
+        "description": None,
+        "version": None,
+        "base_url": None,
+    }

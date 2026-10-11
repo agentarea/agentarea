@@ -5,7 +5,8 @@ membership-checked ``workspace`` argument), never on one named by a tool's own
 parameters. Accepting an
 invitation is deliberately absent — the acceptor is not yet a member of the
 target workspace, so it belongs on the REST surface the invitee opens, not on
-a member's tool surface.
+a member's tool surface. Inviting, revoking an invitation and removing a member
+need a signed-in user, as on the REST surface: an API key is refused.
 """
 
 import json
@@ -14,6 +15,7 @@ from uuid import UUID
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import (
     enforced_in_handler,
+    requires_user_session,
     requires_workspace_admin,
     unrestricted,
 )
@@ -111,6 +113,7 @@ class MembersToolset(Toolset):
             )
 
     @tool_method(effect="privileged")
+    @requires_user_session("invite members")
     @requires_workspace_admin()
     async def invite(self, email: str | None = None, expires_in_days: int | None = None) -> str:
         """Create an invitation. The plaintext token is returned exactly once."""
@@ -153,6 +156,7 @@ class MembersToolset(Toolset):
             return json.dumps([_invitation(i) for i in invitations], default=str)
 
     @tool_method(effect="privileged")
+    @requires_user_session("revoke invitations")
     @requires_workspace_admin()
     async def revoke_invitation(self, invitation_id: str) -> str:
         """Revoke a pending invitation."""
@@ -176,6 +180,7 @@ class MembersToolset(Toolset):
             return json.dumps({"revoked": True})
 
     @tool_method(effect="privileged")
+    @requires_user_session("remove members")
     @enforced_in_handler("owner-only, enforced by WorkspaceMembershipService.remove")
     async def remove(self, user_id: str) -> str:
         """Remove a member from the workspace.

@@ -26,6 +26,9 @@ class UserContext:
     # The handle the request named the workspace by (``/v1/workspaces/{slug}``).
     # ``None`` for contexts minted outside HTTP, which name it by id.
     workspace_slug: str | None = None
+    # The API key that authenticated the request, if one did. The key acts as
+    # its creator, so ``user_id`` alone cannot tell a key from a signed-in user.
+    api_key_id: str | None = None
 
     def __post_init__(self):
         """Refuse a context that names no principal or no workspace."""
@@ -49,6 +52,15 @@ class WorkspaceUnreachableError(PermissionError):
 
 class WorkspaceBoundCredentialError(PermissionError):
     """A credential confined to one workspace was used to act beyond it."""
+
+
+class UserSessionRequiredError(PermissionError):
+    """An API key was used for an action only a signed-in user may take.
+
+    Minting or revoking keys and deciding who is in the workspace hand out or
+    take away access. A key that could do them would outlive its own revocation
+    through the keys and members it created.
+    """
 
 
 @dataclass
@@ -93,6 +105,7 @@ class UserPrincipal:
             ),
             email=self.email,
             client_id=self.client_id,
+            api_key_id=self.api_key_id,
         )
 
 

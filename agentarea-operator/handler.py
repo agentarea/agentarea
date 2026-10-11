@@ -82,6 +82,40 @@ def platform_instance_id(provider_key: str, model_name: str) -> str:
     return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"model_instance:{provider_key}:{model_name}"))
 
 
+# Workspace-scoped resources (``spec.workspaceId`` set) get derived ids too, for
+# the same reason as platform ones: every reconcile — create, update, the hourly
+# rediscovery timer, an operator restart — has to land on the rows the previous
+# one wrote. A generated id found nothing to update and inserted a fresh
+# configuration, encrypted secret and model instances each time.
+#
+# They are keyed on the resource rather than on the provider alone, because a
+# workspace may declare several configurations for one provider, and on the
+# provider key as well, because a configuration is bound to its provider spec:
+# pointing a resource at a different provider is a different configuration, not a
+# rewrite of this one under its existing model instances.
+#
+# A separate namespace from the platform's, so nothing here can collide with a
+# platform id. Freeze it and the name formats: changing either orphans every
+# workspace configuration the operator has written and duplicates it on the next
+# reconcile.
+WORKSPACE_ID_NAMESPACE = uuid.UUID("3c9e2f71-4b8a-5d06-a1e7-9f2c6b0d4e85")
+
+
+def workspace_config_id(
+    workspace_id: str, namespace: str, cr_name: str, provider_key: str
+) -> str:
+    return str(
+        uuid.uuid5(
+            WORKSPACE_ID_NAMESPACE,
+            f"provider_config:{workspace_id}:{namespace}/{cr_name}:{provider_key}",
+        )
+    )
+
+
+def workspace_instance_id(config_id: str, model_name: str) -> str:
+    return str(uuid.uuid5(WORKSPACE_ID_NAMESPACE, f"model_instance:{config_id}:{model_name}"))
+
+
 def secret_name_for(config_id: str) -> str:
     """The name a configuration's key is stored under.
 
@@ -234,8 +268,14 @@ def sync_provider_config(
     spec: dict,
     api_key: str,
     cr_name: str,
+    *,
+    namespace: str,
 ) -> tuple[str, int]:
     """Sync a ProviderConfig + optional models to the database.
+
+    ``namespace`` and ``cr_name`` identify the custom resource; a workspace-scoped
+    configuration's id is derived from them, so reconciling the same resource
+    again updates the rows it wrote rather than adding new ones.
 
     Returns (provider_config_id, model_count).
     """
@@ -278,8 +318,16 @@ def sync_provider_config(
         # created a second configuration rather than updating the first — two rows
         # holding the operator's key, both visible to every workspace, only one of
         # them metered.
+        #
+        # Derived for workspace-scoped resources as well, from the resource's own
+        # identity: a generated id there meant every reconcile inserted another
+        # configuration, secret and set of model instances (#708).
         is_platform = workspace_id == PLATFORM_WORKSPACE_ID
-        config_id = platform_config_id(provider_key) if is_platform else str(uuid.uuid4())
+        config_id = (
+            platform_config_id(provider_key)
+            if is_platform
+            else workspace_config_id(workspace_id, namespace, cr_name, provider_key)
+        )
         managed_by = MANAGED_BY_PLATFORM if is_platform else None
 
         existing = conn.execute(
@@ -486,11 +534,13 @@ def _upsert_model_instance(
 ):
     """Create a ModelInstance if it doesn't already exist, and set its tags.
 
-    The id is derived rather than generated for platform rows. It is what an agent
+    The id is derived rather than generated. For platform rows it is what an agent
     stores when it selects this model and what billing's rate cards name, so a
     re-created row has to come back with the same id: a fresh one would silently
     unlink every agent using the model and match no rate card, which does not fail
-    — it runs on our provider credit and charges nobody.
+    — it runs on our provider credit and charges nobody. Workspace rows derive it
+    from their (already derived) configuration id, so a reconcile finds the row it
+    wrote last time instead of inserting another.
 
     ``tags`` of None leaves an existing row's tags alone: discovered models have
     no resource entry to take them from. A list, empty included, replaces them.
@@ -500,7 +550,7 @@ def _upsert_model_instance(
     instance_id = (
         platform_instance_id(provider_key, model_name)
         if workspace_id == PLATFORM_WORKSPACE_ID
-        else str(uuid.uuid4())
+        else workspace_instance_id(config_id, model_name)
     )
     existing = conn.execute(
         text(
@@ -607,7 +657,9 @@ def on_provider_config_change(spec, meta, status, namespace, patch, **_):
         patch.status["message"] = "Discovering models..."
 
     try:
-        config_id, model_count = sync_provider_config(spec, api_key, cr_name)
+        config_id, model_count = sync_provider_config(
+            spec, api_key, cr_name, namespace=namespace
+        )
     except kopf.PermanentError as e:
         # Record why before giving up. A permanent failure is the one kind nothing
         # retries, so if it does not reach the resource's status it reaches nobody:
@@ -681,7 +733,9 @@ def periodic_rediscovery(spec, meta, namespace, patch, **_):
 
     try:
         api_key = read_secret(namespace, secret_ref["name"], secret_ref["key"])
-        config_id, model_count = sync_provider_config(spec, api_key, cr_name)
+        config_id, model_count = sync_provider_config(
+            spec, api_key, cr_name, namespace=namespace
+        )
         patch.status["phase"] = "Synced"
         patch.status["discoveredModels"] = model_count
         patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()

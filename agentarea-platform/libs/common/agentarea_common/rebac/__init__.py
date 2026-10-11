@@ -14,15 +14,19 @@ from .models import (
 from .openfga_bootstrap import bootstrap_openfga
 from .openfga_client import OpenFGAClient, OpenFGAError, OpenFGAUnavailableError
 from .ownership import (
+    INVOKER_RELATION,
     OWNER_RELATIONS,
     ResourceOwnershipError,
+    delete_tuple_idempotent,
     grant_resource_owner,
+    owner_relations,
     resolve_graph_client,
     root_project_id,
     write_tuple_idempotent,
 )
 
 __all__ = [
+    "INVOKER_RELATION",
     "OWNER_RELATIONS",
     "CheckResult",
     "OpenFGAClient",
@@ -33,7 +37,9 @@ __all__ = [
     "ResourceOwnershipError",
     "SubjectSet",
     "bootstrap_openfga",
+    "delete_tuple_idempotent",
     "grant_resource_owner",
+    "owner_relations",
     "resolve_graph_client",
     "root_project_id",
     "write_tuple_idempotent",

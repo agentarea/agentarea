@@ -15,11 +15,11 @@ import logging
 import mimetypes
 import re
 import tempfile
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Collection, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Any
+from typing import Any, Protocol
 
 from botocore.exceptions import ClientError
 from fastapi import status
@@ -88,6 +88,38 @@ def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
     return None
 
 
+class WorkspaceError(RuntimeError):
+    """Base error carrying a stable machine-readable failure code."""
+
+    code = "workspace_error"
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+
+
+class WorkspaceConflictError(WorkspaceError):
+    code = "workspace_conflict"
+
+
+class _Store(Protocol):
+    async def exists(self, workspace_id: str, path: str) -> bool: ...
+
+    async def list(self, workspace_id: str, prefix: str = "", max_items: int = 1000) -> Any: ...
+
+
+async def ensure_no_file_ancestors(store: _Store, workspace_id: str, path: str) -> None:
+    """Prevent an existing file from also becoming a parent folder."""
+    for parent in PurePosixPath(path).parents:
+        if parent != PurePosixPath(".") and await store.exists(workspace_id, str(parent)):
+            raise WorkspaceConflictError(f"A file already exists at {str(parent)!r}")
+
+
+async def ensure_writable_file(store: _Store, workspace_id: str, path: str) -> None:
+    await ensure_no_file_ancestors(store, workspace_id, path)
+    if await store.list(workspace_id, prefix=f"{path}/", max_items=1):
+        raise WorkspaceConflictError("A folder already exists at this path")
+
+
 class ArtifactIntegrityError(RuntimeError):
     """The stored artifact cannot be verified against its immutable digest."""
 
@@ -98,6 +130,16 @@ class ArtifactObject:
     size: int
     content_type: str | None
     last_modified: str | None = None
+
+
+@dataclass(frozen=True)
+class RestoredArtifact:
+    """Where a restore put a file back, and where the file it displaced went."""
+
+    path: str
+    restored_from: str
+    # Trash path of the file that occupied ``path`` before the restore; ``None`` when it was free.
+    archived_current: str | None = None
 
 
 @dataclass(frozen=True)
@@ -164,6 +206,11 @@ class ArtifactService:
         if not workspace_id:
             raise ValueError("workspace_id is required")
         clean = path.lstrip("/")
+        # An empty path names the workspace root, which no object can be: a
+        # route like ``/files/download/%0A`` arrives here as "" because the
+        # router's ``$`` also matches before a trailing newline.
+        if not clean:
+            raise InvalidArtifactPathError("path is empty")
         if ".." in clean.split("/"):
             raise InvalidArtifactPathError(f"path may not contain '..' segments: {path!r}")
         if any(ord(character) < 0x20 or ord(character) == 0x7F for character in clean):
@@ -401,8 +448,16 @@ class ArtifactService:
         await self._record(workspace_id, clean, ACTION_ARCHIVED)
         return archived_path
 
-    async def restore(self, workspace_id: str, archived_path: str) -> str:
-        """Move an archived file back to the path it was archived from and return that path.
+    async def restore(self, workspace_id: str, archived_path: str) -> RestoredArtifact:
+        """Move an archived file back to the path it was archived from.
+
+        Restoring never destroys anything. A file that has taken the original
+        path since is archived first, exactly as a delete would archive it, and
+        its trash path is returned as ``archived_current``. The original path
+        must still be one a file can occupy — no file among its parents and no
+        folder at it — or ``WorkspaceConflictError`` is raised before anything
+        moves. A folder marker (``.trash/{timestamp}/dir/``) comes back as a
+        folder marker.
 
         The file already lived there, so the path is held to the key bound only:
         a file archived before the write bound existed must still come back.
@@ -413,26 +468,62 @@ class ArtifactService:
         original = "/".join(parts[2:])
         if not original:
             raise InvalidArtifactPathError(f"not an archived path: {archived_path!r}")
+        if clean.endswith("/"):
+            original = f"{original}/"
         if not await self.exists(workspace_id, clean):
             raise FileNotFoundError(clean)
+
+        if original.endswith("/"):
+            folder = original.removesuffix("/")
+            await ensure_no_file_ancestors(self, workspace_id, folder)
+            if await self.exists(workspace_id, folder):
+                raise WorkspaceConflictError(f"A file already exists at {folder!r}")
+        else:
+            await ensure_writable_file(self, workspace_id, original)
+
+        archived_current: str | None = None
+        if await self.exists(workspace_id, original):
+            archived_current = await self.archive(workspace_id, original)
+            logger.info(
+                "Restore archived the file at %s to %s before restoring %s (workspace=%s)",
+                original,
+                archived_current,
+                clean,
+                workspace_id,
+            )
+
         await self._copy_object(self._key(workspace_id, clean), self._key(workspace_id, original))
         await self.delete(workspace_id, clean)
-        return original
+        return RestoredArtifact(
+            path=original, restored_from=clean, archived_current=archived_current
+        )
 
     async def list(
         self,
         workspace_id: str,
         prefix: str = "",
-        max_items: int = 1000,
+        max_items: int | None = 1000,
+        exclude_roots: Collection[str] = (),
     ) -> list[ArtifactObject]:
+        """The objects under ``prefix``, at most ``max_items`` of them; None returns every one.
+
+        ``exclude_roots`` names top-level folders (``tasks``, ``.trash``) to
+        leave out of a whole-workspace listing. Their subtrees are never walked,
+        so they cost no requests and do not count toward ``max_items``. It
+        applies to the workspace root only and cannot be combined with ``prefix``.
+        """
+        if exclude_roots and prefix:
+            raise ValueError("exclude_roots lists the workspace root; it takes no prefix")
         full_prefix = self._prefix(workspace_id, prefix)
         prefix_len = len(self._prefix(workspace_id, ""))
 
         def _call() -> list[ArtifactObject]:
             out: list[ArtifactObject] = []
             paginator = self._client.get_paginator("list_objects_v2")
-            for page in paginator.paginate(Bucket=self._bucket, Prefix=full_prefix):
-                for obj in page.get("Contents", []):
+
+            def collect(contents: list[dict[str, Any]]) -> bool:
+                """Add ``contents`` to the result; True once ``max_items`` is reached."""
+                for obj in contents:
                     key: str = obj["Key"]
                     rel = key[prefix_len:]
                     if not rel:
@@ -447,7 +538,28 @@ class ArtifactService:
                             else None,
                         )
                     )
-                    if len(out) >= max_items:
+                    if max_items is not None and len(out) >= max_items:
+                        return True
+                return False
+
+            subtrees = [full_prefix]
+            if exclude_roots:
+                # One delimited pass yields the files at the root and the
+                # top-level folders; only the folders kept are walked in full.
+                subtrees = []
+                for page in paginator.paginate(
+                    Bucket=self._bucket, Prefix=full_prefix, Delimiter="/"
+                ):
+                    if collect(page.get("Contents", [])):
+                        return out
+                    subtrees.extend(
+                        folder["Prefix"]
+                        for folder in page.get("CommonPrefixes", [])
+                        if folder["Prefix"][prefix_len:].rstrip("/") not in exclude_roots
+                    )
+            for subtree in subtrees:
+                for page in paginator.paginate(Bucket=self._bucket, Prefix=subtree):
+                    if collect(page.get("Contents", [])):
                         return out
             return out
 

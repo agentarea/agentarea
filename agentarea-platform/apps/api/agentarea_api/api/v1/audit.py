@@ -4,12 +4,12 @@ from typing import Annotated, cast
 from uuid import UUID
 
 from agentarea_common.audit.models import AuditEventORM
-from agentarea_common.audit.repository import AuditRepository
+from agentarea_common.audit.repository import AuditRepository, UnknownAuditCursorError
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import NaiveUtcDatetime, UtcDatetime
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,6 +58,7 @@ class AuditLogListResponse(BaseModel):
     """Paginated audit log response."""
 
     events: list[AuditEventResponse]
+    # Null once the last page is reached: a page shorter than ``limit``.
     next_cursor: str | None
 
 
@@ -79,19 +80,22 @@ async def list_audit_logs(
 ):
     """List audit events for the current workspace."""
     repo = AuditRepository(db_session)
-    events = await repo.query(
-        workspace_id=user_context.workspace_id,
-        action=action,
-        actor_id=actor_id,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        since=since,
-        until=until,
-        cursor=cursor,
-        limit=limit,
-    )
+    try:
+        events = await repo.query(
+            workspace_id=user_context.workspace_id,
+            action=action,
+            actor_id=actor_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            since=since,
+            until=until,
+            cursor=cursor,
+            limit=limit,
+        )
+    except UnknownAuditCursorError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
-    next_cursor = str(events[-1].id) if events else None
+    next_cursor = str(events[-1].id) if len(events) == limit else None
 
     return AuditLogListResponse(
         events=[AuditEventResponse.from_orm(e) for e in events],

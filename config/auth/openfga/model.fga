@@ -46,3 +46,7 @@ type resource
     define can_read: reader or can_read from role_assignment or can_read from project
     define can_write: writer or can_write from role_assignment or can_write from project
     define can_manage: manager or can_manage from role_assignment or can_manage from project
+    # Who may run the agent. Granted explicitly and implied by nothing: managing,
+    # reading or administering the workspace does not let anyone invoke it.
+    define invoker: [User, Agent, Workspace#members]
+    define can_invoke: invoker

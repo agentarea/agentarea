@@ -10,9 +10,13 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
-from .service import MAX_WRITE_PATH_BYTES, TRASH_PREFIX
+from .service import (
+    MAX_WRITE_PATH_BYTES,
+    TRASH_PREFIX,
+    _Store,
+    ensure_writable_file,
+)
 from .workspace import (
-    WorkspaceConflictError,
     WorkspaceError,
     WorkspaceValidationError,
     normalize_workspace_path,
@@ -34,12 +38,6 @@ READ_ONLY_PREFIXES = frozenset({"apps"})
 
 class WorkspaceReadOnlyError(WorkspaceValidationError):
     code = "workspace_path_read_only"
-
-
-class _Store(Protocol):
-    async def exists(self, workspace_id: str, path: str) -> bool: ...
-
-    async def list(self, workspace_id: str, prefix: str = "", max_items: int = 1000) -> Any: ...
 
 
 class _PlanningStore(_Store, Protocol):
@@ -87,19 +85,6 @@ def resolve_write_path(path: str, filename: str = "") -> str:
         )
     ensure_not_read_only(resolved)
     return resolved
-
-
-async def ensure_no_file_ancestors(store: _Store, workspace_id: str, path: str) -> None:
-    """Prevent an existing file from also becoming a parent folder."""
-    for parent in PurePosixPath(path).parents:
-        if parent != PurePosixPath(".") and await store.exists(workspace_id, str(parent)):
-            raise WorkspaceConflictError(f"A file already exists at {str(parent)!r}")
-
-
-async def ensure_writable_file(store: _Store, workspace_id: str, path: str) -> None:
-    await ensure_no_file_ancestors(store, workspace_id, path)
-    if await store.list(workspace_id, prefix=f"{path}/", max_items=1):
-        raise WorkspaceConflictError("A folder already exists at this path")
 
 
 async def plan_uploads(store: _PlanningStore, workspace_id: str, entries: list[Any]) -> list[dict]:

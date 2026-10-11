@@ -9,6 +9,7 @@ which agent they addressed arrive in ``ServerCallContext.state`` via
 """
 
 import logging
+import re
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -80,15 +81,24 @@ from agentarea_common.utils.a2a_push import (
     upsert_push_config,
 )
 from agentarea_common.utils.url_safety import UnsafeUrlError, validate_outbound_url
+from agentarea_tasks.domain.exceptions import (
+    AgentModelNotConfiguredError,
+    BudgetCapExceededError,
+)
 from agentarea_tasks.domain.models import AgentTask, TaskUpdate
 from agentarea_tasks.task_service import TaskService
 from google.protobuf.json_format import MessageToDict
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
 
 logger = logging.getLogger(__name__)
 
 A2A_SCOPE_KEY = "agentarea.a2a"
 _AVAILABLE_AGENT_STATUSES = frozenset({"active", "available", "ready"})
+# A ListTasks page token is the offset we issued, base64-encoded. Eighteen ASCII
+# digits stay inside the database's BIGINT, so a forged token is refused here
+# instead of failing in the query.
+_PAGE_OFFSET = re.compile(r"[0-9]{1,18}")
 
 TaskEventFeed = Callable[..., AsyncIterator[TaskEventEnvelope]]
 
@@ -214,8 +224,18 @@ class _Operation:
             self._log("completed")
         elif isinstance(exc, A2AError):
             self._log("failed", error=exc.message)
+        elif isinstance(exc, HTTPException):
+            # The dispatcher re-raises it as an HTTP response (the 403 of
+            # ``assert_may_act_on_task``); its detail is ours to send.
+            self._log("failed", error=str(exc.detail))
         elif isinstance(exc, Exception):
+            # Anything else is a fault on our side. The dispatcher would send
+            # ``str(exc)`` to the caller -- for a database error that is the SQL
+            # and its bound parameters -- so it stays in our log and the caller
+            # gets a generic internal error.
             self._log("failed", error=str(exc))
+            logger.error("A2A %s raised an unexpected error", self.name, exc_info=exc)
+            raise InternalError(message="Internal error") from exc
         else:
             # GeneratorExit / CancelledError: the client went away mid-stream.
             self._log("closed")
@@ -354,6 +374,15 @@ class AgentAreaRequestHandler(RequestHandler):
         )
         try:
             created = await self._tasks.submit_task(task)
+        except AgentModelNotConfiguredError as e:
+            raise InvalidParamsError(
+                message="This agent has no model configured; "
+                "select a model for it before sending a message"
+            ) from e
+        except BudgetCapExceededError as e:
+            raise InvalidRequestError(
+                message="The workspace has reached its monthly spend cap"
+            ) from e
         except ValueError as e:
             logger.warning(
                 "A2A task submission for agent %s rejected: %s", scope.agent_id, e, exc_info=True
@@ -457,7 +486,7 @@ class AgentAreaRequestHandler(RequestHandler):
             offset = 0
             if params.page_token:
                 cursor = decode_page_token(params.page_token)
-                if not cursor.isdigit():
+                if not _PAGE_OFFSET.fullmatch(cursor):
                     raise InvalidParamsError(message="Invalid page token")
                 offset = int(cursor)
 

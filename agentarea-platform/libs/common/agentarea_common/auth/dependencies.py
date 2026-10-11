@@ -33,6 +33,7 @@ from .authorization import AuthorizationService
 from .context import (
     UserContext,
     UserPrincipal,
+    UserSessionRequiredError,
     WorkspaceBoundCredentialError,
     WorkspaceUnreachableError,
 )
@@ -585,6 +586,19 @@ def ensure_not_workspace_bound(principal: UserPrincipal) -> None:
             "An API key acts only in the workspace it was issued for; "
             "sign in as a user to create or join workspaces"
         )
+
+
+def ensure_user_session(caller: UserPrincipal | UserContext, action: str) -> None:
+    """Refuse an API key on an action that hands out or takes away access.
+
+    A key acts as its creator, so the creator's authority alone would let it
+    mint more keys and invite members, and those would keep the access after
+    the key itself is revoked. Managing keys, invitations, members and access
+    grants therefore needs a signed-in user. ``action`` completes "An API key
+    cannot ...".
+    """
+    if caller.api_key_id is not None:
+        raise UserSessionRequiredError(f"An API key cannot {action}; sign in as a user to do it")
 
 
 async def get_unbound_principal(

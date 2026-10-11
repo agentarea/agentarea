@@ -323,3 +323,27 @@ async def test_list_invitations_never_returns_tokens(harness):
 
     assert result[0]["email"] == "new@example.com"
     assert "token" not in result[0]
+
+
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        ("invite", {"email": "mallory@example.com"}),
+        ("revoke_invitation", {"invitation_id": str(INVITATION_ID)}),
+        ("remove", {"user_id": "user-2"}),
+    ],
+)
+async def test_an_api_key_cannot_change_who_is_in_the_workspace(harness, tool, arguments):
+    """As on the REST surface (#716): the key administers the workspace, and is still refused."""
+    key = UserContext(
+        user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"], api_key_id="key-1"
+    )
+
+    with use_mcp_user_context(key):
+        result = json.loads(await getattr(MembersToolset(), tool)(**arguments))
+
+    assert "An API key cannot" in result["error"]
+    assert harness.service.created == []
+    assert harness.service.revoked == []
+    assert harness.memberships.calls == []
+    assert harness.audit == []

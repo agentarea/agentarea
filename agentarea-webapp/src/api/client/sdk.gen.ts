@@ -175,6 +175,9 @@ import type {
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteData,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteErrors,
   DeleteConnectionV1OpenapiConnectionsConnectionIdDeleteResponses,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
   DeleteMcpAuthConfigV1McpAuthConfigsConfigIdDeleteData,
   DeleteMcpAuthConfigV1McpAuthConfigsConfigIdDeleteErrors,
   DeleteMcpAuthConfigV1McpAuthConfigsConfigIdDeleteResponses,
@@ -542,6 +545,8 @@ import type {
   ListEventsV1StreamsStreamIdEventsGetData,
   ListEventsV1StreamsStreamIdEventsGetErrors,
   ListEventsV1StreamsStreamIdEventsGetResponses,
+  ListExternalIdentitiesV1MeExternalIdentitiesGetData,
+  ListExternalIdentitiesV1MeExternalIdentitiesGetResponses,
   ListInvitationsV1InvitationsGetData,
   ListInvitationsV1InvitationsGetErrors,
   ListInvitationsV1InvitationsGetResponses,
@@ -797,6 +802,9 @@ import type {
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostData,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostErrors,
   SendTaskCommandV1AgentsAgentIdTasksTaskIdCommandPostResponses,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetData,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetErrors,
   StreamProjectFileV1ProjectsProjectIdFilesDownloadFilePathGetResponses,
@@ -818,6 +826,9 @@ import type {
   TriggersHealthCheckV1TriggersHealthGetData,
   TriggersHealthCheckV1TriggersHealthGetErrors,
   TriggersHealthCheckV1TriggersHealthGetResponses,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses,
   UpdateAgentV1AgentsAgentIdPatchData,
   UpdateAgentV1AgentsAgentIdPatchErrors,
   UpdateAgentV1AgentsAgentIdPatchResponses,
@@ -1708,6 +1719,105 @@ export const proxyInstanceV1McpInstanceIdMcpPost = <
   });
 
 /**
+ * List External Identities
+ */
+export const listExternalIdentitiesV1MeExternalIdentitiesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListExternalIdentitiesV1MeExternalIdentitiesGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListExternalIdentitiesV1MeExternalIdentitiesGetResponses,
+  unknown,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListExternalIdentitiesV1MeExternalIdentitiesGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/me/external-identities",
+    ...options,
+  });
+
+/**
+ * Start Telegram Link
+ *
+ * A deep link that offers the caller's account to whoever opens it in Telegram.
+ */
+export const startTelegramLinkV1MeExternalIdentitiesTelegramLinkPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
+  StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostResponses,
+    StartTelegramLinkV1MeExternalIdentitiesTelegramLinkPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/me/external-identities/telegram/link",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Unlink External Identity
+ */
+export const unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses,
+  UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses,
+    UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/me/external-identities/{identity_id}",
+    ...options,
+  });
+
+/**
  * Get Pricing Currency
  *
  * Return the billing currency of this deployment.
@@ -1912,6 +2022,9 @@ export const getGraphV1AccessControlGraphGet = <
  * Delete Relationship
  *
  * Revoke a resource-ownership relation from the configured graph backend.
+ *
+ * Idempotent: revoking a grant that is already gone answers 204 without
+ * touching the graph or the audit trail.
  */
 export const deleteRelationshipV1AccessControlRelationshipsDelete = <
   ThrowOnError extends boolean = false,
@@ -1986,6 +2099,10 @@ export const listRelationshipsV1AccessControlRelationshipsGet = <
  * Create Relationship
  *
  * Grant a resource-ownership relation via the configured graph backend.
+ *
+ * Idempotent: a grant the subject already holds (also under a legacy alias
+ * such as ``viewers`` for ``reader``) succeeds without changing the graph,
+ * and is not audited again.
  */
 export const createRelationshipV1AccessControlRelationshipsPost = <
   ThrowOnError extends boolean = false,
@@ -2399,7 +2516,7 @@ export const installAgentV1AgentsAgentIdInstallPost = <
 /**
  * Get Agent Overview
  *
- * Aggregate stats + upcoming work for one agent.
+ * Aggregate stats + upcoming work for one agent; 404 if it is not in the workspace.
  */
 export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
   ThrowOnError extends boolean = false,
@@ -4306,6 +4423,11 @@ export const moveWorkspaceFileV1FilesMovePost = <
  * Restore Workspace File
  *
  * Move an archived file back to the path it was archived from.
+ *
+ * A file that has taken that path since is archived first, as a delete would,
+ * and its trash path comes back as ``archived_current`` — a restore never
+ * destroys anything. A path a write could not take (a file among its parents,
+ * a folder at it) is a 409.
  */
 export const restoreWorkspaceFileV1FilesRestoreFilePathPost = <
   ThrowOnError extends boolean = false,
@@ -9526,7 +9648,11 @@ export const listSourceTypesV1StreamsSourceTypesGet = <
 /**
  * Delete Stream
  *
- * Refused (409) while a live webhook trigger's source feeds the stream.
+ * Delete a stream with its events, sources and subscriptions.
+ *
+ * Refused with 409 while a live webhook trigger's source feeds the stream,
+ * while a trigger subscribes to it (delete the trigger first), or while a
+ * forward of any stream writes into it (remove that forward first).
  */
 export const deleteStreamV1StreamsStreamIdDelete = <
   ThrowOnError extends boolean = false,
@@ -9795,6 +9921,41 @@ export const listSubscriptionsV1StreamsStreamIdSubscriptionsGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions",
+    ...options,
+  });
+
+/**
+ * Delete Forward
+ *
+ * Remove a forward. The caller must be able to edit every output stream, as to create it.
+ *
+ * A trigger's subscription is refused with 409: it goes when the trigger is deleted.
+ */
+export const deleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
+  DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteResponses,
+    DeleteForwardV1StreamsStreamIdSubscriptionsSubscriptionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}",
     ...options,
   });
 
@@ -10352,7 +10513,9 @@ export const getTriggerV1TriggersTriggerIdGet = <
  * The updated trigger.
  *
  * Raises:
- * HTTPException: If trigger not found or validation fails.
+ * HTTPException: If trigger not found or validation fails; 409 if the
+ * update changes the filter of a trigger that has no stream
+ * subscription left.
  */
 export const updateTriggerV1TriggersTriggerIdPut = <
   ThrowOnError extends boolean = false,

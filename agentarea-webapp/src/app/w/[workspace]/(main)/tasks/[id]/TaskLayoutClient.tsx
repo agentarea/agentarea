@@ -2,6 +2,7 @@
 
 import { TaskProvider, useTaskContext } from "./TaskContext";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import type { TaskRequester } from "@/components/TaskInfoPanel/types";
 import { TaskControls } from "./components/TaskControls";
 import TaskSubheader from "./components/TaskSubheader";
 
@@ -10,6 +11,7 @@ interface TaskLayoutClientProps {
   tasksTitle: string;
   initialTask?: unknown;
   initialError?: string | null;
+  requester: TaskRequester | null;
   children: React.ReactNode;
 }
 
@@ -62,10 +64,16 @@ export default function TaskLayoutClient({
   tasksTitle,
   initialTask,
   initialError,
+  requester,
   children,
 }: TaskLayoutClientProps) {
   return (
-    <TaskProvider taskId={taskId} initialTask={initialTask} initialError={initialError}>
+    <TaskProvider
+      taskId={taskId}
+      initialTask={initialTask}
+      initialError={initialError}
+      requester={requester}
+    >
       <TaskLayoutContent taskId={taskId} tasksTitle={tasksTitle}>
         {children}
       </TaskLayoutContent>

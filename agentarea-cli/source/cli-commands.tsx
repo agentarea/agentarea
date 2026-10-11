@@ -1,5 +1,10 @@
 import {apiClient} from './services/apiClient.js';
-import {initApiClient, setRuntimeToken} from './services/apiRuntime.js';
+import {
+	applyApiUrlFlag,
+	getApiBaseUrl,
+	initApiClient,
+	setRuntimeToken,
+} from './services/apiRuntime.js';
 import {configManager} from './utils/config.js';
 import {logger} from './utils/logger.js';
 import {connectClient} from './commands/connect.js';
@@ -42,17 +47,14 @@ export async function handleCliCommand(
 	subcommand: string | undefined,
 	options: CliOptions,
 ): Promise<boolean> {
-	// Initialize config with provided API URL if specified
-	if (options.apiUrl) {
-		process.env['AGENTAREA_API_URL'] = options.apiUrl;
-		configManager.reinitialize();
-		apiClient.reinitialize();
-	}
+	// `--api-url` outranks AGENTAREA_API_URL and the saved config; login,
+	// connect and every SDK call then resolve the same URL.
+	applyApiUrlFlag(options.apiUrl);
 
 	// Configure the shared API client (base URL + lazy token provider).
 	initApiClient();
 
-	const apiUrl = options.apiUrl || 'http://localhost:8000';
+	const apiUrl = getApiBaseUrl();
 
 	// Browser sign-in has to run before any token is required.
 	if (command === 'login') {

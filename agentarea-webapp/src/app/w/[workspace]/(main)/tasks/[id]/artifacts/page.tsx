@@ -1,122 +1,84 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download, FileText, RefreshCw } from "lucide-react";
-import type { TaskArtifactItem } from "@/api/client/types.gen";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslations } from "next-intl";
+import { useFileBrowserState } from "@/components/files/file-browser";
+import { apiErrorDetail, formatApiError } from "@/lib/api-errors";
 import { apiProxyUrl } from "@/lib/api-proxy-url";
 import { listTaskArtifactsAction } from "@/lib/server-actions";
 import { useTaskContext } from "../TaskContext";
-
-function formatBytes(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KiB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MiB`;
-}
+import TaskArtifactsView, { type ArtifactListing } from "./TaskArtifactsView";
 
 export default function TaskArtifactsPage() {
+  const t = useTranslations("TaskArtifactsPage");
   const { task, loading: taskLoading, error: taskError } = useTaskContext();
-  const [artifacts, setArtifacts] = useState<TaskArtifactItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [listing, setListing] = useState<ArtifactListing>({ kind: "loading" });
+  // Path -> download URL: the browser asks for a file by its path.
+  const [downloadUrls, setDownloadUrls] = useState<Map<string, string>>(
+    new Map()
+  );
+  const [refreshing, setRefreshing] = useState(false);
+  const [browserState, setBrowserState] = useFileBrowserState(
+    `task-artifacts:${task?.id ?? "pending"}`
+  );
 
   const loadArtifacts = useCallback(async () => {
     if (!task) return;
-    setLoading(true);
-    setError(null);
+    setRefreshing(true);
     try {
       const result = await listTaskArtifactsAction(task.agent_id, task.id);
-      if (result.error) {
-        setArtifacts([]);
-        setError("Artifacts are temporarily unavailable.");
+      // 404 is a task with nowhere artifacts were ever kept: none published.
+      if (result.error && result.status !== 404) {
+        setListing({
+          kind: "error",
+          message: apiErrorDetail(result, t("loadFailed")),
+        });
         return;
       }
-      setArtifacts(result.data ?? []);
+      const artifacts = result.error ? [] : (result.data ?? []);
+      setDownloadUrls(
+        new Map(
+          artifacts.map((artifact) => [
+            artifact.path,
+            apiProxyUrl(artifact.download_url),
+          ])
+        )
+      );
+      setListing({
+        kind: "ready",
+        files: artifacts.map((artifact) => ({
+          path: artifact.path,
+          size: artifact.size,
+          content_type: artifact.content_type,
+          last_modified: artifact.created_at,
+        })),
+      });
+    } catch (err) {
+      setListing({ kind: "error", message: formatApiError(err) });
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  }, [task]);
+  }, [task, t]);
 
   useEffect(() => {
     void loadArtifacts();
   }, [loadArtifacts]);
 
-  if (taskLoading || loading) {
-    return (
-      <div className="space-y-2 p-4" aria-hidden="true">
-        {Array.from({ length: 5 }).map((_, index) => (
-          <Skeleton key={index} className="h-16 w-full rounded-lg" />
-        ))}
-      </div>
-    );
-  }
-
-  if (taskError || !task) {
-    return (
-      <div className="py-12 text-center text-muted-foreground">
-        <FileText className="mx-auto mb-4 h-16 w-16 opacity-50" />
-        <p>{taskError || "Task not found"}</p>
-      </div>
-    );
-  }
+  const fetchUrl = useCallback(
+    async (path: string) => ({ data: downloadUrls.get(path) ?? null }),
+    [downloadUrls]
+  );
 
   return (
-    <div className="main-content">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-lg font-semibold">Artifacts</h3>
-          <p className="note">
-            Durable files explicitly published by the agent from its sandbox.
-          </p>
-        </div>
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={() => void loadArtifacts()}
-        >
-          <RefreshCw className="mr-1.5" />
-          Refresh
-        </Button>
-      </div>
-
-      {error ? (
-        <div className="py-12 text-center text-muted-foreground">{error}</div>
-      ) : artifacts.length > 0 ? (
-        <div className="space-y-3">
-          {artifacts.map((artifact) => (
-            <div
-              key={artifact.id}
-              className="flex items-center justify-between rounded-lg border p-4"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <FileText className="h-8 w-8 shrink-0 text-primary" />
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{artifact.name}</p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {artifact.path} · {formatBytes(artifact.size)}
-                  </p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" className="gap-1" asChild>
-                <a href={apiProxyUrl(artifact.download_url)}>
-                  <Download />
-                  Download
-                </a>
-              </Button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="py-12 text-center">
-          <FileText className="mx-auto mb-4 h-16 w-16 text-muted-foreground opacity-50" />
-          <h3 className="mb-2 text-lg font-semibold">No artifacts</h3>
-          <p className="text-muted-foreground">
-            Temporary sandbox files stay in Files. Outputs appear here only
-            after the agent publishes them.
-          </p>
-        </div>
-      )}
-    </div>
+    <TaskArtifactsView
+      taskId={task?.id ?? null}
+      taskError={taskLoading ? null : (taskError ?? (task ? null : ""))}
+      listing={taskLoading ? { kind: "loading" } : listing}
+      refreshing={refreshing}
+      onRefresh={() => void loadArtifacts()}
+      fetchUrl={fetchUrl}
+      browserState={browserState}
+      onBrowserStateChange={setBrowserState}
+    />
   );
 }

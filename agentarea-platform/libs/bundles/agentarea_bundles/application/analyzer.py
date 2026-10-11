@@ -20,7 +20,13 @@ from agentarea_governance.domain.rules import (
 )
 from pydantic import ValidationError
 
-from agentarea_bundles.schemas.bundle import Bundle, BundleMcp, BundlePolicy, setup_refs
+from agentarea_bundles.schemas.bundle import (
+    MAX_NAME_LENGTH,
+    Bundle,
+    BundleMcp,
+    BundlePolicy,
+    setup_refs,
+)
 from agentarea_bundles.schemas.preview import (
     EntityKind,
     EntityStatus,
@@ -168,6 +174,7 @@ class BundleAnalyzer:
         self._analyze_channels(package, agent_keys, setup_keys, entities, issues)
         await self._analyze_automations(package, agent_keys, entities, issues)
         self._analyze_policies(package, agent_keys, entities, issues)
+        self._check_trigger_names(package, issues)
 
         installable = not any(i.severity is IssueSeverity.BLOCK for i in issues)
         return ImportPreview(
@@ -201,6 +208,23 @@ class BundleAnalyzer:
                         )
                     )
                 seen.add(item.key)
+
+    def _check_trigger_names(self, package: Bundle, issues: list[PreviewIssue]) -> None:
+        """Channels and automations become triggers named ``<bundle>:<key>``."""
+        for label, items in (("channel", package.channels), ("automation", package.automations)):
+            for item in items:
+                trigger_name = f"{package.name}:{item.key}"
+                if len(trigger_name) > MAX_NAME_LENGTH:
+                    issues.append(
+                        PreviewIssue(
+                            severity=IssueSeverity.BLOCK,
+                            message=(
+                                f"{label} '{item.key}' would create trigger '{trigger_name[:40]}...' "
+                                f"whose name is longer than {MAX_NAME_LENGTH} characters"
+                            ),
+                            entity_key=item.key,
+                        )
+                    )
 
     def _analyze_mcps(
         self,
