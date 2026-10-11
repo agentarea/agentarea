@@ -1646,8 +1646,28 @@
       },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
-        "description": "Budget-related ceilings.",
+        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month.",
         "properties": {
+          "agent_monthly_spend_cap_usd": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Monthly Spend Cap Usd"
+          },
           "monthly_spend_cap_usd": {
             "anyOf": [
               {
@@ -1714,8 +1734,20 @@
       },
       "BudgetPolicy-Output": {
         "additionalProperties": false,
-        "description": "Budget-related ceilings.",
+        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month.",
         "properties": {
+          "agent_monthly_spend_cap_usd": {
+            "anyOf": [
+              {
+                "ge": "0",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Monthly Spend Cap Usd"
+          },
           "monthly_spend_cap_usd": {
             "anyOf": [
               {
@@ -13299,6 +13331,236 @@
         },
         "title": "TokenPolicy",
         "type": "object"
+      },
+      "ToolCallApprovalDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "approved"
+        ],
+        "title": "ToolCallApprovalDecision",
+        "type": "object"
+      },
+      "ToolCallApprovalListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallApprovalResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ToolCallApprovalListResponse",
+        "type": "object"
+      },
+      "ToolCallApprovalResponse": {
+        "properties": {
+          "arguments": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arguments"
+          },
+          "can_decide": {
+            "title": "Can Decide",
+            "type": "boolean"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mcp_instance_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcp Instance Id"
+          },
+          "policy_name": {
+            "title": "Policy Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ToolCallApprovalStatus"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requested_by",
+          "client_id",
+          "client_name",
+          "mcp_instance_id",
+          "connector",
+          "tool",
+          "policy_name",
+          "arguments",
+          "reason",
+          "hint",
+          "can_decide",
+          "decided_by",
+          "decided_at",
+          "comment",
+          "expires_at",
+          "created_at",
+          "url"
+        ],
+        "title": "ToolCallApprovalResponse",
+        "type": "object"
+      },
+      "ToolCallApprovalStatus": {
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "consumed",
+          "expired"
+        ],
+        "title": "ToolCallApprovalStatus",
+        "type": "string"
       },
       "ToolMethodResponse": {
         "description": "One callable method of a code toolset.",
@@ -34538,6 +34800,236 @@
           "v1",
           "protected",
           "tasks"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/tool-call-approvals": {
+      "get": {
+        "description": "Tool calls held for approval in this workspace, newest first.",
+        "operationId": "list_tool_call_approvals_v1_tool_call_approvals_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ToolCallApprovalStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 10000,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCallApprovalListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tool Call Approvals",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-call-approvals"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}": {
+      "get": {
+        "description": "One held call: what will run, who asked, and whether the caller may decide.",
+        "operationId": "get_tool_call_approval_v1_tool_call_approvals__approval_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCallApprovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tool Call Approval",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-call-approvals"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}/decide": {
+      "post": {
+        "description": "Approve or reject a pending call; an approval is usable for one hour.",
+        "operationId": "decide_tool_call_approval_v1_tool_call_approvals__approval_id__decide_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallApprovalDecision"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCallApprovalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Decide Tool Call Approval",
+        "tags": [
+          "v1",
+          "protected",
+          "tool-call-approvals"
         ]
       }
     },

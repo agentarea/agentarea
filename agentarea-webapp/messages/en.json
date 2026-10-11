@@ -886,8 +886,8 @@
         "checkingTitle": "Checking authorization",
         "checkingDetail": "Asking the server how it wants to be authorized.",
         "unsupportedTitle": "Cannot be authorized from here",
-        "readyTitle": "Ready to connect",
-        "readyDetail": "Sign in and approve access — nothing to set up first.",
+        "readyTitle": "OAuth available",
+        "readyDetail": "Try signing in. If the provider refuses automatic registration, additional setup is required.",
         "authorizedTitle": "Authorized",
         "authorizedDetail": "This connection holds an access token. Reconnect to re-authorize it.",
         "needsAppTitle": "Needs an OAuth app",
@@ -1626,6 +1626,7 @@
     "policyPromptInjection": "Prompt-injection detection",
     "policyOutputSanitizer": "Output sanitizer",
     "policyMonthlyCap": "Monthly cap",
+    "policyAgentMonthlyCap": "Agent monthly cap",
     "policyServiceBudget": "Service budget",
     "policyApprovers": "Approvers",
     "policyOn": "On",
@@ -2096,13 +2097,18 @@
     }
   },
   "NetworkPage": {
+    "title": "Network topology",
+    "refreshTopology": "Refresh topology",
     "graphSelection": {
-      "title": "Nodes and relationships",
-      "nodes": "Nodes ({count})",
-      "relationships": "Relationships ({count})",
-      "relationshipLabel": "{source} to {target}: {relation}",
       "showMore": "Show more",
-      "showLess": "Show less"
+      "showLess": "Show less",
+      "groups": {
+        "agents": "Agents",
+        "triggers": "Triggers",
+        "resources": "Resources",
+        "people": "People",
+        "links": "Links"
+      }
     },
     "orgChart": {
       "types": {
@@ -2235,6 +2241,17 @@
           "title": "Access",
           "description": "From the people and triggers that send requests, through agents, to the resources they reach.",
           "empty": "No agents or resources to map."
+        },
+        "flow": {
+          "tab": "Data flow",
+          "title": "Data flow",
+          "description": "What crosses the workspace perimeter: where data comes in from, which agents and stores keep it inside, and where it is sent out.",
+          "empty": "No agents to trace.",
+          "zones": {
+            "inbound": "Outside sources",
+            "inside": "Workspace perimeter",
+            "outbound": "Outside recipients"
+          }
         }
       },
       "issues": "Issues",
@@ -2265,9 +2282,17 @@
         "trigger": "Trigger",
         "delegates": "Delegates",
         "uses": "Uses",
-        "starts": "Starts"
+        "starts": "Starts",
+        "inbound": "Data in",
+        "outbound": "Data out"
       },
-      "isolated": "Not connected · {count}"
+      "isolated": "Not connected · {count}",
+      "modes": {
+        "graph": "Graph",
+        "list": "List"
+      },
+      "show": "Show",
+      "legendTitle": "Legend"
     }
   },
   "WorkspacePage": {
@@ -2778,6 +2803,14 @@
     "reject": "Reject",
     "approveAll": "Approve all",
     "loadFailed": "Failed to load inbox",
+    "toolCalls": {
+      "title": "Tool calls waiting for approval",
+      "row": "{tool} on {connector}",
+      "via": "Asked via {client}",
+      "viaMcp": "Asked via the AgentArea MCP server",
+      "waiting": "Waiting for approval",
+      "loadFailed": "Failed to load tool calls waiting for approval"
+    },
     "filters": {
       "all": "All",
       "pending": "Needs approval",
@@ -2848,7 +2881,7 @@
     },
     "detailEmpty": {
       "title": "Select a task",
-      "pending": "{count, plural, one {# task is} other {# tasks are}} waiting for your decision. Open one to review its output, then approve or reject the action.",
+      "pending": "{count, plural, one {# request is} other {# requests are}} waiting for your decision. Open one to review it, then approve or reject the action.",
       "clear": "Nothing is waiting for your decision. Open a task to review its output.",
       "openNext": "Review next approval"
     },
@@ -3330,7 +3363,30 @@
     "outcomeForTool": "{outcome}: {tool}",
     "decidedBy": "by {name}",
     "decidedByAt": "by {name} · {time}",
-    "comment": "“{comment}”"
+    "comment": "“{comment}”",
+    "link": {
+      "metaTitle": "Approve {tool}",
+      "title": "Run {tool} on {connector}?",
+      "workspace": "In {workspace}",
+      "askedBy": "Asked by",
+      "askedByVia": "{name}, via {client}",
+      "askedByMcp": "{name}, via the AgentArea MCP server",
+      "tool": "Tool",
+      "hintReadOnly": "Read-only",
+      "hintDestructive": "Destructive",
+      "policy": "Why it needs approval",
+      "expires": "Expires",
+      "arguments": "Exactly what will run",
+      "argumentsHidden": "Only an approver or the person who asked can see the arguments.",
+      "waitingTitle": "Waiting for an approver",
+      "doneTitle": "Done — go back to your chat and ask the agent to continue.",
+      "approvedDetail": "The agent's next call with these exact arguments runs once. The approval lapses {time}.",
+      "rejectedDetail": "The agent's next call with these arguments is told you rejected it.",
+      "consumedTitle": "Approved and already run",
+      "consumedDetail": "The approved call has run. Running it again needs a new approval.",
+      "expiredTitle": "This approval link has expired",
+      "expiredDetail": "Ask the agent to call the tool again for a new link."
+    }
   },
   "ToolPart": {
     "blockedByPolicy": "Blocked by policy",
