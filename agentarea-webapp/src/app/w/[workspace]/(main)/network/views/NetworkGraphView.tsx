@@ -1,27 +1,38 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, Search, Users, X } from "lucide-react";
+import { Info, X } from "lucide-react";
 import type {
   EffectivePolicy,
   NetworkPeopleAccessResponse,
 } from "@/api/client/types.gen";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { cn } from "@/lib/utils";
 import type { NetworkActionResult } from "../actions";
 import NetworkCanvas from "../components/NetworkCanvas";
-import NetworkSelectionList from "../components/NetworkSelectionList";
 import NetworkConnectionPanel from "../components/NetworkConnectionPanel";
 import NetworkPeoplePanel from "../components/NetworkPeoplePanel";
 import NetworkRoutePanel from "../components/NetworkRoutePanel";
+import NetworkSelectionList from "../components/NetworkSelectionList";
+import { useNetwork } from "../NetworkProvider";
 import type { NetworkNodeData, TopologyResponse } from "../types";
 import { useNetworkPeople } from "../useNetworkPeople";
 import {
   buildNetworkGraph,
   graphForLens,
   isResource,
-  issueCount,
   pathThrough,
   personNodeId,
   personUserId,
@@ -42,9 +53,6 @@ export interface NetworkGraphViewProps {
   onSelectNode: (node: NetworkNodeData | null) => void;
 }
 
-const chipClass =
-  "flex h-9 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary aria-pressed:border-primary/40 aria-pressed:bg-primary/5 aria-pressed:text-foreground";
-
 export default function NetworkGraphView({
   lens,
   topology,
@@ -54,16 +62,12 @@ export default function NetworkGraphView({
   onSelectNode,
 }: NetworkGraphViewProps) {
   const t = useTranslations("NetworkPage.graph");
-  const types = useTranslations("NetworkPage.orgChart");
   const peopleText = useTranslations("NetworkPage.people");
   const accessText = useTranslations("NetworkPage.accessDetails");
   const { canAdminister } = useViewerCapabilities();
   const people = useNetworkPeople(canAdminister, loadPeopleAccess, topology);
 
-  const [showPeople, setShowPeople] = useState(false);
-  const [showIssues, setShowIssues] = useState(false);
-  const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const { mode, query, showIssues, showPeople } = useNetwork();
   const [edgeId, setEdgeId] = useState<string | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const [peopleOpen, setPeopleOpen] = useState(false);
@@ -91,6 +95,18 @@ export default function NetworkGraphView({
     () => new Set(results.map((node) => node.id)),
     [results]
   );
+  const listed = useMemo(
+    () =>
+      query.trim()
+        ? {
+            nodes: results,
+            edges: visible.edges.filter(
+              (item) => matches.has(item.source) || matches.has(item.target)
+            ),
+          }
+        : visible,
+    [query, results, matches, visible]
+  );
 
   const edge = visible.edges.find((item) => item.id === edgeId);
   const person = people.data?.people.find((item) => item.user_id === personId);
@@ -107,7 +123,6 @@ export default function NetworkGraphView({
     setPersonId(null);
     setPeopleOpen(false);
     setPathOf(null);
-    setSearchOpen(false);
     onSelectNode(null);
   }, [onSelectNode]);
 
@@ -149,18 +164,12 @@ export default function NetworkGraphView({
     [onSelectNode]
   );
 
-  const pickResult = (id: string) => {
-    setQuery("");
-    setSearchOpen(false);
-    selectNode(id);
-  };
-
-  const togglePeople = () => {
-    const next = !showPeople;
-    setShowPeople(next);
-    if (next && people.status !== "ready") setPeopleOpen(true);
-    if (!next && personId) setPersonId(null);
-  };
+  // Turning people on before their access has loaded opens the panel that
+  // says so; turning them off drops a selected person with them.
+  useEffect(() => {
+    if (showPeople && people.status !== "ready") setPeopleOpen(true);
+    if (!showPeople) setPersonId(null);
+  }, [showPeople, people.status]);
 
   const canvasSelection =
     edgeId ?? (personId ? personNodeId(personId) : null) ?? selectedNodeId;
@@ -185,136 +194,57 @@ export default function NetworkGraphView({
     triggers: visible.nodes.filter((item) => item.kind === "trigger").length,
     links: visible.edges.length,
   };
-  const issues = issueCount(graph);
+
+  const legend = (
+    <>
+      <Legend swatch="h-2.5 w-2.5 rounded-full bg-primary">
+        {t("legend.agent")}
+      </Legend>
+      <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-emerald-600 dark:border-emerald-400">
+        {t("legend.internal")}
+      </Legend>
+      <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-amber-600 dark:border-amber-400">
+        {t("legend.external")}
+      </Legend>
+      <Legend swatch="h-2 w-2 rotate-45 bg-violet-600 dark:bg-violet-400">
+        {t("legend.trigger")}
+      </Legend>
+      <Legend swatch="w-5 border-t-2 border-primary">
+        {t("legend.delegates")}
+      </Legend>
+      <Legend swatch="w-5 border-t-2 border-dashed border-muted-foreground">
+        {t("legend.uses")}
+      </Legend>
+      <Legend swatch="w-5 border-t-2 border-dotted border-violet-600 dark:border-violet-400">
+        {t("legend.starts")}
+      </Legend>
+      {lens === "flow" && (
+        <>
+          <Legend swatch="w-5 border-t-2 border-muted-foreground">
+            {t("legend.inbound")}
+          </Legend>
+          <Legend swatch="w-5 border-t-2 border-amber-600 dark:border-amber-400">
+            {t("legend.outbound")}
+          </Legend>
+        </>
+      )}
+    </>
+  );
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-layoutBackground">
-      <div className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 md:px-5">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">
-            {t(`lenses.${lens}.title`)}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t(`lenses.${lens}.description`)}
-          </p>
-        </div>
-        {pathNode && (
-          <button
-            type="button"
-            onClick={() => setPathOf(null)}
-            className="flex max-w-full items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-primary"
-            aria-label={accessText("clearFocus")}
-          >
-            <span className="truncate">
-              {accessText("focusedOn", { name: pathNode.label })}
-            </span>
-            <X className="h-3.5 w-3.5 shrink-0" />
-          </button>
-        )}
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          {lens !== "access" && (
-            <button
-              type="button"
-              aria-pressed={showPeople}
-              onClick={togglePeople}
-              className={chipClass}
-            >
-              <Users className="h-3.5 w-3.5" />
-              {peopleText("title")}
-            </button>
-          )}
-          <button
-            type="button"
-            aria-pressed={showIssues}
-            onClick={() => setShowIssues((value) => !value)}
-            className={chipClass}
-          >
-            <AlertTriangle
-              className={cn("h-3.5 w-3.5", issues > 0 && "text-destructive")}
-            />
-            {t("issues")}
-            <span className="tabular-nums">{issues}</span>
-          </button>
-          <div
-            className="relative min-w-0 flex-1 sm:w-64"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget))
-                setSearchOpen(false);
-            }}
-          >
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <input
-              aria-label={t("search")}
-              placeholder={t("search")}
-              value={query}
-              onFocus={() => setSearchOpen(true)}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setSearchOpen(true);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setQuery("");
-                  setSearchOpen(false);
-                }
-                if (event.key === "Enter" && results[0])
-                  pickResult(results[0].id);
-              }}
-              className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-7 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
-            />
-            {query && (
-              <button
-                type="button"
-                aria-label={t("clearSearch")}
-                onClick={() => setQuery("")}
-                className="absolute right-1 top-1 flex h-7 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {query.trim() && searchOpen && (
-              <div className="absolute right-0 top-11 z-20 max-h-64 w-64 max-w-[calc(100vw-2rem)] overflow-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
-                <p
-                  className="px-2 py-2 text-xs text-muted-foreground"
-                  role="status"
-                >
-                  {t("matches", { count: results.length })}
-                </p>
-                {results.map((result) => (
-                  <button
-                    type="button"
-                    key={result.id}
-                    onClick={() => pickResult(result.id)}
-                    className="block w-full rounded px-2 py-2 text-left text-xs hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <span className="block truncate font-medium">
-                      {result.label}
-                    </span>
-                    <span className="mt-0.5 block text-muted-foreground">
-                      {result.kind === "person"
-                        ? peopleText("title")
-                        : types(`types.${result.kind}`)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {visible.nodes.length > 0 && (
-        <NetworkSelectionList
-          nodes={visible.nodes}
-          edges={visible.edges}
-          selectedId={canvasSelection}
-          onSelectNode={selectNode}
-          onSelectEdge={selectEdge}
-        />
-      )}
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-          {visible.nodes.length === 0 ? (
+          {mode === "list" ? (
+            <NetworkSelectionList
+              nodes={listed.nodes}
+              edges={listed.edges}
+              topologyNodes={topology.nodes}
+              selectedId={canvasSelection}
+              onSelectNode={selectNode}
+              onSelectEdge={selectEdge}
+            />
+          ) : visible.nodes.length === 0 ? (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm font-medium">
               {t(`lenses.${lens}.empty`)}
             </div>
@@ -332,6 +262,50 @@ export default function NetworkGraphView({
               onSelectEdge={selectEdge}
               onClear={clear}
             />
+          )}
+          {mode === "graph" && pathNode && (
+            <button
+              type="button"
+              onClick={() => setPathOf(null)}
+              className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs shadow-sm hover:bg-muted"
+              aria-label={accessText("clearFocus")}
+            >
+              <span className="truncate">
+                {accessText("focusedOn", { name: pathNode.label })}
+              </span>
+              <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </button>
+          )}
+          {mode === "graph" && visible.nodes.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="absolute right-4 top-4 flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  {t("legendTitle")}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                side="bottom"
+                className="w-64 space-y-3 p-3 text-xs text-muted-foreground"
+              >
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
+                  <span>{t("counts.agents", { count: counts.agents })}</span>
+                  <span>
+                    {t("counts.resources", { count: counts.resources })}
+                  </span>
+                  <span>
+                    {t("counts.triggers", { count: counts.triggers })}
+                  </span>
+                  <span>{t("counts.links", { count: counts.links })}</span>
+                </div>
+                <div className="h-px bg-border" />
+                <div className="grid gap-1.5">{legend}</div>
+              </PopoverContent>
+            </Popover>
           )}
         </div>
         {edge && routeSource && routeTarget && (
@@ -372,38 +346,6 @@ export default function NetworkGraphView({
             onRetry={people.reload}
           />
         )}
-      </div>
-
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-background px-4 py-2.5 text-xs text-muted-foreground md:px-5">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 tabular-nums">
-          <span>{t("counts.agents", { count: counts.agents })}</span>
-          <span>{t("counts.resources", { count: counts.resources })}</span>
-          <span>{t("counts.triggers", { count: counts.triggers })}</span>
-          <span>{t("counts.links", { count: counts.links })}</span>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-          <Legend swatch="h-2.5 w-2.5 rounded-full bg-primary">
-            {t("legend.agent")}
-          </Legend>
-          <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-emerald-600 dark:border-emerald-400">
-            {t("legend.internal")}
-          </Legend>
-          <Legend swatch="h-2.5 w-2.5 rounded-full border-2 border-amber-600 dark:border-amber-400">
-            {t("legend.external")}
-          </Legend>
-          <Legend swatch="h-2 w-2 rotate-45 bg-violet-600 dark:bg-violet-400">
-            {t("legend.trigger")}
-          </Legend>
-          <Legend swatch="w-5 border-t-2 border-primary">
-            {t("legend.delegates")}
-          </Legend>
-          <Legend swatch="w-5 border-t-2 border-dashed border-muted-foreground">
-            {t("legend.uses")}
-          </Legend>
-          <Legend swatch="w-5 border-t-2 border-dotted border-violet-600 dark:border-violet-400">
-            {t("legend.starts")}
-          </Legend>
-        </div>
       </div>
     </div>
   );

@@ -20,7 +20,17 @@ interface NetworkContextValue {
   error: boolean;
   fetchTopology: () => Promise<void>;
   view: GraphLens;
+  mode: NetworkMode;
+  setMode: (mode: NetworkMode) => void;
+  query: string;
+  setQuery: (query: string) => void;
+  showIssues: boolean;
+  setShowIssues: (show: boolean) => void;
+  showPeople: boolean;
+  setShowPeople: (show: boolean) => void;
 }
+
+export type NetworkMode = "graph" | "list";
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
 
@@ -39,6 +49,10 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   const [topology, setTopology] = useState<TopologyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [mode, setMode] = useState<NetworkMode>("graph");
+  const [query, setQuery] = useState("");
+  const [showIssues, setShowIssues] = useState(false);
+  const [showPeople, setShowPeople] = useState(false);
 
   const fetchTopology = useCallback(async () => {
     setLoading(true);
@@ -71,7 +85,21 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
 
   return (
     <NetworkContext.Provider
-      value={{ topology, loading, error, fetchTopology, view }}
+      value={{
+        topology,
+        loading,
+        error,
+        fetchTopology,
+        view,
+        mode,
+        setMode,
+        query,
+        setQuery,
+        showIssues,
+        setShowIssues,
+        showPeople,
+        setShowPeople,
+      }}
     >
       {children}
     </NetworkContext.Provider>

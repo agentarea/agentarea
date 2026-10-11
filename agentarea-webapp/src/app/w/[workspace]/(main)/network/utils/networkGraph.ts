@@ -5,7 +5,7 @@ import type {
 import type { NetworkNodeData, TopologyResponse } from "../types";
 import { getNetworkScope } from "./networkConnections";
 
-export type GraphLens = "overview" | "delegation" | "access";
+export type GraphLens = "overview" | "delegation" | "access" | "flow";
 export type GraphKind = NetworkNodeData["type"] | "person";
 export type GraphIssue =
   | "triggerOff"
@@ -22,6 +22,7 @@ export interface GraphNode {
   failed: boolean;
   degree: number;
   issues: GraphIssue[];
+  triggerType: string | null;
 }
 
 export interface GraphEdge {
@@ -149,6 +150,11 @@ export function buildNetworkGraph(
       failed,
       degree: degree.get(node.id) ?? 0,
       issues,
+      triggerType:
+        node.type === "trigger" &&
+        typeof node.metadata.trigger_type === "string"
+          ? node.metadata.trigger_type
+          : null,
     };
   });
 
@@ -164,6 +170,7 @@ export function buildNetworkGraph(
       failed: false,
       degree: degree.get(id) ?? 0,
       issues: [],
+      triggerType: null,
     });
   }
 
@@ -178,7 +185,8 @@ function isOff(status: string | null | undefined) {
  * What each lens shows. Overview is everything configured; delegation keeps
  * only who hands work to whom and what starts it; access lays the whole chain
  * out from the people and triggers who send requests to the resources the
- * agents reach, so people are always part of it.
+ * agents reach, so people are always part of it; flow is the same chain sorted
+ * into zones by whether the data stays inside the perimeter.
  */
 export function graphForLens(
   graph: NetworkGraph,
@@ -186,7 +194,8 @@ export function graphForLens(
   showPeople: boolean
 ): NetworkGraph {
   const nodes = graph.nodes.filter((node) => {
-    if (node.kind === "person") return showPeople || lens === "access";
+    if (node.kind === "person")
+      return showPeople || lens === "access" || lens === "flow";
     if (lens === "delegation") return !isResource(node.kind);
     return true;
   });
@@ -249,7 +258,9 @@ export function searchGraph(graph: NetworkGraph, query: string) {
 }
 
 export function lensFromView(view: string | null): GraphLens {
-  return view === "delegation" || view === "access" ? view : "overview";
+  return view === "delegation" || view === "access" || view === "flow"
+    ? view
+    : "overview";
 }
 
 /** Nodes with no edge in this graph, agents first, then by name. */

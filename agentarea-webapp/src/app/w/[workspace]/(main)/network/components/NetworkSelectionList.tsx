@@ -1,16 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { cn } from "@/lib/utils";
-import type { GraphEdge, GraphNode } from "../utils/networkGraph";
+import { ArrowRight } from "lucide-react";
+import { AgentAvatar } from "@/components/AgentAvatar";
+import EntityMark from "@/components/EntityMark";
+import { CollapsibleGroup } from "@/components/ui/group-header";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import { EntityIcon } from "@/lib/entity-icons";
+import type { NetworkNodeData } from "../types";
+import { getNodeIdentity } from "../utils/networkConnections";
+import type { GraphEdge, GraphKind, GraphNode } from "../utils/networkGraph";
 
 const INITIAL_VISIBLE_COUNT = 100;
+
+const GROUPS: { key: string; kinds: GraphKind[] }[] = [
+  { key: "agents", kinds: ["agent"] },
+  { key: "triggers", kinds: ["trigger"] },
+  { key: "resources", kinds: ["mcp_instance", "openapi_connection", "skill"] },
+  { key: "people", kinds: ["person"] },
+];
 
 interface NetworkSelectionListProps {
   nodes: GraphNode[];
   edges: GraphEdge[];
+  topologyNodes: NetworkNodeData[];
   selectedId: string | null;
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string) => void;
@@ -30,14 +44,17 @@ function visibleItems<T extends { id: string }>(
   return visible;
 }
 
-const itemClass =
-  "flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-sm text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-8";
 const moreClass =
-  "mt-2 min-h-11 rounded-md px-2.5 text-sm font-medium text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary md:min-h-8";
+  "min-h-9 w-full px-4 text-left text-[12.5px] font-medium text-primary hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
+/**
+ * The graph as rows: every node grouped by kind, then every relationship. The
+ * list view of the network, and the keyboard path to anything on the canvas.
+ */
 export default function NetworkSelectionList({
   nodes,
   edges,
+  topologyNodes,
   selectedId,
   onSelectNode,
   onSelectEdge,
@@ -46,124 +63,124 @@ export default function NetworkSelectionList({
   const graphText = useTranslations("NetworkPage.graph");
   const types = useTranslations("NetworkPage.orgChart");
   const peopleText = useTranslations("NetworkPage.people");
-  const [showAllNodes, setShowAllNodes] = useState(false);
-  const [showAllEdges, setShowAllEdges] = useState(false);
-  const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-  const listedNodes = visibleItems(nodes, selectedId, showAllNodes);
-  const listedEdges = visibleItems(edges, selectedId, showAllEdges);
+  const [showAll, setShowAll] = useState(false);
+  const byId = useMemo(
+    () => new Map(nodes.map((node) => [node.id, node])),
+    [nodes]
+  );
+  const topologyById = useMemo(
+    () => new Map(topologyNodes.map((node) => [node.id, node])),
+    [topologyNodes]
+  );
+  const listedEdges = visibleItems(edges, selectedId, showAll);
+
+  const kindLabel = (kind: GraphKind) =>
+    kind === "person"
+      ? peopleText("title")
+      : types.has(`types.${kind}`)
+        ? types(`types.${kind}`)
+        : kind;
+
+  const mark = (node: GraphNode) => {
+    if (node.kind === "agent")
+      return <AgentAvatar agent={{ id: node.id, name: node.label }} />;
+    const source = topologyById.get(node.id);
+    if (!source)
+      return (
+        <EntityIcon
+          kind="person"
+          className="h-6 w-6 rounded-md p-1 text-muted-foreground"
+        />
+      );
+    return (
+      <EntityMark
+        identity={getNodeIdentity(source)}
+        className="h-6 w-6 shrink-0 rounded-md"
+        glyphClassName="p-1 text-muted-foreground"
+      />
+    );
+  };
 
   return (
-    <details className="shrink-0 border-b border-border bg-background">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary md:px-5">
-        <span>{t("title")}</span>
-        <span className="shrink-0 text-xs font-normal text-muted-foreground">
-          {nodes.length} · {edges.length}
-        </span>
-        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
-      </summary>
-      <div className="max-h-[min(20vh,12rem)] overflow-y-auto border-t border-border px-4 py-3 md:max-h-[min(35vh,20rem)] md:px-5">
-        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
-          <section className="min-w-0">
-            <h3 className="mb-2 text-xs font-semibold text-muted-foreground">
-              {t("nodes", { count: nodes.length })}
-            </h3>
-            <ul className="space-y-1">
-              {listedNodes.map((node) => {
-                const current = selectedId === node.id;
-                return (
-                  <li key={node.id} className="min-w-0">
-                    <button
-                      type="button"
-                      aria-current={current ? "true" : undefined}
-                      onClick={() => onSelectNode(node.id)}
-                      className={cn(itemClass, current && "border-primary bg-primary/10")}
-                    >
-                      <span className="min-w-0 truncate font-medium">{node.label}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {node.kind === "person"
-                          ? peopleText("title")
-                          : types.has(`types.${node.kind}`)
-                            ? types(`types.${node.kind}`)
-                            : node.kind}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {nodes.length > INITIAL_VISIBLE_COUNT && (
-              <button
-                type="button"
-                onClick={() => setShowAllNodes((value) => !value)}
-                className={moreClass}
+    <div className="h-full overflow-y-auto bg-background">
+      {GROUPS.map(({ key, kinds }) => {
+        const members = nodes.filter((node) => kinds.includes(node.kind));
+        if (members.length === 0) return null;
+        return (
+          <CollapsibleGroup
+            key={key}
+            label={t(`groups.${key}`)}
+            count={members.length}
+          >
+            {members.map((node) => (
+              <InteractiveListRow
+                key={node.id}
+                start={mark(node)}
+                selected={selectedId === node.id}
+                onClick={() => onSelectNode(node.id)}
+                end={
+                  kinds.length > 1 && (
+                    <span className="text-[11.5px] text-muted-foreground">
+                      {kindLabel(node.kind)}
+                    </span>
+                  )
+                }
               >
-                {t(showAllNodes ? "showLess" : "showMore")}
-              </button>
-            )}
-          </section>
-
-          <section className="min-w-0">
-            <h3 className="mb-2 text-xs font-semibold text-muted-foreground">
-              {t("relationships", { count: edges.length })}
-            </h3>
-            <ul className="space-y-1">
-              {listedEdges.map((edge) => {
-                const current = selectedId === edge.id;
-                const source = byId.get(edge.source)?.label ?? edge.source;
-                const target = byId.get(edge.target)?.label ?? edge.target;
-                const relation =
-                  edge.relation === "person_access"
-                    ? graphText(edge.off ? "denied" : "allowed")
-                    : types.has(`relations.${edge.relation}`)
-                      ? types(`relations.${edge.relation}`)
-                      : edge.relation;
-                return (
-                  <li key={edge.id} className="min-w-0">
-                    <button
-                      type="button"
-                      aria-current={current ? "true" : undefined}
-                      aria-label={t("relationshipLabel", {
-                        source,
-                        target,
-                        relation,
-                      })}
-                      onClick={() => onSelectEdge(edge.id)}
-                      className={cn(
-                        itemClass,
-                        "justify-start",
-                        current && "border-primary bg-primary/10"
-                      )}
-                    >
-                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <span className="flex min-w-0 items-center gap-1.5 truncate font-medium">
-                          <span className="truncate">{source}</span>
-                          <ArrowRight
-                            aria-hidden="true"
-                            className="h-3.5 w-3.5 shrink-0"
-                          />
-                          <span className="truncate">{target}</span>
-                        </span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {relation}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {edges.length > INITIAL_VISIBLE_COUNT && (
-              <button
-                type="button"
-                onClick={() => setShowAllEdges((value) => !value)}
-                className={moreClass}
+                <span className="truncate text-[13px] font-medium">
+                  {node.label}
+                </span>
+              </InteractiveListRow>
+            ))}
+          </CollapsibleGroup>
+        );
+      })}
+      {edges.length > 0 && (
+        <CollapsibleGroup
+          label={t("groups.links")}
+          count={edges.length}
+          defaultOpen={false}
+        >
+          {listedEdges.map((edge) => {
+            const source = byId.get(edge.source)?.label ?? edge.source;
+            const target = byId.get(edge.target)?.label ?? edge.target;
+            const relation =
+              edge.relation === "person_access"
+                ? graphText(edge.off ? "denied" : "allowed")
+                : types.has(`relations.${edge.relation}`)
+                  ? types(`relations.${edge.relation}`)
+                  : edge.relation;
+            return (
+              <InteractiveListRow
+                key={edge.id}
+                selected={selectedId === edge.id}
+                onClick={() => onSelectEdge(edge.id)}
+                contentClassName="gap-1.5"
+                end={
+                  <span className="text-[11.5px] text-muted-foreground">
+                    {relation}
+                  </span>
+                }
               >
-                {t(showAllEdges ? "showLess" : "showMore")}
-              </button>
-            )}
-          </section>
-        </div>
-      </div>
-    </details>
+                <span className="truncate text-[13px]">{source}</span>
+                <ArrowRight
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                />
+                <span className="truncate text-[13px]">{target}</span>
+              </InteractiveListRow>
+            );
+          })}
+          {edges.length > INITIAL_VISIBLE_COUNT && (
+            <button
+              type="button"
+              onClick={() => setShowAll((value) => !value)}
+              className={moreClass}
+            >
+              {t(showAll ? "showLess" : "showMore")}
+            </button>
+          )}
+        </CollapsibleGroup>
+      )}
+    </div>
   );
 }
