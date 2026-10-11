@@ -5,7 +5,8 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Copy, Star } from "lucide-react";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import type { Skill } from "@/types/skill";
-import { scopeMeta, shortAge, SkillTile, sourceMeta } from "./skillsMeta";
+import { SkillTile } from "@/components/SkillTile";
+import { scopeMeta, shortAge, sourceMeta } from "./skillsMeta";
 
 interface SkillRowProps {
   skill: Skill;

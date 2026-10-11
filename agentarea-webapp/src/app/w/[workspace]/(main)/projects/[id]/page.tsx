@@ -8,11 +8,10 @@ import type {
   ProjectFileInfo,
   ProjectResponse,
 } from "@/api/client";
-import type { AttachmentItem } from "@/components/AttachmentSection";
 import EmptyState from "@/components/EmptyState";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
-import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
+import { mcpRefIdentity } from "@/lib/mcp/resolveMcpRef";
 import {
   getProjectAction,
   listAgentsAction,
@@ -112,11 +111,6 @@ export default function ProjectOverviewPage() {
     );
   }
 
-  const instanceIconSrc = (instance: AttachmentItem) => {
-    const resolved = resolveMcpRef(instance.id, allMcpInstances, mcpServers);
-    return resolved.status === "unresolved" ? undefined : resolved.iconSrc;
-  };
-
   return (
     <ProjectOverviewView
       project={project}
@@ -124,7 +118,9 @@ export default function ProjectOverviewPage() {
       allSkills={allSkills}
       allMcpInstances={allMcpInstances}
       resourcesLoading={resourcesLoading}
-      instanceIconSrc={instanceIconSrc}
+      mcpIdentity={(instance) =>
+        mcpRefIdentity(instance.id, allMcpInstances, mcpServers)
+      }
       agentsError={agentsError}
       files={files}
       filesError={filesError}

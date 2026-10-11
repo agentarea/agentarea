@@ -2,29 +2,29 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import Link from "@/components/WorkspaceLink";
 import { PackagePlus, RotateCcw } from "lucide-react";
+import type {
+  SetupField as ApiSetupField,
+  EntityKind,
+  EntityStatus,
+  ImportPreview,
+  InstallAction,
+  InstalledEntity,
+  InstallResult,
+  PreviewEntity,
+} from "@/api/client/types.gen";
+import type { SetupFieldView } from "@/app/w/[workspace]/(main)/bundles/types";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import SetupForm from "@/components/SetupForm";
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { Textarea } from "@/components/ui/textarea";
-import FormLabel from "@/components/FormLabel/FormLabel";
-import SetupForm from "@/components/SetupForm";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
+import Link from "@/components/WorkspaceLink";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
-import { cn } from "@/lib/utils";
 import type { StatusKind } from "@/lib/status";
-import type {
-  ImportPreview,
-  InstallResult,
-  EntityKind,
-  EntityStatus,
-  InstallAction,
-  PreviewEntity,
-  InstalledEntity,
-  SetupField as ApiSetupField,
-} from "@/api/client/types.gen";
-import type { SetupFieldView } from "@/app/w/[workspace]/(main)/bundles/types";
+import { cn } from "@/lib/utils";
 import { analyzeBundleAction, installBundleAction } from "./actions";
 
 type WizardStep = "source" | "review" | "result";
@@ -38,7 +38,13 @@ const KIND_LABELS: Record<EntityKind, string> = {
   policy: "Policies",
 };
 
-const ENTITY_ORDER: EntityKind[] = ["agent", "skill", "mcp", "automation", "policy"];
+const ENTITY_ORDER: EntityKind[] = [
+  "agent",
+  "skill",
+  "mcp",
+  "automation",
+  "policy",
+];
 const ENTITY_STATUS_KIND: Record<EntityStatus, StatusKind> = {
   will_create: "queued",
   already_exists: "active",
@@ -88,7 +94,9 @@ function EntityRow({ entity }: { entity: PreviewEntity }) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">{entity.name}</span>
         {entity.detail && (
-          <span className="truncate text-xs text-muted-foreground">{entity.detail}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {entity.detail}
+          </span>
         )}
       </div>
       <EntityStatusChip status={entity.status} />
@@ -102,7 +110,9 @@ function InstalledEntityRow({ entity }: { entity: InstalledEntity }) {
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">{entity.name}</span>
         {entity.detail && (
-          <span className="truncate text-xs text-muted-foreground">{entity.detail}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {entity.detail}
+          </span>
         )}
       </div>
       <ActionChip action={entity.action} />
@@ -110,7 +120,9 @@ function InstalledEntityRow({ entity }: { entity: InstalledEntity }) {
   );
 }
 
-function groupEntitiesByKind(entities: PreviewEntity[]): Map<EntityKind, PreviewEntity[]> {
+function groupEntitiesByKind(
+  entities: PreviewEntity[]
+): Map<EntityKind, PreviewEntity[]> {
   const map = new Map<EntityKind, PreviewEntity[]>();
   for (const e of entities) {
     const list = map.get(e.kind) ?? [];
@@ -120,7 +132,9 @@ function groupEntitiesByKind(entities: PreviewEntity[]): Map<EntityKind, Preview
   return map;
 }
 
-function groupInstalledByKind(entities: InstalledEntity[]): Map<EntityKind, InstalledEntity[]> {
+function groupInstalledByKind(
+  entities: InstalledEntity[]
+): Map<EntityKind, InstalledEntity[]> {
   const map = new Map<EntityKind, InstalledEntity[]>();
   for (const e of entities) {
     const list = map.get(e.kind) ?? [];
@@ -165,7 +179,9 @@ function setupFields(fields: ApiSetupField[] | undefined): SetupFieldView[] {
   }));
 }
 
-export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {}) {
+export default function ImportWizard({
+  initialSrc,
+}: { initialSrc?: string } = {}) {
   const { canAdminister } = useViewerCapabilities();
   const t = useTranslations("BundleInstall");
   const [step, setStep] = useState<WizardStep>("source");
@@ -177,7 +193,9 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
 
   // Review step
   const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [setupValues, setSetupValues] = useState<Record<string, string | number | boolean>>({});
+  const [setupValues, setSetupValues] = useState<
+    Record<string, string | number | boolean>
+  >({});
   const [setupErrors, setSetupErrors] = useState<Record<string, string>>({});
   const [installLoading, setInstallLoading] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
@@ -322,9 +340,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
                 analyzeError ? "border-red-300" : ""
               )}
             />
-            {analyzeError && (
-              <p className="form-error">{analyzeError}</p>
-            )}
+            {analyzeError && <p className="form-error">{analyzeError}</p>}
             <p className="note">
               Paste a valid agent package definition in YAML or JSON format.
             </p>
@@ -433,11 +449,7 @@ export default function ImportWizard({ initialSrc }: { initialSrc?: string } = {
                 key={idx}
                 className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
               >
-                <StatusIndicator
-                  kind="attention"
-                  size="sm"
-                  className="text-sm"
-                >
+                <StatusIndicator kind="attention" size="sm" className="text-sm">
                   {issue.message}
                 </StatusIndicator>
               </div>

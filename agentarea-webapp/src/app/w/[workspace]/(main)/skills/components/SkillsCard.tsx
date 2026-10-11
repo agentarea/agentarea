@@ -7,7 +7,8 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ArrowUpRight, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
-import { scopeMeta, SkillTile, sourceMeta } from "./skillsMeta";
+import { SkillTile } from "@/components/SkillTile";
+import { scopeMeta, sourceMeta } from "./skillsMeta";
 
 interface SkillsCardProps {
   skill: Skill;

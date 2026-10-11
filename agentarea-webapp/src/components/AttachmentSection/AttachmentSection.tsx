@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import Image from "next/image";
 import { Loader2, Trash2, type LucideIcon } from "lucide-react";
 import AccordionControl from "@/components/AccordionControl";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
@@ -90,27 +89,20 @@ export function useAttachmentWrites<T extends AttachmentItem>(
   return { run, pendingId, error, setError };
 }
 
-/** The small mark in front of an item name: its own icon, or the section's. */
+/** The small mark in front of an item name: its own mark, or the section's icon. */
 function ItemMark<T extends AttachmentItem>({
   item,
   icon: Icon,
-  getIconSrc,
+  renderMark,
 }: {
   item: T;
   icon: LucideIcon;
-  getIconSrc?: (item: T) => string | undefined;
+  renderMark?: (item: T) => ReactNode;
 }) {
-  const src = getIconSrc?.(item);
   return (
     <span className="relative grid h-4 w-4 shrink-0 place-items-center overflow-hidden">
-      {src ? (
-        <Image
-          src={src}
-          alt=""
-          width={16}
-          height={16}
-          className="h-4 w-4 object-contain"
-        />
+      {renderMark ? (
+        renderMark(item)
       ) : (
         <Icon className="h-4 w-4 text-muted-foreground" />
       )}
@@ -121,15 +113,15 @@ function ItemMark<T extends AttachmentItem>({
 function ItemTitle<T extends AttachmentItem>({
   item,
   icon,
-  getIconSrc,
+  renderMark,
 }: {
   item: T;
   icon: LucideIcon;
-  getIconSrc?: (item: T) => string | undefined;
+  renderMark?: (item: T) => ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-      <ItemMark item={item} icon={icon} getIconSrc={getIconSrc} />
+      <ItemMark item={item} icon={icon} renderMark={renderMark} />
       <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
         {item.name}
       </h3>
@@ -174,7 +166,7 @@ type AttachmentPickerSheetProps<T extends AttachmentItem> = {
   /** Replaces the default trigger button. */
   triggerComponent?: ReactNode;
   className?: string;
-  getIconSrc?: (item: T) => string | undefined;
+  renderMark?: (item: T) => ReactNode;
   renderDetails?: (item: T) => ReactNode;
 };
 
@@ -200,7 +192,7 @@ export function AttachmentPickerSheet<T extends AttachmentItem>({
   triggerText,
   triggerComponent,
   className,
-  getIconSrc,
+  renderMark,
   renderDetails,
 }: AttachmentPickerSheetProps<T>) {
   const t = useTranslations("AttachmentSection");
@@ -230,7 +222,7 @@ export function AttachmentPickerSheet<T extends AttachmentItem>({
             items={available}
             prefix={id}
             extractTitle={(item) => (
-              <ItemTitle item={item} icon={Icon} getIconSrc={getIconSrc} />
+              <ItemTitle item={item} icon={Icon} renderMark={renderMark} />
             )}
             onAdd={onAdd}
             onRemove={onRemove}
@@ -273,7 +265,8 @@ type AttachmentSectionProps<T extends AttachmentItem> = {
   onRemove: (item: T) => Promise<MutationResult>;
   /** Called after a write succeeds — refetch the owning resource here. */
   onChanged?: () => Promise<void> | void;
-  getIconSrc?: (item: T) => string | undefined;
+  /** The item's own mark (`AgentAvatar`, `SkillTile`, `EntityMark`); the section glyph otherwise. */
+  renderMark?: (item: T) => ReactNode;
   renderDetails?: (item: T) => ReactNode;
 };
 
@@ -300,7 +293,7 @@ export function AttachmentSection<T extends AttachmentItem>({
   onAdd,
   onRemove,
   onChanged,
-  getIconSrc,
+  renderMark,
   renderDetails,
 }: AttachmentSectionProps<T>) {
   const [accordionValue, setAccordionValue] = useState<string>(id);
@@ -340,7 +333,7 @@ export function AttachmentSection<T extends AttachmentItem>({
           }}
           triggerText={triggerText}
           className="ml-auto"
-          getIconSrc={getIconSrc}
+          renderMark={renderMark}
           renderDetails={renderDetails}
         />
       }
@@ -356,7 +349,7 @@ export function AttachmentSection<T extends AttachmentItem>({
                 key={`${id}-${item.id}`}
                 value={`${id}-${item.id}`}
                 title={
-                  <ItemTitle item={item} icon={icon} getIconSrc={getIconSrc} />
+                  <ItemTitle item={item} icon={icon} renderMark={renderMark} />
                 }
                 controls={
                   <Button

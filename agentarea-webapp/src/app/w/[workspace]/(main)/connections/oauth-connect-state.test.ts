@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-
 import {
   buildAuthorizeRequest,
   buildCatalogConnectRequest,
   canAuthorize,
   catalogPreflightToMCP,
   deriveOAuthConnectState,
+  preflightAfterAuthorizeError,
   summarizeAuthorization,
   type MCPOAuthPreflight,
 } from "./oauth-connect-state";
@@ -26,6 +26,40 @@ function preflight(over: Partial<MCPOAuthPreflight> = {}): MCPOAuthPreflight {
 }
 
 describe("deriveOAuthConnectState", () => {
+  it("replaces advertised readiness after registration is refused and preserves app retry settings", () => {
+    const before = preflight({
+      redirect_uri: "https://app.example.com/callback",
+    });
+    const after = preflightAfterAuthorizeError(
+      before,
+      "oauth_app_required",
+      "Registration refused"
+    );
+    const state = deriveOAuthConnectState({
+      isUrlType: true,
+      preflight: after,
+    });
+    expect(state).toEqual({
+      kind: "needs_oauth_app",
+      connected: false,
+      reason: "Registration refused",
+      issuer: before.issuer,
+      redirectUri: before.redirect_uri,
+    });
+    expect(
+      buildAuthorizeRequest({ instanceId: INSTANCE_ID, state })
+    ).toBeNull();
+    expect(
+      buildAuthorizeRequest({
+        instanceId: INSTANCE_ID,
+        state,
+        credentials: { client_id: "app", client_secret: "secret" },
+      })
+    ).toMatchObject({ credential_mode: "custom", client_id: "app" });
+    expect(preflightAfterAuthorizeError(after, null, "Network failure")).toBe(
+      after
+    );
+  });
   it("offers nothing until the preflight answer arrives", () => {
     expect(
       deriveOAuthConnectState({ isUrlType: true, preflight: null })
@@ -37,7 +71,8 @@ describe("deriveOAuthConnectState", () => {
       isUrlType: true,
       preflight: preflight({
         status: "oauth_app_required",
-        detail: "accounts.google.com does not support Dynamic Client Registration",
+        detail:
+          "accounts.google.com does not support Dynamic Client Registration",
       }),
     });
 
@@ -239,17 +274,17 @@ describe("canAuthorize", () => {
   } as const;
 
   it("is ready without credentials when the provider registers us itself", () => {
-    expect(
-      canAuthorize({ state: { kind: "ready", connected: false } })
-    ).toBe(true);
+    expect(canAuthorize({ state: { kind: "ready", connected: false } })).toBe(
+      true
+    );
   });
 
   it("waits for a complete OAuth app before the connection even exists", () => {
     // The create page asks this before it creates the instance the request
     // will name, so readiness cannot depend on having an instance id.
-    expect(canAuthorize({ state: needsApp, credentials: { client_id: "cid" } })).toBe(
-      false
-    );
+    expect(
+      canAuthorize({ state: needsApp, credentials: { client_id: "cid" } })
+    ).toBe(false);
     expect(
       canAuthorize({
         state: needsApp,

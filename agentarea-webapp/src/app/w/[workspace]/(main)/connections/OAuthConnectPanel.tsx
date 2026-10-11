@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-
 import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import { Button } from "@/components/ui/button";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { CopyableText } from "@/components/ui/copyable-text";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import { apiErrorMessage } from "@/lib/api-errors";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
 import { isSafeRedirectUrl } from "@/lib/safe-redirect";
@@ -15,7 +14,6 @@ import {
   mcpOAuthPreflightAction,
   oauthAuthorizeAction,
 } from "@/lib/server-actions";
-
 import {
   catalogConnectionPreflightAction,
   connectCatalogConnectionAction,
@@ -26,6 +24,7 @@ import {
   canAuthorize,
   catalogPreflightToMCP,
   deriveOAuthConnectState,
+  preflightAfterAuthorizeError,
   type MCPOAuthPreflight,
   type OAuthConnectState,
 } from "./oauth-connect-state";
@@ -85,7 +84,7 @@ export function OAuthConnectPanel({
   const [fetchedPreflight, setPreflight] = useState<MCPOAuthPreflight | null>(
     null
   );
-  const preflight = givenPreflight ?? fetchedPreflight;
+  const preflight = fetchedPreflight ?? givenPreflight ?? null;
   const hasGivenPreflight = givenPreflight !== undefined;
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const [credentials, setCredentials] =
@@ -168,7 +167,17 @@ export function OAuthConnectPanel({
           request
         );
         if (result.error || !result.data) {
-          setConnectError(apiErrorMessage(result, t("startFailed")));
+          const message = apiErrorMessage(result, t("startFailed"));
+          const code =
+            result.error &&
+            typeof result.error === "object" &&
+            "code" in result.error &&
+            typeof result.error.code === "string"
+              ? result.error.code
+              : null;
+          setConnectError(message);
+          setPreflight(preflightAfterAuthorizeError(preflight, code, message));
+          onAuthorizeError?.(code);
           return;
         }
         authorizeUrl = result.data.authorize_url;
@@ -186,7 +195,9 @@ export function OAuthConnectPanel({
         if (!request) return;
         const { data, error, code } = await oauthAuthorizeAction(request);
         if (error || !data?.authorize_url) {
-          setConnectError(error || t("startFailed"));
+          const message = error || t("startFailed");
+          setConnectError(message);
+          setPreflight(preflightAfterAuthorizeError(preflight, code, message));
           onAuthorizeError?.(code);
           return;
         }
@@ -198,7 +209,9 @@ export function OAuthConnectPanel({
       }
       window.location.href = authorizeUrl;
     } catch (error) {
-      setConnectError(error instanceof Error ? error.message : t("startFailed"));
+      setConnectError(
+        error instanceof Error ? error.message : t("startFailed")
+      );
     } finally {
       setIsConnecting(false);
     }
@@ -210,6 +223,7 @@ export function OAuthConnectPanel({
     onConnectStart,
     onAuthorizeError,
     returnPath,
+    preflight,
   ]);
 
   if (state.kind === "hidden") return null;
@@ -328,9 +342,7 @@ export function OAuthConnectPanel({
         />
         <div className="min-w-0">
           <p className="text-sm font-medium">
-            {state.connected
-              ? t("needsAppTitleConnected")
-              : t("needsAppTitle")}
+            {state.connected ? t("needsAppTitleConnected") : t("needsAppTitle")}
           </p>
           <p className="text-xs text-muted-foreground">{state.reason}</p>
         </div>
@@ -346,11 +358,7 @@ export function OAuthConnectPanel({
         onChange={setCredentials}
         disabled={isConnecting}
       />
-      <div
-        className={
-          bare ? "flex flex-col gap-2" : "flex items-center gap-2"
-        }
-      >
+      <div className={bare ? "flex flex-col gap-2" : "flex items-center gap-2"}>
         <Button
           size={buttonSize}
           className={bare ? "w-full" : undefined}

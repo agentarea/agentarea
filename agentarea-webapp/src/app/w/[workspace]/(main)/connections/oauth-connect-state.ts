@@ -87,6 +87,16 @@ export function deriveOAuthConnectState({
   }
 }
 
+/** A rejected registration supersedes discovery, including server-provided preflight. */
+export function preflightAfterAuthorizeError(
+  preflight: MCPOAuthPreflight | null,
+  code: string | null | undefined,
+  detail: string
+): MCPOAuthPreflight | null {
+  if (!preflight || code !== "oauth_app_required") return preflight;
+  return { ...preflight, status: "oauth_app_required", detail };
+}
+
 /**
  * A catalog template answers the same question as an MCP server: the platform
  * app is its "ready", the user's own app its "oauth_app_required". It never
