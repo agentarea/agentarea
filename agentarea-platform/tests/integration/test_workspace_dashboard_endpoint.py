@@ -468,6 +468,11 @@ async def _call_dashboard(
                 return_value=mtd_usd,
             ),
             patch(
+                "agentarea_tasks.infrastructure.repository.TaskRepository.sum_spend_by_day",
+                new_callable=AsyncMock,
+                return_value={},
+            ),
+            patch(
                 "agentarea_wallet.infrastructure.repository.WalletRepository.list_budget_exhausted",
                 new_callable=AsyncMock,
                 return_value=exhausted_wallets,

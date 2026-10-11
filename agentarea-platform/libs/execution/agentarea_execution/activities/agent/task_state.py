@@ -142,19 +142,32 @@ def make_task_state_activities(
     async def check_monthly_spend_cap_activity(
         request: MonthlySpendCapRequest,
     ) -> MonthlySpendCapResult:
-        """Read the workspace's month-to-date spend against the run's monthly cap."""
+        """Read month-to-date spend of the workspace and of the agent against their caps."""
         from agentarea_tasks.infrastructure.repository import TaskRepository
 
         user_context = create_user_context(request.user_context_data)
+        agent_spent = None
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
-            spent = to_money(await TaskRepository(session, user_context).sum_spend_mtd())
+            tasks = TaskRepository(session, user_context)
+            spent = to_money(await tasks.sum_spend_mtd())
+            if request.agent_cap_usd is not None:
+                if not request.agent_id:
+                    raise ValueError("an agent spend cap check needs the run's agent_id")
+                agent_spent = to_money(await tasks.sum_spend_mtd(agent_id=UUID(request.agent_id)))
         return MonthlySpendCapResult(
-            exceeded=spent >= request.cap_usd,
+            exceeded=request.cap_usd is not None and spent >= request.cap_usd,
             month_to_date_usd=spent,
             cap_usd=request.cap_usd,
             currency=get_customer_pricing().currency(),
+            agent_exceeded=(
+                agent_spent is not None
+                and request.agent_cap_usd is not None
+                and agent_spent >= request.agent_cap_usd
+            ),
+            agent_month_to_date_usd=agent_spent,
+            agent_cap_usd=request.agent_cap_usd,
         )
 
     @activity.defn

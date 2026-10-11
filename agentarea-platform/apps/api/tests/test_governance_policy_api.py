@@ -459,7 +459,9 @@ async def test_preview_merges_workspace_and_agent_rules(session_factory):
             )
 
         assert preview.status_code == 200
-        assert preview.json()["effective_policy"]["budget"]["monthly_spend_cap_usd"] == "25.00"
+        budget = preview.json()["effective_policy"]["budget"]
+        assert budget["monthly_spend_cap_usd"] == "100.00"
+        assert budget["agent_monthly_spend_cap_usd"] == "25.00"
 
 
 async def test_preview_rejects_loosening_task_policy(session_factory):

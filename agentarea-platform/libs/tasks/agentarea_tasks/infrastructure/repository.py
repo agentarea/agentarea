@@ -1,7 +1,8 @@
 """Task repository implementation."""
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 from typing import cast as type_cast
 from uuid import UUID
@@ -9,13 +10,16 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.events.contract import APPROVAL_REQUEST, APPROVAL_RESPONSE
-from sqlalchemy import Numeric, cast, func, literal, or_, select, tuple_, update
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from sqlalchemy import func, literal, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.base_service import TaskNotFoundError
+from ..domain.costs import CostEntry
 from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
+from .cost_repository import CostEntryRepository
 from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
 
 
@@ -306,40 +310,42 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
-    async def sum_spend_since(self, since: datetime) -> float:
-        """Sum each task's own model spend for the workspace since a UTC time.
+    async def sum_spend_since(self, since: datetime, agent_id: UUID | None = None) -> Decimal:
+        """The workspace's spend since a UTC instant, in the billing currency.
 
-        Uses started_at (falling back to created_at when started_at is null)
-        as the activity timestamp. New task results persist ``own_cost`` so
-        delegated child spend is not counted once on the child and again in
-        the parent's transitive ``total_cost``. Historical results fall back
-        to ``total_cost``.
-        ``TaskORM.result`` is a plain JSON column, so we extract via the
-        ``->>`` operator (returns text) and cast to numeric.
+        Summed from the spend ledger, where each paid line is stored once on the
+        task that incurred it, so delegated child spend is never counted twice.
+        ``agent_id`` narrows the sum to one agent's lines.
         """
-        own_cost_expr = cast(TaskORM.result.op("->>")("own_cost"), Numeric)
-        total_cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
-        cost_expr = func.coalesce(own_cost_expr, total_cost_expr, 0)
-        activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
-        stmt = (
-            select(func.coalesce(func.sum(cost_expr), 0))
-            .where(self._get_workspace_filter())
-            .where(activity_at >= since)
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            since,
+            currency=get_customer_pricing().currency(),
+            agent_id=agent_id,
         )
-        result = await self.session.execute(stmt)
-        return float(result.scalar() or 0.0)
 
-    async def sum_spend_mtd(self) -> float:
-        """Sum total_cost for the current workspace from the first of this UTC month."""
-        now = datetime.now(UTC)
-        first_of_month = datetime(now.year, now.month, 1, tzinfo=UTC).replace(tzinfo=None)
-        return await self.sum_spend_since(first_of_month)
+    async def record_costs(self, entries: Sequence[CostEntry]) -> None:
+        """Store paid lines in the spend ledger, once each."""
+        await CostEntryRepository(self.session, self.user_context).record(entries)
 
-    async def sum_spend_today(self) -> float:
-        """Sum total_cost for the current workspace from the start of today UTC."""
+    async def sum_spend_by_day(
+        self, since: datetime, agent_id: UUID | None = None
+    ) -> dict[date, Decimal]:
+        """The workspace's (or one agent's) spend per UTC day since a UTC instant."""
+        return await CostEntryRepository(self.session, self.user_context).sum_by_day(
+            since,
+            currency=get_customer_pricing().currency(),
+            agent_id=agent_id,
+        )
+
+    async def sum_spend_mtd(self, agent_id: UUID | None = None) -> Decimal:
+        """The workspace's (or one agent's) spend since the first of this UTC month."""
         now = datetime.now(UTC)
-        today_start = datetime(now.year, now.month, now.day, tzinfo=UTC).replace(tzinfo=None)
-        return await self.sum_spend_since(today_start)
+        return await self.sum_spend_since(datetime(now.year, now.month, 1, tzinfo=UTC), agent_id)
+
+    async def sum_spend_today(self) -> Decimal:
+        """The workspace's spend since the start of today UTC."""
+        now = datetime.now(UTC)
+        return await self.sum_spend_since(datetime(now.year, now.month, now.day, tzinfo=UTC))
 
     async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
         """Update task status atomically with optional additional fields."""

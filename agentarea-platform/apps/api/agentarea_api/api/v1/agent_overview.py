@@ -18,14 +18,15 @@ from agentarea_api.api.v1.dashboard import (
     ACTIVE_TASK_STATUSES,
     HITL_TASK_STATUSES,
     DailySpendPoint,
-    task_spend_expr,
 )
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
-from agentarea_common.money import ZERO, Money, to_money
+from agentarea_common.money import ZERO, Money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_tasks.infrastructure.orm import TaskORM
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -84,18 +85,12 @@ async def get_agent_overview(
     today_start = datetime(now.year, now.month, now.day)
     month_start = datetime(now.year, now.month, 1)
 
-    cost_expr = task_spend_expr()
     activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
     base_filter = (TaskORM.workspace_id == workspace_id) & (TaskORM.agent_id == agent_id)
+    tasks = RepositoryFactory(db_session, user_context).create_repository(TaskRepository)
 
     # ----- summary metrics -----
     summary_q = select(
-        func.coalesce(func.sum(case((activity_at >= today_start, cost_expr), else_=0)), 0).label(
-            "cost_today"
-        ),
-        func.coalesce(func.sum(case((activity_at >= month_start, cost_expr), else_=0)), 0).label(
-            "cost_mtd"
-        ),
         func.coalesce(
             func.sum(
                 case(
@@ -127,15 +122,12 @@ async def get_agent_overview(
     # ----- daily spend (30d) -----
     spend_since = today_start - timedelta(days=29)
     day_col = cast(activity_at, Date).label("day")
-    spend_q = (
-        select(day_col, func.coalesce(func.sum(cost_expr), 0).label("usd"))
-        .where(base_filter)
-        .where(activity_at >= spend_since)
-        .group_by("day")
-        .order_by("day")
-    )
-    spend_rows = (await db_session.execute(spend_q)).all()
-    spend_by_day = {r.day.isoformat(): to_money(r.usd) for r in spend_rows}
+    spend_by_day = {
+        day.isoformat(): amount
+        for day, amount in (
+            await tasks.sum_spend_by_day(spend_since.replace(tzinfo=UTC), agent_id)
+        ).items()
+    }
     daily_spend = [
         DailySpendPoint(date=day, usd=spend_by_day.get(day, ZERO))
         for day in ((spend_since.date() + timedelta(days=i)).isoformat() for i in range(30))
@@ -240,8 +232,8 @@ async def get_agent_overview(
     upcoming.sort(key=lambda u: u.fires_at)
 
     return AgentOverviewResponse(
-        cost_today_usd=to_money(summary.cost_today),
-        cost_mtd_usd=to_money(summary.cost_mtd),
+        cost_today_usd=await tasks.sum_spend_since(today_start.replace(tzinfo=UTC), agent_id),
+        cost_mtd_usd=await tasks.sum_spend_since(month_start.replace(tzinfo=UTC), agent_id),
         tasks_done_today=int(summary.done_today or 0),
         tasks_failed_today=int(summary.failed_today or 0),
         last_activity_at=summary.last_activity,

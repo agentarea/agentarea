@@ -124,7 +124,35 @@ async def test_resolve_merges_workspace_and_agent_tighter_wins(session_factory):
         resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
         effective = await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
 
-        assert str(effective.budget.monthly_spend_cap_usd) == "25.00"
+        # The agent's monthly cap limits that agent's own spend; it does not
+        # shrink the cap on everything the workspace spends.
+        assert str(effective.budget.monthly_spend_cap_usd) == "100.00"
+        assert str(effective.budget.agent_monthly_spend_cap_usd) == "25.00"
+
+
+async def test_agent_caps_of_agent_and_workspace_layers_take_the_tighter(session_factory):
+    async with session_factory() as session:
+        context = _context()
+        agent_id = uuid4()
+        repo = PolicyRuleRepository(session, context)
+        await repo.create(
+            _rule(
+                PolicySubjectType.AGENT,
+                str(agent_id),
+                "spend",
+                PolicyEffect.CAP,
+                amount_usd="10.00",
+                period="month",
+            )
+        )
+
+        resolver = GovernancePolicyResolver(RepositoryFactory(session, context))
+        effective = await resolver.resolve(workspace_id=context.workspace_id, agent_id=agent_id)
+        other = await resolver.resolve(workspace_id=context.workspace_id, agent_id=uuid4())
+
+        assert str(effective.budget.agent_monthly_spend_cap_usd) == "10.00"
+        assert effective.budget.monthly_spend_cap_usd is None
+        assert other.budget is None or other.budget.agent_monthly_spend_cap_usd is None
 
 
 async def test_agent_scoped_approval_rule_reaches_the_pdp_verdict(session_factory):

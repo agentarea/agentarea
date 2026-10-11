@@ -850,8 +850,9 @@ async def create_task_for_agent_with_stream(
         except AgentModelNotConfiguredError:
             creation_error = ("Agent model is not configured", "model_not_configured")
         except BudgetCapExceededError as exc:
+            scope = "Agent" if exc.agent_id else "Workspace"
             creation_error = (
-                f"Workspace monthly spend cap reached ({exc.current_mtd_usd} {exc.currency}/"
+                f"{scope} monthly spend cap reached ({exc.current_mtd_usd} {exc.currency}/"
                 f"{exc.cap_usd} {exc.currency})",
                 "monthly_spend_cap_exceeded",
             )
@@ -859,6 +860,7 @@ async def create_task_for_agent_with_stream(
                 "current_mtd_usd": float(exc.current_mtd_usd),
                 "cap_usd": float(exc.cap_usd),
                 "currency": exc.currency,
+                **({"agent_id": exc.agent_id} if exc.agent_id else {}),
             }
         except ValueError:
             logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)

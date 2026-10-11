@@ -8,6 +8,7 @@ from agentarea_governance.domain.policies import (
     BudgetPolicy,
     ExecutionLimitsPolicy,
     PolicyDocument,
+    PolicyResolver,
     PolicyValidationError,
     TokenPolicy,
 )
@@ -100,6 +101,45 @@ def workspace_id():
 @pytest.fixture
 def mock_task_repo():
     return AsyncMock()
+
+
+def _agent_cap_policy(cap) -> PolicyDocument:
+    return PolicyDocument(budget=BudgetPolicy(agent_monthly_spend_cap_usd=str(cap)))
+
+
+class TestEnforceAgentBudgetCap:
+    async def test_refuses_when_the_agents_own_month_to_date_spend_reached_its_cap(
+        self, workspace_id, mock_task_repo
+    ):
+        agent_id = uuid4()
+
+        async def sum_spend_mtd(agent_id=None):
+            return 9.0 if agent_id is not None else 1.0
+
+        mock_task_repo.sum_spend_mtd.side_effect = sum_spend_mtd
+        service = _make_service(task_repository=mock_task_repo)
+        effective = PolicyResolver().resolve([_agent_cap_policy("9.00")])
+
+        with pytest.raises(BudgetCapExceededError) as exc_info:
+            await service._enforce_budget_cap(workspace_id, effective, agent_id)
+
+        err = exc_info.value
+        assert err.agent_id == str(agent_id)
+        assert err.current_mtd_usd == 9
+        assert err.cap_usd == 9
+        assert str(agent_id) in str(err)
+
+    async def test_allows_the_agent_below_its_cap_whatever_the_workspace_spent(
+        self, workspace_id, mock_task_repo
+    ):
+        async def sum_spend_mtd(agent_id=None):
+            return 2.0 if agent_id is not None else 500.0
+
+        mock_task_repo.sum_spend_mtd.side_effect = sum_spend_mtd
+        service = _make_service(task_repository=mock_task_repo)
+        effective = PolicyResolver().resolve([_agent_cap_policy("9.00")])
+
+        await service._enforce_budget_cap(workspace_id, effective, uuid4())
 
 
 class TestEnforceBudgetCap:

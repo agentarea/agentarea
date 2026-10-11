@@ -9,6 +9,7 @@ Swap via AGENTAREA_TASK_EXECUTOR=direct. No other config needed.
 
 import json
 import logging
+from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -18,6 +19,7 @@ from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
+from .domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
 from .domain.exceptions import SchedulingNotSupportedError
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
@@ -164,13 +166,43 @@ class DirectTaskManager(BaseTaskManager):
                 tokens_used += response.usage.total_tokens
                 if tokens_used > max_tokens_total:
                     raise RuntimeError(f"token budget exceeded: {tokens_used}/{max_tokens_total}")
-                cost_used += await price_llm_call(
+                call_cost = await price_llm_call(
                     model_instance_id=model_instance_id,
                     platform_funded=platform_funded,
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
                     provider_cost_usd=to_money(response.cost),
                 )
+                cost_used += call_cost
+                if call_cost > ZERO:
+                    # No workflow events here, so the ledger line is written directly.
+                    await self.task_repository.record_costs(
+                        [
+                            CostEntry(
+                                workspace_id=task.workspace_id,
+                                created_by=task.user_id,
+                                event_id=uuid4(),
+                                category=CostCategory.MODEL,
+                                task_id=task.id,
+                                agent_id=task.agent_id,
+                                subject_type=CostSubjectType.MODEL_INSTANCE,
+                                subject_id=model_instance_id,
+                                subject_name=None,
+                                call_ref=None,
+                                amount=call_cost,
+                                currency=get_customer_pricing().currency(),
+                                source=CostSource.TOKEN_PRICING,
+                                occurred_at=datetime.now(UTC),
+                                provider_cost_usd=to_money(response.cost),
+                                managed_by=MANAGED_BY_PLATFORM if platform_funded else None,
+                                evidence={
+                                    "iteration": iteration,
+                                    "prompt_tokens": response.usage.prompt_tokens,
+                                    "completion_tokens": response.usage.completion_tokens,
+                                },
+                            )
+                        ]
+                    )
                 if cost_used > to_money(run_budget):
                     currency = get_customer_pricing().currency()
                     raise RuntimeError(

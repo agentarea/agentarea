@@ -99,11 +99,17 @@ class PolicyScope(BaseModel):
 
 
 class BudgetPolicy(BaseModel):
-    """Budget-related ceilings."""
+    """Budget-related ceilings.
+
+    ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+    month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+    alone, summed over all its runs in the month.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     monthly_spend_cap_usd: Money | None = Field(default=None, ge=ZERO)
+    agent_monthly_spend_cap_usd: Money | None = Field(default=None, ge=ZERO)
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
     service_budget_usd: Money | None = Field(default=None, gt=ZERO)
 
@@ -351,12 +357,25 @@ class PolicyResolver:
     def _validate_budget(self, higher: BudgetPolicy | None, lower: BudgetPolicy | None) -> None:
         if not higher or not lower:
             return
-        for field in ("monthly_spend_cap_usd", "run_budget_usd", "service_budget_usd"):
+        for field in (
+            "monthly_spend_cap_usd",
+            "agent_monthly_spend_cap_usd",
+            "run_budget_usd",
+            "service_budget_usd",
+        ):
             higher_value = getattr(higher, field)
             lower_value = getattr(lower, field)
             if higher_value is not None and lower_value is not None:
                 if to_money(lower_value) > to_money(higher_value):
                     raise PolicyValidationError(f"{field} cannot loosen higher-scope ceiling")
+        if (
+            higher.monthly_spend_cap_usd is not None
+            and lower.agent_monthly_spend_cap_usd is not None
+            and to_money(lower.agent_monthly_spend_cap_usd) > to_money(higher.monthly_spend_cap_usd)
+        ):
+            raise PolicyValidationError(
+                "agent_monthly_spend_cap_usd cannot exceed the higher-scope monthly_spend_cap_usd"
+            )
 
     def _validate_tokens(self, higher: TokenPolicy | None, lower: TokenPolicy | None) -> None:
         if not higher or not lower:
@@ -423,6 +442,9 @@ class PolicyResolver:
         return BudgetPolicy(
             monthly_spend_cap_usd=_min_money(
                 higher.monthly_spend_cap_usd, lower.monthly_spend_cap_usd
+            ),
+            agent_monthly_spend_cap_usd=_min_money(
+                higher.agent_monthly_spend_cap_usd, lower.agent_monthly_spend_cap_usd
             ),
             run_budget_usd=_min_money(higher.run_budget_usd, lower.run_budget_usd),
             service_budget_usd=_min_money(higher.service_budget_usd, lower.service_budget_usd),

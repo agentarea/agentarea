@@ -221,30 +221,43 @@ class TaskService(BaseTaskService):
         self,
         workspace_id: str | None,
         effective_policy: EffectivePolicy | None = None,
+        agent_id: UUID | None = None,
     ) -> None:
-        """Reject task creation or continuation if the workspace has hit its monthly cap.
+        """Reject task creation or continuation once a monthly cap is reached.
 
-        No-op when:
-        - workspace_id is missing
-        - no policy monthly cap is configured
+        The workspace cap is checked against the workspace's month-to-date
+        spend, the agent cap against ``agent_id``'s own. No-op when the
+        workspace is missing or the policy configures neither cap.
         """
         if not workspace_id:
             return
 
         policy = effective_policy or await self._resolve_effective_policy(workspace_id=workspace_id)
-        cap_value = policy.budget.monthly_spend_cap_usd if policy.budget else None
-        if cap_value is None:
-            return
+        budget = policy.budget
+        cap_value = budget.monthly_spend_cap_usd if budget else None
+        if cap_value is not None:
+            cap = to_money(cap_value)
+            mtd = to_money(await self.task_repository.sum_spend_mtd())
+            if mtd >= cap:
+                raise BudgetCapExceededError(
+                    workspace_id=workspace_id,
+                    current_mtd_usd=mtd,
+                    cap_usd=cap,
+                    currency=get_customer_pricing().currency(),
+                )
 
-        cap = to_money(cap_value)
-        mtd = to_money(await self.task_repository.sum_spend_mtd())
-        if mtd >= cap:
-            raise BudgetCapExceededError(
-                workspace_id=workspace_id,
-                current_mtd_usd=mtd,
-                cap_usd=cap,
-                currency=get_customer_pricing().currency(),
-            )
+        agent_cap_value = budget.agent_monthly_spend_cap_usd if budget else None
+        if agent_cap_value is not None and agent_id is not None:
+            agent_cap = to_money(agent_cap_value)
+            agent_mtd = to_money(await self.task_repository.sum_spend_mtd(agent_id=agent_id))
+            if agent_mtd >= agent_cap:
+                raise BudgetCapExceededError(
+                    workspace_id=workspace_id,
+                    current_mtd_usd=agent_mtd,
+                    cap_usd=agent_cap,
+                    currency=get_customer_pricing().currency(),
+                    agent_id=str(agent_id),
+                )
 
     async def _validate_agent_exists(self, agent_id: UUID):
         """Validate that the agent exists and return the loaded entity for reuse.
@@ -347,8 +360,16 @@ class TaskService(BaseTaskService):
         effective_policy.require_runtime_contract()
         if upper_bound_policy is not None:
             upper_bound_policy.require_runtime_contract()
+            # The parent's agent cap limits the parent's agent, not the one it
+            # delegates to, so it bounds nothing here.
             upper_bound_document = PolicyDocument.model_validate(
-                upper_bound_policy.model_dump(exclude={"source_policy_ids", "resolver_version"})
+                upper_bound_policy.model_dump(
+                    exclude={
+                        "source_policy_ids": True,
+                        "resolver_version": True,
+                        "budget": {"agent_monthly_spend_cap_usd"},
+                    }
+                )
             )
             effective_document = PolicyDocument.model_validate(
                 effective_policy.model_dump(exclude={"source_policy_ids", "resolver_version"})
@@ -356,7 +377,7 @@ class TaskService(BaseTaskService):
             # A delegated task may be stricter than its parent, but never
             # acquire limits or capabilities the parent execution did not have.
             PolicyResolver().resolve([upper_bound_document, effective_document])
-        await self._enforce_budget_cap(workspace_id, effective_policy)
+        await self._enforce_budget_cap(workspace_id, effective_policy, agent_id)
 
         agent = await self._validate_agent_exists(agent_id)
         if require_model:
@@ -966,7 +987,7 @@ class TaskService(BaseTaskService):
             next_policy.runtime_contract()
         except PolicyValidationError:
             return {"accepted": False, "reason": "policy_ceiling"}
-        await self._enforce_budget_cap(task.workspace_id, next_policy)
+        await self._enforce_budget_cap(task.workspace_id, next_policy, task.agent_id)
 
         resolved_execution = next_policy.execution
         if resolved_execution is None:
@@ -1070,7 +1091,7 @@ class TaskService(BaseTaskService):
             task_policy=requested_policy,
         )
         policy.require_runtime_contract()
-        await self._enforce_budget_cap(task.workspace_id, policy)
+        await self._enforce_budget_cap(task.workspace_id, policy, task.agent_id)
         resolved_execution = policy.execution
         snapshot = {
             "requested_policy": requested_policy.to_json_dict(),

@@ -44,6 +44,7 @@ A limit comes from one of three places, and that decides how you change it.
 | Limit | Default for a new workspace | Unit |
 |---|---|---|
 | `budget.monthly_spend_cap_usd` | `500.00` | billing currency per calendar month, UTC |
+| `budget.agent_monthly_spend_cap_usd` | not seeded | billing currency per agent per calendar month, UTC |
 | `budget.run_budget_usd` | `50.00` | billing currency per task |
 | `budget.service_budget_usd` | not seeded | USD per task |
 | `tokens.max_tokens` | `20000000` | tokens per task |
@@ -162,7 +163,8 @@ carrying content, command text, stdout or stderr are replaced with a size marker
 
 | Limit | Enforced at |
 |---|---|
-| `monthly_spend_cap_usd` | Task creation only. A running task is not interrupted, and the check has no lock, so concurrent creation can cross it. |
+| `monthly_spend_cap_usd` | Task creation and continuation, run start and resume. The check has no lock, so concurrent creation can cross it. |
+| `agent_monthly_spend_cap_usd` | Task creation and continuation, run start and resume, and after each paid model or tool call. Other runs of the same agent between two checks can cross it. |
 | `run_budget_usd` | The workflow loop, and `CostBudgetGuard` before each LLM and tool call. |
 | `service_budget_usd` | The workflow loop, and `ServiceBudgetGuard` before each tool call. |
 | `max_tokens` | `TokenBudgetGuard` before each LLM call. |
@@ -177,7 +179,7 @@ carrying content, command text, stdout or stderr are replaced with a size marker
 | A required runtime policy dimension is missing | Task execution fails closed with the missing field named. |
 | A service budget of zero or less | Treated as unlimited. |
 | A guard raising an exception | Logged with a traceback; the pipeline continues. Fail-open for that dimension. |
-| Month-to-date spend | Summed from persisted task cost from the first of the current UTC month. Spend from a task still running is not fully counted. |
+| Month-to-date spend | Summed from the spend ledger (`cost_entries`) from the first of the current UTC month, as each paid call's event is stored. Wallet payments count only where USD is the billing currency. |
 | Per-call cost | Read from the provider response where supplied; otherwise estimated at a flat rate per token. |
 
 The `max_depth` parameter on the graph client's check accepts a value and
@@ -236,6 +238,6 @@ the minimum of the request value and every layer above it:
     What exceeding a limit returns
   </Card>
   <Card title="Budgets and quotas" icon="scale-balanced" href="/concepts/governance/budgets-and-quotas">
-    Why the monthly cap is admission-only
+    How the monthly caps are enforced
   </Card>
 </Columns>

@@ -39,9 +39,8 @@ from agentarea_triggers.infrastructure.orm import TriggerORM
 from agentarea_wallet.infrastructure.repository import WalletRepository
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
-from sqlalchemy import Date, Numeric, cast, desc, func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 logger = logging.getLogger(__name__)
 
@@ -197,20 +196,6 @@ class DashboardResponse(BaseModel):
 
 _MONEY = TypeAdapter(Money)
 _CENT = Decimal("0.01")
-
-
-def task_spend_expr() -> ColumnElement[Decimal]:
-    """A task's own model spend, as TaskRepository.sum_spend_since sums it.
-
-    ``own_cost`` keeps delegated child spend from counting on the child and
-    again in the parent's transitive ``total_cost``; older results only have
-    ``total_cost``.
-    """
-    return func.coalesce(
-        cast(TaskORM.result.op("->>")("own_cost"), Numeric),
-        cast(TaskORM.result.op("->>")("total_cost"), Numeric),
-        0,
-    )
 
 
 def _project_eom(mtd_usd: Decimal, now: datetime) -> Decimal:
@@ -500,19 +485,12 @@ async def get_dashboard(
     schedule = await _build_schedule(db_session, workspace_id, agent_name_by_id)
 
     # ----- daily spend (last 30 days, UTC) -----
-    spend_since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=29)
-    spend_since = datetime(spend_since.year, spend_since.month, spend_since.day)
-    activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
-    day_col = cast(activity_at, Date).label("day")
-    daily_spend_q = (
-        select(day_col, func.coalesce(func.sum(task_spend_expr()), 0).label("usd"))
-        .where(TaskORM.workspace_id == workspace_id)
-        .where(activity_at >= spend_since)
-        .group_by("day")
-        .order_by("day")
-    )
-    daily_spend_rows = (await db_session.execute(daily_spend_q)).all()
-    spend_by_day = {r.day.isoformat(): to_money(r.usd) for r in daily_spend_rows}
+    spend_since = datetime.now(UTC) - timedelta(days=29)
+    spend_since = datetime(spend_since.year, spend_since.month, spend_since.day, tzinfo=UTC)
+    spend_by_day = {
+        day.isoformat(): amount
+        for day, amount in (await task_repo.sum_spend_by_day(spend_since)).items()
+    }
     daily_spend = [
         DailySpendPoint(date=day, usd=spend_by_day.get(day, ZERO))
         for day in ((spend_since.date() + timedelta(days=i)).isoformat() for i in range(30))

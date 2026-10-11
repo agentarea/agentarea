@@ -279,6 +279,36 @@ async def test_delegated_task_cannot_loosen_parent_execution_policy():
         )
 
 
+@pytest.mark.asyncio
+async def test_delegated_agent_keeps_its_own_agent_cap_not_the_parents():
+    service, _ = _make_service()
+
+    def policy(agent_cap: str) -> EffectivePolicy:
+        return EffectivePolicy(
+            budget=BudgetPolicy(run_budget_usd="50.00", agent_monthly_spend_cap_usd=agent_cap),
+            tokens=TokenPolicy(max_tokens=20_000_000, max_tokens_per_call=100_000),
+            execution=ExecutionLimitsPolicy(
+                max_model_turns=100,
+                max_tool_calls_per_turn=10,
+                max_tool_calls_total=1000,
+            ),
+        )
+
+    service.policy_resolver.resolve = AsyncMock(return_value=policy("50.00"))
+    service.task_repository.sum_spend_mtd = AsyncMock(return_value=0)
+
+    task = await service.create_task_with_policy(
+        agent_id=uuid4(),
+        description="Delegated work",
+        workspace_id="ws-abc",
+        user_id="user-123",
+        upper_bound_policy=policy("10.00"),
+    )
+
+    effective = task.metadata["governance_snapshot"]["effective_policy"]
+    assert effective["budget"]["agent_monthly_spend_cap_usd"] == "50.00"
+
+
 def test_run_contract_has_no_sandbox_policy_toggle() -> None:
     removed_field = "package" + "_install"
 
