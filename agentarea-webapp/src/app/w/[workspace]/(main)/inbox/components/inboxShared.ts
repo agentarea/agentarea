@@ -52,18 +52,20 @@ export function isPending(status: string): boolean {
 /**
  * Counts per filter, plus the statuses no filter can hold. `decided` is the
  * number of recorded approval decisions; those are not tasks, so `all` leaves
- * them out.
+ * them out. `heldToolCalls` are client tool calls waiting on an approval link:
+ * they wait on a person like a task does, so `all` and `pending` count them.
  */
 export function countInbox(
   statuses: string[],
-  decided = 0
+  decided = 0,
+  heldToolCalls = 0
 ): {
   counts: InboxCounts;
   unknown: string[];
 } {
   const counts: InboxCounts = {
-    all: statuses.length,
-    pending: 0,
+    all: statuses.length + heldToolCalls,
+    pending: heldToolCalls,
     input: 0,
     completed: 0,
     failed: 0,

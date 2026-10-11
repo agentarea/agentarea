@@ -1,4 +1,4 @@
-"""InboxToolset — read tasks that need user attention."""
+"""InboxToolset — read tasks and held tool calls that need user attention."""
 
 import json
 from uuid import UUID
@@ -6,8 +6,12 @@ from uuid import UUID
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.workspaces.lookup import workspace_slug_for
+from agentarea_governance.application.tool_call_approvals import ToolCallApprovalService
+from agentarea_governance.domain.tool_call_approvals import ToolCallApprovalStatus
 from agentarea_tasks.domain.statuses import INBOX_STATUSES
 
+from ..api.v1.tool_call_approvals import approval_page_url
 from .base import platform_read_context
 
 
@@ -30,14 +34,18 @@ class InboxToolset(Toolset):
         page: int = 1,
         page_size: int = 50,
     ) -> str:
-        """List inbox items, optionally filtered by status or agent."""
+        """List inbox items, optionally filtered by status or agent.
+
+        ``tool_call_approvals`` lists the client tool calls waiting on a
+        person's approval, each with the link that person opens.
+        """
         if status and status not in INBOX_STATUSES:
             return json.dumps(
                 {
                     "error": f"Unknown inbox status {status!r}; expected one of {list(INBOX_STATUSES)}"
                 }
             )
-        async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, _secret):
+        async with platform_read_context() as (_session, user_ctx, repo_factory, broker, _secret):
             from agentarea_tasks.task_service import TaskService
 
             from agentarea_api.api.deps.services import (
@@ -74,7 +82,34 @@ class InboxToolset(Toolset):
                 }
                 for t in tasks
             ]
+            approvals = []
+            if not status or status == "waiting_for_approval":
+                held, _ = await ToolCallApprovalService(repo_factory).list(
+                    status=ToolCallApprovalStatus.PENDING, limit=page_size
+                )
+                slug = None
+                for approval in held:
+                    slug = slug or user_ctx.workspace_slug
+                    slug = slug or await workspace_slug_for(user_ctx.workspace_id)
+                    approvals.append(
+                        {
+                            "id": approval.id,
+                            "connector": approval.connector,
+                            "tool": approval.tool,
+                            "requested_by": approval.requested_by,
+                            "client_name": approval.client_name,
+                            "url": approval_page_url(slug, approval.id),
+                            "created_at": approval.created_at.isoformat(),
+                            "expires_at": approval.expires_at.isoformat(),
+                        }
+                    )
             return json.dumps(
-                {"items": items, "total": total, "page": page, "page_size": page_size},
+                {
+                    "items": items,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "tool_call_approvals": approvals,
+                },
                 default=str,
             )

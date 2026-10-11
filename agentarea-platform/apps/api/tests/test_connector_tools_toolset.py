@@ -792,23 +792,6 @@ async def test_dispatch_refuses_a_tool_the_policy_denies(dispatch_env):
     assert event.action == "tool.call.denied"
 
 
-@pytest.mark.asyncio
-async def test_dispatch_refuses_a_tool_held_for_approval_because_a_call_cannot_wait(dispatch_env):
-    env = dispatch_env
-    env.policy["approval"] = {"escalation_rules": ["ask_*"]}
-
-    result = await client_mcp.call_instance_tool(
-        AsyncMock(), CALLER, env.service, env.instance, "ask_question", {}
-    )
-
-    assert result.is_error is True
-    assert "cannot wait for approval" in result.content[0].text
-    assert env.upstream == []
-    [event] = env.events
-    assert event.action == "tool.call.denied"
-    assert event.event_metadata["decision"] == "require_approval"
-
-
 @pytest.fixture
 def openapi_env(dispatch_env, monkeypatch):
     """The real ``call_openapi_tool`` over the agents' OpenAPI tool, its HTTP call stubbed."""

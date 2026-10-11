@@ -61,6 +61,7 @@ from . import (
     skill_collections,
     skills,
     streams,
+    tool_call_approvals,
     triggers,
     wallet,
     workspace_config,
@@ -232,6 +233,9 @@ workspace_v1_router.include_router(policies.router)
 
 # Inbox
 workspace_v1_router.include_router(inbox.router)
+
+# Tool calls a client made that the policy holds for a person's approval
+workspace_v1_router.include_router(tool_call_approvals.router)
 
 # Workspace files (read-only listing of S3 objects under workspaces/{workspace_id}/)
 workspace_v1_router.include_router(files.router)

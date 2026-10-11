@@ -51,6 +51,14 @@ describe("countInbox", () => {
     expect(unknown).toEqual([]);
   });
 
+  it("counts a client tool call held for approval as waiting on a person", () => {
+    const { counts } = countInbox(["waiting_for_approval", "completed"], 0, 2);
+
+    expect(counts.all).toBe(4);
+    expect(counts.pending).toBe(3);
+    expect(counts.completed).toBe(1);
+  });
+
   it("counts a resolved escalation as having left the inbox, not as failed", () => {
     const { counts, unknown } = countInbox([RESOLVED_ESCALATION_STATUS]);
 
