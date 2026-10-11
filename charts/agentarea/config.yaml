@@ -171,6 +171,8 @@ groups:
       AGENTAREA_ENV: 'production'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       AGENTAREA_WORKER_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
+      # Links the worker sends out, e.g. a Telegram bot's "link your account" reply.
+      AGENTAREA_APP_URL: '{{ include "agentarea.frontendUrl" . }}'
 
   application:
     secrets:

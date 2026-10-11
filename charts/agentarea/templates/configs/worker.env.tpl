@@ -10,6 +10,7 @@ AGENTAREA_DEBUG: "false"
 AGENTAREA_ENV: "production"
 AGENTAREA_MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
 AGENTAREA_WORKER_HEALTH_PORT: "{{ .Values.worker.healthPort }}"
+AGENTAREA_APP_URL: "{{ include "agentarea.frontendUrl" . }}"
 {{- end }}
 
 {{- define "agentarea.worker.envs" }}
@@ -43,4 +44,9 @@ AGENTAREA_WORKER_HEALTH_PORT: "{{ .Values.worker.healthPort }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-worker
       key: AGENTAREA_WORKER_HEALTH_PORT
+- name: AGENTAREA_APP_URL
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_APP_URL
 {{- end }}
