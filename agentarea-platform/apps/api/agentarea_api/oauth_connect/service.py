@@ -156,11 +156,8 @@ class OAuthConnectService:
             credentials=resolved.credentials,
             allow_managed_credentials=True,
             # Minted for this connection, so it is deleted with it.
-            **(
-                {"mcp_instance_id": connection_id}
-                if kind == "mcp_instance"
-                else {"openapi_connection_id": connection_id}
-            ),
+            mcp_instance_id=connection_id if kind == "mcp_instance" else None,
+            openapi_connection_id=connection_id if kind == "openapi_connection" else None,
         )
         for secret_id, field_name in resolved.references:
             await self._secret_catalog.add_reference(

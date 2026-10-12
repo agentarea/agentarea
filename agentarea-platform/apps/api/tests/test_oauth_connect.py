@@ -488,7 +488,7 @@ async def test_authorize_with_a_custom_oauth_app_keeps_the_secret_out_of_state(
     assert config["credential_mode"] == "custom"
     # Minted for this instance, so it is deleted with it.
     assert auth_create.await_args.kwargs["mcp_instance_id"] == instance.id
-    assert "openapi_connection_id" not in auth_create.await_args.kwargs
+    assert auth_create.await_args.kwargs["openapi_connection_id"] is None
     if credential_source == "inline":
         assert config["client_id"] == "inline-client-id"
         assert auth_create.await_args.kwargs["credentials"] == {  # pragma: allowlist secret
@@ -1054,7 +1054,7 @@ async def test_catalog_authorize_creates_the_connection_and_keeps_secrets_out_of
     assert config["provider"] == "yandex-metrica"
     # Minted for this connection, so it is deleted with it.
     assert auth_create.await_args.kwargs["openapi_connection_id"] == connection_id
-    assert "mcp_instance_id" not in auth_create.await_args.kwargs
+    assert auth_create.await_args.kwargs["mcp_instance_id"] is None
     assert config["authorization_scheme"] == "OAuth"
     if credential_source == "platform":
         assert auth_create.await_args.kwargs["credentials"] == {}
