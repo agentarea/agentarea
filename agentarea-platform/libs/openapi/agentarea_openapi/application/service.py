@@ -8,9 +8,10 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+import httpx
 import yaml
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
+from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
@@ -109,26 +110,32 @@ async def fetch_and_parse_spec(
     Shared by service._fetch_spec and the preview_spec endpoint.
 
     Raises:
-        ValueError: On validation failure, size limit, or fetch error.
-        httpx.HTTPStatusError: On non-2xx response.
+        ValueError: On validation failure, size limit, a non-2xx answer, or a
+            failed fetch, with the reason in the message.
     """
     validate_url(url, policy=policy)
 
     # The pinned client resolves, vets and pins every hop itself, and hands a
     # proxied request to the proxy by name. Pinning by hand here sent CONNECT to
     # the IP through HTTPS_PROXY, where TLS was then checked against the IP.
-    async with safe_async_client(
-        policy=policy, timeout=30, headers=headers or {}, follow_redirects=False
-    ) as client:
-        async with client.stream("GET", url) as resp:
-            resp.raise_for_status()
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
-                total += len(chunk)
-                if total > _SPEC_MAX_SIZE:
-                    raise ValueError("Spec response exceeds 5MB limit.")
-                chunks.append(chunk)
+    try:
+        async with safe_async_client(
+            policy=policy, timeout=30, headers=headers or {}, follow_redirects=False
+        ) as client:
+            async with client.stream("GET", url) as resp:
+                if resp.is_error:
+                    raise ValueError(f"Spec URL {url} returned HTTP {resp.status_code}")
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                    total += len(chunk)
+                    if total > _SPEC_MAX_SIZE:
+                        raise ValueError("Spec response exceeds 5MB limit.")
+                    chunks.append(chunk)
+    except UnsafeUrlError:
+        raise
+    except httpx.RequestError as exc:
+        raise ValueError(f"Could not fetch the spec from {url}: {exc}") from exc
 
     content = b"".join(chunks)
     text = content.decode(resp.encoding or "utf-8", errors="replace")

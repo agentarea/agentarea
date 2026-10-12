@@ -1143,3 +1143,52 @@ class TestDeleteConnectionReleasesItsAuth:
                 auth_config_access_checker=AsyncMock(),
                 outbound_policy=OutboundPolicy(),
             )
+
+
+def _fail_with(error: Exception, monkeypatch: pytest.MonkeyPatch) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        raise error
+
+    monkeypatch.setattr(
+        service_module,
+        "safe_async_client",
+        lambda *, policy, **kwargs: httpx.AsyncClient(
+            transport=httpx.MockTransport(handle), **kwargs
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_spec_host_whose_certificate_cannot_be_verified_is_named_with_the_cause(
+    monkeypatch,
+):
+    _fail_with(
+        httpx.ConnectError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+            "self-signed certificate in certificate chain (_ssl.c:1010)"
+        ),
+        monkeypatch,
+    )
+
+    with pytest.raises(ValueError) as raised:
+        await fetch_and_parse_spec(
+            "http://127.0.0.1/swagger.json", policy=OutboundPolicy(allow_private=True)
+        )
+
+    assert "http://127.0.0.1/swagger.json" in str(raised.value)
+    assert "CERTIFICATE_VERIFY_FAILED" in str(raised.value)
+
+
+@pytest.mark.asyncio
+async def test_a_spec_url_answering_an_error_status_says_which(monkeypatch):
+    _serve_status = httpx.MockTransport(lambda _req: httpx.Response(404, text="nope"))
+    monkeypatch.setattr(
+        service_module,
+        "safe_async_client",
+        lambda *, policy, **kwargs: httpx.AsyncClient(transport=_serve_status, **kwargs),
+    )
+
+    with pytest.raises(ValueError, match="HTTP 404"):
+        await fetch_and_parse_spec(
+            "http://127.0.0.1/swagger.json", policy=OutboundPolicy(allow_private=True)
+        )

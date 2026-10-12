@@ -119,6 +119,10 @@ spec:
             - name: AGENTAREA_AUTHZ_FGA_MODEL_PATH
               value: "/etc/agentarea/openfga/authorization-model.json"
             {{- end }}
+            {{- if .Values.global.http.extraCaCerts }}
+            - name: AGENTAREA_HTTP_EXTRA_CA_CERTS
+              value: {{ include "agentarea.extraCaCerts.path" . | quote }}
+            {{- end }}
             {{- if or .Values.worker.envVars .Values.global.envVars }}
             {{- $workerEnv := default dict .Values.worker.envVars -}}
             {{- $globalEnv := default dict .Values.global.envVars -}}
@@ -193,23 +197,33 @@ spec:
               memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
             {{- end }}
           {{- end }}
-          {{- if or .Values.openfga.enabled .Values.worker.extraVolumeMounts }}
+          {{- if or .Values.openfga.enabled .Values.global.http.extraCaCerts .Values.worker.extraVolumeMounts }}
           volumeMounts:
             {{- if .Values.openfga.enabled }}
             - name: openfga-authorization-model
               mountPath: /etc/agentarea/openfga
               readOnly: true
             {{- end }}
+            {{- if .Values.global.http.extraCaCerts }}
+            - name: extra-ca-certs
+              mountPath: {{ include "agentarea.extraCaCerts.dir" . }}
+              readOnly: true
+            {{- end }}
             {{- with .Values.worker.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-      {{- if or .Values.openfga.enabled .Values.worker.extraVolumes }}
+      {{- if or .Values.openfga.enabled .Values.global.http.extraCaCerts .Values.worker.extraVolumes }}
       volumes:
         {{- if .Values.openfga.enabled }}
         - name: openfga-authorization-model
           configMap:
             name: {{ include "agentarea.fullname" . }}-openfga-authorization-model
+        {{- end }}
+        {{- if .Values.global.http.extraCaCerts }}
+        - name: extra-ca-certs
+          configMap:
+            name: {{ include "agentarea.fullname" . }}-extra-ca-certs
         {{- end }}
         {{- with .Values.worker.extraVolumes }}
         {{- toYaml . | nindent 8 }}

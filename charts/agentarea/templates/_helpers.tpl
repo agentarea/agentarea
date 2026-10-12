@@ -506,3 +506,15 @@ Kratos Admin URL
 {{- define "agentarea.kratosAdminUrl" -}}
 {{- .Values.kratos.urls.admin | default (printf "http://%s-kratos-admin:4434" (include "agentarea.fullname" .)) | trimSuffix "/" -}}
 {{- end -}}
+
+{{/*
+Where the extra CA certificates from global.http.extraCaCerts are mounted, and
+the file AGENTAREA_HTTP_EXTRA_CA_CERTS names.
+*/}}
+{{- define "agentarea.extraCaCerts.dir" -}}
+/etc/agentarea/extra-ca
+{{- end }}
+
+{{- define "agentarea.extraCaCerts.path" -}}
+{{ include "agentarea.extraCaCerts.dir" . }}/ca-certificates.pem
+{{- end }}

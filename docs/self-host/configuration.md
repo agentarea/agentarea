@@ -402,6 +402,33 @@ Compose there is no separate runner: the manager runs it in-process
 (`AGENTAREA_SANDBOX_EMBEDDED_RUNNER=true`) and delegates execution to the
 `sandbox-executor` container over `AGENTAREA_SANDBOX_EXECUTOR_URL`.
 
+### Outbound TLS (not in `config.yaml`)
+
+Read by `HttpSettings` in the backend and the worker.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `AGENTAREA_HTTP_EXTRA_CA_CERTS` | `global.http.extraCaCerts` (PEM text) | unset |
+
+Every request the platform sends to a host outside the deployment checks TLS
+against one trust store: the system CAs and certifi's bundle, plus the PEM file
+this variable names. The file adds to the public roots and never replaces them.
+Set it when members connect services whose chain those roots leave out, such as
+hosts certified by the Russian Trusted Root CA, or a corporate CA. It covers
+OpenAPI spec fetches and tool calls, URL MCP servers, OAuth discovery and token
+endpoints, A2A delegates, model discovery, skill and registry imports, and
+channel webhooks. LLM calls made through LiteLLM are not covered.
+
+On Kubernetes, put the PEM text of one or more certificates in
+`global.http.extraCaCerts`: the chart stores it in the ConfigMap
+`<release>-extra-ca-certs`, mounts it into the backend and worker at
+`/etc/agentarea/extra-ca`, and sets the variable to the file there. In Docker
+Compose, mount the file into `app` and `agentarea-worker` with an override file
+and set the variable to its path inside the container.
+
+A path that does not exist, cannot be read, or holds no certificate stops the
+API and the worker at startup.
+
 ### Docker Compose variables
 
 Read from `.env` by `docker-compose.yaml`. Only the ones with no Kubernetes
@@ -437,6 +464,8 @@ than starting with them empty.
 | Startup raises `Invalid AGENTAREA_SECRET_BACKEND` | Value is neither `database` nor `infisical` | Correct the value |
 | Startup raises `Infisical credentials not configured` | Type is `infisical` without both keys | Set `AGENTAREA_SECRET_CLIENT_ID` and `AGENTAREA_SECRET_CLIENT_SECRET` |
 | `docker compose` aborts before starting anything | A `${VAR:?}` variable is empty | Set the sandbox secrets |
+| Startup raises `AGENTAREA_HTTP_EXTRA_CA_CERTS=... names no readable PEM file of CA certificates` | The file is missing, unreadable, or holds no certificate | Mount the PEM bundle at that path, or unset the variable |
+| A connection fails with `CERTIFICATE_VERIFY_FAILED` | The host's chain ends at a CA outside the public roots | Add that CA to `AGENTAREA_HTTP_EXTRA_CA_CERTS` |
 | Presigned upload URLs point at an unreachable host | `AGENTAREA_S3_PUBLIC_ENDPOINT` empty with a cluster-only object store | Set `global.storage.publicEndpoint` |
 | CI fails on a Helm change with a configs diff | `templates/configs/` is stale relative to `config.yaml` | Run `make helm-gen` and commit |
 | A webhook answers `429` | The workspace crossed `AGENTAREA_EVENT_WRITE_QUOTA` events in the trailing minute, across every stream it owns | Raise `AGENTAREA_EVENT_WRITE_QUOTA`; it is workspace-wide, not per stream |

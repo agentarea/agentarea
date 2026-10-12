@@ -328,7 +328,11 @@ class LLMModel:
         tool_calls_buffer: dict[int, dict[str, Any]] = {}
         final_usage: LLMUsage | None = None
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+        from agentarea_common.utils.outbound_tls import outbound_ssl_context
+
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(300.0), verify=outbound_ssl_context()
+        ) as client:
             # Try with thinking enabled first; fall back without if provider rejects it
             use_payload = {**payload, "think": True}
             resp = await client.send(

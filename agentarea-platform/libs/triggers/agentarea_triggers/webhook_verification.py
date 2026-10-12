@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 
 if TYPE_CHECKING:
     from .channels.secret_reader import SecretReader
@@ -416,6 +417,7 @@ class YooKassaNotificationVerifier:
                 auth=(shop_id, secret_key),
                 timeout=self.TIMEOUT_SECONDS,
                 transport=self._transport,
+                verify=outbound_ssl_context(),
             ) as client:
                 response = await client.get(f"/{collection}/{object_id}")
         except httpx.HTTPError:

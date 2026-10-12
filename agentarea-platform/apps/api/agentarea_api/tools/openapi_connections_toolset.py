@@ -9,6 +9,8 @@ kwargs and DTO fields.
 """
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
 
@@ -22,8 +24,22 @@ from agentarea_openapi.schemas.dto import (
     QueryParamInput,
     UrlVariableInput,
 )
+from mcp.server.mcpserver.exceptions import ToolError
 
 from .base import platform_context, platform_read_context
+
+
+@contextmanager
+def _refusal_reaches_caller() -> Iterator[None]:
+    """Give the caller the reason a request was refused, as the REST routes do.
+
+    Any other exception still reaches MCP as an unexpected error, its text kept
+    in the server log.
+    """
+    try:
+        yield
+    except (ValueError, PermissionError) as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def _serialize(conn: Any) -> dict:
@@ -157,7 +173,8 @@ class OpenAPIConnectionsToolset(Toolset):
             secret_mgr,
         ):
             service = _build_service(repo_factory, secret_mgr)
-            conn = await service.create_connection(payload)
+            with _refusal_reaches_caller():
+                conn = await service.create_connection(payload)
             return json.dumps(_serialize(conn), default=str)
 
     @tool_method(effect="read")
@@ -268,7 +285,8 @@ class OpenAPIConnectionsToolset(Toolset):
             secret_mgr,
         ):
             service = _build_service(repo_factory, secret_mgr)
-            conn = await service.update_connection(UUID(connection_id), payload)
+            with _refusal_reaches_caller():
+                conn = await service.update_connection(UUID(connection_id), payload)
             if not conn:
                 return json.dumps({"error": "Connection not found"})
             return json.dumps(_serialize(conn), default=str)
@@ -285,7 +303,8 @@ class OpenAPIConnectionsToolset(Toolset):
             secret_mgr,
         ):
             service = _build_service(repo_factory, secret_mgr)
-            result = await service.discover_tools(UUID(connection_id))
+            with _refusal_reaches_caller():
+                result = await service.discover_tools(UUID(connection_id))
             return json.dumps(result, default=str)
 
     @tool_method(effect="destructive")

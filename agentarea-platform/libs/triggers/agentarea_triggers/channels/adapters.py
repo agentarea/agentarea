@@ -29,6 +29,7 @@ from agentarea_common.events.contract import (
     TOOL_CALL,
     canonical_type,
 )
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 
 from . import register_adapter
 from .exceptions import FatalError, RetryableError
@@ -192,7 +193,7 @@ def make_http_sender(
         auth = cfg.auth_fmt.format(token=token)
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
                 resp = await client.post(
                     url,
                     json=payload,
@@ -483,7 +484,7 @@ def make_telegram_streaming_sender(
             text = "…\n" + text[-4093:]
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
                 if not msg_id:
                     payload: dict[str, Any] = {
                         "chat_id": chat_id,

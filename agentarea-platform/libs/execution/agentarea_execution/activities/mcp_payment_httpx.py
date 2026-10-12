@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx2
 from agentarea_common.money import ZERO, serialize_money
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_wallet.domain.enums import SETTLED_PAYMENT_STATUSES, settlement_status
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ class AgentAreaPaymentTransport(httpx2.AsyncBaseTransport):
         self._next_idempotency_key = next_idempotency_key
         self._find_settled_payment = find_settled_payment
         self._on_payment = on_payment
-        self._inner = inner or httpx2.AsyncHTTPTransport()
+        self._inner = inner or httpx2.AsyncHTTPTransport(verify=outbound_ssl_context())
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         response = await self._inner.handle_async_request(request)

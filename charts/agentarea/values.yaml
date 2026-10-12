@@ -293,6 +293,15 @@ global:
       port: 8001
       path: "/health"
 
+  # Outbound HTTP from the backend and worker
+  http:
+    # -- PEM text of CA certificates to trust on outbound TLS in addition to the
+    # public roots, for hosts whose chain those roots leave out (the Russian
+    # Trusted Root CA, a corporate CA). Rendered into a ConfigMap, mounted into
+    # the backend and worker, and named by AGENTAREA_HTTP_EXTRA_CA_CERTS. Empty:
+    # public roots only.
+    extraCaCerts: ""
+
   # Security configuration
   security:
     # Pod security context

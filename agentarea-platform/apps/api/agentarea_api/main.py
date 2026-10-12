@@ -211,6 +211,9 @@ async def app_lifespan(app: FastAPI):
     # events router running with nothing to stop it.
     from agentarea_common.config import MetricsSettings
     from agentarea_common.observability.metrics import start_metrics_server
+    from agentarea_common.utils.outbound_tls import install_outbound_trust
+
+    install_outbound_trust()
 
     metrics = MetricsSettings()
     metrics_server = start_metrics_server(metrics.PORT) if metrics.ENABLED else None

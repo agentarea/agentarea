@@ -317,7 +317,7 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
         "import_module",
         lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
     )
-    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda: server)
+    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda **_kwargs: server)
 
     async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
         async with httpx_client_factory() as client:
@@ -397,7 +397,7 @@ async def test_payment_that_settled_before_the_request_failed_is_spent(
         "import_module",
         lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
     )
-    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda: server)
+    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda **_kwargs: server)
 
     async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
         async with httpx_client_factory() as client:

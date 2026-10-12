@@ -5,7 +5,6 @@ import logging
 from typing import Any
 from uuid import UUID
 
-import httpx
 from agentarea_api.api.deps.services import get_openapi_connection_service
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_OFFSET
@@ -136,15 +135,6 @@ async def preview_spec(
             spec = await fetch_and_parse_spec(request.spec_url, policy=policy)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
-        except httpx.RequestError as e:
-            logger.exception("Failed to fetch spec from %s: %s", request.spec_url, e)
-            raise HTTPException(
-                status_code=400, detail="Failed to fetch spec from the provided URL."
-            ) from e
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(
-                status_code=400, detail=f"Spec URL returned HTTP {e.response.status_code}"
-            ) from e
 
     if not spec:
         raise HTTPException(status_code=400, detail="Provide spec_url or spec_content")
@@ -183,16 +173,6 @@ async def create_connection(
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to fetch spec: HTTP {e.response.status_code}",
-        ) from e
-    except httpx.RequestError as e:
-        logger.exception("Failed to fetch spec during connection create: %s", e)
-        raise HTTPException(
-            status_code=400, detail="Failed to fetch spec from the provided URL."
-        ) from e
 
 
 @router.get(
