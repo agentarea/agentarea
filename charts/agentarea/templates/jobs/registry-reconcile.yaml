@@ -82,9 +82,9 @@ spec:
             # (JSON array; bound to the --registries-config option via envvar).
             - name: REGISTRIES_CONFIG
               value: {{ .Values.registryReconcile.registries | toJson | quote }}
-            {{- /* The model is the API's to apply and its file is not mounted here, so
-                   these two are set once, last, and dropped from every other source. */}}
-            {{- $forced := list "AGENTAREA_AUTHZ_FGA_APPLY_MODEL" "AGENTAREA_AUTHZ_FGA_MODEL_PATH" }}
+            {{- /* The model is the API's to apply, so this is set once, last, and
+                   dropped from every other source. */}}
+            {{- $forced := list "AGENTAREA_AUTHZ_FGA_APPLY_MODEL" }}
             {{- if .Values.openfga.enabled }}
             # The authorization graph, as the backend reaches it.
             - name: AGENTAREA_AUTHZ_BACKEND

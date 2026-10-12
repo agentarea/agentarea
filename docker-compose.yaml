@@ -62,10 +62,7 @@ services:
       - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
       - AGENTAREA_AUTHZ_FGA_APPLY_MODEL=${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
       - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
-      - AGENTAREA_AUTHZ_FGA_MODEL_PATH=${AGENTAREA_AUTHZ_FGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
       - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
-    volumes:
-      - ./config/auth/openfga:/app/config/auth/openfga:ro
     depends_on:
       db:
         condition: service_healthy
@@ -453,8 +450,6 @@ services:
         condition: service_completed_successfully
       openfga:
         condition: service_healthy
-    volumes:
-      - ./config/auth/openfga:/app/config/auth/openfga:ro
     environment:
       # Database
       - AGENTAREA_DB_HOST=db
@@ -498,7 +493,6 @@ services:
       - AGENTAREA_AUTHZ_FGA_BOOTSTRAP=${AGENTAREA_AUTHZ_FGA_BOOTSTRAP:-true}
       - AGENTAREA_AUTHZ_FGA_APPLY_MODEL=${AGENTAREA_AUTHZ_FGA_APPLY_MODEL:-true}
       - AGENTAREA_AUTHZ_FGA_STORE_NAME=${AGENTAREA_AUTHZ_FGA_STORE_NAME:-agentarea}
-      - AGENTAREA_AUTHZ_FGA_MODEL_PATH=${AGENTAREA_AUTHZ_FGA_MODEL_PATH:-/app/config/auth/openfga/authorization-model.json}
       - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
 
       # Development

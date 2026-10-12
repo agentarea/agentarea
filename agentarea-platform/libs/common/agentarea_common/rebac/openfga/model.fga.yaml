@@ -1,5 +1,5 @@
 name: AgentArea OpenFGA model tests
-model_file: ./model.fga
+model_file: ./fga.mod
 
 tuples:
   - user: User:u1

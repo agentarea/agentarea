@@ -15,11 +15,16 @@ from .openfga_client import OpenFGAError, OpenFGAUnavailableError
 
 logger = logging.getLogger(__name__)
 
+#: The model this code checks against. It ships inside the package, so the
+#: relations a check names always exist in the model the process applies.
+AUTHORIZATION_MODEL = Path(__file__).parent / "openfga" / "authorization-model.json"
+
 
 async def bootstrap_openfga(
     settings: OpenFGASettings,
     *,
     client: httpx.AsyncClient | None = None,
+    model_path: Path = AUTHORIZATION_MODEL,
 ) -> None:
     """Populate OpenFGA store/model ids on ``settings`` when bootstrap is enabled."""
     if not settings.BOOTSTRAP:
@@ -43,12 +48,11 @@ async def bootstrap_openfga(
             settings.STORE_ID = store_id
 
         if settings.APPLY_MODEL:
-            model_path = settings.MODEL_PATH
-            if not model_path:
-                raise OpenFGAError(
-                    "AGENTAREA_AUTHZ_FGA_MODEL_PATH is required when model auto-apply is enabled"
-                )
-            model = _load_authorization_model(Path(model_path))
+            model = _load_authorization_model(model_path)
+            if settings.MODEL_PATH:
+                custom = _load_authorization_model(Path(settings.MODEL_PATH))
+                require_extends(custom, model)
+                model = custom
             model_id = await _find_authorization_model(client, api_url, store_id, model, headers)
             if model_id is None:
                 model_id = await _write_authorization_model(
@@ -108,6 +112,65 @@ async def _find_store_id(
 
     stores.sort(key=lambda store: (store.get("created_at") or "", store.get("id") or ""))
     return _store_id(stores[0])
+
+
+def require_extends(custom: dict[str, Any], base: dict[str, Any]) -> None:
+    """Refuse a custom model that drops or redefines anything of the packaged one.
+
+    The platform's checks name the packaged model's relations, so a model
+    without them fails every such check at runtime. Additions are the
+    deployment's own; OpenFGA modular models (``extend type``) produce exactly
+    that shape.
+    """
+    problems: list[str] = []
+    if custom.get("schema_version") != base.get("schema_version"):
+        problems.append(
+            f"schema_version {custom.get('schema_version')!r}, "
+            f"expected {base.get('schema_version')!r}"
+        )
+    custom_types = {t.get("type"): t for t in custom.get("type_definitions") or []}
+    for base_type in base.get("type_definitions") or []:
+        name = base_type.get("type")
+        mine = custom_types.get(name)
+        if mine is None:
+            problems.append(f"type {name} is missing")
+            continue
+        base_meta = (base_type.get("metadata") or {}).get("relations") or {}
+        mine_meta = (mine.get("metadata") or {}).get("relations") or {}
+        for relation, rewrite in (base_type.get("relations") or {}).items():
+            if relation not in (mine.get("relations") or {}):
+                problems.append(f"{name}#{relation} is missing")
+            elif _definition(mine["relations"][relation], mine_meta.get(relation)) != _definition(
+                rewrite, base_meta.get(relation)
+            ):
+                problems.append(f"{name}#{relation} is redefined")
+    custom_conditions = custom.get("conditions") or {}
+    for condition, body in (base.get("conditions") or {}).items():
+        if _without_provenance(custom_conditions.get(condition)) != _without_provenance(body):
+            problems.append(f"condition {condition} is missing or redefined")
+    if problems:
+        raise OpenFGAError(
+            "AGENTAREA_AUTHZ_FGA_MODEL_PATH must extend the packaged authorization model: "
+            + "; ".join(problems)
+        )
+
+
+def _definition(rewrite: Any, metadata: Any) -> Any:
+    return _without_provenance({"rewrite": rewrite, "metadata": metadata})
+
+
+def _without_provenance(value: Any) -> Any:
+    """A model element as OpenFGA evaluates it, without where a module declared it."""
+    if isinstance(value, dict):
+        stripped = {
+            key: _without_provenance(item)
+            for key, item in sorted(value.items())
+            if key not in {"module", "source_info"}
+        }
+        return {key: item for key, item in stripped.items() if item not in ({}, [], None, "")}
+    if isinstance(value, list):
+        return [_without_provenance(item) for item in value]
+    return value
 
 
 def _load_authorization_model(path: Path) -> dict[str, Any]:
@@ -195,7 +258,10 @@ def _normalize_authorization_model(value: Any) -> Any:
             item = _normalize_authorization_model(raw)
             if key in {"id", "authorization_model_id"}:
                 continue
-            if key in {"module", "source_info", "condition", "object"} and item in {"", None}:
+            if key in {"module", "source_info", "condition", "object"} and item in ("", None):
+                continue
+            # The server echoes absent collections back as empty ones.
+            if item in ({}, []):
                 continue
             normalized[key] = item
         return {key: normalized[key] for key in sorted(normalized)}
