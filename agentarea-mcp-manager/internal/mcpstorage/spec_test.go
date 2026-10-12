@@ -76,7 +76,7 @@ func TestParseManagerURL(t *testing.T) {
 	if got, err := ParseManagerURL(""); err != nil || got != "" {
 		t.Fatalf("ParseManagerURL(empty) = %q, %v", got, err)
 	}
-	for _, raw := range []string{"mcp-manager:80", "/relative", "http://user:pw@host", "http://host?x=1"} {
+	for _, raw := range []string{"mcp-manager:80", "/relative", "http://user:pw@host", "http://host?x=1"} { // pragma: allowlist secret
 		if _, err := ParseManagerURL(raw); err == nil {
 			t.Fatalf("ParseManagerURL(%q) accepted it", raw)
 		}

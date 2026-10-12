@@ -137,7 +137,7 @@ func (f fakeInstances) Instance(_ context.Context, id string) (*models.MCPServer
 
 const testPrefix = "workspaces/ws-1/apps/inst-1/"
 
-var testSecret = []byte("0123456789abcdef0123456789abcdef")
+var testSecret = []byte("0123456789abcdef0123456789abcdef") // pragma: allowlist secret
 
 func sign(t *testing.T, secret []byte, workspaceID, instanceID string) string {
 	t.Helper()
@@ -310,7 +310,7 @@ func TestListReturnsEveryPageRelativeToTheInstance(t *testing.T) {
 	for _, name := range []string{"a", "b/1", "b/2", "c"} {
 		expectStatus(t, h.do(http.MethodPut, "/objects/"+name, []byte(name), map[string]string{"If-None-Match": "*"}), http.StatusOK)
 	}
-	h.store.objects["workspaces/ws-1/apps/inst-2/secret"] = storedObject{data: []byte("x"), etag: `"x"`}
+	h.store.objects["workspaces/ws-1/apps/inst-2/secret"] = storedObject{data: []byte("x"), etag: `"x"`} // pragma: allowlist secret
 
 	var listing struct {
 		Objects []listedObject `json:"objects"`

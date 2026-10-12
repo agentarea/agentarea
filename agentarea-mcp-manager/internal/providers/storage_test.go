@@ -33,7 +33,7 @@ func (c *capturingBackend) CreateInstance(_ context.Context, spec *BackendInstan
 
 func (c *capturingBackend) DeleteInstance(context.Context, string) error { return nil }
 
-var storageSecret = []byte("0123456789abcdef0123456789abcdef")
+var storageSecret = []byte("0123456789abcdef0123456789abcdef") // pragma: allowlist secret
 
 func storageIssuer() *mcpstorage.Issuer {
 	return mcpstorage.NewIssuer(storageSecret, "http://mcp-manager:80")
