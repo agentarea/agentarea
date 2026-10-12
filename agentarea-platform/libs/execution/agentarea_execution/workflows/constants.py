@@ -105,6 +105,8 @@ class EventTypes:
     SERVICE_BUDGET_EXCEEDED: Final[str] = "ServiceBudgetExceeded"
 
     CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
+    # The final answer's check found leaks; data says which and whether it was rewritten.
+    ANSWER_CHECKED: Final[str] = "AnswerChecked"
     CONTEXT_WARNING: Final[str] = "ContextWarning"
 
     WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"

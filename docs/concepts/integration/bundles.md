@@ -147,6 +147,21 @@ refuse most real workspaces: a Postgres MCP has nowhere else to take its
 connection string. Templating keeps the export usable, and the person
 installing the bundle supplies their own values.
 
+### Agent settings that are policies
+
+Per-agent behaviour that governance owns travels as a policy bound to the
+agent's key. The final-answer check, for example (see
+[answer check](/reference/policy-syntax#answer-check)):
+
+```yaml
+policies:
+  - key: clean_answers
+    subject: smetchik
+    target: content
+    effect: safety
+    params: {answer_check: {language: ru}}
+```
+
 ### Analyze, then install
 
 `POST /v1/workspaces/{workspace}/bundles/analyze` parses the source and returns an `ImportPreview` —

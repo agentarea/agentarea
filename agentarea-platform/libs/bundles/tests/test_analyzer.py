@@ -292,3 +292,23 @@ async def test_a_literal_context_secret_is_not_a_bundle():
     source = _signed_url_mcp("secret").replace("${setup.signing}", "x" * 40)
     with pytest.raises(BundleParseError, match="never the secret itself"):
         parse_bundle(source)
+
+
+async def test_an_agent_answer_check_ships_as_a_safety_policy_on_that_agent():
+    pkg = parse_bundle(
+        """
+schema_version: "0.1.0"
+name: p
+agents: [{key: smetchik, name: S, model: gpt-4o}]
+policies:
+  - key: clean_answers
+    subject: smetchik
+    target: content
+    effect: safety
+    params: {answer_check: {language: ru}}
+"""
+    )
+
+    preview = await BundleAnalyzer().analyze(pkg)
+
+    assert preview.installable is True

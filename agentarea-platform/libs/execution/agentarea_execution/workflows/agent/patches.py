@@ -22,3 +22,6 @@ GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH = "governance-denial-blocks-run-v1"
 # The run's input is the first user message only, pinned in the window's head;
 # before, the system prompt repeated it and compaction could summarize the message.
 RUN_INPUT_IN_FIRST_MESSAGE_PATCH = "run-input-in-first-message-v1"
+# A final answer that leaks (CJK, tool names, codes, stack traces, JSON, English
+# in a Russian answer) gets one rewrite call when the policy's answer_check is on.
+ANSWER_CHECK_REWRITE_PATCH = "answer-check-rewrite-v1"
