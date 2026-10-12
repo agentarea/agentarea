@@ -32,6 +32,7 @@ export function AgentSelect({
   ariaLabel,
   className,
   disabled,
+  invalid,
 }: {
   agents: SelectableAgent[];
   value: string;
@@ -43,6 +44,8 @@ export function AgentSelect({
   ariaLabel?: string;
   className?: string;
   disabled?: boolean;
+  /** Marks the field invalid for assistive tech while its error is shown. */
+  invalid?: boolean;
 }) {
   return (
     <Select
@@ -54,6 +57,7 @@ export function AgentSelect({
       <SelectTrigger
         id={id}
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
         className={className ?? "h-9 gap-2 [&>span]:flex-1 [&>span]:text-left"}
       >
         <SelectValue placeholder={placeholder} />

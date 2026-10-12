@@ -142,6 +142,13 @@ export function CreateTriggerForm({
   const [selectedId, setSelectedId] = useState(() =>
     resolveInitialId(catalog, initialData)
   );
+  // A new trigger starts with a name, as a new agent or model does: generic
+  // until a type is picked, then named after the type. Once someone types
+  // their own, picking another type leaves it alone.
+  const [name, setName] = useState(
+    () => initialData?.name ?? t("automationNamePlaceholder")
+  );
+  const [nameEdited, setNameEdited] = useState(isEditing);
   const [selectedAgentId, setSelectedAgentId] = useState(
     initialData?.agent_id ?? ""
   );
@@ -169,6 +176,7 @@ export function CreateTriggerForm({
       !key.startsWith("credential_secret_")
   );
   const [typeMissing, setTypeMissing] = useState(false);
+  const [agentMissing, setAgentMissing] = useState(false);
   const [selectedMethods, setSelectedMethods] = useState<string[]>(
     initialData?.allowed_methods ?? ["POST"]
   );
@@ -311,11 +319,23 @@ export function CreateTriggerForm({
   const kinds = new Set(catalog.map((e) => e.kind));
   const orderedKinds = KIND_ORDER.filter((k) => kinds.has(k));
 
+  // A new trigger cannot be saved without a type or an agent; both are
+  // checked here, before the post, rather than left to the server's 422.
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (!isEditing && !selected) {
-      event.preventDefault();
-      setTypeMissing(true);
+    if (isEditing) return;
+    if (!selectedAgentId) {
+      setAgentMissing(true);
+      document.getElementById("agent_id")?.focus();
     }
+    // Scrolled to after the agent's focus: on a phone both share one scroll,
+    // and the type is the field further up.
+    if (!selected) {
+      setTypeMissing(true);
+      document
+        .getElementById("trigger-type-field")
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    if (!selected || !selectedAgentId) event.preventDefault();
   };
 
   const fileControl = (
@@ -476,7 +496,15 @@ export function CreateTriggerForm({
                 id="name"
                 name="name"
                 placeholder={t("automationNamePlaceholder")}
-                defaultValue={initialData?.name || ""}
+                value={name}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNameEdited(true);
+                }}
+                // A suggested name is meant to be typed over, not edited.
+                onFocus={(event) => {
+                  if (!nameEdited) event.currentTarget.select();
+                }}
                 required
               />
               {state.errors?.name && (
@@ -521,7 +549,7 @@ export function CreateTriggerForm({
 
             <Divider />
 
-            <div className="space-y-2">
+            <div id="trigger-type-field" className="scroll-mt-5 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <FormLabel icon={ENTITY_ICONS.trigger} required={!isEditing}>
                   {t("triggerType")}
@@ -538,6 +566,11 @@ export function CreateTriggerForm({
                   </Button>
                 )}
               </div>
+              {(typeMissing || state.errors?.trigger_type) && (
+                <p role="alert" className="form-error">
+                  {state.errors?.trigger_type?.[0] ?? t("selectType")}
+                </p>
+              )}
               {catalogFailed && (
                 <p role="alert" className="form-error">
                   {t("catalogLoadFailed")}
@@ -569,6 +602,10 @@ export function CreateTriggerForm({
                               selected={entry.id === selectedId}
                               onClick={() => {
                                 setSelectedId(entry.id);
+                                if (!nameEdited)
+                                  setName(
+                                    t("suggestedName", { type: entry.name })
+                                  );
                                 setChangingType(false);
                                 setTypeMissing(false);
                               }}
@@ -594,11 +631,6 @@ export function CreateTriggerForm({
                   onClick={() => setChangingType(true)}
                   className="w-full sm:max-w-sm"
                 />
-              )}
-              {(typeMissing || state.errors?.trigger_type) && (
-                <p role="alert" className="form-error">
-                  {state.errors?.trigger_type?.[0] ?? t("selectType")}
-                </p>
               )}
             </div>
 
@@ -900,12 +932,18 @@ export function CreateTriggerForm({
                   id="agent_id"
                   agents={agents}
                   value={selectedAgentId}
-                  onChange={setSelectedAgentId}
+                  onChange={(agentId) => {
+                    setSelectedAgentId(agentId);
+                    setAgentMissing(false);
+                  }}
                   ariaLabel={t("execution.orchestrator")}
                   placeholder={t("selectAgent")}
+                  invalid={agentMissing || Boolean(state.errors?.agent_id)}
                 />
-                {state.errors?.agent_id && (
-                  <p className="form-error">{state.errors.agent_id[0]}</p>
+                {(agentMissing || state.errors?.agent_id) && (
+                  <p role="alert" className="form-error">
+                    {state.errors?.agent_id?.[0] ?? t("agentRequired")}
+                  </p>
                 )}
               </div>
             }
