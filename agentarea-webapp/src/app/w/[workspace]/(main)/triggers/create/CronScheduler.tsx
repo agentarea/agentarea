@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -10,52 +12,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 
-type Frequency = "every_minute" | "hourly" | "daily" | "weekly" | "monthly" | "custom";
+type Frequency =
+  | "every_minute"
+  | "hourly"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "custom";
 
-const DAYS_OF_WEEK = [
-  { value: "1", label: "Monday" },
-  { value: "2", label: "Tuesday" },
-  { value: "3", label: "Wednesday" },
-  { value: "4", label: "Thursday" },
-  { value: "5", label: "Friday" },
-  { value: "6", label: "Saturday" },
-  { value: "0", label: "Sunday" },
+const FREQUENCIES: Frequency[] = [
+  "every_minute",
+  "hourly",
+  "daily",
+  "weekly",
+  "monthly",
+  "custom",
 ];
 
-const HOURS = Array.from({ length: 24 }, (_, i) => ({
-  value: String(i),
-  label: i.toString().padStart(2, "0"),
-}));
+// Monday first, as a week reads; values are cron's day-of-week numbers.
+const DAYS_OF_WEEK = ["1", "2", "3", "4", "5", "6", "0"];
 
-const MINUTES = Array.from({ length: 60 }, (_, i) => ({
-  value: String(i),
-  label: i.toString().padStart(2, "0"),
-}));
+const range = (length: number, from = 0) =>
+  Array.from({ length }, (_, i) => String(i + from));
 
-const DAYS_OF_MONTH = Array.from({ length: 31 }, (_, i) => ({
-  value: String(i + 1),
-  label: String(i + 1),
-}));
+const HOURS = range(24);
+const MINUTES = range(60);
+const DAYS_OF_MONTH = range(31, 1);
+const HOURLY_INTERVALS = ["1", "2", "3", "4", "6", "8", "12"];
+const MINUTE_INTERVALS = ["1", "5", "10", "15", "30"];
 
-const HOURLY_INTERVALS = [
-  { value: "1", label: "Every hour" },
-  { value: "2", label: "Every 2 hours" },
-  { value: "3", label: "Every 3 hours" },
-  { value: "4", label: "Every 4 hours" },
-  { value: "6", label: "Every 6 hours" },
-  { value: "8", label: "Every 8 hours" },
-  { value: "12", label: "Every 12 hours" },
-];
-
-const MINUTE_INTERVALS = [
-  { value: "1", label: "Every minute" },
-  { value: "5", label: "Every 5 minutes" },
-  { value: "10", label: "Every 10 minutes" },
-  { value: "15", label: "Every 15 minutes" },
-  { value: "30", label: "Every 30 minutes" },
-];
+const pad = (value: string) => value.padStart(2, "0");
 
 function parseCron(expr: string): {
   frequency: Frequency;
@@ -90,30 +77,30 @@ function parseCron(expr: string): {
   // Every N minutes: */N * * * *
   if (hr === "*" && dom === "*" && dow === "*") {
     const interval = min === "*" ? "1" : min.startsWith("*/") ? min.slice(2) : "";
-    if (MINUTE_INTERVALS.some(({ value }) => value === interval)) {
+    if (MINUTE_INTERVALS.includes(interval)) {
       return { ...defaults, frequency: "every_minute", minuteInterval: interval };
     }
   }
 
-  if (!MINUTES.some(({ value }) => value === min)) return custom;
+  if (!MINUTES.includes(min)) return custom;
 
   // Hourly: M */N * * * or M * * * *
   if (dom === "*" && dow === "*") {
     const interval = hr === "*" ? "1" : hr.startsWith("*/") ? hr.slice(2) : "";
-    if (HOURLY_INTERVALS.some(({ value }) => value === interval)) {
+    if (HOURLY_INTERVALS.includes(interval)) {
       return { ...defaults, frequency: "hourly", minute: min, hourInterval: interval };
     }
   }
 
-  if (!HOURS.some(({ value }) => value === hr)) return custom;
+  if (!HOURS.includes(hr)) return custom;
 
   // Weekly: M H * * D
-  if (dom === "*" && DAYS_OF_WEEK.some(({ value }) => value === dow)) {
+  if (dom === "*" && DAYS_OF_WEEK.includes(dow)) {
     return { ...defaults, frequency: "weekly", minute: min, hour: hr, dayOfWeek: dow };
   }
 
   // Monthly: M H D * *
-  if (DAYS_OF_MONTH.some(({ value }) => value === dom) && dow === "*") {
+  if (DAYS_OF_MONTH.includes(dom) && dow === "*") {
     return { ...defaults, frequency: "monthly", minute: min, hour: hr, dayOfMonth: dom };
   }
 
@@ -150,46 +137,52 @@ function buildCron(
   }
 }
 
-function describeCron(
-  frequency: Frequency,
-  minute: string,
-  hour: string,
-  dayOfMonth: string,
-  dayOfWeek: string,
-  hourInterval: string,
-  minuteInterval: string
-): string {
-  const time = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  const dayName = DAYS_OF_WEEK.find((d) => d.value === dayOfWeek)?.label ?? dayOfWeek;
-  const suffix = (n: number) => {
-    if (n >= 11 && n <= 13) return "th";
-    switch (n % 10) {
-      case 1: return "st";
-      case 2: return "nd";
-      case 3: return "rd";
-      default: return "th";
-    }
-  };
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
 
-  switch (frequency) {
-    case "every_minute":
-      return minuteInterval === "1"
-        ? "Runs every minute"
-        : `Runs every ${minuteInterval} minutes`;
-    case "hourly":
-      if (hourInterval === "1") return `Runs every hour at minute ${minute}`;
-      return `Runs every ${hourInterval} hours at minute ${minute}`;
-    case "daily":
-      return `Runs daily at ${time}`;
-    case "weekly":
-      return `Runs every ${dayName} at ${time}`;
-    case "monthly": {
-      const dom = parseInt(dayOfMonth);
-      return `Runs on the ${dom}${suffix(dom)} of every month at ${time}`;
-    }
-    case "custom":
-      return "Custom cron expression";
-  }
+function OptionSelect({
+  value,
+  onChange,
+  options,
+  className,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  className: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={className} aria-label={ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 interface CronSchedulerProps {
@@ -203,6 +196,9 @@ export function CronScheduler({
   name,
   onChange,
 }: CronSchedulerProps) {
+  const t = useTranslations("TriggersPage.create.cron");
+  const locale = useLocale();
+  const instanceId = useId();
   const parsed = useMemo(() => parseCron(defaultValue), [defaultValue]);
 
   const [frequency, setFrequency] = useState<Frequency>(parsed.frequency);
@@ -223,260 +219,168 @@ export function CronScheduler({
     onChange?.(cronExpr);
   }, [cronExpr, onChange]);
 
-  const description =
-    frequency === "custom"
-      ? `Custom: ${customExpr}`
-      : describeCron(frequency, minute, hour, dayOfMonth, dayOfWeek, hourInterval, minuteInterval);
+  // 7 Jan 2024 was a Sunday, so day N of that week is cron's weekday N.
+  const dayName = useMemo(() => {
+    const format = new Intl.DateTimeFormat(locale, {
+      weekday: "long",
+      timeZone: "UTC",
+    });
+    return (value: string) =>
+      format.format(new Date(Date.UTC(2024, 0, 7 + Number(value))));
+  }, [locale]);
+
+  const time = `${pad(hour)}:${pad(minute)}`;
+  const description = {
+    every_minute: t("runsEveryMinutes", { count: Number(minuteInterval) }),
+    hourly: t("runsEveryHours", {
+      count: Number(hourInterval),
+      minute: pad(minute),
+    }),
+    daily: t("runsDaily", { time }),
+    weekly: t("runsWeekly", { day: dayName(dayOfWeek), time }),
+    monthly: t("runsMonthly", { day: Number(dayOfMonth), time }),
+    custom: t("runsCustom"),
+  }[frequency];
+
+  const hourOptions = HOURS.map((value) => ({ value, label: pad(value) }));
+  const minuteOptions = MINUTES.map((value) => ({ value, label: pad(value) }));
+  const timeField = (
+    <Field label={t("time")}>
+      <div className="flex items-center gap-1">
+        <OptionSelect
+          value={hour}
+          onChange={setHour}
+          options={hourOptions}
+          className="w-[72px]"
+          ariaLabel={t("hour")}
+        />
+        <span className="text-sm text-muted-foreground">:</span>
+        <OptionSelect
+          value={minute}
+          onChange={setMinute}
+          options={minuteOptions}
+          className="w-[72px]"
+          ariaLabel={t("minute")}
+        />
+      </div>
+    </Field>
+  );
 
   return (
     <div className="space-y-4">
       <input type="hidden" name={name} value={cronExpr} />
 
-      {/* Frequency selector */}
-      <div className="space-y-1.5">
-        <Label>Frequency</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {([
-            ["every_minute", "Minutes"],
-            ["hourly", "Hourly"],
-            ["daily", "Daily"],
-            ["weekly", "Weekly"],
-            ["monthly", "Monthly"],
-            ["custom", "Custom"],
-          ] as [Frequency, string][]).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => {
-                if (key === "custom") setCustomExpr(cronExpr);
-                setFrequency(key);
-              }}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                frequency === key
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SegmentedControl
+        items={FREQUENCIES.map((value) => ({
+          value,
+          label: t(`frequency.${value}`),
+        }))}
+        value={frequency}
+        onChange={(key) => {
+          if (key === "custom") setCustomExpr(cronExpr);
+          setFrequency(key);
+        }}
+        layoutId={`cron-frequency-${instanceId}`}
+        className="max-w-full"
+        itemClassName="min-w-0"
+      />
 
-      {/* Frequency-specific options */}
       <div className="flex flex-wrap items-end gap-3">
         {frequency === "every_minute" && (
-          <div className="space-y-1.5">
-            <Label>Interval</Label>
-            <Select value={minuteInterval} onValueChange={setMinuteInterval}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MINUTE_INTERVALS.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Field label={t("interval")}>
+            <OptionSelect
+              value={minuteInterval}
+              onChange={setMinuteInterval}
+              options={MINUTE_INTERVALS.map((value) => ({
+                value,
+                label: t("everyMinutes", { count: Number(value) }),
+              }))}
+              className="w-[180px]"
+            />
+          </Field>
         )}
 
         {frequency === "hourly" && (
           <>
-            <div className="space-y-1.5">
-              <Label>Interval</Label>
-              <Select value={hourInterval} onValueChange={setHourInterval}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOURLY_INTERVALS.map((h) => (
-                    <SelectItem key={h.value} value={h.value}>
-                      {h.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>At minute</Label>
-              <Select value={minute} onValueChange={setMinute}>
-                <SelectTrigger className="w-[80px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MINUTES.map((m) => (
-                    <SelectItem key={m.value} value={m.value}>
-                      :{m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Field label={t("interval")}>
+              <OptionSelect
+                value={hourInterval}
+                onChange={setHourInterval}
+                options={HOURLY_INTERVALS.map((value) => ({
+                  value,
+                  label: t("everyHours", { count: Number(value) }),
+                }))}
+                className="w-[180px]"
+              />
+            </Field>
+            <Field label={t("atMinute")}>
+              <OptionSelect
+                value={minute}
+                onChange={setMinute}
+                options={MINUTES.map((value) => ({
+                  value,
+                  label: `:${pad(value)}`,
+                }))}
+                className="w-[80px]"
+              />
+            </Field>
           </>
-        )}
-
-        {frequency === "daily" && (
-          <div className="flex items-end gap-2">
-            <div className="space-y-1.5">
-              <Label>Time</Label>
-              <div className="flex items-center gap-1">
-                <Select value={hour} onValueChange={setHour}>
-                  <SelectTrigger className="w-[72px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOURS.map((h) => (
-                      <SelectItem key={h.value} value={h.value}>
-                        {h.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-muted-foreground">:</span>
-                <Select value={minute} onValueChange={setMinute}>
-                  <SelectTrigger className="w-[72px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MINUTES.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
         )}
 
         {frequency === "weekly" && (
-          <>
-            <div className="space-y-1.5">
-              <Label>Day</Label>
-              <Select value={dayOfWeek} onValueChange={setDayOfWeek}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS_OF_WEEK.map((d) => (
-                    <SelectItem key={d.value} value={d.value}>
-                      {d.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Time</Label>
-              <div className="flex items-center gap-1">
-                <Select value={hour} onValueChange={setHour}>
-                  <SelectTrigger className="w-[72px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOURS.map((h) => (
-                      <SelectItem key={h.value} value={h.value}>
-                        {h.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-muted-foreground">:</span>
-                <Select value={minute} onValueChange={setMinute}>
-                  <SelectTrigger className="w-[72px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MINUTES.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </>
+          <Field label={t("day")}>
+            <OptionSelect
+              value={dayOfWeek}
+              onChange={setDayOfWeek}
+              options={DAYS_OF_WEEK.map((value) => ({
+                value,
+                label: dayName(value),
+              }))}
+              className="w-[160px] capitalize"
+            />
+          </Field>
         )}
 
         {frequency === "monthly" && (
-          <>
-            <div className="space-y-1.5">
-              <Label>Day of month</Label>
-              <Select value={dayOfMonth} onValueChange={setDayOfMonth}>
-                <SelectTrigger className="w-[80px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DAYS_OF_MONTH.map((d) => (
-                    <SelectItem key={d.value} value={d.value}>
-                      {d.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Time</Label>
-              <div className="flex items-center gap-1">
-                <Select value={hour} onValueChange={setHour}>
-                  <SelectTrigger className="w-[72px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HOURS.map((h) => (
-                      <SelectItem key={h.value} value={h.value}>
-                        {h.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-sm text-muted-foreground">:</span>
-                <Select value={minute} onValueChange={setMinute}>
-                  <SelectTrigger className="w-[72px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MINUTES.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>
-                        {m.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </>
+          <Field label={t("dayOfMonth")}>
+            <OptionSelect
+              value={dayOfMonth}
+              onChange={setDayOfMonth}
+              options={DAYS_OF_MONTH.map((value) => ({ value, label: value }))}
+              className="w-[80px]"
+            />
+          </Field>
         )}
 
+        {(frequency === "daily" ||
+          frequency === "weekly" ||
+          frequency === "monthly") &&
+          timeField}
+
         {frequency === "custom" && (
-          <div className="flex-1 space-y-1.5">
-            <Label htmlFor="cron_custom_expression">Cron expression</Label>
-            <Input
-              id="cron_custom_expression"
-              type="text"
-              value={customExpr}
-              onChange={(e) => setCustomExpr(e.target.value)}
-              placeholder="0 9 * * 1-5"
-              className="font-mono"
-            />
-            <p className="note">minute hour day month weekday</p>
+          <div className="flex-1">
+            <Field
+              label={t("expression")}
+              htmlFor={`cron_custom_expression${instanceId}`}
+            >
+              <Input
+                id={`cron_custom_expression${instanceId}`}
+                type="text"
+                value={customExpr}
+                onChange={(e) => setCustomExpr(e.target.value)}
+                placeholder="0 9 * * 1-5"
+                className="font-mono"
+              />
+              <p className="note">{t("expressionFields")}</p>
+            </Field>
           </div>
         )}
       </div>
 
-      {/* Preview */}
       <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
         <span>{description}</span>
         {frequency !== "custom" && (
-          <code className="ml-auto font-mono text-muted-foreground">
-            {cronExpr}
-          </code>
+          <code className="ml-auto font-mono">{cronExpr}</code>
         )}
       </div>
     </div>

@@ -7,6 +7,7 @@ import type { TriggerResponse } from "@/api/client/types.gen";
 import { ViewerCapabilitiesProvider } from "@/components/ViewerCapabilities";
 import { IntlProvider } from "@/test/intl";
 import { installRadixJsdomStubs } from "@/test/radix-jsdom";
+import type { TriggerCatalogEntry } from "./actions";
 import { CreateTriggerForm } from "./CreateTriggerForm";
 
 function Providers({ children }: { children: ReactNode }) {
@@ -40,23 +41,24 @@ vi.mock("@/app/w/[workspace]/(main)/secrets/actions", () => ({
 vi.mock("./actions", () => ({
   createTriggerAction: vi.fn(),
   updateTriggerAction: vi.fn(),
-  listTriggerCatalogAction: vi.fn(async () => [
-    {
-      id: "telegram",
-      name: "Telegram",
-      icon: "",
-      description: "",
-      icon_url: "http://api.test/static/icons/channels/telegram.svg",
-      kind: "messaging",
-      backend_type: "webhook",
-      webhook_type: "telegram",
-      data_extractor: "telegram",
-      credential_fields: [
-        { key: "bot_token", label: "Bot token", placeholder: "" },
-      ],
-    },
-  ]),
 }));
+
+const catalog: TriggerCatalogEntry[] = [
+  {
+    id: "telegram",
+    name: "Telegram",
+    icon: "",
+    description: "",
+    icon_url: "http://api.test/static/icons/channels/telegram.svg",
+    kind: "messaging",
+    backend_type: "webhook",
+    webhook_type: "telegram",
+    data_extractor: "telegram",
+    credential_fields: [
+      { key: "bot_token", label: "Bot token", placeholder: "" },
+    ],
+  },
+];
 
 beforeAll(installRadixJsdomStubs);
 afterEach(cleanup);
@@ -97,6 +99,7 @@ describe("channel credentials on the trigger form", () => {
     render(
       <CreateTriggerForm
         agents={[]}
+        catalog={catalog}
         streams={{ items: [], error: null }}
         initialData={telegramTrigger}
       />,
@@ -132,24 +135,23 @@ describe("channel credentials on the trigger form", () => {
     listWorkspaceSecretsAction.mockResolvedValue([]);
     const user = userEvent.setup();
     render(
-      <CreateTriggerForm agents={[]} streams={{ items: [], error: null }} />,
+      <CreateTriggerForm
+        agents={[]}
+        catalog={catalog}
+        streams={{ items: [], error: null }}
+      />,
       {
         wrapper: Providers,
       }
     );
 
-    const typePicker = await screen.findByRole("combobox", {
-      name: /Trigger Type/,
-    });
-    await user.click(typePicker);
-    const option = await screen.findByRole("option", { name: "Telegram" });
+    const option = await screen.findByRole("button", { name: /Telegram/ });
     // The catalog's own artwork, not a lucide stand-in picked by id.
     expect(option.querySelector("img")?.getAttribute("src")).toBe(
       "http://api.test/static/icons/channels/telegram.svg"
     );
     await user.click(option);
 
-    expect(typePicker.textContent).toContain("Telegram");
     expect(
       document.querySelector<HTMLInputElement>('input[name="trigger_type"]')
         ?.value

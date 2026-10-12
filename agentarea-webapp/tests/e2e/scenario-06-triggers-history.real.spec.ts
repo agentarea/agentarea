@@ -44,12 +44,14 @@ test.describe("Scenario 06 MP - create cron and webhook triggers", () => {
 
     await gotoCommitted(page, "/triggers/create");
 
-    // The trigger type is a select filled from the catalog, which loads async.
-    await page.locator("#trigger_type_select").click();
-    await page.getByRole("option", { name: "Cron", exact: true }).click();
+    // The trigger type is a grid of tiles from the catalog; a tile's name
+    // carries its description too, so match on the leading title.
+    await page.getByRole("button", { name: /^Cron/ }).click();
 
     // Gate on the CronScheduler having rendered before touching fields.
-    await expect(page.getByText("Frequency")).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("button", { name: "Custom", exact: true })
+    ).toBeVisible({ timeout: 10_000 });
 
     await page.locator("#name").fill(name);
 

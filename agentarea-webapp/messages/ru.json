@@ -1525,7 +1525,6 @@
       },
       "uploadHint": "Перетащите ZIP-файл или выберите его для загрузки",
       "loadingDuplicate": "Загружаю исходный навык и предзаполняю форму...",
-      "cancel": "Отмена",
       "writeContent": "Написать контент",
       "uploadFiles": "Загрузить файлы",
       "descriptionLabel": "Описание",
@@ -1982,7 +1981,6 @@
         "selectedTools": "{count, plural, one {# выбранный инструмент} few {# выбранных инструмента} other {# выбранных инструментов}}",
         "noTools": "Нет включённых инструментов",
         "approval": "Нужно подтверждение",
-        "toolListUnavailable": "Список инструментов недоступен",
         "skillsOnDemand": "Доступны для активации",
         "configureAgent": "Настроить агента",
         "carriedOver": "Достались от прежней версии этого триггера. Перенесите их на агента — триггеры больше не носят свои ресурсы.",
@@ -2018,7 +2016,35 @@
       "stream": "Поток",
       "streamHint": "Срабатывает на события, пришедшие в этот поток после создания триггера.",
       "noStreams": "Потоков пока нет",
-      "streamsLoadFailed": "Не удалось загрузить потоки"
+      "streamsLoadFailed": "Не удалось загрузить потоки",
+      "cron": {
+        "frequency": {
+          "every_minute": "Минуты",
+          "hourly": "Ежечасно",
+          "daily": "Ежедневно",
+          "weekly": "Еженедельно",
+          "monthly": "Ежемесячно",
+          "custom": "Своё"
+        },
+        "interval": "Интервал",
+        "atMinute": "Минута",
+        "time": "Время",
+        "hour": "Час",
+        "minute": "Минута",
+        "day": "День",
+        "dayOfMonth": "День месяца",
+        "expression": "Cron-выражение",
+        "expressionFields": "минута час день месяц день_недели",
+        "everyMinutes": "{count, plural, =1 {Каждую минуту} one {Каждую # минуту} few {Каждые # минуты} other {Каждые # минут}}",
+        "everyHours": "{count, plural, =1 {Каждый час} one {Каждый # час} few {Каждые # часа} other {Каждые # часов}}",
+        "runsEveryMinutes": "{count, plural, =1 {Запуск каждую минуту} one {Запуск каждую # минуту} few {Запуск каждые # минуты} other {Запуск каждые # минут}}",
+        "runsEveryHours": "{count, plural, =1 {Запуск каждый час в :{minute}} one {Запуск каждый # час в :{minute}} few {Запуск каждые # часа в :{minute}} other {Запуск каждые # часов в :{minute}}}",
+        "runsDaily": "Запуск ежедневно в {time}",
+        "runsWeekly": "Запуск еженедельно: {day}, {time}",
+        "runsMonthly": "Запуск {day}-го числа каждого месяца в {time}",
+        "runsCustom": "Своё cron-выражение"
+      },
+      "changeType": "Изменить"
     },
     "detail": {
       "overview": "Обзор",
