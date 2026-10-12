@@ -30,6 +30,7 @@ from agentarea_common.identity import (
     LinkCodes,
 )
 from agentarea_common.identity.models import METHOD_PAIRING, TELEGRAM
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .secret_reader import SecretReader
@@ -98,7 +99,7 @@ class TelegramBotClient:
         self._base = f"https://api.telegram.org/bot{token}"
 
     async def username(self) -> str | None:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
             response = await client.get(f"{self._base}/getMe")
         if not response.is_success:
             logger.warning("Telegram getMe failed: %s", response.status_code)
@@ -106,7 +107,7 @@ class TelegramBotClient:
         return (response.json().get("result") or {}).get("username")
 
     async def send(self, chat_id: str, text: str) -> None:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
             response = await client.post(
                 f"{self._base}/sendMessage", json={"chat_id": chat_id, "text": text}
             )

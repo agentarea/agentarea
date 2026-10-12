@@ -52,6 +52,9 @@ services:
       - SMTP_SKIP_SSL_VERIFY=${SMTP_SKIP_SSL_VERIFY:-true}
       - SMTP_DISABLE_STARTTLS=${SMTP_DISABLE_STARTTLS:-true}
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
+      # PEM file of CA certificates trusted on outbound TLS on top of the public
+      # roots; a path inside the container, mounted by an override file.
+      - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
@@ -470,6 +473,9 @@ services:
       - AGENTAREA_REDIS_URL=redis://valkey:6379
       # Links the worker sends out (the Telegram account-link reply)
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
+      # PEM file of CA certificates trusted on outbound TLS on top of the public
+      # roots; a path inside the container, mounted by an override file.
+      - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
 
       # Temporal
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}

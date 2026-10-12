@@ -3,6 +3,7 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 
 import httpx
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from ..domain.model_kind import ModelKind
@@ -159,7 +160,9 @@ class ModelDiscoveryService:
                 policy = replace(policy, allow_private=True)
             client = safe_async_client(policy=policy, timeout=self._timeout)
         else:
-            client = httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
+            client = httpx.AsyncClient(
+                timeout=self._timeout, transport=self._transport, verify=outbound_ssl_context()
+            )
 
         try:
             async with client:

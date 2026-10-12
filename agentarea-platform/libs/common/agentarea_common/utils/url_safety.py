@@ -32,6 +32,8 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
+
 __all__ = [
     "OutboundPolicy",
     "PinnedSender",
@@ -257,7 +259,9 @@ class PinnedSender:
         self._error = error
         self._resolve = resolve
         self._new_pool = inner or (
-            lambda proxy=None: lib.AsyncHTTPTransport(trust_env=False, proxy=proxy)
+            lambda proxy=None: lib.AsyncHTTPTransport(
+                trust_env=False, proxy=proxy, verify=outbound_ssl_context()
+            )
         )
         self._pools: dict[tuple[str, str | None], Any] = {}
 

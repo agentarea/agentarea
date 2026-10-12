@@ -25,6 +25,7 @@ from uuid import UUID
 
 import yaml
 from agentarea_common.money import to_optional_money
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
@@ -994,7 +995,9 @@ class RegistryService:
                     "User-Agent": "agentarea-registry-sync",
                 },
             )
-            with urllib.request.urlopen(req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS) as resp:  # noqa: S310
+            with urllib.request.urlopen(  # noqa: S310
+                req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS, context=outbound_ssl_context()
+            ) as resp:
                 raw = resp.read().decode("utf-8")
                 content_type = resp.headers.get("Content-Type", "")
         else:

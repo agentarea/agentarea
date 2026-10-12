@@ -243,7 +243,11 @@ class A2AAgentTool(BaseTool):
                     self.name, f"Could not resolve the credential for '{self._agent_name}': {e}"
                 ) from e
 
-        transport: httpx.AsyncBaseTransport = self._http_transport or httpx.AsyncHTTPTransport()
+        from agentarea_common.utils.outbound_tls import outbound_ssl_context
+
+        transport: httpx.AsyncBaseTransport = self._http_transport or httpx.AsyncHTTPTransport(
+            verify=outbound_ssl_context()
+        )
         payments: _PaymentTransport | None = None
         if self._payment_handler:
             payments = _PaymentTransport(transport, self._payment_handler, self.name)

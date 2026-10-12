@@ -28,6 +28,10 @@ spec:
         {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- if .Values.global.http.extraCaCerts }}
+        # The trust store is loaded once per process; a changed bundle needs new pods.
+        checksum/extra-ca-certs: {{ .Values.global.http.extraCaCerts | sha256sum }}
+        {{- end }}
         {{- with .Values.backend.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -134,6 +138,10 @@ spec:
             - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
               value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
             {{- end }}
+            {{- if .Values.global.http.extraCaCerts }}
+            - name: AGENTAREA_HTTP_EXTRA_CA_CERTS
+              value: {{ include "agentarea.extraCaCerts.path" . | quote }}
+            {{- end }}
             {{- if or .Values.backend.envVars .Values.global.envVars }}
             {{- $backendEnv := default dict .Values.backend.envVars -}}
             {{- $globalEnv := default dict .Values.global.envVars -}}
@@ -195,13 +203,27 @@ spec:
               memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
             {{- end }}
           {{- end }}
-          {{- with .Values.backend.extraVolumeMounts }}
+          {{- if or .Values.global.http.extraCaCerts .Values.backend.extraVolumeMounts }}
           volumeMounts:
+            {{- if .Values.global.http.extraCaCerts }}
+            - name: extra-ca-certs
+              mountPath: {{ include "agentarea.extraCaCerts.dir" . }}
+              readOnly: true
+            {{- end }}
+            {{- with .Values.backend.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
-      {{- with .Values.backend.extraVolumes }}
+      {{- if or .Values.global.http.extraCaCerts .Values.backend.extraVolumes }}
       volumes:
+        {{- if .Values.global.http.extraCaCerts }}
+        - name: extra-ca-certs
+          configMap:
+            name: {{ include "agentarea.fullname" . }}-extra-ca-certs
+        {{- end }}
+        {{- with .Values.backend.extraVolumes }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- with .Values.backend.extraContainers }}
       {{- toYaml . | nindent 6 }}

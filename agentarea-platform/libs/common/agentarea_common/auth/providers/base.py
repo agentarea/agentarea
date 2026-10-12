@@ -10,6 +10,8 @@ from typing import Any
 
 import httpx
 
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
+
 from ..interfaces import AuthProviderInterface, AuthResult
 
 logger = logging.getLogger(__name__)
@@ -72,7 +74,7 @@ class BaseAuthProvider(AuthProviderInterface):
             Dictionary containing the JWKS
         """
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(verify=outbound_ssl_context()) as client:
                 response = await client.get(jwks_url)
                 response.raise_for_status()
                 return response.json()
