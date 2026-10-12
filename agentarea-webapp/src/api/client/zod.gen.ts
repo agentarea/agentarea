@@ -144,6 +144,20 @@ export const zAnalyzeRequest = z.object({
 });
 
 /**
+ * AnswerCheckPolicy
+ *
+ * Check an agent's final answer and have the model rewrite it once if it leaks.
+ *
+ * Leaks: CJK characters, tool names and snake_case codes, stack traces, raw
+ * JSON, and (for ``language: ru``) lowercase English words in a Russian answer.
+ */
+export const zAnswerCheckPolicy = z.object({
+  enabled: z.boolean().optional().default(true),
+  language: z.string().min(2).max(8).nullish(),
+  rewrite_instruction: z.string().min(1).max(4000).nullish(),
+});
+
+/**
  * ApprovalDecision
  *
  * One answered approval request, as the workflow recorded the answer.
@@ -373,6 +387,7 @@ export const zBundleChannel = z.object({
  */
 export const zBundleMcp = z.object({
   bindings: z.record(z.string()).optional(),
+  context_secret: z.string().nullish(),
   json_spec: z.record(z.unknown()),
   key: z.string().min(1),
   name: z.string().min(1).max(255),
@@ -619,6 +634,7 @@ export const zCollectionUpdateRequest = z.object({
  * Content-safety governance controls.
  */
 export const zContentSafetyPolicy = z.object({
+  answer_check: zAnswerCheckPolicy.nullish(),
   output_sanitizer_enabled: z.boolean().nullish(),
   prompt_injection_detection_enabled: z.boolean().nullish(),
 });
@@ -3034,6 +3050,8 @@ export const zTaskCommandPayload = z.object({
  */
 export const zTaskEvent = z.object({
   agent_id: z.string(),
+  data: z.record(z.unknown()).optional().default({}),
+  event_id: z.string().nullish(),
   event_type: z.string(),
   execution_id: z.string().nullish(),
   id: z.string(),
@@ -3088,16 +3106,19 @@ export const zTaskResponse = z.object({
   created_at: z.string().datetime(),
   created_by: z.string().nullish(),
   description: z.string(),
+  end_user_id: z.string().nullish(),
   error: z.string().nullish(),
   execution_id: z.string().nullish(),
   failure_reason: z.string().nullish(),
   id: z.string().uuid(),
+  metadata: z.record(z.unknown()).nullish(),
   parameters: z.record(z.unknown()),
   provenance: zTaskProvenance.optional(),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
   scheduled_at: z.string().datetime().nullish(),
   status: z.string(),
   total_cost: z.number().nullish(),
+  total_tokens: z.number().int().nullish(),
 });
 
 /**
@@ -3133,6 +3154,16 @@ export const zTaskSummary = z.object({
 });
 
 /**
+ * TaskWebhook
+ *
+ * Where to POST each terminal event of the task, with its cost.
+ */
+export const zTaskWebhook = z.object({
+  secret: z.string().min(32).max(512).nullish(),
+  url: z.string().min(1).max(2048),
+});
+
+/**
  * TaskWithAgent
  *
  * Task response with agent information for global task listing.
@@ -3143,18 +3174,21 @@ export const zTaskWithAgent = z.object({
   created_at: z.string().datetime(),
   created_by: z.string().nullish(),
   description: z.string(),
+  end_user_id: z.string().nullish(),
   error: z.string().nullish(),
   escalation_id: z.string().nullish(),
   escalation_tool_name: z.string().nullish(),
   execution_id: z.string().nullish(),
   failure_reason: z.string().nullish(),
   id: z.string().uuid(),
+  metadata: z.record(z.unknown()).nullish(),
   parameters: z.record(z.unknown()),
   provenance: zTaskProvenance.optional(),
   result: z.union([z.record(z.unknown()), z.string()]).nullish(),
   scheduled_at: z.string().datetime().nullish(),
   status: z.string(),
   total_cost: z.number().nullish(),
+  total_tokens: z.number().int().nullish(),
 });
 
 /**
@@ -3305,6 +3339,7 @@ export const zScheduleTaskCreate = z.object({
   requires_human_approval: z.boolean().nullish().default(false),
   scheduled_at: z.string().datetime(),
   task_policy: zPolicyDocument.nullish(),
+  webhook: zTaskWebhook.nullish(),
 });
 
 /**
@@ -3320,6 +3355,7 @@ export const zTaskCreate = z.object({
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
   task_policy: zPolicyDocument.nullish(),
+  webhook: zTaskWebhook.nullish(),
 });
 
 /**
@@ -4361,6 +4397,11 @@ export const zCreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostBody =
 export const zCreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostPath =
   z.object({
     agent_id: z.string().uuid(),
+  });
+
+export const zCreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostQuery =
+  z.object({
+    follow: z.boolean().optional().default(false),
   });
 
 export const zScheduleTaskForAgentV1AgentsAgentIdTasksSchedulePostBody =

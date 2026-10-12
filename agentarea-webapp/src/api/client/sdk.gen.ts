@@ -3650,6 +3650,10 @@ export const analyzeBundleV1BundlesAnalyzePost = <
  * Install Bundle
  *
  * Install a canonical bundle: MCP instances, skills, agents and automations.
+ *
+ * All or nothing: a failure removes whatever this install had created. A
+ * bundle or setup value that is invalid answers 422; any other install
+ * failure answers 400. Both carry ``{message, issues}``.
  */
 export const installBundleV1BundlesInstallPost = <
   ThrowOnError extends boolean = false,

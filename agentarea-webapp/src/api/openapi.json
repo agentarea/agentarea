@@ -1079,6 +1079,45 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "AnswerCheckPolicy": {
+        "additionalProperties": false,
+        "description": "Check an agent's final answer and have the model rewrite it once if it leaks.\n\nLeaks: CJK characters, tool names and snake_case codes, stack traces, raw\nJSON, and (for ``language: ru``) lowercase English words in a Russian answer.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "rewrite_instruction": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewrite Instruction"
+          }
+        },
+        "title": "AnswerCheckPolicy",
+        "type": "object"
+      },
       "ApprovalDecision": {
         "description": "One answered approval request, as the workflow recorded the answer.",
         "properties": {
@@ -2131,6 +2170,18 @@
             "title": "Bindings",
             "type": "object"
           },
+          "context_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.",
+            "title": "Context Secret"
+          },
           "json_spec": {
             "additionalProperties": true,
             "description": "Native MCP runtime spec. Must include 'type' (command|docker|url).",
@@ -3135,6 +3186,16 @@
         "additionalProperties": false,
         "description": "Content-safety governance controls.",
         "properties": {
+          "answer_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerCheckPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "output_sanitizer_enabled": {
             "anyOf": [
               {
@@ -10968,6 +11029,17 @@
                 "type": "null"
               }
             ]
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskWebhook"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it."
           }
         },
         "required": [
@@ -12677,6 +12749,17 @@
                 "type": "null"
               }
             ]
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskWebhook"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it."
           }
         },
         "required": [
@@ -12691,6 +12774,23 @@
           "agent_id": {
             "title": "Agent Id",
             "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Data",
+            "type": "object"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
           },
           "event_type": {
             "title": "Event Type",
@@ -12917,6 +13017,17 @@
             "title": "Description",
             "type": "string"
           },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End User Id"
+          },
           "error": {
             "anyOf": [
               {
@@ -12954,6 +13065,18 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
           },
           "parameters": {
             "additionalProperties": true,
@@ -13004,6 +13127,17 @@
               }
             ],
             "title": "Total Cost"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
           }
         },
         "required": [
@@ -13150,6 +13284,38 @@
         "title": "TaskSummary",
         "type": "object"
       },
+      "TaskWebhook": {
+        "additionalProperties": false,
+        "description": "Where to POST each terminal event of the task, with its cost.",
+        "properties": {
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signs each delivery as X-AgentArea-Signature: t=<unix>,v1=<hex HMAC-SHA256 of \"<t>.<body>\">. Write-only: stored in the secret manager.",
+            "title": "Secret"
+          },
+          "url": {
+            "description": "http(s) URL to POST to.",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "TaskWebhook",
+        "type": "object"
+      },
       "TaskWithAgent": {
         "description": "Task response with agent information for global task listing.",
         "properties": {
@@ -13188,6 +13354,17 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End User Id"
           },
           "error": {
             "anyOf": [
@@ -13249,6 +13426,18 @@
             "title": "Id",
             "type": "string"
           },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
           "parameters": {
             "additionalProperties": true,
             "title": "Parameters",
@@ -13298,6 +13487,17 @@
               }
             ],
             "title": "Total Cost"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
           }
         },
         "required": [
@@ -18580,6 +18780,18 @@
               "title": "Workspace",
               "type": "string"
             }
+          },
+          {
+            "description": "Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.",
+            "in": "query",
+            "name": "follow",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.",
+              "title": "Follow",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -21237,7 +21449,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/install": {
       "post": {
-        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.",
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422; any other install\nfailure answers 400. Both carry ``{message, issues}``.",
         "operationId": "install_bundle_v1_bundles_install_post",
         "parameters": [
           {
