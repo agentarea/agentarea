@@ -469,7 +469,6 @@ export function createServer(app: AppStore, appDir: string, current: BooksStore)
     },
     async ({ ids, reconciled }) =>
       change((store) => {
-        const data = store.data;
         const updated = store.setReconciled(ids, reconciled);
         return reply(`${updated.length} transactions marked ${reconciled ? "reconciled" : "unreconciled"}.`, {
           updated: updated.length,
@@ -735,7 +734,6 @@ export function createServer(app: AppStore, appDir: string, current: BooksStore)
     },
     async ({ name, kind, tax_id, email }) =>
       change((store) => {
-        const data = store.data;
         const counterparty = store.createCounterparty({ name, kind, taxId: tax_id, email });
         return reply(`Created ${counterparty.kind} ${counterparty.name} (${counterparty.id}).`, { ...counterparty });
       }),
@@ -752,7 +750,6 @@ export function createServer(app: AppStore, appDir: string, current: BooksStore)
     },
     async ({ name, kind }) =>
       change((store) => {
-        const data = store.data;
         const category = store.createCategory({ name, kind });
         return reply(`Created ${category.kind} category ${category.name} (${category.id}).`, { ...category });
       }),
@@ -773,7 +770,6 @@ export function createServer(app: AppStore, appDir: string, current: BooksStore)
     },
     async ({ category: query, name, archived }) =>
       change((store) => {
-        const data = store.data;
         const category = store.updateCategory(query, { name, archived });
         return reply(`Category ${category.name} (${category.id})${category.archived ? ", archived" : ""}.`, { ...category });
       }),
