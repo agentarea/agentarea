@@ -134,3 +134,27 @@ async def test_business_result_overrides_engine_completion():
 
     assert enriched.status == "blocked"
     assert enriched.result == result
+
+
+@pytest.mark.asyncio
+async def test_the_closed_runs_result_keeps_the_cost_and_tokens_stored_with_the_task():
+    task = _task()
+    task.result = {"response": "old", "total_cost": "0.02", "own_cost": "0.02", "tokens_used": 900}
+    service = _service(
+        {
+            "execution_status": "completed",
+            "status": "completed",
+            "success": True,
+            "result": {"status": "completed", "final_response": "done"},
+        }
+    )
+
+    enriched = await service._enrich_task_with_workflow_status(task)
+
+    assert enriched.result == {
+        "status": "completed",
+        "final_response": "done",
+        "total_cost": "0.02",
+        "own_cost": "0.02",
+        "tokens_used": 900,
+    }

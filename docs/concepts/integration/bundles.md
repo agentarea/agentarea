@@ -182,7 +182,8 @@ Install answers **422** when the bundle or a setup value is invalid (anything
 analyze blocks, missing required setup, a refused `context_secret`, a skill the
 skill service refuses, an MCP the MCP service refuses) and **400** when an
 install step fails for another reason, such as a GitHub skill that cannot be
-fetched. Both carry `{"message": …, "issues": [...]}`.
+fetched. Both are problem+json: the message in `detail`, `code`
+`bundle_invalid` or `bundle_install_failed`, and the blocking `issues`.
 
 Analyze accepts exactly one of `source` (pasted text) or `source_url` (fetched
 server-side behind an SSRF guard, capped at 5 MB).
