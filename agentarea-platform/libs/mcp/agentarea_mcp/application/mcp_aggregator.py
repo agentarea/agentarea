@@ -11,6 +11,7 @@ from typing import Any, TypeVar
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_app_ui import is_visible_to_model
+from agentarea_agents_sdk.tools.mcp_tool_identity import server_label
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
 
@@ -109,6 +110,9 @@ class MCPAggregatorProxy:
         if member.namespace_prefix:
             return member.namespace_prefix
         name = self.instance_names.get(str(member.mcp_instance_id), "")
+        if name and not name.isascii():
+            # Tool names must be ASCII; an ASCII name keeps its namespace as before.
+            return server_label(name)
         if name:
             return name.lower().replace(" ", "_").replace("-", "_")
         return str(member.mcp_instance_id)[:8]

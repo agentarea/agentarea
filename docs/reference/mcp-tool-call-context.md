@@ -156,6 +156,33 @@ SSE feed and its history.
 
 When `content` is empty, the model reads `structuredContent` as text instead.
 
+## Tool names the model sees
+
+An agent's MCP tool is offered to the model as `mcp__<server>__<tool>`, at most
+64 characters (a longer name is cut and ends in an 8-character digest).
+`<tool>` is the raw tool name with characters outside `[a-zA-Z0-9_-]` replaced
+by `_`. `<server>` comes from the instance name:
+
+| Instance name | `<server>` | Example |
+|---|---|---|
+| ASCII only | Lowercased, characters outside `[a-zA-Z0-9_-]` replaced by `_` (unchanged from before) | `My GitHub!` → `my_github_` |
+| Any other letters | Cyrillic transliterated, accents dropped, runs of anything else collapsed to one `_`, trimmed | `Constractio — инструменты сметчика` → `constractio_instrumenty_smetchika` |
+| Nothing readable left (CJK only, say) | `server` | `工具` → `server` |
+
+Two instances with the same `<server>` on one agent are kept apart by a suffix
+of the second one's id. Your server receives the raw `<tool>` name in
+`tools/call`, never the qualified one, so renaming affects only what the model,
+the event stream and policy rules written against `tool:mcp__…` see.
+
+**Compatibility.** Names of instances whose name is ASCII did not change. An
+instance with a non-ASCII name was previously offered as `mcp__` followed by one
+`_` per non-ASCII character; it now gets the readable label above. Running tasks
+keep the names they started with. Rules written as `tool:mcp:<instance id>:<tool>`
+(what approval toggles write) are unaffected; a hand-written rule that targeted
+the old underscore name must be rewritten to the new name or, better, to
+`tool:mcp:<instance id>:<tool>`. Client MCP endpoints apply the same label to a
+non-ASCII instance name when the member has no `namespace_prefix`.
+
 ## Idempotency
 
 A retried tool activity sends the same `task_id`, `tool_call_id`,
@@ -167,7 +194,7 @@ duplicate.
 
 | Input | Where | Rules |
 |---|---|---|
-| `context_secret` | `POST /v1/workspaces/{workspace}/mcp-server-instances/`, `POST …/with-spec` (`instance.context_secret`), `PATCH /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}` | 32 to 512 characters. URL instances only. Write-only: stored in the secret manager as `mcp_instance_{id}_AGENTAREA_CONTEXT_SECRET`; the instance's `json_spec` shows `context_signing: true`. `PATCH` with `null` removes it |
+| `context_secret` | `POST /v1/workspaces/{workspace}/mcp-server-instances/`, `POST …/with-spec` (`instance.context_secret`), `PATCH /v1/workspaces/{workspace}/mcp-server-instances/{instance_id}`, or a bundle's `mcps[].context_secret: "${setup.<key>}"` ([bundles](/concepts/integration/bundles)) | 32 to 512 characters. URL instances only. Write-only: stored in the secret manager as `mcp_instance_{id}_AGENTAREA_CONTEXT_SECRET`; the instance's `json_spec` shows `context_signing: true`. `PATCH` with `null` removes it |
 | `metadata` | `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/`, `…/tasks/sync`, `…/tasks/schedule` | JSON object, at most 4096 bytes. API key or client-credentials callers only; a browser session gets 403 |
 | `end_user_id` | Same endpoints | 1 to 256 characters. Same callers as `metadata` |
 

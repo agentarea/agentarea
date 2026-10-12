@@ -28,6 +28,12 @@ def test_namespace_falls_back_to_slugified_instance_name():
     assert p._get_namespace(m) == "my_server"
 
 
+def test_a_non_latin_instance_name_namespaces_in_ascii():
+    m = AggregatedMember(mcp_instance_id="1")
+    p = _proxy([m], names={"1": "Constractio — инструменты"})
+    assert p._get_namespace(m) == "constractio_instrumenty"
+
+
 def test_namespace_falls_back_to_id_prefix():
     m = AggregatedMember(mcp_instance_id="abcdef12-3456")
     assert _proxy([m])._get_namespace(m) == "abcdef12"
