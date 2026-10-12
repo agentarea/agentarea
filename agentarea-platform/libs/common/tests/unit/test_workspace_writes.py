@@ -12,7 +12,9 @@ import pytest
 from agentarea_common.artifacts import WorkspaceConflictError, WorkspaceValidationError
 from agentarea_common.artifacts.workspace_writes import (
     MAX_WRITE_PATH_BYTES,
+    WorkspaceReadOnlyError,
     ensure_writable_file,
+    is_read_only_path,
     is_reserved_path,
     plan_uploads,
     resolve_write_path,
@@ -52,6 +54,19 @@ def test_reserved_prefixes_cannot_be_written(reserved: str) -> None:
     assert is_reserved_path(reserved)
     with pytest.raises(WorkspaceValidationError):
         resolve_write_path(reserved)
+
+
+@pytest.mark.parametrize("app_path", ["apps", "apps/i-1", "apps/i-1/app.sqlite"])
+def test_app_storage_is_listed_but_not_writable(app_path: str) -> None:
+    assert is_read_only_path(app_path)
+    assert is_read_only_path(f"/{app_path}")
+    assert not is_reserved_path(app_path)
+    with pytest.raises(WorkspaceReadOnlyError):
+        resolve_write_path(app_path)
+
+
+def test_a_name_that_only_starts_with_apps_is_writable() -> None:
+    assert resolve_write_path("apps-notes/todo.md") == "apps-notes/todo.md"
 
 
 @pytest.mark.parametrize(

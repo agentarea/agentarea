@@ -24,6 +24,8 @@ class OpenFGASettings(BaseAppSettings):
     BOOTSTRAP: bool = False
     APPLY_MODEL: bool = False
     STORE_NAME: str = "agentarea"
+    # A deployment's own model. It must extend the packaged one: every type and
+    # relation the platform checks, unchanged, plus whatever the deployment adds.
     MODEL_PATH: str | None = None
     # Bearer token sent with every request when the server runs with
     # OPENFGA_AUTHN_METHOD=preshared. Empty means the server accepts

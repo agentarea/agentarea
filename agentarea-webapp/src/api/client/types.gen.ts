@@ -922,8 +922,16 @@ export type BudgetPeriod = "execution" | "daily" | "monthly";
  * BudgetPolicy
  *
  * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month.
  */
 export type BudgetPolicyInput = {
+  /**
+   * Agent Monthly Spend Cap Usd
+   */
+  agent_monthly_spend_cap_usd?: number | string | null;
   /**
    * Monthly Spend Cap Usd
    */
@@ -942,8 +950,16 @@ export type BudgetPolicyInput = {
  * BudgetPolicy
  *
  * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month.
  */
 export type BudgetPolicyOutput = {
+  /**
+   * Agent Monthly Spend Cap Usd
+   */
+  agent_monthly_spend_cap_usd?: string | null;
   /**
    * Monthly Spend Cap Usd
    */
@@ -7717,6 +7733,133 @@ export type TokenPolicy = {
    */
   max_tokens_per_call?: number | null;
 };
+
+/**
+ * ToolCallApprovalDecision
+ */
+export type ToolCallApprovalDecision = {
+  /**
+   * Approved
+   */
+  approved: boolean;
+  /**
+   * Comment
+   */
+  comment?: string | null;
+};
+
+/**
+ * ToolCallApprovalListResponse
+ */
+export type ToolCallApprovalListResponse = {
+  /**
+   * Items
+   */
+  items: Array<ToolCallApprovalResponse>;
+  /**
+   * Page
+   */
+  page: number;
+  /**
+   * Page Size
+   */
+  page_size: number;
+  /**
+   * Total
+   */
+  total: number;
+};
+
+/**
+ * ToolCallApprovalResponse
+ */
+export type ToolCallApprovalResponse = {
+  /**
+   * Arguments
+   */
+  arguments: {
+    [key: string]: unknown;
+  } | null;
+  /**
+   * Can Decide
+   */
+  can_decide: boolean;
+  /**
+   * Client Id
+   */
+  client_id: string | null;
+  /**
+   * Client Name
+   */
+  client_name: string | null;
+  /**
+   * Comment
+   */
+  comment: string | null;
+  /**
+   * Connector
+   */
+  connector: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Decided At
+   */
+  decided_at: string | null;
+  /**
+   * Decided By
+   */
+  decided_by: string | null;
+  /**
+   * Expires At
+   */
+  expires_at: string;
+  /**
+   * Hint
+   */
+  hint: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Mcp Instance Id
+   */
+  mcp_instance_id: string | null;
+  /**
+   * Policy Name
+   */
+  policy_name: string;
+  /**
+   * Reason
+   */
+  reason: string;
+  /**
+   * Requested By
+   */
+  requested_by: string;
+  status: ToolCallApprovalStatus;
+  /**
+   * Tool
+   */
+  tool: string;
+  /**
+   * Url
+   */
+  url: string;
+};
+
+/**
+ * ToolCallApprovalStatus
+ */
+export type ToolCallApprovalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "consumed"
+  | "expired";
 
 /**
  * ToolMethodResponse
@@ -18204,6 +18347,113 @@ export type ContinueTaskExecutionV1TasksTaskIdContinuePostResponses = {
    */
   200: unknown;
 };
+
+export type ListToolCallApprovalsV1ToolCallApprovalsGetData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Status
+     */
+    status?: ToolCallApprovalStatus | null;
+    /**
+     * Page
+     */
+    page?: number;
+    /**
+     * Page Size
+     */
+    page_size?: number;
+  };
+  url: "/v1/workspaces/{workspace}/tool-call-approvals";
+};
+
+export type ListToolCallApprovalsV1ToolCallApprovalsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListToolCallApprovalsV1ToolCallApprovalsGetError =
+  ListToolCallApprovalsV1ToolCallApprovalsGetErrors[keyof ListToolCallApprovalsV1ToolCallApprovalsGetErrors];
+
+export type ListToolCallApprovalsV1ToolCallApprovalsGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ToolCallApprovalListResponse;
+};
+
+export type ListToolCallApprovalsV1ToolCallApprovalsGetResponse =
+  ListToolCallApprovalsV1ToolCallApprovalsGetResponses[keyof ListToolCallApprovalsV1ToolCallApprovalsGetResponses];
+
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Approval Id
+     */
+    approval_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}";
+};
+
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetError =
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors[keyof GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors];
+
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: ToolCallApprovalResponse;
+};
+
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponse =
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses[keyof GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses];
+
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostData =
+  {
+    body: ToolCallApprovalDecision;
+    path: {
+      /**
+       * Approval Id
+       */
+      approval_id: string;
+    };
+    query?: never;
+    url: "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}/decide";
+  };
+
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostError =
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors[keyof DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors];
+
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: ToolCallApprovalResponse;
+  };
+
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponse =
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses[keyof DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses];
 
 export type ListTriggersV1TriggersGetData = {
   body?: never;

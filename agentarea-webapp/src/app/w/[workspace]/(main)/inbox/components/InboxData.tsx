@@ -1,13 +1,15 @@
 import { getTranslations } from "next-intl/server";
 import { client as serverClient } from "@/api/client/client.gen";
 import { listApprovalDecisionsV1InboxDecisionsGet } from "@/api/client/sdk.gen";
+import type { ToolCallApprovalResponse } from "@/api/client/types.gen";
 import { resolvePrincipalNamesAction } from "@/components/Approvals/actions";
-import { getInbox, type TaskWithAgent } from "@/lib/api";
+import { getInbox, listToolCallApprovals, type TaskWithAgent } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { InboxClient } from "./InboxClient";
 import type { InboxDecision } from "./inboxShared";
 
 const DECISIONS_PAGE_SIZE = 100;
+const TOOL_CALLS_PAGE_SIZE = 100;
 
 /**
  * Server data loader for the inbox, isolated behind a <Suspense> boundary in
@@ -22,6 +24,8 @@ export async function InboxData() {
   let decisions: InboxDecision[] = [];
   let decisionsTotal = 0;
   let decisionsError: string | null = null;
+  let toolCalls: ToolCallApprovalResponse[] = [];
+  let toolCallsError: string | null = null;
 
   try {
     const res = await getInbox();
@@ -72,6 +76,25 @@ export async function InboxData() {
     decisionsError = `${t("decisions.loadFailed")}: ${formatApiError(err)}`;
   }
 
+  try {
+    const res = await listToolCallApprovals({
+      status: "pending",
+      page_size: TOOL_CALLS_PAGE_SIZE,
+    });
+    if (res.error || !res.data) {
+      console.error(
+        "Failed to load tool calls waiting for approval",
+        res.error
+      );
+      toolCallsError = apiErrorMessage(res, t("toolCalls.loadFailed"));
+    } else {
+      toolCalls = res.data.items;
+    }
+  } catch (err) {
+    console.error("Failed to load tool calls waiting for approval", err);
+    toolCallsError = `${t("toolCalls.loadFailed")}: ${formatApiError(err)}`;
+  }
+
   return (
     <InboxClient
       items={items}
@@ -79,6 +102,8 @@ export async function InboxData() {
       decisions={decisions}
       decisionsTotal={decisionsTotal}
       decisionsError={decisionsError}
+      toolCalls={toolCalls}
+      toolCallsError={toolCallsError}
     />
   );
 }

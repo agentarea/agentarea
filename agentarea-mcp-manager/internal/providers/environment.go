@@ -65,3 +65,32 @@ func resolveInstanceSpecSecrets(resolver secrets.SecretResolver, instanceID stri
 	}
 	return resolved, nil
 }
+
+// withEnvironment returns spec with extra laid over its "environment" map. The
+// platform-issued values win over anything the spec declares under the same
+// name.
+func withEnvironment(spec map[string]any, extra map[string]string) map[string]any {
+	if len(extra) == 0 {
+		return spec
+	}
+	environment := make(map[string]any)
+	switch values := spec["environment"].(type) {
+	case map[string]any:
+		for key, value := range values {
+			environment[key] = value
+		}
+	case map[string]string:
+		for key, value := range values {
+			environment[key] = value
+		}
+	}
+	for key, value := range extra {
+		environment[key] = value
+	}
+	out := make(map[string]any, len(spec)+1)
+	for key, value := range spec {
+		out[key] = value
+	}
+	out["environment"] = environment
+	return out
+}

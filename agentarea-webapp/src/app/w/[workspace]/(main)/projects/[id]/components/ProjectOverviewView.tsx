@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import Image from "next/image";
 import type {
   AgentResponse,
   ProjectFileInfo,
@@ -13,6 +12,7 @@ import {
   hydrateAttachments,
   type AttachmentItem,
 } from "@/components/AttachmentSection";
+import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import { OverviewHero } from "@/components/Overview/OverviewHero";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import type { EntityIdentity } from "@/lib/entity-identity";
 import {
   addAgentToProjectAction,
   addMcpInstanceToProjectAction,
@@ -50,7 +51,7 @@ export default function ProjectOverviewView({
   allSkills,
   allMcpInstances,
   resourcesLoading,
-  instanceIconSrc,
+  mcpIdentity,
   agentsError,
   files,
   filesError,
@@ -62,7 +63,7 @@ export default function ProjectOverviewView({
   allSkills: AttachmentItem[];
   allMcpInstances: AttachmentItem[];
   resourcesLoading: boolean;
-  instanceIconSrc: (instance: AttachmentItem) => string | undefined;
+  mcpIdentity: (instance: AttachmentItem) => EntityIdentity;
   agentsError: string | null;
   files: ProjectFileInfo[];
   filesError: string | null;
@@ -209,33 +210,18 @@ export default function ProjectOverviewView({
                 removeMcpInstanceFromProjectAction(projectId, item.id)
               }
               onChanged={onChanged}
-              getIconSrc={instanceIconSrc}
-              renderTile={(instance) => {
-                const src = instanceIconSrc(instance);
-                return (
-                  <EntityAvatar
-                    size={TILE}
-                    rounded={7}
-                    hue={deterministicHue(instance.id)}
-                    iconScale={src ? 0.68 : 0.5}
-                    icon={
-                      src ? (
-                        <Image
-                          src={src}
-                          alt=""
-                          aria-hidden="true"
-                          width={16}
-                          height={16}
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        <McpIcon strokeWidth={1.85} />
-                      )
-                    }
-                    aria-hidden
-                  />
-                );
-              }}
+              renderMark={(instance) => (
+                <EntityMark
+                  identity={mcpIdentity(instance)}
+                  className="h-4 w-4 rounded-sm"
+                />
+              )}
+              renderTile={(instance) => (
+                <EntityMark
+                  identity={mcpIdentity(instance)}
+                  className="h-6 w-6 shrink-0 rounded-[7px]"
+                />
+              )}
               itemHref={(instance) => `/connections/${instance.id}`}
             />
 

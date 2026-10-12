@@ -28,8 +28,7 @@ export default async function SkillsPage({
         : "list";
 
   const groupParam = asString(resolvedSearchParams.group);
-  const group: "source" | "scope" | "none" =
-    groupParam === "scope" || groupParam === "none" ? groupParam : "source";
+  const group: "scope" | "none" = groupParam === "scope" ? "scope" : "none";
 
   const orderParam = asString(resolvedSearchParams.order);
   const order: "name" | "created" =

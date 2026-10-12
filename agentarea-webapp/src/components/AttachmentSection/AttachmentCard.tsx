@@ -52,7 +52,8 @@ type AttachmentCardProps<T extends AttachmentItem> = {
   itemHref?: (item: T) => string | undefined;
   /** The row's second line; the item's description by default. */
   renderSub?: (item: T) => ReactNode;
-  getIconSrc?: (item: T) => string | undefined;
+  /** The item's own mark in the picker; the section icon otherwise. */
+  renderMark?: (item: T) => ReactNode;
   renderDetails?: (item: T) => ReactNode;
 };
 
@@ -81,7 +82,7 @@ export function AttachmentCard<T extends AttachmentItem>({
   renderTile,
   itemHref,
   renderSub,
-  getIconSrc,
+  renderMark,
   renderDetails,
 }: AttachmentCardProps<T>) {
   const t = useTranslations("AttachmentSection");
@@ -124,7 +125,7 @@ export function AttachmentCard<T extends AttachmentItem>({
                 {addLabel}
               </Button>
             }
-            getIconSrc={getIconSrc}
+            renderMark={renderMark}
             renderDetails={renderDetails}
           />
         }

@@ -37,7 +37,9 @@ class SchedulingNotSupportedError(Exception):
 
 
 class BudgetCapExceededError(Exception):
-    """Raised when a workspace's month-to-date spend has reached its monthly cap.
+    """Raised when a workspace's, or one agent's, month-to-date spend has reached its cap.
+
+    ``agent_id`` is set when the cap reached is the agent's own.
 
     Maps to HTTP 402 Payment Required at the API boundary. The numeric
     fields are surfaced in the response body so the UI can render an
@@ -53,13 +55,15 @@ class BudgetCapExceededError(Exception):
         current_mtd_usd: Money,
         cap_usd: Money,
         currency: str = "USD",
+        agent_id: str | None = None,
     ):
         self.workspace_id = workspace_id
         self.current_mtd_usd = current_mtd_usd
         self.cap_usd = cap_usd
         self.currency = currency
+        self.agent_id = agent_id
+        scope = f"Agent {agent_id}" if agent_id else f"Workspace {workspace_id}"
         # At the amounts' own precision: a cap below a cent must not read as 0.00.
         super().__init__(
-            f"Workspace {workspace_id} MTD spend {current_mtd_usd} {currency} "
-            f"has reached cap {cap_usd} {currency}"
+            f"{scope} MTD spend {current_mtd_usd} {currency} has reached cap {cap_usd} {currency}"
         )

@@ -558,7 +558,7 @@ class TestWebhookHTTPIntegration:
                 webhook_id=str(uuid4()),
                 webhook_type=WebhookType.TELEGRAM,
                 allowed_methods=["POST"],
-                validation_rules={"secret_token": "telegram-secret-token"},  # noqa: S106
+                validation_rules={"secret_token": "telegram-secret-token"},  # noqa: S106  # pragma: allowlist secret
                 created_by="test_user",
                 workspace_id="webhook-test-workspace",
             )

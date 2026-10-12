@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type {
   Core,
+  EdgeSingular,
   ElementDefinition,
   LayoutOptions,
   NodeSingular,
@@ -12,7 +13,14 @@ import type {
 import { Focus, Minus, Plus } from "lucide-react";
 import { ENTITY_ICONS, type EntityKind } from "@/lib/entity-icons";
 import { BRAND_MARKS } from "@/lib/entity-identity";
+import { cn } from "@/lib/utils";
 import type { NetworkNodeData } from "../types";
+import {
+  crossing,
+  flowLayout,
+  segmentsFor,
+  type Point,
+} from "../utils/flowLayout";
 import { hierarchyPositions, shelfPositions } from "../utils/hierarchyLayout";
 import { getNodeIdentity } from "../utils/networkConnections";
 import {
@@ -41,6 +49,7 @@ const PALETTE = {
   border: "text-border",
   background: "text-background",
   destructive: "text-destructive",
+  attention: "text-[color:var(--status-attention)]",
   internal: "text-emerald-600 dark:text-emerald-400",
   external: "text-amber-600 dark:text-amber-400",
   trigger: "text-violet-600 dark:text-violet-400",
@@ -50,6 +59,33 @@ const PALETTE = {
 type Palette = Record<keyof typeof PALETTE, string>;
 
 const ISOLATED_GROUP = "__network_isolated__";
+
+/**
+ * Closed outlines through each loop, smoothed: every point becomes the control
+ * of a curve between its neighbours' midpoints. Marching squares leaves a
+ * staircase at grid size; this irons it out.
+ */
+function smoothPath(loops: Point[][]) {
+  return loops
+    .map((loop) => {
+      const mid = (a: Point, b: Point) => ({
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+      });
+      const start = mid(loop[loop.length - 1], loop[0]);
+      return (
+        `M ${start.x} ${start.y} ` +
+        loop
+          .map((point, index) => {
+            const end = mid(point, loop[(index + 1) % loop.length]);
+            return `Q ${point.x} ${point.y} ${end.x} ${end.y}`;
+          })
+          .join(" ") +
+        " Z"
+      );
+    })
+    .join(" ");
+}
 
 const controlClass =
   "flex h-9 w-9 items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
@@ -311,6 +347,38 @@ function stylesheet(
       },
     },
     {
+      selector: "edge[?routed]",
+      style: {
+        "curve-style": "round-segments",
+        "edge-distances": "node-position",
+        "segment-weights": (edge: EdgeSingular) => edge.data("segW"),
+        "segment-distances": (edge: EdgeSingular) => edge.data("segD"),
+        "segment-radii": [24],
+      },
+    },
+    {
+      selector: "edge[crossing = 'outbound']",
+      style: {
+        width: 2,
+        "line-color": palette.external,
+        "target-arrow-color": palette.external,
+        opacity: 0.9,
+      },
+    },
+    {
+      selector: "edge[crossing = 'inbound']",
+      style: {
+        width: 2,
+        "line-color": palette.muted,
+        "target-arrow-color": palette.muted,
+        opacity: 0.8,
+      },
+    },
+    {
+      selector: "edge[crossing = 'inbound'][relation = 'person_access']",
+      style: { width: 1, opacity: 0.25 },
+    },
+    {
       selector: "node[kind = 'group']",
       style: {
         shape: "round-rectangle",
@@ -348,13 +416,7 @@ function stylesheet(
     },
     {
       selector: "node.issue",
-      style: {
-        "underlay-color": palette.destructive,
-        "underlay-opacity": 0.18,
-        "underlay-padding": 7,
-        "underlay-shape": "ellipse",
-        "border-color": palette.destructive,
-      },
+      style: { "border-width": 3, "border-color": palette.attention },
     },
   ];
 }
@@ -439,7 +501,7 @@ export default function NetworkCanvas({
   const probes = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const [ready, setReady] = useState(false);
-  const [zoom, setZoom] = useState(1);
+  const [viewport, setViewport] = useState({ zoom: 1, x: 0, y: 0 });
   const [theme, setTheme] = useState(0);
   const logos = useLogos(nodes);
   const handlers = useRef({ onSelectNode, onSelectEdge, onClear });
@@ -493,7 +555,11 @@ export default function NetworkCanvas({
           if (selection.current || !cy) return;
           cy.elements().removeClass("faded lit");
         });
-        cy.on("zoom", () => cy && setZoom(cy.zoom()));
+        cy.on("viewport", () => {
+          if (!cy) return;
+          const { x, y } = cy.pan();
+          setViewport({ zoom: cy.zoom(), x, y });
+        });
         cyRef.current = cy;
         setReady(true);
       }
@@ -508,9 +574,25 @@ export default function NetworkCanvas({
     };
   }, []);
 
+  const flow = useMemo(
+    () =>
+      lens === "flow"
+        ? flowLayout(graph, (node) => nodeSize(node.kind, node.degree))
+        : null,
+    [graph, lens]
+  );
   const elements = useMemo<ElementDefinition[]>(() => {
     const isolated = new Set(isolatedNodes(graph).map((node) => node.id));
-    const framed = isolated.size > 0 && isolated.size < graph.nodes.length;
+    const framed =
+      lens !== "flow" &&
+      isolated.size > 0 &&
+      isolated.size < graph.nodes.length;
+    const segments = (source: string, target: string, id: string) => {
+      const from = flow?.positions.get(source);
+      const to = flow?.positions.get(target);
+      const route = flow?.routes.get(id);
+      return from && to && route ? segmentsFor(from, to, route) : null;
+    };
     return [
       ...(framed
         ? [
@@ -539,24 +621,31 @@ export default function NetworkCanvas({
           issues: node.issues.length,
         },
       })),
-      ...graph.edges.map((edge) => ({
-        group: "edges" as const,
-        data: {
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          relation: edge.relation,
-          off: edge.off,
-          label:
-            edge.relation === "person_access"
-              ? t(edge.off ? "denied" : "allowed")
-              : relations.has(`relations.${edge.relation}`)
-                ? relations(`relations.${edge.relation}`)
-                : edge.relation,
-        },
-      })),
+      ...graph.edges.map((edge) => {
+        const route = segments(edge.source, edge.target, edge.id);
+        return {
+          group: "edges" as const,
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            relation: edge.relation,
+            off: edge.off,
+            crossing: (flow && crossing(edge, flow.zones)) ?? "none",
+            routed: route !== null,
+            segW: route?.weights,
+            segD: route?.distances,
+            label:
+              edge.relation === "person_access"
+                ? t(edge.off ? "denied" : "allowed")
+                : relations.has(`relations.${edge.relation}`)
+                  ? relations(`relations.${edge.relation}`)
+                  : edge.relation,
+          },
+        };
+      }),
     ];
-  }, [graph, t, relations]);
+  }, [graph, lens, flow, t, relations]);
   const structure = `${lens}#${elements.map((element) => element.data.id).join("|")}`;
 
   useEffect(() => {
@@ -606,7 +695,11 @@ export default function NetworkCanvas({
     // Settle the final layout instantly, then play one transition from where
     // every node was to where it lands, camera included — so switching lens
     // or adding a node moves the graph instead of rebuilding it.
-    if (connected.nonempty()) {
+    if (flow) {
+      movable.positions(
+        (node) => flow.positions.get(node.id()) ?? { x: 0, y: 0 }
+      );
+    } else if (connected.nonempty()) {
       if (lens === "overview") {
         // fcose starts from random positions; a fixed seed keeps the same
         // workspace looking the same between visits.
@@ -654,7 +747,7 @@ export default function NetworkCanvas({
           .positions((node) => positions.get(node.id()) ?? { x: 0, y: 0 });
       }
     }
-    if (isolated.nonempty()) {
+    if (!flow && isolated.nonempty()) {
       const ids = isolated.map((node) => node.id());
       let positions;
       if (connected.empty()) {
@@ -683,20 +776,31 @@ export default function NetworkCanvas({
       movable.map((node) => [node.id(), { ...node.position() }])
     );
     const box = cy.elements().boundingBox();
+    if (flow) {
+      for (const point of [...flow.perimeter.flat(), ...flow.labels]) {
+        box.x1 = Math.min(box.x1, point.x);
+        box.x2 = Math.max(box.x2, point.x);
+        box.y1 = Math.min(box.y1, point.y - 24);
+        box.y2 = Math.max(box.y2, point.y);
+      }
+      box.w = box.x2 - box.x1;
+      box.h = box.y2 - box.y1;
+    }
     const padding = 40;
+    const top = padding;
     const zoom = Math.min(
       cy.maxZoom(),
       Math.max(
         cy.minZoom(),
         Math.min(
           (cy.width() - 2 * padding) / Math.max(box.w, 1),
-          (cy.height() - 2 * padding) / Math.max(box.h, 1)
+          (cy.height() - top - padding) / Math.max(box.h, 1)
         )
       )
     );
     const pan = {
       x: cy.width() / 2 - zoom * (box.x1 + box.w / 2),
-      y: cy.height() / 2 - zoom * (box.y1 + box.h / 2),
+      y: top + (cy.height() - top - padding) / 2 - zoom * (box.y1 + box.h / 2),
     };
     if (!duration) {
       cy.viewport({ zoom, pan });
@@ -780,12 +884,65 @@ export default function NetworkCanvas({
   };
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full bg-[radial-gradient(hsl(var(--border))_1px,transparent_1px)] [background-size:22px_22px]">
+      {flow && flow.perimeter.length > 0 && (
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 h-full w-full overflow-hidden"
+        >
+          <g
+            transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.zoom})`}
+          >
+            <path
+              d={smoothPath(flow.perimeter)}
+              fillRule="evenodd"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+              className="fill-foreground/[0.02] stroke-muted-foreground/60"
+            />
+          </g>
+        </svg>
+      )}
+      {flow && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+        >
+          {flow.perimeter.length > 0 &&
+            (() => {
+              const top = flow.perimeter
+                .flat()
+                .reduce((best, point) => (point.y < best.y ? point : best));
+              return (
+                <FlowLabel
+                  x={top.x * viewport.zoom + viewport.x}
+                  y={top.y * viewport.zoom + viewport.y}
+                  className="text-muted-foreground"
+                >
+                  {t("lenses.flow.zones.inside")}
+                  <span className="tabular-nums">{flow.insideCount}</span>
+                </FlowLabel>
+              );
+            })()}
+          {flow.labels.map((label) => (
+            <FlowLabel
+              key={label.zone}
+              x={label.x * viewport.zoom + viewport.x}
+              y={label.y * viewport.zoom + viewport.y}
+              className="text-muted-foreground"
+            >
+              {t(`lenses.flow.zones.${label.zone}`)}
+              <span className="tabular-nums">{label.count}</span>
+            </FlowLabel>
+          ))}
+        </div>
+      )}
       <div
         ref={container}
         role="img"
         aria-label={ariaLabel}
-        className="h-full w-full bg-[radial-gradient(hsl(var(--border))_1px,transparent_1px)] [background-size:22px_22px]"
+        className="relative h-full w-full"
       />
       <div ref={sprite} hidden aria-hidden="true">
         {Object.values(KINDS).map((kind) => {
@@ -808,7 +965,7 @@ export default function NetworkCanvas({
           <Minus className="h-4 w-4" />
         </button>
         <span className="w-12 text-center text-xs tabular-nums text-muted-foreground">
-          {Math.round(zoom * 100)}%
+          {Math.round(viewport.zoom * 100)}%
         </span>
         <button
           type="button"
@@ -835,5 +992,29 @@ export default function NetworkCanvas({
         </button>
       </div>
     </div>
+  );
+}
+
+function FlowLabel({
+  x,
+  y,
+  className,
+  children,
+}: {
+  x: number;
+  y: number;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <p
+      className={cn(
+        "absolute flex -translate-x-1/2 -translate-y-full items-center gap-1.5 whitespace-nowrap pb-1.5 text-xs font-medium uppercase tracking-wide",
+        className
+      )}
+      style={{ left: x, top: y }}
+    >
+      {children}
+    </p>
   );
 }

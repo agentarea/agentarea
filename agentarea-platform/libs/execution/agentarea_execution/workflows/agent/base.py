@@ -63,6 +63,12 @@ class AgentWorkflowBase:
         self._continuation_count = 0
         self._delegated_cost: Money = ZERO
         self._monthly_cap_message: str | None = None
+        # The agent's month-to-date spend at the last cap check, and this run's
+        # own spend at that moment; None while the run's agent has no cap.
+        self._agent_spend_baseline: Money | None = None
+        self._agent_spend_mark: Money = ZERO
+        self._agent_cap_counts_service = False
+        self._agent_cap_currency: str | None = None
         # A resumed run whose log predates the logged system prompt writes one first.
         self._resume_system_prompt_missing = False
         # Old histories retain their recorded command sequence.

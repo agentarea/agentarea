@@ -24,9 +24,30 @@ from pydantic import (
 
 from .image_reference import validate_optional_image_reference, validate_spec_image
 
+
+def validate_spec_storage(json_spec: dict[str, Any]) -> dict[str, Any]:
+    """Refuse a ``storage`` key the MCP manager would reject when starting the app.
+
+    ``{"enabled": true}`` opts an MCP app into the manager's app storage; the
+    manager accepts no other value, so a typo fails here instead of at start.
+    """
+    storage = json_spec.get("storage")
+    if storage is None:
+        return json_spec
+    if (
+        not isinstance(storage, dict)
+        or set(storage) != {"enabled"}
+        or storage["enabled"] is not True
+    ):
+        raise ValueError('json_spec.storage must be exactly {"enabled": true}')
+    return json_spec
+
+
 # json_spec is read back in SQL (``json_spec->>'type'``); a NUL or unpaired
 # surrogate stored there broke every such query, so refuse it at the edge.
-JsonSpec = Annotated[dict[str, Any], AfterValidator(require_pg_text)]
+JsonSpec = Annotated[
+    dict[str, Any], AfterValidator(require_pg_text), AfterValidator(validate_spec_storage)
+]
 # A spec or instance json_spec whose ``image`` reaches ``docker run``.
 ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]
 ImageReference = Annotated[str | None, AfterValidator(validate_optional_image_reference)]

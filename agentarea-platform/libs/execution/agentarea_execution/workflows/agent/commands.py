@@ -142,6 +142,11 @@ class CommandsMixin(BudgetMixin):
             contract.pop("source_policy_ids", None)
             contract.pop("resolver_version", None)
             contract["budget"].pop("run_budget_usd", None)
+            # Monthly caps are read against current spend whenever the run
+            # resumes, so a cap that moved in the meantime is not a change in
+            # what this run was granted.
+            contract["budget"].pop("monthly_spend_cap_usd", None)
+            contract["budget"].pop("agent_monthly_spend_cap_usd", None)
             contract["execution"].pop("max_model_turns", None)
             contract["execution"].pop("max_tool_calls_total", None)
             contract["tokens"].pop("max_tokens", None)

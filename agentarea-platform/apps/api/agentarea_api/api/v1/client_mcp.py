@@ -10,8 +10,10 @@ client's workspace), and ``activate_skill`` over its skills.
 
 Every tool the client carries is still governed by the workspace policy: the
 caller's workspace+user policy is resolved with the resolver task snapshots use
-and judged by the one tool PDP (``decide_tool_policy``). A tool the policy does
-not allow is neither listed nor run, and every call's verdict is audited.
+and judged by the one tool PDP (``decide_tool_policy``). A tool the policy denies
+is neither listed nor run, and every call's verdict is audited. A call the
+policy holds for approval is recorded and answered with an approval link; the
+client's retry with the same arguments runs it once a person approved it.
 
 ``/client-mcp/{client_id}`` is the previous address, still mounted so harnesses
 configured against it keep working until they are re-installed.
@@ -37,6 +39,8 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationDecision,
     decide_tool_policy,
 )
+from agentarea_execution.workflows.helpers import approvers_for_tool
+from agentarea_governance.domain.tool_call_approvals import GateVerdict, ToolCallRequest
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from agentarea_mcp.domain.client_models import ClientPlatformToolset
@@ -124,6 +128,9 @@ class ClientScope:
     tool_policy: dict
     # How the caller appears in the audit trail.
     actor_type: str
+    # The client the call came through, as an approval request names it.
+    client_id: str | None = None
+    client_name: str | None = None
 
 
 def _platform_tools(client_id: str, attached: list[ClientPlatformToolset]) -> frozenset[str]:
@@ -257,6 +264,8 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                 user_context=user_ctx,
                 tool_policy=await _effective_tool_policy(session, user_ctx),
                 actor_type=_actor_type(principal, client_id),
+                client_id=client_id,
+                client_name=client.name,
             )
 
 
@@ -345,26 +354,22 @@ def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
 def _client_tool_decision(
     scope: ClientScope, tool_name: str, restricting_aliases: Sequence[str] = ()
 ) -> ToolAuthorizationDecision:
-    """The PDP's verdict on the client running ``tool_name``, approval folded into deny.
-
-    An approval requirement holds an agent's run until a human resolves the
-    escalation. A client's call is a synchronous request from a harness the
-    platform does not drive: there is no run to suspend and no channel to come
-    back on once someone approves, so the call is refused and says why.
-    """
-    decision = decide_tool_policy(
+    """The PDP's verdict on the client running ``tool_name``."""
+    return decide_tool_policy(
         scope.tool_policy,
         tool_name,
         aliases=_policy_aliases(scope, tool_name),
         restricting_aliases=restricting_aliases,
     )
-    if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
-        return ToolAuthorizationDecision(
-            ToolAuthorizationAction.REQUIRE_APPROVAL,
-            f"{decision.reason}; a client call cannot wait for approval, "
-            "so run it from an agent task instead",
-        )
-    return decision
+
+
+@dataclass(frozen=True)
+class ApprovalRequired:
+    """What a held call answers: the link a person opens to approve it."""
+
+    approval_id: str
+    url: str
+    message: str
 
 
 def _refusal(text: str) -> CallToolResult:
@@ -382,6 +387,7 @@ async def _record_tool_call(
     *,
     resource_type: str,
     resource_id: str,
+    approval_id: str | None = None,
 ) -> None:
     from agentarea_common.audit import AuditService
 
@@ -394,6 +400,8 @@ async def _record_tool_call(
     }
     if owner is not None:
         metadata["mcp_instance_id"] = str(owner[0].mcp_instance_id)
+    if approval_id is not None:
+        metadata["approval_id"] = approval_id
     await AuditService(session, scope.user_context).record(
         "tool.call.allowed" if decision.allowed else "tool.call.denied",
         resource_type,
@@ -432,6 +440,103 @@ async def _audit_tool_call(
         )
 
 
+def _held_call(
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    decision: ToolAuthorizationDecision,
+) -> ToolCallRequest:
+    """The exact call a person is asked to approve, with the approvers the policy names."""
+    owner = None if tool_name in scope.platform_tools else scope.proxy.owner_of(tool_name)
+    if owner is None:
+        instance_id, connector, raw_name = None, "AgentArea", tool_name
+    else:
+        member, raw_name = owner
+        instance_id = str(member.mcp_instance_id)
+        connector = scope.proxy.instance_names.get(instance_id) or instance_id
+    return ToolCallRequest(
+        mcp_instance_id=instance_id,
+        connector=connector,
+        tool=raw_name,
+        policy_name=tool_name,
+        arguments=arguments,
+        reason=decision.reason,
+        approvers=approvers_for_tool(
+            scope.tool_policy, tool_name, aliases=_policy_aliases(scope, tool_name)
+        ),
+        client_id=scope.client_id,
+        client_name=scope.client_name,
+    )
+
+
+async def _gate_held_call(
+    scope: ClientScope,
+    tool_name: str,
+    arguments: dict,
+    decision: ToolAuthorizationDecision,
+    *,
+    resource_type: str,
+    resource_id: str,
+) -> CallToolResult | ApprovalRequired | None:
+    """Pass a held call through its approval: ``None`` when an approval lets it run.
+
+    The approval is consumed and the verdict audited in one transaction, before
+    the call runs, so an approval is spent only by a call that is on record.
+    """
+    from agentarea_common.base.repository_factory import RepositoryFactory
+    from agentarea_common.base.tenant_scope import workspace_scope
+    from agentarea_common.config.database import get_database
+    from agentarea_common.workspaces.lookup import workspace_slug_for
+    from agentarea_governance.application.tool_call_approvals import ToolCallApprovalService
+
+    from .tool_call_approvals import approval_page_url
+
+    user_ctx = scope.user_context
+    request = _held_call(scope, tool_name, arguments, decision)
+    with workspace_scope(user_ctx.workspace_id):
+        async with get_database().session() as session:
+            outcome = await ToolCallApprovalService(RepositoryFactory(session, user_ctx)).gate(
+                request
+            )
+            approval = outcome.approval
+            if outcome.verdict is GateVerdict.RUN:
+                decision = ToolAuthorizationDecision(
+                    ToolAuthorizationAction.ALLOW,
+                    f"approved by {approval.decided_by} (approval {approval.id})",
+                )
+            elif outcome.verdict is GateVerdict.REJECTED:
+                decision = ToolAuthorizationDecision(
+                    ToolAuthorizationAction.DENY,
+                    f"rejected by {approval.decided_by} (approval {approval.id})",
+                )
+            await _record_tool_call(
+                session,
+                scope,
+                tool_name,
+                arguments,
+                decision,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                approval_id=approval.id,
+            )
+    if outcome.verdict is GateVerdict.RUN:
+        return None
+    if outcome.verdict is GateVerdict.REJECTED:
+        comment = f" ({approval.comment})" if approval.comment else ""
+        return _refusal(f"the user rejected this call{comment}. Change the arguments to ask again.")
+    slug = user_ctx.workspace_slug or await workspace_slug_for(user_ctx.workspace_id)
+    url = approval_page_url(slug, approval.id)
+    return ApprovalRequired(
+        approval_id=approval.id,
+        url=url,
+        message=(
+            f"The workspace policy requires approval to run {approval.tool} on "
+            f"{approval.connector}. Ask the user to open the link and approve; then call "
+            f"again with the same arguments: {url}"
+        ),
+    )
+
+
 async def _authorize_call(
     scope: ClientScope,
     tool_name: str,
@@ -440,9 +545,18 @@ async def _authorize_call(
     resource_type: str,
     resource_id: str,
     restricting_aliases: Sequence[str] = (),
-) -> CallToolResult | None:
-    """Judge and audit one call; ``None`` when it may run, else the refusal."""
+) -> CallToolResult | ApprovalRequired | None:
+    """Judge and audit one call; ``None`` when it may run, else the refusal or approval link."""
     decision = _client_tool_decision(scope, tool_name, restricting_aliases)
+    if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
+        return await _gate_held_call(
+            scope,
+            tool_name,
+            arguments,
+            decision,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
     await _audit_tool_call(
         scope,
         tool_name,
@@ -463,11 +577,12 @@ async def call_instance_tool(
     instance: Any,
     tool_name: str,
     arguments: dict,
-) -> CallToolResult:
+) -> CallToolResult | ApprovalRequired:
     """Run one of *instance*'s tools as the caller, the way a client's endpoint runs it.
 
     The same resolved url and credentials, the same policy verdict and the same
-    audit record, filed against the connection instead of a client.
+    audit record, filed against the connection instead of a client. A call the
+    policy holds for approval answers with its approval link.
     """
     proxy = await _aggregate_instances(instance.name, "", instance_service, [instance], {})
     if not proxy.members:
@@ -482,6 +597,7 @@ async def call_instance_tool(
         user_context=user_ctx,
         tool_policy=await _effective_tool_policy(session, user_ctx),
         actor_type="client" if user_ctx.client_id else "user",
+        client_id=user_ctx.client_id,
     )
     name = proxy.qualified_name(proxy.members[0], tool_name)
     refusal = await _authorize_call(
@@ -503,13 +619,13 @@ async def call_openapi_tool(
     connection: Any,
     tool_name: str,
     arguments: dict,
-) -> CallToolResult:
+) -> CallToolResult | ApprovalRequired:
     """Run one operation of an OpenAPI *connection* as the caller, the way an agent runs it.
 
     The request is the agent's ``OpenAPITool``; the policy verdict and the audit
     record are a connector tool's, filed against the connection. A rule naming
     the operation, the connection or its id governs the call, as it governs an
-    agent's.
+    agent's. A call the policy holds for approval answers with its approval link.
     """
     from agentarea_agents_sdk.tools.openapi_tool import OpenAPIToolFactory
 
@@ -531,6 +647,7 @@ async def call_openapi_tool(
         user_context=user_ctx,
         tool_policy=await _effective_tool_policy(session, user_ctx),
         actor_type="client" if user_ctx.client_id else "user",
+        client_id=user_ctx.client_id,
     )
     refusal = await _authorize_call(
         scope,
@@ -589,8 +706,13 @@ async def _list_tools(_ctx: object, _params: PaginatedRequestParams | None) -> L
         )
         for t in await scope.proxy.list_namespaced_tools()
     )
-    # Disclosed is a subset of authorized: a tool the client may not run is not offered.
-    tools = [tool for tool in tools if _client_tool_decision(scope, tool.name).allowed]
+    # Disclosed is a subset of authorized: a tool the client may never run is not
+    # offered. One held for approval is: an approval link lets it run.
+    tools = [
+        tool
+        for tool in tools
+        if _client_tool_decision(scope, tool.name).action is not ToolAuthorizationAction.DENY
+    ]
     if scope.skill_registry:
         tools.append(_activate_skill_tool(scope.skill_registry))
     return ListToolsResult(tools=tools)
@@ -630,6 +752,10 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         resource_type="client",
         resource_id=client_id,
     )
+    if isinstance(refusal, ApprovalRequired):
+        return CallToolResult(
+            content=[TextContent(type="text", text=refusal.message)], is_error=True
+        )
     if refusal is not None:
         return refusal
 

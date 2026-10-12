@@ -157,7 +157,24 @@ def _action_required(connector: Any, action: dict[str, Any]) -> str | InputRequi
     )
 
 
-def _call_result(connector: Any, tool: str, result: CallToolResult) -> str:
+def _call_result(
+    connector: Any, tool: str, result: CallToolResult | client_mcp.ApprovalRequired
+) -> str | InputRequiredResult:
+    if isinstance(result, client_mcp.ApprovalRequired):
+        elicitation = url_elicitation(result.url, result.message)
+        if elicitation is not None:
+            return elicitation
+        return json.dumps(
+            {
+                "approval_required": {
+                    "approval_id": result.approval_id,
+                    "url": result.url,
+                    "message": result.message,
+                },
+                "connector": connector.name,
+                "tool": tool,
+            }
+        )
     payload: dict[str, Any] = {
         "connector_id": str(connector.id),
         "connector": connector.name,
@@ -291,7 +308,10 @@ class ConnectorToolsToolset(Toolset):
 
         A tool marked destructive is not run until the user confirms: ask them,
         then call again with ``confirm=true``. A connector still waiting on a
-        sign-in or key answers with the link the user opens to connect it.
+        sign-in or key answers with the link the user opens to connect it. A
+        call the workspace policy holds for approval answers with an approval
+        link: ask the user to open it and approve, then call again with exactly
+        the same arguments — it runs once per approval.
 
         Args:
             connector: The connector's id or name.

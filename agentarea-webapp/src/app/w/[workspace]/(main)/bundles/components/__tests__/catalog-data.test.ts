@@ -175,13 +175,17 @@ describe("catalog data normalization", () => {
   assertEqual(
     normalize(
       "connections",
-      item({ name: "ai.agentarea.catalog/ahrefs", spec: { raw_spec: { title: "Ahrefs" } } })
+      item({
+        name: "ai.agentarea.catalog/ahrefs",
+        spec: { raw_spec: { title: "Ahrefs" } },
+      })
     ).title,
     "Ahrefs",
     "titles: a connection shows its own title, not the registry id"
   );
   assertEqual(
-    normalize("connections", item({ name: "io.github.acme/weather-mcp" })).title,
+    normalize("connections", item({ name: "io.github.acme/weather-mcp" }))
+      .title,
     "weather mcp",
     "titles: without a title the namespace is dropped"
   );

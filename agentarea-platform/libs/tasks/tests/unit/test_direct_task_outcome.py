@@ -230,6 +230,9 @@ async def test_direct_execution_counts_what_the_customer_pays(monkeypatch):
             "provider_cost_usd": to_money("0.01"),
         }
     ]
+    [line] = repository.record_costs.await_args.args[0]
+    assert (line.amount, line.currency, line.agent_id) == (to_money("0.95"), "RUB", task.agent_id)
+    assert (line.subject_id, line.managed_by) == ("model-1", "platform")
 
 
 @pytest.mark.asyncio

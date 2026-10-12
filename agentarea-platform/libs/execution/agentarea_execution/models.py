@@ -724,21 +724,30 @@ class UpdateTaskGovernanceSnapshotResult(BaseModel):
 
 
 class MonthlySpendCapRequest(BaseModel):
-    """Compare the workspace's month-to-date spend with the run's monthly cap."""
+    """Compare month-to-date spend with the run's monthly caps.
+
+    ``cap_usd`` is the workspace cap; ``agent_cap_usd`` the cap on ``agent_id``'s
+    own spend. Either may be absent, not both.
+    """
 
     workspace_id: str
-    cap_usd: Money
+    cap_usd: Money | None = None
     user_context_data: dict[str, Any]
+    agent_id: str | None = None
+    agent_cap_usd: Money | None = None
 
 
 class MonthlySpendCapResult(BaseModel):
     exceeded: bool
     month_to_date_usd: Money
-    cap_usd: Money
-    # ISO 4217 code of both amounts (the billing currency). The cap check runs
+    cap_usd: Money | None = None
+    # ISO 4217 code of the amounts (the billing currency). The cap check runs
     # before any priced call, so the workflow has no other way to name it yet.
     # None on results recorded before the field existed.
     currency: str | None = None
+    agent_exceeded: bool = False
+    agent_month_to_date_usd: Money | None = None
+    agent_cap_usd: Money | None = None
 
 
 class CompactMessagesRequest(BaseModel):

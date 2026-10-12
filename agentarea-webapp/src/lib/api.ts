@@ -22,6 +22,7 @@ import type {
   InvitationResponse,
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
+  ListToolCallApprovalsV1ToolCallApprovalsGetData,
   McpInstanceConsumer,
   McpServerCreate,
   McpServerInstanceCreate,
@@ -58,6 +59,7 @@ import type {
   SkillResponse,
   SkillUpdateRequest,
   TaskCreate,
+  ToolCallApprovalDecision,
   TriggerCreate,
   TriggerUpdate,
   UpdateWalletRequest,
@@ -358,6 +360,38 @@ export const resolveEscalation = async (
       }
     );
   return { data, error };
+};
+
+export const getToolCallApproval = async (approvalId: string) => {
+  const result =
+    await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
+      client: serverClient,
+      path: { approval_id: approvalId },
+    });
+  return withStatus(result);
+};
+
+export const listToolCallApprovals = async (
+  query?: ListToolCallApprovalsV1ToolCallApprovalsGetData["query"]
+) => {
+  const result = await sdk.listToolCallApprovalsV1ToolCallApprovalsGet({
+    client: serverClient,
+    query,
+  });
+  return withStatus(result);
+};
+
+export const decideToolCallApproval = async (
+  approvalId: string,
+  body: ToolCallApprovalDecision
+) => {
+  const result =
+    await sdk.decideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePost({
+      client: serverClient,
+      path: { approval_id: approvalId },
+      body,
+    });
+  return withStatus(result);
 };
 
 export const listPendingEscalations = async (

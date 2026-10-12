@@ -98,6 +98,16 @@ export function deriveOAuthConnectState({
   }
 }
 
+/** A rejected registration supersedes discovery, including server-provided preflight. */
+export function preflightAfterAuthorizeError(
+  preflight: OAuthPreflight | null,
+  code: string | null | undefined,
+  detail: string
+): OAuthPreflight | null {
+  if (!preflight || code !== "oauth_app_required") return preflight;
+  return { ...preflight, status: "oauth_app_required", detail };
+}
+
 /**
  * Whether a ready connection may instead use the person's own OAuth app: only
  * over the operator's app, whose consent screen names AgentArea, not them.

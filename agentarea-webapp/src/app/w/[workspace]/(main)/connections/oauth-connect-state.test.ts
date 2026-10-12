@@ -4,6 +4,7 @@ import {
   canAuthorize,
   canUseOwnApp,
   deriveOAuthConnectState,
+  preflightAfterAuthorizeError,
   summarizeAuthorization,
   type OAuthPreflight,
 } from "./oauth-connect-state";
@@ -27,6 +28,40 @@ function preflight(over: Partial<OAuthPreflight> = {}): OAuthPreflight {
 }
 
 describe("deriveOAuthConnectState", () => {
+  it("replaces advertised readiness after registration is refused and preserves app retry settings", () => {
+    const before = preflight({
+      redirect_uri: "https://app.example.com/callback",
+    });
+    const after = preflightAfterAuthorizeError(
+      before,
+      "oauth_app_required",
+      "Registration refused"
+    );
+    const state = deriveOAuthConnectState({
+      isUrlType: true,
+      preflight: after,
+    });
+    expect(state).toEqual({
+      kind: "needs_oauth_app",
+      connected: false,
+      reason: "Registration refused",
+      issuer: before.issuer,
+      redirectUri: before.redirect_uri,
+    });
+    expect(
+      buildAuthorizeRequest({ target: { instance_id: INSTANCE_ID }, state })
+    ).toBeNull();
+    expect(
+      buildAuthorizeRequest({
+        target: { instance_id: INSTANCE_ID },
+        state,
+        credentials: { client_id: "app", client_secret: "secret" },
+      })
+    ).toMatchObject({ credential_mode: "custom", client_id: "app" });
+    expect(preflightAfterAuthorizeError(after, null, "Network failure")).toBe(
+      after
+    );
+  });
   it("offers nothing until the preflight answer arrives", () => {
     expect(
       deriveOAuthConnectState({ isUrlType: true, preflight: null })

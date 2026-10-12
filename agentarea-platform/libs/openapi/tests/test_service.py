@@ -6,10 +6,10 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_common.testing.flows import MainFlow
 from agentarea_common.testing.mocks import TestSecretManager as FakeSecretManager
 from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application import service as service_module
-from agentarea_common.testing.flows import MainFlow
 from agentarea_openapi.application.service import (
     MissingHeaderSecretError,
     MissingQueryParamSecretError,
