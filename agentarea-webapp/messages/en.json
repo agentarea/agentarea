@@ -914,7 +914,11 @@
         "needsAppTitleConnected": "Re-authorizing needs your OAuth app",
         "needsAppHint": "Enter a client ID and secret, or pick them from workspace secrets.",
         "redirectUriLabel": "Redirect URI to register with the provider",
-        "unauthorizedNote": "This server lists its tools without a token, so verification succeeds while nobody is authorized — tool calls stay unauthorized until you connect."
+        "unauthorizedNote": "This server lists its tools without a token, so verification succeeds while nobody is authorized — tool calls stay unauthorized until you connect.",
+        "useOwnApp": "Use your own OAuth app",
+        "usePlatformApp": "Use AgentArea's OAuth app",
+        "ownAppTitle": "Your own OAuth app",
+        "ownAppDetail": "Sign in through an OAuth app you registered with the provider instead of AgentArea's."
       },
       "status": {
         "stopped": "Stopped",

@@ -1444,95 +1444,6 @@ export type CatalogConnection = {
 };
 
 /**
- * CatalogConnectionPreflight
- *
- * What the connect form needs to know before it offers Connect.
- *
- * ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
- * ``oauth_app_required`` — the user must register their own app first.
- */
-export type CatalogConnectionPreflight = {
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Detail
-     */
-    detail: string;
-    /**
-     * Existing Connections
-     */
-    existing_connections?: Array<CatalogConnection>;
-    /**
-     * Item Id
-     */
-    item_id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Redirect Uri
-     */
-    redirect_uri: string;
-    /**
-     * Status
-     */
-    status: 'ready' | 'oauth_app_required';
-};
-
-/**
- * CatalogConnectionRequest
- *
- * Connect with AgentArea credentials, or override them from Advanced.
- */
-export type CatalogConnectionRequest = {
-    /**
-     * Client Id
-     */
-    client_id?: string | null;
-    /**
-     * Client Id Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client ID.
-     */
-    client_id_secret_id?: string | null;
-    /**
-     * Client Secret
-     */
-    client_secret?: string | null;
-    /**
-     * Client Secret Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client secret.
-     */
-    client_secret_secret_id?: string | null;
-    /**
-     * Credential Mode
-     */
-    credential_mode?: 'managed' | 'custom';
-    /**
-     * Return To
-     */
-    return_to?: string;
-};
-
-/**
- * CatalogConnectionResponse
- */
-export type CatalogConnectionResponse = {
-    /**
-     * Authorize Url
-     */
-    authorize_url: string;
-    /**
-     * Connection Id
-     */
-    connection_id: string;
-};
-
-/**
  * CatalogItemCreate
  *
  * Definition published directly into a platform-managed catalog.
@@ -3256,96 +3167,6 @@ export type McpInstanceHealthResponse = {
 };
 
 /**
- * MCPOAuthAuthorizeRequest
- *
- * Start an OAuth flow for one MCP instance.
- *
- * ``auto`` registers AgentArea with the authorization server (RFC 7591), or
- * uses the operator's platform app when the server has no registration.
- * ``custom`` uses an OAuth app the workspace registered with the provider —
- * the only option when the provider has no Dynamic Client Registration.
- */
-export type McpoAuthAuthorizeRequest = {
-    /**
-     * Client Id
-     */
-    client_id?: string | null;
-    /**
-     * Client Id Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client ID.
-     */
-    client_id_secret_id?: string | null;
-    /**
-     * Client Secret
-     */
-    client_secret?: string | null;
-    /**
-     * Client Secret Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client secret.
-     */
-    client_secret_secret_id?: string | null;
-    /**
-     * Credential Mode
-     */
-    credential_mode?: 'auto' | 'custom';
-    /**
-     * Instance Id
-     */
-    instance_id: string;
-    /**
-     * Return To
-     */
-    return_to?: string;
-};
-
-/**
- * MCPOAuthPreflightResponse
- *
- * What the UI needs before it can offer a Connect action.
- *
- * ``ready`` — Connect can run unattended (the server supports DCR, or the
- * operator registered a platform app for it).
- * ``oauth_app_required`` — ask for a client ID/secret first.
- * ``unsupported`` — this server cannot be authorized this way; say why.
- */
-export type McpoAuthPreflightResponse = {
-    /**
-     * Authorization Endpoint
-     */
-    authorization_endpoint?: string | null;
-    /**
-     * Connected
-     */
-    connected: boolean;
-    /**
-     * Detail
-     */
-    detail?: string;
-    /**
-     * Instance Id
-     */
-    instance_id?: string | null;
-    /**
-     * Issuer
-     */
-    issuer?: string | null;
-    /**
-     * Scopes
-     */
-    scopes?: Array<string>;
-    /**
-     * Server Id
-     */
-    server_id?: string | null;
-    /**
-     * Status
-     */
-    status: 'ready' | 'oauth_app_required' | 'unsupported';
-};
-
-/**
  * MCPServerConnectionCreateRequest
  */
 export type McpServerConnectionCreateRequest = {
@@ -4402,6 +4223,72 @@ export type NetworkTopologyResponse = {
 };
 
 /**
+ * OAuthAuthorizeRequest
+ *
+ * Start a sign-in for one MCP instance or one catalog API.
+ *
+ * ``auto`` uses the operator's platform app when one serves the provider, else
+ * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
+ * workspace registered with the provider, and overrides either.
+ */
+export type OAuthAuthorizeRequest = {
+    /**
+     * Catalog Item Id
+     *
+     * Catalog API to connect; the connection is created by this request.
+     */
+    catalog_item_id?: string | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Client Id Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client ID.
+     */
+    client_id_secret_id?: string | null;
+    /**
+     * Client Secret
+     */
+    client_secret?: string | null;
+    /**
+     * Client Secret Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client secret.
+     */
+    client_secret_secret_id?: string | null;
+    /**
+     * Credential Mode
+     */
+    credential_mode?: 'auto' | 'custom';
+    /**
+     * Instance Id
+     *
+     * MCP instance to sign in to.
+     */
+    instance_id?: string | null;
+    /**
+     * Return To
+     */
+    return_to?: string;
+};
+
+/**
+ * OAuthAuthorizeResponse
+ */
+export type OAuthAuthorizeResponse = {
+    /**
+     * Authorize Url
+     */
+    authorize_url: string;
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+};
+
+/**
  * OAuthLinkCreateRequest
  */
 export type OAuthLinkCreateRequest = {
@@ -4471,6 +4358,51 @@ export type OAuthLinkResponse = {
      * Token
      */
     token: string;
+};
+
+/**
+ * OAuthPreflightResponse
+ *
+ * What the UI needs before it can offer Connect.
+ *
+ * ``ready`` — Connect runs unattended, with the client ``credential_source``
+ * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * ``oauth_app_required`` — ask for a client ID/secret first.
+ * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
+ */
+export type OAuthPreflightResponse = {
+    /**
+     * Authorization Endpoint
+     */
+    authorization_endpoint?: string | null;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Credential Source
+     */
+    credential_source?: 'platform' | 'dynamic' | null;
+    /**
+     * Detail
+     */
+    detail?: string;
+    /**
+     * Issuer
+     */
+    issuer?: string | null;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri: string;
+    /**
+     * Scopes
+     */
+    scopes?: Array<string>;
+    /**
+     * Status
+     */
+    status: 'ready' | 'oauth_app_required' | 'unsupported';
 };
 
 /**
@@ -9840,46 +9772,6 @@ export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses = {
     200: unknown;
 };
 
-export type OauthCallbackV1ConnectionsOauthCallbackGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Code
-         */
-        code?: string | null;
-        /**
-         * State
-         */
-        state?: string | null;
-        /**
-         * Error
-         */
-        error?: string | null;
-        /**
-         * Error Description
-         */
-        error_description?: string | null;
-    };
-    url: '/v1/connections/oauth/callback';
-};
-
-export type OauthCallbackV1ConnectionsOauthCallbackGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type OauthCallbackV1ConnectionsOauthCallbackGetError = OauthCallbackV1ConnectionsOauthCallbackGetErrors[keyof OauthCallbackV1ConnectionsOauthCallbackGetErrors];
-
-export type OauthCallbackV1ConnectionsOauthCallbackGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-
 export type AcceptInvitationV1InvitationsAcceptPostData = {
     body: AcceptInvitationBody;
     path?: never;
@@ -9929,46 +9821,6 @@ export type PreviewInvitationV1InvitationsPreviewPostResponses = {
 };
 
 export type PreviewInvitationV1InvitationsPreviewPostResponse = PreviewInvitationV1InvitationsPreviewPostResponses[keyof PreviewInvitationV1InvitationsPreviewPostResponses];
-
-export type OauthCallbackV1McpOauthCallbackGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Code
-         */
-        code?: string;
-        /**
-         * State
-         */
-        state?: string;
-        /**
-         * Error
-         */
-        error?: string;
-        /**
-         * Error Description
-         */
-        error_description?: string;
-    };
-    url: '/v1/mcp-oauth/callback';
-};
-
-export type OauthCallbackV1McpOauthCallbackGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type OauthCallbackV1McpOauthCallbackGetError = OauthCallbackV1McpOauthCallbackGetErrors[keyof OauthCallbackV1McpOauthCallbackGetErrors];
-
-export type OauthCallbackV1McpOauthCallbackGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 
 export type ProxyInstanceV1McpInstanceIdMcpDeleteData = {
     body?: never;
@@ -10126,6 +9978,46 @@ export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse
 };
 
 export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse = UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses[keyof UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses];
+
+export type OauthCallbackV1OauthCallbackGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Code
+         */
+        code?: string | null;
+        /**
+         * State
+         */
+        state?: string | null;
+        /**
+         * Error
+         */
+        error?: string | null;
+        /**
+         * Error Description
+         */
+        error_description?: string | null;
+    };
+    url: '/v1/oauth/callback';
+};
+
+export type OauthCallbackV1OauthCallbackGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthCallbackV1OauthCallbackGetError = OauthCallbackV1OauthCallbackGetErrors[keyof OauthCallbackV1OauthCallbackGetErrors];
+
+export type OauthCallbackV1OauthCallbackGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 
 export type GetPricingCurrencyV1PricingCurrencyGetData = {
     body?: never;
@@ -12288,66 +12180,6 @@ export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses =
 
 export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses];
 
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData = {
-    body: CatalogConnectionRequest;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/connections/catalog/{item_id}/connect';
-};
-
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostError = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors];
-
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogConnectionResponse;
-};
-
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses];
-
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData = {
-    body?: never;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight';
-};
-
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetError = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors];
-
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogConnectionPreflight;
-};
-
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses];
-
 export type GetDashboardV1DashboardGetData = {
     body?: never;
     path?: never;
@@ -13196,73 +13028,6 @@ export type GetOauthLinkV1McpOauthLinksLinkIdGetResponses = {
 };
 
 export type GetOauthLinkV1McpOauthLinksLinkIdGetResponse = GetOauthLinkV1McpOauthLinksLinkIdGetResponses[keyof GetOauthLinkV1McpOauthLinksLinkIdGetResponses];
-
-export type OauthAuthorizeV1McpOauthAuthorizePostData = {
-    body: McpoAuthAuthorizeRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/workspaces/{workspace}/mcp-oauth/authorize';
-};
-
-export type OauthAuthorizeV1McpOauthAuthorizePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type OauthAuthorizeV1McpOauthAuthorizePostError = OauthAuthorizeV1McpOauthAuthorizePostErrors[keyof OauthAuthorizeV1McpOauthAuthorizePostErrors];
-
-export type OauthAuthorizeV1McpOauthAuthorizePostResponses = {
-    /**
-     * Response Oauth Authorize V1 Mcp Oauth Authorize Post
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: string;
-    };
-};
-
-export type OauthAuthorizeV1McpOauthAuthorizePostResponse = OauthAuthorizeV1McpOauthAuthorizePostResponses[keyof OauthAuthorizeV1McpOauthAuthorizePostResponses];
-
-export type OauthPreflightV1McpOauthPreflightGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Instance Id
-         *
-         * MCP instance to inspect
-         */
-        instance_id?: string | null;
-        /**
-         * Server Id
-         *
-         * Catalog spec to inspect before any instance exists
-         */
-        server_id?: string | null;
-    };
-    url: '/v1/workspaces/{workspace}/mcp-oauth/preflight';
-};
-
-export type OauthPreflightV1McpOauthPreflightGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-
-export type OauthPreflightV1McpOauthPreflightGetError = OauthPreflightV1McpOauthPreflightGetErrors[keyof OauthPreflightV1McpOauthPreflightGetErrors];
-
-export type OauthPreflightV1McpOauthPreflightGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpoAuthPreflightResponse;
-};
-
-export type OauthPreflightV1McpOauthPreflightGetResponse = OauthPreflightV1McpOauthPreflightGetResponses[keyof OauthPreflightV1McpOauthPreflightGetResponses];
 
 export type ListMcpServerInstancesV1McpServerInstancesGetData = {
     body?: never;
@@ -14503,6 +14268,75 @@ export type GetNetworkTopologyV1NetworkTopologyGetResponses = {
 };
 
 export type GetNetworkTopologyV1NetworkTopologyGetResponse = GetNetworkTopologyV1NetworkTopologyGetResponses[keyof GetNetworkTopologyV1NetworkTopologyGetResponses];
+
+export type OauthAuthorizeV1OauthAuthorizePostData = {
+    body: OAuthAuthorizeRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/oauth/authorize';
+};
+
+export type OauthAuthorizeV1OauthAuthorizePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthAuthorizeV1OauthAuthorizePostError = OauthAuthorizeV1OauthAuthorizePostErrors[keyof OauthAuthorizeV1OauthAuthorizePostErrors];
+
+export type OauthAuthorizeV1OauthAuthorizePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthAuthorizeResponse;
+};
+
+export type OauthAuthorizeV1OauthAuthorizePostResponse = OauthAuthorizeV1OauthAuthorizePostResponses[keyof OauthAuthorizeV1OauthAuthorizePostResponses];
+
+export type OauthPreflightV1OauthPreflightGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance to inspect
+         */
+        instance_id?: string | null;
+        /**
+         * Server Id
+         *
+         * Catalog MCP spec to inspect before any instance exists
+         */
+        server_id?: string | null;
+        /**
+         * Catalog Item Id
+         *
+         * Catalog API to inspect before connecting it
+         */
+        catalog_item_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/preflight';
+};
+
+export type OauthPreflightV1OauthPreflightGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthPreflightV1OauthPreflightGetError = OauthPreflightV1OauthPreflightGetErrors[keyof OauthPreflightV1OauthPreflightGetErrors];
+
+export type OauthPreflightV1OauthPreflightGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthPreflightResponse;
+};
+
+export type OauthPreflightV1OauthPreflightGetResponse = OauthPreflightV1OauthPreflightGetResponses[keyof OauthPreflightV1OauthPreflightGetResponses];
 
 export type ListConnectionsV1OpenapiConnectionsGetData = {
     body?: never;

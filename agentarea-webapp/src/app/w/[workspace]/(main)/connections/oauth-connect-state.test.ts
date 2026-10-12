@@ -1,21 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAuthorizeRequest,
-  buildCatalogConnectRequest,
   canAuthorize,
-  catalogPreflightToMCP,
+  canUseOwnApp,
   deriveOAuthConnectState,
   preflightAfterAuthorizeError,
   summarizeAuthorization,
-  type MCPOAuthPreflight,
+  type OAuthPreflight,
 } from "./oauth-connect-state";
 
 const INSTANCE_ID = "76216436-01e9-4ebc-a8d5-9023ed773cce";
+const ITEM_ID = "0b5a3e0e-7d0a-4a43-9c64-0d1f6f3e9b11";
+const REDIRECT_URI = "https://api.agentarea.ru/v1/oauth/callback";
 
-function preflight(over: Partial<MCPOAuthPreflight> = {}): MCPOAuthPreflight {
+function preflight(over: Partial<OAuthPreflight> = {}): OAuthPreflight {
   return {
-    instance_id: INSTANCE_ID,
     status: "ready",
+    credential_source: "dynamic",
+    redirect_uri: REDIRECT_URI,
     connected: false,
     detail: "",
     issuer: "https://accounts.google.com",
@@ -47,11 +49,11 @@ describe("deriveOAuthConnectState", () => {
       redirectUri: before.redirect_uri,
     });
     expect(
-      buildAuthorizeRequest({ instanceId: INSTANCE_ID, state })
+      buildAuthorizeRequest({ target: { instance_id: INSTANCE_ID }, state })
     ).toBeNull();
     expect(
       buildAuthorizeRequest({
-        instanceId: INSTANCE_ID,
+        target: { instance_id: INSTANCE_ID },
         state,
         credentials: { client_id: "app", client_secret: "secret" },
       })
@@ -82,7 +84,51 @@ describe("deriveOAuthConnectState", () => {
       reason:
         "accounts.google.com does not support Dynamic Client Registration",
       issuer: "https://accounts.google.com",
+      redirectUri: REDIRECT_URI,
     });
+  });
+
+  it("names the client a ready connection signs in with", () => {
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({ credential_source: "platform" }),
+      })
+    ).toEqual({
+      kind: "ready",
+      connected: false,
+      credentialSource: "platform",
+    });
+  });
+
+  it("asks for the person's own app when they choose it over the platform app", () => {
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: preflight({ credential_source: "platform" }),
+        useOwnApp: true,
+      })
+    ).toEqual({
+      kind: "needs_oauth_app",
+      connected: false,
+      reason: "",
+      issuer: "https://accounts.google.com",
+      redirectUri: REDIRECT_URI,
+      optional: true,
+    });
+  });
+
+  it("keeps a dynamically registered connection on its own client", () => {
+    const ready = preflight({ credential_source: "dynamic" });
+
+    expect(canUseOwnApp(ready)).toBe(false);
+    expect(
+      deriveOAuthConnectState({
+        isUrlType: true,
+        preflight: ready,
+        useOwnApp: true,
+      })
+    ).toEqual({ kind: "ready", connected: false, credentialSource: "dynamic" });
   });
 
   it("carries the reason through when the server cannot be authorized at all", () => {
@@ -121,7 +167,7 @@ describe("buildAuthorizeRequest", () => {
   it("registers dynamically when the provider supports it", () => {
     expect(
       buildAuthorizeRequest({
-        instanceId: INSTANCE_ID,
+        target: { instance_id: INSTANCE_ID },
         state: { kind: "ready", connected: false },
         returnTo: "https://app.agentarea.ru",
       })
@@ -142,7 +188,7 @@ describe("buildAuthorizeRequest", () => {
   it("sends typed-in credentials as a custom app", () => {
     expect(
       buildAuthorizeRequest({
-        instanceId: INSTANCE_ID,
+        target: { instance_id: INSTANCE_ID },
         state: needsApp,
         credentials: { client_id: "  cid  ", client_secret: "shh" },
       })
@@ -156,7 +202,7 @@ describe("buildAuthorizeRequest", () => {
 
   it("sends workspace secret references without their values", () => {
     const request = buildAuthorizeRequest({
-      instanceId: INSTANCE_ID,
+      target: { instance_id: INSTANCE_ID },
       state: needsApp,
       credentials: {
         client_id_secret_id: "secret-1",
@@ -175,7 +221,7 @@ describe("buildAuthorizeRequest", () => {
   it("refuses a half-filled form rather than posting a request the API rejects", () => {
     expect(
       buildAuthorizeRequest({
-        instanceId: INSTANCE_ID,
+        target: { instance_id: INSTANCE_ID },
         state: needsApp,
         credentials: { client_id: "cid" },
       })
@@ -183,7 +229,7 @@ describe("buildAuthorizeRequest", () => {
 
     expect(
       buildAuthorizeRequest({
-        instanceId: INSTANCE_ID,
+        target: { instance_id: INSTANCE_ID },
         state: needsApp,
         credentials: {
           client_id: "cid",
@@ -197,7 +243,7 @@ describe("buildAuthorizeRequest", () => {
   it("has nothing to send while the server cannot be authorized", () => {
     expect(
       buildAuthorizeRequest({
-        instanceId: INSTANCE_ID,
+        target: { instance_id: INSTANCE_ID },
         state: { kind: "unsupported", reason: "no oauth" },
         credentials: { client_id: "cid", client_secret: "shh" },
       })
@@ -294,74 +340,53 @@ describe("canAuthorize", () => {
   });
 });
 
-describe("catalog connections", () => {
-  const REDIRECT_URI = "https://api.agentarea.ru/v1/connections/oauth/callback";
+describe("catalog APIs", () => {
+  const needsApp = {
+    kind: "needs_oauth_app",
+    connected: false,
+    reason: "No AgentArea OAuth app for Yandex Metrica",
+    issuer: null,
+    redirectUri: REDIRECT_URI,
+  } as const;
 
-  function catalogState(status: "ready" | "oauth_app_required") {
-    return deriveOAuthConnectState({
-      isUrlType: true,
-      preflight: catalogPreflightToMCP({
-        item_id: INSTANCE_ID,
-        name: "Yandex Metrica",
-        status,
-        detail: "No AgentArea OAuth app for Yandex Metrica",
-        redirect_uri: REDIRECT_URI,
-      }),
-    });
-  }
-
-  it("offers Connect on the platform app when the installation holds one", () => {
-    expect(catalogState("ready")).toEqual({ kind: "ready", connected: false });
-  });
-
-  it("asks for the user's own app and names the redirect URI to register", () => {
-    expect(catalogState("oauth_app_required")).toEqual({
-      kind: "needs_oauth_app",
-      connected: false,
-      reason: "No AgentArea OAuth app for Yandex Metrica",
-      issuer: null,
-      redirectUri: REDIRECT_URI,
-    });
-  });
-
-  it("connects on the platform app without any credentials", () => {
+  it("connects through the same request as an MCP instance", () => {
     expect(
-      buildCatalogConnectRequest({
-        state: catalogState("ready"),
+      buildAuthorizeRequest({
+        target: { catalog_item_id: ITEM_ID },
+        state: {
+          kind: "ready",
+          connected: false,
+          credentialSource: "platform",
+        },
         returnTo: "https://app.agentarea.ru",
       })
     ).toEqual({
-      credential_mode: "managed",
+      catalog_item_id: ITEM_ID,
+      credential_mode: "auto",
       return_to: "https://app.agentarea.ru",
     });
   });
 
-  it("sends the user's own app as custom credentials", () => {
+  it("sends the user's own app under the same one-source-per-credential rule", () => {
     expect(
-      buildCatalogConnectRequest({
-        state: catalogState("oauth_app_required"),
+      buildAuthorizeRequest({
+        target: { catalog_item_id: ITEM_ID },
+        state: needsApp,
         credentials: {
           client_id: " cid ",
           client_secret_secret_id: "secret-2",
         },
       })
     ).toEqual({
+      catalog_item_id: ITEM_ID,
       credential_mode: "custom",
       client_id: "cid",
       client_secret_secret_id: "secret-2",
     });
-  });
-
-  it("applies the same one-source-per-credential rule as MCP", () => {
     expect(
-      buildCatalogConnectRequest({
-        state: catalogState("oauth_app_required"),
-        credentials: { client_id: "cid" },
-      })
-    ).toBeNull();
-    expect(
-      buildCatalogConnectRequest({
-        state: catalogState("oauth_app_required"),
+      buildAuthorizeRequest({
+        target: { catalog_item_id: ITEM_ID },
+        state: needsApp,
         credentials: {
           client_id: "cid",
           client_id_secret_id: "secret-1",

@@ -4,9 +4,6 @@ import { z } from "zod";
 import type {
   AgentResponse,
   AnalyzeRequest,
-  CatalogConnectionPreflight,
-  CatalogConnectionRequest,
-  CatalogConnectionResponse,
   ImportPreview,
   InstallRequest,
   InstallResult,
@@ -19,9 +16,6 @@ import {
   zAnalyzeBundleV1BundlesAnalyzePostBody,
   zAnalyzeBundleV1BundlesAnalyzePostResponse,
   zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
-  zCatalogConnectionPreflight,
-  zCatalogConnectionRequest,
-  zCatalogConnectionResponse,
   zGetAgentV1AgentsAgentIdGetResponse,
   zGetCatalogItemV1RegistriesCatalogItemsItemIdGetResponse,
   zGetSkillContentV1SkillsSkillIdContentGetResponse,
@@ -37,7 +31,6 @@ import {
 import {
   analyzeBundle,
   browseCatalog,
-  connectCatalogItem,
   getAgent,
   getCatalogItem,
   getSkillContent,
@@ -48,7 +41,6 @@ import {
   installSkill,
   listAgents,
   listModelInstances,
-  preflightCatalogConnection,
   updateAgent,
 } from "@/lib/api";
 import {
@@ -160,25 +152,6 @@ export async function fetchCatalogItemAction(
     data,
     status
   );
-}
-
-export async function catalogConnectionPreflightAction(
-  itemId: string
-): Promise<ActionResult<CatalogConnectionPreflight>> {
-  const { data, error, status } = await preflightCatalogConnection(itemId);
-  if (error || !data) return { error, status };
-  return checked(zCatalogConnectionPreflight, data, status);
-}
-
-export async function connectCatalogConnectionAction(
-  itemId: string,
-  input: CatalogConnectionRequest
-): Promise<ActionResult<CatalogConnectionResponse>> {
-  const body = checked(zCatalogConnectionRequest, input);
-  if (!body.data) return { error: body.error, status: body.status };
-  const { data, error, status } = await connectCatalogItem(itemId, body.data);
-  if (error || !data) return { error, status };
-  return checked(zCatalogConnectionResponse, data, status);
 }
 
 export async function analyzeBundleAction(

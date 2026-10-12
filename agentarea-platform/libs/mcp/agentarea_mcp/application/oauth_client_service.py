@@ -6,7 +6,9 @@ Copilot), this service handles the discovery → registration → authorization 
     1. discover_auth_server(mcp_url)  — RFC 9728 + RFC 8414 discovery
     2. register_client(as_metadata)   — RFC 7591 Dynamic Client Registration
     3. build_authorize_url(...)       — OAuth 2.1 + PKCE (S256)
-    4. exchange_code(...)             — Authorization code → access token
+
+The code exchange and every refresh run in ``MCPAuthService``, for every
+connection kind.
 
 References:
     - MCP Authorization: https://modelcontextprotocol.io/specification/draft/basic/authorization
@@ -28,7 +30,12 @@ from urllib.parse import urlencode, urlparse
 import httpx
 from agentarea_common.utils.url_safety import safe_async_client
 
-from agentarea_mcp.application.platform_oauth_app import find_platform_oauth_app
+from agentarea_mcp.application.oauth_profile import (
+    CredentialSource,
+    OAuthProfile,
+    auto_credential_source,
+)
+from agentarea_mcp.application.platform_oauth_app import url_origin
 
 logger = logging.getLogger(__name__)
 
@@ -122,16 +129,17 @@ class OAuthClientCredentials:
 class OAuthCapability:
     """Whether a remote MCP server can be authorized, and what it takes.
 
-    ``ready`` — the provider supports dynamic registration, or the operator
-    configured a platform app for it, so Connect runs on its own.
-    ``oauth_app_required`` — neither, so the workspace brings an OAuth app it
-    registered with the provider. ``unsupported`` — no OAuth
-    discovery here; ``detail`` says why.
+    ``ready`` — the operator configured a platform app for it, or the
+    provider supports dynamic registration, so Connect runs on its own;
+    ``credential_source`` says which. ``oauth_app_required`` — neither, so the
+    workspace brings an OAuth app it registered with the provider.
+    ``unsupported`` — no OAuth discovery here; ``detail`` says why.
     """
 
     status: Literal["ready", "oauth_app_required", "unsupported"]
     detail: str = ""
     metadata: AuthServerMetadata | None = None
+    credential_source: CredentialSource | None = None
 
     @property
     def advertises_oauth(self) -> bool:
@@ -165,10 +173,9 @@ class MCPOAuthClientService:
         except httpx.HTTPError as exc:
             logger.info("OAuth discovery could not reach %s", mcp_url, exc_info=True)
             return OAuthCapability(status="unsupported", detail=f"Could not reach {mcp_url}: {exc}")
-        if metadata.registration_endpoint:
-            return OAuthCapability(status="ready", metadata=metadata)
-        if find_platform_oauth_app(metadata.issuer, mcp_url) is not None:
-            return OAuthCapability(status="ready", metadata=metadata)
+        source = auto_credential_source(discovered_profile(metadata, mcp_url))
+        if source is not None:
+            return OAuthCapability(status="ready", metadata=metadata, credential_source=source)
         return OAuthCapability(
             status="oauth_app_required",
             detail=oauth_app_required_detail(metadata.issuer),
@@ -341,15 +348,17 @@ class MCPOAuthClientService:
 
     async def register_client(
         self,
-        as_metadata: AuthServerMetadata,
+        registration_endpoint: str | None,
         redirect_uri: str,
         client_name: str = "AgentArea",
     ) -> OAuthClientCredentials:
         """Dynamic Client Registration (RFC 7591) with the remote AS.
 
-        Returns client_id (and optionally client_secret) for the authorization flow.
+        Returns client_id (and optionally client_secret) for the authorization
+        flow. A client is registered per authorization, so its redirect URI is
+        always the one this deployment answers at now.
         """
-        if not as_metadata.registration_endpoint:
+        if not registration_endpoint:
             raise MCPOAuthDiscoveryError(
                 "Authorization server does not support Dynamic Client Registration "
                 "(no registration_endpoint). Pre-registered credentials required."
@@ -366,7 +375,7 @@ class MCPOAuthClientService:
 
         async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
             resp = await client.post(
-                as_metadata.registration_endpoint,
+                registration_endpoint,
                 json=payload,
                 headers={"Content-Type": "application/json"},
             )
@@ -380,28 +389,27 @@ class MCPOAuthClientService:
 
     def build_authorize_url(
         self,
-        as_metadata: AuthServerMetadata,
+        profile: OAuthProfile,
         client_id: str,
         redirect_uri: str,
         pkce: PKCEPair,
         state: str,
         scopes: list[str] | None = None,
-        extra_params: Mapping[str, str] | None = None,
     ) -> str:
         """Build the OAuth 2.1 authorization URL with PKCE and resource indicator.
 
-        ``extra_params`` carries what a provider requires beyond OAuth 2.1, as
-        its catalog spec declares it (see ``oauth_authorize_params``).
+        The profile's ``authorize_params`` carry what a provider requires beyond
+        OAuth 2.1, as its catalog spec or template declares it.
         """
-        extra = checked_authorize_params(extra_params or {})
-        scope_list = list(scopes or as_metadata.scopes_supported or [])
+        extra = checked_authorize_params(profile.authorize_params)
+        scope_list = list(scopes or profile.scopes or [])
         # Request offline_access when the AS advertises it, so it issues a
         # refresh_token; without one, providers like Vercel return a ~1h access
         # token with nothing to renew and the connection silently 403s. Only when
         # advertised, though: a provider that never claimed the scope may answer
         # invalid_scope, which costs the whole authorization instead of just its
         # refresh token (Google lists openid/email/profile and nothing more).
-        if as_metadata.offline_access_supported and "offline_access" not in scope_list:
+        if profile.offline_access_supported and "offline_access" not in scope_list:
             scope_list.append("offline_access")
         params: dict[str, str] = {
             "response_type": "code",
@@ -413,44 +421,11 @@ class MCPOAuthClientService:
         }
         if scope_list:
             params["scope"] = " ".join(scope_list)
-        if as_metadata.resource:
-            params["resource"] = as_metadata.resource
+        if profile.resource:
+            params["resource"] = profile.resource
         params.update(extra)
 
-        return f"{as_metadata.authorization_endpoint}?{urlencode(params)}"
-
-    async def exchange_code(
-        self,
-        as_metadata: AuthServerMetadata,
-        code: str,
-        client_id: str,
-        redirect_uri: str,
-        code_verifier: str,
-        client_secret: str | None = None,
-    ) -> dict[str, Any]:
-        """Exchange authorization code for tokens using PKCE verifier.
-
-        Returns the full token response dict (access_token, token_type,
-        expires_in, refresh_token, scope, etc.).
-        """
-        data: dict[str, str] = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": redirect_uri,
-            "client_id": client_id,
-            "code_verifier": code_verifier,
-        }
-        if client_secret:
-            data["client_secret"] = client_secret
-
-        async with safe_async_client(timeout=_HTTP_TIMEOUT) as client:
-            resp = await client.post(
-                as_metadata.token_endpoint,
-                data=data,
-                headers={"Accept": "application/json"},
-            )
-            resp.raise_for_status()
-            return resp.json()
+        return f"{profile.authorization_endpoint}?{urlencode(params)}"
 
 
 class MCPOAuthDiscoveryError(Exception):
@@ -548,6 +523,26 @@ def _as_metadata_urls(issuer: str) -> list[str]:
         f"{origin}/.well-known/openid-configuration{path}",
         f"{origin}{path}/.well-known/openid-configuration",
     ]
+
+
+def discovered_profile(
+    metadata: AuthServerMetadata,
+    mcp_url: str,
+    authorize_params: Mapping[str, str] | None = None,
+) -> OAuthProfile:
+    """The profile a remote MCP server's discovery describes; tokens go to its origin."""
+    return OAuthProfile(
+        provider="mcp-remote",
+        issuer=metadata.issuer,
+        authorization_endpoint=metadata.authorization_endpoint,
+        token_endpoint=metadata.token_endpoint,
+        registration_endpoint=metadata.registration_endpoint,
+        scopes=tuple(metadata.scopes_supported),
+        resource=metadata.resource,
+        offline_access_supported=metadata.offline_access_supported,
+        resource_origins=(url_origin(mcp_url),),
+        authorize_params=dict(authorize_params or {}),
+    )
 
 
 def oauth_authorize_params(json_spec: Mapping[str, Any] | None) -> dict[str, str]:

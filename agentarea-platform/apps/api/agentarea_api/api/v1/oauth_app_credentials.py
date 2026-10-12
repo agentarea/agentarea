@@ -1,13 +1,11 @@
-"""A workspace's own OAuth app, shared by every Connect flow.
+"""A workspace's own OAuth app, for the OAuth connect flow (``agentarea_api.oauth_connect``).
 
-Two flows let a workspace supply its own OAuth client: remote MCP instances
-(``mcp_oauth_connect``) and one-click API connections (``connection_oauth``).
-Both accept the credentials either typed in or referenced from workspace
-secrets, and both must hold the same line — exactly one source per credential,
+A workspace may supply its own OAuth client for a remote MCP instance or a
+catalog API connection, either typed in or referenced from workspace secrets.
+The flow holds one line for both — exactly one source per credential,
 user-owned secrets the caller created or administers only (the client ID comes
 back inside the authorize URL), and the secret value persisted on an auth config
-rather than copied into expiring OAuth state. Those rules live here so the two
-flows cannot drift into two different security postures.
+rather than copied into expiring OAuth state.
 """
 
 from dataclasses import dataclass, field

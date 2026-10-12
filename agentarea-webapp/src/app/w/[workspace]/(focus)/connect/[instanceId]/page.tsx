@@ -6,14 +6,13 @@ import {
   missingSecretFields,
   requiredSecretFields,
 } from "@/app/w/[workspace]/(main)/connections/credential-fields";
-import type { MCPOAuthPreflight } from "@/app/w/[workspace]/(main)/connections/oauth-connect-state";
 import {
   getEffectiveMCPVerificationStatus,
   getMCPConnectionTitle,
 } from "@/app/w/[workspace]/(main)/connections/utils";
 import { getMCPServer, getMCPServerInstance } from "@/lib/api";
 import { mcpIdentity } from "@/lib/entity-identity";
-import { mcpOAuthPreflightAction } from "@/lib/server-actions";
+import { oauthPreflightAction } from "@/lib/server-actions";
 import { optionalApiData, requireApiData } from "@/lib/server-resource";
 import { getWorkspaces } from "@/lib/workspace-context";
 import { workspacePath } from "@/lib/workspace-routes";
@@ -68,7 +67,7 @@ export default async function ConnectPage({ params }: Props) {
   const [serverSpecResult, preflightResult, workspaces] = await Promise.all([
     getMCPServer(instance.server_spec_id),
     needsOAuthPreflight({ ...credentials, ...verification })
-      ? mcpOAuthPreflightAction({ instance_id: instance.id })
+      ? oauthPreflightAction({ instance_id: instance.id })
       : null,
     getWorkspaces(),
   ]);
@@ -76,7 +75,7 @@ export default async function ConnectPage({ params }: Props) {
     serverSpecResult,
     `MCP server ${instance.server_spec_id}`
   );
-  const preflight = (preflightResult?.data ?? null) as MCPOAuthPreflight | null;
+  const preflight = preflightResult?.data ?? null;
 
   const declared = declaredCredentialFields(serverSpec, instance.transport);
   const missingFields = missingSecretFields(declared, jsonSpec);

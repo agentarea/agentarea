@@ -7,7 +7,7 @@
 
 import type { McpTransport } from "@/api/client/types.gen";
 import type { CredentialFieldSpec } from "@/app/w/[workspace]/(main)/connections/credential-fields";
-import type { MCPOAuthPreflight } from "@/app/w/[workspace]/(main)/connections/oauth-connect-state";
+import type { OAuthPreflight } from "@/app/w/[workspace]/(main)/connections/oauth-connect-state";
 import type { MCPVerificationStatus } from "@/app/w/[workspace]/(main)/connections/utils";
 
 export type ConnectStep =
@@ -102,7 +102,7 @@ export function deriveConnectStep({
   /** An OAuth credential is attached to the connection. */
   authorized: boolean;
   /** The OAuth preflight; null when it does not apply or was not answered. */
-  oauth: Pick<MCPOAuthPreflight, "status" | "connected"> | null;
+  oauth: Pick<OAuthPreflight, "status" | "connected"> | null;
 }): ConnectStep {
   if (mustSignInAgain(verification, authorized)) {
     return {

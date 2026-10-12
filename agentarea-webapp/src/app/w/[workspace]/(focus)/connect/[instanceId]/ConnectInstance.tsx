@@ -15,7 +15,7 @@ import {
   credentialUpdateSpec,
   type CredentialFieldSpec,
 } from "@/app/w/[workspace]/(main)/connections/credential-fields";
-import type { MCPOAuthPreflight } from "@/app/w/[workspace]/(main)/connections/oauth-connect-state";
+import type { OAuthPreflight } from "@/app/w/[workspace]/(main)/connections/oauth-connect-state";
 import { OAuthConnectPanel } from "@/app/w/[workspace]/(main)/connections/OAuthConnectPanel";
 import { FocusCard, FocusHeader, FocusStep } from "@/components/FocusCard";
 import FormError from "@/components/FormError";
@@ -42,7 +42,7 @@ interface Props {
   /** The keys to ask for instead when the provider refuses the sign-in. */
   keyFields: CredentialFieldSpec[];
   /** How the provider authorizes, when the page asked it. */
-  preflight: MCPOAuthPreflight | null;
+  preflight: OAuthPreflight | null;
   /** Why the page could not ask the provider how it authorizes. */
   preflightError: string | null;
   /** This page, for the OAuth provider to send the user back to. */

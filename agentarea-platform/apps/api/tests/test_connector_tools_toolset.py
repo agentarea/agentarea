@@ -20,8 +20,9 @@ from uuid import uuid4
 import agentarea_mcp.application.service as mcp_service
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
-from agentarea_api.api.v1 import _catalog_connections, client_mcp, mcp_oauth_connect
+from agentarea_api.api.v1 import _catalog_connections, client_mcp
 from agentarea_api.api.v1._catalog_connections import CatalogConnection
+from agentarea_api.oauth_connect import pages as oauth_pages
 from agentarea_api.tools import connector_tools_toolset
 from agentarea_api.tools.connector_tools_toolset import ConnectorToolsToolset
 from agentarea_common.audit import AuditEventORM
@@ -94,7 +95,7 @@ def harness(monkeypatch):
     monkeypatch.setattr(connector_tools_toolset, "platform_context", _ctx)
     monkeypatch.setattr(connector_tools_toolset, "platform_read_context", _ctx)
     monkeypatch.setattr(
-        mcp_oauth_connect,
+        oauth_pages,
         "get_settings",
         lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.example")),
     )

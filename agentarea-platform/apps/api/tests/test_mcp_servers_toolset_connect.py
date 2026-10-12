@@ -18,8 +18,9 @@ import agentarea_mcp.application.service as mcp_service
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
 from agentarea_agents_sdk.mcp_server.elicitation import mcp_call_context
-from agentarea_api.api.v1 import _catalog_connections, mcp_oauth_connect
+from agentarea_api.api.v1 import _catalog_connections
 from agentarea_api.api.v1._catalog_connections import CatalogConnection
+from agentarea_api.oauth_connect import pages as oauth_pages
 from agentarea_api.tools import mcp_servers_toolset
 from agentarea_api.tools.mcp_servers_toolset import MCPServersToolset
 from agentarea_common.auth.context import UserContext
@@ -56,7 +57,7 @@ def harness(monkeypatch):
     monkeypatch.setattr(mcp_servers_toolset, "platform_context", _ctx)
     monkeypatch.setattr(mcp_servers_toolset, "platform_read_context", _ctx)
     monkeypatch.setattr(
-        mcp_oauth_connect,
+        oauth_pages,
         "get_settings",
         lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.example")),
     )
