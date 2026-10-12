@@ -1179,16 +1179,20 @@ async def test_a_spec_host_whose_certificate_cannot_be_verified_is_named_with_th
     assert "CERTIFICATE_VERIFY_FAILED" in str(raised.value)
 
 
+@pytest.mark.parametrize("status", [301, 404])
 @pytest.mark.asyncio
-async def test_a_spec_url_answering_an_error_status_says_which(monkeypatch):
-    _serve_status = httpx.MockTransport(lambda _req: httpx.Response(404, text="nope"))
+async def test_a_spec_url_answering_anything_but_success_says_which(monkeypatch, status):
+    # Redirects are not followed, so a 3xx body is no spec either.
+    _serve_status = httpx.MockTransport(
+        lambda _req: httpx.Response(status, headers={"location": "https://elsewhere/"})
+    )
     monkeypatch.setattr(
         service_module,
         "safe_async_client",
         lambda *, policy, **kwargs: httpx.AsyncClient(transport=_serve_status, **kwargs),
     )
 
-    with pytest.raises(ValueError, match="HTTP 404"):
+    with pytest.raises(ValueError, match=f"HTTP {status}"):
         await fetch_and_parse_spec(
             "http://127.0.0.1/swagger.json", policy=OutboundPolicy(allow_private=True)
         )

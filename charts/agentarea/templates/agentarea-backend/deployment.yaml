@@ -28,6 +28,10 @@ spec:
         {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- if .Values.global.http.extraCaCerts }}
+        # The trust store is loaded once per process; a changed bundle needs new pods.
+        checksum/extra-ca-certs: {{ .Values.global.http.extraCaCerts | sha256sum }}
+        {{- end }}
         {{- with .Values.backend.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -123,7 +123,7 @@ async def fetch_and_parse_spec(
             policy=policy, timeout=30, headers=headers or {}, follow_redirects=False
         ) as client:
             async with client.stream("GET", url) as resp:
-                if resp.is_error:
+                if not resp.is_success:
                     raise ValueError(f"Spec URL {url} returned HTTP {resp.status_code}")
                 chunks: list[bytes] = []
                 total = 0
