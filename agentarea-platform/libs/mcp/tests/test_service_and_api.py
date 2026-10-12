@@ -1061,6 +1061,7 @@ class TestServiceExecuteTool:
             transport=None,
             verdict_key=None,
             verdict_store=None,
+            **_call_options,
         ):
             captured["factory"] = httpx_client_factory
             return MagicMock(

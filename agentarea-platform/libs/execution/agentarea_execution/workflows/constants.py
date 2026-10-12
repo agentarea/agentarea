@@ -93,6 +93,8 @@ class EventTypes:
     TOOL_CALL_STARTED: Final[str] = "tool.call"
     TOOL_CALL_COMPLETED: Final[str] = "tool.result"
     TOOL_CALL_FAILED: Final[str] = "tool.result"
+    # Recorded by the tool activity itself while a call runs (see tool_progress).
+    TOOL_PROGRESS: Final[str] = "tool.progress"
 
     # Timeline/system — not in the part taxonomy, kept bare.
     BUDGET_WARNING: Final[str] = "BudgetWarning"
@@ -103,6 +105,8 @@ class EventTypes:
     SERVICE_BUDGET_EXCEEDED: Final[str] = "ServiceBudgetExceeded"
 
     CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
+    # The final answer's check found leaks; data says which and whether it was rewritten.
+    ANSWER_CHECKED: Final[str] = "AnswerChecked"
     CONTEXT_WARNING: Final[str] = "ContextWarning"
 
     WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"

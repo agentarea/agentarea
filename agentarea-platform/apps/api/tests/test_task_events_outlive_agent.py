@@ -211,3 +211,16 @@ async def test_a_task_that_does_not_exist_is_still_a_404(async_client, task_serv
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Task not found"
+
+
+@pytest.mark.asyncio
+async def test_a_paged_event_carries_its_payload_under_data_like_the_live_stream(async_client):
+    response = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events"
+    )
+
+    (event,) = response.json()["events"]
+    assert event["event_id"] == event["id"]
+    assert event["data"] == {"message": "done", "execution_id": "exec-1"}
+    # Deprecated alias kept for clients that read it.
+    assert event["metadata"] == event["data"]

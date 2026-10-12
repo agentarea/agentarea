@@ -1453,6 +1453,11 @@ export const analyzeBundleV1BundlesAnalyzePost = <ThrowOnError extends boolean =
  * Install Bundle
  *
  * Install a canonical bundle: MCP instances, skills, agents and automations.
+ *
+ * All or nothing: a failure removes whatever this install had created. A
+ * bundle or setup value that is invalid answers 422 (``code: bundle_invalid``);
+ * any other install failure answers 400 (``code: bundle_install_failed``). Both
+ * are problem+json with the message in ``detail`` and the blocking ``issues``.
  */
 export const installBundleV1BundlesInstallPost = <ThrowOnError extends boolean = false>(options: Options<InstallBundleV1BundlesInstallPostData, ThrowOnError>): RequestResult<InstallBundleV1BundlesInstallPostResponses, InstallBundleV1BundlesInstallPostErrors, ThrowOnError> => (options.client ?? client).post<InstallBundleV1BundlesInstallPostResponses, InstallBundleV1BundlesInstallPostErrors, ThrowOnError>({
     security: [{

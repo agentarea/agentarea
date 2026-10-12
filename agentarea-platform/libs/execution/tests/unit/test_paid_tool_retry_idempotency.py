@@ -319,7 +319,7 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
     )
     monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda **_kwargs: server)
 
-    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
+    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory, **_options):
         async with httpx_client_factory() as client:
             response = await client.post(PAID_URL, json=tool_args)
         return {"success": response.status_code == 200, "result": response.text}
@@ -399,7 +399,7 @@ async def test_payment_that_settled_before_the_request_failed_is_spent(
     )
     monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda **_kwargs: server)
 
-    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
+    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory, **_options):
         async with httpx_client_factory() as client:
             response = await client.post(PAID_URL, json=tool_args)
         return {"success": response.status_code == 200, "result": response.text}
@@ -535,7 +535,9 @@ class GatewayService:
     async def get(self, instance_id):
         return self.instance
 
-    async def execute_tool(self, instance_id, raw_name, tool_args, httpx_client_factory=None):
+    async def execute_tool(
+        self, instance_id, raw_name, tool_args, httpx_client_factory=None, **_options
+    ):
         self.calls.append(raw_name)
         return {
             "success": True,

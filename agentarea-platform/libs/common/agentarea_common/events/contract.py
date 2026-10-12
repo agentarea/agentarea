@@ -27,6 +27,9 @@ LLM_FAILED = "llm.call.failed"
 LLM_CHUNK = "llm.call.chunk"
 TOOL_CALL = "tool.call"
 TOOL_RESULT = "tool.result"
+# An MCP server's progress on a running call. Not a part: the tool part of the
+# same tool_call_id stays as tool.call / tool.result left it.
+TOOL_PROGRESS = "tool.progress"
 INPUT_REQUEST = "input.request"
 INPUT_RESPONSE = "input.response"
 APPROVAL_REQUEST = "approval.request"

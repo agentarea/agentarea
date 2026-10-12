@@ -8,7 +8,7 @@ related:
   - /guides/tasks/start-a-task
   - /guides/tasks/debug-a-failed-task
   - /concepts/execution/tasks
-last_updated: 2026-07-29
+last_updated: 2026-10-12
 ---
 
 Do this when you want to render or follow a run as it happens. Do not build a
@@ -31,7 +31,7 @@ nothing.
 |---|---|
 | `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events/stream` | You want live updates. Replays full history, then tails. Ends on a terminal event. |
 | `GET /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events` | You want a finished task's history, paginated, in one request. |
-| `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/` | You are starting the task anyway and want the stream on the same connection. |
+| `POST /v1/workspaces/{workspace}/agents/{agent_id}/tasks/` | You are starting the task anyway and want the stream on the same connection. It ends at the first turn's terminal event; add `?follow=true` to keep it through the follow-up window. |
 
 ## Steps
 
@@ -62,7 +62,20 @@ nothing.
 
     The feed replays the task's full durable history first, then tails live events,
     de-duplicating by `event_id` across the hand-off. It closes after
-    `task.completed`, `task.failed`, or `task.cancelled`.
+    `task.completed`, `task.failed`, or `task.cancelled`, except a
+    `task.completed` whose `data.execution_status` is `waiting`: the task is
+    waiting for a follow-up, and this endpoint keeps streaming its next turns.
+  </Step>
+
+  <Step title="Know where the stream you start a task with ends">
+    `POST .../tasks/` streams the run it starts and ends at that turn's
+    terminal event, `waiting` or not, so a request does not hold a connection
+    for the 30-minute follow-up window. Send a follow-up with
+    `POST .../tasks/{task_id}/command` (`queue_message`) and read their turns from
+    `GET .../tasks/{task_id}/events/stream` (reconnect with `Last-Event-ID` to
+    skip what you have). `POST .../tasks/?follow=true` keeps the old behaviour:
+    the stream stays open through follow-up turns until the run finishes or 30
+    minutes pass.
   </Step>
 
   <Step title="Drop token-level chunks">
@@ -92,11 +105,19 @@ nothing.
         "execution_id": "task-3f2a...",
         "timestamp": "2026-07-29T10:15:04.912004+00:00",
         "event_type": "task.started",
+        "event_id": "0f7c...",
         "message": "",
-        "metadata": {}
+        "data": {"task_id": "3f2a...", "execution_id": "task-3f2a..."},
+        "metadata": {"task_id": "3f2a...", "execution_id": "task-3f2a..."}
       }
     }
     ```
+
+    A paged event and a live frame carry the same fields in the same places:
+    `event_type`, `event_id`, `timestamp` and the payload under `data`, shaped
+    the same way. `id` equals `event_id`. `metadata` is a deprecated alias
+    holding the stored payload before the live stream's flattening of nested
+    `data`/`original_data`; read `data`.
 
     Filter with `?event_type=tool.call`. Chunks never appear here — they are
     stream-only and are not persisted.

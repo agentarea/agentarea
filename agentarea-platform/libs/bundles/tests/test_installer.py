@@ -8,7 +8,11 @@ import pytest
 from agentarea_agents.application import workspace_export_service
 from agentarea_agents.application.workspace_export_service import WorkspaceExportService
 from agentarea_bundles.application.analyzer import BundleAnalyzer, parse_bundle
-from agentarea_bundles.application.installer import BundleInstaller, BundleInstallError
+from agentarea_bundles.application.installer import (
+    BundleInstaller,
+    BundleInstallError,
+    BundleValidationError,
+)
 from agentarea_bundles.schemas.bundle import setup_refs
 from agentarea_bundles.schemas.result import InstallAction
 from agentarea_common.auth.authorization import AuthorizationService
@@ -749,4 +753,122 @@ async def test_duplicate_entity_keys_are_refused_by_install():
         await inst.install(pkg, {})
 
     assert any("duplicate skill key 's1'" in i.message for i in refused.value.issues)
+    _assert_nothing_written(deps)
+
+
+class _Deleting:
+    """Records deletes made by a failed install's compensation."""
+
+    def __init__(self):
+        self.deleted: list[tuple[str, object]] = []
+
+
+def _compensating_installer(**overrides):
+    log = _Deleting()
+
+    class Specs(FakeMcpServerSvc):
+        async def delete_mcp_server(self, id):
+            log.deleted.append(("spec", id))
+            return True
+
+    class Instances(FakeMcpInstSvc):
+        async def delete_instance(self, id):
+            log.deleted.append(("instance", id))
+            return True
+
+    class Skills(FakeSkillSvc):
+        async def delete(self, skill_id):
+            log.deleted.append(("skill", skill_id))
+            return True
+
+    deps = dict(
+        mcp_server_service=Specs(),
+        mcp_instance_service=Instances(),
+        skill_service=Skills(),
+    )
+    deps.update(overrides)
+    inst, all_deps = _installer(**deps)
+    return inst, all_deps, log
+
+
+async def test_a_failed_install_removes_what_it_created_so_a_retry_starts_clean():
+    class FailingAgents(FakeAgentSvc):
+        async def create_agent(self, payload):
+            raise RuntimeError("database went away")
+
+    inst, deps, log = _compensating_installer(agent_service=FailingAgents())
+
+    with pytest.raises(RuntimeError):
+        await inst.install(parse_bundle(FULL), {"token": "t"})
+
+    # newest first: skill, then the MCP instance, then its spec
+    assert [kind for kind, _ in log.deleted] == ["skill", "instance", "spec"]
+
+
+async def test_an_invalid_skill_at_install_is_a_validation_error_and_leaves_nothing():
+    class RefusingSkills(FakeSkillSvc):
+        async def create_from_content(self, payload):
+            raise ValueError("Failed to parse skill content: mapping values are not allowed")
+
+        async def delete(self, skill_id):
+            raise AssertionError("nothing was created")
+
+    inst, deps, log = _compensating_installer(skill_service=RefusingSkills())
+
+    with pytest.raises(BundleValidationError, match="skill 'sk' is not a valid SKILL.md"):
+        await inst.install(parse_bundle(FULL), {"token": "t"})
+
+    assert [kind for kind, _ in log.deleted] == ["instance", "spec"]
+    assert deps["agent_service"].calls == []
+
+
+async def test_a_reused_entity_is_never_removed_by_a_failed_install():
+    class FailingAgents(FakeAgentSvc):
+        async def create_agent(self, payload):
+            raise RuntimeError("boom")
+
+    existing = SimpleNamespace(id=uuid4())
+    inst, deps, log = _compensating_installer(agent_service=FailingAgents())
+    deps["mcp_instance_service"].existing = existing
+
+    with pytest.raises(RuntimeError):
+        await inst.install(parse_bundle(FULL), {"token": "t"})
+
+    assert [kind for kind, _ in log.deleted] == ["skill"]
+
+
+SIGNED = """
+schema_version: "0.1.0"
+name: app
+setup:
+  - {key: bearer, label: Bearer, type: secret, required: true}
+  - {key: signing, label: Signing key, type: secret, required: true}
+mcps:
+  - key: tools
+    name: App tools
+    json_spec: {type: url, endpoint_url: "https://app.example/mcp"}
+    bindings: {Authorization: "Bearer ${setup.bearer}"}
+    context_secret: "${setup.signing}"
+"""
+
+
+async def test_a_bundle_sets_the_context_secret_of_a_url_mcp_from_setup():
+    inst, deps = _installer()
+    signing = "s" * 40
+
+    await inst.install(parse_bundle(SIGNED), {"bearer": "b", "signing": signing})
+
+    (created,) = deps["mcp_instance_service"].calls
+    assert created.context_secret == signing
+    assert "s" * 40 not in str(created.json_spec)
+
+
+async def test_a_short_context_secret_is_refused_without_echoing_it():
+    inst, deps = _installer()
+
+    with pytest.raises(BundleValidationError) as refused:
+        await inst.install(parse_bundle(SIGNED), {"bearer": "b", "signing": "too-short-value"})
+
+    assert "too-short-value" not in str(refused.value)
+    assert "setup field 'signing'" in str(refused.value)
     _assert_nothing_written(deps)

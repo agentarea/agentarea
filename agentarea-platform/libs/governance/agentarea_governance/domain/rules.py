@@ -26,6 +26,7 @@ from pydantic import (
 )
 
 from .policies import (
+    AnswerCheckPolicy,
     ApprovalPolicy,
     BudgetPolicy,
     ContentSafetyPolicy,
@@ -242,11 +243,20 @@ class SafetyParams(BaseModel):
 
     prompt_injection: bool | None = None
     output_sanitizer: bool | None = None
+    # Check the final answer and rewrite it once; see AnswerCheckPolicy.
+    answer_check: AnswerCheckPolicy | None = None
 
     @model_validator(mode="after")
     def _require_one(self) -> SafetyParams:
-        if self.prompt_injection is None and self.output_sanitizer is None:
-            raise ValueError("safety on content requires 'prompt_injection' or 'output_sanitizer'")
+        if (
+            self.prompt_injection is None
+            and self.output_sanitizer is None
+            and self.answer_check is None
+        ):
+            raise ValueError(
+                "safety on content requires 'prompt_injection', 'output_sanitizer' "
+                "or 'answer_check'"
+            )
         return self
 
 
@@ -551,6 +561,10 @@ def _apply_safety(acc: _DocumentAccumulator, params: dict[str, Any]) -> None:
         acc.content_safety["prompt_injection_detection_enabled"] = bool(params["prompt_injection"])
     if "output_sanitizer" in params:
         acc.content_safety["output_sanitizer_enabled"] = bool(params["output_sanitizer"])
+    if isinstance(params.get("answer_check"), dict):
+        acc.content_safety["answer_check"] = AnswerCheckPolicy.model_validate(
+            params["answer_check"]
+        )
 
 
 def egress_allowlist_from_rules(rules: list[PolicyRule]) -> dict[str, list[str]]:

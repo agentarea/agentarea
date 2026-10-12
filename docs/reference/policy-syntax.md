@@ -9,7 +9,7 @@ related:
   - /reference/limits
   - /guides/governance/authorize-a-tool-call
   - /guides/governance/set-a-budget
-last_updated: 2026-07-29
+last_updated: 2026-10-12
 ---
 
 One `PolicyRule` row expresses one governance intent for one subject. Rules are
@@ -112,6 +112,7 @@ name.
 | `approval` | `tool:<name>` | `approvers` | array of subject refs | Optional. Stored under `approvers_by_tool[<name>]`. |
 | `safety` | `content` | `prompt_injection` | boolean | Coerced with `bool()`. |
 | `safety` | `content` | `output_sanitizer` | boolean | Coerced with `bool()`. |
+| `safety` | `content` | `answer_check` | object | `{enabled?: bool = true, language?: string, rewrite_instruction?: string (≤4000)}`; unknown keys are refused. See [Answer check](#answer-check). |
 | `egress` | `mcp:<id>` | `allowed_hosts` | array of strings | A non-list value skips the rule. |
 
 Approver references are `user:<id>`, `group:<id>`, or a userset
@@ -132,9 +133,56 @@ Applied per layer in order. A lower layer may only tighten.
 | `approval.escalation_rules` | union | — |
 | `approval.approvers` | union | — |
 | `approval.approvers_by_tool` | union per tool key | — |
-| `content_safety.*` | logical OR | sets `false` where a higher layer set `true` |
+| `content_safety.prompt_injection_detection_enabled`, `content_safety.output_sanitizer_enabled` | logical OR | sets `false` where a higher layer set `true` |
+| `content_safety.answer_check` | the lowest layer that sets it wins (an agent's over the workspace's) | — |
 
 A rejected chain raises a validation error, surfaced as HTTP 422.
+
+## Answer check
+
+`answer_check` looks at an agent's final answer before the task completes. It
+is off unless a `safety` rule on `content` sets it, usually on the agent:
+
+```json
+{"subject_type": "agent", "subject_id": "<agent id>", "target": "content",
+ "effect": "safety", "params": {"answer_check": {"language": "ru"}}}
+```
+
+In a bundle, the same rule is a policy whose `subject` is the agent's key:
+
+```yaml
+policies:
+  - key: clean_answers
+    subject: smetchik
+    target: content
+    effect: safety
+    params: {answer_check: {language: ru}}
+```
+
+| Leak | Found when the answer, outside links, file names and code blocks, has |
+|---|---|
+| `cjk` | Chinese, Japanese or Korean characters. Off for `language` `zh`, `ja`, `ko` |
+| `tool_name` | The name of one of the agent's tools, or an MCP tool's raw name |
+| `identifier` | A `snake_case` code (when no tool name was found) |
+| `stack_trace` | `Error: `, `TypeError` and kin, `ENOENT`, `at f (/path`, `node_modules/`, a Python traceback |
+| `json` | A JSON object (`{"key":`) |
+| `english` | `language: ru` only, in a mostly Cyrillic answer: a lowercase Latin word of four or more letters other than `xlsx`, `docx`, `html`, `http`, `https`, `mailto` |
+
+With no leak nothing happens. Otherwise the workflow makes **one** extra call to
+the agent's own model, with no tools and no streaming, asking it to fix only
+the leaks found (`rewrite_instruction` replaces the default instruction). The
+rewrite is used when it is not empty and keeps every link of the original;
+otherwise the original stays, minus CJK characters if those were the leak.
+
+| What a client sees | |
+|---|---|
+| `llm.call.completed` with `purpose: "answer_check"` | The rewrite call: its cost and usage, and `content` = the rewritten answer. Same `execution_id`/`iteration` as the turn, so it supersedes the turn's reply part |
+| `AnswerChecked` | `{iteration, leaks: [{kind, sample}], rewritten}` |
+| `task.completed` `result`, the task's `result.response` | The checked answer |
+
+The live `llm.call.chunk` stream has already shown the original text; the
+superseding part and the final result carry the checked one. The rewrite is
+metered like any model call and counts against the run's budget.
 
 ## Enforcement
 
@@ -148,7 +196,7 @@ and the API returns it while the runtime never sees it.
 | `deny` on `tool:<name>` | Enforced |
 | `allow` on `tool:<name>` | Enforced |
 | `approval` on `*`, `tool:*`, `tool:<name>` | Enforced in the agent workflow only |
-| `safety` on `content` | Enforced by the two registered content filters |
+| `safety` on `content` | `prompt_injection` and `output_sanitizer` by the two registered content filters; `answer_check` by the agent workflow on its final answer |
 | `condition` on any rule | **Inert.** No resolver, compiler or gate reads it. |
 | `subject_type: group` | **Inert.** The resolver reads workspace, agent and user layers only. |
 | `priority` | **Inert.** Stored and returned; not used in ordering. |

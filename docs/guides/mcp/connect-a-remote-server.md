@@ -8,13 +8,18 @@ related:
   - /guides/mcp/add-a-hosted-server
   - /guides/mcp/authenticate-with-oauth
   - /guides/mcp/pass-secrets
-last_updated: 2026-07-29
+  - /guides/mcp/expose-your-app-tools
+last_updated: 2026-10-12
 ---
 
 Do this when the server already runs at a URL — a vendor's hosted MCP endpoint,
 or one your team operates elsewhere. Use
 [Add a hosted MCP server](/guides/mcp/add-a-hosted-server) when AgentArea should
 run the workload itself.
+
+When the server is your own application and its tools must know which task and
+end user a call is for, follow
+[Expose your app's tools to agents](/guides/mcp/expose-your-app-tools) instead.
 
 Nothing is provisioned here. AgentArea stores the endpoint and its credentials,
 verifies it answers, and proxies every call so authorization and audit stay

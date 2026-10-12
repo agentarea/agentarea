@@ -4,27 +4,62 @@ Raw MCP tool names are only unique within one server: two attached servers can
 both advertise ``search``. The model-facing name therefore carries the server
 (``mcp__<server>__<tool>``), while the identity behind it keeps what routing and
 policy need — the instance id and the raw name the server advertised.
+
+The server segment is ASCII. A name already written in ASCII keeps the segment
+it always had (so existing tool names and rules naming them do not change); a
+name with other letters is transliterated (Cyrillic) or folded (accented Latin)
+and collapsed to ``[a-z0-9_]``, so "Constractio — инструменты сметчика" becomes
+``constractio_instrumenty_smetchika`` instead of a run of underscores.
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 
 MAX_TOOL_NAME_LENGTH = 64
 _PREFIX = "mcp"
 _DELIMITER = "__"
 _INVALID = re.compile(r"[^a-zA-Z0-9_-]")
+_NOT_SLUG = re.compile(r"[^a-z0-9]+")
+
+# Lowercase Cyrillic (Russian, Ukrainian, Belarusian) to Latin, one-way, for names
+# only: readable and stable, not a reversible standard.
+_CYRILLIC_LETTERS = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяіїєґў"
+# One Latin reading per letter above, in order; "-" means the letter is dropped.
+_CYRILLIC_LATIN = (
+    "a b v g d e e zh z i y k l m n o p r s t u f h ts ch sh sch - y - e yu ya i yi ye g u"
+).split()
+_CYRILLIC = str.maketrans(
+    {
+        letter: "" if latin == "-" else latin
+        for letter, latin in zip(_CYRILLIC_LETTERS, _CYRILLIC_LATIN, strict=True)
+    }
+)
 
 
 def _sanitize(value: str) -> str:
     return _INVALID.sub("_", value)
 
 
+def ascii_slug(name: str) -> str:
+    """``name`` as ``[a-z0-9_]``: Cyrillic transliterated, accents dropped.
+
+    Letters with no Latin reading (CJK, say) are dropped; the result may be empty.
+    """
+    latin = name.lower().translate(_CYRILLIC)
+    folded = unicodedata.normalize("NFKD", latin).encode("ascii", "ignore").decode("ascii")
+    return _NOT_SLUG.sub("_", folded).strip("_")
+
+
 def server_label(instance_name: str) -> str:
-    """The server segment of a model-facing tool name."""
-    return _sanitize(instance_name.strip().lower()) or "server"
+    """The server segment of a model-facing tool name. Idempotent."""
+    name = instance_name.strip().lower()
+    if name.isascii():
+        return _sanitize(name) or "server"
+    return ascii_slug(name) or "server"
 
 
 def qualify_mcp_tool_name(label: str, raw_name: str) -> str:

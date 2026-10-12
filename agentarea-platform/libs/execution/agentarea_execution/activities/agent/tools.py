@@ -4,9 +4,10 @@ import functools
 import itertools
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from agentarea_agents_sdk import ToolExecutor
 from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
@@ -28,6 +29,7 @@ from agentarea_governance.tool_calls import (
     run_tool_call,
 )
 from agentarea_mcp.domain.metering import META_USAGE, platform_funded_resource, reported_quantity
+from agentarea_mcp.tool_context import call_context_from_task
 from agentarea_tasks.domain.costs import platform_tool_call_entry
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from agentarea_wallet.domain.enums import settlement_status
@@ -40,6 +42,7 @@ from ...workflows.helpers import tool_config_aliases, tool_policy_aliases
 from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_control_auth_secret, sandbox_file_auth_secret
 from .tool_audit import TOOL_CALL_DENIED, argument_keys
+from .tool_progress import make_tool_progress_relay
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -223,6 +226,39 @@ def make_tools_activities(
             ctx._sessions.append(session)
             await CostEntryRepository(session, user_context).record(
                 [platform_tool_call_entry(usage)]
+            )
+
+    async def _record_tool_progress(
+        data: dict[str, Any], *, request: MCPToolRequest, user_context: Any
+    ) -> None:
+        """Store a ``tool.progress`` event, then put it on the task's live stream.
+
+        Its own short transaction, so the row is visible while the call still runs.
+        """
+        from agentarea_common.events.contract import TOOL_PROGRESS
+        from agentarea_common.events.task_stream import publish_task_event
+
+        event_id = uuid4()
+        timestamp = datetime.now(UTC)
+        async with ActivityContext(container, user_context) as progress_ctx:
+            task_event_service = await progress_ctx.get_task_event_service()
+            await task_event_service.create_workflow_event(
+                task_id=UUID(str(request.task_id)),
+                event_id=event_id,
+                event_type=TOOL_PROGRESS,
+                data=data,
+                timestamp=timestamp,
+                workspace_id=str(request.workspace_id),
+                created_by=str(user_context.user_id),
+            )
+        if dependencies.broker_client is not None:
+            await publish_task_event(
+                dependencies.broker_client,
+                task_id=str(request.task_id),
+                event_type=TOOL_PROGRESS,
+                data=data,
+                event_id=str(event_id),
+                timestamp=timestamp.isoformat(),
             )
 
     @activity.defn
@@ -784,12 +820,33 @@ def make_tools_activities(
                             on_payment=on_mcp_payment,
                         )
 
+                call_context = call_context_from_task(
+                    task_id=request.task_id,
+                    tool_call_id=request.tool_call_id,
+                    workspace_id=str(request.workspace_id),
+                    agent_id=str(request.agent_id) if request.agent_id else None,
+                    task_metadata=request.metadata,
+                )
+                progress_relay = None
+                if call_context is not None:
+                    progress_relay = make_tool_progress_relay(
+                        record=functools.partial(
+                            _record_tool_progress, request=request, user_context=user_context
+                        ),
+                        task_id=call_context.task_id,
+                        tool_name=request.tool_name,
+                        tool_call_id=call_context.tool_call_id,
+                        heartbeat=activity.heartbeat,
+                    )
+
                 try:
                     mcp_result = await mcp_server_instance_service.execute_tool(
                         UUID(str(instance.id)),
                         route.raw_name,
                         request.tool_args,
                         httpx_client_factory=payment_httpx_client_factory,
+                        call_context=call_context,
+                        progress_callback=progress_relay,
                     )
                 except Exception as e:
                     logger.error("MCP tool execution failed: %s", e, exc_info=True)
@@ -830,6 +887,8 @@ def make_tools_activities(
                     server_instance_id=str(instance.id),
                     server_name=getattr(instance, "name", None),
                     server_icon=_server_icon_from_instance(instance),
+                    structured_content=mcp_result.get("structured_content"),
+                    structured_content_dropped=bool(mcp_result.get("structured_content_dropped")),
                 )
 
             try:

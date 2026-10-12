@@ -127,6 +127,7 @@
               "guides/tasks/start-a-task",
               "guides/tasks/attach-files",
               "guides/tasks/stream-events",
+              "guides/tasks/charge-for-task-cost",
               "guides/tasks/retrieve-artifacts",
               "guides/tasks/debug-a-failed-task",
               "guides/tasks/cancel-and-retry"
@@ -152,6 +153,7 @@
             "group": "MCP",
             "pages": [
               "guides/mcp/connect-a-remote-server",
+              "guides/mcp/expose-your-app-tools",
               "guides/mcp/add-a-hosted-server",
               "guides/mcp/authenticate-with-oauth",
               "guides/mcp/pass-secrets",
@@ -206,6 +208,7 @@
           "reference/authorization-model",
           "reference/policy-syntax",
           "reference/limits",
+          "reference/mcp-tool-call-context",
           "reference/errors"
         ]
       },

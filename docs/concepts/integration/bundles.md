@@ -8,7 +8,7 @@ related:
   - /concepts/integration/registry-and-catalog
   - /concepts/agents/skills
   - /concepts/governance/policy-engine
-last_updated: 2026-10-03
+last_updated: 2026-10-12
 ---
 
 A bundle is a single document that describes everything a working setup needs:
@@ -77,6 +77,34 @@ The installer marks the resulting `env_schema` entry as a secret based on
 heuristic. The bundle already declared which inputs are credentials, so guessing
 from the variable name is unnecessary and less accurate.
 
+A URL MCP that verifies the signed call context
+([tool call context](/reference/mcp-tool-call-context)) takes its signing key
+the same way. `context_secret` is a `${setup.<key>}` reference to a setup field
+of type `secret`, never the key itself:
+
+```yaml
+setup:
+  - key: signing_key
+    label: Context signing key (at least 32 characters)
+    type: secret
+    required: true
+
+mcps:
+  - key: app
+    name: My app tools
+    json_spec: { type: url, endpoint_url: https://app.example.com/mcp }
+    bindings:
+      Authorization: "Bearer ${setup.tools_bearer}"
+    context_secret: "${setup.signing_key}"
+```
+
+The value goes to the instance's `context_secret`, which stores it in the secret
+manager; the instance then shows `context_signing: true`. A literal value fails
+parsing, a reference on a non-URL MCP or to a non-secret field blocks the
+bundle, and a value shorter than 32 or longer than 512 characters refuses the
+install with a message that names the field, not the value. Exporting a
+workspace turns a signed instance's key into a fresh secret setup field.
+
 ### A workspace exports as a bundle
 
 `GET /v1/workspaces/{workspace}/export` (admin only; **Settings → Workspace →
@@ -119,6 +147,21 @@ refuse most real workspaces: a Postgres MCP has nowhere else to take its
 connection string. Templating keeps the export usable, and the person
 installing the bundle supplies their own values.
 
+### Agent settings that are policies
+
+Per-agent behaviour that governance owns travels as a policy bound to the
+agent's key. The final-answer check, for example (see
+[answer check](/reference/policy-syntax#answer-check)):
+
+```yaml
+policies:
+  - key: clean_answers
+    subject: smetchik
+    target: content
+    effect: safety
+    params: {answer_check: {language: ru}}
+```
+
 ### Analyze, then install
 
 `POST /v1/workspaces/{workspace}/bundles/analyze` parses the source and returns an `ImportPreview` —
@@ -129,6 +172,18 @@ is surfaced.
 
 `POST /v1/workspaces/{workspace}/bundles/install` takes the canonical bundle and the setup values.
 Missing required setup blocks the whole install before anything is written.
+
+Inline skill content is parsed with the same `SKILL.md` parser the skill service
+uses, so a frontmatter that is not valid YAML (an unquoted value containing
+`: ` is the usual cause) is a blocking issue in the preview, naming the skill
+and the line.
+
+Install answers **422** when the bundle or a setup value is invalid (anything
+analyze blocks, missing required setup, a refused `context_secret`, a skill the
+skill service refuses, an MCP the MCP service refuses) and **400** when an
+install step fails for another reason, such as a GitHub skill that cannot be
+fetched. Both are problem+json: the message in `detail`, `code`
+`bundle_invalid` or `bundle_install_failed`, and the blocking `issues`.
 
 Analyze accepts exactly one of `source` (pasted text) or `source_url` (fetched
 server-side behind an SSRF guard, capped at 5 MB).
@@ -149,6 +204,17 @@ across bundles. An `InstalledBundle` row is upserted by bundle name, recording
 the canonical document and the full install result.
 
 Re-running an install is therefore close to a no-op for what already exists.
+
+### A failed install leaves nothing behind
+
+Each domain service commits on its own, so install is made all-or-nothing by
+compensation. Every entity the install creates is recorded with how to delete
+it; when a later step fails, those entities are deleted again, newest first,
+before the error is returned: policies, triggers and their stored channel
+credentials, agents, skills, MCP instances (with their stored secrets) and the
+MCP server specs created for them. Entities that already existed and were
+`REUSED` are never touched. A retry after a failure therefore creates everything
+fresh instead of reusing a half-configured MCP instance from the failed attempt.
 
 ### Automations and channels install disabled
 
@@ -196,9 +262,9 @@ preview, moves those failures to a point where nothing has been created yet.
   and validates it against the `Bundle` schema. There is no adapter that
   converts a Claude plugin manifest, a repository layout, or any other external
   format — despite what the format module's own docstring implies.
-- **Install is not transactional.** The steps run in order and a failure part-way
-  through does not undo what earlier steps created. Existence-by-name makes a
-  re-run mostly idempotent, which is the mitigation, not a rollback.
+- **Rollback is compensation, not a database transaction.** If deleting a
+  created entity also fails (the database is down, say), that failure is logged
+  and the rest are still removed; the original error is what the caller sees.
 - **Command MCPs are restricted to eight runtimes.** `npx`, `uvx`, `uv`,
   `python`, `python3`, `node`, `bunx`, `deno`. A command that is a local path or
   references `${CLAUDE_PLUGIN_ROOT}` is skipped with a reason recorded, not

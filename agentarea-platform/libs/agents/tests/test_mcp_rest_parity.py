@@ -161,8 +161,9 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     "openapi_connections.update": set(),
     "mcp_servers.create_spec": set(),
     "mcp_servers.update_spec": set(),
-    "mcp_servers.create": set(),
-    "mcp_servers.update": set(),
+    # A signing secret is set by a person over REST, never typed by a model.
+    "mcp_servers.create": {"context_secret"},
+    "mcp_servers.update": {"context_secret"},
     "skills.create": set(),
     "skills.create_from_archive": set(),
     "skills.import_from_github": set(),

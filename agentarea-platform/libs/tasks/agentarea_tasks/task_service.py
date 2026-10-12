@@ -89,6 +89,18 @@ def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | N
     return tuple(groups)
 
 
+# Written by the workflow into the stored result; the closed run's result lacks them.
+_STORED_USAGE_KEYS = ("total_cost", "own_cost", "tokens_used")
+
+
+def _with_stored_usage(result: Any, stored: Any) -> Any:
+    """The workflow's result, keeping the cost and tokens stored with the task."""
+    if not isinstance(result, dict) or not isinstance(stored, dict):
+        return result
+    kept = {key: stored[key] for key in _STORED_USAGE_KEYS if key in stored}
+    return {**result, **kept}
+
+
 class TaskService(BaseTaskService):
     """High-level service for task management that orchestrates persistence and execution."""
 
@@ -1158,7 +1170,7 @@ class TaskService(BaseTaskService):
                 }:
                     task.status = outcome
                     if result is not None:
-                        task.result = result
+                        task.result = _with_stored_usage(result, task.result)
                     if workflow_status.get("error"):
                         task.error_message = str(workflow_status["error"])
         except Exception as e:

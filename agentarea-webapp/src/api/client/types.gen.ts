@@ -588,6 +588,29 @@ export type AnalyzeRequest = {
 };
 
 /**
+ * AnswerCheckPolicy
+ *
+ * Check an agent's final answer and have the model rewrite it once if it leaks.
+ *
+ * Leaks: CJK characters, tool names and snake_case codes, stack traces, raw
+ * JSON, and (for ``language: ru``) lowercase English words in a Russian answer.
+ */
+export type AnswerCheckPolicy = {
+  /**
+   * Enabled
+   */
+  enabled?: boolean;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
+   * Rewrite Instruction
+   */
+  rewrite_instruction?: string | null;
+};
+
+/**
  * ApprovalDecision
  *
  * One answered approval request, as the workflow recorded the answer.
@@ -1238,6 +1261,12 @@ export type BundleMcp = {
     [key: string]: string;
   };
   /**
+   * Context Secret
+   *
+   * URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.
+   */
+  context_secret?: string | null;
+  /**
    * Json Spec
    *
    * Native MCP runtime spec. Must include 'type' (command|docker|url).
@@ -1836,6 +1865,7 @@ export type CollectionUpdateRequest = {
  * Content-safety governance controls.
  */
 export type ContentSafetyPolicy = {
+  answer_check?: AnswerCheckPolicy | null;
   /**
    * Output Sanitizer Enabled
    */
@@ -3297,6 +3327,12 @@ export type McpServerInstanceCreate = {
    */
   auth_config_id?: string | null;
   /**
+   * Context Secret
+   *
+   * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+   */
+  context_secret?: string | null;
+  /**
    * Description
    *
    * Optional human-readable description of the instance.
@@ -3332,6 +3368,12 @@ export type McpServerInstanceCreateWithoutSpec = {
    * Auth Config Id
    */
   auth_config_id?: string | null;
+  /**
+   * Context Secret
+   *
+   * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+   */
+  context_secret?: string | null;
   /**
    * Description
    */
@@ -3417,6 +3459,12 @@ export type McpServerInstanceResponse = {
  * Patch payload for an MCP server instance. All fields optional — unset = unchanged.
  */
 export type McpServerInstanceUpdate = {
+  /**
+   * Context Secret
+   *
+   * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.
+   */
+  context_secret?: string | null;
   /**
    * Description
    */
@@ -6302,7 +6350,21 @@ export type ScheduleTaskCreate = {
    * Description
    */
   description: string;
+  /**
+   * End User Id
+   *
+   * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+   */
+  end_user_id?: string | null;
   execution?: RunExecutionConfig | null;
+  /**
+   * Metadata
+   *
+   * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+   */
+  metadata?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Parameters
    */
@@ -6322,6 +6384,10 @@ export type ScheduleTaskCreate = {
    */
   scheduled_at: string;
   task_policy?: PolicyDocument | null;
+  /**
+   * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
+   */
+  webhook?: TaskWebhook | null;
 };
 
 /**
@@ -7324,7 +7390,21 @@ export type TaskCreate = {
    * Description
    */
   description: string;
+  /**
+   * End User Id
+   *
+   * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+   */
+  end_user_id?: string | null;
   execution?: RunExecutionConfig | null;
+  /**
+   * Metadata
+   *
+   * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+   */
+  metadata?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Parameters
    */
@@ -7340,6 +7420,10 @@ export type TaskCreate = {
    */
   requires_human_approval?: boolean | null;
   task_policy?: PolicyDocument | null;
+  /**
+   * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
+   */
+  webhook?: TaskWebhook | null;
 };
 
 /**
@@ -7352,6 +7436,16 @@ export type TaskEvent = {
    * Agent Id
    */
   agent_id: string;
+  /**
+   * Data
+   */
+  data?: {
+    [key: string]: unknown;
+  };
+  /**
+   * Event Id
+   */
+  event_id?: string | null;
   /**
    * Event Type
    */
@@ -7485,6 +7579,10 @@ export type TaskResponse = {
    */
   description: string;
   /**
+   * End User Id
+   */
+  end_user_id?: string | null;
+  /**
    * Error
    */
   error?: string | null;
@@ -7500,6 +7598,12 @@ export type TaskResponse = {
    * Id
    */
   id: string;
+  /**
+   * Metadata
+   */
+  metadata?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Parameters
    */
@@ -7528,6 +7632,10 @@ export type TaskResponse = {
    * Total Cost
    */
   total_cost?: number | null;
+  /**
+   * Total Tokens
+   */
+  total_tokens?: number | null;
 };
 
 /**
@@ -7617,6 +7725,26 @@ export type TaskSummary = {
 };
 
 /**
+ * TaskWebhook
+ *
+ * Where to POST each terminal event of the task, with its cost.
+ */
+export type TaskWebhook = {
+  /**
+   * Secret
+   *
+   * Signs each delivery as X-AgentArea-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">. Write-only: stored in the secret manager.
+   */
+  secret?: string | null;
+  /**
+   * Url
+   *
+   * http(s) URL to POST to.
+   */
+  url: string;
+};
+
+/**
  * TaskWithAgent
  *
  * Task response with agent information for global task listing.
@@ -7643,6 +7771,10 @@ export type TaskWithAgent = {
    */
   description: string;
   /**
+   * End User Id
+   */
+  end_user_id?: string | null;
+  /**
    * Error
    */
   error?: string | null;
@@ -7666,6 +7798,12 @@ export type TaskWithAgent = {
    * Id
    */
   id: string;
+  /**
+   * Metadata
+   */
+  metadata?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Parameters
    */
@@ -7694,6 +7832,10 @@ export type TaskWithAgent = {
    * Total Cost
    */
   total_cost?: number | null;
+  /**
+   * Total Tokens
+   */
+  total_tokens?: number | null;
 };
 
 /**
@@ -10770,7 +10912,14 @@ export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostData = {
      */
     agent_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Follow
+     *
+     * Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.
+     */
+    follow?: boolean;
+  };
   url: "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/";
 };
 

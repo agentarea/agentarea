@@ -53,6 +53,19 @@ def _governance_verdict(error: ActivityError) -> tuple[str, str, bool] | None:
     return cause.type, f"{verdict['interceptor_name']}: {verdict['reason']}", ran
 
 
+def structured_content_field(result: dict[str, Any]) -> dict[str, Any]:
+    """The tool.result keys for an MCP tool's ``structuredContent``.
+
+    Absent when the tool returned none, so events of other tools and older
+    histories keep their shape.
+    """
+    if result.get("structured_content") is not None:
+        return {"structured_content": result["structured_content"]}
+    if result.get("structured_content_dropped"):
+        return {"structured_content_dropped": True}
+    return {}
+
+
 class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
     """Running a capability tool through its activity, with governance verdicts."""
 
@@ -260,6 +273,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                     "service_cost": serialize_money(service_cost),
                     **priced_cost_fields,
                     **paid_call_fields,
+                    **structured_content_field(result_dict),
                     "payment": result_dict.get("payment"),
                     "source": result_dict.get("source"),
                     "server_instance_id": result_dict.get("server_instance_id"),

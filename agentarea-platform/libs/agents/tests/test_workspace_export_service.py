@@ -424,6 +424,25 @@ class TestMcpExport:
         assert bundle.mcps[0].json_spec["headers"] == {"X-Org": "acme"}
 
     @pytest.mark.asyncio
+    async def test_a_signed_url_instance_exports_its_context_secret_as_a_secret_setup_field(
+        self, export_service, mock_mcp_instance_service
+    ):
+        instance = _mcp_instance("App")
+        instance.json_spec = {"context_signing": True}
+        mock_mcp_instance_service.list.return_value = [instance]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "https://app.example.test/mcp",
+        }
+
+        bundle = parse_bundle(await export_service.export_workspace())
+
+        (setup_key,) = setup_refs(bundle.mcps[0].context_secret)
+        field = bundle.setup_field(setup_key)
+        assert field is not None
+        assert field.type.value == "secret"
+
+    @pytest.mark.asyncio
     async def test_a_plain_endpoint_url_is_exported_verbatim(
         self, export_service, mock_mcp_instance_service
     ):

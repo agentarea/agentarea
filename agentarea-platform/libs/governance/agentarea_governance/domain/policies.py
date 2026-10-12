@@ -174,6 +174,23 @@ class ApprovalPolicy(BaseModel):
         return value
 
 
+class AnswerCheckPolicy(BaseModel):
+    """Check an agent's final answer and have the model rewrite it once if it leaks.
+
+    Leaks: CJK characters, tool names and snake_case codes, stack traces, raw
+    JSON, and (for ``language: ru``) lowercase English words in a Russian answer.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    # The answer's language. "ru" adds the English-word check; "zh"/"ja"/"ko"
+    # turn the CJK check off.
+    language: str | None = Field(default=None, min_length=2, max_length=8)
+    # Replaces the default rewrite instruction (the system prompt of the call).
+    rewrite_instruction: str | None = Field(default=None, min_length=1, max_length=4000)
+
+
 class ContentSafetyPolicy(BaseModel):
     """Content-safety governance controls."""
 
@@ -181,6 +198,7 @@ class ContentSafetyPolicy(BaseModel):
 
     prompt_injection_detection_enabled: bool | None = None
     output_sanitizer_enabled: bool | None = None
+    answer_check: AnswerCheckPolicy | None = None
 
 
 class PolicyDocument(BaseModel):
@@ -523,6 +541,8 @@ class PolicyResolver:
             or bool(lower.prompt_injection_detection_enabled),
             output_sanitizer_enabled=bool(higher.output_sanitizer_enabled)
             or bool(lower.output_sanitizer_enabled),
+            # Not a guard but a preference: the more specific layer's setting wins.
+            answer_check=lower.answer_check or higher.answer_check,
         )
 
 
