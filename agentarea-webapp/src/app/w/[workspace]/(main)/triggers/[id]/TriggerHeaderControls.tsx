@@ -108,9 +108,7 @@ export default function TriggerHeaderControls({
         size={isEditing ? "xs" : "sm"}
         variant={isEditing ? "outline" : "default"}
         className={
-          isEditing
-            ? "max-md:min-h-11"
-            : "h-7 gap-1.5 px-3 text-[12.5px] font-semibold max-md:min-h-11"
+          isEditing ? undefined : "h-7 gap-1.5 px-3 text-[12.5px] font-semibold"
         }
         type="button"
         onClick={handleRunNow}
@@ -123,7 +121,6 @@ export default function TriggerHeaderControls({
       <Button
         size="xs"
         variant="outline"
-        className="max-md:min-h-11"
         type="button"
         onClick={handleToggle}
         disabled={isToggling}
@@ -152,17 +149,15 @@ export default function TriggerHeaderControls({
           {tCreate("updateButton")}
         </Button>
       )}
-      <div className="max-md:[&>button]:min-h-11">
-        <DeleteButton
-          size="xs"
-          itemId={triggerId}
-          itemName={triggerName}
-          onDelete={deleteTriggerAction}
-          redirectPath="/triggers"
-          title={t("delete")}
-          errorMessages={{ failedToDelete: tError("deleteFailed") }}
-        />
-      </div>
+      <DeleteButton
+        size="xs"
+        itemId={triggerId}
+        itemName={triggerName}
+        onDelete={deleteTriggerAction}
+        redirectPath="/triggers"
+        title={t("delete")}
+        errorMessages={{ failedToDelete: tError("deleteFailed") }}
+      />
     </div>
   );
 }
