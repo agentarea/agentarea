@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import socket
 from collections.abc import Callable, Collection
@@ -65,6 +66,15 @@ from agentarea_mcp.schemas.dto import (
     MCPServerInstanceCreate,
     MCPServerInstanceUpdate,
     MCPServerUpdate,
+)
+from agentarea_mcp.tool_context import (
+    CONTEXT_HEADER,
+    CONTEXT_SECRET_NAME,
+    CONTEXT_SIGNING_FLAG,
+    ProgressCallback,
+    ToolCallContext,
+    context_meta,
+    sign_context,
 )
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
 from agentarea_mcp.transport_spec import (
@@ -140,6 +150,24 @@ def _spec_endpoint_refusal(remote_url: str | None, json_spec: dict[str, Any] | N
 
 def _instance_owned_spec(spec: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in spec.items() if key not in INSTANCE_TRANSPORT_FIELDS}
+
+
+# Structured tool output rides in the tool.result event, not the model's context;
+# past this many characters of JSON it is dropped there and flagged instead.
+STRUCTURED_CONTENT_MAX_CHARS = 16_000
+
+
+def _capped_structured_content(value: Any) -> tuple[Any, bool]:
+    """``structuredContent`` as the event carries it, and whether it was dropped."""
+    if value is None:
+        return None, False
+    try:
+        size = len(json.dumps(value, default=str))
+    except (TypeError, ValueError):
+        return None, True
+    if size > STRUCTURED_CONTENT_MAX_CHARS:
+        return None, True
+    return value, False
 
 
 def derive_bundle_verification(bundle: MCPServerInstance, members: list[MCPServerInstance]) -> dict:
@@ -636,10 +664,17 @@ class MCPServerInstanceService:
                 if refusal:
                     raise MCPValidationError([refusal])
 
+            context_secret = getattr(payload, "context_secret", None)
+            if context_secret and instance_type != MCPTransport.URL:
+                raise MCPValidationError(["context_secret applies to URL instances only"])
+
             instance_spec = _instance_owned_spec(submitted_spec)
+            instance_spec.pop(CONTEXT_SIGNING_FLAG, None)
             spec, secret_env_vars = await self._extract_secrets_from_spec(
                 instance_spec, server_spec_id
             )
+            if context_secret:
+                spec[CONTEXT_SIGNING_FLAG] = True
 
             create_kwargs: dict[str, Any] = {
                 "name": name,
@@ -686,6 +721,11 @@ class MCPServerInstanceService:
                     exc_info=True,
                 )
                 raise
+
+        if context_secret:
+            await self.env_service.set_instance_environment(
+                instance.id, {CONTEXT_SECRET_NAME: context_secret}
+            )
 
         if is_url_type:
             # Synchronous verify — blocks until succeeded or failed
@@ -754,6 +794,7 @@ class MCPServerInstanceService:
             server_spec_id=server.id,
             json_spec=instance_payload.json_spec,
             auth_config_id=instance_payload.auth_config_id,
+            context_secret=getattr(instance_payload, "context_secret", None),
         )
         instance = await self.create_instance(payload)
         await self._grant_creator_ownership(server.id)
@@ -776,11 +817,14 @@ class MCPServerInstanceService:
 
         if "json_spec" in patch and patch["json_spec"] is not None:
             json_spec = _normalize_url_keys(patch["json_spec"])
+            json_spec.pop(CONTEXT_SIGNING_FLAG, None)
             instance = await self.repository.get_by_id(id)
             if instance:
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
                     json_spec, instance.server_spec_id, instance.json_spec
                 )
+                if (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
+                    cleaned_spec[CONTEXT_SIGNING_FLAG] = True
                 # Transport belongs to the original connection and is immutable
                 # through this DTO. Preserve it while replacing the editable
                 # instance configuration; otherwise every legitimate PATCH drops
@@ -813,6 +857,13 @@ class MCPServerInstanceService:
                         id,
                     )
                 update_kwargs["json_spec"] = cleaned_spec
+
+        if "context_secret" in patch:
+            instance = instance or await self.repository.get_by_id(id)
+            if instance:
+                spec = dict(update_kwargs.get("json_spec", instance.json_spec) or {})
+                await self._set_context_secret(instance, patch["context_secret"], spec)
+                update_kwargs["json_spec"] = spec
 
         instance = await self.repository.update(id, **update_kwargs)
         if not instance:
@@ -1065,6 +1116,30 @@ class MCPServerInstanceService:
         headers.update(await self._secret_headers(instance))
         return headers
 
+    async def _set_context_secret(
+        self, instance: MCPServerInstance, secret: str | None, spec: dict[str, Any]
+    ) -> None:
+        """Store or remove the key that signs this instance's call context.
+
+        ``spec`` is the json_spec about to be saved; its flag follows the secret.
+        """
+        if secret:
+            if instance.transport != MCPTransport.URL:
+                raise MCPValidationError(["context_secret applies to URL instances only"])
+            await self.env_service.set_instance_environment(
+                instance.id, {CONTEXT_SECRET_NAME: secret}
+            )
+            spec[CONTEXT_SIGNING_FLAG] = True
+        else:
+            await self.env_service.delete_instance_environment(instance.id, [CONTEXT_SECRET_NAME])
+            spec.pop(CONTEXT_SIGNING_FLAG, None)
+
+    async def _context_secret(self, instance: MCPServerInstance) -> str | None:
+        if not (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
+            return None
+        stored = await self.env_service.get_instance_environment(instance.id, [CONTEXT_SECRET_NAME])
+        return stored.get(CONTEXT_SECRET_NAME) or None
+
     async def get_instance_environment(self, instance_id: UUID) -> dict[str, str]:
         instance = await self.repository.get_by_id(instance_id)
         if not instance:
@@ -1088,9 +1163,10 @@ class MCPServerInstanceService:
         # The auth configs minted for the instance go with its row (ON DELETE
         # CASCADE); what they and the instance keep in the secret store goes
         # first, so a failure leaves a delete to retry, not an orphan secret.
-        await self.env_service.delete_instance_environment(
-            instance.id, instance.get_configured_env_vars()
-        )
+        stored_names = instance.get_configured_env_vars()
+        if (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
+            stored_names = [*stored_names, CONTEXT_SECRET_NAME]
+        await self.env_service.delete_instance_environment(instance.id, stored_names)
         await self._release_owned_auth(instance.id)
         deleted = await self.repository.delete(id)
         if deleted:
@@ -1150,14 +1226,23 @@ class MCPServerInstanceService:
         tool_name: str,
         tool_args: dict[str, Any],
         httpx_client_factory: Callable[..., Any] | None = None,
+        *,
+        call_context: ToolCallContext | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
         """Execute a tool on an MCP server instance.
 
         Handles url/docker/command types directly. For bundle instances,
         resolves the original member via tools metadata and dispatches to that member.
 
+        ``call_context`` reaches a URL instance that has a context signing secret
+        as ``_meta`` keys plus a signed ``X-AgentArea-Context`` header bound to
+        that instance (``aud``) and tool; other instances get neither.
+        ``progress_callback`` receives the server's ``notifications/progress``.
+
         Returns {"success": bool, "result": str, "error": str|None,
-                 "tool_name": str, "server_instance_id": str}
+                 "tool_name": str, "server_instance_id": str,
+                 "structured_content": Any, "structured_content_dropped": bool}
         """
 
         def _fail(result_msg: str, error_msg: str) -> dict[str, Any]:
@@ -1217,13 +1302,28 @@ class MCPServerInstanceService:
                 original_tool_name,
                 tool_args,
                 httpx_client_factory=httpx_client_factory,
+                call_context=call_context,
+                progress_callback=progress_callback,
             )
 
         try:
             mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
             verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
+            meta: dict[str, Any] | None = None
             if instance_type == MCPTransport.URL:
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
+                secret = await self._context_secret(instance) if call_context else None
+                if call_context is not None and secret:
+                    meta = context_meta(call_context)
+                    headers = {
+                        **headers,
+                        CONTEXT_HEADER: sign_context(
+                            call_context,
+                            secret=secret,
+                            audience=str(instance.id),
+                            tool=tool_name,
+                        ),
+                    }
             elif httpx_client_factory is None:
                 httpx_client_factory = platform_client_factory
             else:
@@ -1252,6 +1352,8 @@ class MCPServerInstanceService:
                 transport=transport,
                 verdict_key=verdict_key,
                 verdict_store=self.era_verdict_store,
+                meta=meta,
+                progress_callback=progress_callback,
             )
         except Exception as e:
             logger.error(
@@ -1299,12 +1401,15 @@ class MCPServerInstanceService:
             return _fail(error_msg, error_msg)
 
         record_dispatch(server_instance_id)
+        structured, dropped = _capped_structured_content(structured_content)
         return {
             "success": True,
             "result": result_str,
             "error": None,
             "tool_name": tool_name,
             "server_instance_id": str(server_instance_id),
+            "structured_content": structured,
+            "structured_content_dropped": dropped,
         }
 
     async def _resolve_mcp_url_and_headers(
@@ -1384,11 +1489,15 @@ class MCPServerInstanceService:
         *,
         verdict_key: str | None = None,
         verdict_store=None,
+        meta: dict[str, Any] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ):
         return await self._with_mcp_session(
             mcp_url,
             headers,
-            lambda client: client.call_tool(tool_name, tool_args),
+            lambda client: client.call_tool(
+                tool_name, tool_args, progress_callback=progress_callback, meta=meta
+            ),
             httpx_client_factory=httpx_client_factory,
             transport=transport,
             verdict_key=verdict_key,
