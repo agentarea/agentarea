@@ -61,3 +61,20 @@ def build_auth_config_access_checker(
         await service.get_for_use(config_id)
 
     return check
+
+
+def build_owned_auth_releaser(
+    repository_factory,
+    secret_manager: BaseSecretManager,
+) -> Callable[[UUID], Awaitable[None]]:
+    """Build the step that discards an OpenAPI connection's minted auth configs.
+
+    Their rows go with the connection's; see ``MCPAuthService.release_owned``.
+    """
+    repository = repository_factory.create_repository(MCPAuthConfigRepository)
+    service = MCPAuthService(repository, secret_manager)
+
+    async def release(connection_id: UUID) -> None:
+        await service.release_owned(openapi_connection_id=connection_id)
+
+    return release

@@ -656,6 +656,7 @@ async def _telegram_service(token: str | None = _TELEGRAM_TOKEN):
         repository_factory=MagicMock(),
         secret_manager=secrets,
         auth_config_access_checker=AsyncMock(),
+        owned_auth_releaser=AsyncMock(),
         outbound_policy=OutboundPolicy(),
     )
     svc._repo = AsyncMock()
@@ -754,6 +755,7 @@ async def _metrica_service(token: str | None = _METRICA_TOKEN):
         repository_factory=MagicMock(),
         secret_manager=secrets,
         auth_config_access_checker=AsyncMock(),
+        owned_auth_releaser=AsyncMock(),
         outbound_policy=OutboundPolicy(),
     )
     svc._repo = AsyncMock()

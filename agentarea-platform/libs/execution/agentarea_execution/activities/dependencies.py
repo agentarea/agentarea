@@ -123,6 +123,7 @@ class ActivityServiceContainer:
         from agentarea_mcp.application.auth_resolver import (
             build_auth_config_access_checker,
             build_auth_header_resolver,
+            build_owned_auth_releaser,
         )
 
         service = OpenAPIConnectionService(
@@ -132,6 +133,7 @@ class ActivityServiceContainer:
                 repository_factory, secret_manager
             ),
             auth_header_resolver=build_auth_header_resolver(repository_factory, secret_manager),
+            owned_auth_releaser=build_owned_auth_releaser(repository_factory, secret_manager),
             outbound_policy=OutboundPolicy.from_env(),
         )
         return service, session

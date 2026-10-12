@@ -49,6 +49,7 @@ class TestDiscoverTools:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
 
@@ -122,6 +123,7 @@ class TestResolveHeaders:
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
             auth_header_resolver=resolver,
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         conn = OpenAPIConnection(
@@ -157,6 +159,7 @@ class TestResolveHeaders:
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
             auth_header_resolver=resolver,
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         conn = OpenAPIConnection(
@@ -180,6 +183,7 @@ class TestCreateConnection:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
@@ -240,6 +244,7 @@ class TestUpdateConnection:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
@@ -272,6 +277,7 @@ class TestCreateConnectionAuthConfigAccess:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=checker,
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
@@ -340,6 +346,7 @@ class TestUpdateConnectionAuthConfigAccess:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=checker,
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
@@ -576,6 +583,7 @@ class TestYamlSpecWithBareDates:
             repository_factory=mock_factory,
             secret_manager=AsyncMock(),
             auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(allow_private=True),
         )
 
@@ -606,6 +614,7 @@ class TestUrlVariables:
             repository_factory=mock_factory,
             secret_manager=secret_manager,
             auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
@@ -781,6 +790,7 @@ class TestCustomQueryParams:
             repository_factory=mock_factory,
             secret_manager=secret_manager,
             auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=AsyncMock(),
             outbound_policy=OutboundPolicy(),
         )
         svc._repo = AsyncMock()
@@ -1082,3 +1092,54 @@ class TestRecordDispatch:
         await svc.record_dispatch(uuid4())
 
         assert "db gone" in caplog.text
+
+
+class TestDeleteConnectionReleasesItsAuth:
+    def _service(self, conn, calls: list[str]) -> OpenAPIConnectionService:
+        factory = MagicMock()
+        repo = AsyncMock()
+        repo.get_by_id.return_value = conn
+        repo.delete.side_effect = lambda *_a: calls.append("delete") or True
+        factory.create_repository.return_value = repo
+
+        async def release(connection_id):
+            calls.append(f"release {connection_id}")
+
+        return OpenAPIConnectionService(
+            repository_factory=factory,
+            secret_manager=FakeSecretManager(),
+            auth_config_access_checker=AsyncMock(),
+            owned_auth_releaser=release,
+            outbound_policy=OutboundPolicy(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_auth_minted_for_the_connection_is_released_before_its_row_goes(self):
+        # The row's delete takes the minted auth config rows with it; their
+        # credential lives in the secret store and must go first, or nothing
+        # would point at it any more.
+        conn = OpenAPIConnection(id=uuid4(), name="Metrica", base_url="https://api.example.com")
+        calls: list[str] = []
+
+        assert await self._service(conn, calls).delete_connection(conn.id) is True
+
+        assert calls == [f"release {conn.id}", "delete"]
+
+    @pytest.mark.asyncio
+    async def test_a_missing_connection_releases_nothing(self):
+        calls: list[str] = []
+        svc = self._service(None, calls)
+        svc._repo.delete.side_effect = lambda *_a: False
+
+        assert await svc.delete_connection(uuid4()) is False
+
+        assert calls == []
+
+    def test_the_releaser_is_required(self):
+        with pytest.raises(TypeError, match="owned_auth_releaser"):
+            OpenAPIConnectionService(  # type: ignore[call-arg]
+                repository_factory=MagicMock(),
+                secret_manager=FakeSecretManager(),
+                auth_config_access_checker=AsyncMock(),
+                outbound_policy=OutboundPolicy(),
+            )

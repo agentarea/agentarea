@@ -5,7 +5,7 @@ answered with an approval link; the client's retry with the same arguments
 (matched by arguments_hash) runs it once the call is approved.
 
 Revision ID: 20261006_1200_tool_call_approval
-Revises: 20261010_1000_user_ext_ids
+Revises: 20261011_1800_auth_config_owner
 Create Date: 2026-10-06 12:00:00.000000
 """
 
@@ -16,7 +16,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20261006_1200_tool_call_approval"
-down_revision: str | None = "20261010_1000_user_ext_ids"
+down_revision: str | None = "20261011_1800_auth_config_owner"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

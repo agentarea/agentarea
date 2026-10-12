@@ -421,7 +421,7 @@ equivalent are listed; the rest map onto the groups above.
 | `AGENTAREA_AUTH_JWKS_B64` / `AGENTAREA_AUTH_ISSUER` / `AGENTAREA_AUTH_AUDIENCE` | yes | a published test key |
 | `AGENTAREA_AUTH_KRATOS_ADMIN_URL` | yes, to show member names | `http://kratos:4434` |
 | `SMTP_*` | for email delivery | targets the bundled Mailpit |
-| `AGENTAREA_APP_URL` | for links in invitation email | `http://localhost:3000` |
+| `AGENTAREA_APP_URL` | for links in invitation email and the Telegram bot's account-link reply | `http://localhost:3000` |
 | `OIDC_GOOGLE_*` / `OIDC_GITHUB_*` | for social login | empty |
 | `VERSION` | no | `latest` |
 | `AGENTAREA_API_WORKERS` / `RELOAD` / `PORT` / `AGENTAREA_LOG_LEVEL` | no | `1` / `false` / `8000` / `info` |

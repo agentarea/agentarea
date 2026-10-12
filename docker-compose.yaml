@@ -468,6 +468,8 @@ services:
 
       # Redis
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      # Links the worker sends out (the Telegram account-link reply)
+      - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
 
       # Temporal
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
