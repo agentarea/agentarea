@@ -64,6 +64,7 @@ def make_task_state_activities(
                 if (
                     request.result
                 ):  # Task model expects result as dict, but request carries it as JSON string
+                    result_dict: dict[str, Any]
                     try:
                         result_dict = json.loads(request.result)
                     except (json.JSONDecodeError, TypeError):
@@ -73,6 +74,8 @@ def make_task_state_activities(
                         result_dict["total_cost"] = str(request.total_cost)
                     if request.own_cost is not None:
                         result_dict["own_cost"] = str(request.own_cost)
+                    if request.tokens_used is not None:
+                        result_dict["tokens_used"] = request.tokens_used
                     additional_fields["result"] = result_dict
                 elif request.total_cost is not None or request.own_cost is not None:
                     # Serialize Money (Decimal) to string for JSON compatibility
@@ -81,6 +84,8 @@ def make_task_state_activities(
                         additional_fields["result"]["total_cost"] = str(request.total_cost)
                     if request.own_cost is not None:
                         additional_fields["result"]["own_cost"] = str(request.own_cost)
+                    if request.tokens_used is not None:
+                        additional_fields["result"]["tokens_used"] = request.tokens_used
                 if request.error_message:
                     # Tasks table stores this as `error`, not `error_message`.
                     additional_fields["error"] = request.error_message

@@ -23,6 +23,7 @@ RESERVED_PREFIXES: tuple[str, ...] = (
     "openapi:",
     "task-input/",
     "a2a_push_token:",
+    "task_webhook:",
 )
 
 _USER_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$")
@@ -113,6 +114,10 @@ def _parse_a2a_push_token(rest: str) -> OwnerRef | None:
     return OwnerRef("task", task_id)
 
 
+def _parse_task_webhook(rest: str) -> OwnerRef | None:
+    return OwnerRef("task", rest) if _UUID_RE.fullmatch(rest) else None
+
+
 _PARSERS = (
     ("provider_config_", _parse_provider_config),
     ("mcp_instance_", _parse_mcp_instance),
@@ -122,6 +127,7 @@ _PARSERS = (
     ("openapi:", _parse_openapi),
     ("task-input/", _parse_task_input),
     ("a2a_push_token:", _parse_a2a_push_token),
+    ("task_webhook:", _parse_task_webhook),
 )
 
 

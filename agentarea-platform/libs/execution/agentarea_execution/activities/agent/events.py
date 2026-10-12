@@ -24,7 +24,14 @@ logger = logging.getLogger(__name__)
 async def load_task_parameters(
     container: "ActivityServiceContainer", user_context: UserContext, task_id: str
 ) -> dict[str, Any]:
-    """The task's parameters, which carry its channel origin and A2A push configs."""
+    """Where the task's events go: its parameters and the routing part of its metadata.
+
+    Parameters carry the channel origin and A2A push configs. From the trusted
+    metadata only the task webhook config and what its delivery reports (the
+    caller's end user id and metadata) are copied, under reserved keys.
+    """
+    from agentarea_common.utils.task_webhook import TASK_WEBHOOK_KEY
+    from agentarea_mcp.tool_context import APP_METADATA_KEY, END_USER_ID_KEY
     from agentarea_tasks.infrastructure.repository import TaskRepository
 
     from ..dependencies import ActivityContext
@@ -33,7 +40,21 @@ async def load_task_parameters(
         session = container._database.async_session_factory()
         ctx._sessions.append(session)
         task = await TaskRepository(session, user_context).get_task(UUID(task_id))
-    return dict(task.parameters or {}) if task else {}
+    if not task:
+        return {}
+    parameters = dict(task.parameters or {})
+    metadata = task.metadata or {}
+    if isinstance(metadata.get(TASK_WEBHOOK_KEY), dict):
+        parameters[_WEBHOOK_ROUTE_KEY] = {
+            **metadata[TASK_WEBHOOK_KEY],
+            "end_user_id": metadata.get(END_USER_ID_KEY),
+            "app_metadata": metadata.get(APP_METADATA_KEY),
+        }
+    return parameters
+
+
+# Not a task parameter: added by load_task_parameters from trusted metadata only.
+_WEBHOOK_ROUTE_KEY = "__task_webhook_route"
 
 
 def make_events_activities(
@@ -154,6 +175,29 @@ async def _emit_channel_deliveries(
         broker=broker,
         stream=stream,
     )
+
+    webhook = (await parameters_of(task_id)).get(_WEBHOOK_ROUTE_KEY)
+    if isinstance(webhook, dict) and webhook.get("url"):
+        await emit_channel_delivery(
+            event={
+                **event_with_id,
+                "timestamp": event.get("timestamp"),
+                "data": {
+                    **data,
+                    "end_user_id": webhook.get("end_user_id"),
+                    "app_metadata": webhook.get("app_metadata"),
+                },
+            },
+            channel_origin={
+                "type": "task_webhook",
+                "url": webhook["url"],
+                "signed": bool(webhook.get("signed")),
+                "presentation": "silent",
+            },
+            broker=broker,
+            stream=stream,
+            dedup_suffix="task_webhook",
+        )
 
     push_configs = (await parameters_of(task_id)).get("a2a_push_configs")
     for cfg in push_configs if isinstance(push_configs, list) else []:

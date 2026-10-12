@@ -130,6 +130,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                         "success": True,
                         "iterations_completed": self.state.current_iteration,
                         "total_cost": serialize_money(self._budget.cost),
+                        "tokens_used": self.state.tokens_used,
                         "result": self.state.final_response,
                         "validation_state": self.state.validation_state,
                         **(

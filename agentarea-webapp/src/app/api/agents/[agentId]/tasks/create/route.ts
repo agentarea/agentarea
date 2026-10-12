@@ -28,8 +28,9 @@ export async function POST(
     // Task creation is JSON. Files are pre-staged via POST /v1/files/upload-url
     // (presigned upload) and referenced by ref in the body's `attachments` array.
     const backendUrl = env.AGENTAREA_API_URL;
+    // follow=true: the chat reads follow-up turns from this same stream.
     const createTaskUrl = fillWorkspace(
-      `${backendUrl}/v1/workspaces/{workspace}/agents/${agentId}/tasks/`,
+      `${backendUrl}/v1/workspaces/{workspace}/agents/${agentId}/tasks/?follow=true`,
       resolveRequestWorkspaceSlug(request)
     );
 

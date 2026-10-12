@@ -699,6 +699,8 @@ class UpdateTaskStatusRequest(BaseModel):
     workspace_id: str
     total_cost: Money | None = None
     own_cost: Money | None = None
+    # Cumulative model tokens of the run, stored with total_cost for billing.
+    tokens_used: int | None = None
     user_context_data: dict[str, Any] | None = None
     # Entries the run added since its last model call, written with the status.
     conversation: ConversationWindow | None = None

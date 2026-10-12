@@ -69,6 +69,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     "success": self.state.success,
                     "iterations_completed": self.state.current_iteration,
                     "total_cost": serialize_money(self._budget.cost),
+                    "tokens_used": self.state.tokens_used,
                     "final_response": self.state.final_response,
                     "status": self.state.status,
                     "failure_reason": self.state.failure_reason,
@@ -124,6 +125,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                     own_cost=self._own_cost,
+                    tokens_used=self.state.tokens_used,
                     conversation=self._conversation_window(),
                     conversation_pending=conversation_pending,
                     conversation_resume=conversation_resume,
@@ -186,6 +188,10 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     "error": user_message,
                     "error_type": self._get_user_facing_error_type(error),
                     "iterations_completed": self.state.current_iteration,
+                    "total_cost": serialize_money(
+                        self.budget_tracker.cost if self.budget_tracker else ZERO
+                    ),
+                    "tokens_used": self.state.tokens_used,
                     "status": self.state.status,
                     "blocked_reason": self.state.blocked_reason,
                 },
@@ -207,6 +213,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                         workspace_id=self.state.workspace_id,
                         total_cost=self.budget_tracker.cost if self.budget_tracker else None,
                         own_cost=self._own_cost if self.budget_tracker else None,
+                        tokens_used=self.state.tokens_used,
                         conversation=self._conversation_window(),
                         conversation_pending=self._conversation_payload(),
                     )

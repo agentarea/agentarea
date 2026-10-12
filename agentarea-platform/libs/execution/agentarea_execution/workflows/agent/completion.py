@@ -197,6 +197,7 @@ class CompletionMixin(BudgetMixin):
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                     own_cost=self._own_cost,
+                    tokens_used=self.state.tokens_used,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,

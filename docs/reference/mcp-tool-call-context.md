@@ -200,7 +200,10 @@ duplicate.
 
 The model cannot set `metadata` or `end_user_id`: they are task metadata,
 written when the task is created and carried into every tool call of the task,
-follow-ups included.
+follow-ups included. Reading the task back (`GET …/tasks/{task_id}`, the task
+lists) returns both to API key and service-client callers and `null` to anyone
+else. To bill per end user, see
+[Charge your users for task cost](/guides/tasks/charge-for-task-cost).
 
 ## Versioning
 

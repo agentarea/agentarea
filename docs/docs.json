@@ -127,6 +127,7 @@
               "guides/tasks/start-a-task",
               "guides/tasks/attach-files",
               "guides/tasks/stream-events",
+              "guides/tasks/charge-for-task-cost",
               "guides/tasks/retrieve-artifacts",
               "guides/tasks/debug-a-failed-task",
               "guides/tasks/cancel-and-retry"
