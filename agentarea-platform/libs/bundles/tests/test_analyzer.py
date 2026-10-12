@@ -227,3 +227,68 @@ async def test_an_automation_whose_trigger_name_is_too_long_blocks():
     preview = await BundleAnalyzer().analyze(pkg)
     assert preview.installable is False
     assert any(i.entity_key == "nightly_run" for i in preview.block_issues)
+
+
+BROKEN_SKILL = """
+schema_version: "0.1.0"
+name: p
+skills:
+  - key: tiles
+    name: Tiles
+    content: |
+      ---
+      name: tiles
+      description: Набор: плитка
+      ---
+      # Tiles
+"""
+
+
+async def test_a_skill_whose_frontmatter_does_not_parse_blocks_the_bundle():
+    preview = await BundleAnalyzer().analyze(parse_bundle(BROKEN_SKILL))
+
+    assert preview.installable is False
+    (issue,) = preview.block_issues
+    assert issue.entity_key == "tiles"
+    assert "skill 'tiles' is not a valid SKILL.md" in issue.message
+    assert "quote values" in issue.message
+
+
+def _signed_url_mcp(setup_type: str, spec_type: str = "url") -> str:
+    spec = (
+        "{type: url, endpoint_url: 'https://app.example/mcp'}"
+        if spec_type == "url"
+        else "{type: command, command: npx}"
+    )
+    return f"""
+schema_version: "0.1.0"
+name: p
+setup:
+  - {{key: signing, label: Signing key, type: {setup_type}, required: true}}
+mcps:
+  - key: app
+    name: App
+    json_spec: {spec}
+    context_secret: "${{setup.signing}}"
+"""
+
+
+async def test_a_url_mcp_takes_its_context_secret_from_a_secret_setup_field():
+    preview = await BundleAnalyzer().analyze(parse_bundle(_signed_url_mcp("secret")))
+    assert preview.installable is True
+
+
+async def test_a_context_secret_from_a_plain_setup_field_blocks():
+    preview = await BundleAnalyzer().analyze(parse_bundle(_signed_url_mcp("string")))
+    assert any("of type 'secret'" in i.message for i in preview.block_issues)
+
+
+async def test_a_context_secret_on_a_command_mcp_blocks():
+    preview = await BundleAnalyzer().analyze(parse_bundle(_signed_url_mcp("secret", "command")))
+    assert any("url MCPs only" in i.message for i in preview.block_issues)
+
+
+async def test_a_literal_context_secret_is_not_a_bundle():
+    source = _signed_url_mcp("secret").replace("${setup.signing}", "x" * 40)
+    with pytest.raises(BundleParseError, match="never the secret itself"):
+        parse_bundle(source)

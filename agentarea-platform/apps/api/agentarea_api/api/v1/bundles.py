@@ -13,7 +13,7 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_bundles.application.analyzer import BundleParseError
-from agentarea_bundles.application.installer import BundleInstallError
+from agentarea_bundles.application.installer import BundleInstallError, BundleValidationError
 from agentarea_bundles.application.service import BundleService
 from agentarea_bundles.schemas.bundle import Bundle
 from agentarea_bundles.schemas.preview import ImportPreview
@@ -192,12 +192,17 @@ async def install_bundle(
     body: InstallRequest,
     service: BundleServiceDep,
 ) -> InstallResult:
-    """Install a canonical bundle: MCP instances, skills, agents and automations."""
+    """Install a canonical bundle: MCP instances, skills, agents and automations.
+
+    All or nothing: a failure removes whatever this install had created. A
+    bundle or setup value that is invalid answers 422; any other install
+    failure answers 400. Both carry ``{message, issues}``.
+    """
     try:
         return await service.install(body.bundle, body.setup_values)
     except BundleInstallError as exc:
         raise HTTPException(
-            status_code=400,
+            status_code=422 if isinstance(exc, BundleValidationError) else 400,
             detail={
                 "message": str(exc),
                 "issues": [i.model_dump(mode="json") for i in exc.issues],

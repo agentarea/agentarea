@@ -13,7 +13,8 @@ Design notes:
   service (``type``: ``command`` | ``docker`` | ``url``) — no second schema.
   ``args`` and ``endpoint_url`` may contain ``${setup.<key>}`` references;
   ``environment`` / ``headers`` hold literal non-secret configuration, while
-  credentials go through ``bindings``.
+  credentials go through ``bindings``. A URL MCP's ``context_secret`` is a
+  ``${setup.<key>}`` reference to a secret setup field, like a binding.
 """
 
 from __future__ import annotations
@@ -124,6 +125,14 @@ class BundleMcp(BaseModel):
             "reference, e.g. {'GITHUB_TOKEN': '${setup.github_token}'}."
         ),
     )
+    context_secret: str | None = Field(
+        default=None,
+        description=(
+            "URL MCPs only. A ${setup.x} reference to a secret setup field whose "
+            "value becomes the instance's context_secret: the key AgentArea signs "
+            "each tool call's context with. Write-only, like a header secret."
+        ),
+    )
 
     @field_validator("key")
     @classmethod
@@ -131,6 +140,18 @@ class BundleMcp(BaseModel):
         if not _KEY_RE.match(v):
             raise ValueError(f"mcp key '{v}' must match [a-zA-Z][a-zA-Z0-9_]*")
         return v
+
+    @field_validator("context_secret")
+    @classmethod
+    def _context_secret_is_a_reference(cls, v: str | None) -> str | None:
+        # A literal value here would travel in the bundle and be stored with the
+        # install record; only a reference to a setup field may.
+        if v is not None and not _PLACEHOLDER_RE.fullmatch(v.strip()):
+            raise ValueError(
+                "context_secret must be a single ${setup.<key>} reference to a secret "
+                "setup field, never the secret itself"
+            )
+        return v.strip() if v is not None else None
 
 
 class BundleSkill(BaseModel):
