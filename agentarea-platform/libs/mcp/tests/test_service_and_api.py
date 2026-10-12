@@ -130,6 +130,8 @@ def _make_service(
     svc.env_service = MagicMock()
     svc.env_service.set_instance_environment = AsyncMock()
     svc.env_service.get_instance_environment = AsyncMock(return_value={})
+    svc.env_service.delete_instance_environment = AsyncMock()
+    svc._release_owned_auth = AsyncMock()
     svc.db = MagicMock()
     svc.era_verdict_store = None
 
@@ -348,6 +350,50 @@ async def test_delete_container_instance_retires_runtime_before_desired_state():
     assert client.calls == [(f"http://manager/mcp/{instance.id}", {"X-Auth": "secret"})]
     assert await svc.repository.get_by_id(instance.id) is None
     svc.event_broker.publish.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_discards_the_instance_secrets_and_minted_auth_before_its_row():
+    # The row's delete takes the auth configs minted for the instance with it;
+    # what they and the instance hold in the secret store goes first.
+    instance = _make_instance("url")
+    instance.get_configured_env_vars.return_value = ["X-Api-Key"]
+    svc = _make_service({str(instance.id): instance})
+    calls: list[str] = []
+    svc._release_owned_auth.side_effect = lambda instance_id: calls.append(f"auth {instance_id}")
+    svc.env_service.delete_instance_environment.side_effect = lambda instance_id, names: calls.append(
+        f"env {instance_id} {names}"
+    )
+    delete = svc.repository.delete
+
+    async def delete_row(id_):
+        calls.append("row")
+        return await delete(id_)
+
+    svc.repository.delete = delete_row
+
+    assert await svc.delete_instance(instance.id) is True
+
+    assert calls == [
+        f"env {instance.id} ['X-Api-Key']",
+        f"auth {instance.id}",
+        "row",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_retirement_discards_nothing():
+    instance = _make_instance("docker")
+    svc = _make_service({str(instance.id): instance})
+    svc._retire_runtime_before_mutation = AsyncMock(
+        side_effect=MCPRuntimeRetirementError("desired state was preserved")
+    )
+
+    with pytest.raises(MCPRuntimeRetirementError):
+        await svc.delete_instance(instance.id)
+
+    svc._release_owned_auth.assert_not_awaited()
+    svc.env_service.delete_instance_environment.assert_not_awaited()
 
 
 @pytest.mark.asyncio
