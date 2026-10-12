@@ -18,6 +18,7 @@ import {
   canAuthorize,
   canUseOwnApp,
   deriveOAuthConnectState,
+  preflightAfterAuthorizeError,
   type OAuthConnectState,
   type OAuthPreflight,
 } from "./oauth-connect-state";
@@ -79,7 +80,7 @@ export function OAuthConnectPanel({
   const [fetchedPreflight, setPreflight] = useState<OAuthPreflight | null>(
     null
   );
-  const preflight = givenPreflight ?? fetchedPreflight;
+  const preflight = fetchedPreflight ?? givenPreflight ?? null;
   const hasGivenPreflight = givenPreflight !== undefined;
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const [credentials, setCredentials] =
@@ -162,7 +163,9 @@ export function OAuthConnectPanel({
       if (!request) return;
       const { data, error, code } = await oauthAuthorizeAction(request);
       if (error || !data?.authorize_url) {
-        setConnectError(error || t("startFailed"));
+        const message = error || t("startFailed");
+        setConnectError(message);
+        setPreflight(preflightAfterAuthorizeError(preflight, code, message));
         onAuthorizeError?.(code);
         return;
       }
@@ -187,6 +190,7 @@ export function OAuthConnectPanel({
     onConnectStart,
     onAuthorizeError,
     returnPath,
+    preflight,
   ]);
 
   if (state.kind === "hidden") return null;

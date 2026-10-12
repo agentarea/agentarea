@@ -10,6 +10,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Check } from "lucide-react";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
+import type { ToolCallApprovalResponse } from "@/api/client/types.gen";
 import { InboxBatchDecisionDialog } from "@/app/w/[workspace]/(main)/inbox/components/InboxBatchDecisionDialog";
 import { InboxClientPanel } from "@/app/w/[workspace]/(main)/inbox/components/InboxClientPanel";
 import { InboxDecisionList } from "@/app/w/[workspace]/(main)/inbox/components/InboxDecisionList";
@@ -28,6 +29,7 @@ import {
 } from "@/app/w/[workspace]/(main)/inbox/components/inboxShared";
 import { InboxTaskList } from "@/app/w/[workspace]/(main)/inbox/components/InboxTaskList";
 import { InboxToolbar } from "@/app/w/[workspace]/(main)/inbox/components/InboxToolbar";
+import { InboxToolCallList } from "@/app/w/[workspace]/(main)/inbox/components/InboxToolCallList";
 import type { ApprovalDecisionResult } from "@/components/Approvals/ApprovalDecisionCard";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
@@ -50,6 +52,9 @@ interface InboxClientProps {
   decisions: InboxDecision[];
   decisionsTotal: number;
   decisionsError: string | null;
+  /** Client tool calls waiting on an approval link. */
+  toolCalls: ToolCallApprovalResponse[];
+  toolCallsError: string | null;
 }
 
 type BatchDecision = { approved: boolean; tasks: InboxTask[] };
@@ -60,6 +65,8 @@ export function InboxClient({
   decisions,
   decisionsTotal,
   decisionsError,
+  toolCalls,
+  toolCallsError,
 }: InboxClientProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("InboxPage");
@@ -96,8 +103,9 @@ export function InboxClient({
   );
 
   const { counts, unknown } = useMemo(
-    () => countInbox(items.map(effectiveStatus), decisionsTotal),
-    [items, effectiveStatus, decisionsTotal]
+    () =>
+      countInbox(items.map(effectiveStatus), decisionsTotal, toolCalls.length),
+    [items, effectiveStatus, decisionsTotal, toolCalls.length]
   );
 
   useEffect(() => {
@@ -107,6 +115,8 @@ export function InboxClient({
   }, [unknown]);
 
   const showingDecisions = filter === "decided";
+  const showingToolCalls =
+    (filter === "all" || filter === "pending") && toolCalls.length > 0;
   const visible = useMemo(() => {
     if (filter === "decided") return [];
     return items.filter((task) =>
@@ -134,9 +144,14 @@ export function InboxClient({
 
   // Jump to the first task still waiting on a decision; a filter that hides
   // it (completed / failed / decided) switches to the approval queue first.
+  // A held tool call is decided on its own page, so it is next only when no
+  // task is waiting.
   function openNextPending() {
     const next = items.find((task) => isPending(effectiveStatus(task)));
-    if (!next) return;
+    if (!next) {
+      if (toolCalls[0]) router.push(`/approve/${toolCalls[0].id}`);
+      return;
+    }
     if (filter !== "all" && filter !== "pending") changeFilter("pending");
     setSelectedId(String(next.id));
   }
@@ -346,6 +361,9 @@ export function InboxClient({
             {resolveError && (
               <FormError className="m-3 mb-0">{resolveError}</FormError>
             )}
+            {toolCallsError && (
+              <FormError className="m-3 mb-0">{toolCallsError}</FormError>
+            )}
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {showingDecisions ? (
@@ -355,20 +373,27 @@ export function InboxClient({
                   empty={<InboxEmptyState filter="decided" counts={counts} />}
                 />
               ) : (
-                <InboxTaskList
-                  visible={visible}
-                  filter={filter}
-                  counts={counts}
-                  selectedId={selectedId}
-                  checked={checked}
-                  anyChecked={anyChecked}
-                  effectiveStatus={effectiveStatus}
-                  onSelect={setSelectedId}
-                  onToggleCheck={toggleCheck}
-                  onResolve={(task, approved) => {
-                    void resolveOne(task, approved);
-                  }}
-                />
+                <>
+                  {showingToolCalls && (
+                    <InboxToolCallList approvals={toolCalls} />
+                  )}
+                  {(visible.length > 0 || !showingToolCalls) && (
+                    <InboxTaskList
+                      visible={visible}
+                      filter={filter}
+                      counts={counts}
+                      selectedId={selectedId}
+                      checked={checked}
+                      anyChecked={anyChecked}
+                      effectiveStatus={effectiveStatus}
+                      onSelect={setSelectedId}
+                      onToggleCheck={toggleCheck}
+                      onResolve={(task, approved) => {
+                        void resolveOne(task, approved);
+                      }}
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -286,8 +286,15 @@ export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
  * BudgetPolicy
  *
  * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month.
  */
 export const zBudgetPolicyInput = z.object({
+  agent_monthly_spend_cap_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   monthly_spend_cap_usd: z
     .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
     .nullish(),
@@ -303,8 +310,13 @@ export const zBudgetPolicyInput = z.object({
  * BudgetPolicy
  *
  * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month.
  */
 export const zBudgetPolicyOutput = z.object({
+  agent_monthly_spend_cap_usd: z.string().nullish(),
   monthly_spend_cap_usd: z.string().nullish(),
   run_budget_usd: z.string().nullish(),
   service_budget_usd: z.string().nullish(),
@@ -3187,6 +3199,60 @@ export const zTelegramLinkResponse = z.object({
 export const zTokenPolicy = z.object({
   max_tokens: z.number().int().gt(0).nullish(),
   max_tokens_per_call: z.number().int().gt(0).nullish(),
+});
+
+/**
+ * ToolCallApprovalDecision
+ */
+export const zToolCallApprovalDecision = z.object({
+  approved: z.boolean(),
+  comment: z.string().max(2000).nullish(),
+});
+
+/**
+ * ToolCallApprovalStatus
+ */
+export const zToolCallApprovalStatus = z.enum([
+  "pending",
+  "approved",
+  "rejected",
+  "consumed",
+  "expired",
+]);
+
+/**
+ * ToolCallApprovalResponse
+ */
+export const zToolCallApprovalResponse = z.object({
+  arguments: z.record(z.unknown()).nullable(),
+  can_decide: z.boolean(),
+  client_id: z.string().nullable(),
+  client_name: z.string().nullable(),
+  comment: z.string().nullable(),
+  connector: z.string(),
+  created_at: z.string().datetime(),
+  decided_at: z.string().datetime().nullable(),
+  decided_by: z.string().nullable(),
+  expires_at: z.string().datetime(),
+  hint: z.string().nullable(),
+  id: z.string(),
+  mcp_instance_id: z.string().nullable(),
+  policy_name: z.string(),
+  reason: z.string(),
+  requested_by: z.string(),
+  status: zToolCallApprovalStatus,
+  tool: z.string(),
+  url: z.string(),
+});
+
+/**
+ * ToolCallApprovalListResponse
+ */
+export const zToolCallApprovalListResponse = z.object({
+  items: z.array(zToolCallApprovalResponse),
+  page: z.number().int(),
+  page_size: z.number().int(),
+  total: z.number().int(),
 });
 
 /**
@@ -6634,6 +6700,43 @@ export const zContinueTaskExecutionV1TasksTaskIdContinuePostBody =
 export const zContinueTaskExecutionV1TasksTaskIdContinuePostPath = z.object({
   task_id: z.string().uuid(),
 });
+
+export const zListToolCallApprovalsV1ToolCallApprovalsGetQuery = z.object({
+  status: zToolCallApprovalStatus.nullish(),
+  page: z.number().int().gte(1).lte(10000).optional().default(1),
+  page_size: z.number().int().gte(1).lte(200).optional().default(50),
+});
+
+/**
+ * Successful Response
+ */
+export const zListToolCallApprovalsV1ToolCallApprovalsGetResponse =
+  zToolCallApprovalListResponse;
+
+export const zGetToolCallApprovalV1ToolCallApprovalsApprovalIdGetPath =
+  z.object({
+    approval_id: z.string(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponse =
+  zToolCallApprovalResponse;
+
+export const zDecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostBody =
+  zToolCallApprovalDecision;
+
+export const zDecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostPath =
+  z.object({
+    approval_id: z.string(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponse =
+  zToolCallApprovalResponse;
 
 export const zListTriggersV1TriggersGetQuery = z.object({
   agent_id: z.string().uuid().nullish(),

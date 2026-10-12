@@ -120,8 +120,6 @@ spec:
               value: {{ .Values.openfga.accessControl.autoApplyModel | quote }}
             - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
               value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_MODEL_PATH
-              value: "/etc/agentarea/openfga/authorization-model.json"
             {{- end }}
             {{- if .Values.global.http.extraCaCerts }}
             - name: AGENTAREA_HTTP_EXTRA_CA_CERTS
@@ -201,13 +199,8 @@ spec:
               memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
             {{- end }}
           {{- end }}
-          {{- if or .Values.openfga.enabled .Values.global.http.extraCaCerts .Values.worker.extraVolumeMounts }}
+          {{- if or .Values.global.http.extraCaCerts .Values.worker.extraVolumeMounts }}
           volumeMounts:
-            {{- if .Values.openfga.enabled }}
-            - name: openfga-authorization-model
-              mountPath: /etc/agentarea/openfga
-              readOnly: true
-            {{- end }}
             {{- if .Values.global.http.extraCaCerts }}
             - name: extra-ca-certs
               mountPath: {{ include "agentarea.extraCaCerts.dir" . }}
@@ -217,13 +210,8 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-      {{- if or .Values.openfga.enabled .Values.global.http.extraCaCerts .Values.worker.extraVolumes }}
+      {{- if or .Values.global.http.extraCaCerts .Values.worker.extraVolumes }}
       volumes:
-        {{- if .Values.openfga.enabled }}
-        - name: openfga-authorization-model
-          configMap:
-            name: {{ include "agentarea.fullname" . }}-openfga-authorization-model
-        {{- end }}
         {{- if .Values.global.http.extraCaCerts }}
         - name: extra-ca-certs
           configMap:

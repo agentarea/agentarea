@@ -1,6 +1,4 @@
 """Unit tests for OpenAPITool and OpenAPIToolFactory."""
-# ruff: noqa: F401,F821,F841 — half-finished fixture body references vars
-# that haven't been plumbed yet; will be cleaned up in a follow-up PR.
 
 import json
 from types import SimpleNamespace
@@ -635,8 +633,8 @@ class TestOpenAPIToolFactory:
 # Secret URL variables
 # ---------------------------------------------------------------------------
 
-_TELEGRAM_TOKEN = "123456:ABC/def"
-_QUOTED_TOKEN = "123456%3AABC%2Fdef"
+_TELEGRAM_TOKEN = "123456:ABC/def"  # noqa: S105 -- fake credential for request tests
+_QUOTED_TOKEN = "123456%3AABC%2Fdef"  # noqa: S105 -- fake credential for request tests
 
 
 async def _telegram_service(token: str | None = _TELEGRAM_TOKEN):
@@ -732,7 +730,7 @@ class TestOpenAPIToolUrlVariables:
 # Configured query parameters
 # ---------------------------------------------------------------------------
 
-_METRICA_TOKEN = "ms-secret-token-value"
+_METRICA_TOKEN = "ms-secret-token-value"  # noqa: S105 -- fake credential for request tests
 
 
 async def _metrica_service(token: str | None = _METRICA_TOKEN):

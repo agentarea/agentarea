@@ -1,4 +1,4 @@
-"""Run budget, token budget and workspace monthly spend cap enforcement."""
+"""Run budget, token budget and monthly spend cap enforcement."""
 
 from temporalio import workflow
 from temporalio.exceptions import ApplicationError
@@ -19,7 +19,7 @@ MONTHLY_CAP_FAILURE_REASON = "monthly_spend_cap_exceeded"
 
 
 class BudgetMixin(AgentWorkflowBase):
-    """Run budget, token budget and workspace monthly spend cap enforcement."""
+    """Run budget, token budget and monthly spend cap enforcement."""
 
     @property
     def _budget(self) -> BudgetTracker:
@@ -48,6 +48,7 @@ class BudgetMixin(AgentWorkflowBase):
         """
         self._require_total_tokens(total_tokens, source)
         self._budget.add_cost(cost)
+        self._enforce_agent_spend_cap()
         self._enforce_run_budget(source)
         self.state.tokens_used += total_tokens
         self._enforce_token_budget(source)
@@ -67,6 +68,7 @@ class BudgetMixin(AgentWorkflowBase):
         self._require_total_tokens(total_tokens, source)
         self._budget.add_cost(cost)
         self.state.tokens_used += total_tokens
+        self._enforce_agent_spend_cap()
 
     def _enforce_inference_limits(self, source: str) -> None:
         """Stop the run when accounted spend or tokens exceed the resolved limits."""
@@ -134,17 +136,50 @@ class BudgetMixin(AgentWorkflowBase):
             )
             await self._publish_events_immediately()
 
-    async def _check_monthly_spend_cap(self) -> None:
-        """Stop the run when the workspace's month-to-date spend reached its cap.
+    @property
+    def _agent_run_spend(self) -> Money:
+        """What this run has spent towards its agent's cap, children excluded."""
+        if self._agent_cap_counts_service:
+            return self._own_cost + self.state.service_cost_used
+        return self._own_cost
 
-        Submission already refused a capped workspace, but a scheduled, resumed
-        or continued run executes later, so current spend is read again here.
+    def _enforce_agent_spend_cap(self) -> None:
+        """Stop the run once its agent's month-to-date spend reaches the agent's cap.
+
+        The month-to-date read at the last cap check plus what this run spent
+        since then; the stop is the monthly cap's, which denies further tool
+        calls at once and ends the run before its next model turn.
+
+        The cap can be overshot: by the call that crosses it, and by what other
+        runs of the same agent (including its delegated children) spend between
+        two cap checks, which this run only sees at its next check.
+        """
+        if self._agent_spend_baseline is None or self._monthly_cap_message:
+            return
+        budget = effective_policy_from_json(self.state.effective_policy).budget
+        cap = budget.agent_monthly_spend_cap_usd if budget else None
+        if cap is None:
+            return
+        spent = self._agent_spend_baseline + (self._agent_run_spend - self._agent_spend_mark)
+        if spent >= cap:
+            self._monthly_cap_message = self._agent_cap_message(spent, cap)
+
+    def _agent_cap_message(self, spent: Money, cap: Money) -> str:
+        unit = f" {self._agent_cap_currency}" if self._agent_cap_currency else ""
+        return f"Agent monthly spend cap reached ({spent}{unit}/{cap}{unit})"
+
+    async def _check_monthly_spend_cap(self) -> None:
+        """Stop the run when the workspace's or its agent's month-to-date spend reached a cap.
+
+        Submission already refused a capped workspace or agent, but a scheduled,
+        resumed or continued run executes later, so current spend is read again here.
         """
         if not workflow.patched(MONTHLY_CAP_AT_START_PATCH):
             return
         budget = effective_policy_from_json(self.state.effective_policy).budget
         cap = budget.monthly_spend_cap_usd if budget else None
-        if cap is None:
+        agent_cap = budget.agent_monthly_spend_cap_usd if budget else None
+        if cap is None and agent_cap is None:
             return
         result: MonthlySpendCapResult = await workflow.execute_activity(
             Activities.CHECK_MONTHLY_SPEND_CAP,
@@ -153,15 +188,28 @@ class BudgetMixin(AgentWorkflowBase):
                     workspace_id=self.state.workspace_id,
                     cap_usd=cap,
                     user_context_data=self.state.user_context_data,
+                    agent_id=self.state.agent_id if agent_cap is not None else None,
+                    agent_cap_usd=agent_cap,
                 )
             ],
             result_type=MonthlySpendCapResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=bookkeeping_retry_policy(),
         )
+        if result.agent_month_to_date_usd is not None:
+            self._agent_cap_currency = result.currency
+            # Wallet payments are recorded in USD and only count where USD is
+            # the billing currency, as they do in the ledger sum just read.
+            self._agent_cap_counts_service = result.currency == "USD"
+            self._agent_spend_baseline = result.agent_month_to_date_usd
+            self._agent_spend_mark = self._agent_run_spend
         if result.exceeded:
             unit = f" {result.currency}" if result.currency else ""
             self._monthly_cap_message = (
                 f"Workspace monthly spend cap reached "
                 f"({result.month_to_date_usd}{unit}/{result.cap_usd}{unit})"
+            )
+        elif result.agent_exceeded and result.agent_cap_usd is not None:
+            self._monthly_cap_message = self._agent_cap_message(
+                result.agent_month_to_date_usd or ZERO, result.agent_cap_usd
             )

@@ -13,7 +13,12 @@ from agentarea_common.artifacts import (
     DbArtifactEventRecorder,
     InvalidArtifactPathError,
 )
-from agentarea_common.artifacts.workspace_writes import MAX_UPLOADS_PER_PLAN, plan_uploads
+from agentarea_common.artifacts.workspace_writes import (
+    MAX_UPLOADS_PER_PLAN,
+    WorkspaceReadOnlyError,
+    ensure_not_read_only,
+    plan_uploads,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.workspaces.lookup import workspace_api_prefix
@@ -107,6 +112,10 @@ class FilesToolset(Toolset):
     @unrestricted("workspace files are member-level, as DELETE /v1/files allows")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
+        try:
+            ensure_not_read_only(path)
+        except WorkspaceReadOnlyError as exc:
+            return json.dumps({"deleted": False, "error": str(exc)})
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService()
             if not await _exists(svc, user_ctx.workspace_id, path):

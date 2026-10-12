@@ -1,8 +1,8 @@
 """A client's tool calls answer to the workspace policy and land in the audit trail.
 
 The client endpoint reaches the same upstream an agent does, so a tool the
-policy denies (or holds for approval) must be refused there too, and every
-verdict recorded — not only the calls an agent makes.
+policy denies must be refused there too, and every verdict recorded — not only
+the calls an agent makes. Calls held for approval: test_client_tool_call_approvals.py.
 """
 
 import importlib
@@ -164,21 +164,3 @@ async def test_an_allowed_tool_runs_and_is_audited_without_argument_values(
     assert event.action == "tool.call.allowed"
     assert event.event_metadata["argument_keys"] == ["repoName"]
     assert "secret/repo" not in str(event.event_metadata)
-
-
-@pytest.mark.asyncio
-async def test_an_approval_gated_tool_is_refused_because_a_client_cannot_wait(
-    client, audit_events, upstream_calls
-):
-    client({"approval": {"escalation_rules": ["ask_*"]}})
-
-    result = await _call("deepwiki__ask_question", question="q")
-
-    assert result.is_error is True
-    assert "requires approval" in _text(result)
-    assert upstream_calls == []
-    [event] = audit_events
-    assert event.action == "tool.call.denied"
-    assert event.event_metadata["decision"] == "require_approval"
-    listed = await client_mcp._list_tools(None, None)
-    assert [tool.name for tool in listed.tools] == ["deepwiki__read_wiki_structure"]

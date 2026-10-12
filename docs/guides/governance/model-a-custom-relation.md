@@ -9,7 +9,7 @@ related:
   - /guides/governance/grant-resource-access
   - /concepts/governance/authorization-basics
   - /concepts/governance/the-agentarea-model
-last_updated: 2026-07-29
+last_updated: 2026-10-12
 ---
 
 Do this when direct `reader`/`writer`/`manager` grants cannot express what you
@@ -29,7 +29,9 @@ once. Make changes additive.
 
 <Info>
 - The `fga` CLI installed. Every step below depends on it.
-- Write access to `config/auth/openfga/` in the repository.
+- To change the platform's own model: write access to `agentarea-platform/libs/common/agentarea_common/rebac/openfga/` in the
+  repository. To extend it in your deployment only, see
+  [extend the model in your deployment](#extend-the-model-in-your-deployment).
 - A dev stack you can restart: `AGENTAREA_AUTHZ_BACKEND=openfga` with
   `AGENTAREA_AUTHZ_FGA_BOOTSTRAP=true` and
   `AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true`, which is what
@@ -40,13 +42,14 @@ once. Make changes additive.
 - Read [the AgentArea model](/concepts/governance/the-agentarea-model) — you are
   editing exactly what that page describes.
 
-Three files move together:
+These files live in `agentarea-platform/libs/common/agentarea_common/rebac/openfga/` and move together:
 
 | File | Role |
 |---|---|
-| `config/auth/openfga/model.fga` | the DSL you edit — the source of truth |
-| `config/auth/openfga/model.fga.yaml` | CLI test fixture: tuples plus assertions |
-| `config/auth/openfga/authorization-model.json` | generated API payload the platform loads at boot |
+| `model.fga` | the `agentarea` module, the DSL you edit and the source of truth |
+| `fga.mod` | the modular-model manifest (schema 1.2) that lists it |
+| `model.fga.yaml` | CLI test fixture: tuples plus assertions |
+| `authorization-model.json` | generated API payload; it ships in the image and the platform loads it at boot |
 </Info>
 
 ## Steps
@@ -73,7 +76,7 @@ Three files move together:
   </Step>
 
   <Step title="Edit the model">
-    Add to `config/auth/openfga/model.fga`. Keep changes additive: a new type, or a
+    Add to `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga`. Keep changes additive: a new type, or a
     new relation on an existing type. Changing or removing an existing relation
     breaks live tuples that reference it.
 
@@ -101,7 +104,7 @@ Three files move together:
 
   <Step title="Add tests before you validate">
     Every new relation needs at least one positive and one negative assertion in
-    `config/auth/openfga/model.fga.yaml`. Add tuples to the shared `tuples` block and
+    `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga.yaml`. Add tuples to the shared `tuples` block and
     a case to `tests`:
 
     ```yaml
@@ -126,8 +129,8 @@ Three files move together:
 
   <Step title="Validate and test">
     ```bash
-    cd config/auth/openfga
-    fga model validate --file model.fga
+    cd agentarea-platform/libs/common/agentarea_common/rebac/openfga
+    fga model validate --file fga.mod
     fga model test --tests model.fga.yaml
     ```
 
@@ -140,18 +143,15 @@ Three files move together:
     The JSON is generated, never hand-edited:
 
     ```bash
-    fga model transform --file model.fga > authorization-model.json
-    cp authorization-model.json ../../../charts/agentarea/files/openfga/authorization-model.json
+    fga model transform --file fga.mod > authorization-model.json
     ```
 
-    Both copies must move together. The compose stack mounts the `config/` copy at
-    `/app/config/auth/openfga/authorization-model.json`; the Helm chart packages the
-    `charts/` copy as a ConfigMap mounted at
-    `/etc/agentarea/openfga/authorization-model.json`.
+    There is one copy, and it is part of the package: the image carries the model
+    its own code checks, so no deployment mounts or syncs one.
   </Step>
 
   <Step title="Roll it out">
-    Restart the API and the worker. Both bootstrap OpenFGA at startup: they find or
+    Rebuild the images and restart the API and the worker. Both bootstrap OpenFGA at startup: they find or
     create the store named by `AGENTAREA_AUTHZ_FGA_STORE_NAME`, compare the model
     on disk against the models already in the store, write it if it is new, and use
     the returned model id for the rest of the process lifetime.
@@ -171,7 +171,7 @@ Three files move together:
 **The CLI tests pass.** This is the gate; run it before anything else:
 
 ```bash
-cd config/auth/openfga && fga model test --tests model.fga.yaml
+cd agentarea-platform/libs/common/agentarea_common/rebac/openfga && fga model test --tests model.fga.yaml
 ```
 
 **The running platform loaded the new model.** Write a tuple that uses the new
@@ -203,16 +203,17 @@ broke inheritance shows up here rather than in your new tests.
     edited model is byte-identical in structure to one already in the store, it
     reuses that model id and writes nothing — which is correct. If it genuinely
     differs and is still not picked up, check that
-    `AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true` and that
-    `AGENTAREA_AUTHZ_FGA_MODEL_PATH` points at the file you regenerated. With
+    `AGENTAREA_AUTHZ_FGA_APPLY_MODEL=true` and that the running image is the one
+    built after you regenerated the JSON. With
     auto-apply off, the process uses whatever
     `AGENTAREA_AUTHZ_FGA_MODEL_ID` names and your file is
     ignored.
   </Accordion>
-  <Accordion title="It works in compose and not in Kubernetes">
-    You regenerated `config/auth/openfga/authorization-model.json` and forgot
-    the copy under `charts/agentarea/files/openfga/` . They are two files and
-    nothing keeps them in sync automatically.
+  <Accordion title="The API refuses to start: the model must extend the packaged one">
+    `AGENTAREA_AUTHZ_FGA_MODEL_PATH` names a model that drops or redefines part of
+    the platform's. The error lists each type, relation or condition. Usually the
+    deployment's model was built against an older `model.fga`: rebuild it from the
+    `model.fga` of the version you run.
   </Accordion>
   <Accordion title="Agents are denied where users are allowed">
     Role bits are typed `[User:*, Agent:*]` and both must be written per enabled
@@ -238,12 +239,46 @@ broke inheritance shows up here rather than in your new tests.
   </Accordion>
   <Accordion title="Authorization broke everywhere after the change">
     You made a destructive edit — renamed or removed a relation that live tuples
-    reference. Restore the previous `model.fga` , regenerate both JSON copies,
-    and restart. OpenFGA keeps prior model versions, so re-pinning
+    reference. Restore the previous `model.fga` , regenerate the JSON,
+    rebuild and restart. OpenFGA keeps prior model versions, so re-pinning
     `AGENTAREA_AUTHZ_FGA_MODEL_ID` to the last known-good id is
     the fastest rollback while you fix the DSL.
   </Accordion>
 </AccordionGroup>
+
+## Extend the model in your deployment
+
+To add types or relations for one deployment without forking the platform,
+use OpenFGA [modular models](https://openfga.dev/docs/modeling/modular-models).
+Your module may add types and `extend type` existing ones; it may not redefine a
+relation the platform declares.
+
+```text
+# acme.fga
+module acme
+
+extend type resource
+  relations
+    define auditor: [User]
+```
+
+```yaml
+# fga.mod
+schema: '1.2'
+contents:
+  - agentarea/model.fga   # the model.fga of the version you deploy
+  - acme.fga
+```
+
+```bash
+fga model transform --file fga.mod > authorization-model.json
+```
+
+Mount the result into the API and the worker and point
+`AGENTAREA_AUTHZ_FGA_MODEL_PATH` at it. At startup the process checks that the
+model still contains every packaged type, relation and condition unchanged and
+refuses to start otherwise, so an upgrade that adds a relation tells you to
+rebuild instead of failing checks at runtime.
 
 ## Related
 

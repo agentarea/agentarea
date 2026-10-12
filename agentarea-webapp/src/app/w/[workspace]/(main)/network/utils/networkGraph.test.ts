@@ -179,6 +179,7 @@ describe("person ids and lens parsing", () => {
   it("falls back to the overview for unknown views", () => {
     expect(lensFromView("delegation")).toBe("delegation");
     expect(lensFromView("access")).toBe("access");
+    expect(lensFromView("flow")).toBe("flow");
     expect(lensFromView("org")).toBe("overview");
     expect(lensFromView(null)).toBe("overview");
   });

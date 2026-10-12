@@ -118,6 +118,12 @@ review the semantic gaps neither those nor CI can detect.
   subject is built from and then asserts what the mocks produced: the fix is
   deleting it, or lifting the logic into a pure module that a `*.test.ts` can
   state. The full rule is `agentarea-webapp/AGENTS.md` §"TESTS (THIS DIR)".
+- **Frontend state placement.** Flag a client component that loads backend data
+  through a server action in `useEffect` (actions run one at a time per page, so
+  it stalls every later save), or that mirrors server data and form fields in
+  `useState` (`loading`/`loadError`/`reloadKey`, `editX` + `hasChanges`,
+  `saving`/`saved`). The fix is the placement table in
+  [`aa-webapp-ui`](../aa-webapp-ui/SKILL.md), not a reducer or a new store.
 - **Comment and doc density.** Flag comments that narrate what the code plainly
   does. Comments earn their place by stating a non-obvious contract or the reason
   behind a surprising choice. Documentation under `docs/` follows the

@@ -1,25 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { RefreshCw, Route } from "lucide-react";
+import { Check, Network, RefreshCw, Route, Users } from "lucide-react";
+import DisplayMenu from "@/components/DisplayMenu";
+import HeaderTabs from "@/components/HeaderTabs";
+import SearchInput from "@/components/SearchInput";
 import { AnimatedTabs } from "@/components/ui/animated-tabs";
 import { Button } from "@/components/ui/button";
+import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusIndicator } from "@/components/ui/status-indicator";
+import { ToolbarButton, ToolbarDivider } from "@/components/ui/toolbar";
 import {
   getNetworkPeopleAccessAction,
   previewNetworkPolicyAction,
 } from "./actions";
-import { useNetwork } from "./NetworkProvider";
+import { useNetwork, type NetworkMode } from "./NetworkProvider";
 import type { NetworkNodeData } from "./types";
 import { findFocusedNode } from "./utils/focusNode";
+import { buildNetworkGraph, issueCount } from "./utils/networkGraph";
 import NetworkGraphView from "./views/NetworkGraphView";
 
-export function NetworkHeaderTabs() {
-  const t = useTranslations("NetworkPage.graph.lenses");
+export function NetworkToolbar() {
+  const t = useTranslations("NetworkPage.graph");
+  const lenses = useTranslations("NetworkPage.graph.lenses");
+  const peopleText = useTranslations("NetworkPage.people");
   const searchParams = useSearchParams();
-  const { view } = useNetwork();
+  const {
+    topology,
+    view,
+    mode,
+    setMode,
+    query,
+    setQuery,
+    showIssues,
+    setShowIssues,
+    showPeople,
+    setShowPeople,
+  } = useNetwork();
+  const issues = useMemo(
+    () => (topology ? issueCount(buildNetworkGraph(topology)) : 0),
+    [topology]
+  );
+  const peopleLens = view !== "access" && view !== "flow";
 
   // A lens is client state mirrored into the URL. history.replaceState keeps
   // useSearchParams in sync without a server round trip, so the graph starts
@@ -31,23 +56,72 @@ export function NetworkHeaderTabs() {
   };
 
   return (
-    <div className="flex min-w-0 items-center gap-3 py-1.5">
+    <div className="flex min-w-0 flex-1 items-center gap-1.5">
       <AnimatedTabs
         tabs={[
-          { value: "overview", label: t("overview.tab") },
-          { value: "delegation", label: t("delegation.tab") },
-          { value: "access", label: t("access.tab") },
+          { value: "overview", label: lenses("overview.tab") },
+          { value: "delegation", label: lenses("delegation.tab") },
+          { value: "access", label: lenses("access.tab") },
+          { value: "flow", label: lenses("flow.tab") },
         ]}
         activeTab={view}
         onChange={setView}
         size="sm"
         className="w-auto"
       />
+      <ToolbarDivider />
+      <div className="w-[240px] min-w-0 max-w-full">
+        <SearchInput
+          delay={150}
+          initialValue={query}
+          placeholder={t("search")}
+          onDebouncedChange={setQuery}
+        />
+      </div>
+      <div className="flex-1" />
+      {issues > 0 && (
+        <ToolbarButton
+          active={showIssues}
+          aria-pressed={showIssues}
+          onClick={() => setShowIssues(!showIssues)}
+        >
+          <StatusIndicator kind="attention" aria-hidden />
+          {t("issues")}
+          <span className="tabular-nums text-muted-foreground">{issues}</span>
+        </ToolbarButton>
+      )}
+      <HeaderTabs
+        tabs={[
+          {
+            value: "graph",
+            label: t("modes.graph"),
+            icon: <Network className="h-4 w-4" />,
+          },
+          { value: "list", label: t("modes.list") },
+        ]}
+        value={mode}
+        onChange={(next) => setMode(next as NetworkMode)}
+      />
+      {peopleLens && (
+        <DisplayMenu>
+          <MenuSectionLabel>{t("show")}</MenuSectionLabel>
+          <MenuRow
+            icon={<Users className="h-3.5 w-3.5" />}
+            label={peopleText("title")}
+            selected={showPeople}
+            onClick={() => setShowPeople(!showPeople)}
+            trailing={
+              showPeople ? <Check className="h-3.5 w-3.5" /> : undefined
+            }
+          />
+        </DisplayMenu>
+      )}
     </div>
   );
 }
 
 export function NetworkHeaderControls() {
+  const t = useTranslations("NetworkPage");
   const { loading, fetchTopology } = useNetwork();
 
   return (
@@ -58,7 +132,7 @@ export function NetworkHeaderControls() {
         onClick={fetchTopology}
         disabled={loading}
         className="h-7 w-7 text-muted-foreground"
-        aria-label="Refresh topology"
+        aria-label={t("refreshTopology")}
       >
         <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
       </Button>

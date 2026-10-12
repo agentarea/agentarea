@@ -9,10 +9,13 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.events.task_stream import publish_task_event
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import WorkflowEventsRequest, WorkflowEventsResult
+from .cost_ledger import cost_entries
 from .tool_audit import record_tool_audit, tool_audit_entry
 
 if TYPE_CHECKING:
@@ -48,7 +51,8 @@ def make_events_activities(
         """Store each workflow event, then fan it out to live readers and channels.
 
         The ``task_events`` row is the source of truth and is committed first,
-        together with the audit rows of the tool-call outcomes the batch holds.
+        together with the audit rows of the tool-call outcomes and the spend
+        ledger lines of the paid calls the batch holds.
         Any failure raises so Temporal retries the whole batch; every step is
         safe to repeat because it is keyed by the workflow's ``event_id``: the
         row inserts are no-ops for a stored id, the stream carries that id for the
@@ -92,6 +96,21 @@ def make_events_activities(
                         await record_tool_audit(
                             audit, event_id, entry, requested_by=request.user_id
                         )
+                billing_currency = get_customer_pricing().currency()
+                costs = [
+                    entry
+                    for event in events
+                    for entry in cost_entries(
+                        event,
+                        workspace_id=request.workspace_id,
+                        created_by=request.user_id,
+                        billing_currency=billing_currency,
+                    )
+                ]
+                if costs:
+                    session = container._database.async_session_factory()
+                    ctx._sessions.append(session)
+                    await CostEntryRepository(session, user_context).record(costs)
 
             for event, stored in zip(events, stored_events, strict=True):
                 if dependencies.broker_client is not None:

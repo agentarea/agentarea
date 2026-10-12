@@ -143,7 +143,11 @@ def parse_target(selector: str) -> tuple[str, str | None]:
 
 
 class SpendCapParams(BaseModel):
-    """``params`` for a ``cap`` on ``spend`` (per calendar month or per run)."""
+    """``params`` for a ``cap`` on ``spend`` (per calendar month or per run).
+
+    A monthly cap bound to an agent caps that agent's own spend; bound to the
+    workspace or a user it caps the workspace's.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -479,7 +483,9 @@ def _apply_cap(
             logger.debug("skipping cap rule %s: spend cap missing amount_usd", rule.id)
             return
         period = params.get("period", "month")
-        if period == "month":
+        if period == "month" and rule.subject_type == PolicySubjectType.AGENT:
+            acc.budget["agent_monthly_spend_cap_usd"] = to_money(amount)
+        elif period == "month":
             acc.budget["monthly_spend_cap_usd"] = to_money(amount)
         elif period == "run":
             acc.budget["run_budget_usd"] = to_money(amount)

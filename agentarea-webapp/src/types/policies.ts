@@ -9,6 +9,7 @@ export type Money = string | number;
 
 export interface BudgetPolicy {
   monthly_spend_cap_usd?: Money | null;
+  agent_monthly_spend_cap_usd?: Money | null;
   run_budget_usd?: Money | null;
   service_budget_usd?: Money | null;
 }

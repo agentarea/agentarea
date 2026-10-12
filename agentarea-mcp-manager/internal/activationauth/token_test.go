@@ -1,6 +1,7 @@
 package activationauth
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -69,5 +70,42 @@ func TestFileTransferTokenIsBoundToMethodPathSizeAndDigest(t *testing.T) {
 				t.Fatal("transfer token accepted changed operation")
 			}
 		})
+	}
+}
+
+func TestStorageTokenGrantsOneInstanceOfOneWorkspace(t *testing.T) {
+	secret := []byte(strings.Repeat("s", 32))
+	now := time.Unix(1_700_000_000, 0)
+	identity := Identity{WorkspaceID: "workspace-1", InstanceID: "instance-1"}
+	binding := BodySHA256(nil)
+	token, err := Sign(secret, ScopeStorage, identity, binding, now, 30*24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(token, secret, ScopeStorage, identity, binding, now.Add(29*24*time.Hour)); err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	for name, other := range map[string]Identity{
+		"instance":  {WorkspaceID: "workspace-1", InstanceID: "instance-2"},
+		"workspace": {WorkspaceID: "workspace-2", InstanceID: "instance-1"},
+	} {
+		if err := Verify(token, secret, ScopeStorage, other, binding, now); !errors.Is(err, ErrClaimsMismatch) {
+			t.Fatalf("%s: Verify() error = %v, want ErrClaimsMismatch", name, err)
+		}
+	}
+	if err := Verify(token, secret, ScopeFiles, identity, binding, now); !errors.Is(err, ErrClaimsMismatch) {
+		t.Fatalf("storage token was accepted for files: %v", err)
+	}
+	for _, incomplete := range []Identity{
+		{WorkspaceID: "workspace-1"},
+		{WorkspaceID: "workspace-1", InstanceID: "instance-1", TaskID: "task-1"},
+		{WorkspaceID: "workspace-1", InstanceID: "instance-1", FencingToken: 1},
+	} {
+		if _, err := Sign(secret, ScopeStorage, incomplete, binding, now, time.Hour); err == nil {
+			t.Fatalf("Sign() accepted storage identity %+v", incomplete)
+		}
+	}
+	if _, err := Sign(secret, ScopeFiles, Identity{WorkspaceID: "workspace-1", TaskID: "task-1", InstanceID: "instance-1", FencingToken: 1}, binding, now, time.Hour); err == nil {
+		t.Fatal("Sign() accepted an instance id on a task scope")
 	}
 }

@@ -170,6 +170,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                 if self.budget_tracker is None:
                     raise RuntimeError("Workflow budget tracker is not initialized")
                 self.budget_tracker.add_cost(model_cost)
+                self._enforce_agent_spend_cap()
 
             # Failure path: surface the error to the LLM and emit ToolCallFailed
             # so the UI renders an actual error instead of "(no result data)".
@@ -210,6 +211,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
 
             if service_cost > ZERO:
                 self.state.service_cost_used += service_cost
+                self._enforce_agent_spend_cap()
 
             # Offload large outputs to MinIO (hybrid/dynamic strategy)
             result_text = await self._maybe_offload_output(result_text, tool_call.id)

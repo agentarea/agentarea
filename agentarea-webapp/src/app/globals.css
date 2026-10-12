@@ -165,11 +165,6 @@
       display: none;
     }
   }
-  @container skills (max-width: 430px) {
-    .skill-col-source {
-      display: none;
-    }
-  }
 }
 
 @layer base {

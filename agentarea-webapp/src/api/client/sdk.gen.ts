@@ -154,6 +154,9 @@ import type {
   CreateWorkspaceV1WorkspacesPostData,
   CreateWorkspaceV1WorkspacesPostErrors,
   CreateWorkspaceV1WorkspacesPostResponses,
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostData,
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors,
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses,
   DeleteAgentV1AgentsAgentIdDeleteData,
   DeleteAgentV1AgentsAgentIdDeleteErrors,
   DeleteAgentV1AgentsAgentIdDeleteResponses,
@@ -432,6 +435,9 @@ import type {
   GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetData,
   GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetErrors,
   GetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponses,
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetData,
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors,
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses,
   GetTriggerStatusV1TriggersTriggerIdStatusGetData,
   GetTriggerStatusV1TriggersTriggerIdStatusGetErrors,
   GetTriggerStatusV1TriggersTriggerIdStatusGetResponses,
@@ -643,6 +649,9 @@ import type {
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses,
+  ListToolCallApprovalsV1ToolCallApprovalsGetData,
+  ListToolCallApprovalsV1ToolCallApprovalsGetErrors,
+  ListToolCallApprovalsV1ToolCallApprovalsGetResponses,
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
@@ -9953,6 +9962,109 @@ export const continueTaskExecutionV1TasksTaskIdContinuePost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/tasks/{task_id}/continue",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Tool Call Approvals
+ *
+ * Tool calls held for approval in this workspace, newest first.
+ */
+export const listToolCallApprovalsV1ToolCallApprovalsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListToolCallApprovalsV1ToolCallApprovalsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListToolCallApprovalsV1ToolCallApprovalsGetResponses,
+  ListToolCallApprovalsV1ToolCallApprovalsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListToolCallApprovalsV1ToolCallApprovalsGetResponses,
+    ListToolCallApprovalsV1ToolCallApprovalsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/tool-call-approvals",
+    ...options,
+  });
+
+/**
+ * Get Tool Call Approval
+ *
+ * One held call: what will run, who asked, and whether the caller may decide.
+ */
+export const getToolCallApprovalV1ToolCallApprovalsApprovalIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses,
+  GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses,
+    GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}",
+    ...options,
+  });
+
+/**
+ * Decide Tool Call Approval
+ *
+ * Approve or reject a pending call; an approval is usable for one hour.
+ */
+export const decideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses,
+  DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses,
+    DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}/decide",
     ...options,
     headers: {
       "Content-Type": "application/json",

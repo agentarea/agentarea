@@ -601,6 +601,7 @@ def create_app() -> FastAPI:
                 "cap_usd": float(exc.cap_usd),
                 "currency": exc.currency,
                 "workspace_id": exc.workspace_id,
+                "agent_id": exc.agent_id,
             },
         )
 

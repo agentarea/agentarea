@@ -45,9 +45,6 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     and the catalog query is jsonb.
 #   video jobs: a job is read only by its own workspace and task, a finished one
 #     is recorded saved (and billed) once by a conditional update.
-#   membership backfill: the migration and the reconcile script insert rows with
-#     SQL that leans on the (workspace, user) unique constraint and the
-#     invitation and outbox tables.
 #   catalog browse plans: /explore is only fast while every browse query has an
 #     index that serves it, a property of the migrated indexes and the planner.
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
@@ -64,6 +61,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     under the workflow's id (the primary key decides); the SSE catch-up reads
 #     keyset batches ordered by (timestamp, id) and resumes after a given event;
 #     a conversation entry rewritten at its position replaces the first write.
+#   spend ledger: a retried event batch stores each paid line once (the
+#     (event, category) unique key decides), sums skip superseded lines and
+#     other currencies, and the backfill turns stored paid events into lines.
 #   task provenance: a task's origin, correlation, causation and parent id are
 #     plain nullable columns the migrated schema must carry; a mocked session
 #     never catches a missing column.
@@ -113,6 +113,8 @@ PY_SUITES=(
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_conversation_db.py
   libs/tasks/tests/test_task_provenance_db.py
+  libs/tasks/tests/test_cost_entries_db.py
+  libs/tasks/tests/test_cost_entries_backfill_db.py
   libs/tasks/tests/test_inbox_counts_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py

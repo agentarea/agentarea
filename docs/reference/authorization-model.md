@@ -9,12 +9,12 @@ related:
   - /reference/limits
   - /guides/governance/grant-resource-access
   - /guides/governance/model-a-custom-relation
-last_updated: 2026-07-29
+last_updated: 2026-10-12
 ---
 
 The relationship graph that authorizes access to resources. Authority for this
-page is `config/auth/openfga/model.fga`; the deployable payload
-`config/auth/openfga/authorization-model.json` is generated from it.
+page is `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga`; the deployable payload
+`authorization-model.json` next to it is generated from it and ships in the image.
 
 ## Synopsis
 
@@ -268,17 +268,18 @@ kind resolved from the database.
 | `AGENTAREA_AUTHZ_FGA_STORE_NAME` | `agentarea` |
 | `AGENTAREA_AUTHZ_FGA_MODEL_PATH` | `None` |
 
-`docker-compose.dev.yaml` and the Helm chart both set `AUTO_BOOTSTRAP` and
-`AUTO_APPLY_MODEL` to `true`. Model paths differ by deployment:
+`docker-compose.dev.yaml` and the Helm chart both set `BOOTSTRAP` and
+`APPLY_MODEL` to `true`. The applied model is the one packaged with the image,
+so the relations the code checks always exist in it; nothing is mounted.
 
-| Deployment | Mount path |
-|---|---|
-| Compose | `/app/config/auth/openfga/authorization-model.json` |
-| Helm | `/etc/agentarea/openfga/authorization-model.json` |
+`AGENTAREA_AUTHZ_FGA_MODEL_PATH` is for a deployment that extends the model. It
+names a model built with OpenFGA modular models: an `fga.mod` listing the
+packaged `model.fga` plus your own module, transformed with `fga model transform
+--file fga.mod`. The process refuses to start when that model drops or redefines
+any packaged type, relation or condition, and names each one. Additions are yours.
 
-With `AUTO_APPLY_MODEL` enabled the file wins and the returned model id is used
-for the process lifetime. With it disabled,
-`AGENTAREA_AUTHZ_FGA_MODEL_ID` is used and the file is ignored.
+With `APPLY_MODEL` enabled the model's id is used for the process lifetime. With
+it disabled, `AGENTAREA_AUTHZ_FGA_MODEL_ID` is used and no model is written.
 Bootstrap compares candidate models by normalized content ignoring ids, so an
 unchanged model is reused rather than rewritten. When several processes race a
 store create, all converge on the earliest store with that name.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CatalogEntry } from "../catalog-data";
 import {
   canFetchMore,
   catalogPagingReducer,
@@ -6,7 +7,6 @@ import {
   initialPaging,
   type CatalogPaging,
 } from "../catalog-paging";
-import type { CatalogEntry } from "../catalog-data";
 
 const entry = (id: string): CatalogEntry => ({
   id,
@@ -60,7 +60,9 @@ describe("canFetchMore", () => {
   it("blocks a second fetch while one is already in flight", () => {
     // The scroll sentinel stays inside the viewport while a short page renders,
     // so without this guard it fires page after page in a cascade.
-    const busy = catalogPagingReducer(seeded(["a"], 10), { type: "appendStart" });
+    const busy = catalogPagingReducer(seeded(["a"], 10), {
+      type: "appendStart",
+    });
     expect(canFetchMore(busy)).toBe(false);
   });
 
@@ -78,8 +80,13 @@ describe("canFetchMore", () => {
   });
 
   it("allows fetching again once the failure is retried", () => {
-    const failed = catalogPagingReducer(seeded(["a"], 10), { type: "fail", error: "network" });
-    expect(canFetchMore(catalogPagingReducer(failed, { type: "appendStart" }))).toBe(false);
+    const failed = catalogPagingReducer(seeded(["a"], 10), {
+      type: "fail",
+      error: "network",
+    });
+    expect(
+      canFetchMore(catalogPagingReducer(failed, { type: "appendStart" }))
+    ).toBe(false);
     const retried = catalogPagingReducer(failed, {
       type: "append",
       entries: [entry("b")],
@@ -129,7 +136,10 @@ describe("append", () => {
   });
 
   it("clears a previous error", () => {
-    const failed = catalogPagingReducer(seeded(["a"], 10), { type: "fail", error: "network" });
+    const failed = catalogPagingReducer(seeded(["a"], 10), {
+      type: "fail",
+      error: "network",
+    });
     const ok = catalogPagingReducer(failed, {
       type: "append",
       entries: [entry("b")],
@@ -166,7 +176,10 @@ describe("fail", () => {
   it("does not declare the catalog exhausted", () => {
     // A transient failure used to set hasMore=false permanently, so one blip
     // ended infinite scroll for the rest of the session.
-    const failed = catalogPagingReducer(seeded(["a"], 10), { type: "fail", error: "network" });
+    const failed = catalogPagingReducer(seeded(["a"], 10), {
+      type: "fail",
+      error: "network",
+    });
     expect(hasMore(failed)).toBe(true);
   });
 });
@@ -191,9 +204,9 @@ describe("reload", () => {
       categories: [{ value: "data", count: 3 }],
       protocols: [],
     });
-    expect(catalogPagingReducer(withFacets, { type: "reload" }).categories).toEqual([
-      { value: "data", count: 3 },
-    ]);
+    expect(
+      catalogPagingReducer(withFacets, { type: "reload" }).categories
+    ).toEqual([{ value: "data", count: 3 }]);
   });
 });
 

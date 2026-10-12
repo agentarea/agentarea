@@ -83,6 +83,11 @@ export default function PolicyInfo({
     currency,
     locale
   );
+  const agentMonthlyCap = money(
+    policy.budget?.agent_monthly_spend_cap_usd,
+    currency,
+    locale
+  );
   const serviceBudget = money(
     policy.budget?.service_budget_usd,
     currency,
@@ -107,6 +112,7 @@ export default function PolicyInfo({
 
   const hasAny =
     monthlyCap != null ||
+    agentMonthlyCap != null ||
     serviceBudget != null ||
     hasTools ||
     hasTokens ||
@@ -201,6 +207,14 @@ export default function PolicyInfo({
 
       {monthlyCap != null && (
         <Row icon={Coins} label={t("policyMonthlyCap")} value={monthlyCap} />
+      )}
+
+      {agentMonthlyCap != null && (
+        <Row
+          icon={Coins}
+          label={t("policyAgentMonthlyCap")}
+          value={agentMonthlyCap}
+        />
       )}
 
       {serviceBudget != null && (

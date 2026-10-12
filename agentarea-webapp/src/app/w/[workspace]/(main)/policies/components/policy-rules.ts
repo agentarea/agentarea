@@ -92,6 +92,14 @@ export function documentToRules(
         value: fmtMoney(b.monthly_spend_cap_usd, currency, locale),
         stage: STAGE.beforeLlmOrTool,
       });
+    if (b.agent_monthly_spend_cap_usd != null)
+      rules.push({
+        effect: "cap",
+        category: "Budget",
+        label: "Monthly budget per agent",
+        value: fmtMoney(b.agent_monthly_spend_cap_usd, currency, locale),
+        stage: STAGE.beforeLlmOrTool,
+      });
     if (b.run_budget_usd != null)
       rules.push({
         effect: "cap",
