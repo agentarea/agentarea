@@ -3281,6 +3281,12 @@ export type McpServerInstanceCreate = {
    */
   auth_config_id?: string | null;
   /**
+   * Context Secret
+   *
+   * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+   */
+  context_secret?: string | null;
+  /**
    * Description
    *
    * Optional human-readable description of the instance.
@@ -3316,6 +3322,12 @@ export type McpServerInstanceCreateWithoutSpec = {
    * Auth Config Id
    */
   auth_config_id?: string | null;
+  /**
+   * Context Secret
+   *
+   * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+   */
+  context_secret?: string | null;
   /**
    * Description
    */
@@ -3397,6 +3409,12 @@ export type McpServerInstanceResponse = {
  * Patch payload for an MCP server instance. All fields optional — unset = unchanged.
  */
 export type McpServerInstanceUpdate = {
+  /**
+   * Context Secret
+   *
+   * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.
+   */
+  context_secret?: string | null;
   /**
    * Description
    */
@@ -6282,7 +6300,21 @@ export type ScheduleTaskCreate = {
    * Description
    */
   description: string;
+  /**
+   * End User Id
+   *
+   * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+   */
+  end_user_id?: string | null;
   execution?: RunExecutionConfig | null;
+  /**
+   * Metadata
+   *
+   * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+   */
+  metadata?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Parameters
    */
@@ -7304,7 +7336,21 @@ export type TaskCreate = {
    * Description
    */
   description: string;
+  /**
+   * End User Id
+   *
+   * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+   */
+  end_user_id?: string | null;
   execution?: RunExecutionConfig | null;
+  /**
+   * Metadata
+   *
+   * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+   */
+  metadata?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Parameters
    */

@@ -5544,6 +5544,20 @@
             "description": "ID of an MCP auth config (OAuth/credentials) to attach.",
             "title": "Auth Config Id"
           },
+          "context_secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.",
+            "title": "Context Secret"
+          },
           "description": {
             "anyOf": [
               {
@@ -5596,6 +5610,20 @@
               }
             ],
             "title": "Auth Config Id"
+          },
+          "context_secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.",
+            "title": "Context Secret"
           },
           "description": {
             "anyOf": [
@@ -5734,6 +5762,20 @@
         "additionalProperties": false,
         "description": "Patch payload for an MCP server instance. All fields optional \u2014 unset = unchanged.",
         "properties": {
+          "context_secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.",
+            "title": "Context Secret"
+          },
           "description": {
             "anyOf": [
               {
@@ -10847,6 +10889,20 @@
             "title": "Description",
             "type": "string"
           },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's own id for the end user this task runs for. Only API keys and service clients may set it.",
+            "title": "End User Id"
+          },
           "execution": {
             "anyOf": [
               {
@@ -10856,6 +10912,19 @@
                 "type": "null"
               }
             ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trusted task metadata for tool servers, e.g. {\"chatId\": \"...\"}. At most 4096 bytes of JSON. Only API keys and service clients may set it.",
+            "title": "Metadata"
           },
           "parameters": {
             "additionalProperties": true,
@@ -12534,6 +12603,20 @@
             "title": "Description",
             "type": "string"
           },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's own id for the end user this task runs for. Only API keys and service clients may set it.",
+            "title": "End User Id"
+          },
           "execution": {
             "anyOf": [
               {
@@ -12543,6 +12626,19 @@
                 "type": "null"
               }
             ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trusted task metadata for tool servers, e.g. {\"chatId\": \"...\"}. At most 4096 bytes of JSON. Only API keys and service clients may set it.",
+            "title": "Metadata"
           },
           "parameters": {
             "additionalProperties": true,

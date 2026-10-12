@@ -1168,6 +1168,7 @@ export const zMcpServerCreate = z.object({
  */
 export const zMcpServerInstanceCreate = z.object({
   auth_config_id: z.string().nullish(),
+  context_secret: z.string().min(32).max(512).nullish(),
   description: z.string().nullish(),
   json_spec: z.record(z.unknown()),
   name: z.string().min(1).max(255),
@@ -1179,6 +1180,7 @@ export const zMcpServerInstanceCreate = z.object({
  */
 export const zMcpServerInstanceCreateWithoutSpec = z.object({
   auth_config_id: z.string().nullish(),
+  context_secret: z.string().min(32).max(512).nullish(),
   description: z.string().nullish(),
   json_spec: z.record(z.unknown()).optional(),
   name: z.string(),
@@ -1198,6 +1200,7 @@ export const zMcpServerConnectionCreateRequest = z.object({
  * Patch payload for an MCP server instance. All fields optional — unset = unchanged.
  */
 export const zMcpServerInstanceUpdate = z.object({
+  context_secret: z.string().min(32).max(512).nullish(),
   description: z.string().nullish(),
   json_spec: z.record(z.unknown()).optional(),
   name: z.string().min(1).max(255).optional(),
@@ -3294,7 +3297,9 @@ export const zEffectivePolicyPreviewRequest = z.object({
 export const zScheduleTaskCreate = z.object({
   attachments: z.array(z.string()).nullish(),
   description: z.string(),
+  end_user_id: z.string().min(1).max(256).nullish(),
   execution: zRunExecutionConfig.nullish(),
+  metadata: z.record(z.unknown()).nullish(),
   parameters: z.record(z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
@@ -3308,7 +3313,9 @@ export const zScheduleTaskCreate = z.object({
 export const zTaskCreate = z.object({
   attachments: z.array(z.string()).nullish(),
   description: z.string(),
+  end_user_id: z.string().min(1).max(256).nullish(),
   execution: zRunExecutionConfig.nullish(),
+  metadata: z.record(z.unknown()).nullish(),
   parameters: z.record(z.unknown()).optional(),
   project_id: z.string().nullish(),
   requires_human_approval: z.boolean().nullish().default(false),
