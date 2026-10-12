@@ -21449,7 +21449,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/install": {
       "post": {
-        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422; any other install\nfailure answers 400. Both carry ``{message, issues}``.",
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422 (``code: bundle_invalid``);\nany other install failure answers 400 (``code: bundle_install_failed``). Both\nare problem+json with the message in ``detail`` and the blocking ``issues``.",
         "operationId": "install_bundle_v1_bundles_install_post",
         "parameters": [
           {
