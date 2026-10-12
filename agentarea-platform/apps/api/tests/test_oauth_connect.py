@@ -252,17 +252,6 @@ async def test_preflight_answers_unsupported_instead_of_failing(monkeypatch):
     assert "no protected-resource metadata" in result.detail
 
 
-@pytest.mark.asyncio
-async def test_preflight_reports_an_unreachable_server_as_unsupported(monkeypatch):
-    _patch_instance_lookup(monkeypatch)
-    _patch_discovery(monkeypatch, httpx.ConnectError("boom"))
-
-    result = await _preflight(instance_id=uuid4())
-
-    assert result.status == "unsupported"
-    assert "boom" in result.detail
-
-
 def _unreachable_mcp_host(monkeypatch):
     """Every outbound request the discovery makes fails to connect."""
 
