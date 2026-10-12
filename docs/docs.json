@@ -152,6 +152,7 @@
             "group": "MCP",
             "pages": [
               "guides/mcp/connect-a-remote-server",
+              "guides/mcp/expose-your-app-tools",
               "guides/mcp/add-a-hosted-server",
               "guides/mcp/authenticate-with-oauth",
               "guides/mcp/pass-secrets",
@@ -206,6 +207,7 @@
           "reference/authorization-model",
           "reference/policy-syntax",
           "reference/limits",
+          "reference/mcp-tool-call-context",
           "reference/errors"
         ]
       },
