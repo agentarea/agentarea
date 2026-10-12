@@ -8,7 +8,7 @@ import { ArrowUpRight, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
 import { SkillTile } from "@/components/SkillTile";
-import { scopeMeta, sourceMeta } from "./skillsMeta";
+import { scopeMeta } from "./skillsMeta";
 
 interface SkillsCardProps {
   skill: Skill;
@@ -24,9 +24,7 @@ export default function SkillsCard({
   const router = useWorkspaceRouter();
   const skillNameId = useId();
   const t = useTranslations("SkillsPage");
-  const source = sourceMeta(skill.source_type);
   const scope = scopeMeta(skill.network_scope);
-  const SourceIcon = source.icon;
   const ScopeIcon = scope.icon;
 
   return (
@@ -60,12 +58,8 @@ export default function SkillsCard({
         {skill.description || ""}
       </p>
 
-      {/* footer: source label pill + network scope */}
+      {/* footer: network scope */}
       <div className="pointer-events-none relative z-[1] flex items-center gap-2">
-        <span className="inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
-          <SourceIcon className="h-3 w-3" strokeWidth={1.7} />
-          {source.label}
-        </span>
         <span className="inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
           <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
           {scope.label}

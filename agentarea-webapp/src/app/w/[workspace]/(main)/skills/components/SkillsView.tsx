@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { ArrowDownAZ, Clock, Layers, Rows3, Tag } from "lucide-react";
+import { ArrowDownAZ, Clock, Rows3, Tag } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import ContentBlock from "@/components/ContentBlock";
 import DisplayMenu from "@/components/DisplayMenu";
@@ -27,15 +27,9 @@ import CreateSkillButton from "./CreateSkillButton";
 import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import SkillsContentSkeleton from "./SkillsContentSkeleton";
-import {
-  SCOPE_META,
-  SCOPE_ORDER,
-  scopeMeta,
-  SOURCE_ORDER,
-  sourceMeta,
-} from "./skillsMeta";
+import { SCOPE_META, SCOPE_ORDER, scopeMeta } from "./skillsMeta";
 
-type GroupKey = "source" | "scope" | "none";
+type GroupKey = "scope" | "none";
 type OrderKey = "name" | "created";
 type ViewKey = "list" | "grid";
 
@@ -49,7 +43,7 @@ interface InitialState {
 // URL params the page keeps in sync, with the value that leaves them out.
 const URL_DEFAULTS = {
   view: "list",
-  group: "source",
+  group: "none",
   order: "name",
   network_scope: "",
   search: "",
@@ -183,17 +177,11 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     if (group === "none") {
       return [{ key: "none", label: "", color: "", items: sortItems(visible) }];
     }
-    const order_ = group === "source" ? SOURCE_ORDER : SCOPE_ORDER;
-    const meta = group === "source" ? sourceMeta : scopeMeta;
-    const field: keyof Skill =
-      group === "source" ? "source_type" : "network_scope";
-    return order_
-      .map((key) => {
-        const items = sortItems(visible.filter((s) => s[field] === key));
-        const m = meta(key);
-        return { key, label: m.label, color: m.color, items };
-      })
-      .filter((g) => g.items.length > 0);
+    return SCOPE_ORDER.map((key) => {
+      const items = sortItems(visible.filter((s) => s.network_scope === key));
+      const m = scopeMeta(key);
+      return { key, label: m.label, color: m.color, items };
+    }).filter((g) => g.items.length > 0);
   }, [group, visible, sortItems]);
 
   // ---- toolbar control helpers ----
@@ -264,12 +252,6 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
             <>
               <DisplayMenu accessibleLabel={t("display.accessibleLabel")}>
                 <MenuSectionLabel>{t("display.grouping")}</MenuSectionLabel>
-                <MenuRow
-                  icon={<Layers className="h-3.5 w-3.5" />}
-                  label={t("display.source")}
-                  selected={group === "source"}
-                  onClick={() => onGroup("source")}
-                />
                 <MenuRow
                   icon={<Tag className="h-3.5 w-3.5" />}
                   label={t("display.scope")}
