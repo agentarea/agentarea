@@ -12,9 +12,9 @@ The backfill recognises a minted config by what the connect flows write: a
 digits of its owner's id (``mcp-oauth-<instance>``, ``<provider>-<connection>``),
 matched within the workspace and only when exactly one owner fits.
 
-Revision ID: 20261009_1700_auth_config_owner
-Revises: 20261009_1210_openapi_qp_tools
-Create Date: 2026-10-09 17:00:00.000000
+Revision ID: 20261011_1800_auth_config_owner
+Revises: 20261010_1000_user_ext_ids
+Create Date: 2026-10-11 18:00:00.000000
 """
 
 from collections.abc import Sequence
@@ -23,8 +23,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "20261009_1700_auth_config_owner"
-down_revision: str | None = "20261009_1210_openapi_qp_tools"
+revision: str = "20261011_1800_auth_config_owner"
+down_revision: str | None = "20261010_1000_user_ext_ids"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

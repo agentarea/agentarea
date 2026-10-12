@@ -53,7 +53,7 @@ OAUTH = {
     "credential_mode": "custom",
 }
 MIGRATION = Path(__file__).resolve().parents[1] / (
-    "alembic/versions/20261009_1700_auth_config_owner.py"
+    "alembic/versions/20261011_1800_auth_config_owner.py"
 )
 
 
