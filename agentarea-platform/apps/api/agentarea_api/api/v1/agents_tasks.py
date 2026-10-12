@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import mimetypes
 import re
@@ -52,6 +53,7 @@ from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.domain.model_kind import ModelKind
+from agentarea_mcp.tool_context import APP_METADATA_KEY, END_USER_ID_KEY
 from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
@@ -106,6 +108,9 @@ class TaskInputSubmission(BaseModel):
 
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
+# Bound on TaskCreate.metadata: it rides in every signed tool-call token.
+TASK_METADATA_MAX_BYTES = 4096
+
 # Global tasks router (not agent-specific)
 global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -120,6 +125,56 @@ class TaskCreate(BaseModel):
     task_policy: PolicyDocument | None = None
     # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
+    # Trusted context for the task's tool calls, asserted by the API caller (an
+    # API key or service client, never a browser session and never the model).
+    # Every MCP server with a context signing secret receives them, signed, as
+    # agentarea/metadata and agentarea/end_user_id.
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            'Trusted task metadata for tool servers, e.g. {"chatId": "..."}. '
+            f"At most {TASK_METADATA_MAX_BYTES} bytes of JSON. Only API keys and "
+            "service clients may set it."
+        ),
+    )
+    end_user_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description=(
+            "The caller's own id for the end user this task runs for. Only API "
+            "keys and service clients may set it."
+        ),
+    )
+
+    @field_validator("metadata")
+    @classmethod
+    def _bound_metadata(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return value
+        try:
+            size = len(json.dumps(value, separators=(",", ":")).encode("utf-8"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("metadata must be JSON-serializable") from exc
+        if size > TASK_METADATA_MAX_BYTES:
+            raise ValueError(f"metadata must be at most {TASK_METADATA_MAX_BYTES} bytes of JSON")
+        return value
+
+    def trusted_metadata(self, user_context: UserContext) -> dict[str, Any]:
+        """The caller-asserted context as task metadata; refuses a session caller."""
+        if self.metadata is None and self.end_user_id is None:
+            return {}
+        if user_context.api_key_id is None and user_context.client_id is None:
+            raise HTTPException(
+                status_code=403,
+                detail="metadata and end_user_id can only be set with an API key",
+            )
+        trusted: dict[str, Any] = {}
+        if self.metadata is not None:
+            trusted[APP_METADATA_KEY] = self.metadata
+        if self.end_user_id is not None:
+            trusted[END_USER_ID_KEY] = self.end_user_id
+        return trusted
 
     @model_validator(mode="before")
     @classmethod
@@ -773,6 +828,7 @@ async def create_task_for_agent_with_stream(
     agent = await agent_service.get_with_catalog(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    caller_metadata = data.trusted_metadata(user_context)
 
     created_task = None
     if data.attachments:
@@ -803,7 +859,10 @@ async def create_task_for_agent_with_stream(
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
                 task_id=reserved_task_id,
-                trusted_metadata={"workspace_attachments": attachment_descriptors},
+                trusted_metadata={
+                    **caller_metadata,
+                    "workspace_attachments": attachment_descriptors,
+                },
             )
         except PolicyValidationError as exc:
             raise HTTPException(status_code=422, detail="Task policy rejected") from exc
@@ -845,6 +904,7 @@ async def create_task_for_agent_with_stream(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                trusted_metadata=caller_metadata or None,
             )
         except PolicyValidationError:
             creation_error = ("Task policy rejected", "policy_validation_error")
@@ -968,6 +1028,7 @@ async def create_task_for_agent_sync(
     task_service: TaskService = Depends(get_task_service),
 ):
     """Create and execute a task for the specified agent (synchronous response)."""
+    caller_metadata = data.trusted_metadata(user_context)
     try:
         # Create and execute task using shared payload-style entry point so REST
         # /sync, REST streaming and MCP toolset all share the same lifecycle.
@@ -993,7 +1054,10 @@ async def create_task_for_agent_sync(
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
                 task_id=reserved_task_id,
-                trusted_metadata={"workspace_attachments": attachment_descriptors},
+                trusted_metadata={
+                    **caller_metadata,
+                    "workspace_attachments": attachment_descriptors,
+                },
             )
             task = await task_service.dispatch_reserved_run(task)
             await _delete_staging_refs(
@@ -1013,6 +1077,7 @@ async def create_task_for_agent_sync(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                trusted_metadata=caller_metadata or None,
             )
 
         # Convert to API response format
@@ -1063,6 +1128,7 @@ async def schedule_task_for_agent(
     stream until the run starts, which may be days away. Repeating schedules
     are cron triggers, not tasks.
     """
+    caller_metadata = data.trusted_metadata(user_context)
     try:
         if data.attachments:
             reserved_task_id = uuid4()
@@ -1087,7 +1153,10 @@ async def schedule_task_for_agent(
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
                 task_id=reserved_task_id,
-                trusted_metadata={"workspace_attachments": attachment_descriptors},
+                trusted_metadata={
+                    **caller_metadata,
+                    "workspace_attachments": attachment_descriptors,
+                },
             )
             task = await task_service.dispatch_reserved_run(task)
             await _delete_staging_refs(
@@ -1108,6 +1177,7 @@ async def schedule_task_for_agent(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                trusted_metadata=caller_metadata or None,
             )
 
         return TaskResponse.from_agent_task(task)
