@@ -27,19 +27,17 @@ URL = f"/v1/workspaces/acme/agents/{AGENT_ID}/overview"
 @pytest.fixture
 def env():
     result = MagicMock()
-    result.one.return_value = SimpleNamespace(
-        cost_today=0, cost_mtd=0, done_today=0, failed_today=0, last_activity=None
-    )
+    result.one.return_value = SimpleNamespace(done_today=0, failed_today=0, last_activity=None)
     result.all.return_value = []
     result.scalars.return_value.all.return_value = []
-    session = SimpleNamespace(execute=AsyncMock(return_value=result))
+    session = SimpleNamespace(
+        execute=AsyncMock(return_value=result), scalar=AsyncMock(return_value=0)
+    )
     agents = AsyncMock()
 
     app = FastAPI()
     app.include_router(agent_overview.router, prefix="/v1/workspaces/{workspace}")
-    app.dependency_overrides[get_user_context] = lambda: UserContext(
-        user_id="u", workspace_id="ws"
-    )
+    app.dependency_overrides[get_user_context] = lambda: UserContext(user_id="u", workspace_id="ws")
     app.dependency_overrides[get_db_session] = lambda: session
     app.dependency_overrides[get_read_agent_service] = lambda: agents
     return SimpleNamespace(client=TestClient(app), session=session, agents=agents)
