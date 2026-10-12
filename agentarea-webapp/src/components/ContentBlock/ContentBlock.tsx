@@ -67,7 +67,15 @@ export default function ContentBlock({
             </>
           ) : (
             <>
-              <div className="flex min-w-0 items-start gap-1.5 md:gap-2">
+              {/* One line sits on the header's centre line with the
+                controls; with a description under the breadcrumb the toggle
+                stays level with the breadcrumb's first line instead. */}
+              <div
+                className={cn(
+                  "flex min-w-0 gap-1.5 md:gap-2",
+                  header.description ? "items-start" : "items-center"
+                )}
+              >
                 {showSidebarTrigger && (
                   <>
                     <SidebarTrigger className="h-5 w-5" />
