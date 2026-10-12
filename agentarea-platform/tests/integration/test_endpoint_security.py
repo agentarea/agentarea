@@ -186,10 +186,10 @@ class TestEndpointDiscovery:
 
         # Track which endpoints we've tested.
         # There is no /v1/auth/* router anymore -- public (no-JWT) /v1
-        # endpoints are now: agent well-known/discovery docs, the MCP OAuth
-        # connect flow, and the trigger execute callback (all mounted on
+        # endpoints are now: agent well-known/discovery docs, the OAuth
+        # connect callback, and the trigger execute callback (all mounted on
         # public_v1_router in apps/api/agentarea_api/api/v1/router.py).
-        public_patterns = [".well-known", "/mcp-oauth/callback", "/mcp-oauth/authorize", "/execute"]
+        public_patterns = [".well-known", "/v1/oauth/callback", "/execute"]
         protected_count = 0
         public_count = 0
 

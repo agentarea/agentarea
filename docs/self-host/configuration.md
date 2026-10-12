@@ -181,8 +181,8 @@ The same list serves one-click catalog API connections (Google Search Console,
 Yandex Metrica and the like): a catalog connection uses the app whose
 `authorization_endpoint` and `token_endpoint` equal its own and whose
 `resource_origins` include every API origin it calls. Register
-`<API URL>/v1/connections/oauth/callback` as a redirect URI with the provider
-for those. A malformed value stops the API and the worker at startup. Both read
+`<API URL>/v1/oauth/callback` — the one callback for every OAuth connection,
+MCP and catalog API alike — as a redirect URI with each app's provider. A malformed value stops the API and the worker at startup. Both read
 it, the worker to refresh tokens.
 
 ### Worker (group `worker`)

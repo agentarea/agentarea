@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
-import { preflightCatalogConnection } from "@/lib/api";
+import { getCatalogItem } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { OAuthConnectPanel } from "../../OAuthConnectPanel";
 
@@ -17,7 +17,7 @@ export default async function CatalogConnectPage({
   const { itemId } = await params;
   const t = await getTranslations("MCPServersPage");
 
-  const result = await preflightCatalogConnection(itemId);
+  const result = await getCatalogItem(itemId);
   const item = result.data;
 
   return (

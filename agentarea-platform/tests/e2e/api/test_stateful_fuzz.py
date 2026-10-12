@@ -37,7 +37,7 @@ try:
             r"|^/\.well-known/"
             r"|/a2a/"
             r"|^/oauth2/"
-            r"|/mcp-oauth/"
+            r"|/oauth/"
             r"|/asyncapi"
             # .../agents and .../agents/ are duplicates in the spec; schemathesis
             # can't disambiguate. Keep the trailing-slash variant (canonical) only.

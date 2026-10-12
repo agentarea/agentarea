@@ -8,7 +8,6 @@ import type {
   AgentUpdate,
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
-  CatalogConnectionRequest,
   ContinueTaskPayload,
   CreateInvitationBody,
   CreateWalletRequest,
@@ -165,28 +164,6 @@ export const getCatalogItem = async (itemId: string) => {
     client: serverClient,
     path: { item_id: itemId },
   });
-  return withStatus(result);
-};
-
-export const connectCatalogItem = async (
-  itemId: string,
-  body: CatalogConnectionRequest
-) => {
-  const result =
-    await sdk.connectCatalogItemV1ConnectionsCatalogItemIdConnectPost({
-      client: serverClient,
-      path: { item_id: itemId },
-      body,
-    });
-  return withStatus(result);
-};
-
-export const preflightCatalogConnection = async (itemId: string) => {
-  const result =
-    await sdk.preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet({
-      client: serverClient,
-      path: { item_id: itemId },
-    });
   return withStatus(result);
 };
 

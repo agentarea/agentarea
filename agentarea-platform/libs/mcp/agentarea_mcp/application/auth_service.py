@@ -2,9 +2,11 @@
 
 import json
 import logging
+import time
 from typing import Any
 from uuid import UUID
 
+import httpx
 from agentarea_common.auth.authorization import is_workspace_admin
 from agentarea_common.config import MCPOAuthApp
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -65,6 +67,14 @@ class OAuthReauthRequiredError(Exception):
     """
 
 
+class OAuthCodeExchangeError(Exception):
+    """The authorization code did not become a token; ``reason`` is the landing page's code."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
 class ManagedCredentialDestinationError(ValueError):
     """Platform-managed credentials were asked for on behalf of a host they do not serve.
 
@@ -103,6 +113,14 @@ def platform_oauth_app_for(config: MCPAuthConfig) -> MCPOAuthApp | None:
             "which AGENTAREA_MCP_OAUTH_APPS does not configure."
         )
     return app
+
+
+def _set_expiry(creds: dict[str, Any], expires_in: Any) -> None:
+    """Absolute expiry from a token response; none when the token does not expire."""
+    try:
+        creds["expires_at"] = time.time() + int(expires_in)
+    except (TypeError, ValueError):
+        creds.pop("expires_at", None)
 
 
 def _secret_key(config_id: UUID) -> str:
@@ -257,8 +275,6 @@ class MCPAuthService:
         self, config: MCPAuthConfig, creds: dict[str, Any], *, force_refresh: bool = False
     ) -> str:
         """Return a valid OAuth2 access token, refreshing if needed."""
-        import time
-
         access_token = creds.get("access_token", "")
         expires_at = creds.get("expires_at")
 
@@ -272,29 +288,115 @@ class MCPAuthService:
 
         return access_token
 
+    def token_endpoint(self, config: MCPAuthConfig) -> str:
+        """Where this config's codes and refresh tokens are redeemed.
+
+        A platform app's own endpoint, never the config's copy, so a tampered
+        ``token_url`` cannot receive the operator's client secret.
+        """
+        platform_app = platform_oauth_app_for(config)
+        if platform_app is not None:
+            return platform_app.token_endpoint
+        return str(config.config.get("token_url") or "")
+
+    async def _token_request(
+        self,
+        config: MCPAuthConfig,
+        payload: dict[str, str],
+        client_id: str,
+        client_secret: str,
+    ) -> dict[str, Any]:
+        """POST a grant to the config's token endpoint, authenticating the client its way."""
+        token_url = self.token_endpoint(config)
+        if not token_url or not client_id:
+            raise ValueError("oauth2 config missing token_url or client_id")
+        async with safe_async_client() as client:
+            if config.config.get("client_auth_method") == "client_secret_basic":
+                if not client_secret:
+                    raise MissingCredentialsError(
+                        f"Auth config {config.id} authenticates with client_secret_basic "
+                        "but has no client secret."
+                    )
+                resp = await client.post(
+                    token_url,
+                    data=payload,
+                    headers=_TOKEN_RESPONSE_HEADERS,
+                    auth=(client_id, client_secret),
+                    timeout=10,
+                )
+            else:
+                if client_secret:
+                    payload = {**payload, "client_secret": client_secret}
+                resp = await client.post(
+                    token_url, data=payload, headers=_TOKEN_RESPONSE_HEADERS, timeout=10
+                )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def complete_authorization(
+        self,
+        config: MCPAuthConfig,
+        *,
+        code: str,
+        redirect_uri: str,
+        code_verifier: str,
+    ) -> None:
+        """Redeem an authorization code (PKCE) and store the tokens on ``config``.
+
+        Raises :class:`OAuthCodeExchangeError` with the reason the landing page
+        reports: ``token_exchange_failed`` or ``no_access_token``.
+        """
+        try:
+            client_id, client_secret, creds = await self.get_oauth_client_credentials(config)
+            tokens = await self._token_request(
+                config,
+                {
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "code_verifier": code_verifier,
+                    "client_id": client_id,
+                },
+                client_id,
+                client_secret,
+            )
+        except (httpx.HTTPError, MissingCredentialsError, ValueError) as exc:
+            logger.warning(
+                "OAuth code exchange failed for auth config %s: %s", config.id, exc, exc_info=True
+            )
+            raise OAuthCodeExchangeError("token_exchange_failed") from exc
+
+        access_token = str(tokens.get("access_token") or "")
+        if not access_token:
+            # GitHub answers a bad code with 200 and an error body.
+            logger.warning(
+                "OAuth code exchange for auth config %s returned no access token (%s)",
+                config.id,
+                tokens.get("error", "no error given"),
+            )
+            raise OAuthCodeExchangeError("no_access_token")
+        creds.update(
+            {
+                "access_token": access_token,
+                "refresh_token": str(tokens.get("refresh_token") or ""),
+                "token_type": str(tokens.get("token_type") or "bearer"),
+                "scope": tokens.get("scope") or "",
+            }
+        )
+        _set_expiry(creds, tokens.get("expires_in"))
+        await self.update(config.id, credentials=creds, allow_managed_credentials=True)
+
     async def _refresh_oauth2_token(self, config: MCPAuthConfig, creds: dict[str, Any]) -> str:
         """Obtain a new access token using Client Credentials or Refresh Token flow.
 
         Raises :class:`OAuthReauthRequiredError` when renewal is impossible (no
         refresh_token and no client_secret for client_credentials) or the token
-        endpoint rejects the grant — both mean the user must reconnect.
+        endpoint rejects the grant — both mean the user must reconnect. A
+        refresh names no redirect URI (RFC 6749 §6).
         """
-        import time
-
-        import httpx
-
-        platform_app = platform_oauth_app_for(config)
-        token_url: str = (
-            platform_app.token_endpoint
-            if platform_app is not None
-            else config.config.get("token_url", "")
-        )
         client_id, client_secret, _ = await self.get_oauth_client_credentials(config)
         refresh_token: str = creds.get("refresh_token", "")
         scopes: list[str] = config.config.get("scopes", [])
-
-        if not token_url or not client_id:
-            raise ValueError("oauth2 config missing token_url or client_id")
 
         if refresh_token:
             payload = {
@@ -302,14 +404,10 @@ class MCPAuthService:
                 "refresh_token": refresh_token,
                 "client_id": client_id,
             }
-            # Public (PKCE/DCR) clients have no secret; only send one if present.
-            if client_secret:
-                payload["client_secret"] = client_secret
         elif client_secret:
             payload = {
                 "grant_type": "client_credentials",
                 "client_id": client_id,
-                "client_secret": client_secret,
                 "scope": " ".join(scopes),
             }
         else:
@@ -320,22 +418,7 @@ class MCPAuthService:
             )
 
         try:
-            async with safe_async_client() as client:
-                if config.config.get("client_auth_method") == "client_secret_basic":
-                    payload.pop("client_secret", None)
-                    resp = await client.post(
-                        token_url,
-                        data=payload,
-                        headers=_TOKEN_RESPONSE_HEADERS,
-                        auth=(client_id, client_secret),
-                        timeout=10,
-                    )
-                else:
-                    resp = await client.post(
-                        token_url, data=payload, headers=_TOKEN_RESPONSE_HEADERS, timeout=10
-                    )
-                resp.raise_for_status()
-                data = resp.json()
+            data = await self._token_request(config, payload, client_id, client_secret)
         except httpx.HTTPStatusError as exc:
             # 4xx from the token endpoint means the grant is dead (revoked /
             # expired refresh_token) — the user must reconnect.
@@ -354,14 +437,10 @@ class MCPAuthService:
                 f"token refresh rejected ({reason}) for auth config {config.id}; reconnect required"
             )
         access_token: str = data["access_token"]
-        expires_in_raw = data.get("expires_in")
 
         # Persist updated tokens
         creds["access_token"] = access_token
-        if expires_in_raw is not None:
-            creds["expires_at"] = time.time() + int(expires_in_raw)
-        else:
-            creds.pop("expires_at", None)
+        _set_expiry(creds, data.get("expires_in"))
         if "refresh_token" in data:
             creds["refresh_token"] = data["refresh_token"]
 

@@ -30,7 +30,7 @@ from mcp.types import CallToolResult, InputRequiredResult
 from ..api.deps.services import get_openapi_connection_service
 from ..api.v1 import _catalog_connections, client_mcp
 from ..api.v1._catalog_connections import with_existing_connections
-from ..api.v1.mcp_oauth_connect import catalog_connect_page_url
+from ..oauth_connect.pages import catalog_connect_page_url
 from .base import platform_context, platform_read_context
 from .mcp_servers_toolset import _connect_action, _tool_safety_hint
 
