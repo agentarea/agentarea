@@ -35,10 +35,12 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
 
     @staticmethod
     def _scoped_links(workspace_id: str) -> tuple:
-        """Load only the linked children that live in the client's workspace."""
+        """Load only the linked children the client's workspace can see."""
         return (
             selectinload(Client.skills.and_(Skill.workspace_id == workspace_id)),
-            selectinload(Client.mcp_instances.and_(MCPServerInstance.workspace_id == workspace_id)),
+            selectinload(
+                Client.mcp_instances.and_(MCPServerInstance.workspace_visibility(workspace_id))
+            ),
         )
 
     async def get_by_id(self, id: UUID | str, creator_scoped: bool = False) -> Client | None:

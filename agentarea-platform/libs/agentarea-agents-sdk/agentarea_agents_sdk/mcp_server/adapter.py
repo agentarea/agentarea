@@ -94,10 +94,12 @@ class MCPToolAdapter:
                 return result
             return json.dumps(result, default=str)
 
-        # Copy signature from original method, removing 'self'
+        # Copy signature from original method, removing 'self'. The return is the
+        # handler's own, a string: left as the method's, the SDK would derive an output
+        # schema from it and reject the serialized result the handler actually returns.
         sig = inspect.signature(method)
         params = [p for name, p in sig.parameters.items() if name != "self"]
-        handler.__signature__ = sig.replace(parameters=params)
+        handler.__signature__ = sig.replace(parameters=params, return_annotation=str)
 
         # Copy type hints (excluding 'self' and 'return')
         hints = {}

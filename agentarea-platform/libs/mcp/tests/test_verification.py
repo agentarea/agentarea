@@ -56,6 +56,7 @@ class _FakeInstance:
         self.verification = verification if verification is not None else dict(DEFAULT_VERIFICATION)
         self.last_dispatch = None
         self.tools = None
+        self.managed_by = None
 
     @property
     def endpoint_url(self) -> str:

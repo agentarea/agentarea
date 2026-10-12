@@ -27,11 +27,11 @@ from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from agentarea_common.di.container import get_container
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
-from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.domain.auth_models import MCPAuthConfig
 from agentarea_mcp.domain.client_models import Client, client_mcp_instances, client_skills
@@ -45,6 +45,7 @@ from agentarea_projects.domain.models import (
     project_skills,
 )
 from agentarea_projects.infrastructure.repository import ProjectRepository
+from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -131,6 +132,20 @@ async def _instance(session, ctx, name="github") -> MCPServerInstance:
     )
 
 
+async def _platform_instance(session, name="tool-gateway") -> MCPServerInstance:
+    return await _add(
+        session,
+        MCPServerInstance(
+            name=name,
+            server_spec_id="spec",
+            transport="url",
+            workspace_id=PLATFORM_WORKSPACE_ID,
+            created_by="operator",
+            managed_by=MANAGED_BY_PLATFORM,
+        ),
+    )
+
+
 async def _project(session, ctx) -> Project:
     return await _add(session, Project(name="launch", **_owned(ctx)))
 
@@ -185,6 +200,17 @@ async def test_project_links_a_child_of_its_own_workspace(session, method, make_
 
     loaded = await _projects(session).get(project.id)
     assert [c.id for c in getattr(loaded, attr)] == [child.id]
+
+
+async def test_project_links_a_platform_managed_instance(session):
+    """Visible to every workspace, so a workspace may attach it like its own."""
+    project = await _project(session, OURS)
+    platform = await _platform_instance(session)
+
+    await _projects(session).add_mcp_instance(project.id, platform.id)
+
+    loaded = await _projects(session).get(project.id)
+    assert [i.id for i in loaded.mcp_instances] == [platform.id]
 
 
 async def test_foreign_project_cannot_be_linked_or_unlinked(session):
@@ -301,6 +327,17 @@ async def test_client_links_children_of_its_own_workspace(session):
     loaded = await _clients(session).get(client.id)
     assert [s.id for s in loaded.skills] == [skill.id]
     assert [i.id for i in loaded.mcp_instances] == [instance.id]
+
+
+async def test_client_links_a_platform_managed_instance(session):
+    """Visible to every workspace, so a workspace may attach it like its own."""
+    client = await _client(session, OURS)
+    platform = await _platform_instance(session)
+
+    await _clients(session).add_mcp_instance(client.id, platform.id)
+
+    loaded = await _clients(session).get(client.id)
+    assert [i.id for i in loaded.mcp_instances] == [platform.id]
 
 
 async def test_foreign_client_cannot_be_unlinked(session):

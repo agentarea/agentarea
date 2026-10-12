@@ -1,0 +1,18 @@
+# Example: the AgentArea tool-gateway, offered to every workspace on the platform's token
+# 1. Create the secret: kubectl create secret generic tool-gateway-secrets --from-literal=GATEWAY_TOKEN=... -n agentarea
+# 2. Apply this: kubectl apply -f tool-gateway.yaml
+apiVersion: agentarea.io/v1alpha1
+kind: MCPConnection
+metadata:
+  name: tool-gateway
+  namespace: agentarea
+spec:
+  # The connection's ids are derived from this name; changing it is a new connection.
+  name: "AgentArea Tools"
+  description: "Paid tools served by AgentArea"
+  # The FQDN, so NO_PROXY's .svc.cluster.local suffix keeps the call in-cluster.
+  endpointUrl: "http://tool-gateway.agentarea.svc.cluster.local:8080/mcp"
+  transport: streamable-http
+  tokenSecretRef:
+    name: tool-gateway-secrets
+    key: GATEWAY_TOKEN

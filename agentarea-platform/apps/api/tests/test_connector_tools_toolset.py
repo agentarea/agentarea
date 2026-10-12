@@ -742,7 +742,7 @@ def dispatch_env(monkeypatch):
         return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(MCPAggregatorProxy, "_call_member_tool_result", call_member)
-    instance = SimpleNamespace(id=uuid4(), name="DeepWiki", transport="url")
+    instance = SimpleNamespace(id=uuid4(), name="DeepWiki", transport="url", managed_by=None)
     service = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)
     service._resolve_mcp_url_and_headers = AsyncMock(

@@ -48,7 +48,7 @@ class _Proxy:
             return AggregatedMember(mcp_instance_id="gh"), "create_issue"
         return None
 
-    async def call_namespaced_tool(self, name, arguments):
+    async def call_namespaced_tool_result(self, name, arguments):
         raise ValueError(f"No member owns tool {name}")
 
 

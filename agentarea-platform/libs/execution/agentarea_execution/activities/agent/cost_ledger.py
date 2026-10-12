@@ -2,11 +2,15 @@
 
 Every paid line of a run is already on a persisted event: ``llm.call.completed``
 carries an inference call's priced cost, and ``tool.result`` carries what a tool
-paid an external service (``service_cost``) and what a platform model it ran
-cost (``model_cost``). They are mapped onto ledger rows here, in the activity
-that stores the events, so the ledger covers every path without the workflow
-doing IO. A line is keyed by its event's id and category, which makes a retried
-batch write nothing twice.
+paid an external service from the agent's wallet (``service_cost``) and what a
+platform model it ran cost (``model_cost``). They are mapped onto ledger rows here,
+in the activity that stores the events, so the ledger covers every path without the
+workflow doing IO. A line is keyed by its event's id and category, which makes a
+retried batch write nothing twice.
+
+A call on a platform-managed connection is not among them: the tool-call layer
+writes its line when the call runs, the same way for a run and for /mcp, and the
+event's ``cost`` only reports it.
 """
 
 from datetime import datetime

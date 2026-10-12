@@ -13,6 +13,7 @@ import httpx
 from agentarea_common.audit import audited
 from agentarea_common.base.service import BaseCrudService
 from agentarea_common.config import get_database, get_settings
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import BadRequestError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -834,6 +835,10 @@ class MCPServerInstanceService:
         instance = await self.repository.get_by_id(instance_id)
         if not instance:
             raise ValueError(f"Instance {instance_id} not found")
+        if instance.managed_by == MANAGED_BY_PLATFORM:
+            # Verification writes the row, and this one is the platform's: the
+            # worker's monitor verifies it, in the platform workspace.
+            raise PermissionError(f"{instance.name} is managed by the platform")
 
         if instance.transport == MCPTransport.BUNDLE:
             member_ids: list[str] = (instance.json_spec or {}).get("members", [])
@@ -1048,6 +1053,8 @@ class MCPServerInstanceService:
         names = instance.get_configured_env_vars()
         if not names:
             return {}
+        if instance.managed_by == MANAGED_BY_PLATFORM:
+            return await platform_instance_environment(instance.id, names)
         return await self.env_service.get_instance_environment(instance.id, names)
 
     async def outbound_headers(self, instance: MCPServerInstance) -> dict[str, str]:
@@ -1222,7 +1229,9 @@ class MCPServerInstanceService:
         try:
             mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
             verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
-            if instance_type == MCPTransport.URL:
+            # A platform-managed connection's address is the operator's, as the
+            # manager gateway's is: it may be, and is, inside the cluster.
+            if instance_type == MCPTransport.URL and instance.managed_by != MANAGED_BY_PLATFORM:
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
             elif httpx_client_factory is None:
                 httpx_client_factory = platform_client_factory
@@ -1305,6 +1314,9 @@ class MCPServerInstanceService:
             "error": None,
             "tool_name": tool_name,
             "server_instance_id": str(server_instance_id),
+            # What the server reported about the call beside its content: a
+            # platform-funded connection's usage travels here (domain/metering).
+            "meta": getattr(call_result, "meta", None),
         }
 
     async def _resolve_mcp_url_and_headers(
@@ -1621,3 +1633,25 @@ class MCPServerInstanceService:
         except Exception as e:
             logger.warning("Probe failed for instance %s: %s", instance_id, e, exc_info=True)
             return {"status": "error", "message": "Probe failed due to an internal error"}
+
+
+async def platform_instance_environment(instance_id: UUID, names: list[str]) -> dict[str, str]:
+    """A platform-managed connection's credential, read from the platform workspace.
+
+    Whatever workspace is calling, the credential belongs to the platform, which is
+    the only one that writes it — the same branch ``resolve_provider_api_key`` takes
+    for a platform model's key. Read from the caller's workspace it would simply be
+    absent, and the gateway would answer 401.
+    """
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.config import get_database
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+    from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+
+    platform = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID)
+    session = get_database().async_session_factory()
+    try:
+        env_service = MCPEnvironmentService(get_real_secret_manager(session, platform))
+        return await env_service.get_instance_environment(instance_id, names)
+    finally:
+        await session.close()

@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 CUSTOMER_PRICING_EXTENSION = "customer_pricing"
 
 
+class ToolCallUnpricedError(LookupError):
+    """No price exists for a call of this paid tool, so it must not run."""
+
+
 @runtime_checkable
 class CustomerPricing(Protocol):
     def currency(self) -> str:
@@ -50,6 +54,25 @@ class CustomerPricing(Protocol):
         ``platform_funded`` is True when the call ran on the operator's credentials
         (the customer buys the tokens from us), False when it ran on the customer's
         own key (the provider bills them; any amount here is an estimate).
+        """
+        ...
+
+
+@runtime_checkable
+class ToolCallPricing(Protocol):
+    """A pricing that can also price calls of paid tools.
+
+    Separate from ``CustomerPricing`` so a pricing that predates paid tools still
+    satisfies that: it simply prices none, and every paid call is refused.
+    """
+
+    async def price_tool_call(self, resource_ref: str) -> Decimal:
+        """Return what one call of a paid tool costs the customer, in ``currency()``.
+
+        A paid tool runs on the operator's credentials, so the call is always bought
+        by the platform. Raises a ``LookupError`` when no price exists: there is no
+        estimate to fall back to, and a call nobody is charged for is one the platform
+        pays for alone.
         """
         ...
 
@@ -171,3 +194,19 @@ async def price_llm_call(
         raise RuntimeError(
             f"LLM usage accounting unavailable: customer pricing failed: {error}"
         ) from error
+
+
+async def price_tool_call(resource_ref: str, *, pricing: CustomerPricing | None = None) -> Decimal:
+    """What one call of a paid tool costs the customer, asked before the call runs.
+
+    Raises rather than prices at zero: a call with no price is refused, not given away.
+    """
+    active = pricing or get_customer_pricing()
+    if not isinstance(active, ToolCallPricing):
+        raise ToolCallUnpricedError(
+            f"{resource_ref} has no price: {type(active).__name__} does not price paid tools"
+        )
+    try:
+        return to_money(await active.price_tool_call(resource_ref))
+    except LookupError as error:
+        raise ToolCallUnpricedError(str(error)) from error

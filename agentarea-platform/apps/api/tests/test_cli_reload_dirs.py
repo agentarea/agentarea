@@ -4,7 +4,6 @@ from pathlib import Path
 
 import click
 import pytest
-
 from agentarea_api.cli import reload_dirs
 
 

@@ -3,7 +3,8 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, CheckConstraint, Enum, ForeignKey, String, Text
+from agentarea_common.constants import MANAGED_BY_PLATFORM
+from sqlalchemy import JSON, CheckConstraint, ColumnElement, Enum, ForeignKey, String, Text, or_
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -61,6 +62,17 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
         ForeignKey("mcp_auth_configs.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Whose credential this connection runs on, as on ``ProviderConfig``: NULL is the
+    # workspace's own; ``"platform"`` is a connection the deployment supplies to every
+    # workspace (the tool-gateway, say), readable everywhere, written only by the
+    # operator, its credential kept in the platform workspace. Every call on one is
+    # bought by the platform, so it is gated on and charged to the caller's balance.
+    managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """The workspace's own connections, plus the platform-managed ones."""
+        return or_(cls.workspace_id == workspace_id, cls.managed_by == MANAGED_BY_PLATFORM)
 
     def __init__(
         self,

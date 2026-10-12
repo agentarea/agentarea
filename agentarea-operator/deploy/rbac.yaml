@@ -14,6 +14,8 @@ rules:
     resources:
       - "llmproviderconfigs"
       - "llmproviderconfigs/status"
+      - "mcpconnections"
+      - "mcpconnections/status"
       - "registrysyncs"
       - "registrysyncs/status"
     verbs: ["get", "list", "watch", "patch", "update"]
@@ -56,7 +58,7 @@ rules:
     resources: ["secrets"]
     verbs: ["get"]
 ---
-# apiKeySecretRef resolves only in the LLMProviderConfig's own namespace
+# apiKeySecretRef and tokenSecretRef resolve only in their resource's own namespace
 # (handler.py), so this grant is scoped the same way: one RoleBinding per
 # namespace the operator actually watches. Add another RoleBinding to
 # agentarea-operator-secrets-reader, in that namespace, for each additional

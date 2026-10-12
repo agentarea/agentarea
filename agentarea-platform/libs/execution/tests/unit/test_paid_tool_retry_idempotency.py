@@ -508,3 +508,193 @@ def test_call_ref_without_tool_call_id_uses_the_activity_identity():
     assert (
         tool_activities._payment_call_ref(_request(task_id="t-1", tool_call_id="c-1")) == "t-1:c-1"
     )
+
+
+GATEWAY_ID = "9a0c6d8e-0000-4000-8000-000000000001"
+
+
+class GatewayService:
+    """A platform-managed connection whose one tool declares its metered resource."""
+
+    def __init__(self):
+        self.calls: list[str] = []
+        self.instance = SimpleNamespace(
+            id=GATEWAY_ID,
+            name="AgentArea tools",
+            json_spec={},
+            managed_by="platform",
+            get_available_tools=lambda: [
+                {
+                    "name": "yandex_search",
+                    "_meta": {"agentarea.ai/resource_ref": "yandex.search.web"},
+                },
+                {"name": "undeclared"},
+            ],
+        )
+
+    async def get(self, instance_id):
+        return self.instance
+
+    async def execute_tool(self, instance_id, raw_name, tool_args, httpx_client_factory=None):
+        self.calls.append(raw_name)
+        return {
+            "success": True,
+            "result": "[]",
+            "meta": {"agentarea.ai/usage": {"resource_ref": "yandex.search.web", "quantity": 1}},
+        }
+
+
+class Ledger:
+    """The spend ledger, keyed like the real table on (event id, category)."""
+
+    def __init__(self):
+        self.lines = {}
+
+    def __call__(self, session, user_context):
+        return self
+
+    async def record(self, entries):
+        for entry in entries:
+            self.lines.setdefault((entry.event_id, entry.category), entry)
+
+
+class Guard:
+    name = "entitlement_guard"
+
+    def __init__(self, allow=True):
+        self.allow = allow
+
+    async def execute(self, context):
+        from agentarea_governance.domain.enums import InterceptorAction
+        from agentarea_governance.domain.models import InterceptorResult
+
+        return InterceptorResult(
+            action=InterceptorAction.ALLOW if self.allow else InterceptorAction.DENY,
+            interceptor_name=self.name,
+            reason="ok" if self.allow else "no credits remaining",
+        )
+
+
+@pytest.fixture
+def gateway(monkeypatch, activity_fns):
+    """The tool-gateway attached, priced, with an entitlement gate installed."""
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+    from agentarea_governance.tool_calls import entitlement_guard
+
+    class Pricing(customer_pricing.ProviderCostPricing):
+        def currency(self) -> str:
+            return "RUB"
+
+        async def price_tool_call(self, resource_ref: str) -> Decimal:
+            if resource_ref != "yandex.search.web":
+                raise customer_pricing.ToolCallUnpricedError(f"no price for {resource_ref}")
+            return Decimal("0.74")
+
+    ctx, _ = activity_fns
+    service = GatewayService()
+    ctx.get_mcp_server_instance_service = AsyncMock(return_value=service)
+    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Pricing())
+    ledger = Ledger()
+    monkeypatch.setattr(tool_activities, "CostEntryRepository", ledger)
+    ExtensionRegistry.clear()
+    entitlement_guard.cache_clear()
+    ExtensionRegistry.register("entitlement_guard", lambda: Guard())
+    yield service, ledger
+    ExtensionRegistry.clear()
+    entitlement_guard.cache_clear()
+
+
+def _gateway_request(raw_name: str = "yandex_search") -> MCPToolRequest:
+    return _request(
+        tool_name=f"tools__{raw_name}",
+        tool_args={"query": "agentarea"},
+        tools=[{"type": "mcp", "name": GATEWAY_ID}],
+        mcp_route=McpToolRoute(
+            instance_id=GATEWAY_ID, raw_name=raw_name, attachment_ref=GATEWAY_ID
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_call_on_the_platform_connection_is_gated_priced_and_one_ledger_line(
+    monkeypatch, activity_fns, gateway
+):
+    from agentarea_tasks.domain.costs import tool_call_event_id
+
+    _, execute_mcp_tool_activity = activity_fns
+    monkeypatch.setattr(
+        tool_activities,
+        "_offload_large_activity_output",
+        AsyncMock(side_effect=lambda **k: k["content"]),
+    )
+    service, ledger = gateway
+    request = _gateway_request()
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+    await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+
+    assert result.success is True
+    assert (result.managed_by, result.cost) == ("platform", Decimal("0.74"))
+    assert result.usage == {"resource_ref": "yandex.search.web", "quantity": 1}
+    assert service.calls == ["yandex_search", "yandex_search"]
+    [line] = ledger.lines.values()
+    assert line.event_id == tool_call_event_id(f"{request.task_id}:call_1")
+    assert (str(line.task_id), line.agent_id, line.client_id) == (
+        request.task_id,
+        request.agent_id,
+        None,
+    )
+    assert (line.subject_id, line.managed_by, line.amount, line.currency) == (
+        "yandex.search.web",
+        "platform",
+        Decimal("0.74"),
+        "RUB",
+    )
+    assert line.evidence == {"quantity": 1, "unit": "call", "resource_ref": "yandex.search.web"}
+
+
+@pytest.mark.asyncio
+async def test_no_balance_refuses_before_the_gateway_is_called(activity_fns, gateway, audit):
+    from agentarea_common.extensions.registry import ExtensionRegistry
+    from agentarea_governance.tool_calls import entitlement_guard
+
+    _, execute_mcp_tool_activity = activity_fns
+    service, ledger = gateway
+    entitlement_guard.cache_clear()
+    ExtensionRegistry.register("entitlement_guard", lambda: Guard(allow=False))
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, _gateway_request())
+
+    assert result.success is False
+    assert "no credits remaining" in (result.error or "")
+    assert service.calls == [] and ledger.lines == {}
+    [row] = audit.rows.values()
+    assert row["action"] == "tool.call.denied"
+
+
+@pytest.mark.asyncio
+async def test_a_platform_tool_that_declares_no_resource_is_refused(activity_fns, gateway):
+    _, execute_mcp_tool_activity = activity_fns
+    service, _ = gateway
+
+    result = await ActivityEnvironment().run(
+        execute_mcp_tool_activity, _gateway_request(raw_name="undeclared")
+    )
+
+    assert result.success is False
+    assert "declares no metered resource" in (result.error or "")
+    assert service.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_free_call_costs_nothing(monkeypatch, activity_fns):
+    _, execute_mcp_tool_activity = activity_fns
+    _prepare_fake_code_tool(monkeypatch)
+    request = _request(
+        tool_name="example", tool_args={}, tools=[{"type": "code", "name": "agentarea/example"}]
+    )
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+
+    assert (result.managed_by, result.cost) == (None, 0)

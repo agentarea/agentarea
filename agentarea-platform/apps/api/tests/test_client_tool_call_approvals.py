@@ -137,10 +137,10 @@ def client(monkeypatch, upstream_calls):
 
     async def call_member(_member, tool_name, arguments):
         upstream_calls.append((tool_name, arguments))
-        return f"ran {tool_name}"
+        return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(proxy, "_discover_member_tools", discover)
-    monkeypatch.setattr(proxy, "_call_member_tool", call_member)
+    monkeypatch.setattr(proxy, "_call_member_tool_result", call_member)
 
     def with_policy(policy: dict, user: UserContext = REQUESTER) -> None:
         scope = client_mcp.ClientScope(
@@ -327,7 +327,7 @@ def dispatch(monkeypatch):
         return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(MCPAggregatorProxy, "_call_member_tool_result", call_member)
-    instance = SimpleNamespace(id=INSTANCE_ID, name="DeepWiki", transport="url")
+    instance = SimpleNamespace(id=INSTANCE_ID, name="DeepWiki", transport="url", managed_by=None)
     service = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)
     service._resolve_mcp_url_and_headers = AsyncMock(

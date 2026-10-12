@@ -1275,6 +1275,7 @@ export const zMcpServerInstanceResponse = z.object({
   id: z.string().uuid(),
   json_spec: z.record(z.unknown()),
   last_dispatch: z.record(z.unknown()).nullish(),
+  managed_by: z.string().nullish(),
   name: z.string(),
   server_spec_id: z.string(),
   tools: z.array(z.record(z.unknown())).nullish(),

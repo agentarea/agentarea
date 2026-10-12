@@ -83,10 +83,10 @@ def client(monkeypatch, upstream_calls):
 
     async def call_member(_member, tool_name, arguments):
         upstream_calls.append((tool_name, arguments))
-        return f"ran {tool_name}"
+        return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(proxy, "_discover_member_tools", discover)
-    monkeypatch.setattr(proxy, "_call_member_tool", call_member)
+    monkeypatch.setattr(proxy, "_call_member_tool_result", call_member)
 
     def with_policy(policy: dict) -> None:
         scope = client_mcp.ClientScope(
@@ -164,3 +164,146 @@ async def test_an_allowed_tool_runs_and_is_audited_without_argument_values(
     assert event.action == "tool.call.allowed"
     assert event.event_metadata["argument_keys"] == ["repoName"]
     assert "secret/repo" not in str(event.event_metadata)
+
+
+class _Ledger:
+    def __init__(self) -> None:
+        self.entries: list = []
+
+    def __call__(self, session, user_context):
+        return self
+
+    async def record(self, entries) -> None:
+        self.entries.extend(entries)
+
+
+class _Guard:
+    name = "entitlement_guard"
+
+    def __init__(self, allow: bool) -> None:
+        self.allow = allow
+
+    async def execute(self, context):
+        from agentarea_governance.domain.enums import InterceptorAction
+        from agentarea_governance.domain.models import InterceptorResult
+
+        return InterceptorResult(
+            action=InterceptorAction.ALLOW if self.allow else InterceptorAction.DENY,
+            interceptor_name=self.name,
+            reason="ok" if self.allow else "no credits remaining",
+        )
+
+
+@pytest.fixture
+def paid_client(monkeypatch, audit_events, upstream_calls):
+    """A client carrying the platform's tool-gateway, priced, its ledger captured."""
+    from decimal import Decimal
+
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+    from agentarea_governance.tool_calls import entitlement_guard
+    from agentarea_tasks.infrastructure import cost_repository
+
+    class Pricing(customer_pricing.ProviderCostPricing):
+        def currency(self) -> str:
+            return "RUB"
+
+        async def price_tool_call(self, resource_ref: str) -> Decimal:
+            return Decimal("0.74")
+
+    proxy = MCPAggregatorProxy(
+        "Codex",
+        "",
+        [AggregatedMember(mcp_instance_id=INSTANCE_ID, pinned=False)],
+        {INSTANCE_ID: "http://tools.invalid/mcp"},
+        {INSTANCE_ID: "Tools"},
+        era_verdict_store=object(),
+    )
+    gateway = SimpleNamespace(
+        id=INSTANCE_ID,
+        managed_by="platform",
+        get_available_tools=lambda: [
+            {"name": "yandex_search", "_meta": {"agentarea.ai/resource_ref": "yandex.search.web"}}
+        ],
+    )
+
+    async def discover(_member):
+        return [{"name": "yandex_search", "inputSchema": {"type": "object"}}]
+
+    async def call_member(_member, tool_name, arguments):
+        upstream_calls.append((tool_name, arguments))
+        return CallToolResult(
+            content=[TextContent(type="text", text="[]")],
+            _meta={"agentarea.ai/usage": {"resource_ref": "yandex.search.web", "quantity": 1}},
+        )
+
+    monkeypatch.setattr(proxy, "_discover_member_tools", discover)
+    monkeypatch.setattr(proxy, "_call_member_tool_result", call_member)
+    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Pricing())
+    ledger = _Ledger()
+    monkeypatch.setattr(cost_repository, "CostEntryRepository", ledger)
+    scope = client_mcp.ClientScope(
+        proxy=proxy,
+        skill_registry={},
+        platform_tools=frozenset(),
+        user_context=UserContext(user_id="user-1", workspace_id="client-ws"),
+        tool_policy={},
+        actor_type="client",
+        client_id=CLIENT_ID,
+        instances={INSTANCE_ID: gateway},
+    )
+
+    async def resolve(_client_id):
+        return scope
+
+    monkeypatch.setattr(client_mcp, "_resolve_client_scope", resolve)
+    token = client_mcp._client_id_var.set(CLIENT_ID)
+
+    def with_balance(allow: bool) -> _Ledger:
+        ExtensionRegistry.clear()
+        entitlement_guard.cache_clear()
+        ExtensionRegistry.register("entitlement_guard", lambda: _Guard(allow))
+        return ledger
+
+    yield with_balance
+    client_mcp._client_id_var.reset(token)
+    ExtensionRegistry.clear()
+    entitlement_guard.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_a_paid_client_call_is_one_ledger_line_of_the_client_and_no_task(
+    paid_client, upstream_calls
+):
+    from uuid import UUID
+
+    ledger = paid_client(True)
+
+    result = await _call("tools__yandex_search", query="agentarea")
+
+    assert result.is_error is not True
+    assert upstream_calls == [("yandex_search", {"query": "agentarea"})]
+    [entry] = ledger.entries
+    assert (entry.task_id, entry.agent_id, entry.client_id) == (None, None, UUID(CLIENT_ID))
+    assert (entry.workspace_id, entry.created_by) == ("client-ws", "user-1")
+    assert (entry.subject_id, entry.managed_by, entry.currency) == (
+        "yandex.search.web",
+        "platform",
+        "RUB",
+    )
+    assert entry.evidence == {"quantity": 1, "unit": "call", "resource_ref": "yandex.search.web"}
+
+
+@pytest.mark.asyncio
+async def test_a_client_with_no_balance_is_refused_before_the_gateway_is_called(
+    paid_client, upstream_calls, audit_events
+):
+    ledger = paid_client(False)
+
+    result = await _call("tools__yandex_search", query="agentarea")
+
+    assert result.is_error is True
+    assert "no credits remaining" in _text(result)
+    assert upstream_calls == [] and ledger.entries == []
+    [event] = audit_events
+    assert event.action == "tool.call.denied"

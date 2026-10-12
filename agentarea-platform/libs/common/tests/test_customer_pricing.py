@@ -9,7 +9,9 @@ from agentarea_common.extensions.customer_pricing import (
     CustomerPricingUnavailableError,
     ProviderCostPricing,
     get_customer_pricing,
+    ToolCallUnpricedError,
     price_llm_call,
+    price_tool_call,
     resolve_customer_pricing,
 )
 from agentarea_common.extensions.registry import ExtensionRegistry
@@ -38,6 +40,9 @@ class _Rub:
         provider_cost_usd,
     ):
         return provider_cost_usd * 95
+
+    async def price_tool_call(self, resource_ref):
+        return Decimal("0.732")
 
 
 @pytest.mark.asyncio
@@ -196,3 +201,23 @@ def test_a_working_copy_of_the_extension_supersedes_a_broken_one(monkeypatch):
     discover_extensions()
 
     assert resolve_customer_pricing().currency() == "RUB"
+
+
+@pytest.mark.asyncio
+async def test_without_billing_no_tool_call_has_a_price():
+    """OSS has nobody to charge for a call on the platform's credentials."""
+    with pytest.raises(ToolCallUnpricedError, match="yandex.search.web"):
+        await price_tool_call("yandex.search.web", pricing=ProviderCostPricing())
+
+
+@pytest.mark.asyncio
+async def test_a_tool_call_is_priced_by_the_active_pricing():
+    ExtensionRegistry.register(CUSTOMER_PRICING_EXTENSION, _Rub)
+
+    assert await price_tool_call("yandex.search.web") == Decimal("0.732")
+
+
+@pytest.mark.asyncio
+async def test_an_unpriced_tool_call_raises_and_names_the_resource():
+    with pytest.raises(ToolCallUnpricedError, match="yandex.search.web"):
+        await price_tool_call("yandex.search.web")

@@ -101,3 +101,18 @@ def test_an_event_without_a_task_is_not_attributed():
     event["data"].pop("task_id")
 
     assert _lines(event) == []
+
+
+def test_a_platform_funded_call_is_not_a_line_of_its_event():
+    """The tool-call layer wrote its line when it ran; the event only reports it."""
+    event = _event(
+        "tool.result",
+        tool_name="yandex_search",
+        tool_call_id="call-9",
+        source="mcp",
+        managed_by="platform",
+        usage={"resource_ref": "yandex.search.web", "quantity": 1},
+        cost="0.74",
+    )
+
+    assert _lines(event) == []

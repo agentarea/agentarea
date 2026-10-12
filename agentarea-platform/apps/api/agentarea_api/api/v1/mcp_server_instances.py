@@ -57,6 +57,9 @@ class MCPServerInstanceResponse(BaseModel):
     last_dispatch: dict[str, Any] | None = None
     tools: list[dict[str, Any]] | None = None
     auth_config_id: UUID | str | None = None
+    # "platform" for a connection the deployment supplies to every workspace on its
+    # own credential (read-only here; its calls are charged to the workspace balance).
+    managed_by: str | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -107,6 +110,7 @@ class MCPServerInstanceResponse(BaseModel):
                 "last_dispatch": instance.last_dispatch,
                 "tools": instance.tools,
                 "auth_config_id": instance.auth_config_id,
+                "managed_by": instance.managed_by,
                 "created_at": instance.created_at,
                 "updated_at": instance.updated_at,
             }
@@ -605,6 +609,8 @@ async def verify_mcp_server_instance(
     try:
         verification = await service.verify_instance(instance_id)
         return {"instance_id": str(instance_id), "verification": verification}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except Exception as e:
         logger.error("verify_instance failed for %s: %s", instance_id, e, exc_info=True)
         raise HTTPException(

@@ -14,11 +14,22 @@ from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
 from agentarea_common.auth.tool_authorization import (
-    ToolAuthorizationAction,
+    ToolAuthorizationDecision,
     ToolAuthorizationRequest,
-    authorize_tool_invocation,
 )
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.money import ZERO, serialize_money, to_money
+from agentarea_governance.tool_calls import (
+    GovernedToolCall,
+    PlatformFundedTool,
+    PlatformToolUsage,
+    ToolCallOutcome,
+    Verdict,
+    run_tool_call,
+)
+from agentarea_mcp.domain.metering import META_USAGE, platform_funded_resource, reported_quantity
+from agentarea_tasks.domain.costs import platform_tool_call_entry
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 from temporalio import activity
@@ -160,7 +171,12 @@ def make_tools_activities(
     from ..dependencies import ActivityContext, create_user_context
 
     async def _audited_denial(request: MCPToolRequest, reason: str) -> MCPToolResult:
-        """Refuse the call and leave its refusal in the workspace's audit trail.
+        """Refuse the call and leave its refusal in the workspace's audit trail."""
+        await _record_denial(request, reason)
+        return _deny_tool_result(request.tool_name, reason)
+
+    async def _record_denial(request: MCPToolRequest, reason: str) -> None:
+        """Leave a refusal in the workspace's audit trail.
 
         The row id is the activity's identity, so a retried attempt that
         refuses again does not record a second denial.
@@ -187,37 +203,100 @@ def make_tools_activities(
                     "requested_by": request.user_id,
                 },
             )
-        return _deny_tool_result(request.tool_name, reason)
+
+    async def _platform_funded_resource(request: MCPToolRequest) -> str | None:
+        """What a call of a routed tool is metered as, if its connection is the platform's."""
+        route = request.mcp_route
+        if route is None:
+            return None
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            service = await ctx.get_mcp_server_instance_service()
+            instance = await service.get(UUID(route.instance_id))
+        return platform_funded_resource(instance, route.raw_name)
+
+    async def _ledger(request: MCPToolRequest, usage: PlatformToolUsage) -> None:
+        """Write a platform-funded call's line to the spend ledger, once per call."""
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            await CostEntryRepository(session, user_context).record(
+                [platform_tool_call_entry(usage)]
+            )
 
     @activity.defn
     @auto_heartbeater
     async def execute_mcp_tool_activity(
         request: MCPToolRequest,
     ) -> MCPToolResult:
-        """Execute an MCP tool or built-in tool."""
-        decision = await authorize_tool_invocation(
-            ToolAuthorizationRequest(
-                tool_name=request.tool_name,
-                tool_args=request.tool_args,
-                user_id=request.user_id,
-                workspace_id=request.workspace_id,
-                effective_policy=request.effective_policy,
-                aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
-                restricting_aliases=tool_config_aliases(
-                    request.tool_name, request.tools, request.openapi_operation_tools
-                ),
+        """Execute an MCP tool or built-in tool through the one tool-call layer.
+
+        The layer judges the call (PDP), prices and gates a platform-funded one on
+        the workspace's balance, runs it, and writes its spend ledger line. The
+        result carries that line's usage and amount for the run's budget.
+        """
+        resource_ref = await _platform_funded_resource(request)
+
+        async def audit(decision: ToolAuthorizationDecision) -> None:
+            if not decision.allowed:
+                await _record_denial(request, decision.reason)
+
+        async def invoke() -> ToolCallOutcome:
+            result = await _dispatch(request)
+            quantity = (
+                reported_quantity({META_USAGE: result.usage}, resource_ref)
+                if resource_ref
+                else None
             )
+            return ToolCallOutcome(success=result.success, usage_quantity=quantity, value=result)
+
+        async def ledger(usage: PlatformToolUsage) -> None:
+            await _ledger(request, usage)
+
+        layered = await run_tool_call(
+            GovernedToolCall(
+                authorization=ToolAuthorizationRequest(
+                    tool_name=request.tool_name,
+                    tool_args=request.tool_args,
+                    user_id=request.user_id,
+                    workspace_id=request.workspace_id,
+                    effective_policy=request.effective_policy,
+                    aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
+                    restricting_aliases=tool_config_aliases(
+                        request.tool_name, request.tools, request.openapi_operation_tools
+                    ),
+                ),
+                call_id=_payment_call_ref(request),
+                agent_id=request.agent_id,
+                task_id=request.task_id,
+                platform_funded=(
+                    PlatformFundedTool(resource_ref) if resource_ref is not None else None
+                ),
+                approval_granted=request.policy_approval_granted,
+            ),
+            invoke,
+            audit=audit,
+            ledger=ledger,
         )
-        if decision.action is ToolAuthorizationAction.DENY:
-            return await _audited_denial(request, decision.reason)
-        if (
-            decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
-            and not request.policy_approval_granted
-        ):
+        if layered.verdict is Verdict.HELD:
             return await _audited_denial(
                 request,
-                f"{decision.reason}; approval must be resolved before activity execution",
+                f"{layered.decision.reason}; approval must be resolved before activity execution",
             )
+        if layered.verdict is Verdict.DENIED or layered.outcome is None:
+            return _deny_tool_result(request.tool_name, layered.decision.reason)
+        result: MCPToolResult = layered.outcome.value
+        if resource_ref:
+            usage = layered.usage
+            result.managed_by = MANAGED_BY_PLATFORM
+            result.usage = (
+                {"resource_ref": usage.resource_ref, "quantity": usage.quantity} if usage else None
+            )
+            result.cost = usage.amount if usage else ZERO
+        return result
+
+    async def _dispatch(request: MCPToolRequest) -> MCPToolResult:
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
@@ -746,6 +825,7 @@ def make_tools_activities(
                         if len(mcp_payments) > 1
                         else (mcp_payments[0] if mcp_payments else None)
                     ),
+                    usage=(mcp_result.get("meta") or {}).get(META_USAGE),
                     source="mcp",
                     server_instance_id=str(instance.id),
                     server_name=getattr(instance, "name", None),

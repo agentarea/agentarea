@@ -76,7 +76,7 @@ class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
 
 
 class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
-    """One paid line of a task's spend; see ``agentarea_tasks.domain.costs``.
+    """One paid line of spend; see ``agentarea_tasks.domain.costs``.
 
     A row is never updated: a later, more exact amount is a new row whose
     ``supersedes_id`` points at the one it replaces. ``currency`` is NULL only on
@@ -93,8 +93,9 @@ class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
 
     event_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     category: Mapped[str] = mapped_column(String(16), nullable=False)
-    task_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    task_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
     agent_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
     subject_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     subject_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -113,6 +114,12 @@ Index(
     "ix_cost_entries_supersedes",
     CostEntryORM.supersedes_id,
     postgresql_where=CostEntryORM.supersedes_id.isnot(None),
+)
+Index(
+    "ix_cost_entries_platform_occurred",
+    CostEntryORM.occurred_at,
+    CostEntryORM.id,
+    postgresql_where=CostEntryORM.managed_by == "platform",
 )
 
 

@@ -136,3 +136,25 @@ async def test_daily_totals_group_current_lines_by_utc_day(session):
     totals = await repo.sum_by_day(MONTH_START, currency="USD", agent_id=agent_id)
 
     assert totals == {date(2026, 10, 6): Decimal("0.10"), date(2026, 10, 7): Decimal("0.50")}
+
+
+async def test_a_line_with_no_task_counts_for_its_workspace_and_no_agent(session):
+    workspace_id, agent_id = str(uuid4()), uuid4()
+    client_id = uuid4()
+    client_line = _entry(
+        workspace_id, None, "0.74", task_id=None, client_id=client_id, category=CostCategory.SERVICE
+    )
+    repo = _repo(session, workspace_id)
+
+    await repo.record([client_line, _entry(workspace_id, agent_id, "0.26")])
+    await repo.record([client_line])
+
+    stored = (
+        await session.execute(
+            text("SELECT task_id, client_id FROM cost_entries WHERE event_id = :id"),
+            {"id": client_line.event_id},
+        )
+    ).all()
+    assert stored == [(None, client_id)]
+    assert await repo.sum_since(MONTH_START, currency="USD") == Decimal("1.00")
+    assert await repo.sum_since(MONTH_START, currency="USD", agent_id=agent_id) == Decimal("0.26")

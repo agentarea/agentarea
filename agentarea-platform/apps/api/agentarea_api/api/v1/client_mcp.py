@@ -22,10 +22,11 @@ configured against it keep working until they are re-installed.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError, selected_tools
 from agentarea_agents_sdk.mcp_server.auth import (
@@ -37,13 +38,24 @@ from agentarea_api.platform_mcp import client_platform_server
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
     ToolAuthorizationDecision,
+    ToolAuthorizationRequest,
     decide_tool_policy,
 )
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_execution.workflows.helpers import approvers_for_tool
 from agentarea_governance.domain.tool_call_approvals import GateVerdict, ToolCallRequest
+from agentarea_governance.tool_calls import (
+    GovernedToolCall,
+    PlatformFundedTool,
+    PlatformToolUsage,
+    ToolCallOutcome,
+    Verdict,
+    run_tool_call,
+)
 from agentarea_mcp.application.mcp_aggregator import AggregatedMember, MCPAggregatorProxy
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from agentarea_mcp.domain.client_models import ClientPlatformToolset
+from agentarea_mcp.domain.metering import platform_funded_resource, reported_quantity
 from agentarea_mcp.domain.transport import MCPTransport
 from mcp.server import Server
 from mcp.types import (
@@ -131,6 +143,9 @@ class ClientScope:
     # The client the call came through, as an approval request names it.
     client_id: str | None = None
     client_name: str | None = None
+    # The connections the client carries, by id: a call on a platform-managed one
+    # is metered as its tool declares.
+    instances: dict[str, Any] | None = None
 
 
 def _platform_tools(client_id: str, attached: list[ClientPlatformToolset]) -> frozenset[str]:
@@ -266,6 +281,7 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                 actor_type=_actor_type(principal, client_id),
                 client_id=client_id,
                 client_name=client.name,
+                instances=instances,
             )
 
 
@@ -306,7 +322,10 @@ async def _aggregate_instances(
                 order=order,
                 namespace_prefix=link.namespace_prefix if link else None,
                 transport=transport,
-                pinned=full.transport == MCPTransport.URL,
+                # The operator's address for a platform-managed connection is the
+                # platform's own choice, not the member's.
+                pinned=full.transport == MCPTransport.URL
+                and full.managed_by != MANAGED_BY_PLATFORM,
                 allowed_tools=(
                     frozenset(link.allowed_tools)
                     if link and link.allowed_tools is not None
@@ -537,19 +556,66 @@ async def _gate_held_call(
     )
 
 
-async def _authorize_call(
+async def _record_platform_tool_call(user_ctx: UserContext, usage: PlatformToolUsage) -> None:
+    """Write a platform-funded call's line to the spend ledger, as a run's activity does."""
+    from agentarea_common.base.tenant_scope import workspace_scope
+    from agentarea_common.config.database import get_database
+    from agentarea_tasks.domain.costs import platform_tool_call_entry
+    from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+
+    with workspace_scope(user_ctx.workspace_id):
+        async with get_database().session() as session:
+            await CostEntryRepository(session, user_ctx).record([platform_tool_call_entry(usage)])
+
+
+def _platform_funded(scope: ClientScope, tool_name: str) -> str | None:
+    """What a call of ``tool_name`` buys on a platform-managed connection; see metering."""
+    owner = None if tool_name in scope.platform_tools else scope.proxy.owner_of(tool_name)
+    if owner is None:
+        return None
+    member, raw_name = owner
+    instance = (scope.instances or {}).get(str(member.mcp_instance_id))
+    return platform_funded_resource(instance, raw_name)
+
+
+async def _governed_call(
     scope: ClientScope,
     tool_name: str,
     arguments: dict,
+    invoke: Callable[[], Awaitable[CallToolResult]],
     *,
     resource_type: str,
     resource_id: str,
     restricting_aliases: Sequence[str] = (),
-) -> CallToolResult | ApprovalRequired | None:
-    """Judge and audit one call; ``None`` when it may run, else the refusal or approval link."""
-    decision = _client_tool_decision(scope, tool_name, restricting_aliases)
-    if decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL:
-        return await _gate_held_call(
+) -> CallToolResult | ApprovalRequired:
+    """Run one call through the tool-call layer, as a run's tool activity does.
+
+    The layer judges it (PDP), prices and gates a call on a platform-managed
+    connection on the workspace's balance, runs it and writes its spend ledger line,
+    with this client and no task. A held call is passed to its approval here and,
+    once approved, through the layer again.
+    """
+    resource_ref = _platform_funded(scope, tool_name)
+    user_ctx = scope.user_context
+    call = GovernedToolCall(
+        authorization=ToolAuthorizationRequest(
+            tool_name=tool_name,
+            tool_args=arguments,
+            user_id=user_ctx.user_id,
+            workspace_id=user_ctx.workspace_id,
+            effective_policy=scope.tool_policy,
+            aliases=_policy_aliases(scope, tool_name),
+            restricting_aliases=restricting_aliases,
+        ),
+        call_id=str(uuid4()),
+        agent_id=None,
+        task_id=None,
+        client_id=scope.client_id,
+        platform_funded=PlatformFundedTool(resource_ref) if resource_ref is not None else None,
+    )
+
+    async def audit(decision: ToolAuthorizationDecision) -> None:
+        await _audit_tool_call(
             scope,
             tool_name,
             arguments,
@@ -557,17 +623,45 @@ async def _authorize_call(
             resource_type=resource_type,
             resource_id=resource_id,
         )
-    await _audit_tool_call(
-        scope,
-        tool_name,
-        arguments,
-        decision,
-        resource_type=resource_type,
-        resource_id=resource_id,
-    )
-    if decision.allowed:
-        return None
-    return _refusal(decision.reason)
+
+    async def ledger(usage: PlatformToolUsage) -> None:
+        await _record_platform_tool_call(user_ctx, usage)
+
+    async def audit_refusal(decision: ToolAuthorizationDecision) -> None:
+        if not decision.allowed:
+            await audit(decision)
+
+    async def run() -> ToolCallOutcome:
+        result = await invoke()
+        quantity = (
+            reported_quantity(result.meta, call.platform_funded.resource_ref)
+            if call.platform_funded
+            else None
+        )
+        return ToolCallOutcome(success=not result.is_error, usage_quantity=quantity, value=result)
+
+    layered = await run_tool_call(call, run, audit=audit, ledger=ledger)
+    if layered.verdict is Verdict.HELD:
+        held = await _gate_held_call(
+            scope,
+            tool_name,
+            arguments,
+            layered.decision,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
+        if held is not None:
+            return held
+        # The approval is already on record; only a later refusal is new.
+        layered = await run_tool_call(
+            replace(call, approval_granted=True),
+            run,
+            audit=audit_refusal,
+            ledger=ledger,
+        )
+    if layered.verdict is not Verdict.RAN or layered.outcome is None:
+        return _refusal(layered.decision.reason)
+    return layered.outcome.value
 
 
 async def call_instance_tool(
@@ -600,16 +694,14 @@ async def call_instance_tool(
         client_id=user_ctx.client_id,
     )
     name = proxy.qualified_name(proxy.members[0], tool_name)
-    refusal = await _authorize_call(
-        scope,
+    return await _governed_call(
+        replace(scope, instances={str(instance.id): instance}),
         name,
         arguments,
+        lambda: proxy.call_namespaced_tool_result(name, arguments),
         resource_type="mcp_instance",
         resource_id=str(instance.id),
     )
-    if refusal is not None:
-        return refusal
-    return await proxy.call_namespaced_tool_result(name, arguments)
 
 
 async def call_openapi_tool(
@@ -640,6 +732,14 @@ async def call_openapi_tool(
             is_error=True,
         )
     tool = tools[0]
+
+    async def invoke() -> CallToolResult:
+        result = await tool.execute(**arguments)
+        text = result["result"] if result["success"] else result["error"]
+        return CallToolResult(
+            content=[TextContent(type="text", text=text or "")], is_error=not result["success"]
+        )
+
     scope = ClientScope(
         proxy=MCPAggregatorProxy(connection.name, "", [], {}, {}),
         skill_registry={},
@@ -649,20 +749,14 @@ async def call_openapi_tool(
         actor_type="client" if user_ctx.client_id else "user",
         client_id=user_ctx.client_id,
     )
-    refusal = await _authorize_call(
+    return await _governed_call(
         scope,
         tool.name,
         arguments,
+        invoke,
         resource_type="openapi_connection",
         resource_id=str(connection.id),
         restricting_aliases=(tool_name, connection.name, str(connection.id)),
-    )
-    if refusal is not None:
-        return refusal
-    result = await tool.execute(**arguments)
-    text = result["result"] if result["success"] else result["error"]
-    return CallToolResult(
-        content=[TextContent(type="text", text=text or "")], is_error=not result["success"]
     )
 
 
@@ -745,28 +839,27 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
         # Not a tool of this client: nothing to judge, nothing ran.
         raise ValueError(f"No member owns tool {params.name}")
 
-    refusal = await _authorize_call(
+    async def invoke() -> CallToolResult:
+        if is_platform_tool:
+            # Run as the caller in the client's workspace: the tool's own
+            # authorization checks apply exactly as on /mcp/w/{workspace}.
+            with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
+                return await client_platform_server().call_tool_result(params.name, arguments)
+        return await scope.proxy.call_namespaced_tool_result(params.name, arguments)
+
+    result = await _governed_call(
         scope,
         params.name,
         arguments,
+        invoke,
         resource_type="client",
         resource_id=client_id,
     )
-    if isinstance(refusal, ApprovalRequired):
+    if isinstance(result, ApprovalRequired):
         return CallToolResult(
-            content=[TextContent(type="text", text=refusal.message)], is_error=True
+            content=[TextContent(type="text", text=result.message)], is_error=True
         )
-    if refusal is not None:
-        return refusal
-
-    if is_platform_tool:
-        # Run as the caller in the client's workspace: the tool's own
-        # authorization checks apply exactly as on /mcp/w/{workspace}.
-        with use_mcp_user_context(scope.user_context), selected_tools(scope.platform_tools):
-            return await client_platform_server().call_tool_result(params.name, arguments)
-    result = await scope.proxy.call_namespaced_tool(params.name, arguments)
-    text = result if isinstance(result, str) else str(result)
-    return CallToolResult(content=[TextContent(type="text", text=text)])
+    return result
 
 
 # The tool set is resolved per request from the client scope, so this is the

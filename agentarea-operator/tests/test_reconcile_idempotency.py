@@ -51,6 +51,10 @@ class FakeDB:
         if sql.startswith("SELECT id FROM provider_configs"):
             return _Result((p["id"],) if p["id"] in self.provider_configs else None)
 
+        if sql.startswith("SELECT id, encrypted_value FROM encrypted_secrets"):
+            row = self.secrets.get((p["ws"], p["name"]))
+            return _Result((row["id"], row["encrypted_value"]) if row else None)
+
         if sql.startswith("INSERT INTO encrypted_secrets"):
             # ON CONFLICT (workspace_id, secret_name) DO UPDATE ... RETURNING id
             key = (p["ws"], p["name"])

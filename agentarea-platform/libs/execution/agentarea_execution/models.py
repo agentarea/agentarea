@@ -625,6 +625,14 @@ class MCPToolResult(BaseModel):
     # in the billing currency; it counts toward the run budget and task total the
     # way an LLM call's cost does.
     model_cost: Money = ZERO
+    # A call on a platform-managed connection (``managed_by == "platform"``): what it
+    # used as the connection reported it ({resource_ref, quantity}), and ``cost``, the
+    # customer's price for that, priced through customer_pricing in the billing
+    # currency. Like an LLM call's cost it joins the run budget and task total, and
+    # its ledger line is a service line the platform funded.
+    managed_by: str | None = None
+    usage: dict[str, Any] | None = None
+    cost: Money = ZERO
     payment: dict[str, Any] | None = None
     # Tool-call attribution surfaced to the UI.
     source: str | None = None  # "mcp" | "builtin" | "openapi"

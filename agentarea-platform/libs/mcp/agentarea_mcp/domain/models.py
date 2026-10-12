@@ -2,7 +2,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
-from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from sqlalchemy import (
     JSON,
     Boolean,
@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     and_,
+    cast,
     column,
     exists,
     or_,
@@ -24,6 +25,8 @@ Base = declarative_base()
 # The registry catalog, named without importing the registry library.
 _registry_items = table("registry_items", column("id"), column("registry_id"))
 _registries = table("registries", column("id"), column("is_active"))
+# Platform-managed connections, named without importing their model.
+_instances = table("mcp_server_instances", column("server_spec_id"), column("managed_by"))
 
 
 class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
@@ -83,6 +86,9 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
         ``registry_item_id``, and a mirror whose registry is deactivated
         disappears with it. A tenant's copy of a mirror keeps the
         ``registry_item_id`` but stays its own.
+
+        So is the spec behind a platform-managed connection: the connection is
+        readable everywhere, and it cannot be used without its spec.
         """
         return or_(
             cls.workspace_id == workspace_id,
@@ -94,6 +100,18 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
                     _registries.c.id == _registry_items.c.registry_id,
                     _registries.c.is_active.is_(True),
                 ),
+            ),
+            cls.backs_platform_connection(),
+        )
+
+    @classmethod
+    def backs_platform_connection(cls) -> ColumnElement[bool]:
+        """A platform spec behind a platform-managed connection."""
+        return and_(
+            cls.workspace_id == PLATFORM_WORKSPACE_ID,
+            exists().where(
+                _instances.c.server_spec_id == cast(cls.id, String),
+                _instances.c.managed_by == MANAGED_BY_PLATFORM,
             ),
         )
 

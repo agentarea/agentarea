@@ -8,6 +8,8 @@ this in one place is why annotations don't silently get dropped again.
 from collections.abc import Mapping
 from typing import Any
 
+from agentarea_mcp.domain.metering import META_RESOURCE_REF
+
 
 def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
     """Convert an mcp.types.Tool into a JSON-serializable dict.
@@ -48,11 +50,18 @@ def serialize_mcp_tool(tool: Any) -> dict[str, Any]:
 
     metadata = getattr(tool, "meta", None)
     if isinstance(metadata, Mapping):
+        meta: dict[str, Any] = {}
         ui = metadata.get("ui")
         normalized_ui = dict(ui) if isinstance(ui, Mapping) else {}
         if "resourceUri" not in normalized_ui and "ui/resourceUri" in metadata:
             normalized_ui["resourceUri"] = metadata["ui/resourceUri"]
         if normalized_ui:
-            out["_meta"] = {"ui": normalized_ui}
+            meta["ui"] = normalized_ui
+        # What a call is metered as; read only for a platform-managed connection
+        # (domain/metering), where the platform itself declared it.
+        if isinstance(metadata.get(META_RESOURCE_REF), str):
+            meta[META_RESOURCE_REF] = metadata[META_RESOURCE_REF]
+        if meta:
+            out["_meta"] = meta
 
     return out

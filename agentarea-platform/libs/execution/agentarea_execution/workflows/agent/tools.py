@@ -8,6 +8,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
+    from agentarea_common.constants import MANAGED_BY_PLATFORM
     from agentarea_common.money import ZERO, serialize_money, to_money
     from agentarea_governance.domain.exceptions import (
         EscalationRequiredError,
@@ -163,13 +164,28 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             # succeeded, since the provider was paid either way. Absent in older
             # histories, so replays take no new branch.
             model_cost = to_money(result_dict.get("model_cost"))
-            model_cost_field = (
+            # A call on a platform-managed connection, priced by the activity in the
+            # billing currency: it joins the run budget and task total the same way,
+            # and the event says whose credentials paid and what was used, as an LLM
+            # call's does, for the ledger line. Absent in older histories too.
+            platform_funded = result_dict.get("managed_by") == MANAGED_BY_PLATFORM
+            paid_cost = to_money(result_dict.get("cost")) if platform_funded else ZERO
+            priced_cost_fields = (
                 {"model_cost": serialize_money(model_cost)} if model_cost > ZERO else {}
             )
-            if model_cost > ZERO:
+            paid_call_fields = (
+                {
+                    "managed_by": MANAGED_BY_PLATFORM,
+                    "usage": result_dict.get("usage"),
+                    "cost": serialize_money(paid_cost),
+                }
+                if platform_funded
+                else {}
+            )
+            if model_cost + paid_cost > ZERO:
                 if self.budget_tracker is None:
                     raise RuntimeError("Workflow budget tracker is not initialized")
-                self.budget_tracker.add_cost(model_cost)
+                self.budget_tracker.add_cost(model_cost + paid_cost)
                 self._enforce_agent_spend_cap()
 
             # Failure path: surface the error to the LLM and emit ToolCallFailed
@@ -203,7 +219,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                         "server_instance_id": result_dict.get("server_instance_id"),
                         "server_name": result_dict.get("server_name"),
                         "server_icon": result_dict.get("server_icon"),
-                        **model_cost_field,
+                        **priced_cost_fields,
                     },
                 )
                 await self._publish_events_immediately()
@@ -242,7 +258,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                     "arguments": sanitize_tool_event_value(tool_args),
                     "execution_time": execution_time,
                     "service_cost": serialize_money(service_cost),
-                    **model_cost_field,
+                    **priced_cost_fields,
+                    **paid_call_fields,
                     "payment": result_dict.get("payment"),
                     "source": result_dict.get("source"),
                     "server_instance_id": result_dict.get("server_instance_id"),

@@ -1,0 +1,94 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcpconnections.agentarea.io
+spec:
+  group: agentarea.io
+  names:
+    kind: MCPConnection
+    listKind: MCPConnectionList
+    plural: mcpconnections
+    singular: mcpconnection
+    shortNames:
+      - mcpc
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - name
+                - endpointUrl
+                - tokenSecretRef
+              properties:
+                # The connection's ids are derived from this, and agents and
+                # clients attach those ids: renaming it is a new connection, not
+                # a rename of this one.
+                name:
+                  type: string
+                  minLength: 1
+                  description: "Human-readable name, shown in every workspace. Also the key the connection's ids are derived from."
+                description:
+                  type: string
+                endpointUrl:
+                  type: string
+                  minLength: 1
+                  description: "The MCP server's URL (e.g. http://tool-gateway.agentarea.svc.cluster.local:8080/mcp)"
+                transport:
+                  type: string
+                  enum: [streamable-http, sse]
+                  default: streamable-http
+                tokenSecretRef:
+                  type: object
+                  description: "Reference to a Kubernetes Secret holding the bearer token the platform presents to the server. Always resolved in this resource's own namespace."
+                  required:
+                    - name
+                    - key
+                  properties:
+                    name:
+                      type: string
+                      description: "Name of the Secret"
+                    key:
+                      type: string
+                      description: "Key within the Secret"
+                    namespace:
+                      type: string
+                      description: "Must equal this resource's own namespace if set. A different value is rejected: the operator never reads a Secret across namespaces on a CR author's behalf."
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Synced, Error]
+                message:
+                  type: string
+                mcpServerId:
+                  type: string
+                  description: "UUID of the synced MCP server spec in the database"
+                mcpInstanceId:
+                  type: string
+                  description: "UUID of the synced MCP server instance; what agents and clients attach"
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Endpoint
+          type: string
+          jsonPath: .spec.endpointUrl
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Instance
+          type: string
+          jsonPath: .status.mcpInstanceId
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

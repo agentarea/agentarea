@@ -81,3 +81,35 @@ async def test_a_result_without_model_cost_leaves_the_budget_alone():
     assert instance.state.service_cost_used == Decimal("0.5")
     [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
     assert "model_cost" not in completed
+
+
+@pytest.mark.asyncio
+async def test_a_platform_funded_call_joins_the_budget_and_names_what_it_used():
+    instance = _workflow(
+        MCPToolResult(
+            success=True,
+            result="[]",
+            managed_by="platform",
+            usage={"resource_ref": "yandex.search.web", "quantity": 1},
+            cost=Decimal("0.74"),
+        )
+    )
+
+    await instance._execute_mcp_tool(_call())
+
+    assert instance.budget_tracker is not None
+    assert instance.budget_tracker.cost == Decimal("2.74")
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert completed["managed_by"] == "platform"
+    assert completed["usage"] == {"resource_ref": "yandex.search.web", "quantity": 1}
+    assert completed["cost"] == "0.74"
+
+
+@pytest.mark.asyncio
+async def test_a_call_on_a_workspaces_own_connection_carries_no_platform_fields():
+    instance = _workflow(MCPToolResult(success=True, result="{}"))
+
+    await instance._execute_mcp_tool(_call())
+
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert not {"managed_by", "usage", "cost"} & set(completed)

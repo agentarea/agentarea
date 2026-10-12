@@ -3381,6 +3381,10 @@ export type McpServerInstanceResponse = {
     [key: string]: unknown;
   } | null;
   /**
+   * Managed By
+   */
+  managed_by?: string | null;
+  /**
    * Name
    */
   name: string;

@@ -45,6 +45,7 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                         "category": entry.category.value,
                         "task_id": entry.task_id,
                         "agent_id": entry.agent_id,
+                        "client_id": entry.client_id,
                         "subject_type": entry.subject_type.value,
                         "subject_id": entry.subject_id,
                         "subject_name": entry.subject_name,

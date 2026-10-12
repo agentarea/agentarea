@@ -1,5 +1,8 @@
 """AgentArea K8s Operator — syncs LLMProviderConfig CRDs to the database.
 
+Also reconciles MCPConnection resources into a platform-managed MCP server spec,
+instance and bearer-token secret (see the MCPConnection section below).
+
 Watches LLMProviderConfig resources and:
 1. Reads API key from referenced K8s Secret
 2. Upserts ProviderConfig in the database
@@ -29,7 +32,7 @@ from datetime import datetime, timezone
 
 import httpx
 import kopf
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from kubernetes import client as k8s_client
 from sqlalchemy import URL, create_engine, text
 
@@ -80,6 +83,17 @@ def platform_config_id(provider_key: str) -> str:
 
 def platform_instance_id(provider_key: str, model_name: str) -> str:
     return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"model_instance:{provider_key}:{model_name}"))
+
+
+# Agents and clients attach the instance id, so it is derived from the
+# connection's name for the same reason a model's is: a re-created row has to come
+# back under the id everything already points at.
+def platform_mcp_server_id(name: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"mcp_server:{name}"))
+
+
+def platform_mcp_instance_id(name: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"mcp_instance:{name}"))
 
 
 # Workspace-scoped resources (``spec.workspaceId`` set) get derived ids too, for
@@ -140,13 +154,53 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> st
     — the configuration is visible to all of them by design — and the lookup would
     then fail anyway, because no secret exists under a name that is itself a key.
     """
+    return store_secret(
+        conn,
+        workspace_id,
+        secret_name,
+        api_key,
+        owner_type="provider_config",
+        owner_id=secret_name.removeprefix("provider_config_"),
+    )
+
+
+def store_secret(
+    conn, workspace_id: str, secret_name: str, value: str, *, owner_type: str, owner_id: str
+) -> str:
+    """Encrypt ``value`` into the workspace's secret store; returns the row's id.
+
+    A value that already decrypts to the same thing is left alone: Fernet output
+    differs on every call, so an unconditional write would rewrite the row on
+    every reconcile.
+    """
     if not ENCRYPTION_KEY:
         raise kopf.PermanentError(
-            "AGENTAREA_SECRET_ENCRYPTION_KEY is not set; refusing to write a provider "
-            "configuration whose credential cannot be stored. Set it to the same "
-            "Fernet key the platform API uses."
+            "AGENTAREA_SECRET_ENCRYPTION_KEY is not set; refusing to write a "
+            "credential that cannot be stored. Set it to the same Fernet key the "
+            "platform API uses."
         )
-    encrypted = Fernet(ENCRYPTION_KEY.encode("utf-8")).encrypt(api_key.encode("utf-8")).decode()
+    fernet = Fernet(ENCRYPTION_KEY.encode("utf-8"))
+    existing = conn.execute(
+        text(
+            "SELECT id, encrypted_value FROM encrypted_secrets "
+            "WHERE workspace_id = :ws AND secret_name = :name"
+        ),
+        {"ws": workspace_id, "name": secret_name},
+    ).fetchone()
+    if existing is not None and existing[1] is not None:
+        try:
+            current = fernet.decrypt(existing[1].encode("utf-8")).decode("utf-8")
+        except InvalidToken:
+            logger.warning(
+                "Secret %s in workspace %s does not decrypt with the current key; "
+                "rewriting it",
+                secret_name,
+                workspace_id,
+            )
+            current = None
+        if current == value:
+            return str(existing[0])
+    encrypted = fernet.encrypt(value.encode("utf-8")).decode()
     # RETURNING on the DO UPDATE branch gives the existing row's id, not the one
     # generated above and discarded — which is what makes this safe to call on
     # every reconcile.
@@ -155,7 +209,7 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> st
             "INSERT INTO encrypted_secrets "
             "(id, workspace_id, secret_name, encrypted_value, owner_type, owner_id, "
             "created_by, created_at, updated_at) "
-            "VALUES (:id, :ws, :name, :val, 'provider_config', :owner, :by, now(), now()) "
+            "VALUES (:id, :ws, :name, :val, :owner_type, :owner, :by, now(), now()) "
             "ON CONFLICT (workspace_id, secret_name) DO UPDATE SET "
             "encrypted_value = EXCLUDED.encrypted_value, external_ref = NULL, "
             "updated_by = EXCLUDED.created_by, updated_at = now() "
@@ -166,14 +220,17 @@ def store_api_key(conn, workspace_id: str, secret_name: str, api_key: str) -> st
             "ws": workspace_id,
             "name": secret_name,
             "val": encrypted,
-            "owner": secret_name.removeprefix("provider_config_"),
+            "owner_type": owner_type,
+            "owner": owner_id,
             "by": PLATFORM_PRINCIPAL_ID,
         },
     ).fetchone()
     return str(row[0])
 
 
-def _cross_namespace_secret_ref_error(secret_ref: dict, namespace: str) -> str | None:
+def _cross_namespace_secret_ref_error(
+    secret_ref: dict, namespace: str, field: str = "apiKeySecretRef"
+) -> str | None:
     """Return an error message if the ref names a namespace other than the CR's own.
 
     ``apiKeySecretRef`` only ever resolves in the CR's own namespace, and the
@@ -186,7 +243,7 @@ def _cross_namespace_secret_ref_error(secret_ref: dict, namespace: str) -> str |
     ref_namespace = secret_ref.get("namespace")
     if ref_namespace and ref_namespace != namespace:
         return (
-            f"apiKeySecretRef.namespace '{ref_namespace}' does not match this "
+            f"{field}.namespace '{ref_namespace}' does not match this "
             f"resource's own namespace '{namespace}'; cross-namespace secret "
             "references are not allowed"
         )
@@ -743,6 +800,235 @@ def periodic_rediscovery(spec, meta, namespace, patch, **_):
     except Exception as e:
         logger.error("Periodic rediscovery failed for %s: %s", cr_name, e)
         patch.status["message"] = f"Rediscovery failed: {e}"
+
+
+# ─── MCPConnection ───────────────────────────────────────────────────────
+#
+# The same offer as a platform LLM provider, for one MCP server: a connection
+# every workspace can attach, on a credential only the platform holds. Three
+# rows — the server spec, the instance, and the bearer token in the platform
+# workspace's secret store under the name the runtime resolves the instance's
+# Authorization header from.
+
+MCP_AUTH_ENV_VAR = "Authorization"
+
+# Keep in sync with agentarea_mcp.domain.verification_types.DEFAULT_VERIFICATION.
+NEVER_ATTEMPTED_VERIFICATION = {
+    "schema_version": 1,
+    "status": "never_attempted",
+    "at": None,
+    "error": None,
+}
+
+
+def mcp_secret_name_for(instance_id: str) -> str:
+    """``mcp_instance_{id}_{ENV}``: the reserved name MCPEnvironmentService reads."""
+    return f"mcp_instance_{instance_id}_{MCP_AUTH_ENV_VAR}"
+
+
+def sync_mcp_connection(spec: dict, token: str) -> tuple[str, str]:
+    """Upsert the server spec, instance and token secret. Returns their two ids.
+
+    Re-running with the same spec changes no row. A changed endpoint or transport
+    resets the instance's verification and tool snapshot, so the platform
+    re-verifies it against the new server instead of trusting the old one's.
+    """
+    from registry_sync import _unique_mcp_slug
+
+    name = spec["name"]
+    description = spec.get("description") or ""
+    endpoint_url = spec["endpointUrl"]
+    transport = spec.get("transport") or "streamable-http"
+    server_id = platform_mcp_server_id(name)
+    instance_id = platform_mcp_instance_id(name)
+    server_json_spec = {"remotes": [{"type": transport, "url": endpoint_url}]}
+    instance_json_spec = {"env_vars": [MCP_AUTH_ENV_VAR]}
+
+    with engine.begin() as conn:
+        server = conn.execute(
+            text("SELECT remote_url, json_spec FROM mcp_servers WHERE id = :id"),
+            {"id": server_id},
+        ).fetchone()
+        endpoint_changed = server is not None and (
+            server[0] != endpoint_url or server[1] != server_json_spec
+        )
+
+        server_params = {
+            "id": server_id,
+            "desc": description,
+            "rurl": endpoint_url,
+            "json_spec": json.dumps(server_json_spec),
+            "ws": PLATFORM_WORKSPACE_ID,
+        }
+        if server is None:
+            conn.execute(
+                text(
+                    "INSERT INTO mcp_servers (id, name, slug, description, version, tags, "
+                    "status, is_public, env_schema, remote_url, json_spec, "
+                    "registry_item_id, workspace_id, created_by, created_at, updated_at) "
+                    "VALUES (:id, :name, :slug, :desc, '1.0.0', CAST('[]' AS JSON), "
+                    "'active', false, CAST('[]' AS JSON), :rurl, CAST(:json_spec AS JSONB), "
+                    "NULL, :ws, :created_by, now(), now())"
+                ),
+                server_params
+                | {
+                    "name": name,
+                    "slug": _unique_mcp_slug(conn, PLATFORM_WORKSPACE_ID, name),
+                    "created_by": PLATFORM_PRINCIPAL_ID,
+                },
+            )
+        else:
+            conn.execute(
+                text(
+                    "UPDATE mcp_servers SET description = :desc, remote_url = :rurl, "
+                    "json_spec = CAST(:json_spec AS JSONB), status = 'active', "
+                    "updated_by = :by, updated_at = now() "
+                    "WHERE id = :id AND workspace_id = :ws AND ("
+                    "description, remote_url, json_spec, status) IS DISTINCT FROM "
+                    "(:desc, :rurl, CAST(:json_spec AS JSONB), 'active')"
+                ),
+                server_params | {"by": PLATFORM_PRINCIPAL_ID},
+            )
+
+        instance = conn.execute(
+            text("SELECT id FROM mcp_server_instances WHERE id = :id"),
+            {"id": instance_id},
+        ).fetchone()
+        instance_params = {
+            "id": instance_id,
+            "server_spec_id": server_id,
+            "name": name,
+            "desc": description,
+            "json_spec": json.dumps(instance_json_spec),
+            "managed_by": MANAGED_BY_PLATFORM,
+            "ws": PLATFORM_WORKSPACE_ID,
+        }
+        if instance is None:
+            conn.execute(
+                text(
+                    "INSERT INTO mcp_server_instances (id, server_spec_id, name, "
+                    "description, transport, json_spec, network_scope, managed_by, "
+                    "workspace_id, created_by, created_at, updated_at) "
+                    "VALUES (:id, :server_spec_id, :name, :desc, 'url', "
+                    "CAST(:json_spec AS JSONB), 'private', :managed_by, :ws, "
+                    ":created_by, now(), now())"
+                ),
+                instance_params | {"created_by": PLATFORM_PRINCIPAL_ID},
+            )
+        elif endpoint_changed:
+            conn.execute(
+                text(
+                    "UPDATE mcp_server_instances SET server_spec_id = :server_spec_id, "
+                    "name = :name, description = :desc, transport = 'url', "
+                    "json_spec = CAST(:json_spec AS JSONB), managed_by = :managed_by, "
+                    "verification = CAST(:verification AS JSONB), tools = NULL, "
+                    "updated_at = now() WHERE id = :id AND workspace_id = :ws"
+                ),
+                instance_params
+                | {"verification": json.dumps(NEVER_ATTEMPTED_VERIFICATION)},
+            )
+        else:
+            conn.execute(
+                text(
+                    "UPDATE mcp_server_instances SET server_spec_id = :server_spec_id, "
+                    "name = :name, description = :desc, transport = 'url', "
+                    "json_spec = CAST(:json_spec AS JSONB), managed_by = :managed_by, "
+                    "updated_at = now() WHERE id = :id AND workspace_id = :ws AND ("
+                    "server_spec_id, name, description, transport, json_spec, managed_by"
+                    ") IS DISTINCT FROM (:server_spec_id, :name, :desc, 'url', "
+                    "CAST(:json_spec AS JSONB), :managed_by)"
+                ),
+                instance_params,
+            )
+
+        store_secret(
+            conn,
+            PLATFORM_WORKSPACE_ID,
+            mcp_secret_name_for(instance_id),
+            f"Bearer {token.strip()}",
+            owner_type="mcp_instance",
+            owner_id=instance_id,
+        )
+
+    return server_id, instance_id
+
+
+def _read_mcp_token(spec: dict, namespace: str, patch) -> str | None:
+    """The token, or None after recording why it could not be read."""
+    secret_ref = spec.get("tokenSecretRef")
+    if not secret_ref:
+        patch.status["phase"] = "Error"
+        patch.status["message"] = "tokenSecretRef is required"
+        return None
+    ns_error = _cross_namespace_secret_ref_error(secret_ref, namespace, "tokenSecretRef")
+    if ns_error:
+        patch.status["phase"] = "Error"
+        patch.status["message"] = ns_error
+        return None
+    try:
+        return read_secret(namespace, secret_ref["name"], secret_ref["key"])
+    except Exception as e:
+        patch.status["phase"] = "Error"
+        patch.status["message"] = f"Failed to read secret: {e}"
+        raise kopf.TemporaryError(str(e), delay=30) from e
+
+
+def _record_mcp_sync(patch, server_id: str, instance_id: str, message: str) -> None:
+    patch.status["phase"] = "Synced"
+    patch.status["mcpServerId"] = server_id
+    patch.status["mcpInstanceId"] = instance_id
+    patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()
+    patch.status["message"] = message
+
+
+@kopf.on.create("agentarea.io", "v1alpha1", "mcpconnections")
+@kopf.on.update("agentarea.io", "v1alpha1", "mcpconnections")
+def on_mcp_connection_change(spec, meta, namespace, patch, **_):
+    cr_name = meta["name"]
+    logger.info("Syncing MCPConnection %s/%s", namespace, cr_name)
+
+    token = _read_mcp_token(spec, namespace, patch)
+    if token is None:
+        return
+
+    try:
+        server_id, instance_id = sync_mcp_connection(spec, token)
+    except kopf.PermanentError as e:
+        patch.status["phase"] = "Error"
+        patch.status["message"] = str(e)
+        raise
+    except Exception as e:
+        logger.exception("MCPConnection sync failed for %s/%s", namespace, cr_name)
+        patch.status["phase"] = "Error"
+        patch.status["message"] = str(e)
+        raise kopf.TemporaryError(str(e), delay=60) from e
+
+    _record_mcp_sync(patch, server_id, instance_id, "Synced")
+    logger.info(
+        "Synced MCPConnection %s/%s → server=%s, instance=%s",
+        namespace, cr_name, server_id, instance_id,
+    )
+
+
+# No delete handler, for the provider path's reasons: a resource vanishing from
+# git is not a decision to withdraw a connection every workspace may be using.
+
+
+@kopf.on.timer("agentarea.io", "v1alpha1", "mcpconnections", interval=3600)
+def periodic_mcp_connection_resync(spec, meta, namespace, patch, **_):
+    """Re-read the token hourly, so a rotated Secret reaches the platform."""
+    cr_name = meta["name"]
+    try:
+        token = _read_mcp_token(spec, namespace, patch)
+        if token is None:
+            return
+        server_id, instance_id = sync_mcp_connection(spec, token)
+    except Exception as e:
+        logger.exception("MCPConnection resync failed for %s/%s", namespace, cr_name)
+        patch.status["phase"] = "Error"
+        patch.status["message"] = f"Resync failed: {e}"
+        return
+    _record_mcp_sync(patch, server_id, instance_id, "Re-synced")
 
 
 # ─── RegistrySync handlers ───────────────────────────────────────────────
