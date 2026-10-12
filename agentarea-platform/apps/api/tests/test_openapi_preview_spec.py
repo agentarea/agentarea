@@ -86,6 +86,7 @@ async def test_creating_a_connection_from_a_malformed_spec_is_a_400(spec, monkey
         repository_factory=factory,
         secret_manager=AsyncMock(),
         auth_config_access_checker=AsyncMock(),
+        owned_auth_releaser=AsyncMock(),
         outbound_policy=OutboundPolicy(),
     )
 
