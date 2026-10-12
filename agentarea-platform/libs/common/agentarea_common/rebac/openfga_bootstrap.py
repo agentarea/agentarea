@@ -123,11 +123,6 @@ def require_extends(custom: dict[str, Any], base: dict[str, Any]) -> None:
     that shape.
     """
     problems: list[str] = []
-    if custom.get("schema_version") != base.get("schema_version"):
-        problems.append(
-            f"schema_version {custom.get('schema_version')!r}, "
-            f"expected {base.get('schema_version')!r}"
-        )
     custom_types = {t.get("type"): t for t in custom.get("type_definitions") or []}
     for base_type in base.get("type_definitions") or []:
         name = base_type.get("type")

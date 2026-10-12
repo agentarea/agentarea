@@ -265,9 +265,7 @@ def test_the_packaged_model_is_generated_from_model_fga():
             declared[current] = set()
         elif match := re.match(r"\s+define (\w+):", line):
             declared[current].add(match.group(1))
-    generated = {
-        t["type"]: set(t.get("relations") or {}) for t in _packaged()["type_definitions"]
-    }
+    generated = {t["type"]: set(t.get("relations") or {}) for t in _packaged()["type_definitions"]}
     assert generated == declared
 
 
@@ -344,7 +342,9 @@ async def test_a_custom_model_path_is_what_gets_applied(tmp_path):
 
     settings = _settings(apply_model=True)
     settings.MODEL_PATH = str(custom_path)
-    await bootstrap_openfga(settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    await bootstrap_openfga(
+        settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
 
     assert written == [custom]
     assert settings.MODEL_ID == "model-custom"
@@ -380,7 +380,30 @@ async def test_the_packaged_model_is_found_as_the_server_echoes_it():
         return httpx.Response(404, text="unexpected")
 
     settings = _settings(apply_model=True)
-    await bootstrap_openfga(settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    await bootstrap_openfga(
+        settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
 
     assert writes == 0
     assert settings.MODEL_ID == "model-1"
+
+
+def test_a_single_file_model_with_the_same_definitions_is_accepted():
+    """A pre-modular (schema 1.1) copy that matches is the same model.
+
+    Prod mounted one until its deployment was updated; it must not stop the
+    first image that carries the model itself.
+    """
+    import copy
+
+    from agentarea_common.rebac.openfga_bootstrap import require_extends
+
+    base = _packaged()
+    single_file = copy.deepcopy(base)
+    single_file["schema_version"] = "1.1"
+    for type_definition in single_file["type_definitions"]:
+        for relation in ((type_definition.get("metadata") or {}).get("relations") or {}).values():
+            relation.pop("module", None)
+            relation.pop("source_info", None)
+
+    require_extends(single_file, base)
