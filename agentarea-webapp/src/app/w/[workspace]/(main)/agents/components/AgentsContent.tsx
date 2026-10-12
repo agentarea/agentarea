@@ -152,7 +152,6 @@ export default async function AgentsContent({
           hints={[
             { text: t("noAgentsHintBuild"), href: "/agents/create" },
             { text: t("noAgentsHintInstall"), href: "/explore?type=agents" },
-            { text: t("noAgentsHintHarness"), href: "/clients" },
           ]}
           iconsType="agent"
           action={{ label: t("createAgent"), href: "/agents/create" }}
