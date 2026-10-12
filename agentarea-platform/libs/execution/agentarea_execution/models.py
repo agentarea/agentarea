@@ -631,6 +631,11 @@ class MCPToolResult(BaseModel):
     server_instance_id: str | None = None
     server_name: str | None = None
     server_icon: str | None = None
+    # An MCP tool's ``structuredContent``, for UIs and programs; the model reads
+    # ``result`` only. None when absent or when it exceeded the size cap, which
+    # ``structured_content_dropped`` then says.
+    structured_content: Any = None
+    structured_content_dropped: bool = False
 
 
 class ExecutionPlanRequest(BaseModel):
