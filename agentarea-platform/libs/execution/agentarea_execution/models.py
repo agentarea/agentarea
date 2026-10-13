@@ -10,7 +10,7 @@ from uuid import UUID
 
 from agentarea_agents_sdk.tools.mcp_tool_identity import McpToolIdentity
 from agentarea_common.money import ZERO, Money
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 
 class ResolvedModelInfo(BaseModel):
@@ -41,8 +41,11 @@ class ResolvedModelInfo(BaseModel):
     )  # model_spec cap; bounds the per-call max_tokens
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
+    # The model spec says the model reads images; None in states resolved before.
+    supports_vision: bool | None = None
     resolved_at: str | None = None  # ISO timestamp for staleness debugging
 
 
@@ -82,6 +85,7 @@ class ChangeModelPayload(BaseModel):
     max_output_tokens: int | None = Field(default=None, gt=0)
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
@@ -121,18 +125,21 @@ class ConversationResumeSnapshot(BaseModel):
 
 
 class AgentExecutionResume(BaseModel):
-    """A new run of a completed task whose workflow has closed.
+    """A new run of a completed, stopped or failed task whose workflow has closed.
 
     The run initializes normally, then adopts the snapshot instead of seeding a
     new conversation; the follow-up message arrives as its start signal.
     ``system_prompt_missing`` marks a log recorded before the system prompt was
-    logged, so the run writes a fresh one at the head of the window.
+    logged, so the run writes a fresh one at the head of the window. ``retry``
+    marks a run that re-runs a failed turn: it has no new message and calls the
+    model on the conversation as it stands.
     """
 
     snapshot: ConversationResumeSnapshot
     total_cost: Money = Field(default=ZERO, ge=ZERO)
     own_cost: Money | None = Field(default=None, ge=ZERO)
     system_prompt_missing: bool = False
+    retry: bool = False
 
 
 class AgentExecutionRequest(BaseModel):
@@ -410,6 +417,8 @@ class AgentConfigResult(BaseModel):
     tools: list[dict[str, Any]] = Field(default_factory=list)
     planning: bool = False
     a2ui_enabled: bool = False
+    # The agent's own answer check setting; a governance rule overrides it.
+    answer_check: dict[str, Any] | None = None
     execution_context: dict[str, Any] | None = None
     step_type: str | None = None
     skills: list[SkillInfo] = Field(default_factory=list)
@@ -535,6 +544,8 @@ class LLMCallRequest(BaseModel):
     agent_id: str | None = None
     execution_id: str | None = None
     iteration: int | None = None  # identifies the streamed chunks of this call
+    # False withholds the reply text from the chunk stream (thinking still streams).
+    stream_text: bool = True
     resolved_model: dict | None = None  # Cached ResolvedModelInfo dict; None = DB lookup
     effective_policy: dict[str, Any] | None = None
     # Runtime governance counters — let budget gates compare against the running total
@@ -544,11 +555,13 @@ class LLMCallRequest(BaseModel):
 
 
 class LLMUsage(BaseModel):
-    """LLM usage statistics."""
+    """LLM usage statistics; ``prompt_tokens`` includes the cached ones."""
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    cached_prompt_tokens: int = 0
+    cache_creation_tokens: int = 0
 
 
 class LLMCallResult(BaseModel):
@@ -574,6 +587,9 @@ class LLMCallResult(BaseModel):
     # the field existed; see AgentExecutionWorkflow._call_managed_by.
     managed_by: str | None = None
     usage: LLMUsage | None = None
+    # A stop cut the reply short after the provider had reported its usage: the
+    # result is what was billed for, not a reply the run acts on.
+    interrupted: bool = False
 
 
 class MCPToolRequest(BaseModel):
@@ -625,14 +641,19 @@ class MCPToolResult(BaseModel):
     # in the billing currency; it counts toward the run budget and task total the
     # way an LLM call's cost does.
     model_cost: Money = ZERO
-    # A call on a platform-managed connection (``managed_by == "platform"``): what it
-    # used as the connection reported it ({resource_ref, quantity}), and ``cost``, the
-    # customer's price for that, priced through customer_pricing in the billing
-    # currency. Like an LLM call's cost it joins the run budget and task total, and
-    # its ledger line is a service line the platform funded.
-    managed_by: str | None = None
-    usage: dict[str, Any] | None = None
+    # What the call's connector declares it cost, as the tool-call layer metered it
+    # and wrote its ledger lines: ``cost`` in the billing currency (wallet payments
+    # aside, which are ``service_cost``), on whose key (``payer``). Like an LLM
+    # call's cost it joins the run budget and task total. ``cost_metered`` says the
+    # layer wrote the call's lines, so the event is not read for them again.
     cost: Money = ZERO
+    payer: str | None = None
+    cost_metered: bool = False
+    # The answer is one given before: the call's ledger lines were already stored, the
+    # server served it from its cache, or its payment had already settled. ``attempt``
+    # is set when this is a retry of the same call.
+    replayed: bool = False
+    attempt: int | None = None
     payment: dict[str, Any] | None = None
     # Tool-call attribution surfaced to the UI.
     source: str | None = None  # "mcp" | "builtin" | "openapi"
@@ -644,6 +665,28 @@ class MCPToolResult(BaseModel):
     # ``structured_content_dropped`` then says.
     structured_content: Any = None
     structured_content_dropped: bool = False
+    # Images the tool returned, stored with the task's offloaded context:
+    # ``{"id", "mime_type", "size"}`` each, never the bytes.
+    images: list[dict[str, Any]] = Field(default_factory=list)
+    # What the tool-call layer's meter reads, kept off the result's wire form (it
+    # never reaches workflow history): the decoded response and an MCP ``_meta``.
+    _metered_body: Any = PrivateAttr(default=None)
+    _metered_meta: dict[str, Any] | None = PrivateAttr(default=None)
+
+    @classmethod
+    def metered(cls, body: Any, meta: dict[str, Any] | None, **fields: Any) -> "MCPToolResult":
+        result = cls(**fields)
+        result._metered_body = body
+        result._metered_meta = meta if isinstance(meta, dict) else None
+        return result
+
+    @property
+    def metered_body(self) -> Any:
+        return self._metered_body
+
+    @property
+    def metered_meta(self) -> dict[str, Any] | None:
+        return self._metered_meta
 
 
 class ExecutionPlanRequest(BaseModel):
@@ -900,30 +943,6 @@ class CreateDelegationTaskResult(BaseModel):
     error: str | None = None
     # Optional only so old activity payloads remain decodable during rollout.
     effective_policy: dict[str, Any] | None = None
-
-
-class CreateTaskFromTriggerRequest(BaseModel):
-    """Request to create task from trigger."""
-
-    trigger_id: UUID
-    execution_data: dict[str, Any] = Field(default_factory=dict)
-
-
-class TaskCreationOutcome(StrEnum):
-    """Outcome of creating a task from a trigger."""
-
-    CREATED = "created"
-    FAILED = "failed"
-
-
-class CreateTaskFromTriggerResult(BaseModel):
-    """Create task from trigger result."""
-
-    task_id: UUID | None = None
-    trigger_id: UUID
-    status: TaskCreationOutcome
-    task_parameters: dict[str, Any] = Field(default_factory=dict)
-    error: str | None = None
 
 
 # === Skill File Activity Models ===

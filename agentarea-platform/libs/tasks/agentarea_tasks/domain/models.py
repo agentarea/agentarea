@@ -356,11 +356,13 @@ class ConversationEntry(BaseModel):
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
     name: str | None = None
+    # Images a tool returned, by reference: ``{"id", "mime_type", "size"}`` each.
+    attachments: list[dict[str, Any]] | None = None
 
     def as_message(self) -> dict[str, Any]:
         """The entry as a chat message, without the fields it does not set."""
         message: dict[str, Any] = {"role": self.role, "content": self.content}
-        for key in ("tool_call_id", "name", "tool_calls"):
+        for key in ("tool_call_id", "name", "tool_calls", "attachments"):
             value = getattr(self, key)
             if value is not None:
                 message[key] = value

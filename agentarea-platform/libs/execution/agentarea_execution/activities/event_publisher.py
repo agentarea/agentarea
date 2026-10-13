@@ -23,6 +23,7 @@ def create_event_publisher(
     execution_id: str | None = None,
     iteration: int | None = None,
     *,
+    stream_text: bool = True,
     min_interval_seconds: float = CHUNK_PUBLISH_INTERVAL_SECONDS,
     clock: Callable[[], float] = time.monotonic,
 ):
@@ -41,6 +42,10 @@ def create_event_publisher(
 
     Snapshots are XADDed to the per-task live stream (ADR-0018) only; the DB
     keeps durable events, and the completed call supersedes the last snapshot.
+
+    With ``stream_text`` False the reply text is withheld: its snapshots carry
+    an empty ``chunk``, and only the first and the final one go out, so a
+    client shows the call as in progress until the completed call arrives.
     """
     text = ""
     thinking = ""
@@ -68,6 +73,8 @@ def create_event_publisher(
         else:
             text += chunk
 
+        if not stream_text and chunk_type == "text" and published_type == "text" and not is_final:
+            return
         now = clock()
         if not (
             is_final
@@ -87,7 +94,7 @@ def create_event_publisher(
                     "task_id": task_id,
                     "execution_id": execution_id,
                     "iteration": iteration,
-                    "chunk": text,
+                    "chunk": text if stream_text else "",
                     "thinking": thinking,
                     "chunk_index": chunk_index,
                     "is_final": is_final,

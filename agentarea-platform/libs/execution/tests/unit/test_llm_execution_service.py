@@ -195,7 +195,14 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
         "provider_cost_usd": "0.02",
         "currency": "USD",
         "managed_by": None,
-        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+        "usage": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "cached_prompt_tokens": 0,
+            "cache_creation_tokens": 0,
+        },
+        "interrupted": False,
     }
     assert result.cost == to_money("0.02")
     assert without_sink == result
@@ -289,6 +296,28 @@ async def test_priced_free_tool_only_response_succeeds(
     assert result.tool_calls == [_tool('{"x":1}')]
     assert result.usage.total_tokens == 15
     assert result.cost == to_money("0")
+
+
+async def test_cached_prompt_tokens_reach_the_result_and_the_model_gets_the_cached_rate(
+    provider, make_service, user_context
+):
+    request = _request()
+    request.resolved_model.update(cached_input_cost_per_token="0.0001")
+    usage = LLMUsage(
+        prompt_tokens=1000,
+        completion_tokens=100,
+        total_tokens=1100,
+        cached_prompt_tokens=800,
+        cache_creation_tokens=50,
+    )
+    provider.chunks = [_response("hello", usage=usage, cost=0.48)]
+
+    result = await make_service().execute(request, user_context=user_context)
+
+    assert provider.constructor.call_args.kwargs["cached_input_cost_per_token"] == to_money(
+        "0.0001"
+    )
+    assert (result.usage.cached_prompt_tokens, result.usage.cache_creation_tokens) == (800, 50)
 
 
 async def test_uncached_model_scope_closes_before_using_provider_config_endpoint(
@@ -413,8 +442,6 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
                     "old",
                     reasoning_content="old reasoning",
                     tool_calls=[_tool('{"old":1}')],
-                    usage=_usage(),
-                    cost=0.5,
                 )
                 waiting.set()
                 await release.wait()
@@ -454,7 +481,14 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
             "provider_cost_usd": "0.02",
             "currency": "USD",
             "managed_by": None,
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+                "cached_prompt_tokens": 0,
+                "cache_creation_tokens": 0,
+            },
+            "interrupted": False,
         }
         assert result.cost == to_money("0.02")
     finally:
@@ -725,3 +759,26 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
     assert [entry.kind for entry in written] == ["summary"]
     assert registered_pricing.calls[0]["platform_funded"] is True
     assert registered_pricing.calls[0]["model_instance_id"] == MODEL_ID
+
+
+async def test_a_stop_after_the_provider_reported_usage_returns_what_was_billed(
+    provider, make_service, user_context
+):
+    """A reply cut short still cost what the provider reported; that is not lost."""
+    waiting, release = asyncio.Event(), asyncio.Event()
+
+    async def stream(request):
+        yield _response("partial", usage=_usage(), cost=0.5)
+        waiting.set()
+        await release.wait()
+
+    provider.ainvoke_stream.side_effect = stream
+    task = asyncio.create_task(make_service().execute(_request(), user_context=user_context))
+    await asyncio.wait_for(waiting.wait(), timeout=2)
+    task.cancel()
+    result = await asyncio.wait_for(task, timeout=2)
+
+    assert result.interrupted is True
+    assert result.content == "partial"
+    assert result.cost == to_money("0.5")
+    assert result.usage is not None and result.usage.total_tokens == 15

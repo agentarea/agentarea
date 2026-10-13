@@ -94,3 +94,18 @@ async def test_a_failed_snapshot_is_dropped_without_failing_the_model_call():
     publish = create_event_publisher(_DownBroker(), "task-1")
 
     await publish("pong", 0, is_final=True)
+
+
+async def test_withheld_reply_text_never_reaches_the_stream_but_thinking_does():
+    stream, clock = CapturingStreamBroker(), FakeClock()
+    publish = create_event_publisher(
+        stream, "task-1", stream_text=False, min_interval_seconds=0.1, clock=clock
+    )
+
+    await publish("Let", 0, chunk_type="thinking")
+    for index, delta in enumerate(["Вызвал ", "edit_estimate", " и всё"]):
+        clock.now = 1.0 + index
+        await publish(delta, index + 1)
+    await publish("", 4, is_final=True)
+
+    assert _snapshots(stream) == [("", "Let", False), ("", "Let", False), ("", "Let", True)]

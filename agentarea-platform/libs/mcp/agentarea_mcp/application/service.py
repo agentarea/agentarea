@@ -26,6 +26,7 @@ from agentarea_common.utils.url_safety import (
     validate_outbound_url,
 )
 from mcp import MCPError
+from mcp_types import INVALID_REQUEST, REQUEST_TIMEOUT
 
 from agentarea_mcp.application.auth_service import (
     ManagedCredentialDestinationError,
@@ -33,6 +34,9 @@ from agentarea_mcp.application.auth_service import (
     OAuthReauthRequiredError,
 )
 from agentarea_mcp.application.mcp_client import (
+    MCP_CONNECT_TIMEOUT_SECONDS,
+    SSE_READ_TIMEOUT_SECONDS,
+    call_headers,
     connected_mcp_client,
     gateway_client_factory,
     mcp_verdict_key,
@@ -40,6 +44,7 @@ from agentarea_mcp.application.mcp_client import (
     platform_client_factory,
     shared_era_verdict_store,
 )
+from agentarea_mcp.application.mcp_session_pool import session_key, session_pool
 from agentarea_mcp.dispatch_stamps import record_dispatch
 from agentarea_mcp.domain.env_schema import normalize_env_schema
 from agentarea_mcp.domain.events import (
@@ -77,7 +82,16 @@ from agentarea_mcp.tool_context import (
     context_meta,
     sign_context,
 )
+from agentarea_mcp.tool_result import split_tool_content
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
+from agentarea_mcp.tool_timeout import (
+    DEFAULT_TOOL_TIMEOUT_SECONDS,
+    MAX_TOOL_TIMEOUT_SECONDS,
+    TOOL_TIMEOUT_GRACE_SECONDS,
+    TOOL_TIMEOUT_KEY,
+    tool_timeout_error,
+    tool_timeout_seconds,
+)
 from agentarea_mcp.transport_spec import (
     instance_transport_spec,
     server_transport,
@@ -116,6 +130,11 @@ def _normalize_url_keys(spec: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
+def _is_terminated_session(exc: MCPError) -> bool:
+    """The SDK's reading of a 404 on a session the server no longer knows."""
+    return exc.code == INVALID_REQUEST and exc.message == "Session terminated"
+
+
 def _is_mcp_protocol_error(exc: BaseException) -> bool:
     """True when the server answered in MCP, rather than the dial failing."""
     if isinstance(exc, BaseExceptionGroup):
@@ -151,6 +170,10 @@ def _spec_endpoint_refusal(remote_url: str | None, json_spec: dict[str, Any] | N
 
 def _instance_owned_spec(spec: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in spec.items() if key not in INSTANCE_TRANSPORT_FIELDS}
+
+
+def _without_tool_timeout(spec: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in spec.items() if key != TOOL_TIMEOUT_KEY}
 
 
 # Structured tool output rides in the tool.result event, not the model's context;
@@ -671,6 +694,9 @@ class MCPServerInstanceService:
 
             instance_spec = _instance_owned_spec(submitted_spec)
             instance_spec.pop(CONTEXT_SIGNING_FLAG, None)
+            timeout_error = tool_timeout_error(instance_spec)
+            if timeout_error:
+                raise MCPValidationError([timeout_error])
             spec, secret_env_vars = await self._extract_secrets_from_spec(
                 instance_spec, server_spec_id
             )
@@ -819,6 +845,9 @@ class MCPServerInstanceService:
         if "json_spec" in patch and patch["json_spec"] is not None:
             json_spec = _normalize_url_keys(patch["json_spec"])
             json_spec.pop(CONTEXT_SIGNING_FLAG, None)
+            timeout_error = tool_timeout_error(json_spec)
+            if timeout_error:
+                raise MCPValidationError([timeout_error])
             instance = await self.repository.get_by_id(id)
             if instance:
                 cleaned_spec, secret_env_vars = await self._extract_secrets_from_spec(
@@ -838,9 +867,10 @@ class MCPServerInstanceService:
                 real_secrets = {
                     k: v for k, v in secret_env_vars.items() if v not in masked_placeholders
                 }
-                runtime_config_changed = cleaned_spec != (instance.json_spec or {}) or bool(
-                    real_secrets
-                )
+                # The tool timeout is the caller's to observe; the process never sees it.
+                runtime_config_changed = _without_tool_timeout(cleaned_spec) != (
+                    _without_tool_timeout(instance.json_spec or {})
+                ) or bool(real_secrets)
                 if runtime_config_changed:
                     if instance.transport in CONTAINER_TRANSPORTS:
                         # A running MCP process cannot observe changed environment,
@@ -1313,16 +1343,18 @@ class MCPServerInstanceService:
                 progress_callback=progress_callback,
             )
 
+        pooled = httpx_client_factory is None
         try:
             mcp_url, headers, transport = await self._resolve_mcp_url_and_headers(instance)
             verdict_key = mcp_verdict_key(server_instance_id, transport_spec)
+            timeout_seconds = tool_timeout_seconds(transport_spec)
             meta: dict[str, Any] | None = None
+            per_call_headers: dict[str, str] | None = None
             if instance_type == MCPTransport.URL:
                 secret = await self._context_secret(instance) if call_context else None
                 if call_context is not None and secret:
                     meta = context_meta(call_context)
-                    headers = {
-                        **headers,
+                    per_call_headers = {
                         CONTEXT_HEADER: sign_context(
                             call_context,
                             secret=secret,
@@ -1333,10 +1365,13 @@ class MCPServerInstanceService:
             # A platform-managed connection's address is the operator's, as the
             # manager gateway's is: it may be, and is, inside the cluster.
             if instance_type == MCPTransport.URL and instance.managed_by != MANAGED_BY_PLATFORM:
+                egress = "pinned"
                 httpx_client_factory = pinned_client_factory(httpx_client_factory)
             elif httpx_client_factory is None:
+                egress = "platform"
                 httpx_client_factory = platform_client_factory
             else:
+                egress = "platform"
                 httpx_client_factory = gateway_client_factory(httpx_client_factory)
         except Exception as e:
             return _fail(
@@ -1364,6 +1399,9 @@ class MCPServerInstanceService:
                 verdict_store=self.era_verdict_store,
                 meta=meta,
                 progress_callback=progress_callback,
+                per_call_headers=per_call_headers,
+                timeout_seconds=timeout_seconds,
+                pool_egress=egress if pooled else None,
             )
         except Exception as e:
             logger.error(
@@ -1373,6 +1411,14 @@ class MCPServerInstanceService:
                 e,
                 exc_info=True,
             )
+            if isinstance(e, MCPError) and e.code == REQUEST_TIMEOUT:
+                reason = f"no result within {timeout_seconds:g} s"
+                return _fail(
+                    f"MCP '{instance.name}' tool call timed out: {reason}. The instance's "
+                    f"{TOOL_TIMEOUT_KEY} (at most {MAX_TOOL_TIMEOUT_SECONDS}) sets how long "
+                    "a call may take.",
+                    f"MCP tool call timed out: {reason}",
+                )
             reason = (
                 "could not connect to the MCP server"
                 if instance_type == MCPTransport.URL and not _is_mcp_protocol_error(e)
@@ -1384,26 +1430,11 @@ class MCPServerInstanceService:
                 f"MCP tool call failed: {reason}",
             )
 
-        parts: list[str] = []
-        for block in getattr(call_result, "content", None) or []:
-            block_type = getattr(block, "type", None)
-            if block_type == "text":
-                parts.append(getattr(block, "text", "") or "")
-            elif block_type == "image":
-                mime = getattr(block, "mime_type", "unknown")
-                parts.append(f"<image mime={mime}>")
-            elif block_type == "resource":
-                resource = getattr(block, "resource", None)
-                uri = getattr(resource, "uri", "unknown") if resource else "unknown"
-                parts.append(f"<resource uri={uri}>")
-            else:
-                parts.append(str(block))
-
+        result_str, images = split_tool_content(getattr(call_result, "content", None) or [])
         structured_content = getattr(call_result, "structured_content", None)
-        if not parts and structured_content is not None:
-            parts.append(str(structured_content))
+        if not result_str and structured_content is not None:
+            result_str = str(structured_content)
 
-        result_str = "\n".join(parts)
         is_error = bool(getattr(call_result, "is_error", False))
 
         if is_error:
@@ -1419,10 +1450,12 @@ class MCPServerInstanceService:
             "tool_name": tool_name,
             "server_instance_id": str(server_instance_id),
             # What the server reported about the call beside its content: a
-            # platform-funded connection's usage travels here (domain/metering).
+            # cost a catalog entry declares as reported in _meta is read here.
             "meta": getattr(call_result, "meta", None),
             "structured_content": structured,
             "structured_content_dropped": dropped,
+            # Base64 images for the model; the caller stores them, never an event.
+            "images": images,
         }
 
     async def _resolve_mcp_url_and_headers(
@@ -1477,6 +1510,7 @@ class MCPServerInstanceService:
         timeout_seconds: float = 30.0,
         verdict_key: str | None = None,
         verdict_store=None,
+        read_timeout_seconds: float = SSE_READ_TIMEOUT_SECONDS,
     ) -> Any:
         """Open a connected v2 MCP client and run one operation."""
         async with connected_mcp_client(
@@ -1487,6 +1521,7 @@ class MCPServerInstanceService:
             verdict_key=verdict_key,
             verdict_store=verdict_store,
             httpx_client_factory=httpx_client_factory,
+            read_timeout_seconds=read_timeout_seconds,
         ) as client:
             result = operation(client)
             return await result if inspect.isawaitable(result) else result
@@ -1504,18 +1539,80 @@ class MCPServerInstanceService:
         verdict_store=None,
         meta: dict[str, Any] | None = None,
         progress_callback: ProgressCallback | None = None,
+        per_call_headers: dict[str, str] | None = None,
+        timeout_seconds: float = DEFAULT_TOOL_TIMEOUT_SECONDS,
+        pool_egress: str | None = None,
     ):
-        return await self._with_mcp_session(
+        """Call the tool, on a pooled connection when ``pool_egress`` names one.
+
+        A caller's own HTTP client factory (a paying one) carries that call's
+        state, so its calls never share a connection.
+        """
+        # A response may go silent a little past the call's own limit, so the
+        # call's timeout fires first and the server is told to stop.
+        read_timeout = timeout_seconds + TOOL_TIMEOUT_GRACE_SECONDS
+        call_kwargs: dict[str, Any] = {
+            "read_timeout_seconds": timeout_seconds,
+            "progress_callback": progress_callback,
+            "meta": meta,
+        }
+
+        if pool_egress is None:
+            with call_headers(per_call_headers):
+                return await self._with_mcp_session(
+                    mcp_url,
+                    headers,
+                    lambda client: client.call_tool(tool_name, tool_args, **call_kwargs),
+                    httpx_client_factory=httpx_client_factory,
+                    transport=transport,
+                    verdict_key=verdict_key,
+                    verdict_store=verdict_store,
+                    read_timeout_seconds=read_timeout,
+                )
+
+        key = session_key(
             mcp_url,
             headers,
-            lambda client: client.call_tool(
-                tool_name, tool_args, progress_callback=progress_callback, meta=meta
-            ),
-            httpx_client_factory=httpx_client_factory,
             transport=transport,
+            egress=pool_egress,
             verdict_key=verdict_key,
-            verdict_store=verdict_store,
+            timeout_seconds=timeout_seconds,
         )
+
+        def open_client():
+            return connected_mcp_client(
+                mcp_url,
+                headers or None,
+                MCP_CONNECT_TIMEOUT_SECONDS,
+                transport=transport,
+                verdict_key=verdict_key,
+                verdict_store=verdict_store,
+                httpx_client_factory=httpx_client_factory,
+                read_timeout_seconds=read_timeout,
+            )
+
+        pool = session_pool()
+        for attempt in (1, 2):
+            async with pool.lease(key, open_client) as session:
+                client = await session.ready()
+                try:
+                    with call_headers(per_call_headers):
+                        return await client.call_tool_once(tool_name, tool_args, **call_kwargs)
+                except MCPError as exc:
+                    # The server forgot the session, or contradicted the cached
+                    # era verdict: it refused the request without running the
+                    # tool, so the call goes once more on a new connection.
+                    session.retire()
+                    forgotten = session.reused and _is_terminated_session(exc)
+                    if attempt == 2 or not (forgotten or await client.forget_stale_verdict(exc)):
+                        raise
+                    logger.info(
+                        "MCP %s refused %s (%s); calling it again on a new connection",
+                        mcp_url,
+                        tool_name,
+                        exc,
+                    )
+        raise AssertionError("unreachable")
 
     async def _list_tools_via_mcp(
         self,

@@ -18,17 +18,14 @@ with workflow.unsafe.imports_passed_through():
 from ...models import LLMCallRequest, LLMCallResult
 from ..constants import (
     CONTEXT_MAX_PAYLOAD_BYTES,
-    HEARTBEAT_TIMEOUT,
-    LLM_CALL_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import model_call_retry_policy
 from .compaction import CompactionMixin
 from .errors import RUN_INPUT_EXCEEDS_CONTEXT_WINDOW, ErrorReportingMixin
 from .limits import run_limit_reason
 from .patches import (
+    ANSWER_CHECK_BEFORE_REPLY_PATCH,
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
@@ -169,10 +166,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self.state.error_message = message
                 self.state.blocked_reason = message
                 return
-            self._events.add_event(
-                EventTypes.LLM_CALL_FAILED,
-                {"iteration": iteration, "error": error_details},
-            )
+            if e is not self._reported_llm_failure:
+                self._events.add_event(
+                    EventTypes.LLM_CALL_FAILED,
+                    {"iteration": iteration, "error": error_details},
+                )
             raise
 
         await self._publish_events_immediately()
@@ -454,15 +452,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 cost_used=self.budget_tracker.cost if self.budget_tracker else None,
                 tokens_used=self.state.tokens_used,
                 service_cost_used=self.state.service_cost_used,
+                # A checked answer reaches the person only once checked.
+                stream_text=self._answer_check() is None,
             )
 
-            response: LLMCallResult = await workflow.execute_activity(
-                Activities.CALL_LLM,
-                args=[llm_request],
-                start_to_close_timeout=LLM_CALL_TIMEOUT,
-                heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=model_call_retry_policy(),
-            )
+            response: LLMCallResult = await self._run_model_activity(llm_request)
             self._mark_conversation_written()
 
             # Normalize response fields to support both Pydantic model and plain dict
@@ -536,6 +530,19 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 if A2UI_DELIMITER in content_value:
                     display_content = content_value.split(A2UI_DELIMITER, 1)[0].rstrip()
 
+            # A text-only reply is the final answer: check it before anyone sees it.
+            answer_checked = False
+            if (
+                not tool_calls_value
+                and display_content.strip()
+                and self._answer_check() is not None
+                and workflow.patched(ANSWER_CHECK_BEFORE_REPLY_PATCH)
+            ):
+                checked = await self._checked_answer(display_content.strip())
+                content_value = checked + content_value[len(display_content) :]
+                display_content = checked
+                answer_checked = True
+
             self._events.add_event(
                 EventTypes.LLM_CALL_COMPLETED,
                 {
@@ -584,6 +591,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 "tool_calls": tool_calls_value,
                 "usage": usage_info,
                 "cost": cost_value,
+                "answer_checked": answer_checked,
             }
 
         except Exception as e:
@@ -591,17 +599,17 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             # this change publish it on their way to the continuation wait.
             if self._is_cancellation(e) or run_limit_reason(e) == "token_limit":
                 raise
-            # Simplified error handling - enriched error events are now published by the activity
-            error_message = self._extract_temporal_error_details(e)
-            error_lower = error_message.lower()
-
-            is_provider_quota_block = (
-                "insufficient balance" in error_lower
-                or "no resource package" in error_lower
-                or "quota exceeded" in error_lower
+            error_lower = self._extract_temporal_error_details(e).lower()
+            cause = self._failure_cause(e)
+            is_provider_quota_block = cause == "provider_out_of_credits" or (
+                cause is None
+                and (
+                    "insufficient balance" in error_lower
+                    or "no resource package" in error_lower
+                    or "quota exceeded" in error_lower
+                )
             )
 
-            # Generic LLM error event for workflow tracking
             user_error = self._get_user_facing_error(e)
             self._events.add_event(
                 EventTypes.LLM_CALL_FAILED,
@@ -609,23 +617,17 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     "iteration": self.state.current_iteration,
                     "error": user_error,
                     "error_type": self._get_user_facing_error_type(e),
+                    "failure_reason": cause,
+                    "error_detail": self._error_detail(e),
                     "model_id": self.state.agent_config.get("model_id"),
                 },
             )
+            self._reported_llm_failure = e
 
+            # The run ends on this failure; task.failed is published once, as it ends.
             if is_provider_quota_block:
                 self.state.status = ExecutionStatus.BLOCKED
                 self.state.blocked_reason = user_error
-                self._events.add_event(
-                    EventTypes.WORKFLOW_FAILED,
-                    {
-                        "error": user_error,
-                        "error_type": "ProviderQuotaExceeded",
-                        "blocked": True,
-                        "blocked_reason": user_error,
-                        "retryable": False,
-                    },
-                )
 
             await self._publish_events_immediately()
             raise
@@ -750,7 +752,9 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     "arguments": json.dumps({"result": effective_content.strip(), "artifacts": []}),
                 },
             )
-            await self._handle_task_completion(completion_call)
+            await self._handle_task_completion(
+                completion_call, answer_checked=bool(response.get("answer_checked"))
+            )
             return
         else:
             # No content and no tool calls — an empty response. The loop calls the

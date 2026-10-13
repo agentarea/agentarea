@@ -9,7 +9,7 @@ related:
   - /guides/mcp/connect-a-remote-server
   - /concepts/execution/events
   - /reference/limits
-last_updated: 2026-10-12
+last_updated: 2026-10-13
 ---
 
 The conventions AgentArea adds to a standard MCP `tools/call` so a remote MCP
@@ -146,13 +146,29 @@ SSE feed and its history.
 | Heartbeat | Every notification heartbeats the tool activity |
 | Part | `tool.progress` derives no part; the tool card stays as `tool.call` / `tool.result` left it |
 
+## Timeout
+
+A call waits for its result for the instance's `tool_timeout_seconds` (in the
+instance `json_spec`), progress notifications included, then fails as
+`MCP tool call timed out: no result within <n> s` and the server is sent
+`notifications/cancelled`.
+
+| Rule | Value |
+|---|---|
+| Default | 300 s |
+| Range | 1 to 1800 s; a value outside it is refused with 422 on create and update |
+| Changing it | Takes effect on the next call; a container instance is not restarted |
+
 ## Results
 
 | Field | Goes to |
 |---|---|
 | `content` (text) | The model. Text over 8000 characters is offloaded and the model sees a pointer and a preview |
+| `content` (image), or an embedded resource with an `image/*` blob | Stored with the task's offloaded context. A vision model sees the image after the tool result; another model reads `[image <id> not shown …]`. The `tool.result` event carries `images: [{id, mime_type, size}]`, never the bytes. PNG, JPEG, GIF and WebP up to 5 MB, at most 8 per result; the newest 8 of the run go with each model call |
+| Embedded text resource | The model, as `[resource <uri>]` followed by its text |
 | `structuredContent` | The `tool.result` event as `structured_content`. The model does not read it. Over 16000 characters of JSON it is left out and the event carries `structured_content_dropped: true` |
 | `isError: true` | A failed `tool.result`; `content` is the error the model reads |
+| `_meta["agentarea/replayed"]: true` | The `tool.result` event as `replayed: true`: the server answered from what it stored for this idempotency key rather than running the tool again |
 
 When `content` is empty, the model reads `structuredContent` as text instead.
 
@@ -189,6 +205,12 @@ A retried tool activity sends the same `task_id`, `tool_call_id`,
 idempotency key and arguments, with a newly minted token. A server that is not
 safe to re-run remembers the result per idempotency key and returns it for a
 duplicate.
+It can say so by setting `_meta["agentarea/replayed"]` to `true` on that result.
+
+A retry's `tool.result` carries `attempt: <n>`. It carries `replayed: true` when
+the server said so, when a wallet payment for the call had already settled, or when
+the call's cost lines were already in the spend ledger; a replay never writes a
+second line. Both fields are absent on a first, fresh call.
 
 ## Setting the inputs
 

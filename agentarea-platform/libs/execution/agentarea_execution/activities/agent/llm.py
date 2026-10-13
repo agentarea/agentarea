@@ -1,5 +1,6 @@
 """Model resolution, model calls, context compaction and planning."""
 
+import asyncio
 import logging
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -20,6 +21,7 @@ from temporalio.exceptions import ApplicationError
 from ... import llm_execution_service
 from ...exceptions import ModelInstanceNotFoundError
 from ...interfaces import ActivityDependencies
+from ...llm_failures import classify_llm_failure
 from ...models import (
     CompactMessagesRequest,
     CompactMessagesResult,
@@ -36,7 +38,7 @@ from ...models import (
 )
 from ...workflows.context_manager import compactable_prefix, estimate_tokens_for_messages
 from ...workflows.context_store import ContextStore
-from ..event_publisher import create_event_publisher
+from ..event_publisher import _is_non_retryable_error, create_event_publisher
 from ..heartbeat import auto_heartbeater
 from . import conversation as conversation_log
 
@@ -44,6 +46,24 @@ if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
 
 logger = logging.getLogger(__name__)
+
+
+def _model_call_failure(message: str, error: Exception) -> ApplicationError:
+    """The activity failure for a model call, carrying its classified cause."""
+    failure = classify_llm_failure(error)
+    return ApplicationError(
+        message,
+        *([failure.as_detail()] if failure else []),
+        type=type(error).__name__,
+        non_retryable=_is_non_retryable_error(error)
+        or (failure is not None and not failure.retryable),
+    )
+
+
+def _stopped_by_request() -> bool:
+    """Whether the activity is being cancelled because its workflow asked it to stop."""
+    details = activity.cancellation_details()
+    return details is not None and details.cancel_requested and not details.worker_shutdown
 
 
 def make_llm_activities(
@@ -104,9 +124,13 @@ def make_llm_activities(
             output_cost_per_token = getattr(
                 model_instance.model_spec, "output_cost_per_token", None
             )
+            cached_input_cost_per_token = getattr(
+                model_instance.model_spec, "cached_input_cost_per_token", None
+            )
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
             managed_by = getattr(model_instance.provider_config, "managed_by", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
+            supports_vision = getattr(model_instance.model_spec, "supports_vision", None)
             provider_display_name = getattr(
                 model_instance.provider_config.provider_spec, "display_name", None
             )
@@ -122,7 +146,9 @@ def make_llm_activities(
             max_output_tokens=max_output_tokens,
             input_cost_per_token=input_cost_per_token,
             output_cost_per_token=output_cost_per_token,
+            cached_input_cost_per_token=cached_input_cost_per_token,
             display_name=display_name,
+            supports_vision=supports_vision,
             provider_display_name=provider_display_name,
             resolved_at=datetime.now(UTC).isoformat(),
         )
@@ -153,23 +179,24 @@ def make_llm_activities(
                     request.task_id,
                     execution_id=request.execution_id,
                     iteration=request.iteration,
+                    stream_text=request.stream_text,
                 )
 
-            return await llm_service.execute(
+            result = await llm_service.execute(
                 request,
                 user_context=user_context,
                 on_chunk=on_chunk,
             )
+            # A reply cut short is reported for its usage only when the run asked
+            # the call to stop; any other cancellation (a worker shutting down)
+            # stays one, so the call is retried rather than taken as an answer.
+            if result.interrupted and not _stopped_by_request():
+                raise asyncio.CancelledError()
+            return result
         except Exception as error:
-            from ..event_publisher import _is_non_retryable_error
-
             error_message = str(error)
             logger.error(f"LLM call failed: {error_message}", exc_info=True)
-            raise ApplicationError(
-                f"LLM call failed: {error_message}",
-                type=type(error).__name__,
-                non_retryable=_is_non_retryable_error(error),
-            ) from error
+            raise _model_call_failure(f"LLM call failed: {error_message}", error) from error
 
     @activity.defn
     @auto_heartbeater
@@ -241,6 +268,7 @@ def make_llm_activities(
             max_output_tokens = None
             input_cost_per_token = None
             output_cost_per_token = None
+            cached_input_cost_per_token = None
 
             if request.resolved_model:
                 cached = request.resolved_model
@@ -250,6 +278,7 @@ def make_llm_activities(
                 max_output_tokens = cached.get("max_output_tokens")
                 input_cost_per_token = cached.get("input_cost_per_token")
                 output_cost_per_token = cached.get("output_cost_per_token")
+                cached_input_cost_per_token = cached.get("cached_input_cost_per_token")
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
@@ -292,6 +321,9 @@ def make_llm_activities(
                     output_cost_per_token = getattr(
                         model_instance.model_spec, "output_cost_per_token", None
                     )
+                    cached_input_cost_per_token = getattr(
+                        model_instance.model_spec, "cached_input_cost_per_token", None
+                    )
 
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
@@ -321,6 +353,7 @@ def make_llm_activities(
                 endpoint_url=endpoint_url,
                 input_cost_per_token=to_optional_money(input_cost_per_token),
                 output_cost_per_token=to_optional_money(output_cost_per_token),
+                cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
             )
 
             # Build compaction prompt
@@ -440,20 +473,14 @@ def make_llm_activities(
                     prompt_tokens=final_usage.prompt_tokens,
                     completion_tokens=final_usage.completion_tokens,
                     total_tokens=final_usage.total_tokens,
+                    cached_prompt_tokens=final_usage.cached_prompt_tokens,
+                    cache_creation_tokens=final_usage.cache_creation_tokens,
                 ),
             )
 
         except Exception as e:
             logger.error(f"Message compaction failed: {e}", exc_info=True)
-            from temporalio.exceptions import ApplicationError
-
-            from ..event_publisher import _is_non_retryable_error
-
-            raise ApplicationError(
-                f"Message compaction failed: {e}",
-                type=type(e).__name__,
-                non_retryable=_is_non_retryable_error(e),
-            ) from e
+            raise _model_call_failure(f"Message compaction failed: {e}", e) from e
 
     @activity.defn
     async def create_execution_plan_activity(

@@ -116,9 +116,11 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
 
         if request.resume is not None:
             self._adopt_resume(request.resume)
+            if request.resume.retry:
+                await self._publish_events_immediately()
 
     def _adopt_resume(self, resume: AgentExecutionResume) -> None:
-        """Continue a closed, completed conversation instead of starting a new one.
+        """Continue a closed conversation instead of starting a new one.
 
         Configuration, tools and policy come from this run's own initialization;
         the conversation position, the counters and the spend carry on. With the
@@ -137,6 +139,11 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         if resume.own_cost is not None:
             self._delegated_cost = max(resume.total_cost - resume.own_cost, ZERO)
         self._resume_system_prompt_missing = resume.system_prompt_missing
+        if resume.retry:
+            self._events.add_event(
+                EventTypes.WORKFLOW_RETRIED,
+                {"iteration": snapshot.current_iteration + 1},
+            )
         workflow.logger.info(
             f"Resuming conversation at entry {snapshot.next_seq}, "
             f"iteration {snapshot.current_iteration}"

@@ -13,11 +13,13 @@ import re
 from typing import Any
 
 from agentarea_agents_sdk.mcp_server.elicitation import url_elicitation
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_mcp.application.auth_service import (
     MissingCredentialsError,
@@ -89,6 +91,15 @@ def _openapi_hints(connection: Any) -> dict[str, str | None]:
     return {op["name"]: _METHOD_HINTS.get(op["method"]) for op in operations}
 
 
+def _platform_managed(resource: Any) -> bool:
+    """Platform data, usable from every workspace: no tenant's graph names it.
+
+    Its writes are refused by the strict workspace filter; its calls still pass the
+    policy, the spend caps and, with billing installed, the balance.
+    """
+    return getattr(resource, "managed_by", None) == MANAGED_BY_PLATFORM
+
+
 async def _openapi_connections(service: Any) -> list[Any]:
     connections, _total = await service.list_connections(limit=0)
     return connections
@@ -97,8 +108,11 @@ async def _openapi_connections(service: Any) -> list[Any]:
 async def _openapi_connect_action(
     session: Any, service: Any, user_ctx: Any, connection: Any
 ) -> dict[str, Any] | None:
-    """The link a person opens to sign in to a catalog *connection* again, if it needs one."""
-    if connection.registry_item_id is None:
+    """The link a person opens to sign in to a catalog *connection* again, if it needs one.
+
+    A platform-managed connection is signed in by the operator, never by a person.
+    """
+    if connection.registry_item_id is None or _platform_managed(connection):
         return None
     if connection.auth_config_id is not None:
         try:
@@ -124,12 +138,14 @@ async def _openapi_connect_action(
     )
 
 
-def _unknown_tool(connector_name: str, tool: str, names: list[str]) -> str:
-    return json.dumps(
-        {
-            "error": f"{connector_name} has no tool {tool!r}",
-            "suggestions": difflib.get_close_matches(tool, names, n=5),
-        }
+def _unknown_tool(connector_name: str, tool: str, names: list[str]) -> ToolError:
+    return ToolError(
+        json.dumps(
+            {
+                "error": f"{connector_name} has no tool {tool!r}",
+                "suggestions": difflib.get_close_matches(tool, names, n=5),
+            }
+        )
     )
 
 
@@ -232,7 +248,7 @@ class ConnectorToolsToolset(Toolset):
             limit: Most matches to return, 1..50.
         """
         if not 1 <= limit <= 50:
-            return json.dumps({"error": f"limit must be between 1 and 50, got {limit}"})
+            raise ToolError(f"limit must be between 1 and 50, got {limit}")
         query_tokens = _tokens(query)
         async with platform_read_context() as (
             _session,
@@ -247,14 +263,14 @@ class ConnectorToolsToolset(Toolset):
             instances = [
                 instance
                 for instance in await service.list()
-                if str(instance.id) in readable
+                if (str(instance.id) in readable or _platform_managed(instance))
                 and _is_verified(instance)
                 and (connector is None or _names(instance, connector))
             ]
             connections = [
                 connection
                 for connection in await _openapi_connections(openapi_service)
-                if str(connection.id) in readable
+                if (str(connection.id) in readable or _platform_managed(connection))
                 and connection.status == "active"
                 and (connector is None or _names(connection, connector))
             ]
@@ -334,13 +350,15 @@ class ConnectorToolsToolset(Toolset):
             ]
             matches = [*instances, *connections]
             if not matches:
-                return json.dumps({"error": f"No connector named {connector!r}"})
+                raise ToolError(f"No connector named {connector!r}")
             if len(matches) > 1:
-                return json.dumps(
-                    {
-                        "error": f"Connector name {connector!r} is ambiguous; pass one of its ids",
-                        "connector_ids": [str(m.id) for m in matches],
-                    }
+                raise ToolError(
+                    json.dumps(
+                        {
+                            "error": f"Connector name {connector!r} is ambiguous; pass one of its ids",
+                            "connector_ids": [str(m.id) for m in matches],
+                        }
+                    )
                 )
             if connections:
                 [connection] = connections
@@ -348,10 +366,13 @@ class ConnectorToolsToolset(Toolset):
                     session, user_ctx, openapi_service, connection, tool, arguments or {}, confirm
                 )
             [instance] = instances
-            try:
-                await require_permission("use", "mcp_instance", str(instance.id), user_ctx.user_id)
-            except HTTPException as exc:
-                return json.dumps({"error": exc.detail})
+            if not _platform_managed(instance):
+                try:
+                    await require_permission(
+                        "use", "mcp_instance", str(instance.id), user_ctx.user_id
+                    )
+                except HTTPException as exc:
+                    raise ToolError(exc.detail) from exc
 
             action = await _connect_action(session, service, user_ctx, instance, probe=False)
             if action is not None:
@@ -360,7 +381,7 @@ class ConnectorToolsToolset(Toolset):
             tools = {t.get("name"): t for t in instance.tools or [] if t.get("name")}
             spec = tools.get(tool)
             if spec is None:
-                return _unknown_tool(instance.name, tool, list(tools))
+                raise _unknown_tool(instance.name, tool, list(tools))
             if _tool_safety_hint(spec) == "destructive" and not confirm:
                 return _confirmation(instance.name, tool)
 
@@ -372,7 +393,7 @@ class ConnectorToolsToolset(Toolset):
                 logger.error(
                     "tools_call %s on connector %s failed", tool, instance.id, exc_info=True
                 )
-                return json.dumps({"error": f"Calling {tool} on {instance.name} failed: {exc}"})
+                raise ToolError(f"Calling {tool} on {instance.name} failed: {exc}") from exc
         return _call_result(instance, tool, result)
 
     async def _call_openapi(
@@ -385,12 +406,13 @@ class ConnectorToolsToolset(Toolset):
         arguments: dict[str, Any],
         confirm: bool,
     ) -> str | InputRequiredResult:
-        try:
-            await require_permission(
-                "use", "openapi_connection", str(connection.id), user_ctx.user_id
-            )
-        except HTTPException as exc:
-            return json.dumps({"error": exc.detail})
+        if not _platform_managed(connection):
+            try:
+                await require_permission(
+                    "use", "openapi_connection", str(connection.id), user_ctx.user_id
+                )
+            except HTTPException as exc:
+                raise ToolError(exc.detail) from exc
 
         action = await _openapi_connect_action(session, service, user_ctx, connection)
         if action is not None:
@@ -398,7 +420,7 @@ class ConnectorToolsToolset(Toolset):
 
         names = [t["name"] for t in connection.available_tools or [] if t.get("name")]
         if tool not in names:
-            return _unknown_tool(connection.name, tool, names)
+            raise _unknown_tool(connection.name, tool, names)
         if _openapi_hints(connection).get(tool) == "destructive" and not confirm:
             return _confirmation(connection.name, tool)
 
@@ -410,5 +432,5 @@ class ConnectorToolsToolset(Toolset):
             logger.error(
                 "tools_call %s on OpenAPI connection %s failed", tool, connection.id, exc_info=True
             )
-            return json.dumps({"error": f"Calling {tool} on {connection.name} failed: {exc}"})
+            raise ToolError(f"Calling {tool} on {connection.name} failed: {exc}") from exc
         return _call_result(connection, tool, result)

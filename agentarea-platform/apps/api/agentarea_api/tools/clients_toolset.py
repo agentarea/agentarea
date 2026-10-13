@@ -1,7 +1,7 @@
 """ClientsToolset — register harnesses (codex, claude, ...) and wire their tools.
 
 A client is an agent-proxy: it connects to ``/mcp/clients/{id}`` and gets the
-skills, MCP instances, and platform toolsets attached to it. Attaching is
+skills, MCP instances, OpenAPI connections, and platform toolsets attached to it. Attaching is
 ``privileged`` rather than plain ``write`` because it widens what an outside
 harness can reach.
 
@@ -16,6 +16,7 @@ import json
 from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -47,8 +48,8 @@ def _summary(client) -> dict[str, str]:
     namespace="agentarea/clients",
     display_name="Registered Clients",
     description=(
-        "Register harnesses as clients and attach skills, MCP instances, and platform "
-        "toolsets to them."
+        "Register harnesses as clients and attach skills, MCP instances, OpenAPI "
+        "connections, and platform toolsets to them."
     ),
     category="platform",
     plane="federate",
@@ -72,12 +73,12 @@ class ClientsToolset(Toolset):
     @tool_method(effect="read")
     @requires("read", "client", id_param="client_id")
     async def get(self, client_id: str) -> str:
-        """Get a client with the skills, MCP instances, and platform toolsets attached to it."""
+        """Get a client with the skills, connections, and platform toolsets attached to it."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             client = await service.get(UUID(client_id))
             if not client:
-                return json.dumps({"error": "Client not found"})
+                raise ToolError("Client not found")
             (response,) = await client_responses(service, [client])
             return response.model_dump_json()
 
@@ -128,7 +129,7 @@ class ClientsToolset(Toolset):
             service = _build_service(repo_factory)
             client = await service.update_client(UUID(client_id), payload)
             if not client:
-                return json.dumps({"error": "Client not found"})
+                raise ToolError("Client not found")
             return json.dumps(_summary(client), default=str)
 
     @tool_method(effect="destructive")
@@ -193,6 +194,40 @@ class ClientsToolset(Toolset):
 
     @tool_method(effect="privileged")
     @requires("edit", "client", id_param="client_id")
+    async def add_openapi_connection(
+        self,
+        client_id: str,
+        openapi_connection_id: str,
+        namespace_prefix: str = "",
+        allowed_tools: builtins.list[str] | None = None,
+    ) -> str:
+        """Attach an OpenAPI connection to a client, optionally namespacing and narrowing it.
+
+        The workspace's own connections and the platform's can be attached.
+        ``allowed_tools`` names the operations the client serves; omit it to serve
+        all of them. Re-attaching replaces both settings.
+        """
+        async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
+            service = _build_service(repo_factory)
+            await service.add_openapi_connection(
+                UUID(client_id),
+                UUID(openapi_connection_id),
+                namespace_prefix or None,
+                allowed_tools,
+            )
+            return json.dumps({"added": True})
+
+    @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
+    async def remove_openapi_connection(self, client_id: str, openapi_connection_id: str) -> str:
+        """Detach an OpenAPI connection from a client."""
+        async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
+            service = _build_service(repo_factory)
+            await service.remove_openapi_connection(UUID(client_id), UUID(openapi_connection_id))
+            return json.dumps({"removed": True})
+
+    @tool_method(effect="privileged")
+    @requires("edit", "client", id_param="client_id")
     async def add_platform_toolset(
         self,
         client_id: str,
@@ -208,7 +243,7 @@ class ClientsToolset(Toolset):
         try:
             namespace = attachable_toolset(toolset, disabled_methods or ())
         except UnknownToolsetError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.set_platform_toolset(UUID(client_id), namespace, disabled_methods)

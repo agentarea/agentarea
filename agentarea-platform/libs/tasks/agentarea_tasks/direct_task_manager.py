@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.extensions.customer_pricing import get_customer_pricing, price_llm_call
 from agentarea_common.money import ZERO, serialize_money, to_money
+from agentarea_common.tool_cost import Payer
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
@@ -194,7 +195,7 @@ class DirectTaskManager(BaseTaskManager):
                                 source=CostSource.TOKEN_PRICING,
                                 occurred_at=datetime.now(UTC),
                                 provider_cost_usd=to_money(response.cost),
-                                managed_by=MANAGED_BY_PLATFORM if platform_funded else None,
+                                payer=Payer.PLATFORM if platform_funded else Payer.WORKSPACE,
                                 evidence={
                                     "iteration": iteration,
                                     "prompt_tokens": response.usage.prompt_tokens,
@@ -403,6 +404,7 @@ class DirectTaskManager(BaseTaskManager):
             endpoint_url=endpoint_url,
             input_cost_per_token=input_cost_per_token,
             output_cost_per_token=output_cost_per_token,
+            cached_input_cost_per_token=model_instance.model_spec.cached_input_cost_per_token,
         )
 
         logger.info(

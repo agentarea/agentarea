@@ -47,6 +47,7 @@ TASK_CANCELLED = "task.cancelled"
 TASK_AWAITING_FOLLOW_UP = "task.awaiting_follow_up"
 TASK_AWAITING_CONTINUATION = "task.awaiting_continuation"
 TASK_CONTINUED = "task.continued"
+TASK_RETRIED = "task.retried"
 EXECUTION_FINISHED = "execution.finished"
 
 # Canonical terminal types: append-only lifecycle events that end a task feed.

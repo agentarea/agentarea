@@ -24,6 +24,8 @@ class Message(BaseModel):
     tool_call_id: str | None = None
     name: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
+    # Images a tool returned, by reference to the task's offloaded context.
+    attachments: list[dict[str, Any]] | None = None
 
 
 class AgentGoal(BaseModel):

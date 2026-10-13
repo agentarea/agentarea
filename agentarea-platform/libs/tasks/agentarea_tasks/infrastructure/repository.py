@@ -678,6 +678,7 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 "tool_calls": entry.tool_calls,
                 "tool_call_id": entry.tool_call_id,
                 "name": entry.name,
+                "attachments": entry.attachments,
                 "workspace_id": self.user_context.workspace_id,
                 "created_by": self.user_context.user_id,
             }
@@ -689,7 +690,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 constraint="uq_task_conversation_entries_seq",
                 set_={
                     column: statement.excluded[column]
-                    for column in ("kind", "role", "content", "tool_calls", "tool_call_id", "name")
+                    for column in (
+                        "kind",
+                        "role",
+                        "content",
+                        "tool_calls",
+                        "tool_call_id",
+                        "name",
+                        "attachments",
+                    )
                 },
                 where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
             )
@@ -722,6 +731,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
         tail = [by_seq[seq] for seq in sorted(by_seq) if seq >= tail_start and seq not in head_set]
         return head, tail
 
+    async def next_seq(self, task_id: UUID) -> int:
+        """The position after the task's last entry; 0 for an empty log."""
+        last = await self.session.scalar(
+            select(func.max(TaskConversationEntryORM.seq)).where(
+                TaskConversationEntryORM.task_id == task_id, self._get_workspace_filter()
+            )
+        )
+        return 0 if last is None else last + 1
+
     async def read_all(self, task_id: UUID) -> list[ConversationEntry]:
         """Every entry of the task's conversation, in log order."""
         result = await self.session.execute(
@@ -741,4 +759,5 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
             tool_calls=row.tool_calls,
             tool_call_id=row.tool_call_id,
             name=row.name,
+            attachments=row.attachments,
         )

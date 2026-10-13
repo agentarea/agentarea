@@ -94,16 +94,3 @@ class TestSerializeMcpTool:
         )
 
         assert out["_meta"] == {"ui": {"visibility": ["model"], "resourceUri": "ui://legacy"}}
-
-
-def test_the_metered_resource_a_tool_declares_is_kept():
-    """A platform-managed connection's tools name what their calls are billed as."""
-    out = serialize_mcp_tool(_tool(meta={"agentarea.ai/resource_ref": "yandex.search.web"}))
-
-    assert out["_meta"] == {"agentarea.ai/resource_ref": "yandex.search.web"}
-
-
-def test_other_meta_is_still_dropped():
-    out = serialize_mcp_tool(_tool(meta={"vendor/secret": "x"}))
-
-    assert "_meta" not in out

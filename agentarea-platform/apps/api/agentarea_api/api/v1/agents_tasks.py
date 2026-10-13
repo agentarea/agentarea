@@ -61,6 +61,7 @@ from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
+    RunStillClosingError,
     SchedulingNotSupportedError,
 )
 from agentarea_tasks.domain.models import TaskProvenance
@@ -2062,6 +2063,54 @@ async def resume_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+_RUN_STILL_CLOSING = (
+    "The task is still stopping: it is recording the call it interrupted. "
+    "Send this again in a few seconds."
+)
+
+
+@router.post(
+    "/{task_id}/retry",
+    dependencies=[requires_task_authority()],
+)
+async def retry_agent_task(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
+):
+    """Re-run the turn a failed task ended on, on the same conversation.
+
+    A new run of the task continues its conversation with no new message, so
+    the model is called again on the input that failed; the run records a
+    ``task.retried`` event.
+    """
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+
+    try:
+        retried = await task_service.retry_last_turn(task_id)
+    except RunStillClosingError as exc:
+        raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
+    except BudgetCapExceededError:
+        raise
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
+    except Exception as e:
+        logger.exception(f"Failed to retry task {task_id} for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+    if not retried:
+        raise HTTPException(
+            status_code=409,
+            detail="Only a failed task whose run has finished can be retried.",
+        )
+    return {"status": "running", "task_id": str(task_id), "execution_id": f"task-{task_id}"}
+
+
 @router.post(
     "/{task_id}/a2ui/action",
     dependencies=[requires_task_authority()],
@@ -2258,8 +2307,10 @@ async def _resolve_model_info(
         "max_output_tokens": model_spec.max_output_tokens,
         "input_cost_per_token": model_spec.input_cost_per_token,
         "output_cost_per_token": model_spec.output_cost_per_token,
+        "cached_input_cost_per_token": model_spec.cached_input_cost_per_token,
         "display_name": model_spec.display_name,
         "provider_display_name": provider_spec.name,
+        "supports_vision": model_spec.supports_vision,
         "resolved_at": datetime.now(UTC).isoformat(),
     }
 
@@ -2302,7 +2353,8 @@ async def send_task_command(
         elif payload.command == "queue_message":
             if not payload.message:
                 raise HTTPException(status_code=400, detail="message is required for queue_message")
-            # A completed task whose workflow has closed continues in a new run.
+            # A completed, stopped or failed task whose workflow has closed
+            # continues in a new run.
             delivered = await task_service.queue_follow_up(task_id, payload.message)
 
         elif payload.command == "remove_message":
@@ -2343,6 +2395,8 @@ async def send_task_command(
 
     except (HTTPException, BudgetCapExceededError):
         raise
+    except RunStillClosingError as exc:
+        raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except Exception as e:

@@ -8,7 +8,6 @@ from temporalio.exceptions import ActivityError, ApplicationError
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
-    from agentarea_common.constants import MANAGED_BY_PLATFORM
     from agentarea_common.money import ZERO, serialize_money, to_money
     from agentarea_governance.domain.exceptions import (
         EscalationRequiredError,
@@ -19,17 +18,11 @@ with workflow.unsafe.imports_passed_through():
     from ..models import Message, ToolCall
 
 from ...models import MCPToolRequest
-from ..constants import (
-    DEFAULT_RETRY_ATTEMPTS,
-    HEARTBEAT_TIMEOUT,
-    TOOL_EXECUTION_TIMEOUT,
-    Activities,
-    EventTypes,
-)
-from ..retry import make_retry_policy
+from ..constants import EventTypes
 from .approval import ToolApprovalMixin
 from .context_tools import ContextToolsMixin
 from .patches import GOVERNANCE_VERDICT_PATCH
+from .stopping import ToolStopMixin
 
 
 def _governance_verdict(error: ActivityError) -> tuple[str, str, bool] | None:
@@ -66,7 +59,12 @@ def structured_content_field(result: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
-class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
+def tool_images_field(result: dict[str, Any]) -> dict[str, Any]:
+    """The tool.result key for images the tool returned: references, never bytes."""
+    return {"images": result["images"]} if result.get("images") else {}
+
+
+class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
     """Running a capability tool through its activity, with governance verdicts."""
 
     async def _execute_mcp_tool(self, tool_call: ToolCall) -> None:
@@ -177,24 +175,29 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
             # succeeded, since the provider was paid either way. Absent in older
             # histories, so replays take no new branch.
             model_cost = to_money(result_dict.get("model_cost"))
-            # A call on a platform-managed connection, priced by the activity in the
-            # billing currency: it joins the run budget and task total the same way,
-            # and the event says whose credentials paid and what was used, as an LLM
-            # call's does, for the ledger line. Absent in older histories too.
-            platform_funded = result_dict.get("managed_by") == MANAGED_BY_PLATFORM
-            paid_cost = to_money(result_dict.get("cost")) if platform_funded else ZERO
+            # A call whose connector declares its cost, metered by the activity's
+            # tool-call layer in the billing currency: it joins the run budget and
+            # task total the same way, and the event says on whose key it ran and
+            # whether its ledger lines are written (``cost_metered``), so they are
+            # not derived from the event again. Absent in older histories.
+            paid_cost = to_money(result_dict.get("cost"))
             priced_cost_fields = (
                 {"model_cost": serialize_money(model_cost)} if model_cost > ZERO else {}
             )
-            paid_call_fields = (
-                {
-                    "managed_by": MANAGED_BY_PLATFORM,
-                    "usage": result_dict.get("usage"),
-                    "cost": serialize_money(paid_cost),
-                }
-                if platform_funded
-                else {}
-            )
+            paid_call_fields: dict[str, Any] = {}
+            if paid_cost > ZERO:
+                paid_call_fields["cost"] = serialize_money(paid_cost)
+            if result_dict.get("payer"):
+                paid_call_fields["payer"] = result_dict["payer"]
+            if result_dict.get("cost_metered"):
+                paid_call_fields["cost_metered"] = True
+            # A retried call says so, on success and failure alike; absent on a first
+            # attempt, so the event of every call that was not replayed is unchanged.
+            replay_fields: dict[str, Any] = {}
+            if result_dict.get("replayed"):
+                replay_fields["replayed"] = True
+            if result_dict.get("attempt"):
+                replay_fields["attempt"] = result_dict["attempt"]
             if model_cost + paid_cost > ZERO:
                 if self.budget_tracker is None:
                     raise RuntimeError("Workflow budget tracker is not initialized")
@@ -233,6 +236,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                         "server_name": result_dict.get("server_name"),
                         "server_icon": result_dict.get("server_icon"),
                         **priced_cost_fields,
+                        **replay_fields,
                     },
                 )
                 await self._publish_events_immediately()
@@ -252,6 +256,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                     content=result_text,
                     tool_call_id=tool_call.id,
                     name=tool_name,
+                    attachments=result_dict.get("images") or None,
                 )
             )
 
@@ -273,7 +278,9 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
                     "service_cost": serialize_money(service_cost),
                     **priced_cost_fields,
                     **paid_call_fields,
+                    **replay_fields,
                     **structured_content_field(result_dict),
+                    **tool_images_field(result_dict),
                     "payment": result_dict.get("payment"),
                     "source": result_dict.get("source"),
                     "server_instance_id": result_dict.get("server_instance_id"),
@@ -328,13 +335,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin):
         did not run — the tool message is already in the conversation.
         """
         try:
-            return await workflow.execute_activity(
-                Activities.EXECUTE_MCP_TOOL,
-                args=[mcp_request],
-                start_to_close_timeout=TOOL_EXECUTION_TIMEOUT,
-                heartbeat_timeout=HEARTBEAT_TIMEOUT,
-                retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
-            )
+            return await self._run_tool_activity(tool_call, mcp_request)
         except ActivityError as error:
             if self._is_cancellation(error):
                 raise
