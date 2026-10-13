@@ -124,14 +124,36 @@ async def test_redirect_is_followed_and_final_url_reported() -> None:
 
 
 @pytest.mark.asyncio
-async def test_binary_content_is_refused_not_stored() -> None:
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "application/rss+xml; charset=utf-8",
+        "application/atom+xml",
+        "application/rdf+xml",
+        "application/feed+json",
+    ],
+)
+async def test_feeds_are_read_as_text(content_type: str) -> None:
+    body = "<rss><channel><item><title>Release 2.0</title></item></channel></rss>"
+
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"%PDF-1.4", headers={"content-type": "application/pdf"})
+        return httpx.Response(200, content=body.encode(), headers={"content-type": content_type})
+
+    payload = json.loads(await _fetching(handler).fetch_webpage("https://example.test/feed"))
+
+    assert payload["text"] == body
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content_type", ["application/pdf", "application/vnd.oasis+zip"])
+async def test_binary_content_is_refused_not_stored(content_type: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"%PDF-1.4", headers={"content-type": content_type})
 
     result = await _fetching(handler).fetch_webpage("https://example.test/report.pdf")
 
     assert result.startswith("Error:")
-    assert "application/pdf" in result
+    assert content_type in result
     assert "sandbox shell" in result
 
 

@@ -33,8 +33,10 @@ _TEXT_CONTENT_TYPES: tuple[str, ...] = (
     "application/xml",
     "application/xhtml",
     "application/javascript",
-    "application/ld+json",
 )
+# RFC 6839 structured-syntax suffixes: RSS, Atom, JSON-LD, JSON Feed and the like
+# are XML or JSON documents under their own names.
+_TEXT_SUFFIXES: tuple[str, ...] = ("+xml", "+json")
 _DEFAULT_TIMEOUT_SECONDS: float = 15.0
 _INLINE_TEXT_CHAR_LIMIT: int = 50_000
 _MAX_FETCH_BYTES: int = 5 * 1024 * 1024  # raw page ceiling; the inline text is far smaller
@@ -107,6 +109,8 @@ def _is_text_content_type(content_type: str | None) -> bool:
     if not content_type:
         return False
     ct = content_type.lower().split(";", 1)[0].strip()
+    if ct.startswith("application/") and ct.endswith(_TEXT_SUFFIXES):
+        return True
     return any(ct.startswith(p) for p in _TEXT_CONTENT_TYPES)
 
 
