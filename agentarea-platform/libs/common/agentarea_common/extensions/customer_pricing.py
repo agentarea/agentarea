@@ -227,8 +227,8 @@ async def price_vendor_cost(
 ) -> tuple[Decimal, str]:
     """A tool call's line amount and its currency.
 
-    An installed pricing that prices tool costs converts the vendor cost to the
-    billing currency, markup included where it applies. Without one the amount is
+    An installed pricing that prices tool costs returns the customer's amount in
+    the billing currency. Without one the amount is
     the vendor cost in the vendor's currency: nothing is converted. Raises
     ``FxUnavailableError`` when an installed pricing cannot convert ``currency``.
     """

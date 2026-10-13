@@ -576,7 +576,7 @@ class LLMCallResult(BaseModel):
     # What the customer pays, in the billing currency (see customer_pricing).
     cost: Money = ZERO
     # What the provider charged, in USD, before that conversion. Carried alongside
-    # so margin and provider spend stay readable once `cost` is no longer USD.
+    # so provider spend stays readable once `cost` is no longer USD.
     # None only on results recorded before this field existed.
     provider_cost_usd: Money | None = None
     # ISO 4217 code of `cost`, so the workflow can name the currency in budget

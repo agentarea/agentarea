@@ -43,8 +43,8 @@ class _Rub:
         return provider_cost_usd * 95
 
     async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
-        markup = Decimal("1.5") if payer == "platform" else Decimal(1)
-        return vendor_cost * markup * (Decimal(95) if currency == "USD" else Decimal(1))
+        factor = Decimal("1.5") if payer == "platform" else Decimal(1)
+        return vendor_cost * factor * (Decimal(95) if currency == "USD" else Decimal(1))
 
 
 @pytest.mark.asyncio

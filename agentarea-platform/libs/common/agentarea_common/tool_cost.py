@@ -229,7 +229,7 @@ class ToolConnection:
     """The connection a call runs on, and what its connector declares the tool costs.
 
     ``connector`` is the catalog id the connection was made from, or
-    ``connection:<id>`` for one made by hand; billing finds a markup by it.
+    ``connection:<id>`` for one made by hand; an installed pricing prices by it.
     """
 
     connection_id: str

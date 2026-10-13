@@ -2,8 +2,8 @@
 
 Whether an entry is paid is a browse facet, derived at sync time from what the
 entry declares (``catalog_facets``). What a call costs the workspace is not: on
-the platform's key it is the vendor's rate as the installed billing prices it
-(markup, currency), so it is asked of the customer pricing seam when the entry is
+the platform's key it is whatever the installed pricing charges for the vendor's
+rate, so it is asked of the customer pricing seam when the entry is
 read. Without enterprise billing that is the vendor's rate in its own currency.
 
 An entry that runs on AgentArea also holds compute while its instance runs. That is

@@ -134,5 +134,5 @@ A `platform` connection lives in the platform workspace and every workspace may 
 it; none can edit it. Its calls are governed by policy and caps, and a tool whose cost
 is `unknown` or `settled` is refused, since nobody could be charged for it. When a
 billing extension is installed it also checks the workspace balance before each call
-and bills the vendor cost times the connector's markup. Without one, a self-hoster can
+and bills the call. Without one, a self-hoster can
 share one key with every workspace, limited by policy and caps alone.
