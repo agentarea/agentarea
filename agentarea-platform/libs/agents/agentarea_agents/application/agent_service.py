@@ -419,6 +419,9 @@ class AgentService(BaseCrudService[Agent]):
             tools=tools,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
+            answer_check=(
+                payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
+            ),
             agent_type=payload.agent_type,
         )
         agent = await self.create(agent)
@@ -581,6 +584,10 @@ class AgentService(BaseCrudService[Agent]):
             agent.planning = patch["planning"]
         if "a2ui_enabled" in patch:
             agent.a2ui_enabled = patch["a2ui_enabled"]
+        if "answer_check" in patch:
+            agent.answer_check = (
+                payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
+            )
         if "agent_type" in patch:
             agent.agent_type = patch["agent_type"]
 

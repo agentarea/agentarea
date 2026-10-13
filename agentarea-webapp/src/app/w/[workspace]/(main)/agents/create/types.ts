@@ -62,6 +62,13 @@ export type AgentSkill = {
   description?: string | null;
 };
 
+/** The agent's answer check as the form edits it; `rewrite_instruction` is carried. */
+export type AnswerCheckFormValues = {
+  enabled: boolean;
+  language: string;
+  rewrite_instruction: string | null;
+};
+
 /**
  * Main form values for agent creation
  * Extends the API's AgentCreate type with our custom instruction field
@@ -80,6 +87,7 @@ export type AgentFormValues = {
   };
   planning: boolean;
   a2ui_enabled: boolean;
+  answer_check: AnswerCheckFormValues;
   skills?: AgentSkill[];
   // Created together with the agent; an existing agent's triggers live on /triggers
   triggers?: TriggerSpec[];

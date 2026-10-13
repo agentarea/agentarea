@@ -426,3 +426,45 @@ async def test_uploading_a_file_that_is_not_a_zip_is_400(
 
     assert response.status_code == 400
     assert "not a valid ZIP" in response.json()["detail"]
+
+
+BROKEN_SKILL_MD = "---\nname: broken\nnot a key value line\n---\nbody"
+
+
+@pytest.mark.asyncio
+async def test_creating_a_skill_with_broken_frontmatter_is_422_naming_the_line(
+    async_client, mock_skill_service, mock_user_context
+):
+    real = SkillService(repository_factory=MagicMock(), user_context=mock_user_context)
+    mock_skill_service.create_from_content.side_effect = real.create_from_content
+
+    response = await async_client.post(
+        "/v1/workspaces/acme/skills", json={"content": BROKEN_SKILL_MD}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "SKILL.md frontmatter line 3 is not a 'key: value' entry: 'not a key value line'"
+    )
+
+
+@pytest.mark.asyncio
+async def test_uploading_a_zip_whose_skill_md_has_broken_frontmatter_is_422(
+    async_client, mock_skill_service, mock_user_context
+):
+    import io
+    import zipfile
+
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("SKILL.md", BROKEN_SKILL_MD)
+    real = SkillService(repository_factory=MagicMock(), user_context=mock_user_context)
+    mock_skill_service.create_from_zip.side_effect = real.create_from_zip
+
+    response = await async_client.post(
+        "/v1/workspaces/acme/skills/upload",
+        files={"file": ("skill.zip", archive.getvalue(), "application/zip")},
+    )
+
+    assert response.status_code == 422
+    assert "frontmatter line 3" in response.json()["detail"]

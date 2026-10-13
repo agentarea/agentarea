@@ -107,6 +107,113 @@ Content
         assert result.metadata.allowed_tools == []
 
 
+class TestSkillParserFrontmatterAuthorsWrite:
+    """Frontmatter that strict YAML refuses but agentskills / Claude Code accept."""
+
+    def test_an_unquoted_colon_in_a_scalar_is_read_up_to_the_first_colon_space(self):
+        content = "---\nname: my-skill\ndescription: Do X: then Y\nlicense: MIT: see LICENSE\n---\n# Body\n"
+
+        result = SkillParser().parse_content(content)
+
+        assert result.metadata.name == "my-skill"
+        assert result.metadata.description == "Do X: then Y"
+        assert result.metadata.raw_frontmatter["license"] == "MIT: see LICENSE"
+        assert result.content == "# Body"
+
+    def test_quoted_values_keep_their_yaml_meaning(self):
+        content = (
+            "---\n"
+            "name: 'quoted: name'\n"
+            'description: "Do X: then Y"\n'
+            "version: 2\n"
+            "---\nbody\n"
+        )
+
+        result = SkillParser().parse_content(content)
+
+        assert result.metadata.name == "quoted: name"
+        assert result.metadata.description == "Do X: then Y"
+        assert result.metadata.raw_frontmatter["version"] == 2
+
+    def test_nested_blocks_still_come_from_yaml_beside_a_lenient_scalar(self):
+        content = (
+            "---\n"
+            "name: nested\n"
+            "description: Use when: deploying\n"
+            "allowed-tools:\n"
+            "  - kubectl\n"
+            "  - helm\n"
+            "metadata:\n"
+            "  author: someone\n"
+            "  tags: [a, b]\n"
+            "---\nbody\n"
+        )
+
+        result = SkillParser().parse_content(content)
+
+        assert result.metadata.description == "Use when: deploying"
+        assert result.metadata.allowed_tools == ["kubectl", "helm"]
+        assert result.metadata.raw_frontmatter["metadata"] == {
+            "author": "someone",
+            "tags": ["a", "b"],
+        }
+
+    def test_nested_metadata_parses_as_before_when_the_yaml_is_valid(self):
+        content = (
+            "---\n"
+            "name: valid\n"
+            "description: plain\n"
+            "metadata:\n"
+            "  owner: team\n"
+            "  limits:\n"
+            "    max: 3\n"
+            "---\nbody\n"
+        )
+
+        result = SkillParser().parse_content(content)
+
+        assert result.metadata.raw_frontmatter["metadata"] == {"owner": "team", "limits": {"max": 3}}
+
+    def test_an_indented_continuation_folds_into_the_lenient_scalar(self):
+        content = "---\nname: folded\ndescription: Do X: then\n  continue with Y\n---\nbody\n"
+
+        result = SkillParser().parse_content(content)
+
+        assert result.metadata.description == "Do X: then continue with Y"
+
+    def test_a_line_that_is_not_key_value_is_refused_with_its_line_number(self):
+        content = "---\nname: broken\ndescription: Do X: then Y\nthis line has no key\n---\nbody\n"
+
+        with pytest.raises(ValueError, match=r"line 4.*this line has no key"):
+            SkillParser().parse_content(content)
+
+    def test_line_numbers_count_from_the_top_of_the_file(self):
+        content = "\n\n---\nname: broken\njust words\n---\nbody\n"
+
+        with pytest.raises(ValueError, match=r"line 5.*just words"):
+            SkillParser().parse_content(content)
+
+    def test_an_unterminated_quoted_value_is_refused_not_read_literally(self):
+        content = '---\nname: q\ndescription: "Do X: then Y\nother: a: b\n---\nbody\n'
+
+        with pytest.raises(ValueError, match=r"line 3.*description"):
+            SkillParser().parse_content(content)
+
+    def test_a_broken_nested_block_is_refused_with_its_line_number(self):
+        content = (
+            "---\n"
+            "name: n\n"
+            "description: Do X: then Y\n"
+            "metadata:\n"
+            "  owner: team\n"
+            "  - stray\n"
+            "---\nbody\n"
+        )
+
+        with pytest.raises(ValueError, match=r"line 6"):
+            SkillParser().parse_content(content)
+
+
 class TestSkillParserFindMainSkillFile:
     """Tests for finding the main skill file."""
 

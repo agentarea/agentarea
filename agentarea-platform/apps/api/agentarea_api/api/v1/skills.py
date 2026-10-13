@@ -3,6 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
+from agentarea_agents.application.skill_parser import SkillFrontmatterError
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.github_skill_importer import (
@@ -225,6 +226,8 @@ async def create_skill(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except GitHubSkillImporterError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except SkillFrontmatterError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -260,6 +263,8 @@ async def upload_skill(
         )
         return SkillResponse.from_skill(skill)
 
+    except SkillFrontmatterError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

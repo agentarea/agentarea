@@ -1,4 +1,4 @@
-"""A final answer that leaks is rewritten once by the same model, only when the policy asks."""
+"""A final answer that leaks is rewritten once by the same model, when the agent or a rule asks."""
 
 import concurrent.futures
 import json
@@ -29,10 +29,15 @@ from temporalio.worker import Worker
 
 LEAKY = "Готово: смета обновлена через edit_estimate, по этим же rooms 最需要."
 CLEAN = "Готово: смета обновлена по тем же комнатам."
+REWRITE_REPLY = (
+    f"<changes>убрал edit_estimate, перевёл rooms</changes>\n<answer>\n{CLEAN}\n</answer>"
+)
 
 llm_requests: list[LLMCallRequest] = []
 events: list[dict[str, Any]] = []
 statuses: list[UpdateTaskStatusRequest] = []
+agent_answer_check: dict[str, Any] | None = None
+explicit_completion = False
 
 
 @activity.defn(name="build_agent_config_activity")
@@ -45,6 +50,7 @@ async def build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "instruction": "Отвечай по-русски.",
         "context_window": 128000,
         "planning": False,
+        "answer_check": agent_answer_check,
     }
 
 
@@ -69,7 +75,23 @@ async def call_llm(request: LLMCallRequest) -> dict[str, Any]:
     llm_requests.append(request)
     usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
     if request.tools is None:  # the rewrite call
-        return {"content": CLEAN, "role": "assistant", "cost": "0.001", "usage": usage}
+        return {"content": REWRITE_REPLY, "role": "assistant", "cost": "0.001", "usage": usage}
+    if explicit_completion:
+        call = {
+            "id": "call-1",
+            "type": "function",
+            "function": {
+                "name": "completion",
+                "arguments": json.dumps({"result": LEAKY, "artifacts": []}, ensure_ascii=False),
+            },
+        }
+        return {
+            "content": "",
+            "role": "assistant",
+            "tool_calls": [call],
+            "cost": "0.002",
+            "usage": usage,
+        }
     return {"content": LEAKY, "role": "assistant", "cost": "0.002", "usage": usage}
 
 
@@ -90,7 +112,15 @@ async def validate_artifacts(request: ArtifactValidationRequest) -> ArtifactVali
     return ArtifactValidationResult(state="passed", generation=0)
 
 
-async def _run(content_safety: dict[str, Any] | None):
+async def _run(
+    content_safety: dict[str, Any] | None,
+    agent_setting: dict[str, Any] | None = None,
+    *,
+    explicit: bool = False,
+):
+    global agent_answer_check, explicit_completion
+    agent_answer_check = agent_setting
+    explicit_completion = explicit
     llm_requests.clear()
     events.clear()
     statuses.clear()
@@ -143,19 +173,27 @@ async def _run(content_safety: dict[str, Any] | None):
                 return await handle.result()
 
 
+def _replies() -> list[str]:
+    return [e["data"]["content"] for e in events if e["event_type"] == "llm.call.completed"]
+
+
 @pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
 @pytest.mark.asyncio
 async def test_a_leaky_answer_is_rewritten_once_and_the_rewrite_is_what_the_task_returns():
     result = await _run({"answer_check": {"language": "ru"}})
 
     assert result.final_response == CLEAN
-    rewrite = llm_requests[-1]
+    turn, rewrite = llm_requests
+    # The reply text is withheld from the live stream until it is checked.
+    assert turn.stream_text is False
     assert rewrite.tools is None and rewrite.task_id is None and rewrite.conversation is None
     assert "edit_estimate" in rewrite.messages[-1]["content"]
-    assert len(llm_requests) == 2
 
+    # Nothing the person can see carries the unchecked answer or the critique.
+    assert _replies() == [CLEAN, CLEAN]
     (checked,) = [e for e in events if e["event_type"] == "AnswerChecked"]
     assert checked["data"]["rewritten"] is True
+    assert checked["data"]["changes"] == "убрал edit_estimate, перевёл rooms"
     assert {leak["kind"] for leak in checked["data"]["leaks"]} >= {"cjk", "english"}
     (reply,) = [
         e
@@ -172,9 +210,42 @@ async def test_a_leaky_answer_is_rewritten_once_and_the_rewrite_is_what_the_task
 
 @pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
 @pytest.mark.asyncio
-async def test_without_the_policy_the_answer_is_returned_as_the_model_wrote_it():
+async def test_without_the_policy_or_the_setting_the_answer_is_returned_as_the_model_wrote_it():
     result = await _run(None)
 
     assert result.final_response == LEAKY
     assert len(llm_requests) == 1
+    assert llm_requests[0].stream_text is True
     assert not [e for e in events if e["event_type"] == "AnswerChecked"]
+
+
+@pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
+@pytest.mark.asyncio
+async def test_the_agents_own_setting_turns_the_check_on():
+    result = await _run(None, {"enabled": True, "language": "ru"})
+
+    assert result.final_response == CLEAN
+    assert len(llm_requests) == 2
+    assert _replies() == [CLEAN, CLEAN]
+
+
+@pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
+@pytest.mark.asyncio
+async def test_a_rule_that_turns_the_check_off_overrides_the_agents_setting():
+    result = await _run({"answer_check": {"enabled": False}}, {"enabled": True, "language": "ru"})
+
+    assert result.final_response == LEAKY
+    assert len(llm_requests) == 1
+
+
+@pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
+@pytest.mark.asyncio
+async def test_an_answer_given_through_the_completion_tool_is_checked_at_completion():
+    result = await _run({"answer_check": {"language": "ru"}}, explicit=True)
+
+    assert result.final_response == CLEAN
+    assert len(llm_requests) == 2
+    (checked,) = [e for e in events if e["event_type"] == "AnswerChecked"]
+    assert checked["data"]["rewritten"] is True
+    completed = next(s for s in statuses if s.status == "completed")
+    assert json.loads(completed.result or "{}")["response"] == CLEAN

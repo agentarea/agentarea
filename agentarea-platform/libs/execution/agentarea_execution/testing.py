@@ -135,6 +135,24 @@ class EventCapture:
 
 
 # ---------------------------------------------------------------------------
+# Run policy
+# ---------------------------------------------------------------------------
+
+
+def runtime_policy(max_model_turns: int = 5, run_budget_usd: str = "1.00") -> dict[str, Any]:
+    """An effective policy carrying every runtime limit the workflow requires."""
+    return {
+        "budget": {"run_budget_usd": run_budget_usd},
+        "tokens": {"max_tokens": 20_000, "max_tokens_per_call": 4_000},
+        "execution": {
+            "max_model_turns": max_model_turns,
+            "max_tool_calls_per_turn": 10,
+            "max_tool_calls_total": 100,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # Standard boilerplate mock activities
 # ---------------------------------------------------------------------------
 
@@ -146,6 +164,7 @@ async def mock_build_agent_config(request: AgentConfigRequest) -> dict[str, Any]
         "name": "Test Agent",
         "model_id": "gpt-4o-mini",
         "instruction": "You are a helpful assistant.",
+        "context_window": 128000,
         "tools_config": {"mcp_servers": []},
         "planning": False,
     }

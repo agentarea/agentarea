@@ -5,8 +5,9 @@ snake_case code, a stack trace, raw JSON, a stray English word. A cheap
 deterministic check finds those; only then does the workflow spend one silent
 rewrite call asking the same model to fix exactly those things.
 
-Pure stdlib, safe in the Temporal sandbox. Turned on per agent (or workspace)
-by a governance ``safety`` rule on ``content`` with ``params.answer_check``.
+Pure stdlib, safe in the Temporal sandbox. Turned on by the agent's own
+``answer_check`` setting; a governance ``safety`` rule on ``content`` with
+``params.answer_check`` overrides that setting, on or off.
 """
 
 from __future__ import annotations
@@ -45,10 +46,23 @@ class Leak:
         return {"kind": self.kind, "sample": self.sample}
 
 
-def answer_check_config(effective_policy: dict[str, Any] | None) -> dict[str, Any] | None:
-    """The enabled answer check of a run's effective policy, or None."""
+@dataclass(frozen=True)
+class Rewrite:
+    answer: str
+    changes: str
+
+
+def answer_check_config(
+    effective_policy: dict[str, Any] | None, agent_setting: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """The run's enabled answer check, or None.
+
+    A governance rule that sets ``answer_check`` is an override, so it wins
+    over the agent's own setting whether it turns the check on or off.
+    """
     safety = (effective_policy or {}).get("content_safety") or {}
-    config = safety.get("answer_check")
+    ruled = safety.get("answer_check")
+    config = ruled if isinstance(ruled, dict) else agent_setting
     if not isinstance(config, dict) or config.get("enabled") is False:
         return None
     return config
@@ -124,8 +138,7 @@ _REWRITE_SYSTEM = {
         "- только по-русски: переведи английские слова, убери иероглифы;\n"
         "- убери названия инструментов, коды и ключи (snake_case), JSON, тексты ошибок "
         "и стек-трейсы — скажи по-человечески, что произошло, если это важно;\n"
-        "- не добавляй нового и не сокращай по смыслу.\n"
-        "Верни только исправленный текст ответа."
+        "- не добавляй нового и не сокращай по смыслу."
     ),
     None: (
         "You edit an assistant's answer for the person reading it. Rewrite it:\n"
@@ -134,33 +147,63 @@ _REWRITE_SYSTEM = {
         "- in the answer's own language; remove characters from other scripts;\n"
         "- remove tool names, codes and keys (snake_case), JSON, error texts and stack "
         "traces; say plainly what happened if it matters;\n"
-        "- add nothing and drop nothing of substance.\n"
-        "Return only the corrected answer."
+        "- add nothing and drop nothing of substance."
     ),
 }
+
+# The parser reads this shape, so it follows a custom instruction too.
+_REPLY_FORMAT = {
+    "ru": (
+        "\n\nВерни ровно два блока:\n"  # noqa: RUF001
+        "<changes>что ты исправил, по пункту в строке</changes>\n"
+        "<answer>\nисправленный ответ целиком\n</answer>\n"  # noqa: RUF001
+        "Внутри <answer> только сам ответ, как его прочтёт человек: без пометок, "  # noqa: RUF001
+        "без заголовков вроде «Ответ:» и без списка исправлений."
+    ),
+    None: (
+        "\n\nReturn exactly two blocks:\n"
+        "<changes>what you fixed, one item per line</changes>\n"
+        "<answer>\nthe whole corrected answer\n</answer>\n"
+        "Inside <answer> put only the answer as the person will read it: no notes, "
+        "no headings such as 'Answer:', no list of fixes."
+    ),
+}
+
+_ANSWER_BLOCK = re.compile(r"<answer>([\s\S]*?)</answer>")
+_CHANGES_BLOCK = re.compile(r"<changes>([\s\S]*?)</changes>")
 
 
 def rewrite_messages(
     text: str, leaks: list[Leak], language: str | None, instruction: str | None
 ) -> list[dict[str, str]]:
     """The one rewrite call: what is wrong, and the answer to fix."""
-    system = instruction or _REWRITE_SYSTEM.get(language) or _REWRITE_SYSTEM[None]
-    found = ", ".join(f"{leak.kind} «{leak.sample}»" for leak in leaks)
-    if language == "ru":
-        prompt = f"Что не так: {found}.\n\nОтвет:\n{text}"  # noqa: RUF001
-    else:
-        prompt = f"What is wrong: {found}.\n\nAnswer:\n{text}"
+    key = "ru" if language == "ru" else None
+    system = (instruction or _REWRITE_SYSTEM[key]) + _REPLY_FORMAT[key]
+    found = "\n".join(f"- {leak.kind} «{leak.sample}»" for leak in leaks)
+    prompt = f"<problems>\n{found}\n</problems>\n<answer>\n{text}\n</answer>"
     return [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
 
 
-def accept_rewrite(original: str, rewritten: str | None, *, strip_cjk: bool) -> str | None:
-    """The rewrite if it is usable: not empty and every link of the original kept."""
-    candidate = (rewritten or "").strip()
+def accept_rewrite(original: str, reply: str | None, *, strip_cjk: bool) -> Rewrite | None:
+    """The rewrite if it is usable, else None.
+
+    Usable: exactly one closed ``<answer>`` block, not empty, keeping every link
+    of the original. Only that block reaches the person; ``<changes>`` is the
+    model's own account of what it fixed.
+    """
+    answers = _ANSWER_BLOCK.findall(reply or "")
+    if len(answers) != 1:
+        return None
+    candidate = answers[0].strip()
     if not candidate:
         return None
     if any(link not in candidate for link in _URL.findall(original)):
         return None
-    return strip_unreadable(candidate) if strip_cjk else candidate
+    changes = _CHANGES_BLOCK.search(reply or "")
+    return Rewrite(
+        answer=strip_unreadable(candidate) if strip_cjk else candidate,
+        changes=changes.group(1).strip() if changes else "",
+    )
 
 
 def strip_unreadable(text: str) -> str:

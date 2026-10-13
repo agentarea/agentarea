@@ -562,7 +562,7 @@ def skill_content_error(content: str | None) -> str | None:
         message = " ".join(message.split())
         if len(message) > _MAX_SKILL_ERROR_LENGTH:
             message = message[: _MAX_SKILL_ERROR_LENGTH - 3] + "..."
-        return f"{message} (check the frontmatter between the '---' lines; quote values that contain ': ')"
+        return f"{message} (check the frontmatter between the '---' lines)"
     return None
 
 

@@ -128,11 +128,13 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     "agents.create": {
         "planning",
         "a2ui_enabled",
+        "answer_check",
         "skill_ids",
     },
     "agents.update": {
         "planning",
         "a2ui_enabled",
+        "answer_check",
         "skill_ids",
         "capabilities",
         "agent_type",

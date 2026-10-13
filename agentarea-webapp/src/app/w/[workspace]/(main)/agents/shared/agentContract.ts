@@ -9,6 +9,7 @@ import type {
 import type {
   AgentFormValues,
   AgentSkill,
+  AnswerCheckFormValues,
   CodeToolModelIds,
 } from "../create/types";
 
@@ -79,6 +80,29 @@ export function toToolsConfig(
   };
 }
 
+export function toAnswerCheckForm(
+  setting: AgentResponse["answer_check"]
+): AnswerCheckFormValues {
+  return {
+    enabled: setting ? (setting.enabled ?? true) : false,
+    language: setting?.language ?? "",
+    rewrite_instruction: setting?.rewrite_instruction ?? null,
+  };
+}
+
+/** Null when nothing is set, so an untouched agent keeps no setting at all. */
+export function toAnswerCheckPayload(
+  form: AnswerCheckFormValues
+): NonNullable<AgentUpdate["answer_check"]> | null {
+  const language = form.language.trim() || null;
+  if (!form.enabled && !language && !form.rewrite_instruction) return null;
+  return {
+    enabled: form.enabled,
+    language,
+    rewrite_instruction: form.rewrite_instruction,
+  };
+}
+
 export function fromAgent(agent: AgentResponse): AgentFormValues {
   return {
     name: agent.name,
@@ -88,6 +112,7 @@ export function fromAgent(agent: AgentResponse): AgentFormValues {
     tools_config: toToolsConfig(agent.tools ?? []),
     planning: agent.planning ?? false,
     a2ui_enabled: agent.a2ui_enabled ?? false,
+    answer_check: toAnswerCheckForm(agent.answer_check),
     skills: (agent.skills ?? []).map(toFormSkill),
   };
 }
@@ -155,6 +180,7 @@ function toAgentBody(input: AgentFormValues) {
     tools: toToolsPayload(input.tools_config),
     planning: input.planning,
     a2ui_enabled: input.a2ui_enabled,
+    answer_check: toAnswerCheckPayload(input.answer_check),
     skill_ids: (input.skills ?? []).map((skill) => skill.id),
   };
 }

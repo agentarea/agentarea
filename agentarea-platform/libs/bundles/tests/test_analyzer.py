@@ -5,6 +5,7 @@ from agentarea_bundles.application.analyzer import (
     BundleAnalyzer,
     BundleParseError,
     parse_bundle,
+    skill_content_error,
 )
 from agentarea_bundles.schemas.preview import EntityStatus, IssueSeverity
 
@@ -229,7 +230,7 @@ async def test_an_automation_whose_trigger_name_is_too_long_blocks():
     assert any(i.entity_key == "nightly_run" for i in preview.block_issues)
 
 
-BROKEN_SKILL = """
+COLON_SKILL = """
 schema_version: "0.1.0"
 name: p
 skills:
@@ -243,6 +244,28 @@ skills:
       # Tiles
 """
 
+BROKEN_SKILL = """
+schema_version: "0.1.0"
+name: p
+skills:
+  - key: tiles
+    name: Tiles
+    content: |
+      ---
+      name: tiles
+      description: Набор: плитка
+      not a key value line
+      ---
+      # Tiles
+"""
+
+
+async def test_an_unquoted_colon_in_a_skill_description_does_not_block_the_bundle():
+    preview = await BundleAnalyzer().analyze(parse_bundle(COLON_SKILL))
+
+    assert preview.installable is True
+    assert skill_content_error(parse_bundle(COLON_SKILL).skills[0].content) is None
+
 
 async def test_a_skill_whose_frontmatter_does_not_parse_blocks_the_bundle():
     preview = await BundleAnalyzer().analyze(parse_bundle(BROKEN_SKILL))
@@ -251,7 +274,8 @@ async def test_a_skill_whose_frontmatter_does_not_parse_blocks_the_bundle():
     (issue,) = preview.block_issues
     assert issue.entity_key == "tiles"
     assert "skill 'tiles' is not a valid SKILL.md" in issue.message
-    assert "quote values" in issue.message
+    assert "line 4" in issue.message
+    assert "not a key value line" in issue.message
 
 
 def _signed_url_mcp(setup_type: str, spec_type: str = "url") -> str:
