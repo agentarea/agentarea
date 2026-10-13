@@ -1,0 +1,5 @@
+# The coverage phase builds every boundary/negative case for all ~280
+# operations eagerly, at pytest collection: ~9 min of CPU before the first
+# request. PRs fuzz without it; the nightly Integration Tests run turns it on.
+[phases.coverage]
+enabled = false

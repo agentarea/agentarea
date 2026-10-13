@@ -760,6 +760,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache-dependency-path: agentarea-mcp-manager/go.sum
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-mcp-manager/Makefile.
       - name: Install golangci-lint
@@ -788,6 +789,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache-dependency-path: agentarea-event-service/go.sum
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-event-service/Makefile.
       - name: Install golangci-lint
@@ -949,6 +951,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26'
+          cache-dependency-path: agentarea-mcp-manager/go.sum
 
       # Migrations heads/upgrade/roundtrip, then every schema-backed suite
       # (Python, MCP manager Go SQL, operator SQL). The list lives in

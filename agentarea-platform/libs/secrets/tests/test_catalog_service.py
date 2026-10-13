@@ -253,8 +253,8 @@ class TestVisibleSecrets:
     @pytest.mark.parametrize(
         "owner_type,name",
         [
-            ("task", f"task-input/{uuid.uuid4()}/api_token"),
-            ("task", f"a2a_push_token:{uuid.uuid4()}:cfg"),
+            ("task", "task-input/42e28a72-0539-443d-8f4a-96bf240e3af9/api_token"),
+            ("task", "a2a_push_token:41000a8f-5bc0-482c-97b9-2f4276c5f7ac:cfg"),
         ],
     )
     async def test_machine_generated_owners_stay_hidden(

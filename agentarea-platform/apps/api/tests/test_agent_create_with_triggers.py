@@ -44,7 +44,11 @@ _TELEGRAM = {
 }
 
 
-_CHAT_MODEL, _DECISION_MODEL, _IMAGE_MODEL = str(uuid4()), str(uuid4()), str(uuid4())
+_CHAT_MODEL, _DECISION_MODEL, _IMAGE_MODEL = (
+    "0d8dab44-fb4b-42f4-8a96-f9f249effe99",
+    "66101e51-ae3d-4213-8c3c-31e2e229a1cd",
+    "4c1c180a-aba4-4cf2-b124-06c07469e415",
+)
 
 
 class _ModelInstances:
