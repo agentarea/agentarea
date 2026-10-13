@@ -1718,7 +1718,7 @@
       },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
-        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month. ``spend_caps`` are the monthly\ncaps narrowed to a client, a connection or one of its tools; every one applies.",
+        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month. ``spend_caps`` are the caps\nnarrowed to model or tool spend, a client, a connection or one of its tools,\nper month or per run; every one applies.",
         "properties": {
           "agent_monthly_spend_cap_usd": {
             "anyOf": [
@@ -1820,7 +1820,7 @@
       },
       "BudgetPolicy-Output": {
         "additionalProperties": false,
-        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month. ``spend_caps`` are the monthly\ncaps narrowed to a client, a connection or one of its tools; every one applies.",
+        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month. ``spend_caps`` are the caps\nnarrowed to model or tool spend, a client, a connection or one of its tools,\nper month or per run; every one applies.",
         "properties": {
           "agent_monthly_spend_cap_usd": {
             "anyOf": [
@@ -11463,7 +11463,7 @@
       },
       "ScopedSpendCap-Input": {
         "additionalProperties": false,
-        "description": "A monthly cap on the lines of one client, connection or tool of a connection.\n\n``own_agent`` narrows it further to the calling agent's lines: the rule was\nbound to that agent. ``currency`` is the cap's currency, the billing currency\nwhen absent; it sums only lines in it.",
+        "description": "A cap on part of the spend: one kind, client, connection or tool of a connection.\n\n``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
         "properties": {
           "amount_usd": {
             "anyOf": [
@@ -11477,6 +11477,21 @@
               }
             ],
             "title": "Amount Usd"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "enum": [
+                  "llm",
+                  "tools"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
           },
           "client_id": {
             "anyOf": [
@@ -11515,6 +11530,18 @@
             "default": false,
             "title": "Own Agent",
             "type": "boolean"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "const": "run",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
           },
           "tool": {
             "anyOf": [
@@ -11536,11 +11563,26 @@
       },
       "ScopedSpendCap-Output": {
         "additionalProperties": false,
-        "description": "A monthly cap on the lines of one client, connection or tool of a connection.\n\n``own_agent`` narrows it further to the calling agent's lines: the rule was\nbound to that agent. ``currency`` is the cap's currency, the billing currency\nwhen absent; it sums only lines in it.",
+        "description": "A cap on part of the spend: one kind, client, connection or tool of a connection.\n\n``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
         "properties": {
           "amount_usd": {
             "title": "Amount Usd",
             "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "enum": [
+                  "llm",
+                  "tools"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
           },
           "client_id": {
             "anyOf": [
@@ -11579,6 +11621,18 @@
             "default": false,
             "title": "Own Agent",
             "type": "boolean"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "const": "run",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
           },
           "tool": {
             "anyOf": [

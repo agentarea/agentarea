@@ -910,8 +910,9 @@ export type BudgetPeriod = 'execution' | 'daily' | 'monthly';
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
- * caps narrowed to a client, a connection or one of its tools; every one applies.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export type BudgetPolicyInput = {
     /**
@@ -942,8 +943,9 @@ export type BudgetPolicyInput = {
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
- * caps narrowed to a client, a connection or one of its tools; every one applies.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export type BudgetPolicyOutput = {
     /**
@@ -6304,17 +6306,24 @@ export type ScheduledRun = {
 /**
  * ScopedSpendCap
  *
- * A monthly cap on the lines of one client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
  *
- * ``own_agent`` narrows it further to the calling agent's lines: the rule was
- * bound to that agent. ``currency`` is the cap's currency, the billing currency
- * when absent; it sums only lines in it.
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
  */
 export type ScopedSpendCapInput = {
     /**
      * Amount Usd
      */
     amount_usd: number | string;
+    /**
+     * Category
+     */
+    category?: 'llm' | 'tools' | null;
     /**
      * Client Id
      */
@@ -6331,6 +6340,10 @@ export type ScopedSpendCapInput = {
      * Own Agent
      */
     own_agent?: boolean;
+    /**
+     * Period
+     */
+    period?: 'run' | null;
     /**
      * Tool
      */
@@ -6339,17 +6352,24 @@ export type ScopedSpendCapInput = {
 /**
  * ScopedSpendCap
  *
- * A monthly cap on the lines of one client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
  *
- * ``own_agent`` narrows it further to the calling agent's lines: the rule was
- * bound to that agent. ``currency`` is the cap's currency, the billing currency
- * when absent; it sums only lines in it.
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
  */
 export type ScopedSpendCapOutput = {
     /**
      * Amount Usd
      */
     amount_usd: string;
+    /**
+     * Category
+     */
+    category?: 'llm' | 'tools' | null;
     /**
      * Client Id
      */
@@ -6366,6 +6386,10 @@ export type ScopedSpendCapOutput = {
      * Own Agent
      */
     own_agent?: boolean;
+    /**
+     * Period
+     */
+    period?: 'run' | null;
     /**
      * Tool
      */

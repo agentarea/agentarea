@@ -2584,21 +2584,26 @@ export const zSchedule = z.object({
 /**
  * ScopedSpendCap
  *
- * A monthly cap on the lines of one client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
  *
- * ``own_agent`` narrows it further to the calling agent's lines: the rule was
- * bound to that agent. ``currency`` is the cap's currency, the billing currency
- * when absent; it sums only lines in it.
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
  */
 export const zScopedSpendCapInput = z.object({
   amount_usd: z.union([
     z.number().gte(0),
     z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
   ]),
+  category: z.enum(["llm", "tools"]).nullish(),
   client_id: z.string().nullish(),
   connection_id: z.string().nullish(),
   currency: z.string().nullish(),
   own_agent: z.boolean().optional().default(false),
+  period: z.literal("run").nullish(),
   tool: z.string().nullish(),
 });
 
@@ -2609,8 +2614,9 @@ export const zScopedSpendCapInput = z.object({
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
- * caps narrowed to a client, a connection or one of its tools; every one applies.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export const zBudgetPolicyInput = z.object({
   agent_monthly_spend_cap_usd: z
@@ -2631,18 +2637,23 @@ export const zBudgetPolicyInput = z.object({
 /**
  * ScopedSpendCap
  *
- * A monthly cap on the lines of one client, connection or tool of a connection.
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
  *
- * ``own_agent`` narrows it further to the calling agent's lines: the rule was
- * bound to that agent. ``currency`` is the cap's currency, the billing currency
- * when absent; it sums only lines in it.
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
  */
 export const zScopedSpendCapOutput = z.object({
   amount_usd: z.string(),
+  category: z.enum(["llm", "tools"]).nullish(),
   client_id: z.string().nullish(),
   connection_id: z.string().nullish(),
   currency: z.string().nullish(),
   own_agent: z.boolean().optional().default(false),
+  period: z.literal("run").nullish(),
   tool: z.string().nullish(),
 });
 
@@ -2653,8 +2664,9 @@ export const zScopedSpendCapOutput = z.object({
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
- * caps narrowed to a client, a connection or one of its tools; every one applies.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export const zBudgetPolicyOutput = z.object({
   agent_monthly_spend_cap_usd: z.string().nullish(),
