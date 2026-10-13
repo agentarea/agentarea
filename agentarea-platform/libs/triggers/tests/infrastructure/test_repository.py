@@ -648,6 +648,7 @@ class TestTriggerExecutionRepositoryEnhancements:
         mock_row.successful_executions = 8
         mock_row.failed_executions = 1
         mock_row.timeout_executions = 1
+        mock_row.skipped_executions = 0
         mock_row.avg_execution_time_ms = 1250.5
         mock_row.min_execution_time_ms = 800
         mock_row.max_execution_time_ms = 2000
@@ -674,6 +675,48 @@ class TestTriggerExecutionRepositoryEnhancements:
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_execution_rates_leave_out_events_the_filter_turned_away(
+        self, repository, mock_session
+    ):
+        row = MagicMock(
+            total_executions=10,
+            successful_executions=4,
+            failed_executions=1,
+            timeout_executions=0,
+            skipped_executions=5,
+            avg_execution_time_ms=10.0,
+            min_execution_time_ms=0,
+            max_execution_time_ms=20,
+        )
+        mock_session.execute.return_value = MagicMock(first=MagicMock(return_value=row))
+
+        result = await repository.get_execution_metrics(uuid4(), hours=24)
+
+        assert result["skipped_executions"] == 5
+        assert result["success_rate"] == 80.0
+        assert result["failure_rate"] == 20.0
+
+    @pytest.mark.asyncio
+    async def test_execution_rates_are_zero_when_every_event_was_skipped(
+        self, repository, mock_session
+    ):
+        row = MagicMock(
+            total_executions=3,
+            successful_executions=0,
+            failed_executions=0,
+            timeout_executions=0,
+            skipped_executions=3,
+            avg_execution_time_ms=0.0,
+            min_execution_time_ms=0,
+            max_execution_time_ms=0,
+        )
+        mock_session.execute.return_value = MagicMock(first=MagicMock(return_value=row))
+
+        result = await repository.get_execution_metrics(uuid4(), hours=24)
+
+        assert (result["success_rate"], result["failure_rate"]) == (0.0, 0.0)
+
+    @pytest.mark.asyncio
     async def test_get_execution_metrics_no_data(self, repository, mock_session):
         """Test getting execution metrics when no data exists."""
         # Setup mock result for no data
@@ -690,6 +733,7 @@ class TestTriggerExecutionRepositoryEnhancements:
         assert result["successful_executions"] == 0
         assert result["failed_executions"] == 0
         assert result["timeout_executions"] == 0
+        assert result["skipped_executions"] == 0
         assert result["success_rate"] == 0.0
         assert result["failure_rate"] == 0.0
         assert result["avg_execution_time_ms"] == 0.0

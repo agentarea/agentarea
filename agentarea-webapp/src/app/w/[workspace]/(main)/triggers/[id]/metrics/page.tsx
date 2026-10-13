@@ -45,6 +45,11 @@ export default async function TriggerMetricsPage({ params }: Props) {
   // The API reports percentages, not fractions.
   const successPct = metrics.success_rate ?? 0;
   const failed = metrics.failed_executions ?? 0;
+  // The rate leaves out events the trigger's conditions turned away.
+  const attempted =
+    (metrics.successful_executions ?? 0) +
+    failed +
+    (metrics.timeout_executions ?? 0);
   const totalCost = metrics.total_cost_usd ?? 0;
 
   return (
@@ -53,14 +58,14 @@ export default async function TriggerMetricsPage({ params }: Props) {
         <Stat
           icon={<Gauge />}
           label={t("successRate")}
-          value={total > 0 ? successPct.toFixed(0) : "—"}
-          unit={total > 0 ? "%" : undefined}
-          bar={total > 0 ? { pct: successPct } : null}
+          value={attempted > 0 ? successPct.toFixed(0) : "—"}
+          unit={attempted > 0 ? "%" : undefined}
+          bar={attempted > 0 ? { pct: successPct } : null}
           sub={
-            total > 0
+            attempted > 0
               ? t("ofRuns", {
                   successful: metrics.successful_executions ?? 0,
-                  total,
+                  total: attempted,
                 })
               : t("noRuns")
           }

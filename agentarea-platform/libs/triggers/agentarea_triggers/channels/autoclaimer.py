@@ -1,6 +1,12 @@
-"""Background loop that runs XAUTOCLAIM to recover entries from dead
-consumers. Pairs with `ChannelDeliveryConsumer`: when a worker crashes
-mid-process, its PEL entries stay unowned until something claims them.
+"""Background loop that runs XAUTOCLAIM and settles what it reclaims.
+
+A consumer reads only new entries, so an entry it left un-ACKed -- a
+retryable failure, a channel this worker has no adapter for during a rolling
+deploy, a worker that crashed mid-process -- is picked up only here. Once it
+has been pending for `min_idle_ms` the entry is claimed and handed to the
+consumer's `handle`, which delivers and ACKs it or leaves it pending again for
+the next pass; the consumer's delivery-count cap dead-letters one that never
+settles.
 
 A single autoclaimer per stream/group is enough — it can be co-resident
 with the consumer.
@@ -10,8 +16,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
-from agentarea_common.broker import BrokerClient
+from agentarea_common.broker import BrokerClient, BrokerMessage
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +31,7 @@ class StreamAutoclaimer:
         stream: str,
         group: str,
         consumer_id: str,
+        handle: Callable[[BrokerMessage], Awaitable[None]],
         min_idle_ms: int = 60_000,
         interval_seconds: float = 30.0,
     ) -> None:
@@ -31,6 +39,7 @@ class StreamAutoclaimer:
         self._stream = stream
         self._group = group
         self._consumer_id = consumer_id
+        self._handle = handle
         self._min_idle_ms = min_idle_ms
         self._interval = interval_seconds
         self._task: asyncio.Task[None] | None = None
@@ -59,22 +68,29 @@ class StreamAutoclaimer:
             self._task = None
         logger.info("StreamAutoclaimer stopped (stream=%s)", self._stream)
 
+    async def reclaim(self) -> int:
+        """Claim the entries idle past `min_idle_ms` and handle each; returns how many."""
+        reclaimed = await self._broker.autoclaim(
+            self._stream,
+            self._group,
+            self._consumer_id,
+            min_idle_ms=self._min_idle_ms,
+        )
+        if reclaimed:
+            logger.info(
+                "autoclaimed %d entries on %s (now owned by %s)",
+                len(reclaimed),
+                self._stream,
+                self._consumer_id,
+            )
+        for msg in reclaimed:
+            await self._handle(msg)
+        return len(reclaimed)
+
     async def _run_loop(self) -> None:
         while self._running:
             try:
-                reclaimed = await self._broker.autoclaim(
-                    self._stream,
-                    self._group,
-                    self._consumer_id,
-                    min_idle_ms=self._min_idle_ms,
-                )
-                if reclaimed:
-                    logger.info(
-                        "autoclaimed %d entries on %s (now owned by %s)",
-                        len(reclaimed),
-                        self._stream,
-                        self._consumer_id,
-                    )
+                await self.reclaim()
             except asyncio.CancelledError:
                 raise
             except Exception:

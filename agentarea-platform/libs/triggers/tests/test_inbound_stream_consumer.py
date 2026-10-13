@@ -74,7 +74,7 @@ async def test_inbound_stream_message_executes_and_acks():
         },
     )
 
-    await consumer._handle(msg)
+    await consumer.handle(msg)
 
     assert consumer.executed == [
         (
@@ -104,7 +104,7 @@ async def test_inbound_stream_malformed_message_goes_to_dlq():
         },
     )
 
-    await consumer._handle(msg)
+    await consumer.handle(msg)
 
     assert consumer.executed == []
     assert broker.acked == [("inbound", "workers", "1-0")]
@@ -128,7 +128,7 @@ async def test_inbound_stream_execution_failure_releases_dedup_without_ack():
         },
     )
 
-    await consumer._handle(msg)
+    await consumer.handle(msg)
 
     assert broker.acked == []
     assert broker.submitted == []

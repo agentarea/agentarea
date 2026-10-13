@@ -144,6 +144,10 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
           total: metrics.total_executions,
           successful: metrics.successful_executions,
           failed: metrics.failed_executions,
+          attempted:
+            metrics.successful_executions +
+            metrics.failed_executions +
+            metrics.timeout_executions,
           /** Already a percentage, 0-100. */
           successRate: metrics.success_rate,
           avgMs: metrics.avg_execution_time_ms,

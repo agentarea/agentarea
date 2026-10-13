@@ -124,7 +124,7 @@ async def _deliver(session_factory, trigger_id: uuid.UUID, task_id: uuid.UUID):
         "task_id": str(task_id),
         "event_type": "task.completed",
     }
-    await consumer._handle(
+    await consumer.handle(
         BrokerMessage(
             id="1-0",
             fields={

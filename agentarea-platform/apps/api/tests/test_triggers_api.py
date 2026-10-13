@@ -690,6 +690,31 @@ class TestTriggersAPI:
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
     @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
+    async def test_get_execution_history_filters_by_status(
+        self,
+        mock_auth,
+        mock_get_service,
+        async_client,
+        mock_trigger_service,
+        mock_auth_context,
+        sample_trigger_data,
+    ):
+        mock_auth.return_value = mock_auth_context
+        mock_get_service.return_value = mock_trigger_service
+        mock_trigger_service.get_trigger.return_value = CronTrigger(**sample_trigger_data)
+        mock_trigger_service.get_execution_history_paginated.return_value = ([], 0)
+
+        trigger_id = str(sample_trigger_data["id"])
+        response = await async_client.get(
+            f"/v1/workspaces/acme/triggers/{trigger_id}/executions?status=skipped"
+        )
+
+        assert response.status_code == 200
+        kwargs = mock_trigger_service.get_execution_history_paginated.await_args.kwargs
+        assert kwargs["status"] == ExecutionStatus.SKIPPED
+
+    @patch("agentarea_api.api.deps.services.get_trigger_service")
+    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     async def test_get_execution_history_with_pagination(
         self,
         mock_auth,
