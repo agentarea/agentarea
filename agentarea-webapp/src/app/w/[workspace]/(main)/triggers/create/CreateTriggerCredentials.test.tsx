@@ -147,9 +147,10 @@ describe("channel credentials on the trigger form", () => {
 
     const option = await screen.findByRole("button", { name: /Telegram/ });
     // The catalog's own artwork, not a lucide stand-in picked by id.
-    expect(option.querySelector("img")?.getAttribute("src")).toBe(
-      "http://api.test/static/icons/channels/telegram.svg"
-    );
+    // next/image may route it through its loader, so match the source in it.
+    expect(
+      decodeURIComponent(option.querySelector("img")?.getAttribute("src") ?? "")
+    ).toContain("http://api.test/static/icons/channels/telegram.svg");
     await user.click(option);
 
     expect(

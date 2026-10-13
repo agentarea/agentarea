@@ -97,25 +97,6 @@ function removeButton(remove?: { label: string; onClick: () => void }) {
   );
 }
 
-function SectionLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-[11px] normal-case text-muted-foreground transition-colors hover:text-foreground"
-    >
-      {children}
-    </Link>
-  );
-}
-
 export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
   const t = useTranslations("TriggersPage.create");
   const [attempt, setAttempt] = useState(0);
@@ -197,10 +178,22 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
               <FormLabel htmlFor="agent_id" icon={ENTITY_ICONS.agent} required>
                 {t("execution.orchestrator")}
               </FormLabel>
-              {agent && (
-                <SectionLink href={`/agents/${agent.id}/settings`}>
-                  {t("execution.configureAgent")}
-                </SectionLink>
+              {props.selectedAgentId && (
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground"
+                >
+                  <Link
+                    href={`/agents/${props.selectedAgentId}/settings`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("execution.configureAgent")}
+                    <ArrowUpRight />
+                  </Link>
+                </Button>
               )}
             </div>
             {props.orchestratorControl}

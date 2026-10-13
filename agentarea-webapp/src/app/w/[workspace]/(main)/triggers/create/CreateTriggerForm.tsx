@@ -18,11 +18,11 @@ import {
 } from "lucide-react";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
-import { ChoiceTile } from "@/components/ChoiceTile";
 import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { SecretSelect } from "@/components/SecretSelect";
 import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,6 @@ import {
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
-import { TriggerSourceMark } from "../components/triggerDisplay";
 import { SigningSecretIssuedDialog } from "../components/WebhookSigning";
 import {
   createTriggerAction,
@@ -96,6 +95,8 @@ const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
 ];
 
 type SelectableResource = TaskParameterRef;
+
+const TYPE_GRID = "grid gap-2 sm:grid-cols-2 xl:grid-cols-3";
 
 function resolveInitialId(
   catalog: TriggerCatalogEntry[],
@@ -348,7 +349,7 @@ export function CreateTriggerForm({
           type="button"
           variant="ghost"
           size="xs"
-          className="justify-start gap-1.5 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground"
         >
           <Paperclip />
           {t("taskFilesPlaceholder")}
@@ -585,20 +586,28 @@ export function CreateTriggerForm({
                   {orderedKinds.map((kind) => (
                     <div key={kind} className="space-y-1.5">
                       <p className="note">{kindLabels[kind]}</p>
-                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className={TYPE_GRID}>
                         {catalog
                           .filter((entry) => entry.kind === kind)
                           .map((entry) => (
-                            <ChoiceTile
+                            <LinkedCard
                               key={entry.id}
-                              // The catalog owns the artwork — drawing it from
-                              // a map here is how channels the map never heard
-                              // of ended up as dots.
-                              icon={
-                                <TriggerSourceMark entry={entry} size={24} />
-                              }
+                              compact
+                              hideHoverLink
+                              // The catalog owns the artwork, as on the
+                              // trigger cards: drawing it from a map here is
+                              // how channels the map never heard of ended up
+                              // as dots.
+                              icon={entry.icon_url ?? ENTITY_ICONS.trigger}
                               title={entry.name}
-                              description={entry.description}
+                              subtitle={
+                                <span
+                                  className="truncate text-xs"
+                                  title={entry.description}
+                                >
+                                  {entry.description}
+                                </span>
+                              }
                               selected={entry.id === selectedId}
                               onClick={() => {
                                 setSelectedId(entry.id);
@@ -616,21 +625,38 @@ export function CreateTriggerForm({
                   ))}
                 </div>
               ) : (
-                <ChoiceTile
-                  icon={
-                    <TriggerSourceMark
-                      entry={selected}
-                      trigger={initialData}
-                      size={24}
+                <div className="space-y-1.5">
+                  {/* The chosen card keeps the group it was picked from. */}
+                  {selected && (
+                    <p className="note">{kindLabels[selected.kind]}</p>
+                  )}
+                  <div className={TYPE_GRID}>
+                    {/* Same grid as the picker: the chosen card keeps its
+                      cell's width. */}
+                    <LinkedCard
+                      compact
+                      hideHoverLink
+                      icon={selected?.icon_url ?? ENTITY_ICONS.trigger}
+                      title={selected?.name ?? initialData?.trigger_type ?? ""}
+                      subtitle={
+                        selected?.description && (
+                          <span className="truncate text-xs">
+                            {selected.description}
+                          </span>
+                        )
+                      }
+                      // An edit cannot change the type: shown, not offered.
+                      onClick={
+                        isEditing ? undefined : () => setChangingType(true)
+                      }
+                      className={
+                        isEditing
+                          ? "cursor-default hover:translate-y-0 hover:shadow-none active:scale-100"
+                          : undefined
+                      }
                     />
-                  }
-                  title={selected?.name ?? initialData?.trigger_type}
-                  description={selected?.description}
-                  selected
-                  disabled={isEditing}
-                  onClick={() => setChangingType(true)}
-                  className="w-full sm:max-w-sm"
-                />
+                  </div>
+                </div>
               )}
             </div>
 
