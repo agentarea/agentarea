@@ -188,6 +188,33 @@ class TestTolerance:
         assert hosting({"connection_type": "openapi"}) is None
         assert derive_facets("skills", name="x", spec={}, tags=[]).hosting is None
 
+    def test_connections_say_whether_using_them_costs_money(self):
+        rate = {"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}}
+
+        def pricing(metadata):
+            spec = {"raw_spec": {"metadata": metadata}}
+            return derive_facets("mcp_servers", name="x", spec=spec, tags=[]).pricing
+
+        assert pricing({}) == "free"
+        assert pricing({"agentarea:cost": {"default": {"source": "free"}}}) == "free"
+        assert (
+            pricing(
+                {
+                    "agentarea:payers": ["workspace", "platform"],
+                    "agentarea:cost": {"tools": {"web_search": rate}},
+                }
+            )
+            == "paid"
+        )
+        assert pricing({"agentarea:cost": {"default": rate}}) == "own_key"
+        # The platform paying for a free call charges nobody.
+        assert (
+            pricing({"agentarea:payers": ["platform"], "agentarea:cost": {"default": {"source": "free"}}})
+            == "free"
+        )
+        assert pricing({"agentarea:payers": "platform", "agentarea:cost": {"default": rate}}) is None
+        assert derive_facets("skills", name="x", spec={}, tags=[]).pricing is None
+
     def test_survives_non_mapping_nested_spec(self):
         # Sources are external; raw_spec/metadata are whatever the upstream
         # served. A string where a mapping was expected must not raise.

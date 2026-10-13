@@ -48,6 +48,7 @@ import {
   REGISTRY_TYPE,
   TYPE_KEYS,
   type CatalogHosting,
+  type CatalogPricing,
   type CatalogProtocol,
   type CatalogType,
 } from "./catalog-data";
@@ -95,6 +96,7 @@ export type CatalogPageResult = {
   categories: { value: string; count: number }[];
   protocols: { value: string; count: number }[];
   hostings: { value: string; count: number }[];
+  pricings: { value: string; count: number }[];
 };
 
 /**
@@ -110,15 +112,25 @@ export async function fetchCatalogPageAction(params: {
   category?: string;
   protocol?: CatalogProtocol;
   hosting?: CatalogHosting;
+  pricing?: CatalogPricing;
   sort?: string;
 }): Promise<ActionResult<CatalogPageResult>> {
-  const { items, total, categories, protocols, hostings, error, status } =
-    await browseCatalog({
+  const {
+    items,
+    total,
+    categories,
+    protocols,
+    hostings,
+    pricings,
+    error,
+    status,
+  } = await browseCatalog({
       registryType: REGISTRY_TYPE[assertCatalogType(params.type)],
       q: params.q,
       category: params.category,
       protocol: params.protocol,
       hosting: params.hosting,
+      pricing: params.pricing,
       sort: params.sort,
       limit: PAGE,
       offset: params.offset,
@@ -126,7 +138,7 @@ export async function fetchCatalogPageAction(params: {
   if (error) return { error, status };
   const parsed = checked(
     zBrowseCatalogV1RegistriesCatalogBrowseGetResponse,
-    { items, total, categories, protocols, hostings },
+    { items, total, categories, protocols, hostings, pricings },
     status
   );
   if (!parsed.data) return { error: parsed.error, status: parsed.status };
@@ -137,6 +149,7 @@ export async function fetchCatalogPageAction(params: {
       categories: parsed.data.categories,
       protocols: parsed.data.protocols ?? [],
       hostings: parsed.data.hostings ?? [],
+      pricings: parsed.data.pricings ?? [],
     },
     status,
   };

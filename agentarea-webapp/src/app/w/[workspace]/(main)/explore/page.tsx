@@ -10,6 +10,7 @@ import {
   DEFAULT_SORT,
   EXPLORE_VIEW_COOKIE,
   isCatalogHosting,
+  isCatalogPricing,
   isCatalogProtocol,
   isSortMode,
   normalize,
@@ -63,6 +64,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
   // Junk in the URL means "unfiltered" rather than an error page.
   const protocol = isCatalogProtocol(sp.protocol) ? sp.protocol : undefined;
   const hosting = isCatalogHosting(sp.hosting) ? sp.hosting : undefined;
+  const pricing = isCatalogPricing(sp.pricing) ? sp.pricing : undefined;
   const sort: SortMode = isSortMode(sp.sort) ? sp.sort : DEFAULT_SORT;
 
   // Persisted grid/table choice: URL param wins, otherwise the cookie written
@@ -84,12 +86,22 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
     category,
     protocol,
     hosting,
+    pricing,
     sort,
     all: ALL,
   });
   const sourceSize = SECTION_SOURCE_SIZE[type];
   const [
-    { items, total, categories, protocols, hostings, error, status },
+    {
+      items,
+      total,
+      categories,
+      protocols,
+      hostings,
+      pricings,
+      error,
+      status,
+    },
     sectionSource,
   ] = await Promise.all([
     browseCatalog({
@@ -98,6 +110,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
       category,
       protocol,
       hosting,
+      pricing,
       sort,
       limit: PAGE,
       offset: 0,
@@ -155,6 +168,7 @@ export default async function ExplorePage({ searchParams }: ExplorePageProps) {
           initialCategories={categories}
           initialProtocols={protocols}
           initialHostings={hostings}
+          initialPricings={pricings}
           initialError={
             error
               ? apiErrorMessage({ error, status }, tBundle("catalogLoadFailed"))

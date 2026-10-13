@@ -18,6 +18,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from agentarea_registry.application.catalog_facets import (
     CATALOG_HOSTINGS,
+    CATALOG_PRICINGS,
     CATALOG_PROTOCOLS,
     PROTOCOL_REGISTRY_TYPE,
 )
@@ -306,6 +307,7 @@ class RegistryItemRepository:
         category: str | None,
         protocol: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
     ) -> list[ColumnElement[bool]]:
         """WHERE clause shared by the page query, its total, and the facets."""
         conditions: list[ColumnElement[bool]] = [
@@ -320,6 +322,8 @@ class RegistryItemRepository:
             conditions.append(RegistryItem.protocol == protocol)
         if hosting:
             conditions.append(RegistryItem.hosting == hosting)
+        if pricing:
+            conditions.append(RegistryItem.pricing == pricing)
         if q:
             pattern = f"%{q}%"
             conditions.append(
@@ -334,6 +338,7 @@ class RegistryItemRepository:
         category: str | None = None,
         protocol: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
         sort: str = DEFAULT_CATALOG_SORT,
         limit: int = 50,
         offset: int = 0,
@@ -343,7 +348,7 @@ class RegistryItemRepository:
         The total is what lets the client know there is more to fetch even when
         the current page contributes nothing visible.
         """
-        conditions = self._browse_filter(registry_type, q, category, protocol, hosting)
+        conditions = self._browse_filter(registry_type, q, category, protocol, hosting, pricing)
         order_by = CATALOG_SORTS.get(sort, CATALOG_SORTS[DEFAULT_CATALOG_SORT])()
         page = (
             select(RegistryItem).where(*conditions).order_by(*order_by).offset(offset).limit(limit)
@@ -360,6 +365,7 @@ class RegistryItemRepository:
         q: str | None = None,
         protocol: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
     ) -> list[tuple[str, int]]:
         """Facet counts over the whole type, not just the loaded page.
 
@@ -374,7 +380,7 @@ class RegistryItemRepository:
         nothing to begin with.
         """
         conditions = self._browse_filter(
-            registry_type, q, category=None, protocol=protocol, hosting=hosting
+            registry_type, q, category=None, protocol=protocol, hosting=hosting, pricing=pricing
         )
         query = (
             select(RegistryItem.category, func.count().label("n"))
@@ -394,6 +400,7 @@ class RegistryItemRepository:
         q: str | None = None,
         category: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
     ) -> list[tuple[str, int]]:
         """How the matching connections split between MCP servers and HTTP APIs.
 
@@ -404,7 +411,9 @@ class RegistryItemRepository:
         """
         if registry_type != PROTOCOL_REGISTRY_TYPE:
             return []
-        conditions = self._browse_filter(registry_type, q, category, protocol=None, hosting=hosting)
+        conditions = self._browse_filter(
+            registry_type, q, category, protocol=None, hosting=hosting, pricing=pricing
+        )
         query = (
             select(RegistryItem.protocol, func.count())
             .where(*conditions)
@@ -421,6 +430,7 @@ class RegistryItemRepository:
         q: str | None = None,
         category: str | None = None,
         protocol: str | None = None,
+        pricing: str | None = None,
     ) -> list[tuple[str, int]]:
         """How the matching MCP connections split between vendor-hosted and run here.
 
@@ -429,7 +439,9 @@ class RegistryItemRepository:
         """
         if registry_type != PROTOCOL_REGISTRY_TYPE:
             return []
-        conditions = self._browse_filter(registry_type, q, category, protocol, hosting=None)
+        conditions = self._browse_filter(
+            registry_type, q, category, protocol, hosting=None, pricing=pricing
+        )
         query = (
             select(RegistryItem.hosting, func.count())
             .where(*conditions)
@@ -437,6 +449,30 @@ class RegistryItemRepository:
         )
         counts: dict[str | None, int] = dict((await self.session.execute(query)).tuples().all())
         return [(name, counts[name]) for name in CATALOG_HOSTINGS if counts.get(name)]
+
+    async def pricing_counts(
+        self,
+        registry_type: str,
+        q: str | None = None,
+        category: str | None = None,
+        protocol: str | None = None,
+        hosting: str | None = None,
+    ) -> list[tuple[str, int]]:
+        """How the matching connections split between paid, own-key and free.
+
+        Connections catalog only. Ignores the active pricing filter so the other
+        sides stay reachable, and drops an empty side.
+        """
+        if registry_type != PROTOCOL_REGISTRY_TYPE:
+            return []
+        conditions = self._browse_filter(registry_type, q, category, protocol, hosting)
+        query = (
+            select(RegistryItem.pricing, func.count())
+            .where(*conditions)
+            .group_by(RegistryItem.pricing)
+        )
+        counts: dict[str | None, int] = dict((await self.session.execute(query)).tuples().all())
+        return [(name, counts[name]) for name in CATALOG_PRICINGS if counts.get(name)]
 
     async def search(
         self,

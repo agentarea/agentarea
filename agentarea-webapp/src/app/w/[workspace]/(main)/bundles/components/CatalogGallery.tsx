@@ -93,6 +93,7 @@ import {
   FEATURED_TAG,
   HOSTING_LABELS,
   isCatalogHosting,
+  isCatalogPricing,
   isCatalogProtocol,
   modelNameMatchesPreferred,
   normalize,
@@ -117,6 +118,7 @@ import {
   type CategoryFacet,
 } from "./catalog-paging";
 import type { CatalogSection } from "./catalog-sections";
+import { PricingBadge, usePriceLabel } from "./PricingBadge";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -181,6 +183,7 @@ type BrowseParams = {
   /** The nuqs value, so ALL or anything a hand-edited URL carries. */
   protocol: string;
   hosting: string;
+  pricing: string;
   sort: SortMode;
 };
 
@@ -194,6 +197,7 @@ async function fetchPage(params: BrowseParams) {
     // request the server would reject.
     protocol: isCatalogProtocol(params.protocol) ? params.protocol : undefined,
     hosting: isCatalogHosting(params.hosting) ? params.hosting : undefined,
+    pricing: isCatalogPricing(params.pricing) ? params.pricing : undefined,
     sort: params.sort,
   });
 }
@@ -415,6 +419,7 @@ type CatalogGalleryProps = {
   initialProtocols: CategoryFacet[];
   /** Vendor-hosted vs run on AgentArea; empty for every type but connections. */
   initialHostings?: CategoryFacet[];
+  initialPricings?: CategoryFacet[];
   initialError?: string | null;
   /** Persisted grid/table choice (cookie), seeds the view nuqs default. */
   initialView?: ViewMode;
@@ -429,6 +434,7 @@ export default function CatalogGallery({
   initialCategories,
   initialProtocols,
   initialHostings = [],
+  initialPricings = [],
   initialError = null,
   initialView = "grid",
   initialSections = [],
@@ -487,6 +493,13 @@ export default function CatalogGallery({
       startTransition: explorePending?.startFilterTransition,
     })
   );
+  const [pricing, setPricing] = useQueryState(
+    "pricing",
+    parseAsString.withDefault(ALL).withOptions({
+      shallow: false,
+      startTransition: explorePending?.startFilterTransition,
+    })
+  );
   const [view] = useQueryState(
     "view",
     parseAsStringLiteral(VIEW_KEYS).withDefault(initialView)
@@ -510,6 +523,7 @@ export default function CatalogGallery({
       categories: initialCategories,
       protocols: initialProtocols,
       hostings: initialHostings,
+      pricings: initialPricings,
       error: initialError,
     })
   );
@@ -549,6 +563,7 @@ export default function CatalogGallery({
       categories: initialCategories,
       protocols: initialProtocols,
       hostings: initialHostings,
+      pricings: initialPricings,
       error: initialError,
     });
   }, [
@@ -557,6 +572,7 @@ export default function CatalogGallery({
     initialCategories,
     initialProtocols,
     initialHostings,
+    initialPricings,
     initialError,
   ]);
 
@@ -572,6 +588,7 @@ export default function CatalogGallery({
         category,
         protocol,
         hosting,
+        pricing,
         sort,
       });
       if (page.error || !page.data) {
@@ -590,6 +607,7 @@ export default function CatalogGallery({
         categories: page.data.categories,
         protocols: page.data.protocols,
         hostings: page.data.hostings,
+        pricings: page.data.pricings,
       });
     } catch (e) {
       console.error("Failed to load catalog page", e);
@@ -598,7 +616,17 @@ export default function CatalogGallery({
         error: `${tBundle("catalogLoadFailed")}: ${formatApiError(e)}`,
       });
     }
-  }, [type, query, category, protocol, hosting, sort, paging.entries, tBundle]);
+  }, [
+    type,
+    query,
+    category,
+    protocol,
+    hosting,
+    pricing,
+    sort,
+    paging.entries,
+    tBundle,
+  ]);
 
   // Infinite scroll: auto-load the next page when the sentinel nears the
   // viewport. `canFetchMore` is the in-flight guard — a short page leaves the
@@ -683,7 +711,8 @@ export default function CatalogGallery({
     query.trim() !== "" ||
     category !== ALL ||
     protocol !== ALL ||
-    hosting !== ALL;
+    hosting !== ALL ||
+    pricing !== ALL;
 
   // A type switch invalidates the current results, so they're skeletoned. A
   // filter change only narrows them: the list stays and dims, which is what
@@ -707,6 +736,14 @@ export default function CatalogGallery({
       ),
     [paging.hostings]
   );
+  const pricings = useMemo(
+    () =>
+      (paging.pricings ?? []).map(
+        (p) => [p.value, p.count] as [string, number]
+      ),
+    [paging.pricings]
+  );
+  const tPricing = useTranslations("CatalogPage.pricing");
 
   // A detail replaces the list, so the list's scroll position is kept here and
   // put back on return: "Back to catalog" lands where the user left, with the
@@ -740,7 +777,12 @@ export default function CatalogGallery({
           Category group with its All option. Counts come from the server and cover
           the whole catalog, so they do not drift as more pages load. A detail is
           full width: the facets belong to the list it came from. */}
-      <aside className={cn("hidden w-52 shrink-0", !itemId && "lg:block")}>
+      <aside
+        className={cn(
+          "hidden w-52 shrink-0 self-start lg:sticky lg:top-0 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto lg:overscroll-contain",
+          !itemId && "lg:block"
+        )}
+      >
         {busy ? (
           <FacetSkeleton />
         ) : (
@@ -769,6 +811,22 @@ export default function CatalogGallery({
                 selected={hosting}
                 onSelect={(v) => {
                   void setHosting(v === ALL ? null : v);
+                  void setItemId(null);
+                }}
+              />
+            )}
+            {pricings.length > 1 && (
+              <FacetGroup
+                label={tPricing("facet")}
+                options={pricings}
+                labels={{
+                  paid: tPricing("kinds.paid"),
+                  own_key: tPricing("kinds.own_key"),
+                  free: tPricing("kinds.free"),
+                }}
+                selected={pricing}
+                onSelect={(v) => {
+                  void setPricing(v === ALL ? null : v);
                   void setItemId(null);
                 }}
               />
@@ -826,6 +884,30 @@ export default function CatalogGallery({
           </DeepItemStatus>
         ) : (
           <>
+            {/* Below lg the facet sidebar is hidden; the categories ride along
+                as a strip pinned to the top of the scroll area instead. */}
+            {categories.length > 0 && (
+              <div className="sticky -top-5 z-10 -mx-4 -mt-5 border-b border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800 lg:hidden">
+                <CountSegmentedControl
+                  layoutId="explore-category-strip"
+                  className="w-full"
+                  itemClassName="capitalize"
+                  items={[
+                    { value: ALL, label: "All" },
+                    ...categories.map(([value, count]) => ({
+                      value,
+                      label: value,
+                      count,
+                    })),
+                  ]}
+                  value={category}
+                  onChange={(v) => {
+                    void setCategory(v === ALL ? null : v);
+                    void setItemId(null);
+                  }}
+                />
+              </div>
+            )}
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -887,6 +969,8 @@ export default function CatalogGallery({
                             void setQuery(null);
                             void setCategory(null);
                             void setProtocol(null);
+                            void setHosting(null);
+                            void setPricing(null);
                           },
                         }
                       : undefined
@@ -1033,6 +1117,7 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
           {e.connections.length > 0 && (
             <ConnectedCount count={e.connections.length} />
           )}
+          {e.pricing && <PricingBadge pricing={e.pricing} />}
         </div>
       ) : null,
   },
@@ -1277,6 +1362,7 @@ function CatalogCard({
             {entry.connections.length > 0 && (
               <ConnectedCount count={entry.connections.length} />
             )}
+            {entry.pricing && <PricingBadge pricing={entry.pricing} />}
             {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
             {entry.meta.map((m) => (
               <Badge
@@ -1421,6 +1507,7 @@ function DetailView({
               {entry.connections.length > 0 && (
                 <ConnectedCount count={entry.connections.length} />
               )}
+              {entry.pricing && <PricingBadge pricing={entry.pricing} />}
               {hosting && (
                 <Badge variant="light" size="sm">
                   {hosting === "agentarea"
@@ -1534,6 +1621,7 @@ function DetailView({
             <ConnectionNeeds entry={entry} />
           </>
         )}
+        {entry.pricing && <ConnectionPricing pricing={entry.pricing} />}
         {entry.type === "connections" && <ConnectionFacts entry={entry} />}
         {entry.type === "skills" && (
           <>
@@ -2432,6 +2520,48 @@ function ConnectionFacts({ entry }: { entry: CatalogEntry }) {
           </div>
         ))}
       </dl>
+    </div>
+  );
+}
+
+/** What calls cost and who bills them; per tool when the connector prices them. */
+function ConnectionPricing({
+  pricing,
+}: {
+  pricing: NonNullable<CatalogEntry["pricing"]>;
+}) {
+  const t = useTranslations("CatalogPage.pricing");
+  const priceLabel = usePriceLabel();
+  if (pricing.kind === "free") return null;
+  const hint =
+    pricing.kind === "own_key"
+      ? t("ownKeyHint")
+      : pricing.payers.includes("workspace")
+        ? t("paidOrOwnKeyHint")
+        : t("paidHint");
+  return (
+    <div>
+      <SectionLabel>{t("title")}</SectionLabel>
+      <p className="text-sm text-muted-foreground">{hint}</p>
+      {pricing.prices.length > 0 && (
+        <div className="mt-2 overflow-hidden rounded-lg border border-border/60">
+          <dl className="divide-y divide-border/60">
+            {pricing.prices.map((price) => (
+              <div
+                key={price.tool ?? ""}
+                className="flex items-center gap-4 px-4 py-2.5 text-sm"
+              >
+                <dt className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
+                  {price.tool ?? t("otherTools")}
+                </dt>
+                <dd className="shrink-0 font-medium tabular-nums">
+                  {priceLabel(price)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
     </div>
   );
 }

@@ -3436,6 +3436,24 @@
       "open": "Open",
       "addAnother": "Add another",
       "connect": "Connect"
+    },
+    "pricing": {
+      "facet": "Pricing",
+      "kinds": {
+        "paid": "Paid",
+        "own_key": "Own key",
+        "free": "Free"
+      },
+      "paid": "Paid",
+      "paidFrom": "Paid · from {price}",
+      "ownKey": "Own key",
+      "perCall": "{price}/call",
+      "perUnit": "{price}/{unit}",
+      "title": "Pricing",
+      "paidHint": "Calls run on AgentArea's key and are charged to the workspace balance.",
+      "paidOrOwnKeyHint": "Calls run on AgentArea's key and are charged to the workspace balance. You can connect your own key instead; then the vendor bills you.",
+      "ownKeyHint": "Calls run on your own account with the vendor, and the vendor bills you. AgentArea counts the spend against your caps.",
+      "otherTools": "Other tools"
     }
   },
   "BundleInstall": {

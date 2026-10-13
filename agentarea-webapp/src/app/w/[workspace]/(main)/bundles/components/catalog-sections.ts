@@ -113,6 +113,7 @@ export function showsSections(params: {
   category: string | null | undefined;
   protocol: string | null | undefined;
   hosting?: string | null | undefined;
+  pricing?: string | null | undefined;
   sort: string;
   all: string;
 }): boolean {
@@ -122,6 +123,7 @@ export function showsSections(params: {
     unset(params.category) &&
     unset(params.protocol) &&
     unset(params.hosting) &&
+    unset(params.pricing) &&
     params.sort === "recommended"
   );
 }

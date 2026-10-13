@@ -3,7 +3,10 @@
 // (CatalogGallery, infinite-scroll appends). No React/JSX here so it stays
 // importable from a Server Component.
 
-import type { CatalogConnection } from "@/api/client/types.gen";
+import type {
+  CatalogConnection,
+  CatalogItemPricingResponse,
+} from "@/api/client/types.gen";
 import type { EntityKind } from "@/lib/entity-icons";
 import {
   domainInitials,
@@ -64,6 +67,16 @@ export const HOSTING_LABELS: Record<CatalogHosting, string> = {
   agentarea: "Runs on AgentArea",
 };
 
+// Whether using a connection costs money through AgentArea. Mirrors
+// CATALOG_PRICINGS on the backend, which derives it from the entry's declared
+// payers and cost (wiki ADR-0038).
+export type CatalogPricing = CatalogItemPricingResponse["kind"];
+export const PRICING_KEYS = [
+  "paid",
+  "own_key",
+  "free",
+] as const satisfies readonly CatalogPricing[];
+
 // Page size for a single registry fetch. A short page means "no more".
 export const PAGE = 96;
 // Sentinel for the "All categories" facet (kept out of the URL as a real value).
@@ -108,6 +121,7 @@ export type RegistryItem = {
   // Connections only: the workspace's connections made from this item that
   // the caller may read.
   workspace_connections?: CatalogConnection[] | null;
+  pricing?: CatalogItemPricingResponse | null;
 };
 
 export type Registry = { id: string; name: string; registry_type: string };
@@ -132,6 +146,8 @@ export type CatalogEntry = {
   // the MCP manager runs), as the server derived it. Null when unknown.
   hosting?: string | null;
   verified: boolean; // official vendor connection with confirmed OAuth
+  // Connections only: what using it costs through AgentArea, priced by the server.
+  pricing: CatalogItemPricingResponse | null;
   // Connections only: what the workspace already made from this item.
   connections: CatalogConnection[];
   spec: RawSpec;
@@ -156,6 +172,12 @@ export function isCatalogProtocol(v: unknown): v is CatalogProtocol {
 export function isCatalogHosting(v: unknown): v is CatalogHosting {
   return (
     typeof v === "string" && (HOSTING_KEYS as readonly string[]).includes(v)
+  );
+}
+
+export function isCatalogPricing(v: unknown): v is CatalogPricing {
+  return (
+    typeof v === "string" && (PRICING_KEYS as readonly string[]).includes(v)
   );
 }
 
@@ -363,6 +385,7 @@ function describe(
     featured: item.featured ?? tags.includes(FEATURED_TAG),
     hosting: str(item.hosting),
     verified: false,
+    pricing: item.pricing ?? null,
     connections: item.workspace_connections ?? [],
     spec,
   };

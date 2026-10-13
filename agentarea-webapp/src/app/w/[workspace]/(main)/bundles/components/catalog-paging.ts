@@ -20,6 +20,8 @@ export type CatalogPaging = {
   protocols: CategoryFacet[];
   /** MCP connections only: vendor-hosted vs run on AgentArea. */
   hostings?: CategoryFacet[];
+  /** Connections only: paid through AgentArea vs own key vs free. */
+  pricings?: CategoryFacet[];
   status: "idle" | "loading" | "appending";
   error: string | null;
   /** Set when the server returns an empty page despite claiming more exist. */
@@ -34,6 +36,7 @@ export type CatalogPagingAction =
       categories: CategoryFacet[];
       protocols: CategoryFacet[];
       hostings?: CategoryFacet[];
+      pricings?: CategoryFacet[];
       error?: string | null;
     }
   | { type: "reload" }
@@ -45,6 +48,7 @@ export type CatalogPagingAction =
       categories: CategoryFacet[];
       protocols: CategoryFacet[];
       hostings?: CategoryFacet[];
+      pricings?: CategoryFacet[];
     }
   | { type: "fail"; error: string };
 
@@ -96,6 +100,7 @@ export function catalogPagingReducer(
         categories: action.categories,
         protocols: action.protocols,
         hostings: action.hostings ?? [],
+        pricings: action.pricings ?? [],
         status: "idle",
         error: action.error ?? null,
         drained: false,
@@ -127,6 +132,7 @@ export function catalogPagingReducer(
         categories: action.categories,
         protocols: action.protocols,
         hostings: action.hostings ?? [],
+        pricings: action.pricings ?? [],
         status: "idle",
         error: null,
         // A page that adds nothing while the total still claims more means the
