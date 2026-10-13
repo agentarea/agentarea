@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from agentarea_agents_sdk import ToolExecutor
-from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
@@ -551,15 +550,6 @@ def make_tools_activities(
                                 auth_secret=sandbox_file_auth_secret(dependencies),
                             ),
                             "workspace_id": str(request.workspace_id),
-                        }
-                    elif tool_name == DECIDE_TOOLSET:
-                        from agentarea_llm.application.decision_service import DecisionService
-
-                        extra_kwargs = {
-                            "backend": DecisionService(
-                                models=await ctx.get_model_service(),
-                                model_id=settings.get("model_id"),
-                            ),
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to

@@ -216,11 +216,10 @@ def _code_tool(name: str, **settings) -> dict:
     return {"type": "code", "name": name, "settings": settings}
 
 
-async def test_media_and_decide_tools_accept_instances_of_their_kind(session_factory):
+async def test_the_media_tool_accepts_instances_of_its_kinds(session_factory):
     async with session_factory() as session:
         image = await _seed_model_instance(session, kind="image")
         video = await _seed_model_instance(session, kind="video")
-        decision = await _seed_model_instance(session, kind="decision")
 
         agent = await _service(session, _context()).create_agent(
             AgentCreate(
@@ -229,24 +228,22 @@ async def test_media_and_decide_tools_accept_instances_of_their_kind(session_fac
                     _code_tool(
                         "agentarea/media", image_model_id=str(image.id), video_model_id=str(video.id)
                     ),
-                    _code_tool("agentarea/decide", model_id=str(decision.id)),
                 ],
             )
         )
 
         settings = {tool["name"]: tool["settings"] for tool in agent.tools}
         assert settings["agentarea/media"]["image_model_id"] == str(image.id)
-        assert settings["agentarea/decide"]["model_id"] == str(decision.id)
+        assert settings["agentarea/media"]["video_model_id"] == str(video.id)
 
 
 @pytest.mark.parametrize(
     "tool, message",
     [
         (_code_tool("agentarea/media"), "needs image_model_id or video_model_id"),
-        (_code_tool("agentarea/decide"), "needs model_id"),
         (_code_tool("agentarea/media", image_model_id="not-a-uuid"), "expected the UUID"),
-        (_code_tool("agentarea/decide", model_id=str(uuid4())), "does not exist"),
-        (_code_tool("agentarea/web", model_id=str(uuid4())), "takes no model"),
+        (_code_tool("agentarea/media", image_model_id=str(uuid4())), "does not exist"),
+        (_code_tool("agentarea/web", image_model_id=str(uuid4())), "takes no model"),
     ],
 )
 async def test_tool_model_settings_are_validated(session_factory, tool, message):
@@ -274,8 +271,8 @@ async def test_tool_model_settings_are_validated_on_update(session_factory):
         agent = await service.create_agent(AgentCreate(name="Later", tools=[]))
         chat = await _seed_model_instance(session)
 
-        with pytest.raises(InvalidModelIdError, match="decision"):
+        with pytest.raises(InvalidModelIdError, match="image"):
             await service.update_agent(
                 agent.id,
-                AgentUpdate(tools=[_code_tool("agentarea/decide", model_id=str(chat.id))]),
+                AgentUpdate(tools=[_code_tool("agentarea/media", image_model_id=str(chat.id))]),
             )

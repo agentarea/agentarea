@@ -36,7 +36,7 @@ function toFormSkill(skill: Record<string, unknown>): AgentSkill {
 // Only the ids that are set, so toolsets without models carry no model keys.
 function toModelIds(source: CodeToolModelIds): CodeToolModelIds {
   return Object.fromEntries(
-    (["image_model_id", "video_model_id", "model_id"] as const).flatMap(
+    (["image_model_id", "video_model_id"] as const).flatMap(
       (key) => (source[key] ? [[key, source[key]]] : [])
     )
   );

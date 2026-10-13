@@ -46,11 +46,11 @@ export type BuiltinToolConfig = {
 } & CodeToolModelIds;
 
 /**
- * Model instances a code toolset runs on (agentarea/media, agentarea/decide)
+ * Model instances a code toolset runs on (agentarea/media)
  */
 export type CodeToolModelIds = Pick<
   CodeToolSettings,
-  "image_model_id" | "video_model_id" | "model_id"
+  "image_model_id" | "video_model_id"
 >;
 
 /**

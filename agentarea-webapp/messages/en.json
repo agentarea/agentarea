@@ -610,7 +610,6 @@
         "clear": "Clear {label}",
         "loadFailed": "Could not load models",
         "pickAtLeastOne": "Pick an image or a video model: the toolset needs at least one.",
-        "pickOne": "Pick a decision model: the toolset needs one.",
         "image": {
           "label": "Image model",
           "empty": "No image models in this workspace."
@@ -618,10 +617,6 @@
         "video": {
           "label": "Video model",
           "empty": "No video models in this workspace."
-        },
-        "decision": {
-          "label": "Decision model",
-          "empty": "No decision models in this workspace."
         }
       },
       "availableMcpServers": "Available MCP Servers",

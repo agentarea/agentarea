@@ -1850,8 +1850,8 @@ export type CodeToolConfig = {
  * Settings for a built-in code toolset.
  *
  * The model ids are model instances of the workspace, each of the kind its
- * toolset needs: ``agentarea/media`` takes an image and/or a video model,
- * ``agentarea/decide`` a decision model. No other toolset takes one.
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model.
+ * No other toolset takes one.
  */
 export type CodeToolSettings = {
   /**
@@ -1864,12 +1864,6 @@ export type CodeToolSettings = {
    * agentarea/media: model instance generating images.
    */
   image_model_id?: string | null;
-  /**
-   * Model Id
-   *
-   * agentarea/decide: decision model instance.
-   */
-  model_id?: string | null;
   /**
    * Requires User Confirmation
    */

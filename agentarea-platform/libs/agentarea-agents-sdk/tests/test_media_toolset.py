@@ -1,4 +1,4 @@
-"""The media and decide toolsets: files land in the workspace, costs reach the result."""
+"""The media toolset: files land in the workspace, costs reach the result."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from decimal import Decimal
 import pytest
 
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
-from agentarea_agents_sdk.tools.decide_toolset import DecideToolset
 from agentarea_agents_sdk.tools.decorator_tool import ToolsetAdapter
 from agentarea_agents_sdk.tools.file_toolset import InMemoryStorage
 from agentarea_agents_sdk.tools.media_toolset import MediaToolset
@@ -167,59 +166,18 @@ async def test_a_disabled_method_is_not_offered():
     assert set(toolset._tool_methods) == {"generate_image", "get_video"}
 
 
-class _Decisions:
-    def __init__(self):
-        self.asked: list = []
-
-    async def evaluate(self, state, questions):
-        self.asked.append((state, questions))
-
-        @dataclass
-        class _Outcome:
-            answers: dict
-            cost: Decimal
-
-        return _Outcome(
-            answers={"route": {"type": "choice", "choice": "billing"}}, cost=Decimal("0.04")
-        )
-
-
-async def test_decide_passes_questions_through_and_reports_cost():
-    decisions = _Decisions()
-    questions = {
-        "route": {
-            "type": "choice",
-            "instructions": "Which team?",
-            "criteria": {"billing": "payments", "support": "other"},
-        }
-    }
-
-    result = await ToolsetAdapter(DecideToolset(backend=decisions)).execute(
-        state="card charged twice", questions=questions
-    )
-
-    assert decisions.asked == [("card charged twice", questions)]
-    assert json.loads(result["result"]) == {"answers": {"route": {"type": "choice", "choice": "billing"}}}
-    assert result["model_cost"] == "0.04"
-
-
-@pytest.mark.parametrize("namespace", ["agentarea/media", "agentarea/decide"])
-def test_toolsets_are_registered_as_runtime_with_declared_effects(namespace):
-    entry = get_code_tools_metadata()[namespace]
+def test_the_toolset_is_registered_as_runtime_with_declared_effects():
+    entry = get_code_tools_metadata()["agentarea/media"]
 
     assert entry["plane"] == "runtime"
     assert entry["available_methods"]
     assert all(m["effect"] in {"read", "write"} for m in entry["available_methods"])
 
 
-@pytest.mark.parametrize(
-    "namespace, extra_kwargs",
-    [("agentarea/media", {"workspace_id": WORKSPACE}), ("agentarea/decide", None)],
-)
-def test_the_schema_builder_can_construct_them_bare(namespace, extra_kwargs):
+def test_the_schema_builder_can_construct_it_bare():
     from agentarea_agents_sdk.tools.code_tools_loader import create_code_tool_instance
 
-    assert create_code_tool_instance(namespace, {}, extra_kwargs=extra_kwargs)
+    assert create_code_tool_instance("agentarea/media", {}, extra_kwargs={"workspace_id": WORKSPACE})
 
 
 def test_the_media_toolset_needs_a_workspace():

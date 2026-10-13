@@ -3220,7 +3220,7 @@
         "type": "object"
       },
       "CodeToolSettings": {
-        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model,\n``agentarea/decide`` a decision model. No other toolset takes one.",
+        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model.\nNo other toolset takes one.",
         "properties": {
           "disabled_methods": {
             "anyOf": [
@@ -3247,18 +3247,6 @@
             ],
             "description": "agentarea/media: model instance generating images.",
             "title": "Image Model Id"
-          },
-          "model_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "agentarea/decide: decision model instance.",
-            "title": "Model Id"
           },
           "requires_user_confirmation": {
             "anyOf": [
