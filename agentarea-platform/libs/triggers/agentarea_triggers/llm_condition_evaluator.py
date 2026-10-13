@@ -8,11 +8,12 @@ in natural language that are evaluated against event data.
 import json
 import logging
 import re
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
-import litellm
+from agentarea_agents_sdk.models import LLMModel, LLMRequest
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.model_service import ModelService
 from agentarea_llm.domain.media import DecisionQuestionType
@@ -734,23 +735,7 @@ class LLMConditionEvaluator:
             endpoint = await self.model_service.resolve(effective_model_id, ModelKind.CHAT)
             provider_type = endpoint.provider_type
 
-            # Build litellm parameters
-            litellm_model = f"{provider_type}/{endpoint.model_name}"
-            litellm_params = {
-                "model": litellm_model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,  # Low temperature for consistent evaluation
-                "max_tokens": 1000,
-            }
-
-            if endpoint.api_key:
-                litellm_params["api_key"] = endpoint.api_key
-            if endpoint.endpoint_url:
-                url = endpoint.endpoint_url
-                if not url.startswith("http"):
-                    url = f"http://{url}"
-                litellm_params["base_url"] = url
-            elif profile_for(provider_type).requires_endpoint_url:
+            if not endpoint.endpoint_url and profile_for(provider_type).requires_endpoint_url:
                 # Self-hosted provider: there is no public address to fall back
                 # to, so the call would go nowhere.
                 raise ValueError(
@@ -758,15 +743,30 @@ class LLMConditionEvaluator:
                     f"{provider_type!r} but has no endpoint_url configured"
                 )
 
-            logger.debug(f"Calling LLM for condition evaluation with model {litellm_model}")
-
-            # Make the LLM call
-            response = cast(Any, await litellm.acompletion(**litellm_params))
-            content = response.choices[0].message.content or ""
+            model = LLMModel(
+                provider_type=provider_type,
+                model_name=endpoint.model_name,
+                api_key=endpoint.api_key,
+                endpoint_url=endpoint.endpoint_url,
+                endpoint_policy=endpoint_policy_for(endpoint.managed_by),
+            )
+            logger.debug(f"Calling LLM for condition evaluation with model {endpoint.model_name}")
+            response = await model.complete(
+                LLMRequest(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,  # Low temperature for consistent evaluation
+                    max_tokens=1000,
+                )
+            )
+            content = response.content or ""
 
             logger.debug(f"LLM condition evaluation response: {content[:100]}...")
             return content.strip()
 
         except Exception as e:
             logger.exception(f"LLM call failed: {e}")
-            raise LLMConditionEvaluationError(f"LLM call failed: {e}") from e
+            # The provider's answer stays in the log: the endpoint may be a member's,
+            # and what it returned is not ours to repeat (GHSA-pprc-x767-m6jg).
+            status_code = getattr(e, "status_code", None)
+            detail = f"HTTP {status_code}" if isinstance(status_code, int) else type(e).__name__
+            raise LLMConditionEvaluationError(f"LLM call failed: {detail}") from e

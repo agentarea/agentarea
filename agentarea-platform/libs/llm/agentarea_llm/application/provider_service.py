@@ -1,11 +1,17 @@
+import asyncio
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import BadRequestError, NotFoundError
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.utils.url_safety import (
+    OutboundPolicy,
+    UnsafeUrlError,
+    validate_outbound_url,
+)
 from sqlalchemy import delete, select
 
 if TYPE_CHECKING:
@@ -29,6 +35,26 @@ from agentarea_llm.infrastructure.provider_spec_repository import ProviderSpecRe
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
 
 logger = logging.getLogger(__name__)
+
+
+ENDPOINT_NOT_ALLOWED = "endpoint_url must be a public address this deployment may call"
+
+
+async def assert_endpoint_allowed(endpoint_url: str) -> None:
+    """Refuse, when it is saved, an endpoint every call would refuse later.
+
+    Calls to a member-set endpoint go through the outbound guard; checking here
+    makes the mistake visible in the form rather than in the first run. One
+    message whether the name is private or does not resolve, so the answer says
+    nothing about which internal names exist.
+    """
+    try:
+        await asyncio.to_thread(
+            validate_outbound_url, endpoint_url, policy=OutboundPolicy.from_env()
+        )
+    except UnsafeUrlError as e:
+        logger.info(f"Refused provider endpoint_url on save: {e}")
+        raise BadRequestError(ENDPOINT_NOT_ALLOWED) from e
 
 
 class PlatformManagedConfigError(PermissionError):
@@ -147,6 +173,8 @@ class ProviderService:
         # the insert's foreign key, leaving the key behind as an orphan secret.
         if await self.provider_spec_repo.get_by_id(payload.provider_spec_id) is None:
             raise NotFoundError("Provider spec not found")
+        if payload.endpoint_url:
+            await assert_endpoint_allowed(payload.endpoint_url)
         config_id = uuid4()
         config = ProviderConfig(
             id=config_id,
@@ -300,6 +328,8 @@ class ProviderService:
         if "description" in patch:
             config.description = patch["description"]
         if "endpoint_url" in patch:
+            if patch["endpoint_url"]:
+                await assert_endpoint_allowed(patch["endpoint_url"])
             config.endpoint_url = patch["endpoint_url"]
         if "is_active" in patch:
             config.is_active = patch["is_active"]
@@ -532,31 +562,3 @@ class ProviderService:
             bool: True if deleted, False otherwise.
         """
         return await self.model_instance_repo.delete(instance_id)
-
-    # Helper methods
-
-    async def get_model_instance_with_config(self, instance_id: UUID) -> dict[str, Any] | None:
-        """Retrieve a model instance along with its provider configuration details and API key.
-
-        Args:
-            instance_id (UUID): The model instance ID.
-
-        Returns:
-            Optional[Dict[str, Any]]: Dictionary containing instance, provider type, model name,
-                                      API key, and endpoint URL, or None if not found.
-        """
-        instance = await self.model_instance_repo.get_with_relations(instance_id)
-        if not instance:
-            return None
-
-        api_key = None
-        if instance.provider_config.api_key:
-            api_key = await self.secret_manager.get_secret(instance.provider_config.api_key)
-
-        return {
-            "instance": instance,
-            "provider_type": instance.provider_config.provider_spec.provider_type,
-            "model_name": instance.model_spec.model_name,
-            "api_key": api_key,
-            "endpoint_url": instance.provider_config.endpoint_url,
-        }

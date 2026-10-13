@@ -14,6 +14,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.extensions.customer_pricing import price_llm_call
 from agentarea_common.money import ZERO, to_money, to_optional_money
+from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_tasks.domain.models import ConversationEntry
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -354,6 +355,7 @@ def make_llm_activities(
                 input_cost_per_token=to_optional_money(input_cost_per_token),
                 output_cost_per_token=to_optional_money(output_cost_per_token),
                 cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
+                endpoint_policy=endpoint_policy_for(managed_by),
             )
 
             # Build compaction prompt

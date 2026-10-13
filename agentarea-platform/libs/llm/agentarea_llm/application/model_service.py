@@ -9,7 +9,7 @@ from uuid import UUID
 import httpx
 from agentarea_common.auth.context import UserContext
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
-from agentarea_common.utils.url_safety import safe_async_client
+from agentarea_common.utils.url_safety import endpoint_policy_for, safe_async_client
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,8 +44,9 @@ class _InstanceSource(Protocol):
 
 def default_http_client(endpoint: ModelEndpoint) -> httpx.AsyncClient:
     """A plain client for the provider's own address; an SSRF-guarded one for a member's."""
-    if endpoint.endpoint_url:
-        return safe_async_client(timeout=_HTTP_TIMEOUT)
+    policy = endpoint_policy_for(endpoint.managed_by) if endpoint.endpoint_url else None
+    if policy is not None:
+        return safe_async_client(policy=policy, timeout=_HTTP_TIMEOUT)
     return httpx.AsyncClient(timeout=_HTTP_TIMEOUT, verify=outbound_ssl_context())
 
 
