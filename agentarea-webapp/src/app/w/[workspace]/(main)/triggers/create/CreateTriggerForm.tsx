@@ -796,6 +796,11 @@ export function CreateTriggerForm({
                   ))}
                 </div>
                 <p className="note">{t("selectCredentialsHint")}</p>
+                {/* Nothing here is required: a trigger saved without its
+                  connection exists but receives nothing until one is added. */}
+                {!isEditing && (
+                  <p className="note">{t("credentialsLaterHint")}</p>
+                )}
                 {resourceErrors.includes("secrets") && (
                   <p role="alert" className="form-error">
                     {t("resourcesLoadFailed")}

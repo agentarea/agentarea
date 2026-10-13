@@ -2010,6 +2010,7 @@
       "refreshResources": "Refresh list",
       "removeResource": "Remove {name}",
       "selectCredentialsHint": "Choose workspace secrets for the channel credentials.",
+      "credentialsLaterHint": "Without a connection the automation is still created, but it receives nothing. You can add the secrets later.",
       "selectSecret": "Select a secret",
       "keepExistingSecret": "Keep existing secret",
       "noSecrets": "No workspace secrets yet.",
