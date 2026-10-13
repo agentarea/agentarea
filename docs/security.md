@@ -438,19 +438,16 @@ Regular security assessments should include:
 
 To report security vulnerabilities:
 
-1. **Email**: security@agentarea.ai
-2. **PGP Key**: Available on our website for encrypted communication
-3. **Response Time**: We aim to respond within 24 hours
-4. **Disclosure Timeline**: 90 days for non-critical, 30 days for critical
+1. **GitHub**: [report a vulnerability privately](https://github.com/agentarea/agentarea/security/advisories/new). Only the maintainers see it.
+2. **Email**, if you cannot use GitHub: security@agentarea.ai
+3. **Response time**: we acknowledge reports within 48 hours.
+4. **Disclosure**: we publish a GitHub security advisory once the fix is released.
 
-### Bug Bounty Program
+### Rewards
 
-We offer rewards for valid security reports:
-
-- **Critical**: $500-$2000
-- **High**: $200-$500  
-- **Medium**: $50-$200
-- **Low**: $25-$50
+We do not run a paid bug bounty program. We credit every reporter on the
+published security advisory and request a CVE where one applies. The full policy
+is in [`SECURITY.md`](https://github.com/agentarea/agentarea/blob/main/SECURITY.md).
 
 ## 📚 Security Resources
 
