@@ -67,3 +67,16 @@ class BudgetCapExceededError(Exception):
         super().__init__(
             f"{scope} MTD spend {current_mtd_usd} {currency} has reached cap {cap_usd} {currency}"
         )
+
+
+class RunStillClosingError(Exception):
+    """Raised when a stopped or failed task's run has not closed yet.
+
+    Maps to HTTP 409 at the API boundary. A stopped run waits for the tool call
+    it interrupted to settle before it closes; until then no new run of the
+    conversation can start, and a message sent to it would be dropped.
+    """
+
+    def __init__(self, task_id):
+        self.task_id = str(task_id)
+        super().__init__(f"Task {self.task_id} is still stopping")

@@ -23,6 +23,7 @@ import type {
   HumanInputSecretValue,
 } from "@/components/Chat/types";
 import { deliverTaskMessage } from "@/components/Chat/utils/deliverTaskMessage";
+import { continuesClosedConversation } from "@/components/Chat/utils/routeComposerMessage";
 import EmptyState from "@/components/EmptyState";
 import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -122,6 +123,7 @@ export function TaskConversation({
     loading: eventsLoading,
     error: eventsError,
     refresh: refreshEvents,
+    follow,
   } = useTaskEvents(task.agent_id, task.id, {
     includeHistory: true,
     autoConnect: true,
@@ -206,6 +208,10 @@ export function TaskConversation({
 
     setSendingMessage(true);
     setComposerError(null);
+    const resumes = continuesClosedConversation({
+      status: streamStatus,
+      executionStatus,
+    });
     try {
       const delivery = await deliverTaskMessage({
         actions,
@@ -216,7 +222,9 @@ export function TaskConversation({
             ? pendingForm.partId
             : undefined,
         queueOnCurrentTask:
-          executionStatus !== "finished" && QUEUEABLE_STATUSES.includes(status),
+          resumes ||
+          (executionStatus !== "finished" &&
+            QUEUEABLE_STATUSES.includes(status)),
       });
       if (delivery.route === "followup" && !delivery.taskId) {
         setComposerError(apiErrorMessage(delivery, t("createTaskFailed")));
@@ -233,6 +241,7 @@ export function TaskConversation({
 
       setChatInput("");
       clearFiles();
+      if (delivery.route === "queue" && resumes) follow();
       if (delivery.route === "followup" && delivery.taskId) {
         router.push(`/tasks/${delivery.taskId}`);
       }

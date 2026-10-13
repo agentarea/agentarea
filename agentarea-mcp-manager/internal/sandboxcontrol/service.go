@@ -119,25 +119,43 @@ func (s *Service) GetExecution(ctx context.Context, id string) (*ExecutionRecord
 	return s.store.GetExecution(ctx, id)
 }
 
-// CancelPendingExecution abandons only work that no runner has claimed. Once a
-// command is claimed or running its outcome is no longer safe to infer from an
-// HTTP client disconnect, so cancellation fails closed with a revision/state
-// conflict instead of pretending the side effects did not happen.
-func (s *Service) CancelPendingExecution(ctx context.Context, id, reason string) (*ExecutionRecord, error) {
-	record, err := s.store.GetExecution(ctx, id)
-	if err != nil {
-		return nil, err
+// CancelExecution stops an execution its caller no longer waits for. Work no
+// runner has claimed is abandoned here. Claimed or running work is only marked:
+// its runner kills the command and records the outcome, which is never
+// inferred from the request, since the command's side effects may be done.
+func (s *Service) CancelExecution(ctx context.Context, id, reason string) (*ExecutionRecord, error) {
+	for {
+		record, err := s.store.GetExecution(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if isTerminalStatus(record.Status) || record.CancelRequestedAt != nil {
+			return record, nil
+		}
+		if record.Status == ExecutionStatusQueued {
+			if reason == "" {
+				reason = "execution cancelled before runner claim"
+			}
+			cancelled, err := s.ApplyExecutionEvent(ctx, id, ExecutionEventRequest{EventType: EventTypeExecutionCancelled, Error: reason})
+			if isConflict(err) {
+				continue
+			}
+			return cancelled, err
+		}
+		now := time.Now().UTC()
+		next := cloneExecutionRecord(record)
+		next.Revision = record.Revision + 1
+		next.UpdatedAt = now
+		next.CancelRequestedAt = &now
+		err = s.store.UpdateExecution(ctx, record.Revision, next, EventTypeExecutionCancelRequested)
+		if isConflict(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return next, nil
 	}
-	if isTerminalStatus(record.Status) {
-		return record, nil
-	}
-	if record.Status != ExecutionStatusQueued {
-		return nil, fmt.Errorf("%w: execution %s is already %s", ErrExecutionConflict, id, record.Status)
-	}
-	if reason == "" {
-		reason = "execution cancelled before runner claim"
-	}
-	return s.ApplyExecutionEvent(ctx, id, ExecutionEventRequest{EventType: EventTypeExecutionCancelled, Error: reason})
 }
 
 func (s *Service) ApplyExecutionEvent(ctx context.Context, id string, event ExecutionEventRequest) (*ExecutionRecord, error) {

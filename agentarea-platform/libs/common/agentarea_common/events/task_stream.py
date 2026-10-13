@@ -22,13 +22,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from .adapters.redis_streams import encode, topic_for
-from .contract import canonical_type
+from .contract import TASK_STARTED, canonical_type
 from .ports import EventStream, IntegrationEvent
 
 logger = logging.getLogger(__name__)
@@ -102,9 +102,15 @@ async def publish_task_event(
     )
 
 
+# A web conversation's feed stays open past a terminal event whose execution
+# goes on: one waiting for a follow-up, or a stopped one still recording the
+# call the stop interrupted.
+_OPEN_EXECUTION_STATUSES = frozenset({"waiting", "settling"})
+
+
 def _ends_feed(env: TaskEventEnvelope, terminal: frozenset[str], follow_execution: bool) -> bool:
     return canonical_type(env.event_type) in terminal and not (
-        follow_execution and env.data.get("execution_status") == "waiting"
+        follow_execution and env.data.get("execution_status") in _OPEN_EXECUTION_STATUSES
     )
 
 
@@ -131,6 +137,7 @@ async def iter_task_event_feed(
     exclude_types: frozenset[str] = frozenset(),
     follow_execution: bool = False,
     resume_after: TaskEventEnvelope | None = None,
+    run_open: Callable[[], Awaitable[bool]] | None = None,
     max_wall_time_seconds: float = 30 * 60,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's events: history (catch-up) then live, dedup'd.
@@ -145,6 +152,11 @@ async def iter_task_event_feed(
     ``follow_execution`` keeps a web conversation subscribed across completed
     turns whose workflow is still waiting for follow-up; A2A remains turn-scoped.
 
+    A task's conversation can go on in a later run after one ended, so history
+    is replayed in full: a terminal event closes the feed only when no later
+    ``task.started`` opened a new run. ``run_open`` says whether a run that
+    has not reported yet was started since; the feed then tails it.
+
     Membership tests are keyed on the canonical (dotted) event type. Rows and
     stream events already carry canonical names; ``canonical_type`` only strips a
     defensive ``workflow.`` prefix.
@@ -153,8 +165,7 @@ async def iter_task_event_feed(
     terminal = frozenset(canonical_type(t) for t in terminal_types)
     excluded = frozenset(canonical_type(t) for t in exclude_types)
 
-    if resume_after is not None and _ends_feed(resume_after, terminal, follow_execution):
-        return
+    closed = resume_after is not None and _ends_feed(resume_after, terminal, follow_execution)
     cursor = _position(resume_after) if resume_after is not None else None
 
     async for env in snapshot():
@@ -163,7 +174,11 @@ async def iter_task_event_feed(
         seen.add(env.event_id)
         yield env
         if _ends_feed(env, terminal, follow_execution):
-            return
+            closed = True
+        elif canonical_type(env.event_type) == TASK_STARTED:
+            closed = False
+    if closed and (run_open is None or not await run_open()):
+        return
 
     # Live tail from the start of the retained stream; dedup against the
     # snapshot. A wall-clock bound stops an open feed on a stuck task.

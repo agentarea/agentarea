@@ -120,6 +120,7 @@ import {
   resolveEscalation,
   resolvePrincipals,
   resumeAgentTask,
+  retryAgentTask,
   sendTaskCommand,
   submitTaskInput,
   updateAgentWallet,
@@ -187,6 +188,10 @@ export async function sendTaskCommandAction(
 
 export async function cancelAgentTaskAction(agentId: string, taskId: string) {
   return await cancelAgentTask(agentId, taskId);
+}
+
+export async function retryAgentTaskAction(agentId: string, taskId: string) {
+  return await retryAgentTask(agentId, taskId);
 }
 
 export async function getTaskAction(taskId: string) {

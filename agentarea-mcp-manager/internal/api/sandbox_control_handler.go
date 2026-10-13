@@ -106,7 +106,7 @@ func (h *Handler) cancelSandboxExecution(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "workspace_scope_mismatch"})
 		return
 	}
-	record, err = h.sandboxControl.CancelPendingExecution(c.Request.Context(), c.Param("id"), "execution caller stopped waiting before runner claim")
+	record, err = h.sandboxControl.CancelExecution(c.Request.Context(), c.Param("id"), "execution caller stopped waiting")
 	if err != nil {
 		h.writeSandboxControlError(c, "cancel", err)
 		return

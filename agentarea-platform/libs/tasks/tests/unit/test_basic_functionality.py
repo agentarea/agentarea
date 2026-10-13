@@ -110,4 +110,3 @@ class TestBasicFunctionality:
         assert event_dict["event_type"] == "LLMCallStarted"
         assert event_dict["data"] == {"model": "gpt-4", "temperature": 0.7}
         assert event_dict["workspace_id"] == "test-workspace"
-

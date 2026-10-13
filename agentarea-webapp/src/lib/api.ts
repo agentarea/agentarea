@@ -233,6 +233,15 @@ export const cancelAgentTask = async (agentId: string, taskId: string) => {
   return { data, error };
 };
 
+export const retryAgentTask = async (agentId: string, taskId: string) => {
+  const { data, error } =
+    await sdk.retryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPost({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+    });
+  return { data, error };
+};
+
 export const getAgentTaskStatus = async (agentId: string, taskId: string) => {
   const response =
     await sdk.getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet({

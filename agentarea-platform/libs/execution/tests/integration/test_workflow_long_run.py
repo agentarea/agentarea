@@ -21,6 +21,10 @@ import pytest
 from agentarea_common.money import to_money
 from agentarea_common.testing.temporal import temporal_download_dir
 from agentarea_common.workflow.sandbox import create_workflow_runner
+from agentarea_execution.activities.heartbeat import (
+    CANCELLATION_DELIVERY_INTERVAL,
+    auto_heartbeater,
+)
 from agentarea_execution.models import (
     AgentConfigRequest,
     AgentExecutionRequest,
@@ -262,6 +266,7 @@ def _activities(scenario: Scenario) -> list[Any]:
         )
 
     @activity.defn(name="execute_mcp_tool_activity")
+    @auto_heartbeater
     async def execute_tool(request: MCPToolRequest) -> MCPToolResult:
         if scenario.tool_delay_seconds:
             await asyncio.sleep(scenario.tool_delay_seconds)
@@ -416,6 +421,8 @@ class _Run:
             activities=_activities(scenario),
             activity_executor=self._executor,
             workflow_runner=create_workflow_runner(),
+            max_heartbeat_throttle_interval=CANCELLATION_DELIVERY_INTERVAL,
+            default_heartbeat_throttle_interval=CANCELLATION_DELIVERY_INTERVAL,
         )
 
     async def __aenter__(self) -> _Run:
@@ -693,6 +700,9 @@ async def test_cancel_during_a_tool_call_stops_the_run(long_run_env):
 
     assert len(scenario.llm_requests) == 1
     assert scenario.published("task.cancelled")
+    [stopped] = scenario.published("tool.result")
+    assert stopped["data"]["cancelled"] is True
+    assert stopped["data"]["error"] == "Stopped before the call finished."
 
 
 @pytest.mark.asyncio

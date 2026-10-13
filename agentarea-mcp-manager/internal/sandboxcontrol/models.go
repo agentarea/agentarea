@@ -28,6 +28,9 @@ const (
 	EventTypeExecutionCompleted = "com.agentarea.sandbox.execution.completed"
 	EventTypeExecutionFailed    = "com.agentarea.sandbox.execution.failed"
 	EventTypeExecutionCancelled = "com.agentarea.sandbox.execution.cancelled"
+	// The caller stopped waiting for a claimed or running command; its runner
+	// kills it and records the execution cancelled.
+	EventTypeExecutionCancelRequested = "com.agentarea.sandbox.execution.cancel_requested"
 )
 
 const (
@@ -79,6 +82,7 @@ type ExecutionRecord struct {
 	StartedAt            *time.Time                `json:"started_at,omitempty"`
 	ExecutionExpiresAt   *time.Time                `json:"execution_expires_at,omitempty"`
 	CompletedAt          *time.Time                `json:"completed_at,omitempty"`
+	CancelRequestedAt    *time.Time                `json:"cancel_requested_at,omitempty"`
 }
 
 func (r *ExecutionCreateRequest) UnmarshalJSON(data []byte) error {

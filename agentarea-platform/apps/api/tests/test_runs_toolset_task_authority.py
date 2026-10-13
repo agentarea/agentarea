@@ -6,11 +6,13 @@ run: the caller must have started it or administer the workspace.
 """
 
 import json
+import re
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import runs_toolset
 from agentarea_api.tools.runs_toolset import RunsToolset
 from agentarea_common.auth.authorization import AuthorizationService
@@ -45,6 +47,9 @@ class FakeTaskService:
 
     async def continue_execution(self, task_id, **kwargs):
         return self.recorder.record("continue_execution", {"continued": True})
+
+    async def queue_follow_up(self, task_id, message):
+        return self.recorder.record("queue_follow_up", True)
 
 
 class FakeWorkflowService:
@@ -110,9 +115,11 @@ ACTIONS = {
 async def test_a_member_who_did_not_start_the_run_cannot_act_on_it(monkeypatch, action):
     recorder = _harness(monkeypatch, OTHER_MEMBER)
 
-    result = json.loads(await ACTIONS[action](RunsToolset()))
+    with pytest.raises(
+        ToolError, match=re.escape("Only a workspace admin may perform this action")
+    ):
+        await ACTIONS[action](RunsToolset())
 
-    assert "error" in result
     assert recorder.calls == []
 
 

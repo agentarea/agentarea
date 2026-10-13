@@ -10,7 +10,7 @@ import {
   FolderKanban,
   Loader2,
   Paperclip,
-  Pause,
+  Square,
   Play,
   Send,
   ShieldCheck,
@@ -266,7 +266,7 @@ export interface ChatInputAreaProps {
   leadingControls?: React.ReactNode;
 
   /**
-   * Stop/Pause handler
+   * Stop handler: cancels the work in flight
    */
   onStop?: () => void;
 
@@ -555,13 +555,13 @@ export function ChatInputArea({
                       variant="destructive"
                       onClick={onStop}
                       disabled={isStopping}
-                      aria-label="Pause"
+                      aria-label="Stop"
                       className="h-8 w-8 rounded-md shadow-none"
                     >
                       {isStopping ? (
                         <LoadingSpinner variant="light" size="sm" />
                       ) : (
-                        <Pause />
+                        <Square />
                       )}
                     </Button>
                   ) : (
