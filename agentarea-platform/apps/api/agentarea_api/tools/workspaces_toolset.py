@@ -9,6 +9,7 @@ import json
 from dataclasses import replace
 
 from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -107,9 +108,9 @@ class WorkspacesToolset(Toolset):
         1 MB. ``clear_logo=True`` removes the logo instead.
         """
         if logo_path is not None and clear_logo:
-            return json.dumps({"error": "Pass either logo_path or clear_logo, not both"})
+            raise ToolError("Pass either logo_path or clear_logo, not both")
         if logo_path is None and not clear_logo:
-            return json.dumps({"error": "Nothing to update: pass logo_path or clear_logo"})
+            raise ToolError("Nothing to update: pass logo_path or clear_logo")
         principal = get_mcp_user_context()
         async with get_database().async_session_factory() as session:
             reachable = await list_reachable_workspaces(
@@ -117,7 +118,7 @@ class WorkspacesToolset(Toolset):
             )
             target = next((w for w in reachable if workspace in (w.slug, w.id)), None)
             if target is None:
-                return json.dumps({"error": f"No accessible workspace '{workspace}'"})
+                raise ToolError(f"No accessible workspace '{workspace}'")
             context = replace(
                 principal,
                 accessible_workspaces=[*(principal.accessible_workspaces or []), target.id],
@@ -125,7 +126,7 @@ class WorkspacesToolset(Toolset):
             try:
                 await assert_workspace_admin(context)
             except HTTPException as exc:
-                return json.dumps({"error": exc.detail})
+                raise ToolError(exc.detail) from exc
 
             logos = WorkspaceLogoStore()
             service = WorkspaceLogoService(session, WorkspaceRepository(session), logos)
@@ -137,13 +138,13 @@ class WorkspacesToolset(Toolset):
                     try:
                         head = await files.head(target.id, logo_path)
                     except InvalidArtifactPathError as exc:
-                        return json.dumps({"error": str(exc)})
+                        raise ToolError(str(exc)) from exc
                     if head is None:
-                        return json.dumps({"error": "File not found"})
+                        raise ToolError("File not found")
                     if head["size"] > LOGO_MAX_BYTES:
                         raise LogoTooLargeError
                     data, _content_type = await files.get(target.id, logo_path)
                     updated = await service.set(target.id, data)
             except WorkspaceLogoError as exc:
-                return json.dumps({"error": str(exc)})
+                raise ToolError(str(exc)) from exc
             return json.dumps(_describe(await describe_workspace(context, updated, logos)))

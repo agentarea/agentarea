@@ -2,14 +2,112 @@
 
 import io
 import os
+import re
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import BinaryIO, ClassVar
+from typing import Any, BinaryIO, ClassVar
 
 import frontmatter
+import yaml
+from frontmatter.default_handlers import YAMLHandler
 
 from .skill_package_limits import check_zip_budget
+
+_ENTRY_RE = re.compile(r"^(?P<key>[A-Za-z_][A-Za-z0-9_.-]*):(?:[ \t]+(?P<value>.*))?$")
+_BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?[0-9]?[+-]?\s*(#.*)?$")
+_STRUCTURED_VALUE_START = ("'", '"', "[", "{")
+
+
+class SkillFrontmatterError(ValueError):
+    """A SKILL.md frontmatter block that cannot be read; the message names the line."""
+
+
+def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
+    """Split SKILL.md into its frontmatter mapping and markdown body.
+
+    Strict YAML first, so every valid file reads exactly as YAML says. When
+    strict YAML refuses the block, it is read the way agentskills and Claude
+    Code read it, one top-level entry at a time:
+
+    - a top-level entry is a ``key: value`` line plus the lines that continue
+      it (indented lines, ``- item`` lines, blank lines between them);
+    - an entry is first parsed as YAML on its own, so quoted values, flow
+      lists, block scalars and nested maps/lists keep their YAML meaning;
+    - only a plain (unquoted, non-flow) scalar that YAML refuses is taken
+      literally: the value is everything after the first ``": "``, with
+      indented continuation lines folded in with a space;
+    - blank lines and ``#`` comments between entries are skipped.
+
+    Anything else is a genuinely broken block and raises ``SkillFrontmatterError`` naming
+    the file line: a line that is not ``key: value``, a quoted or flow value
+    YAML cannot parse, or a nested block (``metadata:``, ``allowed-tools:``)
+    that is not valid YAML itself.
+    """
+    try:
+        post = frontmatter.loads(content)
+    except yaml.YAMLError:
+        text = content.strip()
+        block, body = YAMLHandler().split(text)
+        leading_lines = content[: len(content) - len(content.lstrip())].count("\n")
+        first_line = leading_lines + text[: text.find(block)].count("\n") + 1
+        return _parse_frontmatter_entries(block, first_line), body.strip()
+    return dict(post.metadata), post.content
+
+
+def _parse_frontmatter_entries(block: str, first_line: int) -> dict[str, Any]:
+    lines = block.split("\n")
+    metadata: dict[str, Any] = {}
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            index += 1
+            continue
+        match = _ENTRY_RE.match(line.rstrip())
+        if match is None:
+            raise SkillFrontmatterError(
+                f"SKILL.md frontmatter line {first_line + index} is not a 'key: value' "
+                f"entry: {line.strip()!r}"
+            )
+        end = index + 1
+        while end < len(lines) and (
+            not lines[end].strip() or lines[end][0] in " \t" or lines[end].startswith("-")
+        ):
+            end += 1
+        while end > index + 1 and not lines[end - 1].strip():
+            end -= 1
+        key = match.group("key")
+        metadata[key] = _parse_entry(
+            key, match.group("value") or "", lines[index:end], first_line + index
+        )
+        index = end
+    return metadata
+
+
+def _parse_entry(key: str, value: str, entry_lines: list[str], line_number: int) -> Any:
+    try:
+        parsed = yaml.safe_load("\n".join(entry_lines))
+    except yaml.YAMLError as exc:
+        continuation = entry_lines[1:]
+        is_plain_scalar = (
+            bool(value)
+            and not value.startswith(_STRUCTURED_VALUE_START)
+            and not _BLOCK_SCALAR_RE.match(value)
+            and all(not line.strip() or line[0] in " \t" for line in continuation)
+        )
+        if is_plain_scalar:
+            parts = [value.strip(), *(line.strip() for line in continuation if line.strip())]
+            return " ".join(parts)
+        mark = getattr(exc, "problem_mark", None)
+        offset = min(mark.line, len(entry_lines) - 1) if mark is not None else 0
+        problem = getattr(exc, "problem", None) or str(exc).split("\n")[0]
+        raise SkillFrontmatterError(
+            f"SKILL.md frontmatter line {line_number + offset} ('{key}') is not valid YAML: "
+            f"{problem}: {entry_lines[offset].strip()!r}"
+        ) from exc
+    (entry_value,) = parsed.values()
+    return entry_value
 
 
 @dataclass
@@ -80,14 +178,14 @@ class SkillParser:
             ValueError: If the content cannot be parsed.
         """
         try:
-            post = frontmatter.loads(content)
+            raw_frontmatter, body = parse_frontmatter(content)
 
             # Extract metadata
-            name_value = post.get("name", "")
+            name_value = raw_frontmatter.get("name", "")
             name = name_value if isinstance(name_value, str) else ""
             if not name:
                 # Try to extract name from first heading
-                lines = post.content.strip().split("\n")
+                lines = body.strip().split("\n")
                 for line in lines:
                     if line.startswith("# "):
                         name = line[2:].strip()
@@ -96,8 +194,8 @@ class SkillParser:
             if not name:
                 name = "Unnamed Skill"
 
-            description_value = post.get("description")
-            allowed_tools_value = post.get("allowed-tools", [])
+            description_value = raw_frontmatter.get("description")
+            allowed_tools_value = raw_frontmatter.get("allowed-tools", [])
             allowed_tools = (
                 [str(tool) for tool in allowed_tools_value]
                 if isinstance(allowed_tools_value, list)
@@ -108,15 +206,17 @@ class SkillParser:
                 name=name,
                 description=description_value if isinstance(description_value, str) else None,
                 allowed_tools=allowed_tools,
-                raw_frontmatter=dict(post.metadata),
+                raw_frontmatter=raw_frontmatter,
             )
 
             return ParsedSkill(
                 metadata=metadata,
-                content=post.content,
+                content=body,
                 raw_content=content,
             )
 
+        except SkillFrontmatterError:
+            raise
         except Exception as e:
             raise ValueError(f"Failed to parse skill content: {e}") from e
 

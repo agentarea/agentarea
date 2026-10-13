@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	redis "github.com/go-redis/redis/v8"
@@ -42,7 +43,12 @@ type Config struct {
 	PendingIdle    time.Duration
 	ReclaimEvery   time.Duration
 	HeartbeatEvery time.Duration
+	// How often a running command's record is read for a cancel request.
+	CancelPollEvery time.Duration
 }
+
+// errExecutionCancelled is a command stopped because its caller cancelled it.
+var errExecutionCancelled = errors.New("execution cancelled by its caller")
 
 type Runner struct {
 	cfg                 Config
@@ -99,6 +105,9 @@ func NewWithPlacer(cfg Config, store *sandboxcontrol.RedisStore, placer sandboxp
 	}
 	if cfg.HeartbeatEvery <= 0 {
 		cfg.HeartbeatEvery = 30 * time.Second
+	}
+	if cfg.CancelPollEvery <= 0 {
+		cfg.CancelPollEvery = time.Second
 	}
 	service, err := sandboxcontrol.NewService(store, store.ExecutionPolicy())
 	if err != nil {
@@ -260,6 +269,21 @@ func (r *Runner) handleMessage(ctx context.Context, message redis.XMessage) erro
 	}
 
 	result, outputRefs, execErr := r.execute(ctx, record)
+	if errors.Is(execErr, errExecutionCancelled) {
+		r.logger.Info("sandbox execution cancelled by its caller",
+			slog.String("execution_id", record.ID),
+			slog.String("workflow_id", record.WorkflowID))
+		if _, err := r.service.ApplyExecutionEvent(ctx, record.ID, sandboxcontrol.ExecutionEventRequest{
+			EventType: sandboxcontrol.EventTypeExecutionCancelled,
+			Error:     "the caller stopped the execution while it ran",
+			Metadata: map[string]string{
+				"runner_consumer": r.cfg.Consumer,
+			},
+		}); err != nil {
+			return fmt.Errorf("execution cancelled; additionally failed to mark cancelled: %w", err)
+		}
+		return r.ack(ctx, message.ID)
+	}
 	if execErr != nil {
 		r.logger.Error("sandbox execution failed",
 			slog.String("execution_id", record.ID),
@@ -312,6 +336,8 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 	}
 	executionCtx, cancelExecution := context.WithDeadline(ctx, *started.ExecutionExpiresAt)
 	defer cancelExecution()
+	stopWatching, cancelRequested := r.watchCancelRequest(executionCtx, record.ID, cancelExecution)
+	defer stopWatching()
 
 	req := record.Command
 	req.TaskID = record.TaskID
@@ -340,6 +366,9 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 
 	result, err := target.Executor.ExecuteSandbox(executionCtx, req)
 	if err != nil {
+		if cancelRequested() {
+			return nil, nil, errors.Join(errExecutionCancelled, err)
+		}
 		return nil, nil, err
 	}
 
@@ -363,6 +392,46 @@ func (r *Runner) execute(ctx context.Context, record *sandboxcontrol.ExecutionRe
 	result.StdoutRef = &stdoutRef
 	result.StderrRef = &stderrRef
 	return result, []workspace.Entry{stdoutRef, stderrRef}, nil
+}
+
+// watchCancelRequest cancels a running command's context once its caller asks
+// to stop it. The data plane ends the command when that context ends, so a
+// stopped run does not leave its command running. requested reports whether
+// the context was cancelled for that reason.
+func (r *Runner) watchCancelRequest(ctx context.Context, executionID string, cancel context.CancelFunc) (stop func(), requested func() bool) {
+	var cancelled atomic.Bool
+	watchCtx, stopWatch := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(r.cfg.CancelPollEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-watchCtx.Done():
+				return
+			case <-ticker.C:
+				record, err := r.service.GetExecution(watchCtx, executionID)
+				if err != nil {
+					if watchCtx.Err() == nil {
+						r.logger.Warn("sandbox execution cancel check failed",
+							slog.String("execution_id", executionID),
+							slog.String("error", err.Error()))
+					}
+					continue
+				}
+				if record.CancelRequestedAt != nil {
+					cancelled.Store(true)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	return func() {
+		stopWatch()
+		<-done
+	}, cancelled.Load
 }
 
 func (r *Runner) ack(ctx context.Context, messageID string) error {

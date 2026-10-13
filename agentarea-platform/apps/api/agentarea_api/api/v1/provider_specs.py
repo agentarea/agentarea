@@ -60,6 +60,7 @@ class ModelSpecResponse(BaseModel):
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
+    cached_input_cost_per_token: Money | None = None
     supports_function_calling: bool | None = False
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False
@@ -80,6 +81,7 @@ class ModelSpecResponse(BaseModel):
             max_output_tokens=model_spec.max_output_tokens,
             input_cost_per_token=model_spec.input_cost_per_token,
             output_cost_per_token=model_spec.output_cost_per_token,
+            cached_input_cost_per_token=model_spec.cached_input_cost_per_token,
             supports_function_calling=model_spec.supports_function_calling,
             supports_vision=model_spec.supports_vision,
             supports_reasoning=model_spec.supports_reasoning,

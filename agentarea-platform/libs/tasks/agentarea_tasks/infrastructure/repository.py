@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from typing import cast as type_cast
 from uuid import UUID
 
@@ -17,10 +17,15 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.base_service import TaskNotFoundError
-from ..domain.costs import CostEntry
+from ..domain.costs import CostCategory, CostEntry
 from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
-from .cost_repository import CostEntryRepository
+from .cost_repository import CostEntryRepository, SpendScope
 from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
+
+if TYPE_CHECKING:
+    from agentarea_governance.domain.policies import BudgetPolicy
+
+    from ..spend_gate import LlmCapReached
 
 
 class TaskRepository(WorkspaceScopedRepository[TaskORM]):
@@ -327,6 +332,27 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             since,
             currency=get_customer_pricing().currency(),
             agent_id=agent_id,
+        )
+
+    async def monthly_llm_cap_reached(
+        self, budget: "BudgetPolicy | None", agent_id: UUID | None = None
+    ) -> "LlmCapReached | None":
+        """The first monthly cap on LLM spend that this month's model lines reached."""
+        from ..spend_gate import monthly_llm_cap_reached
+
+        return await monthly_llm_cap_reached(
+            CostEntryRepository(self.session, self.user_context),
+            budget,
+            agent_id,
+            get_customer_pricing().currency(),
+        )
+
+    async def sum_task_llm_spend(self, task_id: UUID) -> Decimal:
+        """What a task's own model calls cost over all its runs, in the billing currency."""
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            datetime(1970, 1, 1, tzinfo=UTC),
+            currency=get_customer_pricing().currency(),
+            scope=SpendScope(task_id=task_id, category=CostCategory.MODEL),
         )
 
     async def record_costs(self, entries: Sequence[CostEntry]) -> None:
@@ -678,6 +704,7 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 "tool_calls": entry.tool_calls,
                 "tool_call_id": entry.tool_call_id,
                 "name": entry.name,
+                "attachments": entry.attachments,
                 "workspace_id": self.user_context.workspace_id,
                 "created_by": self.user_context.user_id,
             }
@@ -689,7 +716,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 constraint="uq_task_conversation_entries_seq",
                 set_={
                     column: statement.excluded[column]
-                    for column in ("kind", "role", "content", "tool_calls", "tool_call_id", "name")
+                    for column in (
+                        "kind",
+                        "role",
+                        "content",
+                        "tool_calls",
+                        "tool_call_id",
+                        "name",
+                        "attachments",
+                    )
                 },
                 where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
             )
@@ -722,6 +757,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
         tail = [by_seq[seq] for seq in sorted(by_seq) if seq >= tail_start and seq not in head_set]
         return head, tail
 
+    async def next_seq(self, task_id: UUID) -> int:
+        """The position after the task's last entry; 0 for an empty log."""
+        last = await self.session.scalar(
+            select(func.max(TaskConversationEntryORM.seq)).where(
+                TaskConversationEntryORM.task_id == task_id, self._get_workspace_filter()
+            )
+        )
+        return 0 if last is None else last + 1
+
     async def read_all(self, task_id: UUID) -> list[ConversationEntry]:
         """Every entry of the task's conversation, in log order."""
         result = await self.session.execute(
@@ -741,4 +785,5 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
             tool_calls=row.tool_calls,
             tool_call_id=row.tool_call_id,
             name=row.name,
+            attachments=row.attachments,
         )

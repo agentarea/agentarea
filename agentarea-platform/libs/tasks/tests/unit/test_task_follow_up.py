@@ -13,6 +13,7 @@ from agentarea_governance.domain.policies import (
     ExecutionLimitsPolicy,
     TokenPolicy,
 )
+from agentarea_tasks.domain.exceptions import RunStillClosingError
 from agentarea_tasks.domain.interfaces import BaseTaskManager
 from agentarea_tasks.domain.models import ConversationEntry, Task
 from agentarea_tasks.infrastructure.repository import TaskConversationRepository, TaskRepository
@@ -43,14 +44,23 @@ class _Tasks:
     async def sum_spend_mtd(self) -> float:
         return 0.0
 
+    async def sum_task_llm_spend(self, task_id: UUID) -> Decimal:
+        return Decimal("0.0080") if task_id == self.task.id else Decimal(0)
+
 
 class _Conversation:
-    def __init__(self, entries: list[ConversationEntry]):
+    def __init__(self, entries: list[ConversationEntry], *, logged_up_to: int | None = None):
         self.entries = entries
         self.written: list[ConversationEntry] = []
+        self.logged_up_to = logged_up_to
 
     async def read_all(self, _task_id: UUID) -> list[ConversationEntry]:
         return list(self.entries)
+
+    async def next_seq(self, _task_id: UUID) -> int:
+        if self.logged_up_to is not None:
+            return self.logged_up_to
+        return max((entry.seq for entry in self.entries), default=-1) + 1
 
     async def write(self, _task_id: UUID, entries: list[ConversationEntry]) -> None:
         self.written.extend(entries)
@@ -78,7 +88,7 @@ class _Engine(BaseTaskManager):
     supports_resume = True
 
     def __init__(self):
-        self.resumed: list[tuple[Any, Any, str]] = []
+        self.resumed: list[tuple[Any, Any, str | None]] = []
 
     async def resume_task(self, task, resume, message):
         self.resumed.append((task, resume, message))
@@ -127,7 +137,7 @@ def _task(status: str, metadata: dict[str, Any], result: dict[str, Any] | None =
 
 def _service(task: Task, workflows: _Workflows, conversation: _Conversation | None = None):
     tasks = _Tasks(task)
-    conversation = conversation or _Conversation([])
+    conversation = conversation or _Conversation([], logged_up_to=SNAPSHOT["next_seq"])
     repositories = {TaskRepository: tasks, TaskConversationRepository: conversation}
     factory = MagicMock()
     factory.create_repository = MagicMock(
@@ -182,6 +192,7 @@ async def test_completed_task_with_closed_workflow_resumes_from_its_snapshot():
     assert resume.snapshot.model_dump() == SNAPSHOT
     assert resume.total_cost == Decimal("0.03")
     assert resume.own_cost == Decimal("0.01")
+    assert resume.llm_cost == Decimal("0.008")
     assert resume.system_prompt_missing is False
     assert conversation.written == []
     # The new run gets today's policy, recorded as the task's next revision.
@@ -214,16 +225,101 @@ async def test_task_without_snapshot_is_rebuilt_from_its_log():
 @pytest.mark.parametrize(
     ("status", "metadata"),
     [
-        ("cancelled", {"conversation_resume": SNAPSHOT}),
-        ("failed", {"conversation_resume": SNAPSHOT}),
+        ("blocked", {"conversation_resume": SNAPSHOT}),
+        ("running", {"conversation_resume": SNAPSHOT}),
         ("completed", {"conversation_resume": SNAPSHOT, "created_via": "agent_delegation"}),
     ],
 )
-async def test_only_a_completed_user_conversation_resumes(status, metadata):
+async def test_only_a_closed_user_conversation_resumes(status, metadata):
     task = _task(status, metadata)
     service, engine, _ = _service(task, _Workflows(running=False, execution_status="completed"))
 
     assert await service.queue_follow_up(task.id, "And then?") is False
+    assert engine.resumed == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["cancelled", "failed"])
+async def test_stopped_or_failed_task_continues_its_conversation(status):
+    task = _task(status, {"conversation_resume": SNAPSHOT}, result={"total_cost": "0.0200"})
+    workflows = _Workflows(running=False, execution_status=status)
+    service, engine, conversation = _service(task, workflows)
+
+    assert await service.queue_follow_up(task.id, "Carry on") is True
+
+    [(_, resume, message)] = engine.resumed
+    assert message == "Carry on"
+    assert resume.snapshot.model_dump() == SNAPSHOT
+    assert resume.total_cost == Decimal("0.02")
+    assert resume.retry is False
+    assert conversation.written == []
+
+
+@pytest.mark.asyncio
+async def test_stopped_task_still_finishing_is_not_signalled():
+    """A stopping run would drop a signalled message; the caller is told to try again."""
+    task = _task("cancelled", {"conversation_resume": SNAPSHOT})
+    workflows = _Workflows(running=True, execution_status="running")
+    service, engine, _ = _service(task, workflows)
+
+    with pytest.raises(RunStillClosingError):
+        await service.queue_follow_up(task.id, "Carry on")
+
+    assert workflows.signals == []
+    assert engine.resumed == []
+
+
+@pytest.mark.asyncio
+async def test_snapshot_behind_the_log_is_rebuilt_instead_of_overwriting_it():
+    task = _task("failed", {"conversation_resume": SNAPSHOT}, result={})
+    log = _Conversation(
+        [
+            ConversationEntry(seq=0, role="system", content="Instructions"),
+            ConversationEntry(seq=1, role="user", content="List the files"),
+            ConversationEntry(seq=2, role="assistant", content="Two files."),
+            ConversationEntry(seq=3, role="user", content="Which is newer?"),
+            ConversationEntry(seq=4, role="assistant", content="The second."),
+            ConversationEntry(seq=5, role="user", content="Delete it"),
+        ]
+    )
+    service, engine, _ = _service(task, _Workflows(running=False, execution_status="failed"), log)
+
+    assert await service.queue_follow_up(task.id, "Go on") is True
+
+    [(_, resume, _)] = engine.resumed
+    assert resume.snapshot.next_seq == 6
+    assert log.written == []
+
+
+@pytest.mark.asyncio
+async def test_retry_reruns_a_failed_turn_without_a_new_message():
+    task = _task("failed", {"conversation_resume": SNAPSHOT}, result={"total_cost": "0.0100"})
+    workflows = _Workflows(running=False, execution_status="failed")
+    service, engine, _ = _service(task, workflows)
+
+    assert await service.retry_last_turn(task.id) is True
+
+    [(resumed_task, resume, message)] = engine.resumed
+    assert message is None
+    assert resume.retry is True
+    assert resume.snapshot.model_dump() == SNAPSHOT
+    assert resume.total_cost == Decimal("0.01")
+    assert workflows.signals == []
+    assert resumed_task.effective_policy["budget"]["run_budget_usd"] == "50.00"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "execution_status"),
+    [("completed", "completed"), ("cancelled", "cancelled"), ("blocked", "completed")],
+)
+async def test_retry_needs_a_failed_task_whose_run_closed(status, execution_status):
+    task = _task(status, {"conversation_resume": SNAPSHOT})
+    service, engine, _ = _service(
+        task, _Workflows(running=False, execution_status=execution_status)
+    )
+
+    assert await service.retry_last_turn(task.id) is False
     assert engine.resumed == []
 
 

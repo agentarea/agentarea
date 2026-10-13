@@ -610,7 +610,6 @@
         "clear": "Clear {label}",
         "loadFailed": "Could not load models",
         "pickAtLeastOne": "Pick an image or a video model: the toolset needs at least one.",
-        "pickOne": "Pick a decision model: the toolset needs one.",
         "image": {
           "label": "Image model",
           "empty": "No image models in this workspace."
@@ -618,10 +617,6 @@
         "video": {
           "label": "Video model",
           "empty": "No video models in this workspace."
-        },
-        "decision": {
-          "label": "Decision model",
-          "empty": "No decision models in this workspace."
         }
       },
       "availableMcpServers": "Available MCP Servers",
@@ -647,6 +642,10 @@
       "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
       "instruction": "Instruction",
       "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "answerCheck": "Check the final answer",
+      "answerCheckDescription": "Before the answer is shown, look for tool names, codes, JSON, error texts and other scripts, and have the model rewrite it once. The reply then appears only after the check.",
+      "answerCheckLanguage": "Answer language",
+      "answerCheckLanguagePlaceholder": "ru, en, zh… (empty: any)",
       "llmModel": "LLM Model",
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
@@ -1276,7 +1275,9 @@
       "sendFailed": "Couldn't send the message",
       "actionRejected": "The task did not accept the action",
       "pauseFailed": "Couldn't pause the task",
-      "resumeFailed": "Couldn't resume the task"
+      "resumeFailed": "Couldn't resume the task",
+      "stopFailed": "Couldn't stop the task",
+      "retryFailed": "Couldn't retry the task"
     },
     "continuation": {
       "title": {
@@ -1366,14 +1367,16 @@
     "controls": {
       "pause": "Pause",
       "resume": "Resume",
-      "cancel": "Cancel task",
+      "cancel": "Stop",
       "pauseFailed": "Could not pause the task",
       "resumeFailed": "Could not resume the task",
-      "cancelFailed": "Could not cancel the task",
-      "cancelTitle": "Cancel this task?",
-      "cancelDescription": "The agent stops at once and the task ends as cancelled. This cannot be undone.",
+      "cancelFailed": "Could not stop the task",
+      "cancelTitle": "Stop this task?",
+      "cancelDescription": "The agent stops at once, including a tool call that is running. Send a message afterwards to continue the same conversation.",
       "keepRunning": "Keep running",
-      "cancelConfirm": "Cancel task"
+      "cancelConfirm": "Stop",
+      "retry": "Retry",
+      "retryFailed": "Could not retry the task"
     }
   },
   "SkillsPage": {
@@ -1663,6 +1666,7 @@
       "iteration": "Iteration {n}",
       "messages": "{count, plural, one {# message} other {# messages}}",
       "tokens": "Tokens in → out",
+      "cached": "{count} cached",
       "cost": "Cost",
       "errorType": "Error type"
     }
@@ -2090,7 +2094,8 @@
         "failed": "Failed",
         "error": "Error",
         "timeout": "Timed out",
-        "cancelled": "Cancelled"
+        "cancelled": "Cancelled",
+        "skipped": "Skipped"
       },
       "metricsLoadFailed": "Failed to load metrics",
       "executionsLoadFailed": "Failed to load executions",
@@ -3201,7 +3206,7 @@
       "budget": {
         "type": "Budget type",
         "spend": "Spend budget",
-        "perService": "Per-service budget",
+        "perService": "Wallet payments per task",
         "tokens": "Token budget",
         "maxTokens": "Max tokens",
         "maxTokensPerCall": "Max tokens per call",
@@ -3209,6 +3214,10 @@
         "period": "Period",
         "perMonth": "Per month",
         "perTask": "Per task",
+        "counts": "Counts",
+        "countsAll": "All spend",
+        "countsLlm": "LLM only",
+        "countsTools": "Tools only",
         "moneyPlaceholder": "0.00",
         "numberPlaceholder": "optional"
       },
@@ -3426,6 +3435,33 @@
       "open": "Open",
       "addAnother": "Add another",
       "connect": "Connect"
+    },
+    "pricing": {
+      "facet": "Pricing",
+      "kinds": {
+        "paid": "Paid",
+        "own_key": "Own key",
+        "free": "Free"
+      },
+      "paid": "Paid",
+      "from": "from {price}",
+      "ownKey": "Own key",
+      "perCall": "{price} / call",
+      "perUnit": "{price} / {unit}",
+      "title": "Pricing",
+      "paidHint": "Calls run on AgentArea's key and are charged to the workspace balance.",
+      "paidOrOwnKeyHint": "Calls run on AgentArea's key and are charged to the workspace balance. You can connect your own key instead; then the vendor bills you.",
+      "ownKeyHint": "Calls run on your own account with the vendor, and the vendor bills you. AgentArea counts the spend against your caps.",
+      "otherTools": "Other tools",
+      "computeHourly": "≈ {price}/h",
+      "computeChipTitle": "≈ {hourly} per hour while the server runs",
+      "computeTitle": "Compute",
+      "computeHint": "While the server runs, AgentArea reserves this CPU and memory for it. Reserved compute is billed by the hour, apart from calls.",
+      "computeUnpricedHint": "While the server runs, AgentArea reserves this CPU and memory for it.",
+      "computeCpu": "CPU",
+      "computeMemory": "Memory",
+      "computePerHour": "Per hour while running",
+      "computePerMonth": "Per month if always on"
     }
   },
   "BundleInstall": {

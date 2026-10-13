@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Pause, Play, Square } from "lucide-react";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
+import { TaskRetryButton } from "@/components/TaskRetryButton";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,13 +25,14 @@ import { useTaskContext } from "../TaskContext";
 
 const FINISHED_STATUSES = ["completed", "failed", "cancelled"];
 
-type Control = "pause" | "resume" | "cancel";
+type Control = "pause" | "resume" | "cancel" | "retry";
 
 /**
- * Pause, resume and cancel for the open task. A pause is a signal the workflow
- * honours at its next step and does not change the task's status: the status
- * endpoint reports it as `paused`, and this control's own last action wins
- * until the page reloads that status.
+ * Pause, resume and stop for the open task, and retry once it failed. A pause
+ * is a signal the workflow honours at its next step and does not change the
+ * task's status: the status endpoint reports it as `paused`, and this
+ * control's own last action wins until the page reloads that status. A stop
+ * cancels the work in flight; a message afterwards continues the conversation.
  */
 export function TaskControls() {
   const t = useTranslations("TasksPage.controls");
@@ -43,7 +45,8 @@ export function TaskControls() {
 
   if (!task) return null;
   const status = liveStatus ?? taskStatus?.status ?? task.status;
-  if (FINISHED_STATUSES.includes(status)) return null;
+  const canRetry = status === "failed";
+  if (FINISHED_STATUSES.includes(status) && !canRetry) return null;
 
   async function run(control: Control) {
     if (!task) return;
@@ -56,7 +59,9 @@ export function TaskControls() {
           ? await pauseAgentTaskAction(task.agent_id, task.id)
           : control === "resume"
             ? await resumeAgentTaskAction(task.agent_id, task.id)
-            : await actions.cancel();
+            : control === "retry"
+              ? await actions.retry()
+              : await actions.cancel();
       if (result.error) {
         setError(apiErrorMessage(result, failed));
         return;
@@ -67,6 +72,7 @@ export function TaskControls() {
         setConfirmCancel(false);
         await refresh();
       }
+      if (control === "retry") await refresh();
     } catch (e) {
       console.error(`Failed to ${control} task`, e);
       setError(`${failed}: ${formatApiError(e)}`);
@@ -77,19 +83,33 @@ export function TaskControls() {
 
   const isPaused =
     paused ?? (taskStatus?.paused === true || status === "paused");
+  const errorIndicator = error && (
+    <StatusIndicator
+      kind="failed"
+      size="sm"
+      className="min-w-0 max-w-[16rem] truncate text-xs"
+      title={error}
+    >
+      {error}
+    </StatusIndicator>
+  );
+
+  if (canRetry) {
+    return (
+      <div className="flex min-w-0 items-center gap-1.5">
+        {errorIndicator}
+        <TaskRetryButton
+          busy={busy === "retry"}
+          disabled={busy !== null}
+          onRetry={() => run("retry")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      {error && (
-        <StatusIndicator
-          kind="failed"
-          size="sm"
-          className="min-w-0 max-w-[16rem] truncate text-xs"
-          title={error}
-        >
-          {error}
-        </StatusIndicator>
-      )}
+      {errorIndicator}
       {isPaused ? (
         <Button
           type="button"

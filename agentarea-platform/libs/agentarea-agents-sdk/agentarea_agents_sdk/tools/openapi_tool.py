@@ -56,6 +56,15 @@ class OpenAPITool(BaseTool):
         return self._name
 
     @property
+    def operation_name(self) -> str:
+        """The operation's own name in the spec, as its cost declaration knows it."""
+        return str(self._operation["name"])
+
+    @property
+    def connection_id(self) -> UUID:
+        return self._connection_id
+
+    @property
     def description(self) -> str:
         return self._description
 
@@ -102,12 +111,21 @@ class OpenAPITool(BaseTool):
                 "status_code": None,
             }
 
-        # Re-validate base_url for SSRF at execution time
+        # Re-validate base_url for SSRF at execution time. A platform-managed
+        # connection's address is the operator's, as for MCP instances: it may be,
+        # and is, inside the cluster (the AgentArea gateway).
+        from agentarea_common.constants import MANAGED_BY_PLATFORM
+        from agentarea_common.utils.url_safety import OutboundPolicy
+
+        outbound = (
+            OutboundPolicy(allow_private=True)
+            if getattr(connection, "managed_by", None) == MANAGED_BY_PLATFORM
+            else OutboundPolicy.from_env()
+        )
         try:
-            from agentarea_common.utils.url_safety import OutboundPolicy
             from agentarea_openapi.application.url_validator import validate_url
 
-            validate_url(connection.base_url, policy=OutboundPolicy.from_env())
+            validate_url(connection.base_url, policy=outbound)
         except ValueError as e:
             logger.error(
                 "SSRF validation failed for connection %s: %s",
@@ -244,15 +262,11 @@ class OpenAPITool(BaseTool):
         # provides agentarea_common (as it does agentarea_openapi above); the
         # pinned client keeps a name that rebinds after the check above from
         # reaching an internal address.
-        from agentarea_common.utils.url_safety import (
-            OutboundPolicy,
-            UnsafeUrlError,
-            safe_async_client,
-        )
+        from agentarea_common.utils.url_safety import UnsafeUrlError, safe_async_client
 
         method = self._operation["method"]
         try:
-            async with safe_async_client(policy=OutboundPolicy.from_env(), timeout=30.0) as client:
+            async with safe_async_client(policy=outbound, timeout=30.0) as client:
                 response = await client.request(
                     method=method,
                     url=url,
@@ -355,10 +369,16 @@ class OpenAPITool(BaseTool):
         if status_code == 204 or not response.content:
             return self._success_result(result_str="", status_code=status_code)
 
+        from agentarea_common.response_transform import apply_response_transform
+
+        body: Any = None
         try:
             ct = response.headers.get("content-type", "")
             if "application/json" in ct:
-                result_str = json.dumps(response.json(), ensure_ascii=False)
+                body = apply_response_transform(
+                    self._operation.get("response_transform") or [], response.json()
+                )
+                result_str = json.dumps(body, ensure_ascii=False)
             elif ct.startswith("text/") or "text" in ct:
                 result_str = response.text
             else:
@@ -374,7 +394,7 @@ class OpenAPITool(BaseTool):
                 "status_code": status_code,
             }
 
-        return self._success_result(result_str=result_str, status_code=status_code)
+        return self._success_result(result_str=result_str, status_code=status_code, body=body)
 
     def _success_result(
         self,
@@ -382,6 +402,7 @@ class OpenAPITool(BaseTool):
         result_str: str,
         status_code: int,
         payment_result: dict[str, Any] | None = None,
+        body: Any = None,
     ) -> dict[str, Any]:
         """Build a successful OpenAPI tool result with optional payment metadata."""
         encoded = result_str.encode("utf-8", errors="replace")
@@ -397,6 +418,8 @@ class OpenAPITool(BaseTool):
             "tool_name": self.name,
             "status_code": status_code,
             "service_cost": "0",
+            # The decoded response, untruncated, for the tool-call layer's meter.
+            "body": body,
         }
         if payment_result:
             result["payment"] = payment_result

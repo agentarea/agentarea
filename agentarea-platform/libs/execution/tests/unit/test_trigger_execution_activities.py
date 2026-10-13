@@ -1,6 +1,12 @@
-"""Unit tests for trigger execution activities."""
+"""Unit tests for trigger execution activities.
 
+A schedule firing starts its task through TriggerService.fire, the path every
+trigger kind shares, and a trigger it disables gets its schedule paused.
+"""
+
+from contextlib import ExitStack
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -8,698 +14,260 @@ import pytest
 from agentarea_execution.activities.trigger_execution_activities import make_trigger_activities
 from agentarea_execution.interfaces import ActivityDependencies
 from agentarea_execution.models import (
-    CreateTaskFromTriggerRequest,
     EvaluateTriggerConditionsRequest,
     ExecuteTriggerRequest,
     RecordTriggerExecutionRequest,
-    TaskCreationOutcome,
     TriggerOutcome,
     TriggerSkipReason,
 )
 from agentarea_triggers.domain.enums import ExecutionStatus
-from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
+from agentarea_triggers.domain.models import ConditionVerdict, CronTrigger, TriggerExecution
+from agentarea_triggers.trigger_service import TriggerService
+from temporalio.testing import ActivityEnvironment
 
-pytestmark = [
-    pytest.mark.asyncio,
-]
+pytestmark = pytest.mark.asyncio
 
 
-class TestTriggerExecutionActivities:
-    """Test cases for trigger execution activities."""
+def _trigger(**overrides) -> CronTrigger:
+    return CronTrigger(
+        **{
+            "id": uuid4(),
+            "name": "Test Trigger",
+            "agent_id": uuid4(),
+            "cron_expression": "0 9 * * 1-5",
+            "task_parameters": {"text": "Run the daily check"},
+            "created_by": "owner",
+            "workspace_id": "ws-1",
+            "is_active": True,
+            **overrides,
+        }
+    )
 
-    @pytest.fixture
-    def mock_dependencies(self):
-        """Create mock activity dependencies."""
-        return ActivityDependencies(
-            settings=MagicMock(),
-            event_broker=AsyncMock(),
-            secret_manager_factory=MagicMock(),
-        )
 
-    @pytest.fixture
-    def trigger_activities(self, mock_dependencies):
-        """Create trigger activities with mocked dependencies."""
-        return make_trigger_activities(mock_dependencies)
+class _Harness:
+    """The activities over a real TriggerService, with storage, tasks and Temporal faked."""
 
-    @pytest.fixture
-    def sample_trigger(self):
-        """Create a sample trigger for testing."""
-        return CronTrigger(
-            id=uuid4(),
-            name="Test Trigger",
-            description="Test trigger for activities",
-            agent_id=uuid4(),
-            cron_expression="0 9 * * 1-5",
-            timezone="UTC",
-            task_parameters={"test_param": "test_value", "text": "Run the daily check"},
-            created_by="test_user",
-            is_active=True,
-        )
-
-    @pytest.fixture
-    def mock_database_session(self):
-        """Create mock database session."""
+    def __init__(self, trigger: CronTrigger):
+        self.trigger = trigger
+        self.trigger_repo = AsyncMock()
+        self.trigger_repo.get_trigger.return_value = trigger
+        self.trigger_repo.disable_trigger.return_value = True
+        self.execution_repo = AsyncMock()
+        self.execution_repo.create.side_effect = lambda **kwargs: TriggerExecution(**kwargs)
+        self.task_service = AsyncMock()
+        self.task_service.get_task.return_value = None
+        self.task_service.route_or_submit_task.side_effect = lambda task, **_: task
+        self.schedule_handle = AsyncMock()
+        self.client = MagicMock()
+        self.client.get_schedule_handle.return_value = self.schedule_handle
         session = AsyncMock()
-        session.__aenter__ = AsyncMock(return_value=session)
-        session.__aexit__ = AsyncMock(return_value=None)
-        return session
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_execute_trigger_activity_success(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """Test successful trigger execution activity."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        # Mock repositories and services
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-            patch(
-                "agentarea_tasks.infrastructure.repository.TaskRepository"
-            ) as mock_task_repo_class,
-            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_task_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-            mock_task_repo_class.return_value = mock_task_repo
-
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_task_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_task_service_class.return_value = mock_task_service
-
-            # Setup trigger service methods — add conditions so condition eval runs
-            sample_trigger.conditions = {"type": "always"}
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-            mock_trigger_service.evaluate_trigger_conditions.return_value = True
-            # Force rule-based path (not LLM)
-            mock_trigger_service.llm_condition_evaluator = None
-            mock_trigger_service._build_task_parameters.return_value = {
-                "trigger_id": str(sample_trigger.id),
-                "test_param": "test_value",
-            }
-
-            # Setup task service methods
-            mock_task = MagicMock()
-            mock_task.id = uuid4()
-            mock_task.status = "running"
-            mock_task_service.create_task_from_params.return_value = mock_task
-            mock_task_service.route_or_submit_task.return_value = mock_task
-            mock_task_service.submit_task.return_value = mock_task
-
-            # Setup execution recording
-            mock_execution = TriggerExecution(
-                trigger_id=sample_trigger.id,
-                status=ExecutionStatus.SUCCESS,
-                execution_time_ms=100,
-                task_id=mock_task.id,
-            )
-            mock_trigger_service.record_execution.return_value = mock_execution
-
-            # Get the activity function
-            execute_trigger_activity = trigger_activities[0]  # First activity is execute_trigger
-
-            # Execute the activity
-            execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            request = ExecuteTriggerRequest(
-                trigger_id=sample_trigger.id, execution_data=execution_data
-            )
-            result = await execute_trigger_activity(request)
-
-            # Verify results
-            assert result.status is TriggerOutcome.SUCCESS
-            assert result.trigger_id == sample_trigger.id
-            assert result.task_id == mock_task.id
-            assert result.execution_time_ms >= 0
-
-            # Verify service calls
-            mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
-            mock_trigger_service.evaluate_trigger_conditions.assert_called_once()
-            mock_task_service.route_or_submit_task.assert_called_once()
-            mock_trigger_service.record_execution.assert_called_once()
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_execute_trigger_activity_records_failure_when_task_creation_fails(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """A trigger that could not create a task must not be recorded as a success.
-
-        Recording it as SUCCESS keeps consecutive_failures at zero, so the
-        auto-disable safety net in TriggerService never fires and a permanently
-        broken trigger keeps firing on schedule forever.
-        """
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-            patch(
-                "agentarea_tasks.infrastructure.repository.TaskRepository"
-            ) as mock_task_repo_class,
-            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
-        ):
-            mock_trigger_repo_class.return_value = AsyncMock()
-            mock_execution_repo_class.return_value = AsyncMock()
-            mock_task_repo_class.return_value = AsyncMock()
-
-            mock_trigger_service = AsyncMock()
-            mock_task_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_task_service_class.return_value = mock_task_service
-
-            sample_trigger.conditions = {"type": "always"}
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-            mock_trigger_service.evaluate_trigger_conditions.return_value = True
-            mock_trigger_service.llm_condition_evaluator = None
-            mock_trigger_service._build_task_parameters.return_value = {
-                "trigger_id": str(sample_trigger.id)
-            }
-
-            policy_error = "effective policy is missing required runtime limits: tokens.max_tokens"
-            mock_task_service.route_or_submit_task.side_effect = ValueError(policy_error)
-
-            mock_trigger_service.record_execution.return_value = TriggerExecution(
-                trigger_id=sample_trigger.id,
-                status=ExecutionStatus.FAILED,
-                execution_time_ms=100,
-                task_id=None,
-            )
-
-            execute_trigger_activity = trigger_activities[0]
-
-            request = ExecuteTriggerRequest(
-                trigger_id=sample_trigger.id,
-                execution_data={"execution_time": datetime.utcnow().isoformat()},
-            )
-            result = await execute_trigger_activity(request)
-
-            assert result.status is TriggerOutcome.FAILED
-            assert result.task_id is None
-            assert result.reason is None
-            assert result.error is not None
-            assert policy_error in result.error
-
-            recorded = mock_trigger_service.record_execution.call_args.kwargs
-            assert recorded["status"] == ExecutionStatus.FAILED
-            assert recorded["task_id"] is None
-            assert recorded["error_message"] is not None
-            assert policy_error in recorded["error_message"]
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_execute_trigger_activity_trigger_not_found(
-        self, mock_get_database, trigger_activities, mock_database_session
-    ):
-        """Test trigger execution activity when trigger is not found."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_trigger_service.get_trigger.return_value = None
-
-            # Get the activity function
-            execute_trigger_activity = trigger_activities[0]
-
-            # Execute the activity - should raise TriggerNotFoundError
-            trigger_id = uuid4()
-            execution_data = {"execution_time": datetime.utcnow().isoformat()}
-
-            with pytest.raises(Exception):  # TriggerNotFoundError
-                request = ExecuteTriggerRequest(
-                    trigger_id=trigger_id, execution_data=execution_data
-                )
-                await execute_trigger_activity(request)
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_execute_trigger_activity_inactive_trigger(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """Test trigger execution activity with inactive trigger."""
-        # Make trigger inactive
-        sample_trigger.is_active = False
-
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-
-            # Get the activity function
-            execute_trigger_activity = trigger_activities[0]
-
-            # Execute the activity
-            execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            request = ExecuteTriggerRequest(
-                trigger_id=sample_trigger.id, execution_data=execution_data
-            )
-            result = await execute_trigger_activity(request)
-
-            # Verify results
-            assert result.status is TriggerOutcome.SKIPPED
-            assert result.reason is TriggerSkipReason.TRIGGER_INACTIVE
-            assert result.trigger_id == sample_trigger.id
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_execute_trigger_activity_conditions_not_met(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """Test trigger execution activity when conditions are not met."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-
-            # Setup service mocks — add conditions so condition eval runs
-            sample_trigger.conditions = {"type": "check"}
-            mock_trigger_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-            mock_trigger_service.evaluate_trigger_conditions.return_value = False
-            # Force rule-based path (not LLM)
-            mock_trigger_service.llm_condition_evaluator = None
-
-            # Get the activity function
-            execute_trigger_activity = trigger_activities[0]
-
-            # Execute the activity
-            execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            request = ExecuteTriggerRequest(
-                trigger_id=sample_trigger.id, execution_data=execution_data
-            )
-            result = await execute_trigger_activity(request)
-
-            # Verify results
-            assert result.status is TriggerOutcome.SKIPPED
-            assert result.reason is TriggerSkipReason.CONDITIONS_NOT_MET
-            assert result.trigger_id == sample_trigger.id
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_a_scheduled_trigger_whose_conditions_cannot_be_evaluated_does_not_fire(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        from agentarea_triggers.trigger_service import TriggerService
-
-        mock_database_session.get.return_value = MagicMock(
-            created_by="test_user", workspace_id="ws-1"
+        session.__aenter__.return_value = session
+        session.get.return_value = SimpleNamespace(
+            created_by=trigger.created_by, workspace_id=trigger.workspace_id
         )
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        # field_matches must be a mapping; the evaluator cannot check this one.
-        sample_trigger.conditions = {"field_matches": ["request.method"]}
-        recorded = TriggerExecution(
-            trigger_id=sample_trigger.id,
-            status=ExecutionStatus.FAILED,
-            execution_time_ms=1,
+        self.database = MagicMock()
+        self.database.async_session_factory.return_value = session
+        self.execute, self.record, self.evaluate = make_trigger_activities(
+            ActivityDependencies(
+                settings=MagicMock(),
+                event_broker=AsyncMock(),
+                secret_manager_factory=MagicMock(),
+            )
         )
 
-        with (
-            patch.object(TriggerService, "get_trigger", AsyncMock(return_value=sample_trigger)),
-            patch.object(
-                TriggerService, "record_execution", AsyncMock(return_value=recorded)
-            ) as record_execution,
-            patch("agentarea_tasks.task_service.TaskService") as task_service_class,
-        ):
-            task_service_class.return_value = AsyncMock()
-            result = await trigger_activities[0](
-                ExecuteTriggerRequest(
-                    trigger_id=sample_trigger.id,
-                    execution_data={"execution_time": datetime.utcnow().isoformat()},
+    async def run(self, activity_fn, request, *patches):
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "agentarea_execution.activities.trigger_execution_activities.get_database",
+                    return_value=self.database,
                 )
             )
-
-        assert result.status is TriggerOutcome.FAILED
-        assert result.task_id is None
-        assert result.error is not None and "condition" in result.error.lower()
-        task_service_class.return_value.route_or_submit_task.assert_not_called()
-        kwargs = record_execution.call_args.kwargs
-        assert kwargs["status"] == ExecutionStatus.FAILED
-        assert "condition" in kwargs["error_message"].lower()
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_record_trigger_execution_activity(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """Test record trigger execution activity."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-
-            # Setup execution recording
-            mock_execution = TriggerExecution(
-                trigger_id=sample_trigger.id,
-                status=ExecutionStatus.SUCCESS,
-                execution_time_ms=150,
-                task_id=uuid4(),
+            stack.enter_context(
+                patch(
+                    "agentarea_triggers.trigger_service.TriggerRepository",
+                    return_value=self.trigger_repo,
+                )
             )
-            mock_trigger_service.record_execution.return_value = mock_execution
+            stack.enter_context(
+                patch(
+                    "agentarea_triggers.trigger_service.TriggerExecutionRepository",
+                    return_value=self.execution_repo,
+                )
+            )
+            stack.enter_context(
+                patch("agentarea_tasks.task_service.TaskService", return_value=self.task_service)
+            )
+            for extra in patches:
+                stack.enter_context(extra)
+            return await ActivityEnvironment(client=self.client).run(activity_fn, request)
 
-            # Get the activity function
-            record_execution_activity = trigger_activities[1]  # Second activity is record_execution
+    def fire(self, execution_data=None, *patches):
+        return self.run(
+            self.execute,
+            ExecuteTriggerRequest(
+                trigger_id=self.trigger.id,
+                execution_data=execution_data
+                or {"execution_time": datetime.utcnow().isoformat()},
+            ),
+            *patches,
+        )
 
-            # Execute the activity
-            execution_data = {
+    def submitted(self):
+        return self.task_service.route_or_submit_task.await_args.args[0]
+
+
+async def test_a_cron_firing_creates_a_task_stamped_with_the_trigger_as_its_origin():
+    harness = _Harness(_trigger())
+
+    result = await harness.fire()
+
+    submitted = harness.submitted()
+    assert submitted.provenance.origin_type == "trigger"
+    assert submitted.provenance.origin_id == str(harness.trigger.id)
+    assert submitted.provenance.correlation_id
+    assert result.status is TriggerOutcome.SUCCESS
+    assert result.task_id == submitted.id
+    recorded = harness.execution_repo.create.call_args.kwargs
+    assert recorded["task_id"] == submitted.id
+    assert recorded["status"] == ExecutionStatus.SUCCESS.value
+
+
+async def test_a_retried_cron_firing_reports_the_task_its_first_attempt_started():
+    harness = _Harness(_trigger())
+    first = await harness.fire()
+
+    harness.task_service.get_task.return_value = SimpleNamespace(
+        id=first.task_id, status="running", execution_id="wf"
+    )
+    second = await harness.fire()
+
+    assert second.task_id == first.task_id
+    assert harness.task_service.route_or_submit_task.await_count == 1
+
+
+async def test_a_cron_trigger_that_hits_its_failure_threshold_pauses_its_schedule():
+    harness = _Harness(_trigger(failure_threshold=1))
+    harness.task_service.route_or_submit_task.side_effect = ValueError("no model")
+
+    result = await harness.fire()
+
+    assert result.status is TriggerOutcome.FAILED
+    assert result.task_id is None
+    assert "no model" in (result.error or "")
+    harness.client.get_schedule_handle.assert_called_with(f"cron-trigger-{harness.trigger.id}")
+    harness.schedule_handle.pause.assert_awaited()
+
+
+async def test_a_recorded_workflow_failure_at_the_threshold_pauses_the_schedule():
+    harness = _Harness(_trigger(failure_threshold=1))
+
+    await harness.run(
+        harness.record,
+        RecordTriggerExecutionRequest(
+            trigger_id=harness.trigger.id,
+            execution_data={"status": "failed", "error_message": "boom"},
+        ),
+    )
+
+    harness.schedule_handle.pause.assert_awaited()
+
+
+async def test_an_inactive_trigger_is_skipped_without_a_task():
+    harness = _Harness(_trigger(is_active=False))
+
+    result = await harness.fire()
+
+    assert result.status is TriggerOutcome.SKIPPED
+    assert result.reason is TriggerSkipReason.TRIGGER_INACTIVE
+    harness.task_service.route_or_submit_task.assert_not_awaited()
+
+
+async def test_unmet_conditions_skip_the_firing():
+    harness = _Harness(_trigger(conditions={"type": "llm", "description": "x"}))
+
+    result = await harness.fire(
+        None,
+        patch.object(
+            TriggerService,
+            "evaluate_trigger_verdict",
+            AsyncMock(return_value=ConditionVerdict(verdict="not_met", reason="quiet day")),
+        ),
+    )
+
+    assert result.status is TriggerOutcome.SKIPPED
+    assert result.reason is TriggerSkipReason.CONDITIONS_NOT_MET
+    harness.task_service.route_or_submit_task.assert_not_awaited()
+
+
+async def test_a_scheduled_trigger_whose_conditions_cannot_be_evaluated_does_not_fire():
+    # field_matches must be a mapping; the evaluator cannot check this one.
+    harness = _Harness(_trigger(conditions={"field_matches": ["request.method"]}))
+
+    result = await harness.fire()
+
+    assert result.status is TriggerOutcome.FAILED
+    assert result.task_id is None
+    assert result.error is not None and "condition" in result.error.lower()
+    harness.task_service.route_or_submit_task.assert_not_awaited()
+    recorded = harness.execution_repo.create.call_args.kwargs
+    assert recorded["status"] == ExecutionStatus.FAILED.value
+
+
+async def test_polled_events_are_told_to_the_agent_like_any_other_event():
+    harness = _Harness(_trigger())
+
+    await harness.fire({"extracted_events": [{"subject": "Invoice 77", "from": "a@b.c"}]})
+
+    task = harness.submitted()
+    assert task.description == "Run the daily check"
+    assert task.query.startswith("Run the daily check\n\n## What started this run")
+    assert "- Trigger: Test Trigger (cron)" in task.query
+    assert '"subject": "Invoice 77"' in task.query
+
+
+async def test_a_missing_trigger_fails_the_activity():
+    harness = _Harness(_trigger())
+    harness.trigger_repo.get_trigger.return_value = None
+
+    with pytest.raises(Exception, match="not found"):
+        await harness.fire()
+
+
+async def test_record_trigger_execution_activity_records_what_the_workflow_reports():
+    harness = _Harness(_trigger())
+    task_id = uuid4()
+
+    result = await harness.run(
+        harness.record,
+        RecordTriggerExecutionRequest(
+            trigger_id=harness.trigger.id,
+            execution_data={
                 "status": "success",
                 "execution_time_ms": 150,
-                "task_id": str(mock_execution.task_id),
+                "task_id": str(task_id),
                 "trigger_data": {"test": "data"},
-            }
-            request = RecordTriggerExecutionRequest(
-                trigger_id=sample_trigger.id, execution_data=execution_data
-            )
-            result = await record_execution_activity(request)
+            },
+        ),
+    )
 
-            # Verify results
-            assert result.execution_id == mock_execution.id
-            assert result.trigger_id == sample_trigger.id
-            assert result.status == ExecutionStatus.SUCCESS
+    recorded = harness.execution_repo.create.call_args.kwargs
+    assert recorded["task_id"] == task_id
+    assert result.trigger_id == harness.trigger.id
+    assert result.status == ExecutionStatus.SUCCESS
+    harness.schedule_handle.pause.assert_not_awaited()
 
-            # Verify service call
-            mock_trigger_service.record_execution.assert_called_once()
 
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_evaluate_trigger_conditions_activity(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """Test evaluate trigger conditions activity."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
+async def test_evaluate_trigger_conditions_activity():
+    harness = _Harness(_trigger())
+    event_data = {"request": {"body": {"type": "test"}}}
+    evaluate = AsyncMock(return_value=True)
 
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
+    result = await harness.run(
+        harness.evaluate,
+        EvaluateTriggerConditionsRequest(trigger_id=harness.trigger.id, event_data=event_data),
+        patch.object(TriggerService, "evaluate_trigger_conditions", evaluate),
+    )
 
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-            mock_trigger_service.evaluate_trigger_conditions.return_value = True
-
-            # Get the activity function
-            evaluate_conditions_activity = trigger_activities[
-                2
-            ]  # Third activity is evaluate_conditions
-
-            # Execute the activity
-            event_data = {"request": {"body": {"type": "test"}}}
-            request = EvaluateTriggerConditionsRequest(
-                trigger_id=sample_trigger.id, event_data=event_data
-            )
-            result = await evaluate_conditions_activity(request)
-
-            # Verify results
-            assert result.conditions_met is True
-
-            # Verify service calls
-            mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
-            mock_trigger_service.evaluate_trigger_conditions.assert_called_once_with(
-                sample_trigger, event_data
-            )
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_create_task_from_trigger_activity(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        """Test create task from trigger activity."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-            patch(
-                "agentarea_tasks.infrastructure.repository.TaskRepository"
-            ) as mock_task_repo_class,
-            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_task_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-            mock_task_repo_class.return_value = mock_task_repo
-
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_task_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_task_service_class.return_value = mock_task_service
-
-            # Setup trigger service methods
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-            mock_trigger_service._build_task_parameters.return_value = {
-                "trigger_id": str(sample_trigger.id),
-                "test_param": "test_value",
-            }
-
-            # Setup task service methods. The activity submits through the
-            # normal routing path (route_or_submit_task), not create_task_from_params.
-            mock_task = MagicMock()
-            mock_task.id = uuid4()
-            mock_task_service.route_or_submit_task.return_value = mock_task
-
-            # Get the activity function
-            create_task_activity = trigger_activities[
-                3
-            ]  # Fourth activity is create_task_from_trigger
-
-            # Execute the activity
-            execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            request = CreateTaskFromTriggerRequest(
-                trigger_id=sample_trigger.id, execution_data=execution_data
-            )
-            result = await create_task_activity(request)
-
-            # Verify results
-            assert result.status is TaskCreationOutcome.CREATED
-            assert result.task_id == mock_task.id
-            assert result.trigger_id == sample_trigger.id
-
-            # Verify service calls
-            mock_trigger_service.get_trigger.assert_called_once_with(sample_trigger.id)
-            mock_trigger_service._build_task_parameters.assert_called_once()
-            mock_task_service.route_or_submit_task.assert_called_once()
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_polled_events_are_told_to_the_agent_like_any_other_event(
-        self, mock_get_database, trigger_activities, sample_trigger, mock_database_session
-    ):
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch("agentarea_triggers.infrastructure.repository.TriggerRepository"),
-            patch("agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"),
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-            patch("agentarea_tasks.infrastructure.repository.TaskRepository"),
-            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
-        ):
-            mock_trigger_service = AsyncMock()
-            mock_task_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_task_service_class.return_value = mock_task_service
-            mock_trigger_service.get_trigger.return_value = sample_trigger
-            mock_trigger_service._build_task_parameters.return_value = {}
-            mock_task_service.route_or_submit_task.return_value = MagicMock(id=uuid4())
-
-            execution_data = {"extracted_events": [{"subject": "Invoice 77", "from": "a@b.c"}]}
-            await trigger_activities[3](
-                CreateTaskFromTriggerRequest(
-                    trigger_id=sample_trigger.id, execution_data=execution_data
-                )
-            )
-
-            task = mock_task_service.route_or_submit_task.call_args.args[0]
-            assert task.description == "Run the daily check"
-            assert task.query.startswith("Run the daily check\n\n## What started this run")
-            assert "- Trigger: Test Trigger (cron)" in task.query
-            assert '"subject": "Invoice 77"' in task.query
-
-    @patch("agentarea_execution.activities.trigger_execution_activities.get_database")
-    async def test_create_task_from_trigger_activity_trigger_not_found(
-        self, mock_get_database, trigger_activities, mock_database_session
-    ):
-        """Test create task from trigger activity when trigger is not found."""
-        # Setup mocks
-        mock_database = MagicMock()
-        mock_database.async_session_factory.return_value = mock_database_session
-        mock_get_database.return_value = mock_database
-
-        with (
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerRepository"
-            ) as mock_trigger_repo_class,
-            patch(
-                "agentarea_triggers.infrastructure.repository.TriggerExecutionRepository"
-            ) as mock_execution_repo_class,
-            patch(
-                "agentarea_triggers.trigger_service.TriggerService"
-            ) as mock_trigger_service_class,
-            patch(
-                "agentarea_tasks.infrastructure.repository.TaskRepository"
-            ) as mock_task_repo_class,
-            patch("agentarea_tasks.task_service.TaskService") as mock_task_service_class,
-        ):
-            # Setup repository mocks
-            mock_trigger_repo = AsyncMock()
-            mock_execution_repo = AsyncMock()
-            mock_trigger_repo_class.return_value = mock_trigger_repo
-            mock_execution_repo_class.return_value = mock_execution_repo
-            mock_task_repo_class.return_value = AsyncMock()
-            mock_task_service_class.return_value = AsyncMock()
-
-            # Setup service mocks
-            mock_trigger_service = AsyncMock()
-            mock_trigger_service_class.return_value = mock_trigger_service
-            mock_trigger_service.get_trigger.return_value = None
-
-            # Get the activity function
-            create_task_activity = trigger_activities[3]
-
-            # Execute the activity
-            trigger_id = uuid4()
-            execution_data = {"execution_time": datetime.utcnow().isoformat()}
-            request = CreateTaskFromTriggerRequest(
-                trigger_id=trigger_id, execution_data=execution_data
-            )
-            result = await create_task_activity(request)
-
-            # Verify results
-            assert result.status is TaskCreationOutcome.FAILED
-            assert result.task_id is None
-            assert result.trigger_id == trigger_id
-            assert result.error and "not found" in result.error
+    assert result.conditions_met is True
+    evaluate.assert_awaited_once_with(harness.trigger, event_data)

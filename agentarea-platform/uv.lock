@@ -381,6 +381,7 @@ dependencies = [
     { name = "httpx2" },
     { name = "mcp" },
     { name = "pydantic" },
+    { name = "pyjwt" },
 ]
 
 [package.metadata]
@@ -392,6 +393,7 @@ requires-dist = [
     { name = "httpx2", specifier = ">=2.5.0" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "pydantic", specifier = ">=2.4.2" },
+    { name = "pyjwt", specifier = ">=2.15.1" },
 ]
 
 [[package]]

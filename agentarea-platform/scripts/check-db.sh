@@ -64,6 +64,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   spend ledger: a retried event batch stores each paid line once (the
 #     (event, category) unique key decides), sums skip superseded lines and
 #     other currencies, and the backfill turns stored paid events into lines.
+#     The tool-call spend gate's caps reach only their scope's lines (agent,
+#     client, connection, tool), a query on the migrated table.
 #   task provenance: a task's origin, correlation, causation and parent id are
 #     plain nullable columns the migrated schema must carry; a mocked session
 #     never catches a missing column.
@@ -115,6 +117,7 @@ PY_SUITES=(
   libs/tasks/tests/test_task_provenance_db.py
   libs/tasks/tests/test_cost_entries_db.py
   libs/tasks/tests/test_cost_entries_backfill_db.py
+  libs/tasks/tests/test_spend_gate_db.py
   libs/tasks/tests/test_inbox_counts_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py
@@ -133,6 +136,7 @@ PY_SUITES=(
   libs/triggers/tests/test_webhook_stream_reuse_db.py
   libs/triggers/tests/test_trigger_event_context_db.py
   libs/openapi/tests/test_record_dispatch_db.py
+  libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
   apps/api/tests/test_owned_auth_configs_db.py
 )

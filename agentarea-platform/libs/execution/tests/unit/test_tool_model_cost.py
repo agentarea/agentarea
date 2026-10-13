@@ -81,3 +81,87 @@ async def test_a_result_without_model_cost_leaves_the_budget_alone():
     assert instance.state.service_cost_used == Decimal("0.5")
     [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
     assert "model_cost" not in completed
+
+
+@pytest.mark.asyncio
+async def test_a_metered_call_joins_the_budget_and_says_who_paid():
+    instance = _workflow(
+        MCPToolResult(
+            success=True,
+            result="[]",
+            cost=Decimal("0.74"),
+            payer="platform",
+            cost_metered=True,
+        )
+    )
+
+    await instance._execute_mcp_tool(_call())
+
+    assert instance.budget_tracker is not None
+    assert instance.budget_tracker.cost == Decimal("2.74")
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert (completed["payer"], completed["cost"], completed["cost_metered"]) == (
+        "platform",
+        "0.74",
+        True,
+    )
+    assert "managed_by" not in completed
+
+
+@pytest.mark.asyncio
+async def test_a_platform_call_recorded_before_the_layer_metered_every_call_still_counts():
+    instance = _workflow(
+        MCPToolResult.model_validate(
+            {"success": True, "result": "[]", "cost": "0.74", "managed_by": "platform"}
+        )
+    )
+
+    await instance._execute_mcp_tool(_call())
+
+    assert instance.budget_tracker.cost == Decimal("2.74")
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert completed["cost"] == "0.74"
+
+
+@pytest.mark.asyncio
+async def test_a_call_on_a_workspaces_own_connection_carries_no_platform_fields():
+    instance = _workflow(MCPToolResult(success=True, result="{}"))
+
+    await instance._execute_mcp_tool(_call())
+
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert not {"managed_by", "payer", "cost", "cost_metered"} & set(completed)
+
+
+@pytest.mark.asyncio
+async def test_a_replayed_retry_is_marked_on_its_tool_result():
+    instance = _workflow(
+        MCPToolResult(success=True, result="[]", cost_metered=True, replayed=True, attempt=2)
+    )
+
+    await instance._execute_mcp_tool(_call())
+
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert (completed["replayed"], completed["attempt"]) == (True, 2)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_replayed_retry_is_marked_too():
+    instance = _workflow(
+        MCPToolResult(success=False, error="502", result="", replayed=True, attempt=3)
+    )
+
+    await instance._execute_mcp_tool(_call())
+
+    [(_, failed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert (failed["success"], failed["replayed"], failed["attempt"]) == (False, True, 3)
+
+
+@pytest.mark.asyncio
+async def test_a_first_attempt_carries_neither_field():
+    instance = _workflow(MCPToolResult(success=True, result="{}"))
+
+    await instance._execute_mcp_tool(_call())
+
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert not {"replayed", "attempt"} & set(completed)

@@ -355,8 +355,15 @@ class ExecutionMetricsResponse(BaseModel):
     successful_executions: int
     failed_executions: int
     timeout_executions: int
-    success_rate: float = Field(description="Percentage, 0-100.")
-    failure_rate: float = Field(description="Percentage, 0-100.")
+    skipped_executions: int = Field(
+        description="Events the trigger's conditions turned away, or that came while it was off."
+    )
+    success_rate: float = Field(
+        description="Percentage, 0-100, of the runs that tried to start a task; skips excluded."
+    )
+    failure_rate: float = Field(
+        description="Percentage, 0-100, of the runs that tried to start a task; skips excluded."
+    )
     avg_execution_time_ms: float
     min_execution_time_ms: int
     max_execution_time_ms: int
@@ -1206,7 +1213,8 @@ async def get_execution_history(
     page: int = Query(1, ge=1, le=MAX_PAGE, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Number of executions per page"),
     status: str | None = Query(
-        None, description="Filter by execution status (success, failed, timeout)"
+        None,
+        description="Filter by execution status (success, failed, timeout, cancelled, skipped)",
     ),
     start_time: NaiveUtcDatetime | None = Query(
         None, description="Filter executions after this time"
@@ -1228,7 +1236,7 @@ async def get_execution_history(
         trigger_id: The unique identifier of the trigger
         page: Page number for pagination
         page_size: Number of executions per page
-        status: Optional status filter (success, failed, timeout)
+        status: Optional status filter (success, failed, timeout, cancelled, skipped)
         start_time: Optional start time filter
         end_time: Optional end time filter
         user_context: Authentication context
@@ -1253,7 +1261,7 @@ async def get_execution_history(
             from agentarea_triggers.domain.enums import ExecutionStatus
 
             try:
-                status_enum = ExecutionStatus(status.upper())
+                status_enum = ExecutionStatus(status.lower())
             except ValueError as e:
                 raise HTTPException(status_code=400, detail=f"Invalid status: {status}") from e
 

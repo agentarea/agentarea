@@ -27,16 +27,23 @@ from agentarea_common.audit.models import AuditEventORM
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from agentarea_common.di.container import get_container
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
-from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.domain.auth_models import MCPAuthConfig
-from agentarea_mcp.domain.client_models import Client, client_mcp_instances, client_skills
+from agentarea_mcp.domain.client_models import (
+    Client,
+    client_mcp_instances,
+    client_openapi_connections,
+    client_platform_toolsets,
+    client_skills,
+)
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
+from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.domain.models import (
     Project,
@@ -45,6 +52,7 @@ from agentarea_projects.domain.models import (
     project_skills,
 )
 from agentarea_projects.infrastructure.repository import ProjectRepository
+from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -56,6 +64,7 @@ _TABLES = [
     Skill.__table__,
     MCPAuthConfig.__table__,
     MCPServerInstance.__table__,
+    OpenAPIConnection.__table__,
     Project.__table__,
     Client.__table__,
     PolicyRuleORM.__table__,
@@ -67,6 +76,8 @@ _TABLES = [
     project_mcp_instances,
     client_skills,
     client_mcp_instances,
+    client_openapi_connections,
+    client_platform_toolsets,
     # A skill id that is not the workspace's is looked up in the catalog next.
     Registry.__table__,
     RegistryItem.__table__,
@@ -131,6 +142,39 @@ async def _instance(session, ctx, name="github") -> MCPServerInstance:
     )
 
 
+async def _platform_instance(session, name="tool-gateway") -> MCPServerInstance:
+    return await _add(
+        session,
+        MCPServerInstance(
+            name=name,
+            server_spec_id="spec",
+            transport="url",
+            workspace_id=PLATFORM_WORKSPACE_ID,
+            created_by="operator",
+            managed_by=MANAGED_BY_PLATFORM,
+        ),
+    )
+
+
+async def _connection(session, ctx, name="analytics") -> OpenAPIConnection:
+    return await _add(
+        session, OpenAPIConnection(name=name, base_url="https://api.example.com", **_owned(ctx))
+    )
+
+
+async def _platform_connection(session, name="Yandex Search") -> OpenAPIConnection:
+    return await _add(
+        session,
+        OpenAPIConnection(
+            name=name,
+            base_url="https://gateway.example.com",
+            workspace_id=PLATFORM_WORKSPACE_ID,
+            created_by="operator",
+            managed_by=MANAGED_BY_PLATFORM,
+        ),
+    )
+
+
 async def _project(session, ctx) -> Project:
     return await _add(session, Project(name="launch", **_owned(ctx)))
 
@@ -185,6 +229,17 @@ async def test_project_links_a_child_of_its_own_workspace(session, method, make_
 
     loaded = await _projects(session).get(project.id)
     assert [c.id for c in getattr(loaded, attr)] == [child.id]
+
+
+async def test_project_links_a_platform_managed_instance(session):
+    """Visible to every workspace, so a workspace may attach it like its own."""
+    project = await _project(session, OURS)
+    platform = await _platform_instance(session)
+
+    await _projects(session).add_mcp_instance(project.id, platform.id)
+
+    loaded = await _projects(session).get(project.id)
+    assert [i.id for i in loaded.mcp_instances] == [platform.id]
 
 
 async def test_foreign_project_cannot_be_linked_or_unlinked(session):
@@ -279,6 +334,7 @@ def _clients(session, ctx=OURS) -> ClientService:
     [
         ("add_skill", _skill, client_skills),
         ("add_mcp_instance", _instance, client_mcp_instances),
+        ("add_openapi_connection", _connection, client_openapi_connections),
     ],
 )
 async def test_client_refuses_a_foreign_child(session, method, make_child, table):
@@ -301,6 +357,81 @@ async def test_client_links_children_of_its_own_workspace(session):
     loaded = await _clients(session).get(client.id)
     assert [s.id for s in loaded.skills] == [skill.id]
     assert [i.id for i in loaded.mcp_instances] == [instance.id]
+
+
+async def test_client_links_a_platform_managed_instance(session):
+    """Visible to every workspace, so a workspace may attach it like its own."""
+    client = await _client(session, OURS)
+    platform = await _platform_instance(session)
+
+    await _clients(session).add_mcp_instance(client.id, platform.id)
+
+    loaded = await _clients(session).get(client.id)
+    assert [i.id for i in loaded.mcp_instances] == [platform.id]
+
+
+async def test_client_links_an_openapi_connection_of_its_own_and_one_of_the_platform(session):
+    client = await _client(session, OURS)
+    ours, platform = await _connection(session, OURS), await _platform_connection(session)
+
+    await _clients(session).add_openapi_connection(client.id, ours.id, "ga", ["accounts.list"])
+    await _clients(session).add_openapi_connection(client.id, platform.id)
+
+    links = (await _clients(session).openapi_links([client.id]))[str(client.id)]
+    assert sorted(
+        (link.connection_id, link.name, link.namespace_prefix) for link in links
+    ) == sorted([(str(ours.id), "analytics", "ga"), (str(platform.id), "Yandex Search", None)])
+    assert {link.connection_id: link.allowed_tools for link in links}[str(ours.id)] == [
+        "accounts.list"
+    ]
+
+    await _clients(session).remove_openapi_connection(client.id, ours.id)
+    links = (await _clients(session).openapi_links([client.id]))[str(client.id)]
+    assert [link.connection_id for link in links] == [str(platform.id)]
+
+
+async def test_client_endpoint_lookup_hides_a_foreign_openapi_connection_already_linked(session):
+    client = await _client(session, OURS)
+    ours, foreign = await _connection(session, OURS), await _connection(session, THEIRS, "theirs")
+    await session.execute(
+        client_openapi_connections.insert(),
+        [
+            {"client_id": client.id, "openapi_connection_id": ours.id},
+            {"client_id": client.id, "openapi_connection_id": foreign.id},
+        ],
+    )
+    await session.commit()
+
+    links = (await _clients(session).openapi_links([client.id]))[str(client.id)]
+
+    assert [link.connection_id for link in links] == [str(ours.id)]
+
+
+async def test_clients_rest_handler_and_toolset_refuse_a_foreign_openapi_connection(
+    toolset_session,
+):
+    client = await _client(toolset_session, OURS)
+    foreign = await _connection(toolset_session, THEIRS)
+
+    with pytest.raises(NotFoundError):
+        await clients_router.add_openapi_connection_to_client(
+            client.id,
+            clients_router.OpenAPIConnectionAssociationBody(id=str(foreign.id)),
+            OURS,
+            _clients(toolset_session),
+        )
+    with pytest.raises(NotFoundError):
+        await ClientsToolset().add_openapi_connection(
+            client_id=str(client.id), openapi_connection_id=str(foreign.id)
+        )
+
+    ours = await _connection(toolset_session, OURS)
+    added = await ClientsToolset().add_openapi_connection(
+        client_id=str(client.id), openapi_connection_id=str(ours.id)
+    )
+    assert json.loads(added) == {"added": True}
+    got = json.loads(await ClientsToolset().get(client_id=str(client.id)))
+    assert [c["id"] for c in got["openapi_connections"]] == [str(ours.id)]
 
 
 async def test_foreign_client_cannot_be_unlinked(session):
@@ -376,14 +507,18 @@ async def test_agent_create_refuses_a_foreign_skill_and_creates_nothing(session)
     foreign = await _skill(session, THEIRS)
 
     with pytest.raises(NotFoundError):
-        await _agents(session).create_agent(AgentCreate(name="writer", tools=[], skill_ids=[foreign.id]))
+        await _agents(session).create_agent(
+            AgentCreate(name="writer", tools=[], skill_ids=[foreign.id])
+        )
 
     assert (await session.execute(select(Agent))).scalars().all() == []
 
 
 async def test_agent_update_refuses_a_foreign_skill_and_keeps_its_skills(session):
     ours = await _skill(session, OURS)
-    agent = await _agents(session).create_agent(AgentCreate(name="writer", tools=[], skill_ids=[ours.id]))
+    agent = await _agents(session).create_agent(
+        AgentCreate(name="writer", tools=[], skill_ids=[ours.id])
+    )
     foreign = await _skill(session, THEIRS)
 
     with pytest.raises(NotFoundError):

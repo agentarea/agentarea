@@ -23,6 +23,7 @@ from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import ZERO, Money, to_money
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_governance.domain.rules import (
@@ -30,11 +31,14 @@ from agentarea_governance.domain.rules import (
     PolicyRule,
     PolicySubjectType,
     assert_enforceable,
+    is_scoped_spend_cap,
 )
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.domain.statuses import TASK_STATUSES, TaskStatus
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.spend_gate import spend_not_covered, workspace_cap_currencies
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from agentarea_wallet.infrastructure.repository import WalletRepository
 from fastapi import APIRouter, Depends, HTTPException
@@ -90,6 +94,11 @@ BLOCKER_LIST_LIMIT = 20
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
 
+class CurrencySpend(BaseModel):
+    currency: str
+    amount: Money
+
+
 class SpendCard(BaseModel):
     today_usd: Money
     mtd_usd: Money
@@ -97,6 +106,9 @@ class SpendCard(BaseModel):
     pct_of_cap: float | None
     projected_eom_usd: Money | None
     projection_method: str = "linear-mtd"
+    # Month-to-date spend in a currency no workspace monthly cap is in: never
+    # converted, never blocked. Empty when the workspace has no such cap.
+    not_covered: list[CurrencySpend] = Field(default_factory=list)
 
 
 class HitlBlocker(BaseModel):
@@ -216,6 +228,7 @@ def _is_monthly_spend_cap(rule: PolicyRule) -> bool:
         rule.effect == PolicyEffect.CAP
         and rule.target == "spend"
         and (rule.params or {}).get("period", "month") == "month"
+        and not is_scoped_spend_cap(rule.params)
     )
 
 
@@ -320,6 +333,20 @@ async def _build_schedule(
     return await asyncio.to_thread(_expand_schedule, trigger_rows, agent_names, datetime.now(UTC))
 
 
+async def _workspace_cap_currencies(
+    factory: RepositoryFactory, workspace_id: str, billing_currency: str
+) -> set[str]:
+    """The currencies the workspace's enabled monthly spend caps count."""
+    rules = await factory.create_repository(PolicyRuleRepository).list_rules(
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id=workspace_id,
+        effect=PolicyEffect.CAP,
+        target="spend",
+        enabled=True,
+    )
+    return workspace_cap_currencies([rule.params or {} for rule in rules], billing_currency)
+
+
 async def _get_workspace_policy_cap_usd(
     factory: RepositoryFactory, workspace_id: str
 ) -> Decimal | None:
@@ -364,12 +391,22 @@ async def get_dashboard(
     mtd_usd = to_money(await task_repo.sum_spend_mtd())
     pct = float(round(mtd_usd / cap_usd * 100, 2)) if cap_usd else None
     projected = _project_eom(mtd_usd, datetime.now(UTC)) if cap_usd is not None else None
+    billing_currency = get_customer_pricing().currency()
+    covered = await _workspace_cap_currencies(factory, workspace_id, billing_currency)
+    now = datetime.now(UTC)
+    by_currency = await factory.create_repository(CostEntryRepository).sum_by_currency_since(
+        datetime(now.year, now.month, 1, tzinfo=UTC)
+    )
     spend = SpendCard(
         today_usd=today_usd,
         mtd_usd=mtd_usd,
         cap_usd=cap_usd,
         pct_of_cap=pct,
         projected_eom_usd=projected,
+        not_covered=[
+            CurrencySpend(currency=currency, amount=amount)
+            for currency, amount in spend_not_covered(by_currency, covered).items()
+        ],
     )
 
     # ----- agent name lookup (single query) -----

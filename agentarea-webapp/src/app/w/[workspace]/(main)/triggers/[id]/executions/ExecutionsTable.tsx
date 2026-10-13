@@ -36,19 +36,26 @@ export default function ExecutionsTable({
     {
       accessor: "status",
       header: "Status",
-      render: (value: string) => {
+      render: (value: string, execution?: TriggerExecutionResponse) => {
         const status = getTriggerExecutionStatusPresentation(
           value || "unknown"
         );
 
         return (
-          <StatusIndicator
-            size="sm"
-            kind={status.kind}
-            className="whitespace-nowrap"
-          >
-            {status.labelKey ? t(`executionStatus.${status.labelKey}`) : status.label}
-          </StatusIndicator>
+          <div className="grid">
+            <StatusIndicator
+              size="sm"
+              kind={status.kind}
+              className="whitespace-nowrap"
+            >
+              {status.labelKey ? t(`executionStatus.${status.labelKey}`) : status.label}
+            </StatusIndicator>
+            {value === "skipped" && execution?.error_message && (
+              <span className="max-w-xs truncate text-xs text-muted-foreground">
+                {execution.error_message}
+              </span>
+            )}
+          </div>
         );
       },
     },
@@ -114,9 +121,9 @@ export default function ExecutionsTable({
     {
       accessor: "error_message",
       header: "Error",
-      render: (value: string) => (
+      render: (value: string, execution?: TriggerExecutionResponse) => (
         <span className="max-w-xs truncate text-muted-foreground block text-xs">
-          {value || "-"}
+          {(execution?.status !== "skipped" && value) || "-"}
         </span>
       ),
     },

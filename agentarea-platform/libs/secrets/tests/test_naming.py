@@ -34,6 +34,7 @@ class TestParseManagedName:
             (f"openapi:{CONFIG_ID}:url_var:token", "openapi_connection", CONFIG_ID),
             (f"task-input/{CONFIG_ID}/api_token", "task", CONFIG_ID),
             (f"a2a_push_token:{CONFIG_ID}:{INSTANCE_ID}", "task", CONFIG_ID),
+            (f"task_webhook:{CONFIG_ID}", "task", CONFIG_ID),
         ],
     )
     def test_recognises_every_producer(self, name: str, owner_type: str, owner_id: str) -> None:

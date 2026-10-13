@@ -253,9 +253,7 @@ async def wait_for_sandbox_execution(
                 raise SandboxHTTPError(f"sandbox execution {status}: {message}")
 
             if status == "queued" and _deadline_reached(record.get("queue_expires_at")):
-                record = await _cancel_pending_execution(
-                    client, mcp_manager_url, signer, execution_id
-                )
+                record = await _cancel_execution(client, mcp_manager_url, signer, execution_id)
                 continue
             if status == "running" and not record.get("execution_expires_at"):
                 raise SandboxHTTPError(
@@ -278,16 +276,17 @@ async def wait_for_sandbox_execution(
             if record.get("status") not in {"completed", "failed", "cancelled"}:
                 await asyncio.sleep(2)
     finally:
-        if not terminal and record.get("status") == "queued":
+        # A caller that stops waiting -- the run was stopped, or polling broke --
+        # leaves no command behind: queued work is dropped, and a claimed or
+        # running command is killed by its runner.
+        if not terminal and record.get("status") in {"queued", "claimed", "running"}:
             try:
-                await _cancel_pending_execution(client, mcp_manager_url, signer, execution_id)
+                await _cancel_execution(client, mcp_manager_url, signer, execution_id)
             except Exception:
-                logger.exception(
-                    "failed to cancel abandoned pending sandbox execution %s", execution_id
-                )
+                logger.exception("failed to cancel abandoned sandbox execution %s", execution_id)
 
 
-async def _cancel_pending_execution(
+async def _cancel_execution(
     client: Any,
     mcp_manager_url: str,
     signer: SandboxControlSigner,

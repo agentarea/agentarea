@@ -15,7 +15,7 @@ import { listModelInstancesAction } from "@/lib/server-actions";
 import type { AgentFormValues, CodeToolModelIds } from "../types";
 
 type ModelField = keyof CodeToolModelIds;
-type SettingsKind = Extract<ModelKind, "image" | "video" | "decision">;
+type SettingsKind = Extract<ModelKind, "image" | "video">;
 
 const MODEL_FIELDS: Record<
   string,
@@ -25,7 +25,6 @@ const MODEL_FIELDS: Record<
     { field: "image_model_id", kind: "image" },
     { field: "video_model_id", kind: "video" },
   ],
-  "agentarea/decide": [{ field: "model_id", kind: "decision" }],
 };
 
 function KindModelSelect({
@@ -150,7 +149,7 @@ export function CodeToolModelSettings({
       ))}
       {missing && (
         <p className="text-xs text-muted-foreground">
-          {fields.length > 1 ? t("pickAtLeastOne") : t("pickOne")}
+          {t("pickAtLeastOne")}
         </p>
       )}
     </div>

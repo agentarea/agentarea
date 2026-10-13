@@ -390,6 +390,7 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "max_output_tokens": entry.get("max_output_tokens"),
                     "input_cost_per_token": entry.get("input_cost_per_token"),
                     "output_cost_per_token": entry.get("output_cost_per_token"),
+                    "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
                     "supports_function_calling": entry.get(
                         "supports_function_calling", False
                     ),
@@ -818,6 +819,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
                 "UPDATE model_specs SET display_name = :dn, description = :desc, "
                 "context_window = :cw, max_output_tokens = :mot, "
                 "input_cost_per_token = :icpt, output_cost_per_token = :ocpt, "
+                "cached_input_cost_per_token = :cicpt, "
                 "supports_function_calling = :sfc, is_active = :active, updated_at = now() "
                 "WHERE id = :id"
             ),
@@ -829,6 +831,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
                 "mot": spec.get("max_output_tokens"),
                 "icpt": spec.get("input_cost_per_token"),
                 "ocpt": spec.get("output_cost_per_token"),
+                "cicpt": spec.get("cached_input_cost_per_token"),
                 "sfc": spec.get("supports_function_calling", False),
                 "active": spec.get("is_active", True),
             },
@@ -839,10 +842,10 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         _text(
             "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
             "description, context_window, max_output_tokens, input_cost_per_token, "
-            "output_cost_per_token, supports_function_calling, is_active, "
-            "workspace_id, created_by, created_at, updated_at) "
+            "output_cost_per_token, cached_input_cost_per_token, supports_function_calling, "
+            "is_active, workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
-            ":mot, :icpt, :ocpt, :sfc, :active, :ws, :created_by, now(), now())"
+            ":mot, :icpt, :ocpt, :cicpt, :sfc, :active, :ws, :created_by, now(), now())"
         ),
         {
             "id": mid,
@@ -854,6 +857,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
             "mot": spec.get("max_output_tokens"),
             "icpt": spec.get("input_cost_per_token"),
             "ocpt": spec.get("output_cost_per_token"),
+            "cicpt": spec.get("cached_input_cost_per_token"),
             "sfc": spec.get("supports_function_calling", False),
             "active": spec.get("is_active", True),
             "ws": workspace_id,

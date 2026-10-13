@@ -1,10 +1,10 @@
 """Paging of the MCP spec list, as the REST route and the platform tool ask for it."""
 
-import json
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import mcp_servers_specifications
 from agentarea_api.tools.mcp_servers_toolset import MCPServersToolset
 from agentarea_common.auth.context import UserContext
@@ -39,6 +39,5 @@ async def test_asking_by_id_returns_every_spec_asked_for(monkeypatch):
 
 @pytest.mark.parametrize(("limit", "offset"), [(0, 0), (101, 0), (-1, 0), (10, -5)])
 async def test_the_spec_tool_refuses_a_page_it_cannot_serve(limit, offset):
-    result = json.loads(await MCPServersToolset().list_specs(limit=limit, offset=offset))
-
-    assert "error" in result
+    with pytest.raises(ToolError):
+        await MCPServersToolset().list_specs(limit=limit, offset=offset)

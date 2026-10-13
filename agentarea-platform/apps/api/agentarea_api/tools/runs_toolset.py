@@ -24,6 +24,7 @@ from agentarea_agents.application.execution_service import (
     NotAnApproverError,
     WorkflowNotFoundError,
 )
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -31,6 +32,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
+from agentarea_tasks.domain.exceptions import BudgetCapExceededError, RunStillClosingError
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
@@ -52,10 +54,46 @@ from agentarea_api.api.v1.agents_tasks import (
 
 from .base import platform_context, platform_read_context
 
-RUN_NOT_FOUND = json.dumps({"error": "Run not found"})
-RUN_AUTHORITY = (
-    "whoever started the run, or a workspace admin; _refuse_unless_may_act loads the run first"
+RUN_NOT_FOUND = "Run not found"
+RUN_STILL_CLOSING = "The run is still stopping; try again in a few seconds"
+RUN_AUTHORITY = "whoever started the run, or a workspace admin; _ensure_may_act loads the run first"
+
+_FAILURE_FIELDS = (
+    "error",
+    "error_type",
+    "failure_reason",
+    "error_detail",
+    "blocked_reason",
+    "model_id",
 )
+_TERMINAL_FIELDS = ("status", "success", "error", "error_type", "failure_reason", "blocked_reason")
+_TERMINAL_TYPES = {"task.completed", "task.failed", "task.cancelled", "execution.finished"}
+_TOOL_RESULT_FIELDS = ("tool_name", "tool_call_id", "success", "replayed", "error", "exit_code")
+_MODEL_CALL_FIELDS = ("model_id", "model_name", "cost", "provider_cost_usd")
+
+
+def _event_projection(event_type: str, data: dict[str, Any]) -> dict[str, Any]:
+    """The facts of one event worth reading over MCP, without results or content."""
+    fields: tuple[str, ...] = ()
+    extra: dict[str, Any] = {}
+    if event_type in _TERMINAL_TYPES or event_type.startswith("task.awaiting_"):
+        fields = _TERMINAL_FIELDS
+    elif event_type.endswith(".failed"):
+        fields = _FAILURE_FIELDS
+    elif event_type == "tool.call":
+        fields = ("tool_name", "tool_call_id")
+        arguments = data.get("arguments")
+        if isinstance(arguments, dict) and arguments:
+            extra["argument_names"] = list(arguments)
+    elif event_type == "tool.result":
+        fields = _TOOL_RESULT_FIELDS
+    elif event_type == "llm.call.completed":
+        fields = _MODEL_CALL_FIELDS
+        usage = (data.get("usage") or {}).get("usage")
+        if isinstance(usage, dict) and usage:
+            extra["usage"] = usage
+    projection = {key: data[key] for key in ("message", *fields) if data.get(key) is not None}
+    return projection | extra
 
 
 async def _build_task_service(repo_factory, event_broker) -> TaskService:
@@ -70,18 +108,15 @@ async def _build_task_service(repo_factory, event_broker) -> TaskService:
     )
 
 
-async def _refuse_unless_may_act(
-    service: TaskService, run_id: str, user_ctx: UserContext
-) -> str | None:
-    """The error to return unless the caller started this run or administers the workspace."""
+async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserContext) -> None:
+    """Refuse unless the caller started this run or administers the workspace."""
     task = await service.get_task(UUID(run_id))
     if not task:
-        return RUN_NOT_FOUND
+        raise ToolError(RUN_NOT_FOUND)
     try:
         await assert_may_act_on_task(task, user_ctx)
     except HTTPException as exc:
-        return json.dumps({"error": exc.detail})
-    return None
+        raise ToolError(exc.detail) from exc
 
 
 def _execution_id(run_id: str) -> str:
@@ -150,12 +185,15 @@ class RunsToolset(Toolset):
             _,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            submitted = await service.start_run(
-                payload,
-                workspace_id=user_ctx.workspace_id,
-                user_id=user_ctx.user_id,
-                created_via="mcp",
-            )
+            try:
+                submitted = await service.start_run(
+                    payload,
+                    workspace_id=user_ctx.workspace_id,
+                    user_id=user_ctx.user_id,
+                    created_via="mcp",
+                )
+            except BudgetCapExceededError as exc:
+                raise ToolError(str(exc)) from None
             return json.dumps(
                 {
                     "run_id": str(submitted.id),
@@ -205,7 +243,7 @@ class RunsToolset(Toolset):
             service = await _build_task_service(repo_factory, event_broker)
             task = await service.get_task(UUID(run_id))
             if not task:
-                return json.dumps({"error": "Run not found"})
+                raise ToolError("Run not found")
             return json.dumps(
                 {
                     "run_id": str(task.id),
@@ -230,10 +268,24 @@ class RunsToolset(Toolset):
             _,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             cancelled = await service.cancel_task(UUID(run_id))
             return json.dumps({"cancelled": cancelled})
+
+    @tool_method(effect="write")
+    @enforced_in_handler(RUN_AUTHORITY)
+    async def retry(self, run_id: str) -> str:
+        """Re-run the turn a failed run ended on, on the same conversation, with no new message."""
+        async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
+            service = await _build_task_service(repo_factory, event_broker)
+            await _ensure_may_act(service, run_id, user_ctx)
+            try:
+                retried = await service.retry_last_turn(UUID(run_id))
+            except RunStillClosingError:
+                raise ToolError(RUN_STILL_CLOSING) from None
+            if not retried:
+                raise ToolError("Only a failed run whose execution has finished can be retried")
+            return json.dumps({"retried": True, "run_id": run_id})
 
     @tool_method(effect="write")
     @enforced_in_handler(RUN_AUTHORITY)
@@ -241,8 +293,7 @@ class RunsToolset(Toolset):
         """Pause a running agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             paused = await workflow.pause_task(_execution_id(run_id))
             return json.dumps({"paused": paused})
@@ -253,8 +304,7 @@ class RunsToolset(Toolset):
         """Resume a paused agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             resumed = await workflow.resume_task(_execution_id(run_id))
             return json.dumps({"resumed": resumed})
@@ -280,8 +330,7 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             delivered = await workflow.send_workflow_command(
                 _execution_id(run_id),
@@ -326,37 +375,44 @@ class RunsToolset(Toolset):
             secret_mgr,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
 
             if payload.command == "queue_message":
                 if not payload.message:
-                    return json.dumps({"error": "message is required for queue_message"})
+                    raise ToolError("message is required for queue_message")
                 body: dict[str, Any] = {"message": payload.message}
             elif payload.command == "remove_message":
                 if not payload.message_id:
-                    return json.dumps({"error": "message_id is required for remove_message"})
+                    raise ToolError("message_id is required for remove_message")
                 body = {"message_id": payload.message_id}
             elif payload.command == "update_budget":
                 if payload.budget_usd is None:
-                    return json.dumps({"error": "budget_usd is required for update_budget"})
+                    raise ToolError("budget_usd is required for update_budget")
                 body = {"budget_usd": serialize_money(payload.budget_usd)}
             elif payload.command == "change_model":
                 if not payload.model_instance_id:
-                    return json.dumps({"error": "model_instance_id is required for change_model"})
+                    raise ToolError("model_instance_id is required for change_model")
                 try:
                     body = await _model_switch_body(
                         payload.model_instance_id, session, user_ctx, event_broker, secret_mgr
                     )
                 except HTTPException as exc:
-                    return json.dumps({"error": exc.detail})
+                    raise ToolError(exc.detail) from exc
             else:
-                return json.dumps({"error": f"Unknown command: {payload.command}"})
+                raise ToolError(f"Unknown command: {payload.command}")
 
-            workflow = await get_temporal_workflow_service()
-            delivered = await workflow.send_workflow_command(
-                _execution_id(run_id), payload.command, body
-            )
+            if payload.command == "queue_message":
+                # A completed, stopped or failed run whose execution has closed
+                # continues its conversation in a new execution.
+                try:
+                    delivered = await service.queue_follow_up(UUID(run_id), body["message"])
+                except RunStillClosingError:
+                    raise ToolError(RUN_STILL_CLOSING) from None
+            else:
+                workflow = await get_temporal_workflow_service()
+                delivered = await workflow.send_workflow_command(
+                    _execution_id(run_id), payload.command, body
+                )
             return json.dumps({"delivered": delivered, "command": payload.command}, default=str)
 
     @tool_method(effect="privileged")
@@ -374,8 +430,7 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             try:
                 resolved = await workflow.resolve_escalation(
@@ -386,9 +441,9 @@ class RunsToolset(Toolset):
                     resolved_by=str(user_ctx.user_id),
                 )
             except EscalationNotPendingError:
-                return json.dumps({"error": "Escalation not found or no longer pending"})
+                raise ToolError("Escalation not found or no longer pending") from None
             except NotAnApproverError:
-                return json.dumps({"error": "You are not an approver of this escalation"})
+                raise ToolError("You are not an approver of this escalation") from None
             return json.dumps({"resolved": resolved, "approved": resolution.approved})
 
     @tool_method(effect="read")
@@ -403,13 +458,12 @@ class RunsToolset(Toolset):
         """
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             try:
                 pending = await workflow.get_pending_escalations(_execution_id(run_id))
             except WorkflowNotFoundError:
-                return json.dumps({"error": "Run has no workflow to read escalations from"})
+                raise ToolError("Run has no workflow to read escalations from") from None
             return json.dumps(
                 [
                     escalation.model_dump()
@@ -438,8 +492,7 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            if refusal := await _refuse_unless_may_act(service, run_id, user_ctx):
-                return refusal
+            await _ensure_may_act(service, run_id, user_ctx)
             result = await service.continue_execution(
                 UUID(run_id),
                 additional_iterations=payload.additional_iterations,
@@ -458,7 +511,13 @@ class RunsToolset(Toolset):
         offset: int = 0,
         event_type: str | None = None,
     ) -> str:
-        """Read a run's persisted execution events, newest page first."""
+        """Read a run's persisted execution events, oldest first.
+
+        Each event carries the facts of its type: the error of a failure, the
+        outcome of a tool call, the cost and token usage of a model call, the
+        status of a terminal event. For the latest events, page from
+        offset=total-limit.
+        """
         async with platform_read_context() as (_s, _user_ctx, repo_factory, _broker, _):
             event_repository = repo_factory.create_repository(TaskEventRepository)
             records, total = await event_repository.list_for_task(
@@ -472,7 +531,7 @@ class RunsToolset(Toolset):
                             "id": str(r.id),
                             "event_type": r.event_type,
                             "timestamp": r.timestamp,
-                            "message": (r.data or {}).get("message"),
+                            **_event_projection(r.event_type, r.data or {}),
                         }
                         for r in records
                     ],

@@ -47,9 +47,7 @@ async def test_agent_workflow_starts_on_the_configured_task_queue(monkeypatch) -
     monkeypatch.setattr(
         config,
         "get_settings",
-        lambda: SimpleNamespace(
-            temporal=SimpleNamespace(QUEUE="agent-tasks-enterprise")
-        ),
+        lambda: SimpleNamespace(temporal=SimpleNamespace(QUEUE="agent-tasks-enterprise")),
     )
     task = AgentTask(
         id=uuid4(),

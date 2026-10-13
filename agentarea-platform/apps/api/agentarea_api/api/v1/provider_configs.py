@@ -296,6 +296,7 @@ class DiscoverPreviewModelResponse(BaseModel):
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
+    cached_input_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -450,6 +451,7 @@ async def discover_models_preview(
             max_output_tokens=model.max_output_tokens,
             input_cost_per_token=model.input_cost_per_token,
             output_cost_per_token=model.output_cost_per_token,
+            cached_input_cost_per_token=model.cached_input_cost_per_token,
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
@@ -469,6 +471,7 @@ async def discover_models_preview(
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
+                cached_input_cost_per_token=model.cached_input_cost_per_token,
                 supports_function_calling=model.supports_function_calling,
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,
@@ -571,6 +574,7 @@ class DiscoveredModelResponse(BaseModel):
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
+    cached_input_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -661,6 +665,7 @@ async def discover_models(
             max_output_tokens=model.max_output_tokens,
             input_cost_per_token=model.input_cost_per_token,
             output_cost_per_token=model.output_cost_per_token,
+            cached_input_cost_per_token=model.cached_input_cost_per_token,
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
@@ -679,6 +684,7 @@ async def discover_models(
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
+                cached_input_cost_per_token=model.cached_input_cost_per_token,
                 supports_function_calling=model.supports_function_calling,
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,

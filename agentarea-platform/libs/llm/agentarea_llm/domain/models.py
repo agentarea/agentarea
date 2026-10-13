@@ -205,6 +205,10 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     max_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     input_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
     output_cost_per_token: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    # Price of a prompt token read from the provider's cache; null prices it as input.
+    cached_input_cost_per_token: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 12), nullable=True
+    )
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )

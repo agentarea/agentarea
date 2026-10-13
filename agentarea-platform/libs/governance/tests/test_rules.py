@@ -142,6 +142,20 @@ class TestCompiler:
         assert doc.content_safety.prompt_injection_detection_enabled is True
         assert doc.content_safety.output_sanitizer_enabled is False
 
+    def test_answer_check_compiles_into_content_safety(self):
+        rule = _rule("content", PolicyEffect.SAFETY, answer_check={"language": "ru"})
+        assert_enforceable(rule)
+        doc = rules_to_document([rule])
+        assert doc.to_json_dict()["content_safety"] == {
+            "answer_check": {"enabled": True, "language": "ru"}
+        }
+
+    def test_an_answer_check_with_unknown_keys_is_refused(self):
+        with pytest.raises(ValueError):
+            assert_enforceable(
+                _rule("content", PolicyEffect.SAFETY, answer_check={"lang": "ru"})
+            )
+
     def test_disabled_rule_ignored(self):
         rule = _rule("tool:x", PolicyEffect.DENY)
         rule.enabled = False

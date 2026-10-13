@@ -3,6 +3,7 @@
 Sync auto-creates entities for new items. Version updates are manual.
 """
 
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -19,7 +20,14 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_registry.application.catalog_facets import (
     PROTOCOL_REGISTRY_TYPE,
     CatalogHosting,
+    CatalogPricing,
     CatalogProtocol,
+)
+from agentarea_registry.application.catalog_pricing import (
+    CatalogItemPricing,
+    ComputeEstimate,
+    ToolPrice,
+    price_catalog_item,
 )
 from agentarea_registry.application.service import (
     VALID_REGISTRY_TYPES,
@@ -111,6 +119,71 @@ class RegistryResponse(BaseModel):
         )
 
 
+class CatalogToolPrice(BaseModel):
+    """What the workspace is charged per unit of a tool's calls; ``tool`` null is the default."""
+
+    tool: str | None
+    amount: Decimal
+    currency: str
+    unit: str
+
+    @classmethod
+    def from_domain(cls, price: ToolPrice) -> "CatalogToolPrice":
+        return cls(tool=price.tool, amount=price.amount, currency=price.currency, unit=price.unit)
+
+
+class CatalogComputeEstimate(BaseModel):
+    """What a running instance of an entry hosted on AgentArea reserves, and its hour.
+
+    ``hourly`` is null where nothing prices compute: the reservation is shown alone.
+    """
+
+    vcpu: Decimal
+    memory_gib: Decimal
+    hourly: Decimal | None
+    currency: str | None
+
+    @classmethod
+    def from_domain(cls, compute: ComputeEstimate) -> "CatalogComputeEstimate":
+        return cls(
+            vcpu=compute.vcpu,
+            memory_gib=compute.memory_gib,
+            hourly=compute.hourly,
+            currency=compute.currency,
+        )
+
+
+class CatalogItemPricingResponse(BaseModel):
+    """Whether using a connection costs money through AgentArea (wiki ADR-0038).
+
+    ``kind`` "paid": the platform's key may pay and the workspace is billed;
+    ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
+    the vendor bills the workspace's own account. "free": nothing is charged.
+    ``kind`` is about calls only; ``compute`` is the separate hourly reservation
+    of an entry that runs on AgentArea.
+    """
+
+    kind: CatalogPricing
+    payers: list[str]
+    price_from: CatalogToolPrice | None
+    prices: list[CatalogToolPrice]
+    compute: CatalogComputeEstimate | None = None
+
+    @classmethod
+    def from_domain(cls, pricing: CatalogItemPricing) -> "CatalogItemPricingResponse":
+        return cls(
+            kind=pricing.kind,
+            payers=[payer.value for payer in pricing.payers],
+            price_from=(
+                CatalogToolPrice.from_domain(pricing.price_from) if pricing.price_from else None
+            ),
+            prices=[CatalogToolPrice.from_domain(price) for price in pricing.prices],
+            compute=(
+                CatalogComputeEstimate.from_domain(pricing.compute) if pricing.compute else None
+            ),
+        )
+
+
 class RegistryItemResponse(BaseModel):
     id: UUID
     registry_id: UUID
@@ -132,6 +205,8 @@ class RegistryItemResponse(BaseModel):
     # Connections catalog only: the workspace's connections made from this item
     # that the caller may read. None where it was not looked up.
     workspace_connections: list[CatalogConnection] | None = None
+    # Connections catalog only; None where it was not looked up.
+    pricing: CatalogItemPricingResponse | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -140,6 +215,7 @@ class RegistryItemResponse(BaseModel):
         cls,
         item: RegistryItem,
         workspace_connections: list[CatalogConnection] | None = None,
+        pricing: CatalogItemPricing | None = None,
     ) -> "RegistryItemResponse":
         return cls(
             id=item.id,
@@ -159,6 +235,7 @@ class RegistryItemResponse(BaseModel):
             featured=item.featured,
             hosting=getattr(item, "hosting", None),
             workspace_connections=workspace_connections,
+            pricing=CatalogItemPricingResponse.from_domain(pricing) if pricing else None,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
@@ -308,6 +385,8 @@ class CatalogBrowseResponse(BaseModel):
     protocols: list[CategoryFacet]
     # Vendor-hosted vs run on AgentArea, for MCP connections; empty otherwise.
     hostings: list[CategoryFacet] = []
+    # Paid / own key / free, for connections; empty otherwise.
+    pricings: list[CategoryFacet] = []
 
 
 @router.get(
@@ -338,6 +417,14 @@ async def browse_catalog(
             "Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or "
             f"'agentarea' (package the platform runs). Only valid for "
             f"registry_type='{PROTOCOL_REGISTRY_TYPE}'."
+        ),
+    ),
+    pricing: CatalogPricing | None = Query(
+        None,
+        description=(
+            "Restrict connections to what using them costs: 'paid' (billed through "
+            "AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid "
+            f"for registry_type='{PROTOCOL_REGISTRY_TYPE}'."
         ),
     ),
     sort: str | None = Query(None, description="'recommended' (default) or 'name'"),
@@ -371,13 +458,19 @@ async def browse_catalog(
             status_code=400,
             detail=f"hosting only applies to registry_type='{PROTOCOL_REGISTRY_TYPE}'",
         )
+    if pricing is not None and registry_type != PROTOCOL_REGISTRY_TYPE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"pricing only applies to registry_type='{PROTOCOL_REGISTRY_TYPE}'",
+        )
 
-    items, total, categories, protocols, hostings = await service.browse_catalog(
+    items, total, categories, protocols, hostings, pricings = await service.browse_catalog(
         registry_type=registry_type,
         query=q,
         category=category,
         protocol=protocol,
         hosting=hosting,
+        pricing=pricing,
         sort=sort,
         limit=limit,
         offset=offset,
@@ -389,13 +482,18 @@ async def browse_catalog(
     )
     return CatalogBrowseResponse(
         items=[
-            RegistryItemResponse.from_domain(i, None if found is None else found.get(str(i.id), []))
+            RegistryItemResponse.from_domain(
+                i,
+                None if found is None else found.get(str(i.id), []),
+                await price_catalog_item(i),
+            )
             for i in items
         ],
         total=total,
         categories=[CategoryFacet(value=v, count=c) for v, c in categories],
         protocols=[CategoryFacet(value=v, count=c) for v, c in protocols],
         hostings=[CategoryFacet(value=v, count=c) for v, c in hostings],
+        pricings=[CategoryFacet(value=v, count=c) for v, c in pricings],
     )
 
 
@@ -568,7 +666,9 @@ async def get_catalog_item(
     if item.registry_type != PROTOCOL_REGISTRY_TYPE:
         return RegistryItemResponse.from_domain(item)
     found = await connections_of([item.id])
-    return RegistryItemResponse.from_domain(item, found.get(str(item.id), []))
+    return RegistryItemResponse.from_domain(
+        item, found.get(str(item.id), []), await price_catalog_item(item)
+    )
 
 
 @router.patch(

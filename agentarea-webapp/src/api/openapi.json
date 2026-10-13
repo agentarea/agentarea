@@ -384,6 +384,17 @@
             "title": "Agent Type",
             "type": "string"
           },
+          "answer_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerCheckPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting."
+          },
           "description": {
             "default": "",
             "description": "Short summary of what the agent does.",
@@ -680,6 +691,16 @@
             "title": "Agent Type",
             "type": "string"
           },
+          "answer_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerCheckPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "description": {
             "anyOf": [
               {
@@ -927,6 +948,16 @@
             "title": "Agent Type",
             "type": "string"
           },
+          "answer_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerCheckPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "capabilities": {
             "anyOf": [
               {
@@ -1077,6 +1108,45 @@
           }
         },
         "title": "AnalyzeRequest",
+        "type": "object"
+      },
+      "AnswerCheckPolicy": {
+        "additionalProperties": false,
+        "description": "Check an agent's final answer and have the model rewrite it once if it leaks.\n\nLeaks: CJK characters, tool names and snake_case codes, stack traces, raw\nJSON, and (for ``language: ru``) lowercase English words in a Russian answer.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 8,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "rewrite_instruction": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rewrite Instruction"
+          }
+        },
+        "title": "AnswerCheckPolicy",
         "type": "object"
       },
       "ApprovalDecision": {
@@ -1648,7 +1718,7 @@
       },
       "BudgetPolicy-Input": {
         "additionalProperties": false,
-        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month.",
+        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month. ``spend_caps`` are the caps\nnarrowed to model or tool spend, a client, a connection or one of its tools,\nper month or per run; every one applies.",
         "properties": {
           "agent_monthly_spend_cap_usd": {
             "anyOf": [
@@ -1729,6 +1799,20 @@
               }
             ],
             "title": "Service Budget Usd"
+          },
+          "spend_caps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScopedSpendCap-Input"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spend Caps"
           }
         },
         "title": "BudgetPolicy",
@@ -1736,7 +1820,7 @@
       },
       "BudgetPolicy-Output": {
         "additionalProperties": false,
-        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month.",
+        "description": "Budget-related ceilings.\n\n``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar\nmonth; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent\nalone, summed over all its runs in the month. ``spend_caps`` are the caps\nnarrowed to model or tool spend, a client, a connection or one of its tools,\nper month or per run; every one applies.",
         "properties": {
           "agent_monthly_spend_cap_usd": {
             "anyOf": [
@@ -1785,6 +1869,20 @@
               }
             ],
             "title": "Service Budget Usd"
+          },
+          "spend_caps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScopedSpendCap-Output"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spend Caps"
           }
         },
         "title": "BudgetPolicy",
@@ -2163,6 +2261,18 @@
             "title": "Bindings",
             "type": "object"
           },
+          "context_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.",
+            "title": "Context Secret"
+          },
           "json_spec": {
             "additionalProperties": true,
             "description": "Native MCP runtime spec. Must include 'type' (command|docker|url).",
@@ -2439,6 +2549,14 @@
             "title": "Items",
             "type": "array"
           },
+          "pricings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Pricings",
+            "type": "array"
+          },
           "protocols": {
             "items": {
               "$ref": "#/components/schemas/CategoryFacet"
@@ -2458,6 +2576,52 @@
           "protocols"
         ],
         "title": "CatalogBrowseResponse",
+        "type": "object"
+      },
+      "CatalogComputeEstimate": {
+        "description": "What a running instance of an entry hosted on AgentArea reserves, and its hour.\n\n``hourly`` is null where nothing prices compute: the reservation is shown alone.",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "hourly": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly"
+          },
+          "memory_gib": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Memory Gib",
+            "type": "string"
+          },
+          "vcpu": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vcpu",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vcpu",
+          "memory_gib",
+          "hourly",
+          "currency"
+        ],
+        "title": "CatalogComputeEstimate",
         "type": "object"
       },
       "CatalogConnection": {
@@ -2560,6 +2724,62 @@
         "title": "CatalogItemCreate",
         "type": "object"
       },
+      "CatalogItemPricingResponse": {
+        "description": "Whether using a connection costs money through AgentArea (wiki ADR-0038).\n\n``kind`` \"paid\": the platform's key may pay and the workspace is billed;\n``prices`` are per call on that key, ``price_from`` the cheapest. \"own_key\":\nthe vendor bills the workspace's own account. \"free\": nothing is charged.\n``kind`` is about calls only; ``compute`` is the separate hourly reservation\nof an entry that runs on AgentArea.",
+        "properties": {
+          "compute": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogComputeEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "paid",
+              "own_key",
+              "free"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "payers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Payers",
+            "type": "array"
+          },
+          "price_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogToolPrice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogToolPrice"
+            },
+            "title": "Prices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "payers",
+          "price_from",
+          "prices"
+        ],
+        "title": "CatalogItemPricingResponse",
+        "type": "object"
+      },
       "CatalogItemUpdate": {
         "properties": {
           "description": {
@@ -2639,6 +2859,43 @@
           }
         },
         "title": "CatalogItemUpdate",
+        "type": "object"
+      },
+      "CatalogToolPrice": {
+        "description": "What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.",
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "amount",
+          "currency",
+          "unit"
+        ],
+        "title": "CatalogToolPrice",
         "type": "object"
       },
       "CategoryFacet": {
@@ -2779,6 +3036,50 @@
         "title": "ClientMcpInstanceRef",
         "type": "object"
       },
+      "ClientOpenAPIConnectionRef": {
+        "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "namespace_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace Prefix"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ClientOpenAPIConnectionRef",
+        "type": "object"
+      },
       "ClientPlatformToolsetRef": {
         "properties": {
           "disabled_methods": {
@@ -2874,6 +3175,14 @@
             "title": "Name",
             "type": "string"
           },
+          "openapi_connections": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClientOpenAPIConnectionRef"
+            },
+            "title": "Openapi Connections",
+            "type": "array"
+          },
           "platform_toolsets": {
             "default": [],
             "items": {
@@ -2967,7 +3276,7 @@
         "type": "object"
       },
       "CodeToolSettings": {
-        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model,\n``agentarea/decide`` a decision model. No other toolset takes one.",
+        "description": "Settings for a built-in code toolset.\n\nThe model ids are model instances of the workspace, each of the kind its\ntoolset needs: ``agentarea/media`` takes an image and/or a video model.\nNo other toolset takes one.",
         "properties": {
           "disabled_methods": {
             "anyOf": [
@@ -2994,18 +3303,6 @@
             ],
             "description": "agentarea/media: model instance generating images.",
             "title": "Image Model Id"
-          },
-          "model_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "agentarea/decide: decision model instance.",
-            "title": "Model Id"
           },
           "requires_user_confirmation": {
             "anyOf": [
@@ -3167,6 +3464,16 @@
         "additionalProperties": false,
         "description": "Content-safety governance controls.",
         "properties": {
+          "answer_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerCheckPolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "output_sanitizer_enabled": {
             "anyOf": [
               {
@@ -3365,6 +3672,24 @@
         "title": "CreateWorkspaceDirectoryRequest",
         "type": "object"
       },
+      "CurrencySpend": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "amount"
+        ],
+        "title": "CurrencySpend",
+        "type": "object"
+      },
       "DailySpendPoint": {
         "properties": {
           "date": {
@@ -3536,6 +3861,17 @@
       },
       "DiscoverPreviewModelResponse": {
         "properties": {
+          "cached_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Cost Per Token"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -3708,6 +4044,17 @@
       },
       "DiscoveredModelResponse": {
         "properties": {
+          "cached_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Cost Per Token"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -4167,7 +4514,7 @@
             "type": "integer"
           },
           "failure_rate": {
-            "description": "Percentage, 0-100.",
+            "description": "Percentage, 0-100, of the runs that tried to start a task; skips excluded.",
             "title": "Failure Rate",
             "type": "number"
           },
@@ -4191,8 +4538,13 @@
             "description": "Window these metrics cover. Null means the whole history.",
             "title": "Period Hours"
           },
+          "skipped_executions": {
+            "description": "Events the trigger's conditions turned away, or that came while it was off.",
+            "title": "Skipped Executions",
+            "type": "integer"
+          },
           "success_rate": {
-            "description": "Percentage, 0-100.",
+            "description": "Percentage, 0-100, of the runs that tried to start a task; skips excluded.",
             "title": "Success Rate",
             "type": "number"
           },
@@ -4226,6 +4578,7 @@
           "successful_executions",
           "failed_executions",
           "timeout_executions",
+          "skipped_executions",
           "success_rate",
           "failure_rate",
           "avg_execution_time_ms",
@@ -5576,6 +5929,20 @@
             "description": "ID of an MCP auth config (OAuth/credentials) to attach.",
             "title": "Auth Config Id"
           },
+          "context_secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.",
+            "title": "Context Secret"
+          },
           "description": {
             "anyOf": [
               {
@@ -5628,6 +5995,20 @@
               }
             ],
             "title": "Auth Config Id"
+          },
+          "context_secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.",
+            "title": "Context Secret"
           },
           "description": {
             "anyOf": [
@@ -5711,6 +6092,17 @@
             ],
             "title": "Last Dispatch"
           },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -5766,6 +6158,20 @@
         "additionalProperties": false,
         "description": "Patch payload for an MCP server instance. All fields optional \u2014 unset = unchanged.",
         "properties": {
+          "context_secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.",
+            "title": "Context Secret"
+          },
           "description": {
             "anyOf": [
               {
@@ -6796,6 +7202,27 @@
       },
       "ModelSpecCreate": {
         "properties": {
+          "cached_input_cost_per_token": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Cost Per Token"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -6919,6 +7346,27 @@
       },
       "ModelSpecUpdate": {
         "properties": {
+          "cached_input_cost_per_token": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Cost Per Token"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -7629,6 +8077,45 @@
           "redirect_uri"
         ],
         "title": "OAuthPreflightResponse",
+        "type": "object"
+      },
+      "OpenAPIConnectionAssociationBody": {
+        "description": "Attach an OpenAPI connection, or replace how an attached one is served.",
+        "properties": {
+          "allowed_tools": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Tools"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "namespace_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Namespace Prefix"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "OpenAPIConnectionAssociationBody",
         "type": "object"
       },
       "OpenAPIConnectionCreate": {
@@ -10151,6 +10638,16 @@
             "title": "Name",
             "type": "string"
           },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogItemPricingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "registry_id": {
             "format": "uuid",
             "title": "Registry Id",
@@ -10879,6 +11376,20 @@
             "title": "Description",
             "type": "string"
           },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's own id for the end user this task runs for. Only API keys and service clients may set it.",
+            "title": "End User Id"
+          },
           "execution": {
             "anyOf": [
               {
@@ -10888,6 +11399,19 @@
                 "type": "null"
               }
             ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trusted task metadata for tool servers, e.g. {\"chatId\": \"...\"}. At most 4096 bytes of JSON. Only API keys and service clients may set it.",
+            "title": "Metadata"
           },
           "parameters": {
             "additionalProperties": true,
@@ -10931,6 +11455,17 @@
                 "type": "null"
               }
             ]
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskWebhook"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it."
           }
         },
         "required": [
@@ -10980,6 +11515,197 @@
           "title"
         ],
         "title": "ScheduledRun",
+        "type": "object"
+      },
+      "ScopedSpendCap-Input": {
+        "additionalProperties": false,
+        "description": "A cap on part of the spend: one kind, client, connection or tool of a connection.\n\n``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
+        "properties": {
+          "amount_usd": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Amount Usd"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "enum": [
+                  "llm",
+                  "tools"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "own_agent": {
+            "default": false,
+            "title": "Own Agent",
+            "type": "boolean"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "const": "run",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "amount_usd"
+        ],
+        "title": "ScopedSpendCap",
+        "type": "object"
+      },
+      "ScopedSpendCap-Output": {
+        "additionalProperties": false,
+        "description": "A cap on part of the spend: one kind, client, connection or tool of a connection.\n\n``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``\n``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``\nnarrows it further to the calling agent's lines: the rule was bound to that\nagent. ``currency`` is the cap's currency, the billing currency when absent; it\nsums only lines in it. Absent fields are left out of the snapshot, so a cap\nthat sets none serializes as it did before they existed.",
+        "properties": {
+          "amount_usd": {
+            "title": "Amount Usd",
+            "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "enum": [
+                  "llm",
+                  "tools"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "own_agent": {
+            "default": false,
+            "title": "Own Agent",
+            "type": "boolean"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "const": "run",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "amount_usd"
+        ],
+        "title": "ScopedSpendCap",
         "type": "object"
       },
       "SecretConsumer": {
@@ -11855,6 +12581,13 @@
             "title": "Mtd Usd",
             "type": "string"
           },
+          "not_covered": {
+            "items": {
+              "$ref": "#/components/schemas/CurrencySpend"
+            },
+            "title": "Not Covered",
+            "type": "array"
+          },
           "pct_of_cap": {
             "anyOf": [
               {
@@ -12566,6 +13299,20 @@
             "title": "Description",
             "type": "string"
           },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's own id for the end user this task runs for. Only API keys and service clients may set it.",
+            "title": "End User Id"
+          },
           "execution": {
             "anyOf": [
               {
@@ -12575,6 +13322,19 @@
                 "type": "null"
               }
             ]
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Trusted task metadata for tool servers, e.g. {\"chatId\": \"...\"}. At most 4096 bytes of JSON. Only API keys and service clients may set it.",
+            "title": "Metadata"
           },
           "parameters": {
             "additionalProperties": true,
@@ -12613,6 +13373,17 @@
                 "type": "null"
               }
             ]
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaskWebhook"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it."
           }
         },
         "required": [
@@ -12627,6 +13398,23 @@
           "agent_id": {
             "title": "Agent Id",
             "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Data",
+            "type": "object"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
           },
           "event_type": {
             "title": "Event Type",
@@ -12853,6 +13641,17 @@
             "title": "Description",
             "type": "string"
           },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End User Id"
+          },
           "error": {
             "anyOf": [
               {
@@ -12890,6 +13689,18 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
           },
           "parameters": {
             "additionalProperties": true,
@@ -12940,6 +13751,17 @@
               }
             ],
             "title": "Total Cost"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
           }
         },
         "required": [
@@ -13086,6 +13908,38 @@
         "title": "TaskSummary",
         "type": "object"
       },
+      "TaskWebhook": {
+        "additionalProperties": false,
+        "description": "Where to POST each terminal event of the task, with its cost.",
+        "properties": {
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "minLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signs each delivery as X-AgentArea-Signature: t=<unix>,v1=<hex HMAC-SHA256 of \"<t>.<body>\">. Write-only: stored in the secret manager.",
+            "title": "Secret"
+          },
+          "url": {
+            "description": "http(s) URL to POST to.",
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "TaskWebhook",
+        "type": "object"
+      },
       "TaskWithAgent": {
         "description": "Task response with agent information for global task listing.",
         "properties": {
@@ -13124,6 +13978,17 @@
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "end_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End User Id"
           },
           "error": {
             "anyOf": [
@@ -13185,6 +14050,18 @@
             "title": "Id",
             "type": "string"
           },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
           "parameters": {
             "additionalProperties": true,
             "title": "Parameters",
@@ -13234,6 +14111,17 @@
               }
             ],
             "title": "Total Cost"
+          },
+          "total_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Tokens"
           }
         },
         "required": [
@@ -15860,6 +16748,17 @@
       },
       "agentarea_api__api__v1__model_specs__ModelSpecResponse": {
         "properties": {
+          "cached_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Cost Per Token"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -16036,6 +16935,17 @@
       },
       "agentarea_api__api__v1__provider_specs__ModelSpecResponse": {
         "properties": {
+          "cached_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Input Cost Per Token"
+          },
           "context_window": {
             "anyOf": [
               {
@@ -18746,6 +19656,18 @@
               "title": "Workspace",
               "type": "string"
             }
+          },
+          {
+            "description": "Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.",
+            "in": "query",
+            "name": "follow",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.",
+              "title": "Follow",
+              "type": "boolean"
+            }
           }
         ],
         "requestBody": {
@@ -20001,6 +20923,78 @@
           }
         ],
         "summary": "Resume Agent Task",
+        "tags": [
+          "v1",
+          "protected",
+          "agent-tasks"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/retry": {
+      "post": {
+        "description": "Re-run the turn a failed task ended on, on the same conversation.\n\nA new run of the task continues its conversation with no new message, so\nthe model is called again on the input that failed; the run records a\n``task.retried`` event.",
+        "operationId": "retry_agent_task_v1_agents__agent_id__tasks__task_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Agent Task",
         "tags": [
           "v1",
           "protected",
@@ -21403,7 +22397,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/install": {
       "post": {
-        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.",
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422 (``code: bundle_invalid``);\nany other install failure answers 400 (``code: bundle_install_failed``). Both\nare problem+json with the message in ``detail`` and the blocking ``issues``.",
         "operationId": "install_bundle_v1_bundles_install_post",
         "parameters": [
           {
@@ -21978,6 +22972,138 @@
           }
         ],
         "summary": "Remove Mcp Instance From Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections": {
+      "post": {
+        "operationId": "add_openapi_connection_to_client_v1_clients__client_id__openapi_connections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAPIConnectionAssociationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Openapi Connection To Client",
+        "tags": [
+          "v1",
+          "protected",
+          "clients"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}": {
+      "delete": {
+        "operationId": "remove_openapi_connection_from_client_v1_clients__client_id__openapi_connections__connection_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Connection Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Openapi Connection From Client",
         "tags": [
           "v1",
           "protected",
@@ -30460,6 +31586,29 @@
             }
           },
           {
+            "description": "Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.",
+            "in": "query",
+            "name": "pricing",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "paid",
+                    "own_key",
+                    "free"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.",
+              "title": "Pricing"
+            }
+          },
+          {
             "description": "'recommended' (default) or 'name'",
             "in": "query",
             "name": "sort",
@@ -35872,7 +37021,7 @@
     },
     "/v1/workspaces/{workspace}/triggers/{trigger_id}/executions": {
       "get": {
-        "description": "Get execution history for a trigger with filtering and pagination.\n\nReturns paginated execution history for the specified trigger, including\nsuccess/failure status, execution times, and error messages. Supports\nfiltering by status and time range.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    page: Page number for pagination\n    page_size: Number of executions per page\n    status: Optional status filter (success, failed, timeout)\n    start_time: Optional start time filter\n    end_time: Optional end time filter\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    db_session: Session used to resolve what each run's task cost\n\nReturns:\n    Paginated execution history\n\nRaises:\n    HTTPException: If trigger not found or invalid parameters",
+        "description": "Get execution history for a trigger with filtering and pagination.\n\nReturns paginated execution history for the specified trigger, including\nsuccess/failure status, execution times, and error messages. Supports\nfiltering by status and time range.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    page: Page number for pagination\n    page_size: Number of executions per page\n    status: Optional status filter (success, failed, timeout, cancelled, skipped)\n    start_time: Optional start time filter\n    end_time: Optional end time filter\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    db_session: Session used to resolve what each run's task cost\n\nReturns:\n    Paginated execution history\n\nRaises:\n    HTTPException: If trigger not found or invalid parameters",
         "operationId": "get_execution_history_v1_triggers__trigger_id__executions_get",
         "parameters": [
           {
@@ -35927,7 +37076,7 @@
             }
           },
           {
-            "description": "Filter by execution status (success, failed, timeout)",
+            "description": "Filter by execution status (success, failed, timeout, cancelled, skipped)",
             "in": "query",
             "name": "status",
             "required": false,
@@ -35940,7 +37089,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Filter by execution status (success, failed, timeout)",
+              "description": "Filter by execution status (success, failed, timeout, cancelled, skipped)",
               "title": "Status"
             }
           },

@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 import yaml
+from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
@@ -25,6 +26,7 @@ from agentarea_bundles.schemas.bundle import (
     Bundle,
     BundleMcp,
     BundlePolicy,
+    SetupFieldType,
     setup_refs,
 )
 from agentarea_bundles.schemas.preview import (
@@ -166,7 +168,8 @@ class BundleAnalyzer:
 
         self._check_duplicate_keys(package, issues)
         unsupported_mcp_keys = self._analyze_mcps(package, setup_keys, entities, issues)
-        await self._analyze_skills(package, entities)
+        self._check_context_secrets(package, issues)
+        await self._analyze_skills(package, entities, issues)
         self._analyze_agents(
             package, mcp_keys, skill_keys, setup_keys, unsupported_mcp_keys, issues
         )
@@ -294,8 +297,57 @@ class BundleAnalyzer:
                 )
         return unsupported
 
-    async def _analyze_skills(self, package: Bundle, entities: list[PreviewEntity]) -> None:
+    def _check_context_secrets(self, package: Bundle, issues: list[PreviewIssue]) -> None:
+        """A context_secret is a URL MCP's, and comes from a secret setup field."""
+        for mcp in package.mcps:
+            if mcp.context_secret is None:
+                continue
+            if (mcp.json_spec or {}).get("type") != "url":
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=f"mcp '{mcp.key}' context_secret applies to url MCPs only",
+                        entity_key=mcp.key,
+                    )
+                )
+            for key in setup_refs(mcp.context_secret):
+                field = package.setup_field(key)
+                if field is None:
+                    issues.append(
+                        PreviewIssue(
+                            severity=IssueSeverity.BLOCK,
+                            message=(
+                                f"mcp '{mcp.key}' context_secret references unknown "
+                                f"setup field '{key}'"
+                            ),
+                            entity_key=mcp.key,
+                        )
+                    )
+                elif field.type is not SetupFieldType.SECRET:
+                    issues.append(
+                        PreviewIssue(
+                            severity=IssueSeverity.BLOCK,
+                            message=(
+                                f"mcp '{mcp.key}' context_secret must come from a setup "
+                                f"field of type 'secret'; '{key}' is '{field.type}'"
+                            ),
+                            entity_key=mcp.key,
+                        )
+                    )
+
+    async def _analyze_skills(
+        self, package: Bundle, entities: list[PreviewEntity], issues: list[PreviewIssue]
+    ) -> None:
         for skill in package.skills:
+            problem = skill_content_error(skill.content) if skill.source_type == "content" else None
+            if problem:
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=f"skill '{skill.key}' is not a valid SKILL.md: {problem}",
+                        entity_key=skill.key,
+                    )
+                )
             exists = await self._existence.skill_exists(skill.name)
             entities.append(
                 PreviewEntity(
@@ -493,6 +545,27 @@ class BundleAnalyzer:
             )
 
 
+# A YAML error quotes the offending lines; enough to find them, not the whole file.
+_MAX_SKILL_ERROR_LENGTH = 300
+
+
+def skill_content_error(content: str | None) -> str | None:
+    """Why inline SKILL.md content would be refused by the skill service, else None.
+
+    The same parser the skill service creates the skill with, so analyze refuses
+    exactly what install would fail on.
+    """
+    try:
+        SkillParser().parse_content(content or "")
+    except ValueError as exc:
+        message = str(exc).removeprefix("Failed to parse skill content: ")
+        message = " ".join(message.split())
+        if len(message) > _MAX_SKILL_ERROR_LENGTH:
+            message = message[: _MAX_SKILL_ERROR_LENGTH - 3] + "..."
+        return f"{message} (check the frontmatter between the '---' lines)"
+    return None
+
+
 def required_setup_errors(package: Bundle, setup_values: dict[str, Any]) -> list[PreviewIssue]:
     """Block issues for required setup fields missing a value (checked at install)."""
     issues: list[PreviewIssue] = []
@@ -509,3 +582,37 @@ def required_setup_errors(package: Bundle, setup_values: dict[str, Any]) -> list
                 )
             )
     return issues
+
+
+def context_secret_errors(package: Bundle, setup_values: dict[str, Any]) -> list[PreviewIssue]:
+    """Block issues for a context_secret value the MCP service would refuse.
+
+    The message names the field and the rule, never the value.
+    """
+    from agentarea_mcp.tool_context import CONTEXT_SECRET_MIN_LENGTH
+
+    issues: list[PreviewIssue] = []
+    for mcp in package.mcps:
+        if mcp.context_secret is None:
+            continue
+        for key in setup_refs(mcp.context_secret):
+            value = setup_values.get(key)
+            if value is None or str(value) == "":
+                continue  # required_setup_errors reports a missing required value
+            if not CONTEXT_SECRET_MIN_LENGTH <= len(str(value)) <= _MAX_CONTEXT_SECRET_LENGTH:
+                issues.append(
+                    PreviewIssue(
+                        severity=IssueSeverity.BLOCK,
+                        message=(
+                            f"setup field '{key}' is the context_secret of mcp '{mcp.key}' "
+                            f"and must be {CONTEXT_SECRET_MIN_LENGTH} to "
+                            f"{_MAX_CONTEXT_SECRET_LENGTH} characters long"
+                        ),
+                        entity_key=key,
+                    )
+                )
+    return issues
+
+
+# MCPServerInstanceCreate.context_secret caps the length at 512.
+_MAX_CONTEXT_SECRET_LENGTH = 512

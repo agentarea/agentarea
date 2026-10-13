@@ -114,6 +114,7 @@ async def test_task_sync_accepts_task_policy_and_passes_typed_payload():
     assert task_service.start_run.await_args.kwargs == {
         "workspace_id": context.workspace_id,
         "user_id": context.user_id,
+        "trusted_metadata": None,
     }
 
 

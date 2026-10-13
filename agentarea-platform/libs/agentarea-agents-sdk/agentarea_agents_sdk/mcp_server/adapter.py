@@ -11,10 +11,11 @@ import logging
 from collections.abc import Callable
 from typing import Annotated, Any
 
+from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
 from mcp.types import InputRequiredResult
 from pydantic import Field
 
-from ..tools.base_tool import BaseTool
+from ..tools.base_tool import BaseTool, ToolError
 from ..tools.decorator_tool import Toolset
 from .auth import bind_workspace
 from .toolsets import RegisteredToolset, ToolsetMCPServer
@@ -86,18 +87,24 @@ class MCPToolAdapter:
         is_async = inspect.iscoroutinefunction(method)
 
         async def handler(**kwargs: Any) -> str | InputRequiredResult:
-            if is_async:
-                result = await method(**kwargs)
-            else:
-                result = method(**kwargs)
+            try:
+                result = await method(**kwargs) if is_async else method(**kwargs)
+            except ToolError as exc:
+                raise MCPToolError(str(exc)) from exc
             if isinstance(result, str | InputRequiredResult):
                 return result
+            if isinstance(result, dict) and result.get("success") is False:
+                raise MCPToolError(
+                    str(result.get("result") or result.get("error") or "Tool failed")
+                )
             return json.dumps(result, default=str)
 
-        # Copy signature from original method, removing 'self'
+        # Copy signature from original method, removing 'self'. The return is the
+        # handler's own, a string: left as the method's, the SDK would derive an output
+        # schema from it and reject the serialized result the handler actually returns.
         sig = inspect.signature(method)
         params = [p for name, p in sig.parameters.items() if name != "self"]
-        handler.__signature__ = sig.replace(parameters=params)
+        handler.__signature__ = sig.replace(parameters=params, return_annotation=str)
 
         # Copy type hints (excluding 'self' and 'return')
         hints = {}
@@ -123,8 +130,7 @@ class MCPToolAdapter:
             if result.get("success"):
                 data = result.get("result")
                 return data if isinstance(data, str) else json.dumps(data, default=str)
-            error = result.get("error", "Unknown error")
-            return json.dumps({"error": error})
+            raise MCPToolError(str(result.get("error") or result.get("result") or "Unknown error"))
 
         # Build signature from tool's OpenAI schema
         schema = tool.get_schema()

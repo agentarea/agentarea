@@ -14,6 +14,7 @@ from agentarea_agents_sdk.tools.mcp_tool_identity import (
     MAX_TOOL_NAME_LENGTH,
     McpToolIdentity,
     qualify_mcp_tool_name,
+    server_label,
 )
 from agentarea_agents_sdk.tools.tool_manager import ToolManager
 
@@ -60,6 +61,22 @@ class TestQualifyName:
 
     def test_sanitizes_characters_models_reject(self):
         assert qualify_mcp_tool_name("My GitHub!", "list.repos") == "mcp__my_github___list_repos"
+
+    def test_a_cyrillic_server_name_becomes_a_readable_ascii_label(self):
+        name = qualify_mcp_tool_name("Constractio — инструменты сметчика", "edit_estimate")
+        assert name == "mcp__constractio_instrumenty_smetchika__edit_estimate"
+
+    def test_the_label_is_stable_and_idempotent(self):
+        label = server_label("Сметчик: Ёлка")
+        assert label == "smetchik_elka"
+        assert server_label(label) == label
+
+    def test_accents_fold_and_unreadable_scripts_fall_back(self):
+        assert server_label("Café Ünïcode") == "cafe_unicode"
+        assert server_label("工具") == "server"
+
+    def test_an_ascii_name_keeps_the_label_it_always_had(self):
+        assert server_label("My GitHub!") == "my_github_"
 
     def test_long_names_are_shortened_deterministically(self):
         raw = "x" * 100

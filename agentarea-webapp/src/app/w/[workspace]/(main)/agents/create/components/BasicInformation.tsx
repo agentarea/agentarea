@@ -8,6 +8,7 @@ import {
   FieldErrors,
   UseFormRegister,
   UseFormSetValue,
+  useWatch,
 } from "react-hook-form";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
@@ -45,6 +46,7 @@ const BasicInformation = ({
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
   const t = useTranslations("AgentsPage.create");
+  const answerCheckOn = useWatch({ control, name: "answer_check.enabled" });
   const [nameReady, setNameReady] = useState(!suggestedName);
   useEffect(() => {
     if (suggestedName) setNameReady(true);
@@ -205,6 +207,41 @@ const BasicInformation = ({
           <span className="text-xs text-muted-foreground">
             Allow agent to render interactive UI surfaces
           </span>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                {...register("answer_check.enabled")}
+                className="rounded"
+              />
+              <span className="text-muted-foreground">{t("answerCheck")}</span>
+            </label>
+            <span className="text-xs text-muted-foreground">
+              {t("answerCheckDescription")}
+            </span>
+          </div>
+          {answerCheckOn && (
+            <div className="max-w-xs space-y-2">
+              <FormLabel htmlFor="answer_check_language">
+                {t("answerCheckLanguage")}
+              </FormLabel>
+              <Input
+                id="answer_check_language"
+                {...register("answer_check.language")}
+                placeholder={t("answerCheckLanguagePlaceholder")}
+                aria-invalid={
+                  !!getNestedErrorMessage(errors, "answer_check.language")
+                }
+              />
+              {getNestedErrorMessage(errors, "answer_check.language") && (
+                <p className="form-error">
+                  {getNestedErrorMessage(errors, "answer_check.language")}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

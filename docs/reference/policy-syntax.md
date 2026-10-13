@@ -9,7 +9,7 @@ related:
   - /reference/limits
   - /guides/governance/authorize-a-tool-call
   - /guides/governance/set-a-budget
-last_updated: 2026-07-29
+last_updated: 2026-10-13
 ---
 
 One `PolicyRule` row expresses one governance intent for one subject. Rules are
@@ -105,14 +105,47 @@ name.
 |---|---|---|---|---|
 | `cap` | `spend` | `amount_usd` | string \| number | Required. Omitted means the rule is skipped. |
 | `cap` | `spend` | `period` | `"month"` \| `"run"` | Any other value skips the rule. Defaults to `"month"` when absent. |
-| `cap` | `service` | `amount_usd` | string \| number | Required. |
+| `cap` | `spend` | `category` | `"llm"` \| `"tools"` | Optional. Counts only model calls (`llm`) or only tool calls (`tools`). Absent: all spend. See [Spend caps by kind](#spend-caps-by-kind). |
+| `cap` | `spend` | `client_id` | string | Optional. Counts only this Registered Client's lines. Monthly only. Not with `category: llm`. |
+| `cap` | `spend` | `connection_id` | string | Optional. Counts only this connection's tool lines. Not with `category: llm`. See [tool costs](/reference/tool-costs). |
+| `cap` | `spend` | `tool` | string | Optional, with `connection_id`. Counts only this tool of the connection. A scoped cap bound to an agent also counts only that agent's lines; every scoped cap that matches a call applies. |
+| `cap` | `spend` | `currency` | ISO 4217 code | Optional. The cap's currency; `amount_usd` is in it, and the cap counts only lines in it. Default: the billing currency. Monthly only. Nothing is converted. |
+| `cap` | `service` | `amount_usd` | string \| number | Required. Caps the run's wallet payments (x402, MPP) in USD. For all tool spend use `cap` on `spend` with `category: tools`. |
 | `cap` | `tokens` | `max_tokens` | integer | Optional. |
 | `cap` | `tokens` | `max_tokens_per_call` | integer | Optional in an individual rule, but required in the resolved runtime contract and enforced on every LLM call. |
 | `approval` | `*`, `tool:*` | `approvers` | array of subject refs | Optional. Empty means any caller may approve. |
 | `approval` | `tool:<name>` | `approvers` | array of subject refs | Optional. Stored under `approvers_by_tool[<name>]`. |
 | `safety` | `content` | `prompt_injection` | boolean | Coerced with `bool()`. |
 | `safety` | `content` | `output_sanitizer` | boolean | Coerced with `bool()`. |
+| `safety` | `content` | `answer_check` | object | `{enabled?: bool = true, language?: string, rewrite_instruction?: string (≤4000)}`; unknown keys are refused. See [Answer check](#answer-check). |
 | `egress` | `mcp:<id>` | `allowed_hosts` | array of strings | A non-list value skips the rule. |
+
+### Spend caps by kind
+
+A `cap` on `spend` takes one `period` and at most one `category`, and binds to the
+workspace (every agent's spend), an agent (its own) or, with `client_id`, a Registered
+Client. Every cap that matches applies.
+
+| Counts | `period: month` | `period: run` |
+|---|---|---|
+| All spend | `{}` | `{}`, the run budget |
+| LLM spend | `{category: llm}` | `{category: llm}` |
+| Tool spend | `{category: tools}` | `{category: tools}` |
+| One connection or tool | `{connection_id, tool?}` | `{connection_id, tool?}` |
+| One client | `{client_id}` | — |
+
+| Cap | Checked | What stops |
+|---|---|---|
+| All spend, month | When a run is submitted or starts, and before every tool call | The run, or the call |
+| All spend, run | Before every model turn and every tool call | The run; in a chat it waits for a continuation grant |
+| LLM spend, month | When a run is submitted, starts or resumes | The run; tool calls by Registered Clients still go through |
+| LLM spend, run | Before every model turn | The run, with `failure_reason` `llm_run_cap_exceeded`; no continuation |
+| Tool spend, connection or tool, month | Before every tool call, over the month's lines | The call; the model is told why and the run goes on |
+| Tool spend, connection or tool, run | Before every tool call, over the run's lines | The call; the run goes on |
+
+A run's tool spend is the sum of its own task's ledger lines, across resumed runs;
+a delegated agent's calls count against its own task. A cap is reached once its sum
+equals it, and the call or turn that crosses it is not undone.
 
 Approver references are `user:<id>`, `group:<id>`, or a userset
 `<type>:<id>#<relation>`. A bare id is rejected at write time. Only `user:<id>`
@@ -132,9 +165,76 @@ Applied per layer in order. A lower layer may only tighten.
 | `approval.escalation_rules` | union | — |
 | `approval.approvers` | union | — |
 | `approval.approvers_by_tool` | union per tool key | — |
-| `content_safety.*` | logical OR | sets `false` where a higher layer set `true` |
+| `content_safety.prompt_injection_detection_enabled`, `content_safety.output_sanitizer_enabled` | logical OR | sets `false` where a higher layer set `true` |
+| `content_safety.answer_check` | the lowest layer that sets it wins (an agent's over the workspace's); any rule that sets it overrides the agent's own setting | — |
 
 A rejected chain raises a validation error, surfaced as HTTP 422.
+
+## Answer check
+
+`answer_check` looks at an agent's final answer before the person sees it. It
+has two sources, and exactly one of them decides for a run:
+
+1. A `safety` rule on `content` that sets `answer_check`, at any scope. It is an
+   override, set by whoever can manage policies: `{enabled: false}` turns the
+   check off for an agent whose own setting has it on, and a rule that turns it
+   on replaces the agent's language and instruction with its own.
+2. Otherwise the agent's own `answer_check` setting (`PATCH /v1/agents/{id}`
+   with `{"answer_check": {"language": "ru"}}`, or the agent's edit form).
+   Anyone who can edit the agent can set it; `null` leaves the check off.
+
+Both take the same object, `{enabled?: bool = true, language?: string,
+rewrite_instruction?: string (≤4000)}`. A rule on the agent:
+
+```json
+{"subject_type": "agent", "subject_id": "<agent id>", "target": "content",
+ "effect": "safety", "params": {"answer_check": {"language": "ru"}}}
+```
+
+In a bundle, the same rule is a policy whose `subject` is the agent's key:
+
+```yaml
+policies:
+  - key: clean_answers
+    subject: smetchik
+    target: content
+    effect: safety
+    params: {answer_check: {language: ru}}
+```
+
+| Leak | Found when the answer, outside links, file names and code blocks, has |
+|---|---|
+| `cjk` | Chinese, Japanese or Korean characters. Off for `language` `zh`, `ja`, `ko` |
+| `tool_name` | The name of one of the agent's tools, or an MCP tool's raw name |
+| `identifier` | A `snake_case` code (when no tool name was found) |
+| `stack_trace` | `Error: `, `TypeError` and kin, `ENOENT`, `at f (/path`, `node_modules/`, a Python traceback |
+| `json` | A JSON object (`{"key":`) |
+| `english` | `language: ru` only, in a mostly Cyrillic answer: a lowercase Latin word of four or more letters other than `xlsx`, `docx`, `html`, `http`, `https`, `mailto` |
+
+With no leak nothing happens. Otherwise the workflow makes **one** extra call to
+the agent's own model, with no tools and no streaming, asking it to fix only
+the leaks found (`rewrite_instruction` replaces the default instruction; the
+reply format below is appended to either). The model answers in two blocks,
+`<changes>` (what it fixed) and `<answer>` (the corrected answer). Only the
+`<answer>` block reaches the person, and only when there is exactly one, it is
+not empty and it keeps every link of the original; otherwise the original
+stays, minus CJK characters if those were the leak.
+
+While the check is on, the reply text is withheld from the live stream: the
+run's `llm.call.chunk` events carry `thinking` but an empty `chunk`, so a client
+shows the call in progress. A text-only reply is the final answer, and it is
+checked before its `llm.call.completed` is published, so that event already
+carries the checked text. An answer given through the `completion` tool is
+checked when the run completes.
+
+| What a client sees | |
+|---|---|
+| `llm.call.completed` of the turn | `content` = the checked answer |
+| `llm.call.completed` with `purpose: "answer_check"` | The rewrite call: its cost and usage, and `content` = the checked answer. Same `execution_id`/`iteration` as the turn, so it supersedes the same reply part |
+| `AnswerChecked` | `{iteration, leaks: [{kind, sample}], rewritten, changes}`: what was found and the model's `<changes>`, for audit; never shown as the answer |
+| `task.completed` `result`, the task's `result.response` | The checked answer |
+
+The rewrite is metered like any model call and counts against the run's budget.
 
 ## Enforcement
 
@@ -144,11 +244,11 @@ and the API returns it while the runtime never sees it.
 
 | Surface | Status |
 |---|---|
-| `cap` on `spend` / `service` / `tokens` | Enforced |
+| `cap` on `spend` / `service` / `tokens` | Enforced. See [Spend caps by kind](#spend-caps-by-kind) |
 | `deny` on `tool:<name>` | Enforced |
 | `allow` on `tool:<name>` | Enforced |
 | `approval` on `*`, `tool:*`, `tool:<name>` | Enforced in the agent workflow only |
-| `safety` on `content` | Enforced by the two registered content filters |
+| `safety` on `content` | `prompt_injection` and `output_sanitizer` by the two registered content filters; `answer_check` by the agent workflow on its final answer |
 | `condition` on any rule | **Inert.** No resolver, compiler or gate reads it. |
 | `subject_type: group` | **Inert.** The resolver reads workspace, agent and user layers only. |
 | `priority` | **Inert.** Stored and returned; not used in ordering. |

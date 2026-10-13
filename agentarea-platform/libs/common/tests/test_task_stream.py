@@ -464,3 +464,90 @@ async def test_resume_after_a_waiting_turn_keeps_following_the_execution():
         )
     )
     assert [e.event_id for e in out] == [_uid(2)]
+
+
+@pytest.mark.asyncio
+async def test_history_of_a_continued_conversation_is_replayed_past_the_first_run():
+    # A stopped run, then a follow-up run that is under way.
+    snapshot = await _snapshot_of(
+        _env(1, "task.started"),
+        _env(2, "task.cancelled"),
+        _env(3, "tool.result"),
+        _env(4, "task.started"),
+        _env(5, "llm.call.completed"),
+    )
+    stream = _FakeStream([_evt(6, "task.completed")])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=frozenset({"task.cancelled", "task.completed"}),
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(n) for n in range(1, 7)]
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_run_keeps_its_settled_events_and_then_closes():
+    snapshot = await _snapshot_of(
+        _env(1, "task.started"), _env(2, "task.cancelled"), _env(3, "tool.result")
+    )
+    stream = _FakeStream([_evt(99)])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=frozenset({"task.cancelled"}),
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3)]
+    assert stream.read_args == {}
+
+
+@pytest.mark.asyncio
+async def test_resume_after_a_terminal_event_tails_a_run_started_since():
+    async def run_open() -> bool:
+        return True
+
+    cursor = _at(5, 5, "task.failed")
+    snapshot = await _snapshot_of()
+    stream = _FakeStream([_live_at(6, 6, "task.started"), _live_at(7, 7, "task.completed")])
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=snapshot,
+            terminal_types=frozenset({"task.failed", "task.completed"}),
+            resume_after=cursor,
+            run_open=run_open,
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(6), _uid(7)]
+
+
+@pytest.mark.asyncio
+async def test_web_feed_stays_open_while_a_stopped_run_records_what_it_interrupted():
+    stream = _FakeStream(
+        [
+            _evt_with(1, "task.cancelled", {"execution_status": "settling"}),
+            _evt_with(2, "tool.result", {"cancelled": True}),
+            _evt_with(3, "execution.finished", {"execution_status": "cancelled"}),
+            _evt(4),
+        ]
+    )
+    out = await _collect(
+        iter_task_event_feed(
+            stream=stream,
+            task_id=_TASK,
+            snapshot=await _snapshot_of(),
+            terminal_types=frozenset({"task.cancelled", "execution.finished"}),
+            follow_execution=True,
+        )
+    )
+    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3)]
+
+
+def _evt_with(n: int, event_type: str, data: dict) -> IntegrationEvent:
+    return IntegrationEvent(id=_uid(n), type=event_type, source="w", subject=_TASK, data=data)

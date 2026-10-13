@@ -34,7 +34,11 @@ export async function GET(
 
     // EventSource reconnects with the last `id:` it saw; forwarding it lets
     // the backend resume after that event instead of replaying the history.
-    const lastEventId = request.headers.get("last-event-id");
+    // A view opening the stream again for a new run names it in the query,
+    // which EventSource can set where it cannot set a header.
+    const lastEventId =
+      request.headers.get("last-event-id") ??
+      request.nextUrl.searchParams.get("last_event_id");
     if (lastEventId) {
       headers["Last-Event-ID"] = lastEventId;
     }

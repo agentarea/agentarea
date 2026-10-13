@@ -246,6 +246,10 @@ export type AgentCreateRequest = {
      */
     agent_type?: 'stateless' | 'stateful';
     /**
+     * Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting.
+     */
+    answer_check?: AnswerCheckPolicy | null;
+    /**
      * Description
      *
      * Short summary of what the agent does.
@@ -390,6 +394,7 @@ export type AgentResponse = {
      * Agent Type
      */
     agent_type?: string;
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Description
      */
@@ -502,6 +507,7 @@ export type AgentUpdate = {
      * Agent Type
      */
     agent_type?: 'stateless' | 'stateful';
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Capabilities
      */
@@ -557,6 +563,28 @@ export type AnalyzeRequest = {
      * URL to fetch raw bundle source from (YAML or JSON).
      */
     source_url?: string | null;
+};
+/**
+ * AnswerCheckPolicy
+ *
+ * Check an agent's final answer and have the model rewrite it once if it leaks.
+ *
+ * Leaks: CJK characters, tool names and snake_case codes, stack traces, raw
+ * JSON, and (for ``language: ru``) lowercase English words in a Russian answer.
+ */
+export type AnswerCheckPolicy = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Rewrite Instruction
+     */
+    rewrite_instruction?: string | null;
 };
 /**
  * ApprovalDecision
@@ -882,7 +910,9 @@ export type BudgetPeriod = 'execution' | 'daily' | 'monthly';
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export type BudgetPolicyInput = {
     /**
@@ -901,6 +931,10 @@ export type BudgetPolicyInput = {
      * Service Budget Usd
      */
     service_budget_usd?: number | string | null;
+    /**
+     * Spend Caps
+     */
+    spend_caps?: Array<ScopedSpendCapInput> | null;
 };
 /**
  * BudgetPolicy
@@ -909,7 +943,9 @@ export type BudgetPolicyInput = {
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export type BudgetPolicyOutput = {
     /**
@@ -928,6 +964,10 @@ export type BudgetPolicyOutput = {
      * Service Budget Usd
      */
     service_budget_usd?: string | null;
+    /**
+     * Spend Caps
+     */
+    spend_caps?: Array<ScopedSpendCapOutput> | null;
 };
 /**
  * Bundle
@@ -1188,6 +1228,12 @@ export type BundleMcp = {
         [key: string]: string;
     };
     /**
+     * Context Secret
+     *
+     * URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.
+     */
+    context_secret?: string | null;
+    /**
      * Json Spec
      *
      * Native MCP runtime spec. Must include 'type' (command|docker|url).
@@ -1368,6 +1414,10 @@ export type CatalogBrowseResponse = {
      */
     items: Array<RegistryItemResponse>;
     /**
+     * Pricings
+     */
+    pricings?: Array<CategoryFacet>;
+    /**
      * Protocols
      */
     protocols: Array<CategoryFacet>;
@@ -1375,6 +1425,31 @@ export type CatalogBrowseResponse = {
      * Total
      */
     total: number;
+};
+/**
+ * CatalogComputeEstimate
+ *
+ * What a running instance of an entry hosted on AgentArea reserves, and its hour.
+ *
+ * ``hourly`` is null where nothing prices compute: the reservation is shown alone.
+ */
+export type CatalogComputeEstimate = {
+    /**
+     * Currency
+     */
+    currency: string | null;
+    /**
+     * Hourly
+     */
+    hourly: string | null;
+    /**
+     * Memory Gib
+     */
+    memory_gib: string;
+    /**
+     * Vcpu
+     */
+    vcpu: string;
 };
 /**
  * CatalogConnection
@@ -1435,6 +1510,33 @@ export type CatalogItemCreate = {
     version?: string | null;
 };
 /**
+ * CatalogItemPricingResponse
+ *
+ * Whether using a connection costs money through AgentArea (wiki ADR-0038).
+ *
+ * ``kind`` "paid": the platform's key may pay and the workspace is billed;
+ * ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
+ * the vendor bills the workspace's own account. "free": nothing is charged.
+ * ``kind`` is about calls only; ``compute`` is the separate hourly reservation
+ * of an entry that runs on AgentArea.
+ */
+export type CatalogItemPricingResponse = {
+    compute?: CatalogComputeEstimate | null;
+    /**
+     * Kind
+     */
+    kind: 'paid' | 'own_key' | 'free';
+    /**
+     * Payers
+     */
+    payers: Array<string>;
+    price_from: CatalogToolPrice | null;
+    /**
+     * Prices
+     */
+    prices: Array<CatalogToolPrice>;
+};
+/**
  * CatalogItemUpdate
  */
 export type CatalogItemUpdate = {
@@ -1464,6 +1566,29 @@ export type CatalogItemUpdate = {
      * Version
      */
     version?: string | null;
+};
+/**
+ * CatalogToolPrice
+ *
+ * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ */
+export type CatalogToolPrice = {
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Tool
+     */
+    tool: string | null;
+    /**
+     * Unit
+     */
+    unit: string;
 };
 /**
  * CategoryFacet
@@ -1549,6 +1674,27 @@ export type ClientMcpInstanceRef = {
     namespace_prefix?: string | null;
 };
 /**
+ * ClientOpenAPIConnectionRef
+ */
+export type ClientOpenApiConnectionRef = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
+};
+/**
  * ClientPlatformToolsetRef
  */
 export type ClientPlatformToolsetRef = {
@@ -1607,6 +1753,10 @@ export type ClientResponse = {
      */
     name: string;
     /**
+     * Openapi Connections
+     */
+    openapi_connections?: Array<ClientOpenApiConnectionRef>;
+    /**
      * Platform Toolsets
      */
     platform_toolsets?: Array<ClientPlatformToolsetRef>;
@@ -1658,8 +1808,8 @@ export type CodeToolConfig = {
  * Settings for a built-in code toolset.
  *
  * The model ids are model instances of the workspace, each of the kind its
- * toolset needs: ``agentarea/media`` takes an image and/or a video model,
- * ``agentarea/decide`` a decision model. No other toolset takes one.
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model.
+ * No other toolset takes one.
  */
 export type CodeToolSettings = {
     /**
@@ -1672,12 +1822,6 @@ export type CodeToolSettings = {
      * agentarea/media: model instance generating images.
      */
     image_model_id?: string | null;
-    /**
-     * Model Id
-     *
-     * agentarea/decide: decision model instance.
-     */
-    model_id?: string | null;
     /**
      * Requires User Confirmation
      */
@@ -1763,6 +1907,7 @@ export type CollectionUpdateRequest = {
  * Content-safety governance controls.
  */
 export type ContentSafetyPolicy = {
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Output Sanitizer Enabled
      */
@@ -1839,6 +1984,19 @@ export type CreateWorkspaceDirectoryRequest = {
      * Path
      */
     path: string;
+};
+/**
+ * CurrencySpend
+ */
+export type CurrencySpend = {
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Currency
+     */
+    currency: string;
 };
 /**
  * DailySpendPoint
@@ -1936,6 +2094,10 @@ export type DashboardTask = {
  */
 export type DiscoverPreviewModelResponse = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
+    /**
      * Context Window
      */
     context_window: number | null;
@@ -2027,6 +2189,10 @@ export type DiscoverPreviewResponse = {
  * DiscoveredModelResponse
  */
 export type DiscoveredModelResponse = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
     /**
      * Context Window
      */
@@ -2279,7 +2445,7 @@ export type ExecutionMetricsResponse = {
     /**
      * Failure Rate
      *
-     * Percentage, 0-100.
+     * Percentage, 0-100, of the runs that tried to start a task; skips excluded.
      */
     failure_rate: number;
     /**
@@ -2297,9 +2463,15 @@ export type ExecutionMetricsResponse = {
      */
     period_hours?: number | null;
     /**
+     * Skipped Executions
+     *
+     * Events the trigger's conditions turned away, or that came while it was off.
+     */
+    skipped_executions: number;
+    /**
      * Success Rate
      *
-     * Percentage, 0-100.
+     * Percentage, 0-100, of the runs that tried to start a task; skips excluded.
      */
     success_rate: number;
     /**
@@ -3153,6 +3325,12 @@ export type McpServerInstanceCreate = {
      */
     auth_config_id?: string | null;
     /**
+     * Context Secret
+     *
+     * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+     */
+    context_secret?: string | null;
+    /**
      * Description
      *
      * Optional human-readable description of the instance.
@@ -3187,6 +3365,12 @@ export type McpServerInstanceCreateWithoutSpec = {
      * Auth Config Id
      */
     auth_config_id?: string | null;
+    /**
+     * Context Secret
+     *
+     * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+     */
+    context_secret?: string | null;
     /**
      * Description
      */
@@ -3235,6 +3419,10 @@ export type McpServerInstanceResponse = {
         [key: string]: unknown;
     } | null;
     /**
+     * Managed By
+     */
+    managed_by?: string | null;
+    /**
      * Name
      */
     name: string;
@@ -3266,6 +3454,12 @@ export type McpServerInstanceResponse = {
  * Patch payload for an MCP server instance. All fields optional — unset = unchanged.
  */
 export type McpServerInstanceUpdate = {
+    /**
+     * Context Secret
+     *
+     * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.
+     */
+    context_secret?: string | null;
     /**
      * Description
      */
@@ -3811,6 +4005,10 @@ export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
  */
 export type ModelSpecCreate = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: number | string | null;
+    /**
      * Context Window
      */
     context_window?: number | null;
@@ -3856,6 +4054,10 @@ export type ModelSpecCreate = {
  * ModelSpecUpdate
  */
 export type ModelSpecUpdate = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: number | string | null;
     /**
      * Context Window
      */
@@ -4240,6 +4442,25 @@ export type OAuthPreflightResponse = {
      * Status
      */
     status: 'ready' | 'oauth_app_required' | 'unsupported';
+};
+/**
+ * OpenAPIConnectionAssociationBody
+ *
+ * Attach an OpenAPI connection, or replace how an attached one is served.
+ */
+export type OpenApiConnectionAssociationBody = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
 };
 /**
  * OpenAPIConnectionCreate
@@ -5627,6 +5848,7 @@ export type RegistryItemResponse = {
      * Name
      */
     name: string;
+    pricing?: CatalogItemPricingResponse | null;
     /**
      * Registry Id
      */
@@ -6045,7 +6267,21 @@ export type ScheduleTaskCreate = {
      * Description
      */
     description: string;
+    /**
+     * End User Id
+     *
+     * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+     */
+    end_user_id?: string | null;
     execution?: RunExecutionConfig | null;
+    /**
+     * Metadata
+     *
+     * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -6065,6 +6301,10 @@ export type ScheduleTaskCreate = {
      */
     scheduled_at: string;
     task_policy?: PolicyDocument | null;
+    /**
+     * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
+     */
+    webhook?: TaskWebhook | null;
 };
 /**
  * ScheduledRun
@@ -6090,6 +6330,98 @@ export type ScheduledRun = {
      * Trigger Id
      */
     trigger_id: string;
+};
+/**
+ * ScopedSpendCap
+ *
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ *
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
+ */
+export type ScopedSpendCapInput = {
+    /**
+     * Amount Usd
+     */
+    amount_usd: number | string;
+    /**
+     * Category
+     */
+    category?: 'llm' | 'tools' | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Own Agent
+     */
+    own_agent?: boolean;
+    /**
+     * Period
+     */
+    period?: 'run' | null;
+    /**
+     * Tool
+     */
+    tool?: string | null;
+};
+/**
+ * ScopedSpendCap
+ *
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ *
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
+ */
+export type ScopedSpendCapOutput = {
+    /**
+     * Amount Usd
+     */
+    amount_usd: string;
+    /**
+     * Category
+     */
+    category?: 'llm' | 'tools' | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Own Agent
+     */
+    own_agent?: boolean;
+    /**
+     * Period
+     */
+    period?: 'run' | null;
+    /**
+     * Tool
+     */
+    tool?: string | null;
 };
 /**
  * SecretConsumer
@@ -6636,6 +6968,10 @@ export type SpendCard = {
      */
     mtd_usd: string;
     /**
+     * Not Covered
+     */
+    not_covered?: Array<CurrencySpend>;
+    /**
      * Pct Of Cap
      */
     pct_of_cap: number | null;
@@ -7026,7 +7362,21 @@ export type TaskCreate = {
      * Description
      */
     description: string;
+    /**
+     * End User Id
+     *
+     * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+     */
+    end_user_id?: string | null;
     execution?: RunExecutionConfig | null;
+    /**
+     * Metadata
+     *
+     * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -7042,6 +7392,10 @@ export type TaskCreate = {
      */
     requires_human_approval?: boolean | null;
     task_policy?: PolicyDocument | null;
+    /**
+     * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
+     */
+    webhook?: TaskWebhook | null;
 };
 /**
  * TaskEvent
@@ -7053,6 +7407,16 @@ export type TaskEvent = {
      * Agent Id
      */
     agent_id: string;
+    /**
+     * Data
+     */
+    data?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Event Id
+     */
+    event_id?: string | null;
     /**
      * Event Type
      */
@@ -7182,6 +7546,10 @@ export type TaskResponse = {
      */
     description: string;
     /**
+     * End User Id
+     */
+    end_user_id?: string | null;
+    /**
      * Error
      */
     error?: string | null;
@@ -7197,6 +7565,12 @@ export type TaskResponse = {
      * Id
      */
     id: string;
+    /**
+     * Metadata
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -7222,6 +7596,10 @@ export type TaskResponse = {
      * Total Cost
      */
     total_cost?: number | null;
+    /**
+     * Total Tokens
+     */
+    total_tokens?: number | null;
 };
 /**
  * TaskSummary
@@ -7309,6 +7687,25 @@ export type TaskSummary = {
     workspace_id: string;
 };
 /**
+ * TaskWebhook
+ *
+ * Where to POST each terminal event of the task, with its cost.
+ */
+export type TaskWebhook = {
+    /**
+     * Secret
+     *
+     * Signs each delivery as X-AgentArea-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">. Write-only: stored in the secret manager.
+     */
+    secret?: string | null;
+    /**
+     * Url
+     *
+     * http(s) URL to POST to.
+     */
+    url: string;
+};
+/**
  * TaskWithAgent
  *
  * Task response with agent information for global task listing.
@@ -7335,6 +7732,10 @@ export type TaskWithAgent = {
      */
     description: string;
     /**
+     * End User Id
+     */
+    end_user_id?: string | null;
+    /**
      * Error
      */
     error?: string | null;
@@ -7358,6 +7759,12 @@ export type TaskWithAgent = {
      * Id
      */
     id: string;
+    /**
+     * Metadata
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -7383,6 +7790,10 @@ export type TaskWithAgent = {
      * Total Cost
      */
     total_cost?: number | null;
+    /**
+     * Total Tokens
+     */
+    total_tokens?: number | null;
 };
 /**
  * TelegramLinkRequest
@@ -8879,6 +9290,10 @@ export type AgentareaApiApiV1AccessControlSyncResponse = {
  */
 export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
+    /**
      * Context Window
      */
     context_window: number | null;
@@ -8956,6 +9371,10 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
     /**
      * Context Window
      */
@@ -10117,7 +10536,14 @@ export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostData = {
          */
         agent_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Follow
+         *
+         * Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.
+         */
+        follow?: boolean;
+    };
     url: '/v1/workspaces/{workspace}/agents/{agent_id}/tasks/';
 };
 export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostErrors = {
@@ -10585,6 +11011,34 @@ export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors = {
 };
 export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostError = ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors[keyof ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors];
 export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/retry';
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostError = RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors[keyof RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors];
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostResponses = {
     /**
      * Successful Response
      */
@@ -11331,6 +11785,60 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
     204: void;
 };
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostData = {
+    body: OpenApiConnectionAssociationBody;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections';
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostError = AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors[keyof AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors];
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponse = AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses[keyof AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses];
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}';
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteError = RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors[keyof RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors];
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponse = RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses[keyof RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses];
 export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData = {
     body: PlatformToolsetAssociationBody;
     path: {
@@ -14452,6 +14960,12 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
          */
         hosting?: 'vendor' | 'agentarea' | null;
         /**
+         * Pricing
+         *
+         * Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.
+         */
+        pricing?: 'paid' | 'own_key' | 'free' | null;
+        /**
          * Sort
          *
          * 'recommended' (default) or 'name'
@@ -16532,7 +17046,7 @@ export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData = {
         /**
          * Status
          *
-         * Filter by execution status (success, failed, timeout)
+         * Filter by execution status (success, failed, timeout, cancelled, skipped)
          */
         status?: string | null;
         /**

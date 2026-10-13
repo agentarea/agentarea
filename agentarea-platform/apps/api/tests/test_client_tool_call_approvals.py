@@ -137,10 +137,10 @@ def client(monkeypatch, upstream_calls):
 
     async def call_member(_member, tool_name, arguments):
         upstream_calls.append((tool_name, arguments))
-        return f"ran {tool_name}"
+        return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(proxy, "_discover_member_tools", discover)
-    monkeypatch.setattr(proxy, "_call_member_tool", call_member)
+    monkeypatch.setattr(proxy, "_call_member_tool_result", call_member)
 
     def with_policy(policy: dict, user: UserContext = REQUESTER) -> None:
         scope = client_mcp.ClientScope(
@@ -240,9 +240,7 @@ async def test_after_approval_the_retry_runs_once_and_the_next_needs_a_new_one(
 
 
 @pytest.mark.asyncio
-async def test_an_approval_does_not_run_other_arguments_or_another_user(
-    client, db, upstream_calls
-):
+async def test_an_approval_does_not_run_other_arguments_or_another_user(client, db, upstream_calls):
     client(GATED)
     await _call("deepwiki__ask_question", question="q")
     [row] = await _approvals(db)
@@ -327,7 +325,14 @@ def dispatch(monkeypatch):
         return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(MCPAggregatorProxy, "_call_member_tool_result", call_member)
-    instance = SimpleNamespace(id=INSTANCE_ID, name="DeepWiki", transport="url")
+    instance = SimpleNamespace(
+        id=INSTANCE_ID, name="DeepWiki", transport="url", managed_by=None, server_spec_id="spec"
+    )
+
+    async def no_catalog_entry(_user_ctx, _instance):
+        return None
+
+    monkeypatch.setattr(client_mcp, "_catalog_server_spec", no_catalog_entry)
     service = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)
     service._resolve_mcp_url_and_headers = AsyncMock(

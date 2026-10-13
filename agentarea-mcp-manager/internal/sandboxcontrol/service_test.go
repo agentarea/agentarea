@@ -414,3 +414,62 @@ func moveExecutionToRunning(t *testing.T, service *Service, id string) {
 		t.Fatalf("start execution: %v", err)
 	}
 }
+
+func TestServiceCancelAsksTheRunnerToStopARunningExecution(t *testing.T) {
+	store := newMemoryStore()
+	service := newTestService(t, store, testMaxExecutionTimeoutSeconds)
+	record, err := service.CreateExecution(context.Background(), ExecutionCreateRequest{
+		WorkspaceID: "workspace-1", TaskID: "task-1",
+		Command: warmpool.ExecuteRequest{CommandBody: "sleep 600"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	moveExecutionToRunning(t, service, record.ID)
+
+	requested, err := service.CancelExecution(context.Background(), record.ID, "the run was stopped")
+	if err != nil {
+		t.Fatalf("CancelExecution() error = %v", err)
+	}
+	if requested.Status != ExecutionStatusRunning || requested.CancelRequestedAt == nil {
+		t.Fatalf("running cancel = status %q requested_at %v, want running with a request", requested.Status, requested.CancelRequestedAt)
+	}
+	again, err := service.CancelExecution(context.Background(), record.ID, "the run was stopped")
+	if err != nil {
+		t.Fatalf("repeated CancelExecution() error = %v", err)
+	}
+	if again.Revision != requested.Revision {
+		t.Fatalf("repeated cancel revision = %d, want %d", again.Revision, requested.Revision)
+	}
+	if got := store.lifecycle[len(store.lifecycle)-1]; got != EventTypeExecutionCancelRequested {
+		t.Fatalf("last lifecycle event = %q, want %q", got, EventTypeExecutionCancelRequested)
+	}
+
+	cancelled, err := service.ApplyExecutionEvent(context.Background(), record.ID, ExecutionEventRequest{
+		EventType: EventTypeExecutionCancelled, Error: "the run was stopped",
+	})
+	if err != nil {
+		t.Fatalf("runner records the cancel: %v", err)
+	}
+	if cancelled.Status != ExecutionStatusCancelled {
+		t.Fatalf("status = %q, want cancelled", cancelled.Status)
+	}
+}
+
+func TestServiceCancelOfQueuedExecutionStillAbandonsIt(t *testing.T) {
+	service := newTestService(t, newMemoryStore(), testMaxExecutionTimeoutSeconds)
+	record, err := service.CreateExecution(context.Background(), ExecutionCreateRequest{
+		WorkspaceID: "workspace-1", TaskID: "task-1",
+		Command: warmpool.ExecuteRequest{CommandBody: "true"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := service.CancelExecution(context.Background(), record.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelled.Status != ExecutionStatusCancelled || cancelled.CancelRequestedAt != nil {
+		t.Fatalf("queued cancel = %+v, want cancelled without a runner request", cancelled)
+	}
+}

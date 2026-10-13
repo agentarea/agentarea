@@ -63,6 +63,18 @@ function fmtCustomValue(value: unknown): string {
   }
 }
 
+// What a spend cap counts, for its label: all spend, or only LLM or tool spend.
+const SPEND_CATEGORY_LABELS: Record<string, string> = {
+  llm: "LLM",
+  tools: "tools",
+};
+
+function spendCategory(params: Record<string, unknown>): string | undefined {
+  return typeof params.category === "string"
+    ? SPEND_CATEGORY_LABELS[params.category]
+    : undefined;
+}
+
 function str(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (typeof value === "number") return String(value);
@@ -112,7 +124,7 @@ export function documentToRules(
       rules.push({
         effect: "cap",
         category: "Budget",
-        label: "Per-service budget",
+        label: "Wallet payments per task",
         value: fmtMoney(b.service_budget_usd, currency, locale),
         stage: STAGE.beforeLlmOrTool,
       });
@@ -287,10 +299,11 @@ function describeRule(
     const amount = fmtMoney(p.amount_usd, currency, locale);
     if (policy.target === "spend") {
       const period = str(p.period);
-      const label = period === "run" ? "Per-task budget" : "Monthly budget";
+      const kind = spendCategory(p);
+      const label = `${period === "run" ? "Per-task" : "Monthly"}${kind ? ` ${kind}` : ""} budget`;
       return { label, value: amount };
     }
-    return { label: "Per-service budget", value: amount };
+    return { label: "Wallet payments per task", value: amount };
   }
 
   if (dimension === "tokens") {
@@ -473,8 +486,9 @@ function buildDimensions(
     if (dimension === "budget") {
       if (policy.target === "spend") {
         const period = str(p.period);
+        const kind = spendCategory(p);
         budgetParts.push(
-          `${fmtMoney(p.amount_usd, currency, locale)}/${period === "run" ? "run" : "mo"}`
+          `${fmtMoney(p.amount_usd, currency, locale)}/${period === "run" ? "run" : "mo"}${kind ? `·${kind}` : ""}`
         );
       } else {
         budgetParts.push(`${fmtMoney(p.amount_usd, currency, locale)}/svc`);

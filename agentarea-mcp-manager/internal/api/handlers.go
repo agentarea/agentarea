@@ -92,6 +92,7 @@ func (h *Handler) SetupRoutes(router *gin.Engine) {
 	instances.POST("/:id/health", h.healthCheckInstance)
 	instances.GET("/:id/health/detailed", h.getDetailedInstanceHealth)
 	instances.GET("/health", h.healthCheckInstances)
+	instances.GET("/reservation", h.defaultReservation)
 
 	monitoring := router.Group("/monitoring", managerInspectionAuth)
 	monitoring.GET("/status", h.getMonitoringStatus)
@@ -181,6 +182,32 @@ func (h *Handler) healthCheck(c *gin.Context) {
 }
 
 // Backend-agnostic instance management methods
+
+// defaultReservation reports what a new MCP instance whose spec names no resources
+// reserves: per dimension its request, else its limit, the amount compute billing
+// charges for. The platform shows a hosted connector's expected price from it.
+func (h *Handler) defaultReservation(c *gin.Context) {
+	reporter, ok := h.backend.(backends.DefaultReservationReporter)
+	if !ok {
+		c.JSON(http.StatusNotImplemented, models.ErrorResponse{
+			Error:   "reservation_unavailable",
+			Code:    http.StatusNotImplemented,
+			Message: "this backend cannot report a reservation",
+		})
+		return
+	}
+	reservation, err := reporter.DefaultReservation(c.Request.Context())
+	if err != nil {
+		h.logger.Error("Failed to read the default reservation", slog.String("error", err.Error()))
+		c.JSON(http.StatusBadGateway, models.ErrorResponse{
+			Error:   "reservation_unavailable",
+			Code:    http.StatusBadGateway,
+			Message: err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, reservation)
+}
 
 // listInstances returns a list of all managed instances
 func (h *Handler) listInstances(c *gin.Context) {

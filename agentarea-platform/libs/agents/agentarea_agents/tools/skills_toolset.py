@@ -21,17 +21,19 @@ This toolset is distinct from the SDK-side ``SkillActivationTool`` (in
 import base64
 import io
 import json
+import logging
 import posixpath
-import re
 import zipfile
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 
+from agentarea_agents.application.skill_parser import parse_frontmatter
 from agentarea_agents.infrastructure.github_skill_importer import extract_skill_package
 from agentarea_agents.schemas.skills_dto import (
     SkillCreateFromArchive,
@@ -43,16 +45,13 @@ from agentarea_agents.schemas.skills_dto import (
 
 from .platform_base import platform_context, platform_read_context
 
+logger = logging.getLogger(__name__)
+
 MAX_FILES = 200
 MAX_INLINE_BYTES = 5 * 1024 * 1024  # 5 MB total across the file map
 MAX_PATH_DEPTH = 10
 MAX_GITHUB_SKILL_CANDIDATES = 50
 MAX_GITHUB_IMPORTS = 10
-FRONTMATTER_NAME_RE = re.compile(r"^name:\s*['\"]?(?P<name>[^'\"\n]+?)['\"]?\s*$", re.MULTILINE)
-FRONTMATTER_DESCRIPTION_RE = re.compile(
-    r"^description:\s*['\"]?(?P<description>[^'\"\n]+?)['\"]?\s*$",
-    re.MULTILINE,
-)
 
 
 def _validate_files_payload(files: Any) -> str | None:
@@ -94,14 +93,19 @@ def _skill_summary(skill: Any) -> dict[str, Any]:
     }
 
 
-def _frontmatter_name(content: str) -> str | None:
-    match = FRONTMATTER_NAME_RE.search(content)
-    return match.group("name").strip() if match else None
-
-
-def _frontmatter_description(content: str) -> str | None:
-    match = FRONTMATTER_DESCRIPTION_RE.search(content)
-    return match.group("description").strip() if match else None
+def _candidate_frontmatter(content: str) -> dict[str, str | None]:
+    """Name and description as install will read them, or the parse error."""
+    try:
+        frontmatter, _body = parse_frontmatter(content)
+    except ValueError as exc:
+        logger.warning("SKILL.md candidate frontmatter does not parse", exc_info=True)
+        return {"name": None, "description": None, "error": str(exc)}
+    name = frontmatter.get("name")
+    description = frontmatter.get("description")
+    return {
+        "name": name.strip() if isinstance(name, str) else None,
+        "description": description.strip() if isinstance(description, str) else None,
+    }
 
 
 async def _fetch_text(url: str) -> str:
@@ -176,8 +180,7 @@ async def _list_github_skill_candidates(
         content = await _fetch_text(raw_url)
         candidates.append(
             {
-                "name": _frontmatter_name(content),
-                "description": _frontmatter_description(content),
+                **_candidate_frontmatter(content),
                 "skill_path": path,
                 "package_path": _candidate_package_path(path),
                 "raw_url": raw_url,
@@ -253,7 +256,7 @@ class SkillsToolset(Toolset):
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill = await service.get(UUID(skill_id))
             if not skill:
-                return json.dumps({"error": "Skill not found"})
+                raise ToolError("Skill not found")
             payload = _skill_summary(skill)
             payload.update({"source_url": skill.source_url, "content": skill.content})
             return json.dumps(payload, default=str)
@@ -276,10 +279,10 @@ class SkillsToolset(Toolset):
         """
         err = _validate_files_payload(files)
         if err:
-            return json.dumps({"error": err})
+            raise ToolError(err)
         normalized = _normalize_files(files)
         if not _has_skill_md(normalized):
-            return json.dumps({"error": "files must include a SKILL.md at the root"})
+            raise ToolError("files must include a SKILL.md at the root")
 
         # The DTO is the source of truth for the wire schema. Build it after
         # the toolset-side limit checks so the LLM gets the more helpful
@@ -292,7 +295,7 @@ class SkillsToolset(Toolset):
                 description=description or None,
             )
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -333,11 +336,11 @@ class SkillsToolset(Toolset):
                 description=description or None,
             )
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
         try:
             zip_bytes = base64.b64decode(payload.zip_base64, validate=True)
         except Exception as exc:
-            return json.dumps({"error": f"Invalid base64: {exc}"})
+            raise ToolError(f"Invalid base64: {exc}") from exc
 
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
@@ -373,7 +376,7 @@ class SkillsToolset(Toolset):
                 description=description or None,
             )
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         return await self._import_github_packages(
             github_url=payload.github_url,
@@ -413,18 +416,14 @@ class SkillsToolset(Toolset):
                         "a more specific GitHub tree URL, or import_all=true.",
                     }
                 )
-            return json.dumps(payload)
+            raise ToolError(json.dumps(payload)) from exc
         except Exception as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         if len(selected) > MAX_GITHUB_IMPORTS:
-            return json.dumps(
-                {
-                    "error": (
-                        f"Refusing to import {len(selected)} GitHub skill packages; "
-                        f"limit is {MAX_GITHUB_IMPORTS}. Use a more specific tree URL."
-                    )
-                }
+            raise ToolError(
+                f"Refusing to import {len(selected)} GitHub skill packages; "
+                f"limit is {MAX_GITHUB_IMPORTS}. Use a more specific tree URL."
             )
 
         try:
@@ -432,7 +431,7 @@ class SkillsToolset(Toolset):
 
             repo_zip_data = await GitHubSkillImporter().download_repo(github_url)
         except Exception as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         created: list[dict[str, Any]] = []
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
@@ -447,7 +446,7 @@ class SkillsToolset(Toolset):
                         package_path=candidate.get("package_path") or "",
                     )
                 except ValueError as exc:
-                    return json.dumps({"error": str(exc)})
+                    raise ToolError(str(exc)) from exc
                 skill = await service.create_from_zip(
                     zip_data=zip_data,
                     name=(name or None) if len(selected) == 1 else None,
@@ -489,7 +488,7 @@ class SkillsToolset(Toolset):
         try:
             payload = SkillEditMetadata.model_validate(patch)
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
@@ -497,7 +496,7 @@ class SkillsToolset(Toolset):
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill = await service.update(UUID(skill_id), payload)
             if not skill:
-                return json.dumps({"error": "Skill not found"})
+                raise ToolError("Skill not found")
             return json.dumps(
                 {"id": str(skill.id), "name": skill.name, "description": skill.description},
                 default=str,
@@ -516,7 +515,7 @@ class SkillsToolset(Toolset):
         """
         err = _validate_files_payload(files)
         if err:
-            return json.dumps({"error": err})
+            raise ToolError(err)
         normalized = _normalize_files(files)
 
         # Validate the payload up front via the DTO so the wire schema and
@@ -525,7 +524,7 @@ class SkillsToolset(Toolset):
         try:
             SkillEditContent(files=normalized)
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
@@ -533,24 +532,20 @@ class SkillsToolset(Toolset):
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill = await service.get(UUID(skill_id))
             if not skill:
-                return json.dumps({"error": "Skill not found"})
+                raise ToolError("Skill not found")
 
             if skill.s3_path is None:
                 # Content mode: only single SKILL.md allowed
                 if len(normalized) != 1 or not _has_skill_md(normalized):
-                    return json.dumps(
-                        {
-                            "error": (
-                                "Skill is content-mode (single SKILL.md only). "
-                                "Multi-file edits are not supported. To migrate to a "
-                                "package, delete this skill and re-create with create()."
-                            )
-                        }
+                    raise ToolError(
+                        "Skill is content-mode (single SKILL.md only). "
+                        "Multi-file edits are not supported. To migrate to a "
+                        "package, delete this skill and re-create with create()."
                     )
                 key = next(iter(normalized))
                 updated = await service.set_content(UUID(skill_id), normalized[key])
                 if updated is None:
-                    return json.dumps({"error": f"Skill {skill_id} not found"})
+                    raise ToolError(f"Skill {skill_id} not found")
                 return json.dumps(
                     {
                         "id": str(updated.id),
@@ -562,7 +557,7 @@ class SkillsToolset(Toolset):
 
             # Package mode
             if not _has_skill_md(normalized):
-                return json.dumps({"error": "files must include a SKILL.md at the root"})
+                raise ToolError("files must include a SKILL.md at the root")
             updated = await service.replace_package_from_files(UUID(skill_id), normalized)
             return json.dumps(
                 {
@@ -626,20 +621,17 @@ class SkillsToolset(Toolset):
                         UUID(skill_id), path, expires_in=expires_in
                     )
                 except ValueError as exc:
-                    return json.dumps({"error": str(exc)})
+                    raise ToolError(str(exc)) from exc
                 return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
             try:
                 raw = await service.get_skill_file_content(UUID(skill_id), path)
             except (ValueError, FileNotFoundError) as exc:
-                return json.dumps({"error": str(exc)})
+                raise ToolError(str(exc)) from exc
             try:
                 text = raw.decode("utf-8")
             except UnicodeDecodeError:
-                return json.dumps(
-                    {
-                        "error": "binary file; retry with as_url=true",
-                        "size": len(raw),
-                    }
-                )
+                raise ToolError(
+                    json.dumps({"error": "binary file; retry with as_url=true", "size": len(raw)})
+                ) from None
             return json.dumps({"path": path, "content": text})

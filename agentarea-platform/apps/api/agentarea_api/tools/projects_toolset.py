@@ -10,6 +10,7 @@ between toolset kwargs and DTO fields.
 import json
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -58,7 +59,7 @@ class ProjectsToolset(Toolset):
             service = _build_service(repo_factory)
             project = await service.get(UUID(project_id))
             if not project:
-                return json.dumps({"error": "Project not found"})
+                raise ToolError("Project not found")
             return json.dumps(
                 {
                     "id": str(project.id),
@@ -85,9 +86,9 @@ class ProjectsToolset(Toolset):
         try:
             parent_id = UUID(parent_project_id) if parent_project_id is not None else None
         except ValueError:
-            return json.dumps(
-                {"error": f"parent_project_id must be a UUID, got {parent_project_id!r}"}
-            )
+            raise ToolError(
+                f"parent_project_id must be a UUID, got {parent_project_id!r}"
+            ) from None
         payload = ProjectCreate(
             name=name,
             description=description,
@@ -121,16 +122,16 @@ class ProjectsToolset(Toolset):
             try:
                 patch["parent_project_id"] = UUID(parent_project_id)
             except ValueError:
-                return json.dumps(
-                    {"error": f"parent_project_id must be a UUID, got {parent_project_id!r}"}
-                )
+                raise ToolError(
+                    f"parent_project_id must be a UUID, got {parent_project_id!r}"
+                ) from None
         payload = ProjectUpdate.model_validate(patch)
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             project = await service.update_project(UUID(project_id), payload)
             if not project:
-                return json.dumps({"error": "Project not found"})
+                raise ToolError("Project not found")
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
     @tool_method(effect="destructive")

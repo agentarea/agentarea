@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import mimetypes
 import re
@@ -46,16 +47,21 @@ from agentarea_common.events.contract import (
     canonical_type,
 )
 from agentarea_common.money import ZERO, Money, serialize_money
+from agentarea_common.utils.task_webhook import TASK_WEBHOOK_KEY, webhook_secret_name
 from agentarea_common.utils.types import UtcDatetime, utc_isoformat
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_common.workflow.executor import WorkflowStatus
 from agentarea_common.workspaces.lookup import workspace_api_prefix
 from agentarea_governance.domain.policies import PolicyDocument, PolicyValidationError
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.domain.model_kind import ModelKind
+from agentarea_mcp.tool_context import APP_METADATA_KEY, END_USER_ID_KEY
+from agentarea_openapi.application.url_validator import validate_url
 from agentarea_secrets.naming import has_reserved_prefix
 from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
+    RunStillClosingError,
     SchedulingNotSupportedError,
 )
 from agentarea_tasks.domain.models import TaskProvenance
@@ -106,8 +112,33 @@ class TaskInputSubmission(BaseModel):
 
 router = APIRouter(prefix="/agents/{agent_id}/tasks", tags=["agent-tasks"])
 
+# Bound on TaskCreate.metadata: it rides in every signed tool-call token.
+TASK_METADATA_MAX_BYTES = 4096
+
 # Global tasks router (not agent-specific)
 global_tasks_router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+class TaskWebhook(BaseModel):
+    """Where to POST each terminal event of the task, with its cost."""
+
+    url: str = Field(min_length=1, max_length=2048, description="http(s) URL to POST to.")
+    secret: str | None = Field(
+        default=None,
+        min_length=32,
+        max_length=512,
+        description=(
+            "Signs each delivery as X-AgentArea-Signature: t=<unix>,v1=<hex HMAC-SHA256 "
+            'of "<t>.<body>">. Write-only: stored in the secret manager.'
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+def _is_api_caller(user_context: UserContext) -> bool:
+    """An API key or service client: who may set, and read back, caller context."""
+    return user_context.api_key_id is not None or user_context.client_id is not None
 
 
 class TaskCreate(BaseModel):
@@ -120,6 +151,80 @@ class TaskCreate(BaseModel):
     task_policy: PolicyDocument | None = None
     # staging refs from a presigned POST /v1/files/upload-url
     attachments: list[str] | None = None
+    # Trusted context for the task's tool calls, asserted by the API caller (an
+    # API key or service client, never a browser session and never the model).
+    # Every MCP server with a context signing secret receives them, signed, as
+    # agentarea/metadata and agentarea/end_user_id.
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            'Trusted task metadata for tool servers, e.g. {"chatId": "..."}. '
+            f"At most {TASK_METADATA_MAX_BYTES} bytes of JSON. Only API keys and "
+            "service clients may set it."
+        ),
+    )
+    end_user_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description=(
+            "The caller's own id for the end user this task runs for. Only API "
+            "keys and service clients may set it."
+        ),
+    )
+    webhook: TaskWebhook | None = Field(
+        default=None,
+        description=(
+            "POSTed on task.completed, task.failed and task.cancelled with the task's "
+            "total_cost, tokens_used, end_user_id and metadata. Only API keys and "
+            "service clients may set it."
+        ),
+    )
+
+    @field_validator("metadata")
+    @classmethod
+    def _bound_metadata(cls, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        if value is None:
+            return value
+        try:
+            size = len(json.dumps(value, separators=(",", ":")).encode("utf-8"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("metadata must be JSON-serializable") from exc
+        if size > TASK_METADATA_MAX_BYTES:
+            raise ValueError(f"metadata must be at most {TASK_METADATA_MAX_BYTES} bytes of JSON")
+        return value
+
+    def trusted_metadata(self, user_context: UserContext) -> dict[str, Any]:
+        """The caller-asserted context as task metadata; refuses a session caller."""
+        if self.metadata is None and self.end_user_id is None and self.webhook is None:
+            return {}
+        if not _is_api_caller(user_context):
+            raise HTTPException(
+                status_code=403,
+                detail="metadata, end_user_id and webhook can only be set with an API key",
+            )
+        trusted: dict[str, Any] = {}
+        if self.metadata is not None:
+            trusted[APP_METADATA_KEY] = self.metadata
+        if self.end_user_id is not None:
+            trusted[END_USER_ID_KEY] = self.end_user_id
+        if self.webhook is not None:
+            # The API caller is a workspace principal, so the deployment's
+            # outbound policy applies, as for the workspace's own MCP endpoints.
+            try:
+                validate_url(self.webhook.url, policy=OutboundPolicy.from_env())
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=f"webhook.url: {exc}") from exc
+            trusted[TASK_WEBHOOK_KEY] = {
+                "url": self.webhook.url,
+                "signed": self.webhook.secret is not None,
+            }
+        return trusted
+
+    async def store_webhook_secret(self, secret_manager: Any, task_id: UUID | str) -> None:
+        """Keep the webhook's signing secret where the delivery reads it."""
+        if self.webhook is not None and self.webhook.secret is not None:
+            await secret_manager.set_secret(webhook_secret_name(str(task_id)), self.webhook.secret)
 
     @model_validator(mode="before")
     @classmethod
@@ -365,6 +470,12 @@ class TaskResponse(BaseModel):
     created_at: UtcDatetime
     execution_id: str | None = None  # Workflow execution ID
     total_cost: float | None = None  # LLM token cost in USD
+    # Model tokens the task has used so far; set once a turn has ended.
+    total_tokens: int | None = None
+    # What the API caller set at creation. Returned to API keys and service
+    # clients only, the callers allowed to set them; null for anyone else.
+    end_user_id: str | None = None
+    metadata: dict[str, Any] | None = None
     # Set only on one-shot deferred runs; null means the task ran on creation.
     scheduled_at: UtcDatetime | None = None
     # Who started the task. Distinct from `parameters`-derived source: a
@@ -396,7 +507,7 @@ class TaskResponse(BaseModel):
         )
 
     @classmethod
-    def from_agent_task(cls, task: Any) -> "TaskResponse":
+    def from_agent_task(cls, task: Any, user_context: UserContext | None = None) -> "TaskResponse":
         """Build a response from a service-layer AgentTask, surfacing its failure cause."""
         return cls(
             id=task.id,
@@ -412,7 +523,31 @@ class TaskResponse(BaseModel):
             scheduled_at=task.scheduled_at,
             created_by=task.user_id,
             provenance=task.provenance,
+            **_usage_fields(task.result),
+            **_caller_fields(getattr(task, "metadata", None), user_context),
         )
+
+
+def _usage_fields(result: Any) -> dict[str, Any]:
+    """total_cost and total_tokens as the workflow stored them in the task result."""
+    if not isinstance(result, dict):
+        return {}
+    fields: dict[str, Any] = {}
+    if result.get("total_cost") is not None:
+        fields["total_cost"] = result["total_cost"]
+    if isinstance(result.get("tokens_used"), int):
+        fields["total_tokens"] = result["tokens_used"]
+    return fields
+
+
+def _caller_fields(metadata: Any, user_context: UserContext | None) -> dict[str, Any]:
+    """end_user_id and metadata, for the callers that may set them."""
+    if user_context is None or not _is_api_caller(user_context) or not isinstance(metadata, dict):
+        return {}
+    return {
+        "end_user_id": metadata.get(END_USER_ID_KEY),
+        "metadata": metadata.get(APP_METADATA_KEY),
+    }
 
 
 class TaskWithAgent(BaseModel):
@@ -433,6 +568,10 @@ class TaskWithAgent(BaseModel):
     created_at: UtcDatetime
     execution_id: str | None = None
     total_cost: float | None = None  # LLM token cost in USD
+    total_tokens: int | None = None
+    # API keys and service clients only, as on TaskResponse.
+    end_user_id: str | None = None
+    metadata: dict[str, Any] | None = None
     scheduled_at: UtcDatetime | None = None
     # Populated by the inbox endpoint for waiting_for_approval tasks so the UI can
     # approve/reject the pending escalation inline without re-fetching task events.
@@ -466,6 +605,9 @@ class TaskWithAgent(BaseModel):
             created_at=task.created_at,
             execution_id=task.execution_id,
             total_cost=task.total_cost,
+            total_tokens=task.total_tokens,
+            end_user_id=task.end_user_id,
+            metadata=task.metadata,
             scheduled_at=task.scheduled_at,
             created_by=task.created_by,
             provenance=task.provenance,
@@ -521,8 +663,6 @@ async def get_all_tasks(
         all_tasks: list[TaskWithAgent] = []
         for task_orm in task_orms:
             task = task_service.task_repository._orm_to_domain(task_orm)
-            result_dict = task.result if isinstance(task.result, dict) else None
-            total_cost = result_dict.get("total_cost") if result_dict else None
             all_tasks.append(
                 TaskWithAgent(
                     id=task.id,
@@ -537,9 +677,10 @@ async def get_all_tasks(
                     created_at=task.created_at,
                     scheduled_at=task.scheduled_at,
                     execution_id=task.execution_id,
-                    total_cost=total_cost,
                     created_by=task.user_id,
                     provenance=task.provenance,
+                    **_usage_fields(task.result),
+                    **_caller_fields(task.metadata, user_context),
                 )
             )
         return all_tasks
@@ -570,8 +711,6 @@ async def get_task_by_id(
 
         task = task_service.task_repository._orm_to_domain(task_orm)
         agent = await agent_service.get_with_catalog(task.agent_id)
-        result_dict = task.result if isinstance(task.result, dict) else None
-        total_cost = result_dict.get("total_cost") if result_dict else None
         return TaskWithAgent(
             id=task.id,
             agent_id=task.agent_id,
@@ -585,9 +724,10 @@ async def get_task_by_id(
             created_at=task.created_at,
             scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
-            total_cost=total_cost,
             created_by=task.user_id,
             provenance=task.provenance,
+            **_usage_fields(task.result),
+            **_caller_fields(task.metadata, user_context),
         )
     except HTTPException:
         raise
@@ -608,6 +748,12 @@ class TaskEvent(BaseModel):
     timestamp: UtcDatetime
     event_type: str
     message: str | None = None
+    # Same as `id`; the name the live stream uses.
+    event_id: str | None = None
+    # The event payload, shaped exactly like `data` on the live stream.
+    data: dict[str, Any] = {}
+    # Deprecated alias: the stored payload before the live stream's flattening.
+    # Kept for clients that read it; new clients read `data`.
     metadata: dict[str, Any] = {}
 
 
@@ -646,6 +792,7 @@ async def _tail_task_events_sse(
     emit_connected: bool = True,
     include_chunks: bool = True,
     last_event_id: str | None = None,
+    follow_execution: bool = True,
 ) -> AsyncGenerator[str, None]:
     """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
 
@@ -659,6 +806,9 @@ async def _tail_task_events_sse(
     Durable events carry their stored id as the SSE ``id``, so a reconnecting
     EventSource sends it back as ``Last-Event-ID`` and resumes after it. Chunks
     are stream-only and carry none.
+
+    ``follow_execution`` keeps the stream open past a ``task.completed`` that
+    leaves the execution waiting for a follow-up; without it that event ends it.
     """
     from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 
@@ -682,7 +832,7 @@ async def _tail_task_events_sse(
         user_context=user_context,
         terminal_types=frozenset(_TERMINAL_EVENT_TYPES),
         include_chunks=include_chunks,
-        follow_execution=True,
+        follow_execution=follow_execution,
         last_event_id=last_event_id,
     ):
         sse_event = {
@@ -763,6 +913,16 @@ async def create_task_for_agent_with_stream(
     agent_id: UUID,
     data: TaskCreate,
     user_context: UserContextDep,
+    secret_manager: BaseSecretManagerDep,
+    follow: bool = Query(
+        False,
+        description=(
+            "Keep the stream open through the follow-up window (up to 30 minutes) "
+            "and relay follow-up turns. By default the stream ends at the turn's "
+            "terminal event (task.completed, task.failed, task.cancelled); read "
+            "follow-ups from GET .../tasks/{task_id}/events/stream."
+        ),
+    ),
     task_service: TaskService = Depends(get_task_service),
     agent_service: AgentService = Depends(get_agent_service),
 ):
@@ -773,6 +933,7 @@ async def create_task_for_agent_with_stream(
     agent = await agent_service.get_with_catalog(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    caller_metadata = data.trusted_metadata(user_context)
 
     created_task = None
     if data.attachments:
@@ -803,7 +964,10 @@ async def create_task_for_agent_with_stream(
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
                 task_id=reserved_task_id,
-                trusted_metadata={"workspace_attachments": attachment_descriptors},
+                trusted_metadata={
+                    **caller_metadata,
+                    "workspace_attachments": attachment_descriptors,
+                },
             )
         except PolicyValidationError as exc:
             raise HTTPException(status_code=422, detail="Task policy rejected") from exc
@@ -845,6 +1009,7 @@ async def create_task_for_agent_with_stream(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                trusted_metadata=caller_metadata or None,
             )
         except PolicyValidationError:
             creation_error = ("Task policy rejected", "policy_validation_error")
@@ -852,8 +1017,9 @@ async def create_task_for_agent_with_stream(
             creation_error = ("Agent model is not configured", "model_not_configured")
         except BudgetCapExceededError as exc:
             scope = "Agent" if exc.agent_id else "Workspace"
+            spend = "LLM spend" if exc.kind == "llm" else "spend"
             creation_error = (
-                f"{scope} monthly spend cap reached ({exc.current_mtd_usd} {exc.currency}/"
+                f"{scope} monthly {spend} cap reached ({exc.current_mtd_usd} {exc.currency}/"
                 f"{exc.cap_usd} {exc.currency})",
                 "monthly_spend_cap_exceeded",
             )
@@ -869,6 +1035,9 @@ async def create_task_for_agent_with_stream(
         except Exception:
             logger.error("Task creation failed for agent %s", agent_id, exc_info=True)
             creation_error = ("Task creation failed", "creation_failed")
+
+    if created_task is not None:
+        await data.store_webhook_secret(secret_manager, created_task.id)
 
     async def task_creation_stream() -> AsyncGenerator[str, None]:
         """Generate Server-Sent Events for task creation and execution."""
@@ -919,6 +1088,7 @@ async def create_task_for_agent_with_stream(
                     task.execution_id,
                     user_context=user_context,
                     emit_connected=False,
+                    follow_execution=follow,
                 ):
                     yield chunk
             else:
@@ -967,9 +1137,11 @@ async def create_task_for_agent_sync(
     agent_id: UUID,
     data: TaskCreate,
     user_context: UserContextDep,
+    secret_manager: BaseSecretManagerDep,
     task_service: TaskService = Depends(get_task_service),
 ):
     """Create and execute a task for the specified agent (synchronous response)."""
+    caller_metadata = data.trusted_metadata(user_context)
     try:
         # Create and execute task using shared payload-style entry point so REST
         # /sync, REST streaming and MCP toolset all share the same lifecycle.
@@ -995,7 +1167,10 @@ async def create_task_for_agent_sync(
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
                 task_id=reserved_task_id,
-                trusted_metadata={"workspace_attachments": attachment_descriptors},
+                trusted_metadata={
+                    **caller_metadata,
+                    "workspace_attachments": attachment_descriptors,
+                },
             )
             task = await task_service.dispatch_reserved_run(task)
             await _delete_staging_refs(
@@ -1015,10 +1190,12 @@ async def create_task_for_agent_sync(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                trusted_metadata=caller_metadata or None,
             )
 
+        await data.store_webhook_secret(secret_manager, task.id)
         # Convert to API response format
-        return TaskResponse.from_agent_task(task)
+        return TaskResponse.from_agent_task(task, user_context)
 
     except (HTTPException, BudgetCapExceededError):
         raise
@@ -1057,6 +1234,7 @@ async def schedule_task_for_agent(
     agent_id: UUID,
     data: ScheduleTaskCreate,
     user_context: UserContextDep,
+    secret_manager: BaseSecretManagerDep,
     task_service: TaskService = Depends(get_task_service),
 ):
     """Create a task that runs once at an absolute future time.
@@ -1065,6 +1243,7 @@ async def schedule_task_for_agent(
     stream until the run starts, which may be days away. Repeating schedules
     are cron triggers, not tasks.
     """
+    caller_metadata = data.trusted_metadata(user_context)
     try:
         if data.attachments:
             reserved_task_id = uuid4()
@@ -1089,7 +1268,10 @@ async def schedule_task_for_agent(
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
                 task_id=reserved_task_id,
-                trusted_metadata={"workspace_attachments": attachment_descriptors},
+                trusted_metadata={
+                    **caller_metadata,
+                    "workspace_attachments": attachment_descriptors,
+                },
             )
             task = await task_service.dispatch_reserved_run(task)
             await _delete_staging_refs(
@@ -1110,9 +1292,11 @@ async def schedule_task_for_agent(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                trusted_metadata=caller_metadata or None,
             )
 
-        return TaskResponse.from_agent_task(task)
+        await data.store_webhook_secret(secret_manager, task.id)
+        return TaskResponse.from_agent_task(task, user_context)
 
     except (HTTPException, BudgetCapExceededError):
         raise
@@ -1174,7 +1358,7 @@ async def list_agent_tasks(
 
         logger.info(f"Returning {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
 
-        return [TaskResponse.from_agent_task(task) for task in agent_tasks]
+        return [TaskResponse.from_agent_task(task, user_context) for task in agent_tasks]
 
     except Exception as e:
         logger.exception(f"Failed to get tasks for agent {agent_id}: {e}")
@@ -1204,7 +1388,7 @@ async def get_agent_task(
             if task.agent_id != agent_id:
                 raise HTTPException(status_code=404, detail="Task not found")
 
-            return TaskResponse.from_agent_task(task)
+            return TaskResponse.from_agent_task(task, user_context)
 
         # No workflow-status fallback here. task_service.get_task_with_workflow_status
         # is workspace-scoped, so a miss means either "no such task" or "belongs to
@@ -1880,6 +2064,54 @@ async def resume_agent_task(
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
+_RUN_STILL_CLOSING = (
+    "The task is still stopping: it is recording the call it interrupted. "
+    "Send this again in a few seconds."
+)
+
+
+@router.post(
+    "/{task_id}/retry",
+    dependencies=[requires_task_authority()],
+)
+async def retry_agent_task(
+    agent_id: UUID,
+    task_id: UUID,
+    user_context: UserContextDep,
+    agent_service: AgentService = Depends(get_agent_service),
+    task_service: TaskService = Depends(get_task_service),
+):
+    """Re-run the turn a failed task ended on, on the same conversation.
+
+    A new run of the task continues its conversation with no new message, so
+    the model is called again on the input that failed; the run records a
+    ``task.retried`` event.
+    """
+    agent = await agent_service.get(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    await _verify_task_for_agent(task_service, agent_id, task_id)
+
+    try:
+        retried = await task_service.retry_last_turn(task_id)
+    except RunStillClosingError as exc:
+        raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
+    except BudgetCapExceededError:
+        raise
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail="Task policy rejected") from exc
+    except Exception as e:
+        logger.exception(f"Failed to retry task {task_id} for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
+    if not retried:
+        raise HTTPException(
+            status_code=409,
+            detail="Only a failed task whose run has finished can be retried.",
+        )
+    return {"status": "running", "task_id": str(task_id), "execution_id": f"task-{task_id}"}
+
+
 @router.post(
     "/{task_id}/a2ui/action",
     dependencies=[requires_task_authority()],
@@ -2076,8 +2308,10 @@ async def _resolve_model_info(
         "max_output_tokens": model_spec.max_output_tokens,
         "input_cost_per_token": model_spec.input_cost_per_token,
         "output_cost_per_token": model_spec.output_cost_per_token,
+        "cached_input_cost_per_token": model_spec.cached_input_cost_per_token,
         "display_name": model_spec.display_name,
         "provider_display_name": provider_spec.name,
+        "supports_vision": model_spec.supports_vision,
         "resolved_at": datetime.now(UTC).isoformat(),
     }
 
@@ -2120,7 +2354,8 @@ async def send_task_command(
         elif payload.command == "queue_message":
             if not payload.message:
                 raise HTTPException(status_code=400, detail="message is required for queue_message")
-            # A completed task whose workflow has closed continues in a new run.
+            # A completed, stopped or failed task whose workflow has closed
+            # continues in a new run.
             delivered = await task_service.queue_follow_up(task_id, payload.message)
 
         elif payload.command == "remove_message":
@@ -2161,6 +2396,8 @@ async def send_task_command(
 
     except (HTTPException, BudgetCapExceededError):
         raise
+    except RunStillClosingError as exc:
+        raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except Exception as e:
@@ -2272,6 +2509,8 @@ async def get_task_events(
                 timestamp=record.timestamp,
                 event_type=record.event_type,
                 message=record.data.get("message"),
+                event_id=str(record.id),
+                data=_filter_domain_fields(dict(record.data)) if record.data else {},
                 metadata=dict(record.data) if record.data else {},
             )
             for record in records

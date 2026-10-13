@@ -16,6 +16,7 @@ from uuid import uuid4
 import agentarea_common.auth.permission as permission
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import agents_toolset
 from agentarea_api.tools.agents_toolset import AgentsToolset
 from agentarea_common.auth.context import UserContext
@@ -64,21 +65,19 @@ async def test_update_without_tools_leaves_them_alone(service):
 async def test_update_refuses_a_code_tool_no_toolset_provides(service):
     tools = [{"type": "code", "name": "agentarea/not-a-toolset"}]
 
-    result = json.loads(await AgentsToolset().update(str(uuid4()), tools=tools))
+    with pytest.raises(ToolError, match="agentarea/not-a-toolset"):
+        await AgentsToolset().update(str(uuid4()), tools=tools)
 
-    assert "agentarea/not-a-toolset" in result["error"]
     service.update_agent.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_create_refuses_a_code_tool_no_toolset_provides(service):
-    result = json.loads(
+    with pytest.raises(ToolError, match="agentarea/not-a-toolset"):
         await AgentsToolset().create(
             name="Ops",
             model_id=str(uuid4()),
             tools=[{"type": "code", "name": "agentarea/not-a-toolset"}],
         )
-    )
 
-    assert "agentarea/not-a-toolset" in result["error"]
     service.create_agent.assert_not_awaited()

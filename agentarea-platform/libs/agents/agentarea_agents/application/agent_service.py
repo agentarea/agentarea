@@ -6,7 +6,6 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import agent_address, delegate_tool_name
-from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_common.audit import audited
 from agentarea_common.auth.authorization import AuthorizationService
@@ -80,7 +79,6 @@ def _credential_bindings(tools: list[dict] | None) -> set[tuple[str, str, str]]:
 # toolset needs at least one of its settings; no other toolset takes any.
 _TOOL_MODEL_SETTINGS: dict[str, dict[str, ModelKind]] = {
     MEDIA_TOOLSET: {"image_model_id": ModelKind.IMAGE, "video_model_id": ModelKind.VIDEO},
-    DECIDE_TOOLSET: {"model_id": ModelKind.DECISION},
 }
 _MODEL_SETTING_KEYS = frozenset(key for keys in _TOOL_MODEL_SETTINGS.values() for key in keys)
 
@@ -419,6 +417,9 @@ class AgentService(BaseCrudService[Agent]):
             tools=tools,
             planning=payload.planning,
             a2ui_enabled=payload.a2ui_enabled,
+            answer_check=(
+                payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
+            ),
             agent_type=payload.agent_type,
         )
         agent = await self.create(agent)
@@ -581,6 +582,10 @@ class AgentService(BaseCrudService[Agent]):
             agent.planning = patch["planning"]
         if "a2ui_enabled" in patch:
             agent.a2ui_enabled = patch["a2ui_enabled"]
+        if "answer_check" in patch:
+            agent.answer_check = (
+                payload.answer_check.model_dump(exclude_none=True) if payload.answer_check else None
+            )
         if "agent_type" in patch:
             agent.agent_type = patch["agent_type"]
 

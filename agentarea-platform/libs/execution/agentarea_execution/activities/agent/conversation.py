@@ -23,6 +23,7 @@ def pending_entries(first_seq: int, messages: list[dict[str, Any]]) -> list[Conv
             tool_calls=message.get("tool_calls"),
             tool_call_id=message.get("tool_call_id"),
             name=message.get("name"),
+            attachments=message.get("attachments"),
         )
         for offset, message in enumerate(messages)
     ]

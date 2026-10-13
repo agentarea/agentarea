@@ -36,11 +36,16 @@ import {
 
 type RawData = Record<string, unknown>;
 
+// A terminal event whose execution goes on: a follow-up wait, or a stopped run
+// still recording the call the stop interrupted. Its stream stays open.
+const OPEN_EXECUTION_STATUSES = new Set(["waiting", "settling"]);
+
 function isTerminal(event: EventInput): boolean {
   const type = canonicalType(event.eventType);
   return (
     type === "execution.finished" ||
-    (TERMINAL_TYPES.has(type) && event.data.execution_status !== "waiting")
+    (TERMINAL_TYPES.has(type) &&
+      !OPEN_EXECUTION_STATUSES.has(String(event.data.execution_status)))
   );
 }
 
@@ -123,6 +128,12 @@ export interface UseTaskEventsResult {
   error: string | null;
   connected: boolean;
   refresh: () => void;
+  /**
+   * Stream the run a follow-up or a retry started after the last one ended.
+   * The live stream closes at a run's end; this opens it again from the last
+   * event already shown.
+   */
+  follow: () => void;
 }
 
 export function useTaskEvents(
@@ -151,6 +162,10 @@ export function useTaskEvents(
   const pendingLive = useRef<EventInput[]>([]);
   const historySettled = useRef(false);
   const disconnectRef = useRef<() => void>(() => {});
+  const connectRef = useRef<() => void>(() => {});
+  // The last event folded in, where a stream opened again resumes.
+  const lastIdRef = useRef<string | null>(null);
+  const [followFrom, setFollowFrom] = useState<string | null>(null);
 
   const pushRaw = useCallback((eventType: string, data: RawData) => {
     const row = toDisplayRow(eventType, data, rawCountRef.current++);
@@ -159,33 +174,36 @@ export function useTaskEvents(
   }, []);
 
   const applyOne = useCallback(
-    (event: EventInput) => {
+    (event: EventInput): boolean => {
       const data = event.data as RawData;
       const id = eventIdOf(data);
       if (id) {
-        if (seenIds.current.has(id)) return;
+        if (seenIds.current.has(id)) return false;
         seenIds.current.add(id);
+        lastIdRef.current = id;
       }
       const next = applyEvent(stateRef.current, event);
       stateRef.current = next;
       setState(next);
       pushRaw(event.eventType, data);
+      return true;
     },
     [pushRaw]
   );
 
+  /** Whether the event was folded in now; a replayed one the view has is not. */
   const push = useCallback(
-    (event: EventInput) => {
-      if (isControl(event.eventType)) return;
+    (event: EventInput): boolean => {
+      if (isControl(event.eventType)) return false;
       // History is the older half of this same stream. Folding a live event in
       // before it lands would order it wrong and — worse — the history fold
       // rebuilds state from scratch, so the live event would be silently
       // dropped while its id stayed in seenIds, making it unrecoverable.
       if (includeHistory && !historySettled.current) {
         pendingLive.current.push(event);
-        return;
+        return false;
       }
-      applyOne(event);
+      return applyOne(event);
     },
     [applyOne, includeHistory]
   );
@@ -194,7 +212,9 @@ export function useTaskEvents(
   const sseUrl =
     agentId && taskId && autoConnect
       ? withWorkspaceQuery(
-          `/api/sse/agents/${agentId}/tasks/${taskId}/events/stream`,
+          `/api/sse/agents/${agentId}/tasks/${taskId}/events/stream${
+            followFrom ? `?last_event_id=${encodeURIComponent(followFrom)}` : ""
+          }`,
           workspaceSlug
         )
       : null;
@@ -203,8 +223,9 @@ export function useTaskEvents(
     (sseEvent: { type: string; data: unknown }) => {
       const normalized = normalizeSSEEvent(sseEvent.type, sseEvent.data);
       if (!normalized) return;
-      push(normalized);
-      if (isTerminal(normalized)) {
+      // The stream replays history; only an end the view had not folded in
+      // ends it, so an earlier run's end does not cut off the one under way.
+      if (push(normalized) && isTerminal(normalized)) {
         terminalReachedRef.current = true;
         disconnectRef.current();
       }
@@ -212,7 +233,7 @@ export function useTaskEvents(
     [push]
   );
 
-  const { isConnected, disconnect } = useSSE(sseUrl, {
+  const { isConnected, connect, disconnect } = useSSE(sseUrl, {
     onMessage: handleSSEMessage,
     reconnect: true,
     reconnectInterval: 3000,
@@ -220,10 +241,23 @@ export function useTaskEvents(
 
   useEffect(() => {
     disconnectRef.current = disconnect;
-  }, [disconnect]);
+    connectRef.current = connect;
+  }, [connect, disconnect]);
+
+  const follow = useCallback(() => {
+    terminalReachedRef.current = false;
+    if (lastIdRef.current !== followFrom) {
+      setFollowFrom(lastIdRef.current);
+      return;
+    }
+    disconnectRef.current();
+    connectRef.current();
+  }, [followFrom]);
 
   useEffect(() => {
     terminalReachedRef.current = false;
+    lastIdRef.current = null;
+    setFollowFrom(null);
     loadedHistory.current = false;
     historySettled.current = false;
     pendingLive.current = [];
@@ -283,6 +317,9 @@ export function useTaskEvents(
           );
         }
         for (const id of foldedIds) seenIds.current.add(id);
+        if (foldedIds.length > 0) {
+          lastIdRef.current = foldedIds[foldedIds.length - 1];
+        }
         stateRef.current = next;
         rawRef.current = rows;
         rawCountRef.current = rows.length;
@@ -309,7 +346,14 @@ export function useTaskEvents(
           historySettled.current = true;
           const buffered = pendingLive.current;
           pendingLive.current = [];
-          for (const event of buffered) applyOne(event);
+          let endedNow = false;
+          for (const event of buffered) {
+            if (applyOne(event) && isTerminal(event)) endedNow = true;
+          }
+          if (endedNow && stateRef.current.executionStatus === "finished") {
+            terminalReachedRef.current = true;
+            disconnectRef.current();
+          }
           setLoading(false);
         }
       }
@@ -349,5 +393,6 @@ export function useTaskEvents(
     error,
     connected: isConnected,
     refresh,
+    follow,
   };
 }

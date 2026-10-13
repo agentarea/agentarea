@@ -742,6 +742,9 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             func.count(
                 case((TriggerExecutionORM.status == ExecutionStatus.TIMEOUT.value, 1))
             ).label("timeout_executions"),
+            func.count(
+                case((TriggerExecutionORM.status == ExecutionStatus.SKIPPED.value, 1))
+            ).label("skipped_executions"),
             func.avg(TriggerExecutionORM.execution_time_ms).label("avg_execution_time_ms"),
             func.min(TriggerExecutionORM.execution_time_ms).label("min_execution_time_ms"),
             func.max(TriggerExecutionORM.execution_time_ms).label("max_execution_time_ms"),
@@ -756,6 +759,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
                 "successful_executions": 0,
                 "failed_executions": 0,
                 "timeout_executions": 0,
+                "skipped_executions": 0,
                 "success_rate": 0.0,
                 "failure_rate": 0.0,
                 "avg_execution_time_ms": 0.0,
@@ -768,14 +772,18 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         successful = row.successful_executions or 0
         failed = row.failed_executions or 0
         timeout = row.timeout_executions or 0
+        # An event the conditions turned away was never an attempt, so the
+        # rates are over the runs that tried to start a task.
+        attempts = successful + failed + timeout
 
         return {
             "total_executions": total,
             "successful_executions": successful,
             "failed_executions": failed,
             "timeout_executions": timeout,
-            "success_rate": (successful / total) * 100 if total > 0 else 0.0,
-            "failure_rate": ((failed + timeout) / total) * 100 if total > 0 else 0.0,
+            "skipped_executions": row.skipped_executions or 0,
+            "success_rate": (successful / attempts) * 100 if attempts else 0.0,
+            "failure_rate": ((failed + timeout) / attempts) * 100 if attempts else 0.0,
             "avg_execution_time_ms": float(row.avg_execution_time_ms or 0),
             "min_execution_time_ms": row.min_execution_time_ms or 0,
             "max_execution_time_ms": row.max_execution_time_ms or 0,

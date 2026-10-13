@@ -38,3 +38,13 @@ def platform_config_id(provider_key: str) -> UUID:
 def platform_instance_id(provider_key: str, model_name: str) -> UUID:
     """The id of one offered model. This is the value billing's rate cards name."""
     return uuid5(PLATFORM_ID_NAMESPACE, f"model_instance:{provider_key}:{model_name}")
+
+
+def platform_mcp_server_id(name: str) -> UUID:
+    """The id of the server spec behind a platform-managed MCP connection."""
+    return uuid5(PLATFORM_ID_NAMESPACE, f"mcp_server:{name}")
+
+
+def platform_mcp_instance_id(name: str) -> UUID:
+    """The id of a platform-managed MCP connection; agents and clients attach this."""
+    return uuid5(PLATFORM_ID_NAMESPACE, f"mcp_instance:{name}")

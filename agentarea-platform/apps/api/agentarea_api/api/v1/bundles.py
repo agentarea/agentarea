@@ -13,13 +13,14 @@ from agentarea_api.api.deps.services import (
     get_trigger_service,
 )
 from agentarea_bundles.application.analyzer import BundleParseError
-from agentarea_bundles.application.installer import BundleInstallError
+from agentarea_bundles.application.installer import BundleInstallError, BundleValidationError
 from agentarea_bundles.application.service import BundleService
 from agentarea_bundles.schemas.bundle import Bundle
 from agentarea_bundles.schemas.preview import ImportPreview
 from agentarea_bundles.schemas.result import InstallResult
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
+from agentarea_common.exceptions.errors import AppError
 from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
 from agentarea_openapi.application.url_validator import validate_url
 from fastapi import APIRouter, Depends, HTTPException
@@ -192,14 +193,20 @@ async def install_bundle(
     body: InstallRequest,
     service: BundleServiceDep,
 ) -> InstallResult:
-    """Install a canonical bundle: MCP instances, skills, agents and automations."""
+    """Install a canonical bundle: MCP instances, skills, agents and automations.
+
+    All or nothing: a failure removes whatever this install had created. A
+    bundle or setup value that is invalid answers 422 (``code: bundle_invalid``);
+    any other install failure answers 400 (``code: bundle_install_failed``). Both
+    are problem+json with the message in ``detail`` and the blocking ``issues``.
+    """
     try:
         return await service.install(body.bundle, body.setup_values)
     except BundleInstallError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": str(exc),
-                "issues": [i.model_dump(mode="json") for i in exc.issues],
-            },
+        invalid = isinstance(exc, BundleValidationError)
+        raise AppError(
+            str(exc),
+            status_code=422 if invalid else 400,
+            code="bundle_invalid" if invalid else "bundle_install_failed",
+            extra={"issues": [i.model_dump(mode="json") for i in exc.issues]},
         ) from exc

@@ -25,13 +25,13 @@ from agentarea_execution.testing import (
     mock_resolve_model,
     mock_update_task_status,
     mock_validate_artifacts,
+    runtime_policy,
 )
 
 
 async def _run_workflow(
     responses,
     max_iterations: int = 5,
-    budget_usd: float = 1.0,
 ) -> tuple[object, EventCapture]:
     """Helper: run workflow with sequenced LLM responses and capture events."""
     event_capture = EventCapture()
@@ -70,8 +70,7 @@ async def _run_workflow(
                     workspace_id="test-workspace",
                     task_query="Test event ordering",
                     timeout_seconds=30,
-                    max_reasoning_iterations=max_iterations,
-                    budget_usd=budget_usd,
+                    effective_policy=runtime_policy(max_model_turns=max_iterations),
                 )
 
                 handle = await env.client.start_workflow(

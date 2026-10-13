@@ -76,7 +76,7 @@ class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
 
 
 class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
-    """One paid line of a task's spend; see ``agentarea_tasks.domain.costs``.
+    """One paid line of spend; see ``agentarea_tasks.domain.costs``.
 
     A row is never updated: a later, more exact amount is a new row whose
     ``supersedes_id`` points at the one it replaces. ``currency`` is NULL only on
@@ -89,12 +89,14 @@ class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
         UniqueConstraint("event_id", "category", name="uq_cost_entries_event_category"),
         Index("ix_cost_entries_workspace_occurred", "workspace_id", "occurred_at"),
         Index("ix_cost_entries_agent_occurred", "workspace_id", "agent_id", "occurred_at"),
+        Index("ix_cost_entries_subject_occurred", "workspace_id", "subject_id", "occurred_at"),
     )
 
     event_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     category: Mapped[str] = mapped_column(String(16), nullable=False)
-    task_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    task_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
     agent_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    client_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
     subject_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     subject_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -102,7 +104,11 @@ class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 12), nullable=False)
     currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     provider_cost_usd: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
-    managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payer: Mapped[str] = mapped_column(String(16), nullable=False)
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    vendor_cost: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    vendor_currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     supersedes_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
@@ -113,6 +119,19 @@ Index(
     "ix_cost_entries_supersedes",
     CostEntryORM.supersedes_id,
     postgresql_where=CostEntryORM.supersedes_id.isnot(None),
+)
+Index(
+    "ix_cost_entries_platform_occurred",
+    CostEntryORM.occurred_at,
+    CostEntryORM.id,
+    postgresql_where=CostEntryORM.payer == "platform",
+)
+Index(
+    "ix_cost_entries_client_occurred",
+    CostEntryORM.workspace_id,
+    CostEntryORM.client_id,
+    CostEntryORM.occurred_at,
+    postgresql_where=CostEntryORM.client_id.isnot(None),
 )
 
 
@@ -134,6 +153,7 @@ class TaskConversationEntryORM(EventBaseModel, WorkspaceScopedMixin):
     tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
     tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

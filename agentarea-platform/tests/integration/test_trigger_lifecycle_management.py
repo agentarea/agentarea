@@ -562,11 +562,10 @@ class TestTriggerLifecycleManagement:
         # Disable trigger
         await trigger_service.disable_trigger(trigger_id)
 
-        # Execute while disabled (should fail or be skipped)
+        # Execute while disabled: turned away without a task
         execution_data = {"execution_time": datetime.utcnow().isoformat(), "test": "disabled"}
         result2 = await trigger_service.execute_trigger(trigger_id, execution_data)
-        # Behavior depends on implementation - could be FAILED or skipped
-        assert result2.status in [ExecutionStatus.FAILED, ExecutionStatus.SUCCESS]
+        assert result2.status == ExecutionStatus.SKIPPED
 
         # Re-enable trigger
         await trigger_service.enable_trigger(trigger_id)

@@ -65,6 +65,7 @@ import {
   presetFormValues,
 } from "../create/utils/agentPreset";
 import A2AAccessConfig from "./A2AAccessConfig";
+import { toAnswerCheckForm } from "./agentContract";
 import { useChat } from "./ChatContext";
 import { delegatesOf, withDelegates } from "./delegationTools";
 import type { DelegationData } from "./useAgentData";
@@ -167,6 +168,7 @@ export default function AgentForm({
       },
       planning: initialData?.planning || false,
       a2ui_enabled: initialData?.a2ui_enabled || false,
+      answer_check: initialData?.answer_check ?? toAnswerCheckForm(null),
     },
   });
 

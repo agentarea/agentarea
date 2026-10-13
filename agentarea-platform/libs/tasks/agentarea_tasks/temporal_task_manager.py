@@ -239,13 +239,14 @@ class TemporalTaskManager(BaseTaskManager):
             raise
 
     async def resume_task(
-        self, task: AgentTask, resume: AgentExecutionResume, message: str
+        self, task: AgentTask, resume: AgentExecutionResume, message: str | None
     ) -> AgentTask:
         """Start a new run of the task's workflow that continues its conversation.
 
         The workflow id is the task's, which a closed execution leaves free to
         reuse. The message is the start signal: if another request already
-        started a run, Temporal delivers the message to it instead.
+        started a run, Temporal delivers the message to it instead. A retry has
+        no message; a run already started refuses it.
         """
         if not task.workspace_id:
             raise ValueError(f"Task {task.id} missing required workspace_id.")
@@ -265,8 +266,10 @@ class TemporalTaskManager(BaseTaskManager):
             config=WorkflowConfig(
                 task_queue=self.task_queue,
                 retry_attempts=1,
-                start_signal="workflow_command",
-                start_signal_args=["queue_message", {"message": message}],
+                start_signal="workflow_command" if message is not None else None,
+                start_signal_args=["queue_message", {"message": message}]
+                if message is not None
+                else [],
             ),
         )
         updated = await self.task_repository.update_status(task.id, "running")

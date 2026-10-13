@@ -24,6 +24,8 @@ def _instance(kind: str):
             max_output_tokens=None,
             input_cost_per_token=0,
             output_cost_per_token=0,
+            cached_input_cost_per_token=None,
+            supports_vision=False,
             display_name="M",
         ),
     )

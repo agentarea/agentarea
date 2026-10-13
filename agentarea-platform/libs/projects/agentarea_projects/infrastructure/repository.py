@@ -31,12 +31,12 @@ class ProjectRepository(WorkspaceScopedRepository[Project]):
         super().__init__(session, Project, user_context)
 
     def _scoped_links(self) -> tuple:
-        """Load only the linked children that live in this project's workspace."""
+        """Load only the linked children this project's workspace can see."""
         workspace_id = self.user_context.workspace_id
         return (
             selectinload(Project.skills.and_(Skill.workspace_id == workspace_id)),
             selectinload(
-                Project.mcp_instances.and_(MCPServerInstance.workspace_id == workspace_id)
+                Project.mcp_instances.and_(MCPServerInstance.workspace_visibility(workspace_id))
             ),
             selectinload(Project.agents.and_(Agent.workspace_id == workspace_id)),
         )

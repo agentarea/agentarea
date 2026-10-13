@@ -19,6 +19,7 @@ import pytest
 from agentarea_agents.tools import skills_toolset
 from agentarea_agents.tools.skills_toolset import SkillsToolset
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import agents_toolset, clients_toolset, mcp_servers_toolset
 from agentarea_api.tools.agents_toolset import AgentsToolset
 from agentarea_api.tools.clients_toolset import ClientsToolset
@@ -143,9 +144,8 @@ async def test_reading_a_tenant_spec_the_graph_refuses_is_refused(graph, monkeyp
     _spec_service(monkeypatch, spec)
     graph.check.return_value = MagicMock(allowed=False)
 
-    result = json.loads(await MCPServersToolset().get_spec(spec_id=str(spec.id)))
-
-    assert result == {"error": "Permission denied"}
+    with pytest.raises(ToolError, match="Permission denied"):
+        await MCPServersToolset().get_spec(spec_id=str(spec.id))
 
 
 @pytest.mark.asyncio

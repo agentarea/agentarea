@@ -6,6 +6,7 @@ import type { PolicyDocument } from "@/api/client/types.gen";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
 import FormError from "@/components/FormError";
 import type { TaskResourceRef } from "@/components/ResourcePicker/TaskResourceAttach";
+import { TaskRetryButton } from "@/components/TaskRetryButton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useMentions } from "@/hooks/useMentions";
 import { useTaskActions } from "@/hooks/useTaskActions";
@@ -20,10 +21,7 @@ import {
   type CompletedRun,
   type EventState,
 } from "@/lib/events/reducer";
-import {
-  pauseAgentTaskAction as pauseAgentTask,
-  resumeAgentTaskAction as resumeAgentTask,
-} from "@/lib/server-actions";
+import { resumeAgentTaskAction as resumeAgentTask } from "@/lib/server-actions";
 import { getTaskStatusPresentation } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { currentWorkspaceHeaders } from "@/lib/workspace-browser";
@@ -50,6 +48,7 @@ import { useScrollManagement } from "./hooks/useScrollManagement";
 import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
 import { createTaskWithAttachments } from "./utils/createTaskWithAttachments";
 import { deliverTaskMessage } from "./utils/deliverTaskMessage";
+import { openTaskEventStream } from "./utils/openTaskEventStream";
 import {
   adoptCreatedTaskId,
   routeComposerMessage,
@@ -330,11 +329,10 @@ export default function FullChat({
 
   // State for loading and input
   const [isLoading, setIsLoading] = React.useState(false);
-  const [isPausing, setIsPausing] = React.useState(false);
+  const [isStopping, setIsStopping] = React.useState(false);
+  const [isRetrying, setIsRetrying] = React.useState(false);
   const [isResuming, setIsResuming] = React.useState(false);
-  const [composerError, setComposerError] = React.useState<string | null>(
-    null
-  );
+  const [composerError, setComposerError] = React.useState<string | null>(null);
   const [taskLifecycleStatus, setTaskLifecycleStatus] = React.useState<
     string | null
   >(null);
@@ -469,9 +467,14 @@ export default function FullChat({
   // rewrite), track lifecycle status, then fold every event into the reducer.
   const currentTaskIdRef = React.useRef<string | null>(currentTaskId);
   currentTaskIdRef.current = currentTaskId;
+  // The last stored event streamed in; a stream opened again resumes after it.
+  const lastEventIdRef = React.useRef<string | null>(null);
 
   const handleSSEMessage = React.useCallback(
     (event: { type: string; data: Record<string, unknown> }) => {
+      if (typeof event.data?.event_id === "string" && event.data.event_id) {
+        lastEventIdRef.current = event.data.event_id;
+      }
       const rawType =
         (typeof event.data?.event_type === "string" && event.data.event_type) ||
         (typeof event.data?.original_event_type === "string" &&
@@ -589,8 +592,37 @@ export default function FullChat({
         addUserMessage(userMessage);
         setInput("");
         setInputDisplay("");
+        // The stopped or failed run closed its stream; the message started a
+        // new run of the same conversation, which streams on from here.
+        if (route.resumes && currentTaskId) await followNewRun(currentTaskId);
         return;
       }
+      streamReader = await createTaskStream();
+
+      const previousReader = activeStreamRef.current;
+      activeStreamRef.current = streamReader;
+      void previousReader?.cancel();
+
+      await parseSSEStream(streamReader, {
+        onEvent: (event) => {
+          if (activeStreamRef.current === streamReader) handleSSEMessage(event);
+        },
+        buffered: true,
+      });
+    } catch (error) {
+      if (!streamReader || activeStreamRef.current === streamReader) {
+        setIsLoading(false);
+        console.error("Failed to send message", error);
+        setComposerError(`${t("errors.sendFailed")}: ${formatApiError(error)}`);
+      }
+    } finally {
+      if (!streamReader || activeStreamRef.current === streamReader) {
+        if (streamReader) activeStreamRef.current = null;
+        setIsLoading(false);
+      }
+    }
+
+    async function createTaskStream() {
       const response = await createTaskWithAttachments({
         files: filesToUpload,
         request: (attachments) => {
@@ -638,24 +670,31 @@ export default function FullChat({
           clearFiles();
         },
       });
+      return response.body.getReader();
+    }
+  };
 
-      streamReader = response.body.getReader();
+  // Stream the run a follow-up or a retry started on the current task, from the
+  // last event the chat already shows.
+  const followNewRun = async (taskId: string) => {
+    setTaskLifecycleStatus("running");
+    setIsLoading(true);
+    let streamReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      streamReader = await openTaskEventStream(
+        agent.id,
+        taskId,
+        lastEventIdRef.current
+      );
       const previousReader = activeStreamRef.current;
       activeStreamRef.current = streamReader;
       void previousReader?.cancel();
-
       await parseSSEStream(streamReader, {
         onEvent: (event) => {
           if (activeStreamRef.current === streamReader) handleSSEMessage(event);
         },
         buffered: true,
       });
-    } catch (error) {
-      if (!streamReader || activeStreamRef.current === streamReader) {
-        setIsLoading(false);
-        console.error("Failed to send message", error);
-        setComposerError(`${t("errors.sendFailed")}: ${formatApiError(error)}`);
-      }
     } finally {
       if (!streamReader || activeStreamRef.current === streamReader) {
         if (streamReader) activeStreamRef.current = null;
@@ -664,28 +703,42 @@ export default function FullChat({
     }
   };
 
-  // Handle pause task
-  const handlePause = async () => {
-    if (!currentTaskId || isPausing) return;
+  const handleRetry = async () => {
+    if (!currentTaskId || isRetrying) return;
+    setIsRetrying(true);
+    setComposerError(null);
+    try {
+      const result = await actions.retry();
+      if (result.error) {
+        setComposerError(apiErrorMessage(result, t("errors.retryFailed")));
+        return;
+      }
+      await followNewRun(currentTaskId);
+    } catch (err) {
+      console.error("Failed to retry task", err);
+      setComposerError(`${t("errors.retryFailed")}: ${formatApiError(err)}`);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  // Stop cancels the work in flight; a message afterwards continues the
+  // conversation, and the stream reports the stop as task.cancelled.
+  const handleStop = async () => {
+    if (!currentTaskId || isStopping) return;
 
     try {
-      setIsPausing(true);
+      setIsStopping(true);
       setComposerError(null);
-      const result = await pauseAgentTask(agent.id, currentTaskId);
-
+      const result = await actions.cancel();
       if (result.error) {
-        setComposerError(apiErrorMessage(result, t("errors.pauseFailed")));
-      } else {
-        // We keep isLoading true until we get a confirmation or the stream ends?
-        // If we pause, the stream might stop sending events.
-        // Let's allow the user to interact again by stopping the loading state.
-        setIsLoading(false);
+        setComposerError(apiErrorMessage(result, t("errors.stopFailed")));
       }
     } catch (err) {
-      console.error("Failed to pause task", err);
-      setComposerError(`${t("errors.pauseFailed")}: ${formatApiError(err)}`);
+      console.error("Failed to stop task", err);
+      setComposerError(`${t("errors.stopFailed")}: ${formatApiError(err)}`);
     } finally {
-      setIsPausing(false);
+      setIsStopping(false);
     }
   };
 
@@ -957,6 +1010,11 @@ export default function FullChat({
               {a2uiError && <FormError>{a2uiError}</FormError>}
             </div>
           )}
+          {taskLifecycleStatus === "failed" && currentTaskId && !isLoading && (
+            <div className="mb-2 flex justify-end">
+              <TaskRetryButton busy={isRetrying} onRetry={handleRetry} />
+            </div>
+          )}
           <ChatInputArea
             input={input}
             inputDisplay={inputDisplay}
@@ -995,8 +1053,8 @@ export default function FullChat({
             taskSkills={taskSkills}
             onTaskMcpsChange={setTaskMcps}
             onTaskSkillsChange={setTaskSkills}
-            onStop={isLoading && currentTaskId ? handlePause : undefined}
-            isStopping={isPausing}
+            onStop={isLoading && currentTaskId ? handleStop : undefined}
+            isStopping={isStopping}
             onResume={currentTaskId ? handleResume : undefined}
             isResuming={isResuming}
             canResume={

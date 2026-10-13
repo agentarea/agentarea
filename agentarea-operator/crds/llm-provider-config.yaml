@@ -89,8 +89,8 @@ spec:
                       # decide to sell is typically newer than the catalog that would
                       # otherwise carry it.
                       #
-                      # Not what the customer pays — that is a markup applied over
-                      # this in the billing service, and it is declared there.
+                      # Not what the customer pays — that is decided by the billing
+                      # service, not here.
                       inputCostPerToken:
                         type: number
                         description: "Provider cost per input token, e.g. 6e-7"

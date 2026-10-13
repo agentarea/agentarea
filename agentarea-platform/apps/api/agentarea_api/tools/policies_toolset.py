@@ -12,6 +12,7 @@ import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -28,7 +29,7 @@ from agentarea_tasks.infrastructure.repository import TaskRepository
 from ..api.v1.policies import PolicyRuleCreateRequest, PolicyRuleUpdateRequest
 from .base import platform_context, platform_read_context
 
-RULE_NOT_FOUND = json.dumps({"error": "Policy rule not found"})
+RULE_NOT_FOUND = "Policy rule not found"
 
 
 def _build_service(repo_factory) -> GovernancePolicyService:
@@ -93,7 +94,7 @@ class PoliciesToolset(Toolset):
             service = _build_service(repo_factory)
             rule = await service.get_rule(rule_id=UUID(rule_id))
             if rule is None:
-                return RULE_NOT_FOUND
+                raise ToolError(RULE_NOT_FOUND)
             return json.dumps(_rule_json(rule), default=str)
 
     @tool_method(effect="privileged")
@@ -135,7 +136,7 @@ class PoliciesToolset(Toolset):
             )
             assert_enforceable(rule)
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
@@ -174,20 +175,20 @@ class PoliciesToolset(Toolset):
         try:
             fields = PolicyRuleUpdateRequest.model_validate(patch).model_dump(exclude_unset=True)
         except ValueError as exc:
-            return json.dumps({"error": str(exc)})
+            raise ToolError(str(exc)) from exc
 
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             existing = await service.get_rule(rule_id=UUID(rule_id))
             if existing is None:
-                return RULE_NOT_FOUND
+                raise ToolError(RULE_NOT_FOUND)
             try:
                 assert_enforceable(existing.model_copy(update=fields))
             except ValueError as exc:
-                return json.dumps({"error": str(exc)})
+                raise ToolError(str(exc)) from exc
             updated = await service.update_rule(rule_id=UUID(rule_id), **fields)
             if updated is None:
-                return RULE_NOT_FOUND
+                raise ToolError(RULE_NOT_FOUND)
             return json.dumps(_rule_json(updated), default=str)
 
     @tool_method(effect="destructive")
@@ -198,7 +199,7 @@ class PoliciesToolset(Toolset):
             service = _build_service(repo_factory)
             deleted = await service.delete_rule(rule_id=UUID(rule_id))
             if not deleted:
-                return RULE_NOT_FOUND
+                raise ToolError(RULE_NOT_FOUND)
             return json.dumps({"deleted": True})
 
     @tool_method(effect="read")
@@ -216,7 +217,7 @@ class PoliciesToolset(Toolset):
                     task_policy=None,
                 )
             except PolicyValidationError as exc:
-                return json.dumps({"error": str(exc)})
+                raise ToolError(str(exc)) from exc
             return json.dumps(effective.model_dump(), default=str)
 
     @tool_method(effect="read")
@@ -233,7 +234,7 @@ class PoliciesToolset(Toolset):
                 snapshot.get("effective_policy") if isinstance(snapshot, dict) else None
             )
             if not isinstance(effective_policy, dict):
-                return json.dumps({"error": "Run policy snapshot not found"})
+                raise ToolError("Run policy snapshot not found")
             return json.dumps(
                 effective_policy_from_json(effective_policy).model_dump(), default=str
             )

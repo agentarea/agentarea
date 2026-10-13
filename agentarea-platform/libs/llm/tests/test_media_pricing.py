@@ -1,4 +1,4 @@
-"""Media and decision costs are converted to the billing currency once, where the call returns.
+"""Media costs are converted to the billing currency once, where the call returns.
 
 Budgets and task totals are in the billing currency; a provider USD amount added
 to them unconverted would sum RUB and USD into one total.
@@ -9,11 +9,9 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_llm.application.decision_service import DecisionService
 from agentarea_llm.application.media_generation_service import MediaGenerationService
 from agentarea_llm.domain.media import VideoJobStatus
 from agentarea_llm.infrastructure.model_clients import (
-    DecisionResult,
     GeneratedMedia,
     ModelEndpoint,
     SubmittedVideo,
@@ -74,17 +72,6 @@ class _Models:
             endpoint=_endpoint(self.managed_by), submit=submit, status=status, content=content
         )
 
-    async def decision_model(self, instance_id):
-        async def evaluate(state, questions):
-            return DecisionResult(
-                answers={"q": {"type": "noul", "noul": 0.9}},
-                cost_usd=Decimal("0.0004"),
-                input_tokens=100,
-                output_tokens=2,
-            )
-
-        return SimpleNamespace(endpoint=_endpoint(self.managed_by), evaluate=evaluate)
-
 
 class _Jobs:
     def __init__(self):
@@ -143,19 +130,3 @@ async def test_a_finished_video_carries_the_billing_currency_amount():
     assert check.cost == Decimal("150.0")
     assert [call["platform_funded"] for call in pricing.calls] == [False]
     assert UUID(job_id)
-
-
-async def test_a_decision_carries_the_billing_currency_amount_and_its_tokens():
-    pricing = _Rubles()
-    service = DecisionService(
-        models=_Models(MANAGED_BY_PLATFORM),  # type: ignore[arg-type]
-        model_id=INSTANCE,
-        pricing=pricing,
-    )
-
-    outcome = await service.evaluate("state", {"q": {"type": "noul", "instructions": "?"}})
-
-    assert outcome.cost == Decimal("0.04")
-    assert outcome.answers == {"q": {"type": "noul", "noul": 0.9}}
-    assert pricing.calls[0]["prompt_tokens"] == 100
-    assert pricing.calls[0]["completion_tokens"] == 2

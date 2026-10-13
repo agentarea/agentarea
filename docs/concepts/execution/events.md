@@ -56,6 +56,11 @@ taxonomy: `IterationStarted`, `IterationCompleted`, `BudgetWarning`,
 `ContextCompacted`, `AgentDelegationStarted`, `ModelChanged`,
 `WorkflowContinuedAsNew`, and others. They carry no part and derive nothing.
 
+`tool.progress` is dotted but derives no part either, so it never replaces the
+tool card of the same `tool_call_id`. The tool activity records it itself while
+an MCP call runs (stored, then put on the live stream), at most two a second
+per call — see [MCP tool call context](/reference/mcp-tool-call-context#progress).
+
 ### Supersede by id
 
 Every event in the taxonomy maps to a **part** with a stable `part_id`. A later

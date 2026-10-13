@@ -36,6 +36,7 @@ from .domain.base_service import BaseTaskService
 from .domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
+    RunStillClosingError,
     SchedulingNotSupportedError,
 )
 from .domain.interfaces import BaseTaskManager, FollowUpClaim
@@ -55,6 +56,8 @@ _CONVERSATION_RESUME_METADATA_KEY = "conversation_resume"
 # A completed task may continue once its execution is gone: closed, or no longer
 # known to the engine because its history aged out.
 _RESUMABLE_EXECUTION_STATUSES = _CLOSED_EXECUTION_STATUSES | {"unknown"}
+# Outcomes whose run never waits for a message: one continues only in a new run.
+_STOPPED_TASK_STATUSES = frozenset({"cancelled", "failed"})
 
 
 def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | None:
@@ -87,6 +90,18 @@ def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | N
                 return None
         groups.append(frozenset(identities))
     return tuple(groups)
+
+
+# Written by the workflow into the stored result; the closed run's result lacks them.
+_STORED_USAGE_KEYS = ("total_cost", "own_cost", "tokens_used")
+
+
+def _with_stored_usage(result: Any, stored: Any) -> Any:
+    """The workflow's result, keeping the cost and tokens stored with the task."""
+    if not isinstance(result, dict) or not isinstance(stored, dict):
+        return result
+    kept = {key: stored[key] for key in _STORED_USAGE_KEYS if key in stored}
+    return {**result, **kept}
 
 
 class TaskService(BaseTaskService):
@@ -226,8 +241,9 @@ class TaskService(BaseTaskService):
         """Reject task creation or continuation once a monthly cap is reached.
 
         The workspace cap is checked against the workspace's month-to-date
-        spend, the agent cap against ``agent_id``'s own. No-op when the
-        workspace is missing or the policy configures neither cap.
+        spend, the agent cap against ``agent_id``'s own, and a cap on LLM spend
+        against the month's model lines. No-op when the workspace is missing or
+        the policy configures no such cap.
         """
         if not workspace_id:
             return
@@ -257,6 +273,18 @@ class TaskService(BaseTaskService):
                     cap_usd=agent_cap,
                     currency=get_customer_pricing().currency(),
                     agent_id=str(agent_id),
+                )
+
+        if budget and budget.spend_caps:
+            reached = await self.task_repository.monthly_llm_cap_reached(budget, agent_id)
+            if reached is not None:
+                raise BudgetCapExceededError(
+                    workspace_id=workspace_id,
+                    current_mtd_usd=reached.spent,
+                    cap_usd=reached.cap,
+                    currency=reached.currency,
+                    agent_id=str(reached.agent_id) if reached.agent_id else None,
+                    kind="llm",
                 )
 
     async def _validate_agent_exists(self, agent_id: UUID):
@@ -1020,33 +1048,60 @@ class TaskService(BaseTaskService):
     async def queue_follow_up(self, task_id: UUID, message: str) -> bool:
         """Deliver a user message to a task's conversation.
 
-        A running execution receives it as a signal. A completed task whose
-        execution has closed is continued by a new run of the same workflow that
-        carries the conversation on. Returns False when the task can take no
-        message: it is not running and it is not a completed conversation.
+        A running execution receives it as a signal. A completed, stopped or
+        failed task whose execution has closed is continued by a new run of the
+        same workflow that carries the conversation on. A stopped or failed run
+        is never signalled: it is finishing and would drop the message; while it
+        finishes this raises RunStillClosingError. Returns False when the task
+        can take no message.
         """
         task = await self.get_task(task_id)
         if task is None or not task.execution_id or self.workflow_service is None:
             return False
-        if await self.workflow_service.send_workflow_command(
-            task.execution_id, "queue_message", {"message": message}
+        if task.status not in _STOPPED_TASK_STATUSES and (
+            await self.workflow_service.send_workflow_command(
+                task.execution_id, "queue_message", {"message": message}
+            )
         ):
             return True
+        if task.status != "completed" and task.status not in _STOPPED_TASK_STATUSES:
+            return False
+        return await self._continue_closed_conversation(task, message)
 
-        metadata = task.metadata or {}
+    async def retry_last_turn(self, task_id: UUID) -> bool:
+        """Re-run the turn a failed task's conversation ended on.
+
+        A new run of the task's workflow continues the conversation as it stands,
+        with no new message, so the model is called again on the same input.
+        Returns False unless the task failed and its execution has closed.
+        """
+        task = await self.get_task(task_id)
+        if task is None or not task.execution_id or self.workflow_service is None:
+            return False
+        if task.status != "failed":
+            return False
+        return await self._continue_closed_conversation(task, None)
+
+    async def _continue_closed_conversation(self, task: AgentTask, message: str | None) -> bool:
+        """Start a run that carries a closed task's conversation on."""
         if (
-            task.status != "completed"
-            or metadata.get("created_via") == "agent_delegation"
+            (task.metadata or {}).get("created_via") == "agent_delegation"
             or not self.task_manager.supports_resume
+            or self.workflow_service is None
+            or not task.execution_id
         ):
             return False
         workflow_status = await self.workflow_service.get_workflow_status(task.execution_id)
         execution_status = workflow_status.get("execution_status", workflow_status.get("status"))
         if execution_status not in _RESUMABLE_EXECUTION_STATUSES:
+            if task.status in _STOPPED_TASK_STATUSES and execution_status == "running":
+                raise RunStillClosingError(task.id)
             return False
 
         await self._refresh_governance_snapshot(task)
         resume = await self._conversation_resume(task)
+        if message is None:
+            resume = resume.model_copy(update={"retry": True})
         await self.task_manager.resume_task(task, resume, message)
         return True
 
@@ -1055,15 +1110,26 @@ class TaskService(BaseTaskService):
         result = task.result if isinstance(task.result, dict) else {}
         total_cost = to_money(result.get("total_cost") or 0)
         own_cost = to_money(result["own_cost"]) if result.get("own_cost") is not None else None
+        llm_cost = to_money(await self.task_repository.sum_task_llm_spend(task.id))
+        conversation = self.repository_factory.create_repository(TaskConversationRepository)
         stored = (task.metadata or {}).get(_CONVERSATION_RESUME_METADATA_KEY)
         if stored is not None:
-            return AgentExecutionResume(
-                snapshot=ConversationResumeSnapshot.model_validate(stored),
-                total_cost=total_cost,
-                own_cost=own_cost,
+            snapshot = ConversationResumeSnapshot.model_validate(stored)
+            # A later run that left no snapshot of its own moved the log on from
+            # this one; continuing from it would write over that run's entries.
+            if snapshot.next_seq == await conversation.next_seq(task.id):
+                return AgentExecutionResume(
+                    snapshot=snapshot,
+                    total_cost=total_cost,
+                    own_cost=own_cost,
+                    llm_cost=llm_cost,
+                )
+            logger.warning(
+                "Task %s resume snapshot ends at %s, not where its log does; rebuilding",
+                task.id,
+                snapshot.next_seq,
             )
 
-        conversation = self.repository_factory.create_repository(TaskConversationRepository)
         response = result.get("response")
         rebuilt = reconstruct_conversation(
             await conversation.read_all(task.id),
@@ -1075,6 +1141,7 @@ class TaskService(BaseTaskService):
             snapshot=rebuilt.snapshot,
             total_cost=total_cost,
             own_cost=own_cost,
+            llm_cost=llm_cost,
             system_prompt_missing=rebuilt.system_prompt_missing,
         )
 
@@ -1158,7 +1225,7 @@ class TaskService(BaseTaskService):
                 }:
                     task.status = outcome
                     if result is not None:
-                        task.result = result
+                        task.result = _with_stored_usage(result, task.result)
                     if workflow_status.get("error"):
                         task.error_message = str(workflow_status["error"])
         except Exception as e:

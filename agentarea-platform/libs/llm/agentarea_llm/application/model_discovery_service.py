@@ -65,6 +65,7 @@ class DiscoveredModel:
     max_output_tokens: int | None = None
     input_cost_per_token: Decimal | None = None
     output_cost_per_token: Decimal | None = None
+    cached_input_cost_per_token: Decimal | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -133,6 +134,9 @@ class ModelDiscoveryService:
                     ),
                     input_cost_per_token=_nonnegative_money_or_none(pricing.get("prompt")),
                     output_cost_per_token=_nonnegative_money_or_none(pricing.get("completion")),
+                    cached_input_cost_per_token=_nonnegative_money_or_none(
+                        pricing.get("input_cache_read")
+                    ),
                     description=m.get("description", ""),
                     kind=_kind_from_listing(m),
                 )

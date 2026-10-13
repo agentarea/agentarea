@@ -332,12 +332,19 @@ class WorkspaceExportService:
                 if plain:
                     json_spec[field] = plain
 
+            # A signing key is never exported; the importer sets a new one.
+            context_secret = (
+                secret_ref(f"{key}_context_secret", "context signing secret")
+                if spec_type == "url" and (instance.json_spec or {}).get("context_signing")
+                else None
+            )
             result.append(
                 bundle_mcp_type(
                     key=key,
                     name=instance.name,
                     json_spec=json_spec,
                     bindings=bindings,
+                    context_secret=context_secret,
                 )
             )
             # Agents reference an MCP by instance name or, when attached in

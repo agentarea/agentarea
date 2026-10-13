@@ -51,7 +51,7 @@ describe("routeComposerMessage", () => {
 
     expect(
       routeComposerMessage(state, { currentTaskId: "task-b", hasFiles: false })
-    ).toEqual({ route: "current", pendingInputId: undefined });
+    ).toEqual({ route: "current", pendingInputId: undefined, resumes: false });
   });
 
   it("answers an open input request with the message", () => {
@@ -65,7 +65,7 @@ describe("routeComposerMessage", () => {
 
     expect(
       routeComposerMessage(state, { currentTaskId: "task-a", hasFiles: false })
-    ).toEqual({ route: "current", pendingInputId: "ir-1" });
+    ).toEqual({ route: "current", pendingInputId: "ir-1", resumes: false });
   });
 
   it("queues rather than answers while an approval is pending", () => {
@@ -82,7 +82,23 @@ describe("routeComposerMessage", () => {
       hasFiles: false,
     });
 
-    expect(route).toEqual({ route: "current", pendingInputId: undefined });
+    expect(route).toEqual({ route: "current", pendingInputId: undefined, resumes: false });
+  });
+
+  it("continues a stopped or failed task's conversation in a new run", () => {
+    for (const terminal of ["task.cancelled", "task.failed"]) {
+      const state = reduceState([
+        started("task-a"),
+        { eventType: terminal, data: {} },
+      ]);
+
+      expect(
+        routeComposerMessage(state, {
+          currentTaskId: "task-a",
+          hasFiles: false,
+        })
+      ).toEqual({ route: "current", pendingInputId: undefined, resumes: true });
+    }
   });
 
   it("starts a new task for attachments, which the current task cannot take", () => {

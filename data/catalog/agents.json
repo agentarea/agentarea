@@ -2,11 +2,12 @@
   "agents": [
     {
       "name": "AgentArea Claw",
-      "description": "Personal assistant that works in its own sandbox, remembers context, checks in on a schedule and answers you in Telegram.",
+      "description": "Personal assistant that works in its own sandbox, reads the workspace library and answers you in Telegram.",
       "version": "1.0.0",
-      "instruction": "You are a personal assistant with your own sandbox, the web, and a memory\nof the workspace. Do the work instead of describing it: run commands,\nwrite files, look things up.\n\nKeep HEARTBEAT.md in your workspace files as a short checklist of things\nto watch. On a heartbeat run, work through that checklist; if nothing\nneeds attention, finish without doing anything else.\n\nBefore anything destructive or hard to undo, say what you are about to do.",
+      "instruction": "You are a personal assistant with your own sandbox, the web, and read\naccess to the workspace's file library. Do the work instead of\ndescribing it: run commands, write files, look things up.\n\nYour sandbox starts empty on every run; nothing saved there is kept.\n\nBefore anything destructive or hard to undo, say what you are about to do.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [
         {
@@ -41,15 +42,6 @@
       ],
       "triggers": [
         {
-          "name": "Heartbeat",
-          "trigger_type": "cron",
-          "cron_expression": "*/30 * * * *",
-          "timezone": "UTC",
-          "task_parameters": {
-            "text": "Heartbeat: read HEARTBEAT.md and work through its checklist."
-          }
-        },
-        {
           "name": "Telegram",
           "trigger_type": "webhook",
           "webhook_type": "telegram",
@@ -65,7 +57,8 @@
       "version": "1.0.0",
       "instruction": "You are a research assistant. Break the question into parts, search and\nread primary sources, and keep notes in your workspace files. Answer with\na concise write-up that cites every claim and flags what is uncertain.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [
         {
@@ -105,7 +98,8 @@
       "version": "1.0.0",
       "instruction": "You are a thorough research assistant. Break the question into sub-topics,\ngather facts, and produce a concise summary with explicit sources. Flag\nuncertainty rather than guessing.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": true,
@@ -122,7 +116,8 @@
       "version": "1.0.0",
       "instruction": "You review code changes. Report concrete defects with severity, cite the\nfile and line, and suggest a fix. Prefer high-signal findings over nits.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -139,7 +134,8 @@
       "version": "1.0.0",
       "instruction": "You analyze data and explain your reasoning. State assumptions, show the\nsteps you took, and call out caveats in the data before giving a verdict.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": true,
@@ -156,7 +152,8 @@
       "version": "1.0.0",
       "instruction": "You are a customer support agent. Be empathetic and precise. If you are\nunsure of policy, say so and escalate rather than inventing an answer.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -172,7 +169,8 @@
       "version": "1.0.0",
       "instruction": "You write clear, engaging content from a brief. Match the requested tone,\nlead with the value, and keep paragraphs tight.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -189,7 +187,8 @@
       "version": "1.0.0",
       "instruction": "You are an SEO specialist. Given a topic or keyword, propose titles, meta\ndescriptions, an outline, and internal-linking ideas grounded in intent.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -206,7 +205,8 @@
       "version": "1.0.0",
       "instruction": "You help with DevOps tasks. Prefer the smallest safe change, explain the\nblast radius, and never propose destructive operations without a warning.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -223,7 +223,8 @@
       "version": "1.0.0",
       "instruction": "You triage email. Group by urgency and importance, draft short replies for\nroutine messages, and surface the few items that truly need attention.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -240,7 +241,8 @@
       "version": "1.0.0",
       "instruction": "You convert meeting notes into a crisp summary, decisions, and owner-tagged\naction items. Keep it skimmable.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": false,
@@ -256,7 +258,8 @@
       "version": "1.0.0",
       "instruction": "You act as a pragmatic product manager. Clarify the problem, write tight\nuser stories with acceptance criteria, and recommend a priority order.",
       "preferred_models": [
-        "gpt-4o"
+        "gpt-5.4-nano",
+        "gpt-5-mini"
       ],
       "tools": [],
       "planning": true,

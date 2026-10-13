@@ -13,6 +13,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import policies_toolset
 from agentarea_api.tools.policies_toolset import PoliciesToolset
 from agentarea_common.auth.authorization import AuthorizationService
@@ -141,41 +142,34 @@ async def test_create_writes_an_enforceable_rule(harness):
 
 
 async def test_create_refuses_a_rule_the_engine_would_ignore(harness):
-    result = json.loads(
+    with pytest.raises(ToolError):
         await PoliciesToolset().create(
             subject_type="group",
             subject_id="group-1",
             target="tool:shell",
             effect="deny",
         )
-    )
 
-    assert "error" in result
     assert harness.service.created == []
 
 
 async def test_update_refuses_an_unenforceable_patch(harness):
-    result = json.loads(
+    with pytest.raises(ToolError):
         await PoliciesToolset().update(rule_id=str(RULE_ID), condition="user.team == 'ops'")
-    )
-
-    assert "error" in result
 
 
 async def test_update_reports_a_missing_rule(harness):
     harness.service.rule = None
 
-    result = json.loads(await PoliciesToolset().update(rule_id=str(RULE_ID), enabled=False))
-
-    assert result == {"error": "Policy rule not found"}
+    with pytest.raises(ToolError, match="Policy rule not found"):
+        await PoliciesToolset().update(rule_id=str(RULE_ID), enabled=False)
 
 
 async def test_delete_reports_a_missing_rule(harness):
     harness.service.deleted = False
 
-    result = json.loads(await PoliciesToolset().delete(rule_id=str(RULE_ID)))
-
-    assert result == {"error": "Policy rule not found"}
+    with pytest.raises(ToolError, match="Policy rule not found"):
+        await PoliciesToolset().delete(rule_id=str(RULE_ID))
 
 
 async def test_preview_resolves_for_the_callers_workspace(harness):

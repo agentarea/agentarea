@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -55,7 +56,7 @@ class AuditToolset(Toolset):
                     limit=limit,
                 )
             except UnknownAuditCursorError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             items = [
                 {
                     "id": str(e.id),

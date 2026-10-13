@@ -5,35 +5,37 @@ and task creation when triggers fire.
 """
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from agentarea_common.config import get_database
 from agentarea_triggers.logging_utils import (
     DependencyUnavailableError,
-    TriggerConditionError,
     TriggerExecutionError,
     TriggerLogger,
-    generate_correlation_id,
     set_correlation_id,
 )
 from temporalio import activity
 
 from ..interfaces import ActivityDependencies
 from ..models import (
-    CreateTaskFromTriggerRequest,
-    CreateTaskFromTriggerResult,
     EvaluateTriggerConditionsRequest,
     EvaluateTriggerConditionsResult,
     ExecuteTriggerRequest,
     ExecuteTriggerResult,
     RecordTriggerExecutionRequest,
     RecordTriggerExecutionResult,
-    TaskCreationOutcome,
     TriggerOutcome,
     TriggerSkipReason,
 )
 
 logger = TriggerLogger(__name__)
+
+_SCHEDULED_TASK_NAMESPACE = UUID("6f1d4c2a-8e3b-4a57-9c0d-2b7e5f9a1c83")
+
+
+def scheduled_task_id(workflow_id: str) -> UUID:
+    """The task a schedule firing starts; every attempt of that firing names the same one."""
+    return uuid5(_SCHEDULED_TASK_NAMESPACE, workflow_id)
 
 
 async def _resolve_trigger_context(session, trigger_id: UUID):
@@ -84,6 +86,40 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             event_broker=dependencies.event_broker,
         )
 
+    def _trigger_service(session, user_context, *, evaluate_conditions=False, task_service=None):
+        """A TriggerService that can pause the schedule of a trigger it disables."""
+        from agentarea_common.base.repository_factory import RepositoryFactory
+        from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
+        from agentarea_triggers.trigger_service import TriggerService
+
+        return TriggerService(
+            repository_factory=RepositoryFactory(session, user_context),
+            event_broker=dependencies.event_broker,
+            task_service=task_service,
+            llm_condition_evaluator=(
+                _condition_evaluator(session, user_context) if evaluate_conditions else None
+            ),
+            temporal_schedule_manager=TemporalScheduleManager(
+                activity.client(), task_queue=dependencies.settings.triggers.QUEUE
+            ),
+        )
+
+    def _task_service(session, user_context):
+        from agentarea_common.base.repository_factory import RepositoryFactory
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+        from agentarea_tasks.task_service import TaskService
+        from agentarea_tasks.temporal_task_manager import TemporalTaskManager
+
+        repository_factory = RepositoryFactory(session, user_context)
+        return TaskService(
+            repository_factory=repository_factory,
+            event_broker=dependencies.event_broker,
+            task_manager=TemporalTaskManager(
+                task_repository=repository_factory.create_repository(TaskRepository),
+                temporal_executor=dependencies.workflow_executor,
+            ),
+        )
+
     @activity.defn(name="execute_trigger_activity")
     async def execute_trigger_activity(request: ExecuteTriggerRequest) -> ExecuteTriggerResult:
         """Execute a trigger and create a task if conditions are met.
@@ -100,7 +136,14 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         trigger_id = request.trigger_id
         execution_data = request.execution_data
 
-        correlation_id = generate_correlation_id()
+        # The firing's workflow id is the same on every attempt of it, so it
+        # names the task and ties the run back to the schedule tick.
+        correlation_id = activity.info().workflow_id
+        if correlation_id is None:
+            raise TriggerExecutionError(
+                "execute_trigger_activity runs only inside a trigger workflow",
+                trigger_id=str(trigger_id),
+            )
         set_correlation_id(correlation_id)
         start_time = datetime.utcnow()
 
@@ -111,13 +154,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 execution_source=execution_data.get("source", "unknown"),
             )
 
-            from agentarea_triggers.domain.enums import ExecutionStatus
+            from agentarea_tasks.domain.models import TaskProvenance
             from agentarea_triggers.logging_utils import TriggerNotFoundError
-            from agentarea_triggers.trigger_service import (
-                NO_TASK_TEXT,
-                TriggerService,
-                compose_task_input,
-            )
 
             database = get_database()
             if not database:
@@ -129,14 +167,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
             async with database.async_session_factory() as session:
                 user_context = await _resolve_trigger_context(session, trigger_id)
-                from agentarea_common.base.repository_factory import RepositoryFactory
-
-                repository_factory = RepositoryFactory(session, user_context)
-
-                trigger_service = TriggerService(
-                    repository_factory=repository_factory,
-                    event_broker=dependencies.event_broker,
-                    llm_condition_evaluator=_condition_evaluator(session, user_context),
+                trigger_service = _trigger_service(
+                    session,
+                    user_context,
+                    evaluate_conditions=True,
+                    task_service=_task_service(session, user_context),
                 )
 
                 # Get trigger with error handling
@@ -155,7 +190,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         error_msg, trigger_id=str(trigger_id), original_error=str(e)
                     ) from None
 
-                # Check if trigger is active
+                # Checked before the extractor runs, so a switched-off poller
+                # does not consume what it would have fetched.
                 if not trigger.is_active:
                     logger.info(
                         "Trigger is inactive, skipping execution",
@@ -167,42 +203,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         status=TriggerOutcome.SKIPPED,
                         reason=TriggerSkipReason.TRIGGER_INACTIVE,
                         execution_time_ms=0,
-                        trigger_data=execution_data,
-                    )
-
-                # A condition that could not be evaluated is recorded as a failed
-                # run, never taken as met.
-                try:
-                    conditions_met = await trigger_service.evaluate_trigger_conditions(
-                        trigger, execution_data
-                    )
-                except TriggerConditionError as condition_error:
-                    execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-                    execution_result = await trigger_service.record_execution(
-                        trigger_id=trigger_id,
-                        status=ExecutionStatus.FAILED,
-                        execution_time_ms=execution_time_ms,
-                        error_message=str(condition_error),
-                        trigger_data=execution_data,
-                    )
-                    return ExecuteTriggerResult(
-                        trigger_id=trigger_id,
-                        status=TriggerOutcome.FAILED,
-                        execution_id=execution_result.id,
-                        execution_time_ms=execution_time_ms,
-                        error=str(condition_error),
-                        trigger_data=execution_data,
-                    )
-
-                if not conditions_met:
-                    logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
-                    return ExecuteTriggerResult(
-                        trigger_id=trigger_id,
-                        status=TriggerOutcome.SKIPPED,
-                        reason=TriggerSkipReason.CONDITIONS_NOT_MET,
-                        execution_time_ms=int(
-                            (datetime.utcnow() - start_time).total_seconds() * 1000
-                        ),
                         trigger_data=execution_data,
                     )
 
@@ -272,122 +272,55 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         )
                         # Continue without extracted data
 
-                # Create task from trigger
-                task_id = None
-                task_failure = None
-                task_input = compose_task_input(trigger, execution_data)
-                if task_input is None:
-                    # Nothing to ask the agent. Recorded as a failure rather than
-                    # skipped so it shows up in the trigger's history and counts
-                    # toward the auto-disable threshold -- a schedule that cannot
-                    # say what it wants will not start saying it tomorrow.
-                    execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-                    logger.warning(
-                        f"Trigger {trigger_id} produced no task: {NO_TASK_TEXT}",
-                        trigger_id=trigger_id,
-                    )
-                    execution_result = await trigger_service.record_execution(
-                        trigger_id=trigger_id,
-                        status=ExecutionStatus.FAILED,
-                        execution_time_ms=execution_time_ms,
-                        error_message=NO_TASK_TEXT,
-                        trigger_data=execution_data,
+                # The one path every trigger kind starts its task through: it
+                # evaluates the conditions, stamps provenance, records the
+                # execution and counts failures toward auto-disable.
+                firing = await trigger_service.fire(
+                    trigger_id,
+                    execution_data,
+                    task_id=scheduled_task_id(correlation_id),
+                    provenance=TaskProvenance(
+                        origin_type="trigger",
+                        origin_id=str(trigger_id),
+                        correlation_id=correlation_id,
+                    ),
+                )
+
+                execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                execution_id = firing.execution.id if firing.execution else None
+                if firing.outcome == "reacted":
+                    logger.info(
+                        f"Trigger {trigger_id} executed successfully, task_id: {firing.task_id}"
                     )
                     return ExecuteTriggerResult(
                         trigger_id=trigger_id,
-                        status=TriggerOutcome.FAILED,
-                        execution_id=execution_result.id,
+                        status=TriggerOutcome.SUCCESS,
+                        task_id=firing.task_id,
+                        execution_id=execution_id,
                         execution_time_ms=execution_time_ms,
-                        error=NO_TASK_TEXT,
                         trigger_data=execution_data,
                     )
-
-                try:
-                    from agentarea_tasks.domain.models import AgentTask
-                    from agentarea_tasks.infrastructure.repository import TaskRepository
-                    from agentarea_tasks.task_service import TaskService
-                    from agentarea_tasks.temporal_task_manager import TemporalTaskManager
-
-                    task_repository = repository_factory.create_repository(TaskRepository)
-
-                    task_manager = TemporalTaskManager(
-                        task_repository=task_repository,
-                        temporal_executor=dependencies.workflow_executor,
+                if firing.outcome == "skipped":
+                    logger.info(f"Trigger {trigger_id} skipped: {firing.reason}")
+                    return ExecuteTriggerResult(
+                        trigger_id=trigger_id,
+                        status=TriggerOutcome.SKIPPED,
+                        reason=(
+                            TriggerSkipReason.CONDITIONS_NOT_MET
+                            if firing.verdict is not None
+                            else TriggerSkipReason.TRIGGER_INACTIVE
+                        ),
+                        execution_id=execution_id,
+                        execution_time_ms=execution_time_ms,
+                        trigger_data=execution_data,
                     )
-
-                    task_service = TaskService(
-                        repository_factory=repository_factory,
-                        event_broker=dependencies.event_broker,
-                        task_manager=task_manager,
-                    )
-
-                    # Carries the channel_origin replies are routed by, built from
-                    # the trigger rather than copied from the extracted event.
-                    task_params = task_input.stamp(
-                        await trigger_service._build_task_parameters(trigger, execution_data)
-                    )
-
-                    # Submit task (creates DB record AND starts Temporal workflow)
-                    task = AgentTask(
-                        title=f"Trigger: {trigger.name}",
-                        description=task_input.ask,
-                        query=task_input.message,
-                        user_id=str(trigger.created_by),
-                        workspace_id=str(user_context.workspace_id),
-                        agent_id=trigger.agent_id,
-                        task_parameters=task_params,
-                        status="submitted",
-                    )
-                    task = await task_service.route_or_submit_task(task)
-
-                    task_id = task.id
-                    if task.status == "routed":
-                        logger.info(
-                            f"Routed follow-up to existing workflow for trigger {trigger_id}"
-                        )
-                    else:
-                        logger.info(f"Submitted task {task_id} from trigger {trigger_id}")
-
-                except Exception as task_error:
-                    task_failure = str(task_error)
-                    logger.error(
-                        f"Failed to create task for trigger {trigger_id}: {task_error}",
-                        exc_info=True,
-                    )
-
-                execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-
-                # A trigger that produced no task has not done its job. Recording it as
-                # SUCCESS resets consecutive_failures, which disarms the auto-disable
-                # safety net and lets a permanently broken trigger fire forever.
-                if task_id is not None:
-                    outcome = TriggerOutcome.SUCCESS
-                    execution_status = ExecutionStatus.SUCCESS
-                else:
-                    outcome = TriggerOutcome.FAILED
-                    execution_status = ExecutionStatus.FAILED
-
-                execution_result = await trigger_service.record_execution(
-                    trigger_id=trigger_id,
-                    status=execution_status,
-                    execution_time_ms=execution_time_ms,
-                    task_id=task_id,
-                    error_message=task_failure,
-                    trigger_data=execution_data,
-                )
-
-                if outcome is TriggerOutcome.SUCCESS:
-                    logger.info(f"Trigger {trigger_id} executed successfully, task_id: {task_id}")
-                else:
-                    logger.warning(f"Trigger {trigger_id} produced no task: {task_failure}")
-
+                logger.warning(f"Trigger {trigger_id} produced no task: {firing.reason}")
                 return ExecuteTriggerResult(
                     trigger_id=trigger_id,
-                    status=outcome,
-                    task_id=task_id,
-                    execution_id=execution_result.id,
+                    status=TriggerOutcome.FAILED,
+                    execution_id=execution_id,
                     execution_time_ms=execution_time_ms,
-                    error=task_failure,
+                    error=firing.reason,
                     trigger_data=execution_data,
                 )
 
@@ -395,7 +328,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             from agentarea_triggers.domain.enums import ExecutionStatus
             from agentarea_triggers.trigger_service import (
                 TriggerNotFoundError,
-                TriggerService,
                 TriggerValidationError,
             )
 
@@ -410,14 +342,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 database = get_database()
                 async with database.async_session_factory() as session:
                     user_context = await _resolve_trigger_context(session, trigger_id)
-                    from agentarea_common.base.repository_factory import RepositoryFactory
-
-                    repository_factory = RepositoryFactory(session, user_context)
-
-                    trigger_service = TriggerService(
-                        repository_factory=repository_factory,
-                        event_broker=dependencies.event_broker,
-                    )
+                    trigger_service = _trigger_service(session, user_context)
 
                     await trigger_service.record_execution(
                         trigger_id=trigger_id,
@@ -450,19 +375,11 @@ def make_trigger_activities(dependencies: ActivityDependencies):
         execution_data = request.execution_data
         try:
             from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.trigger_service import TriggerService
 
             database = get_database()
             async with database.async_session_factory() as session:
                 user_context = await _resolve_trigger_context(session, trigger_id)
-                from agentarea_common.base.repository_factory import RepositoryFactory
-
-                repository_factory = RepositoryFactory(session, user_context)
-
-                trigger_service = TriggerService(
-                    repository_factory=repository_factory,
-                    event_broker=dependencies.event_broker,
-                )
+                trigger_service = _trigger_service(session, user_context)
 
                 status = ExecutionStatus(execution_data["status"])
                 execution_time_ms = execution_data.get("execution_time_ms", 0)
@@ -543,118 +460,8 @@ def make_trigger_activities(dependencies: ActivityDependencies):
             )
             return EvaluateTriggerConditionsResult(conditions_met=False, trigger_id=trigger_id)
 
-    @activity.defn(name="create_task_from_trigger_activity")
-    async def create_task_from_trigger_activity(
-        request: CreateTaskFromTriggerRequest,
-    ) -> CreateTaskFromTriggerResult:
-        """Create a task from a trigger execution.
-
-        Args:
-            request: CreateTaskFromTriggerRequest including trigger_id and execution_data
-
-        Returns:
-            CreateTaskFromTriggerResult containing task creation result
-        """
-        trigger_id = request.trigger_id
-        execution_data = request.execution_data
-        try:
-            from agentarea_tasks.domain.models import AgentTask
-            from agentarea_tasks.infrastructure.repository import TaskRepository
-            from agentarea_tasks.task_service import TaskService
-            from agentarea_tasks.temporal_task_manager import TemporalTaskManager
-            from agentarea_triggers.trigger_service import (
-                NO_TASK_TEXT,
-                TriggerService,
-                compose_task_input,
-            )
-
-            database = get_database()
-            async with database.async_session_factory() as session:
-                # Create repositories via factory
-                user_context = await _resolve_trigger_context(session, trigger_id)
-                from agentarea_common.base.repository_factory import RepositoryFactory
-
-                repository_factory = RepositoryFactory(session, user_context)
-
-                # Create services
-                trigger_service = TriggerService(
-                    repository_factory=repository_factory,
-                    event_broker=dependencies.event_broker,
-                )
-
-                # Get the trigger
-                trigger = await trigger_service.get_trigger(trigger_id)
-                if not trigger:
-                    return CreateTaskFromTriggerResult(
-                        task_id=None,
-                        trigger_id=trigger_id,
-                        status=TaskCreationOutcome.FAILED,
-                        task_parameters={},
-                        error=f"Trigger {trigger_id} not found",
-                    )
-
-                task_repository = repository_factory.create_repository(TaskRepository)
-                task_manager = TemporalTaskManager(
-                    task_repository=task_repository,
-                    temporal_executor=dependencies.workflow_executor,
-                )
-
-                # Create task service and submit through the normal routing path.
-                task_service = TaskService(
-                    repository_factory=repository_factory,
-                    event_broker=dependencies.event_broker,
-                    task_manager=task_manager,
-                    workflow_service=None,
-                )
-
-                # Build task parameters
-                task_params = await trigger_service._build_task_parameters(trigger, execution_data)
-
-                task_input = compose_task_input(trigger, execution_data)
-                if task_input is None:
-                    return CreateTaskFromTriggerResult(
-                        task_id=None,
-                        trigger_id=trigger_id,
-                        status=TaskCreationOutcome.FAILED,
-                        task_parameters=task_params,
-                        error=NO_TASK_TEXT,
-                    )
-
-                task_params = task_input.stamp(task_params)
-                task = AgentTask(
-                    title=f"Trigger: {trigger.name}",
-                    description=task_input.ask,
-                    query=task_input.message,
-                    user_id=str(trigger.created_by),
-                    workspace_id=str(user_context.workspace_id),
-                    agent_id=trigger.agent_id,
-                    task_parameters=task_params,
-                    status="submitted",
-                )
-                task = await task_service.route_or_submit_task(task)
-
-                logger.info(f"Created task {task.id} from trigger {trigger_id}")
-
-                return CreateTaskFromTriggerResult(
-                    task_id=task.id,
-                    trigger_id=trigger_id,
-                    status=TaskCreationOutcome.CREATED,
-                    task_parameters=task_params,
-                )
-
-        except Exception as e:
-            logger.error(f"Failed to create task from trigger {trigger_id}: {e}", exc_info=True)
-            return CreateTaskFromTriggerResult(
-                task_id=None,
-                trigger_id=trigger_id,
-                status=TaskCreationOutcome.FAILED,
-                task_parameters={},
-                error=str(e),
-            )
-
     return [
         execute_trigger_activity,
         record_trigger_execution_activity,
         evaluate_trigger_conditions_activity,
-        create_task_from_trigger_activity,
     ]

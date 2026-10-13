@@ -23,7 +23,6 @@ RUNTIME_NAMESPACES = {
     "agentarea/web",
     "agentarea/shell",
     "agentarea/media",
-    "agentarea/decide",
 }
 
 

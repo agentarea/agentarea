@@ -8,7 +8,7 @@ from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
 )
-from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from agentarea_common.constants import MANAGED_BY_PLATFORM, PLATFORM_WORKSPACE_ID
 from agentarea_common.utils.slug import generate_slug
 from sqlalchemy import DateTime, String, case, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -306,6 +306,17 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             server.is_catalog = True
             return await self._hydrate_catalog_env_schema(server)
 
+        # The spec behind a platform-managed connection is the platform's, readable
+        # wherever the connection is — never a tenant's spec, since only the operator
+        # writes platform-managed connections.
+        platform_spec = select(self.model_class).where(
+            self.model_class.id == server_id,
+            self.model_class.backs_platform_connection(),
+        )
+        server = (await self.session.execute(platform_spec)).scalar_one_or_none()
+        if server is not None:
+            return await self._hydrate_catalog_env_schema(server)
+
         # Fall back to a read-only catalog projection: built-in specs may live in
         # the registry catalog only (ADR-003), addressed by their registry-item id.
         item = await self._get_catalog_repository().get_item(str(server_id))
@@ -315,6 +326,38 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
 class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, MCPServerInstance, user_context)
+
+    def _get_workspace_filter(self):
+        """The workspace's own connections, plus the platform-managed ones.
+
+        The same exception, for the same reason, as ``ProviderConfigRepository``: a
+        connection the platform supplies lives in the platform workspace, which no
+        tenant can name. Writes re-assert the strict filter below, so a tenant can use
+        the platform's connection but never edit, delete or repoint it.
+        """
+        return or_(
+            self._strict_workspace_filter(),
+            MCPServerInstance.managed_by == MANAGED_BY_PLATFORM,
+        )
+
+    def _strict_workspace_filter(self):
+        return super()._get_workspace_filter()
+
+    async def update(self, id, creator_scoped: bool = False, **kwargs):
+        return await self._scoped_write(super().update, id, creator_scoped=creator_scoped, **kwargs)
+
+    async def delete(self, id, creator_scoped: bool = False) -> bool:
+        return bool(await self._scoped_write(super().delete, id, creator_scoped=creator_scoped))
+
+    async def _scoped_write(self, op, id, **kwargs):
+        owned = await self.session.execute(
+            select(MCPServerInstance.id).where(
+                MCPServerInstance.id == id, self._strict_workspace_filter()
+            )
+        )
+        if owned.scalar_one_or_none() is None:
+            return None
+        return await op(id, **kwargs)
 
     @staticmethod
     async def lock_for_package_import(

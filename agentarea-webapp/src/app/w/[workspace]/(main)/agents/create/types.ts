@@ -46,11 +46,11 @@ export type BuiltinToolConfig = {
 } & CodeToolModelIds;
 
 /**
- * Model instances a code toolset runs on (agentarea/media, agentarea/decide)
+ * Model instances a code toolset runs on (agentarea/media)
  */
 export type CodeToolModelIds = Pick<
   CodeToolSettings,
-  "image_model_id" | "video_model_id" | "model_id"
+  "image_model_id" | "video_model_id"
 >;
 
 /**
@@ -60,6 +60,13 @@ export type AgentSkill = {
   id: string;
   name: string;
   description?: string | null;
+};
+
+/** The agent's answer check as the form edits it; `rewrite_instruction` is carried. */
+export type AnswerCheckFormValues = {
+  enabled: boolean;
+  language: string;
+  rewrite_instruction: string | null;
 };
 
 /**
@@ -80,6 +87,7 @@ export type AgentFormValues = {
   };
   planning: boolean;
   a2ui_enabled: boolean;
+  answer_check: AnswerCheckFormValues;
   skills?: AgentSkill[];
   // Created together with the agent; an existing agent's triggers live on /triggers
   triggers?: TriggerSpec[];

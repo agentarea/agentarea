@@ -4,7 +4,8 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, ForeignKey, String, Text
+from agentarea_common.constants import MANAGED_BY_PLATFORM
+from sqlalchemy import JSON, ColumnElement, ForeignKey, String, Text, or_
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -58,6 +59,15 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     # The last successful tool call: {"status", "at", "error"}, the shape of an
     # MCP instance's ``last_dispatch``.
     last_dispatch: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # ``'platform'``: the deployment operator supplies this connection, in the
+    # platform workspace, on a credential only the platform holds; every workspace
+    # can call it and none can edit it. NULL: the workspace's own connection.
+    managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    @classmethod
+    def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:
+        """The workspace's own connections, plus the platform-managed ones."""
+        return or_(cls.workspace_id == workspace_id, cls.managed_by == MANAGED_BY_PLATFORM)
 
     def __init__(
         self,

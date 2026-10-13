@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import workspaces
 from agentarea_api.tools import workspaces_toolset
 from agentarea_api.tools.workspaces_toolset import WorkspacesToolset
@@ -115,6 +116,11 @@ async def _update(principal: UserPrincipal | None = None, **kwargs) -> dict:
         return json.loads(await WorkspacesToolset().update(**kwargs))
 
 
+async def _update_call(principal: UserPrincipal | None = None, **kwargs) -> str:
+    with use_mcp_user_context(principal or _alice()):
+        return await WorkspacesToolset().update(**kwargs)
+
+
 @pytest.mark.asyncio
 async def test_an_admin_sets_the_logo_from_a_file_in_that_workspace(monkeypatch) -> None:
     stand = _Stand(monkeypatch)
@@ -148,11 +154,11 @@ async def test_a_member_who_does_not_administer_it_is_refused(monkeypatch) -> No
     stand = _Stand(monkeypatch)
     stand.store("ws-other", "brand/logo.png", PNG)
 
-    set_result = await _update(workspace="other", logo_path="brand/logo.png")
-    clear_result = await _update(workspace="other", clear_logo=True)
+    with pytest.raises(ToolError, match=r"^Only a workspace admin may perform this action$"):
+        await _update_call(workspace="other", logo_path="brand/logo.png")
+    with pytest.raises(ToolError, match=r"^Only a workspace admin may perform this action$"):
+        await _update_call(workspace="other", clear_logo=True)
 
-    assert set_result == {"error": "Only a workspace admin may perform this action"}
-    assert clear_result == {"error": "Only a workspace admin may perform this action"}
     stand.files_s3.head_object.assert_not_called()
     stand.logos_s3.put_object.assert_not_called()
     stand.logos_s3.delete_object.assert_not_called()
@@ -171,9 +177,9 @@ async def test_a_workspace_the_caller_does_not_reach_is_unknown(monkeypatch, pri
     stand = _Stand(monkeypatch)
     stand.store("ws-acme", "brand/logo.png", PNG)
 
-    result = await _update(principal, workspace="nope", logo_path="brand/logo.png")
+    with pytest.raises(ToolError, match=r"^No accessible workspace 'nope'$"):
+        await _update_call(principal, workspace="nope", logo_path="brand/logo.png")
 
-    assert result == {"error": "No accessible workspace 'nope'"}
     stand.files_s3.head_object.assert_not_called()
     stand.logos_s3.put_object.assert_not_called()
 
@@ -183,9 +189,9 @@ async def test_a_file_that_is_not_a_png_jpeg_or_webp_is_refused(monkeypatch) -> 
     stand = _Stand(monkeypatch)
     stand.store("ws-acme", "brand/logo.svg", b'<svg xmlns="http://www.w3.org/2000/svg"/>')
 
-    result = await _update(workspace="acme", logo_path="brand/logo.svg")
+    with pytest.raises(ToolError, match=r"^Logo must be a PNG, JPEG or WebP image$"):
+        await _update_call(workspace="acme", logo_path="brand/logo.svg")
 
-    assert result == {"error": "Logo must be a PNG, JPEG or WebP image"}
     stand.logos_s3.put_object.assert_not_called()
     assert stand.acme.logo_key is None
 
@@ -195,9 +201,9 @@ async def test_an_oversize_file_is_refused_without_reading_it(monkeypatch) -> No
     stand = _Stand(monkeypatch)
     stand.store("ws-acme", "brand/huge.png", PNG + b"\x00" * LOGO_MAX_BYTES)
 
-    result = await _update(workspace="acme", logo_path="brand/huge.png")
+    with pytest.raises(ToolError, match=rf"^Logo exceeds the {LOGO_MAX_BYTES}-byte limit$"):
+        await _update_call(workspace="acme", logo_path="brand/huge.png")
 
-    assert result == {"error": f"Logo exceeds the {LOGO_MAX_BYTES}-byte limit"}
     stand.files_s3.get_object.assert_not_called()
     stand.logos_s3.put_object.assert_not_called()
 
@@ -206,9 +212,9 @@ async def test_an_oversize_file_is_refused_without_reading_it(monkeypatch) -> No
 async def test_a_missing_file_is_reported(monkeypatch) -> None:
     stand = _Stand(monkeypatch)
 
-    result = await _update(workspace="acme", logo_path="brand/nope.png")
+    with pytest.raises(ToolError, match=r"^File not found$"):
+        await _update_call(workspace="acme", logo_path="brand/nope.png")
 
-    assert result == {"error": "File not found"}
     stand.logos_s3.put_object.assert_not_called()
 
 
@@ -217,9 +223,9 @@ async def test_a_missing_file_is_reported(monkeypatch) -> None:
 async def test_a_path_that_escapes_the_workspace_files_is_refused(monkeypatch, path) -> None:
     stand = _Stand(monkeypatch)
 
-    result = await _update(workspace="acme", logo_path=path)
+    with pytest.raises(ToolError):
+        await _update_call(workspace="acme", logo_path=path)
 
-    assert "error" in result
     stand.files_s3.head_object.assert_not_called()
     stand.files_s3.get_object.assert_not_called()
     stand.logos_s3.put_object.assert_not_called()
@@ -248,9 +254,9 @@ async def test_an_update_must_name_exactly_one_logo_change(monkeypatch, kwargs) 
     stand = _Stand(monkeypatch, acme_logo=PNG_KEY)
     stand.store("ws-acme", "brand/logo.png", PNG)
 
-    result = await _update(workspace="acme", **kwargs)
+    with pytest.raises(ToolError):
+        await _update_call(workspace="acme", **kwargs)
 
-    assert "error" in result
     stand.files_s3.head_object.assert_not_called()
     stand.logos_s3.put_object.assert_not_called()
     stand.logos_s3.delete_object.assert_not_called()
@@ -262,7 +268,7 @@ async def test_a_workspace_that_vanished_mid_call_is_reported(monkeypatch) -> No
     stand = _Stand(monkeypatch, acme_logo=PNG_KEY)
     stand.repo.get = AsyncMock(return_value=None)
 
-    result = await _update(workspace="acme", clear_logo=True)
+    with pytest.raises(ToolError, match=r"^Workspace not found$"):
+        await _update_call(workspace="acme", clear_logo=True)
 
-    assert result == {"error": "Workspace not found"}
     stand.session.commit.assert_not_awaited()

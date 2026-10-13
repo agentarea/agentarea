@@ -2,8 +2,10 @@
 
 Every 30 s:
   1. Orphan GC: mark any `in_progress` verification older than 2 minutes as failed.
-  2. Re-verify sweep: for each docker/command row with `never_attempted` verification,
-     enqueue verify() (max 5 concurrent via asyncio.Semaphore).
+  2. Re-verify sweep: for each docker/command row, and each platform-managed url row
+     (the operator writes those, and no tenant may verify them), with
+     `never_attempted` verification, enqueue verify() (max 5 concurrent via
+     asyncio.Semaphore).
   3. Package import sweep: import verified npx/uvx command rows sequentially (max 3).
 """
 
@@ -60,7 +62,7 @@ SELECT
   i.last_dispatch,
   i.tools
 FROM mcp_server_instances i
-WHERE i.transport IN ('docker', 'command')
+WHERE (i.transport IN ('docker', 'command') OR i.managed_by = 'platform')
   AND (i.verification->>'status') = 'never_attempted'
 """
 
@@ -182,8 +184,9 @@ class MCPContainerMonitor:
             try:
                 from agentarea_mcp.verification import verify
 
+                extra_headers = await _platform_credential(instance)
                 with workspace_scope(str(instance.workspace_id)):
-                    await verify(instance)
+                    await verify(instance, extra_headers=extra_headers)
             except Exception:
                 logger.exception(
                     "verify raised for instance %s",
@@ -198,6 +201,20 @@ class MCPContainerMonitor:
         except Exception:
             logger.exception("Failed to hydrate instance row %s", row.id)
             return None
+
+
+async def _platform_credential(instance) -> dict[str, str] | None:
+    """The secret headers of a platform-managed url connection; None for any other row.
+
+    A user's Verify passes the connection's secret headers in; a sweep has no user,
+    and only a platform-managed url row reaches it.
+    """
+    if instance.transport != MCPTransport.URL:
+        return None
+    from agentarea_mcp.application.service import platform_instance_environment
+
+    names = [str(name) for name in instance.json_spec.get("env_vars", [])]
+    return await platform_instance_environment(instance.id, names) or None
 
 
 # Module-level singleton kept for worker startup hook compatibility.

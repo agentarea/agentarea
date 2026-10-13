@@ -340,12 +340,14 @@ class RegistryService:
         category: str | None = None,
         protocol: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
         sort: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[
         list[RegistryItem],
         int,
+        list[tuple[str, int]],
         list[tuple[str, int]],
         list[tuple[str, int]],
         list[tuple[str, int]],
@@ -362,20 +364,24 @@ class RegistryService:
             category=category,
             protocol=protocol,
             hosting=hosting,
+            pricing=pricing,
             sort=sort or DEFAULT_CATALOG_SORT,
             limit=limit,
             offset=offset,
         )
         categories = await self.item_repo.category_counts(
-            registry_type, q=query, protocol=protocol, hosting=hosting
+            registry_type, q=query, protocol=protocol, hosting=hosting, pricing=pricing
         )
         protocols = await self.item_repo.protocol_counts(
-            registry_type, q=query, category=category, hosting=hosting
+            registry_type, q=query, category=category, hosting=hosting, pricing=pricing
         )
         hostings = await self.item_repo.hosting_counts(
-            registry_type, q=query, category=category, protocol=protocol
+            registry_type, q=query, category=category, protocol=protocol, pricing=pricing
         )
-        return items, total, categories, protocols, hostings
+        pricings = await self.item_repo.pricing_counts(
+            registry_type, q=query, category=category, protocol=protocol, hosting=hosting
+        )
+        return items, total, categories, protocols, hostings, pricings
 
     async def search_catalog(
         self,
@@ -974,6 +980,7 @@ class RegistryService:
             max_output_tokens=spec.get("max_output_tokens"),
             input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
             output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
+            cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )
@@ -1387,6 +1394,7 @@ class RegistryService:
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),
+                        "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "is_active": entry.get("is_active", True),
                     },
