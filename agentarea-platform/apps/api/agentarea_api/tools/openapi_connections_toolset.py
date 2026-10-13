@@ -14,6 +14,7 @@ from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -24,7 +25,6 @@ from agentarea_openapi.schemas.dto import (
     QueryParamInput,
     UrlVariableInput,
 )
-from mcp.server.mcpserver.exceptions import ToolError
 
 from .base import platform_context, platform_read_context
 
@@ -214,7 +214,7 @@ class OpenAPIConnectionsToolset(Toolset):
             service = _build_service(repo_factory, secret_mgr)
             conn = await service.get_connection(UUID(connection_id))
             if not conn:
-                return json.dumps({"error": "Connection not found"})
+                raise ToolError("Connection not found")
             payload = _serialize(conn)
             payload["tools"] = [
                 {"name": t["name"], "description": t.get("description", "")}
@@ -273,7 +273,7 @@ class OpenAPIConnectionsToolset(Toolset):
             patch["url_variables"] = [UrlVariableInput.model_validate(v) for v in raw_url_variables]
 
         if not patch:
-            return json.dumps({"error": "no fields to update"})
+            raise ToolError("no fields to update")
 
         payload = OpenAPIConnectionUpdate.model_validate(patch)
 
@@ -288,7 +288,7 @@ class OpenAPIConnectionsToolset(Toolset):
             with _refusal_reaches_caller():
                 conn = await service.update_connection(UUID(connection_id), payload)
             if not conn:
-                return json.dumps({"error": "Connection not found"})
+                raise ToolError("Connection not found")
             return json.dumps(_serialize(conn), default=str)
 
     @tool_method(effect="write")

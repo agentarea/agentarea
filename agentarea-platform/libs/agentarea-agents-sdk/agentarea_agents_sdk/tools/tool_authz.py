@@ -17,8 +17,8 @@ counterpart of ``agentarea_common.auth.route_authz``:
 
 ``apps/api/tests/test_tool_authz_ratchet.py`` fails on a tool that declares
 none. The two enforcing markers wrap the method, so the declaration and the
-check cannot drift apart; a refusal is returned as the tool's JSON error, the
-shape every tool body already uses. They answer for the principal bound by
+check cannot drift apart; a refusal is raised as a ``ToolError``, which a run
+records as a failed call and an MCP client receives as an error result. They answer for the principal bound by
 ``use_mcp_user_context`` -- the MCP bearer, or the run's user in the worker.
 
 The platform imports stay inside the checks, as in ``mcp_server.auth``: the
@@ -30,10 +30,11 @@ from __future__ import annotations
 
 import functools
 import inspect
-import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
+
+from .base_tool import ToolError
 
 TOOL_AUTHZ_ATTR = "__tool_authz__"
 
@@ -59,7 +60,7 @@ def _enforcing(marker: dict[str, Any], check: _Check) -> Callable[[Any], Any]:
             try:
                 await check(arguments, get_mcp_user_context())
             except HTTPException as exc:
-                return json.dumps({"error": exc.detail})
+                raise ToolError(str(exc.detail)) from exc
             return await func(*args, **kwargs)
 
         return _declare(guarded, marker)
@@ -123,7 +124,7 @@ def requires_user_session(action: str) -> Callable[[Any], Any]:
             try:
                 ensure_user_session(get_mcp_user_context(), action)
             except UserSessionRequiredError as exc:
-                return json.dumps({"error": str(exc)})
+                raise ToolError(str(exc)) from exc
             return await func(*args, **kwargs)
 
         return guarded

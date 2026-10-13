@@ -9,6 +9,7 @@ test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity.
 import json
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -169,7 +170,7 @@ class ProvidersToolset(Toolset):
                 payload=payload,
             )
             if not config:
-                return json.dumps({"error": "Provider configuration not found"})
+                raise ToolError("Provider configuration not found")
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
     @tool_method(effect="destructive")

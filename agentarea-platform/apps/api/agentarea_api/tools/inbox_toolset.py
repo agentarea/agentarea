@@ -3,6 +3,7 @@
 import json
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -40,10 +41,8 @@ class InboxToolset(Toolset):
         person's approval, each with the link that person opens.
         """
         if status and status not in INBOX_STATUSES:
-            return json.dumps(
-                {
-                    "error": f"Unknown inbox status {status!r}; expected one of {list(INBOX_STATUSES)}"
-                }
+            raise ToolError(
+                f"Unknown inbox status {status!r}; expected one of {list(INBOX_STATUSES)}"
             )
         async with platform_read_context() as (_session, user_ctx, repo_factory, broker, _secret):
             from agentarea_tasks.task_service import TaskService

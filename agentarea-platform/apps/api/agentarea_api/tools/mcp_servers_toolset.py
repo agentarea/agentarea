@@ -14,6 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server.elicitation import url_elicitation
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -267,7 +268,7 @@ class MCPServersToolset(Toolset):
             patch["registry_url"] = registry_url
 
         if not patch:
-            return json.dumps({"error": "no fields to update"})
+            raise ToolError("no fields to update")
 
         payload = MCPServerUpdate.model_validate(patch)
 
@@ -286,7 +287,7 @@ class MCPServersToolset(Toolset):
             )
             server = await service.update_mcp_server(UUID(spec_id), payload)
             if not server:
-                return json.dumps({"error": "MCP server spec not found"})
+                raise ToolError("MCP server spec not found")
             return json.dumps(_serialize_server(server), default=str)
 
     @tool_method(effect="read")
@@ -306,9 +307,9 @@ class MCPServersToolset(Toolset):
         ``limit`` is 1..100; page further with ``offset``.
         """
         if not 1 <= limit <= 100:
-            return json.dumps({"error": f"limit must be between 1 and 100, got {limit}"})
+            raise ToolError(f"limit must be between 1 and 100, got {limit}")
         if offset < 0:
-            return json.dumps({"error": f"offset must not be negative, got {offset}"})
+            raise ToolError(f"offset must not be negative, got {offset}")
         async with platform_read_context() as (
             _session,
             user_ctx,
@@ -357,12 +358,12 @@ class MCPServersToolset(Toolset):
             )
             server = await service.get(UUID(spec_id))
             if not server:
-                return json.dumps({"error": "MCP server spec not found"})
+                raise ToolError("MCP server spec not found")
             if not getattr(server, "is_catalog", False):
                 try:
                     await require_permission("read", "mcp_server", spec_id, user_ctx.user_id)
                 except HTTPException as exc:
-                    return json.dumps({"error": exc.detail})
+                    raise ToolError(exc.detail) from exc
             payload = _serialize_server(server)
             payload["env_schema"] = server.env_schema
             payload["registry_url"] = server.registry_url
@@ -416,7 +417,7 @@ class MCPServersToolset(Toolset):
         try:
             spec_id = UUID(server_spec_id)
         except ValueError:
-            return json.dumps({"error": f"server_spec_id must be a UUID, got {server_spec_id!r}"})
+            raise ToolError(f"server_spec_id must be a UUID, got {server_spec_id!r}") from None
         spec = json.loads(json_spec_json) if json_spec_json else {}
         payload = MCPServerInstanceCreate(
             name=name,
@@ -442,7 +443,7 @@ class MCPServersToolset(Toolset):
             )
             instance = await service.create_instance(payload)
             if not instance:
-                return json.dumps({"error": "Failed to create MCP server instance"})
+                raise ToolError("Failed to create MCP server instance")
             action = await _connect_action(session, service, user_ctx, instance, probe=True)
             result = _serialize_instance(instance)
             if action is not None:
@@ -468,7 +469,7 @@ class MCPServersToolset(Toolset):
             patch["json_spec"] = json.loads(json_spec_json)
 
         if not patch:
-            return json.dumps({"error": "no fields to update"})
+            raise ToolError("no fields to update")
 
         payload = MCPServerInstanceUpdate.model_validate(patch)
 
@@ -488,7 +489,7 @@ class MCPServersToolset(Toolset):
             )
             instance = await service.update_instance(UUID(instance_id), payload)
             if not instance:
-                return json.dumps({"error": "MCP server instance not found"})
+                raise ToolError("MCP server instance not found")
             action = await _connect_action(session, service, user_ctx, instance, probe=True)
             result = _serialize_instance(instance)
             if action is not None:
@@ -551,7 +552,7 @@ class MCPServersToolset(Toolset):
             )
             instance = await service.get(UUID(instance_id))
             if not instance:
-                return json.dumps({"error": "MCP server instance not found"})
+                raise ToolError("MCP server instance not found")
             payload = _serialize_instance(instance)
             payload["last_dispatch"] = instance.last_dispatch
             raw_tools = instance.tools or []

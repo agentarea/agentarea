@@ -12,9 +12,8 @@ request dependency, so the check would have denied the workspace owner too.
 
 from __future__ import annotations
 
-import json
-
 import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools.secrets_toolset import SecretsToolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
@@ -68,10 +67,9 @@ def context(monkeypatch):
 async def test_a_member_cannot_mint_a_secret_through_an_agent(catalog, context) -> None:
     context.user = UserContext(user_id="user-member", workspace_id=WORKSPACE, admin_workspaces=[])
 
-    result = json.loads(await SecretsToolset().create("STRIPE_KEY", "sk-live-x"))
+    with pytest.raises(ToolError, match="admin"):
+        await SecretsToolset().create("STRIPE_KEY", "sk-live-x")
 
-    assert result["created"] is False
-    assert "admin" in result["error"].lower()
     assert catalog == [], "the guard must run before the catalog is touched"
 
 
@@ -79,9 +77,9 @@ async def test_a_member_cannot_mint_a_secret_through_an_agent(catalog, context) 
 async def test_a_member_cannot_delete_a_secret_through_an_agent(catalog, context) -> None:
     context.user = UserContext(user_id="user-member", workspace_id=WORKSPACE, admin_workspaces=[])
 
-    result = json.loads(await SecretsToolset().delete("STRIPE_KEY"))
+    with pytest.raises(ToolError, match="admin"):
+        await SecretsToolset().delete("STRIPE_KEY")
 
-    assert result["deleted"] is False
     assert catalog == []
 
 

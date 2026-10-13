@@ -6,6 +6,7 @@ the run, narrowed to the escalation's designated approvers.
 """
 
 import json
+import re
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import uuid4
@@ -15,6 +16,7 @@ from agentarea_agents.application.execution_service import (
     NotAnApproverError,
     WorkflowNotFoundError,
 )
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import runs_toolset
 from agentarea_api.tools.runs_toolset import RUN_NOT_FOUND, RunsToolset
 from agentarea_common.auth.authorization import AuthorizationService
@@ -115,18 +117,18 @@ async def test_a_member_who_cannot_act_on_the_run_is_refused_before_the_workflow
 ):
     workflow = _harness(monkeypatch, "user-invited-yesterday", [_escalation("esc-1", [])])
 
-    result = await _list()
+    with pytest.raises(ToolError) as error:
+        await _list()
 
-    assert isinstance(result, dict)
-    assert "error" in result
-    assert COMMAND not in json.dumps(result)
+    assert COMMAND not in str(error.value)
     assert workflow.queried == []
 
 
 async def test_a_run_outside_the_workspace_is_not_found(monkeypatch):
     workflow = _harness(monkeypatch, STARTER, [_escalation("esc-1", [])], task=None)
 
-    assert await _list() == json.loads(RUN_NOT_FOUND)
+    with pytest.raises(ToolError, match=re.escape(RUN_NOT_FOUND)):
+        await _list()
     assert workflow.queried == []
 
 
@@ -143,16 +145,14 @@ async def test_an_escalation_reserved_for_other_approvers_is_not_shown(monkeypat
 async def test_a_run_whose_workflow_does_not_exist_is_a_clean_error(monkeypatch):
     _harness(monkeypatch, STARTER, WorkflowNotFoundError(f"task-{RUN_ID}"))
 
-    assert await _list() == {"error": "Run has no workflow to read escalations from"}
+    with pytest.raises(ToolError, match=re.escape("Run has no workflow to read escalations from")):
+        await _list()
 
 
 async def test_resolving_as_someone_who_is_not_an_approver_is_a_clean_error(monkeypatch):
     _harness(monkeypatch, STARTER, [])
 
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("You are not an approver of this escalation")):
         await RunsToolset().resolve_escalation(
             run_id=str(RUN_ID), escalation_id="esc-1", approved=True
         )
-    )
-
-    assert result == {"error": "You are not an approver of this escalation"}

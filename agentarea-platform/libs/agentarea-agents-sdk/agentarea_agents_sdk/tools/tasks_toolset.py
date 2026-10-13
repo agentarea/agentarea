@@ -8,6 +8,7 @@ from uuid import UUID
 from agentarea_agents_sdk.tasks import TaskStatus
 from agentarea_agents_sdk.tasks.task_service import InMemoryTaskService
 
+from .base_tool import ToolError
 from .decorator_tool import Toolset, tool_method
 
 
@@ -51,7 +52,7 @@ class TasksToolset(Toolset):
         status_enum = TaskStatus(status)
         updated = self.service.set_status(UUID(task_id), status_enum)
         if not updated:
-            return json.dumps({"error": "Task not found"})
+            raise ToolError(f"Task not found: {task_id}")
         return json.dumps(self.service.to_dict(updated))
 
     @tool_method
@@ -63,7 +64,7 @@ class TasksToolset(Toolset):
             UUID(parent_id), title=title, description=description or "", priority=priority or 1
         )
         if not task:
-            return json.dumps({"error": "Parent task not found"})
+            raise ToolError(f"Parent task not found: {parent_id}")
         return json.dumps(self.service.to_dict(task))
 
     @tool_method

@@ -1,6 +1,7 @@
 """Decorator-based tool interface for automatic schema generation."""
 
 import inspect
+import logging
 import types
 from collections.abc import Callable
 from typing import (
@@ -15,7 +16,8 @@ from typing import (
     overload,
 )
 
-from .base_tool import BaseTool
+from .base_tool import BaseTool, ToolError
+from .tool_arguments import check_arguments
 from .tool_definition import (
     ToolDefinition,
     ToolEffect,
@@ -42,6 +44,8 @@ class ToolMethodMetadata:
         self.effect = effect
         self.requires_user_confirmation = requires_user_confirmation
 
+
+logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -325,7 +329,7 @@ class Toolset:
             if len(self._tool_methods) == 1:
                 # Single method - execute directly
                 method = next(iter(self._tool_methods.values()))
-                result = await self._execute_method(method, kwargs)
+                result = await self._execute_method(method, check_arguments(method, kwargs))
             else:
                 # Multiple methods - use action parameter
                 action = kwargs.get("action") or self._infer_action_from_kwargs(kwargs)
@@ -341,12 +345,19 @@ class Toolset:
 
                 method = self._tool_methods[action]
                 # Filter kwargs for this specific method
-                method_kwargs = self._filter_kwargs_for_method(action, kwargs)
+                method_kwargs = check_arguments(
+                    method,
+                    self._filter_kwargs_for_method(action, kwargs),
+                    field_prefix=f"{action}_",
+                )
                 result = await self._execute_method(method, method_kwargs)
 
             return self._as_tool_result(result)
 
+        except ToolError as e:
+            return {"success": False, "result": str(e), "tool_name": self.name, "error": str(e)}
         except Exception as e:
+            logger.warning("Tool %s failed: %s", self.name, e, exc_info=True)
             return {
                 "success": False,
                 "result": f"Execution failed: {e!s}",

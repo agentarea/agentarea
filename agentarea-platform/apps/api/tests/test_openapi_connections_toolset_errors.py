@@ -5,9 +5,9 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import openapi_connections_toolset as module
 from agentarea_api.tools.openapi_connections_toolset import OpenAPIConnectionsToolset
-from mcp.server.mcpserver.exceptions import ToolError
 
 CAUSE = (
     "Could not fetch the spec from https://enter.tochka.com/doc/openapi/swagger.json: "

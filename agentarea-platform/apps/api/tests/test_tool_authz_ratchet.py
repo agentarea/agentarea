@@ -25,13 +25,13 @@ gets through.
 from __future__ import annotations
 
 import inspect
-import json
 import sys
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.code_tools_loader import _ensure_all_toolsets_imported
 from agentarea_agents_sdk.tools.tool_authz import tool_authz
 from agentarea_agents_sdk.tools.tool_definition import get_toolset_registry
@@ -166,10 +166,10 @@ async def test_a_member_without_the_authority_is_refused(item, bound) -> None:
     cls, name, _func = item
     method = bound(cls, name)
 
-    with use_mcp_user_context(MEMBER):
-        result = json.loads(await method(**_arguments(method)))
+    with use_mcp_user_context(MEMBER), pytest.raises(ToolError) as refusal:
+        await method(**_arguments(method))
 
-    assert result.get("error") in REFUSALS
+    assert str(refusal.value) in REFUSALS
 
 
 @pytest.mark.asyncio
@@ -180,8 +180,8 @@ async def test_a_caller_with_the_authority_gets_through(item, bound) -> None:
 
     with use_mcp_user_context(OWNER):
         try:
-            result = await method(**_arguments(method))
+            await method(**_arguments(method))
         except _BodyReachedError:
             return
-
-    assert json.loads(result).get("error") not in REFUSALS
+        except ToolError as error:
+            assert str(error) not in REFUSALS

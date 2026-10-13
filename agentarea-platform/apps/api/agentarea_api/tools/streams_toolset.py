@@ -10,6 +10,7 @@ import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -54,12 +55,12 @@ def _secret_ports(session: Any, user_ctx: Any, secret_manager: Any) -> dict[str,
     }
 
 
-def _out_of_range(name: str, value: int, low: int, high: int | None = None) -> str | None:
+def _check_range(name: str, value: int, low: int, high: int | None = None) -> None:
     """The REST routes' Query(ge=, le=) bounds; MCP arguments are not validated before the call."""
     if value >= low and (high is None or value <= high):
-        return None
+        return
     bounds = f"between {low} and {high}" if high is not None else f"at least {low}"
-    return json.dumps({"error": f"{name} must be {bounds}, got {value}"})
+    raise ToolError(f"{name} must be {bounds}, got {value}")
 
 
 @toolset(
@@ -79,10 +80,8 @@ class StreamsToolset(Toolset):
     @enforced_in_handler("narrowed to the rows the graph says this caller may read")
     async def list(self, limit: int = 100, offset: int = 0) -> str:
         """List the workspace's streams. limit is 1-1000."""
-        if refused := _out_of_range("limit", limit, 1, 1000) or _out_of_range(
-            "offset", offset, 0, MAX_OFFSET
-        ):
-            return refused
+        _check_range("limit", limit, 1, 1000)
+        _check_range("offset", offset, 0, MAX_OFFSET)
         async with platform_read_context() as (_s, user_ctx, repo_factory, _b, _sec):
             rows = await _service(repo_factory).list_streams(
                 limit=limit, offset=offset, ids=await readable_resource_ids(user_ctx.user_id)
@@ -99,7 +98,7 @@ class StreamsToolset(Toolset):
             try:
                 row = await _service(repo_factory).get_stream(UUID(stream_id))
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return StreamResponse.model_validate(row).model_dump_json()
 
     @tool_method(effect="write")
@@ -117,7 +116,7 @@ class StreamsToolset(Toolset):
                     retention_days=payload.retention_days,
                 )
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return StreamResponse.model_validate(row).model_dump_json()
 
     @tool_method(effect="destructive")
@@ -137,7 +136,7 @@ class StreamsToolset(Toolset):
                     **_secret_ports(session, user_ctx, secret_manager),
                 )
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
     @tool_method(effect="read")
@@ -175,7 +174,7 @@ class StreamsToolset(Toolset):
                 webhook_type=webhook_type, credentials=credentials or {}, config=config or {}
             )
         except ValidationError as error:
-            return json.dumps({"error": str(error)})
+            raise ToolError(str(error)) from error
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
                 row, issued = await create_webhook_source(
@@ -188,7 +187,7 @@ class StreamsToolset(Toolset):
                 # A refusal after the row was flushed must not commit with the scope.
                 await session.rollback()
                 detail = error.detail if isinstance(error, HTTPException) else str(error)
-                return json.dumps({"error": detail})
+                raise ToolError(detail) from error
             return WebhookSourceCreated(
                 **source_response(row).model_dump(), signing_secret=issued
             ).model_dump_json()
@@ -206,7 +205,7 @@ class StreamsToolset(Toolset):
                     source, **_secret_ports(session, user_ctx, secret_manager)
                 )
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
     @tool_method(effect="read")
@@ -240,7 +239,7 @@ class StreamsToolset(Toolset):
                 for output in payload.output_stream_ids:
                     await require_permission("edit", "stream", str(output), user_ctx.user_id)
             except HTTPException as exc:
-                return json.dumps({"error": exc.detail})
+                raise ToolError(exc.detail) from exc
             try:
                 row = await _service(repo_factory).create_forward(
                     stream_id=UUID(stream_id),
@@ -248,7 +247,7 @@ class StreamsToolset(Toolset):
                     event_filter=payload.event_filter,
                 )
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return _subscription(row).model_dump_json()
 
     @tool_method(effect="destructive")
@@ -267,9 +266,9 @@ class StreamsToolset(Toolset):
                     await require_permission("edit", "stream", str(output), user_ctx.user_id)
                 await service.delete_forward(UUID(stream_id), UUID(subscription_id))
             except HTTPException as exc:
-                return json.dumps({"error": exc.detail})
+                raise ToolError(exc.detail) from exc
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
     @tool_method(effect="read")
@@ -280,8 +279,8 @@ class StreamsToolset(Toolset):
         Pass the returned ``next_after`` as ``after`` for the next page; null at the end.
         limit is 1-200.
         """
-        if refused := _out_of_range("limit", limit, 1, 200) or _out_of_range("after", after, 0):
-            return refused
+        _check_range("limit", limit, 1, 200)
+        _check_range("after", after, 0)
         async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
             service = _service(repo_factory)
             try:
@@ -289,7 +288,7 @@ class StreamsToolset(Toolset):
                     UUID(stream_id), after=after, before=None, limit=limit
                 )
             except StreamError as error:
-                return json.dumps({"error": str(error)})
+                raise ToolError(str(error)) from error
             return StreamEventPage(
                 events=await _events_with_outcomes(service, UUID(stream_id), events),
                 next_after=events[-1].sequence if len(events) == limit else None,

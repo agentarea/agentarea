@@ -4,7 +4,7 @@
 parameters, so the raw path string used to reach the PDP. OpenFGA rejects an
 object id it cannot parse, and the fuzz suite saw that as a 500. The id is
 validated first: the route answers 422 like any malformed UUID path parameter,
-the tool answers with its JSON error, and the PDP is never asked.
+the tool raises a ToolError, and the PDP is never asked.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.tool_authz import requires as tool_requires
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -86,10 +87,9 @@ class _Things:
 
 @pytest.mark.asyncio
 async def test_tool_rejects_a_malformed_id_before_the_pdp(permissions) -> None:
-    with use_mcp_user_context(CALLER):
-        result = json.loads(await _Things().delete(thing_id="not-a-uuid"))
+    with use_mcp_user_context(CALLER), pytest.raises(ToolError, match="thing_id must be a UUID"):
+        await _Things().delete(thing_id="not-a-uuid")
 
-    assert "thing_id" in result["error"]
     assert permissions.checked == []
 
 

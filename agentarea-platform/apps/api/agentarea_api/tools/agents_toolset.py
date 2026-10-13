@@ -14,6 +14,7 @@ from uuid import UUID
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.schemas.dto import AgentCreate, AgentTypeLiteral, AgentUpdate
 from agentarea_agents.schemas.import_export import ToolConfig
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -69,7 +70,7 @@ class AgentsToolset(Toolset):
             service = _build_service(repo_factory, event_broker)
             agent = await service.get(UUID(agent_id))
             if not agent:
-                return json.dumps({"error": "Agent not found"})
+                raise ToolError("Agent not found")
             return json.dumps(
                 {
                     "id": str(agent.id),
@@ -110,7 +111,7 @@ class AgentsToolset(Toolset):
         try:
             validate_code_tool_names(payload.tools)
         except HTTPException as exc:
-            return json.dumps({"error": exc.detail})
+            raise ToolError(exc.detail) from exc
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
             agent = await service.create_agent(payload)
@@ -147,13 +148,13 @@ class AgentsToolset(Toolset):
         try:
             validate_code_tool_names(payload.tools)
         except HTTPException as exc:
-            return json.dumps({"error": exc.detail})
+            raise ToolError(exc.detail) from exc
 
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
             agent = await service.update_agent(UUID(agent_id), payload)
             if not agent:
-                return json.dumps({"error": "Agent not found"})
+                raise ToolError("Agent not found")
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
     @tool_method(effect="destructive")

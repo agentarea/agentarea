@@ -45,6 +45,7 @@ def _agent(name: str) -> SimpleNamespace:
         tools=[],
         planning=False,
         a2ui_enabled=False,
+        answer_check=None,
         agent_type="stateless",
         skills=[],
         is_catalog=False,

@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import members_toolset
 from agentarea_api.tools.members_toolset import MembersToolset
 from agentarea_common.auth.authorization import AuthorizationService
@@ -304,18 +305,17 @@ async def test_remove_does_not_claim_a_member_is_gone_while_revocation_is_pendin
 async def test_remove_reports_a_refused_removal_instead_of_claiming_success(harness):
     harness.memberships.removal_error = OwnerRemovalRejected("owner cannot be removed")
 
-    result = json.loads(await MembersToolset().remove(user_id="user-1"))
+    with pytest.raises(ToolError, match="owner cannot be removed"):
+        await MembersToolset().remove(user_id="user-1")
 
-    assert result == {"error": "owner cannot be removed"}
     assert harness.memberships.calls == []
 
 
 async def test_revoke_invitation_reports_a_missing_invitation(harness):
     harness.service.raise_on_revoke = True
 
-    result = json.loads(await MembersToolset().revoke_invitation(invitation_id=str(INVITATION_ID)))
-
-    assert result == {"error": "Invitation not found"}
+    with pytest.raises(ToolError, match="Invitation not found"):
+        await MembersToolset().revoke_invitation(invitation_id=str(INVITATION_ID))
 
 
 async def test_list_invitations_never_returns_tokens(harness):
@@ -339,10 +339,9 @@ async def test_an_api_key_cannot_change_who_is_in_the_workspace(harness, tool, a
         user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"], api_key_id="key-1"
     )
 
-    with use_mcp_user_context(key):
-        result = json.loads(await getattr(MembersToolset(), tool)(**arguments))
+    with use_mcp_user_context(key), pytest.raises(ToolError, match="An API key cannot"):
+        await getattr(MembersToolset(), tool)(**arguments)
 
-    assert "An API key cannot" in result["error"]
     assert harness.service.created == []
     assert harness.service.revoked == []
     assert harness.memberships.calls == []

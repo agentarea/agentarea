@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import inbox as inbox_router
 from agentarea_api.tools import inbox_toolset
 from agentarea_api.tools.inbox_toolset import InboxToolset
@@ -69,9 +70,9 @@ def test_the_router_and_the_tool_share_one_vocabulary() -> None:
 
 @pytest.mark.asyncio
 async def test_an_unknown_status_is_refused(repository) -> None:
-    result = json.loads(await InboxToolset().list(status="running"))
+    with pytest.raises(ToolError, match="running"):
+        await InboxToolset().list(status="running")
 
-    assert "running" in result["error"]
     assert not repository.opened
     repository.list_by_statuses.assert_not_awaited()
 

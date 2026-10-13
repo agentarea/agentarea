@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -10,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import files, projects
 from agentarea_api.tools import files_toolset
 from agentarea_common.artifacts import ArtifactService
@@ -184,10 +184,8 @@ async def test_the_mcp_files_tool_reports_a_too_long_path_as_not_found(
     monkeypatch.setattr(files_toolset, "platform_context", context)
     monkeypatch.setattr(files_toolset, "platform_read_context", context)
 
-    with use_mcp_user_context(user_context):
-        result = json.loads(await getattr(files_toolset.FilesToolset(), tool)(path=path))
-
-    assert result["error"] == "File not found"
+    with use_mcp_user_context(user_context), pytest.raises(ToolError, match=r"^File not found$"):
+        await getattr(files_toolset.FilesToolset(), tool)(path=path)
 
 
 @pytest.mark.asyncio

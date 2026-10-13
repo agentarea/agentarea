@@ -5,11 +5,12 @@ The MCP tools take ids as strings. A malformed one used to reach a DTO typed
 message that names the argument, before any database work.
 """
 
-import json
+import re
 from contextlib import asynccontextmanager
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import mcp_servers_toolset, projects_toolset
 from agentarea_api.tools.mcp_servers_toolset import MCPServersToolset
 from agentarea_api.tools.projects_toolset import ProjectsToolset
@@ -32,28 +33,21 @@ def caller(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_project_create_refuses_a_parent_that_is_not_a_uuid():
-    result = json.loads(await ProjectsToolset().create(name="p", parent_project_id="nope"))
-
-    assert "parent_project_id" in result["error"]
+    with pytest.raises(ToolError, match=re.escape("parent_project_id")):
+        await ProjectsToolset().create(name="p", parent_project_id="nope")
 
 
 @pytest.mark.asyncio
 async def test_project_update_refuses_a_parent_that_is_not_a_uuid():
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("parent_project_id")):
         await ProjectsToolset().update(
             project_id="00000000-0000-4000-8000-000000000001", parent_project_id="nope"
         )
-    )
-
-    assert "parent_project_id" in result["error"]
 
 
 @pytest.mark.asyncio
 async def test_mcp_instance_create_refuses_a_spec_id_that_is_not_a_uuid():
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("server_spec_id")):
         await MCPServersToolset().create(
             name="i", json_spec_json='{"type": "url"}', server_spec_id="nope"
         )
-    )
-
-    assert "server_spec_id" in result["error"]

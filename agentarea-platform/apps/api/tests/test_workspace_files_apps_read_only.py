@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import files
 from agentarea_api.tools import files_toolset
 from agentarea_api.tools.files_toolset import FilesToolset
@@ -158,10 +159,9 @@ def mcp_service(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_the_mcp_delete_tool_refuses_app_files(mcp_service) -> None:
-    result = json.loads(await FilesToolset().delete(path=APP_FILE))
+    with pytest.raises(ToolError, match="read-only"):
+        await FilesToolset().delete(path=APP_FILE)
 
-    assert result["deleted"] is False
-    assert "read-only" in result["error"]
     mcp_service.delete.assert_not_awaited()
 
 
