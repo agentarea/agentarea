@@ -137,7 +137,8 @@ export function FilePickerPanel({
         <SheetDescription className="text-xs">{description}</SheetDescription>
       </SheetHeader>
 
-      <div className="border-b px-5 pb-3 pt-2">
+      {/* The subheader's 42px band: the search carries its own padding. */}
+      <div className="flex h-[42px] shrink-0 items-center border-b px-5">
         <SearchInput
           delay={150}
           onDebouncedChange={setQuery}

@@ -326,7 +326,9 @@ export function CreateTriggerForm({
   };
 
   const fileControl = (
-    <Sheet>
+    // Non-modal and unshaded, like the task's attach sheet: the form behind
+    // stays in view while files are picked.
+    <Sheet modal={false}>
       <SheetTrigger asChild>
         <Button
           id="task_files"
@@ -340,7 +342,11 @@ export function CreateTriggerForm({
         </Button>
       </SheetTrigger>
       {/* Sized like the task composer's attach sheet, which it mirrors. */}
-      <SheetContent className="flex flex-col gap-0 overflow-hidden p-0 sm:w-[420px] sm:max-w-[420px]">
+      <SheetContent
+        side="right"
+        hideOverlay
+        className="flex flex-col gap-0 overflow-hidden p-0 sm:w-[420px] sm:max-w-[420px]"
+      >
         <FilePickerPanel
           title={t("taskFiles")}
           description={t("taskFilesHint")}
