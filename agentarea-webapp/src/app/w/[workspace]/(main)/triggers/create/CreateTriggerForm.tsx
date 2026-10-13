@@ -18,11 +18,10 @@ import {
 } from "lucide-react";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
-import ConfigSheet from "@/components/ConfigSheet";
-import { FileTree } from "@/components/files/file-tree";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
+import { FilePickerPanel } from "@/components/ResourcePicker/FilePickerPanel";
 import { SecretSelect } from "@/components/SecretSelect";
 import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
@@ -37,8 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import Link from "@/components/WorkspaceLink";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
@@ -190,7 +189,6 @@ export function CreateTriggerForm({
   );
   const [taskText, setTaskText] = useState(initialTaskParameters.text);
   const [taskFiles, setTaskFiles] = useState(initialTaskParameters.files);
-  const [fileSearch, setFileSearch] = useState("");
   const [taskSkills, setTaskSkills] = useState<TaskParameterRef[]>(
     initialTaskParameters.skills
   );
@@ -216,18 +214,6 @@ export function CreateTriggerForm({
         description: skill.description,
       })),
     [resources.skills]
-  );
-
-  const refreshResourcesControl = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="xs"
-      disabled={resourcesLoading}
-      onClick={resources.refresh}
-    >
-      {t("refreshResources")}
-    </Button>
   );
 
   const selected = catalog.find((e) => e.id === selectedId);
@@ -340,10 +326,8 @@ export function CreateTriggerForm({
   };
 
   const fileControl = (
-    <ConfigSheet
-      title={t("taskFiles")}
-      description={t("taskFilesHint")}
-      triggerComponent={
+    <Sheet>
+      <SheetTrigger asChild>
         <Button
           id="task_files"
           type="button"
@@ -354,56 +338,21 @@ export function CreateTriggerForm({
           <Paperclip />
           {t("taskFilesPlaceholder")}
         </Button>
-      }
-    >
-      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pb-6">
-        <Input
-          aria-label={t("searchFiles")}
-          placeholder={t("searchFiles")}
-          value={fileSearch}
-          onChange={(event) => setFileSearch(event.target.value)}
+      </SheetTrigger>
+      {/* Sized like the task composer's attach sheet, which it mirrors. */}
+      <SheetContent className="flex flex-col gap-0 overflow-hidden p-0 sm:w-[420px] sm:max-w-[420px]">
+        <FilePickerPanel
+          title={t("taskFiles")}
+          description={t("taskFilesHint")}
+          files={availableFiles}
+          selected={taskFiles}
+          onChange={setTaskFiles}
+          loading={resourcesLoading}
+          failed={resourceErrors.includes("files")}
+          onRefresh={resources.refresh}
         />
-        {resourcesLoading ? (
-          <p className="note">{t("loadingResources")}</p>
-        ) : resourceErrors.includes("files") ? (
-          <p role="alert" className="text-xs text-destructive">
-            {t("resourcesLoadFailed")}
-          </p>
-        ) : (
-          <>
-            <FileTree
-              files={availableFiles.filter(
-                (file) =>
-                  !taskFiles.includes(file.path) &&
-                  file.path.toLowerCase().includes(fileSearch.toLowerCase())
-              )}
-              selectedPath={null}
-              onSelect={(file) =>
-                setTaskFiles((previous) =>
-                  previous.includes(file.path)
-                    ? previous
-                    : [...previous, file.path]
-                )
-              }
-            />
-            {!availableFiles.some(
-              (file) =>
-                !taskFiles.includes(file.path) &&
-                file.path.toLowerCase().includes(fileSearch.toLowerCase())
-            ) && <p className="note">{t("noFiles")}</p>}
-          </>
-        )}
-        <Link
-          href="/files"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-primary hover:underline"
-        >
-          {t("manageFiles")}
-        </Link>
-        {refreshResourcesControl}
-      </div>
-    </ConfigSheet>
+      </SheetContent>
+    </Sheet>
   );
   return (
     <>
@@ -989,6 +938,7 @@ export function CreateTriggerForm({
                 previous.filter((item) => item.id !== id)
               )
             }
+            onClearFiles={() => setTaskFiles([])}
             onRemoveFile={(path) =>
               setTaskFiles((previous) =>
                 previous.filter((file) => file !== path)

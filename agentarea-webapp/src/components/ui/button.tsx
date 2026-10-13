@@ -24,6 +24,10 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:text-accent ",
         ghost:
           "hover:bg-primary/10 hover:text-accent/80 dark:hover:text-accent-foreground dark:hover:bg-primary/30",
+        // Ghost, for an action that removes something (e.g. "Clear"): quiet
+        // like its neighbours until hovered, then red.
+        destructiveGhost:
+          "text-muted-foreground hover:bg-destructive/10 hover:text-destructive dark:hover:bg-red-500/15 dark:hover:text-red-400",
         link: "text-primary underline-offset-4 hover:underline",
       },
       // `[&_svg]:size-*` outranks any `h-4 w-4` a call site puts on the glyph,

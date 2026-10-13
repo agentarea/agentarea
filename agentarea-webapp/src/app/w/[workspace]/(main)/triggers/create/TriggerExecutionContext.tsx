@@ -8,6 +8,7 @@ import type {
   McpServerInstanceResponse,
 } from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { fileBasename } from "@/components/Chat/utils/fileIcon";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import {
   InfoPanelBody,
@@ -46,7 +47,16 @@ type TriggerExecutionContextProps = {
   onRemoveMcp: (id: string) => void;
   onRemoveSkill: (id: string) => void;
   onRemoveFile: (path: string) => void;
+  onClearFiles: () => void;
 };
+
+const FILES_PREVIEW = 5;
+
+/** The folder a path sits in; nothing for a file at the top. */
+function folderOf(path: string) {
+  const index = path.lastIndexOf("/");
+  return index > 0 ? path.slice(0, index) : undefined;
+}
 
 /** An entity's tile as the house draws it: graphite, hued by its id. */
 function tile(kind: EntityKind, id: string) {
@@ -85,9 +95,9 @@ function removeButton(remove?: { label: string; onClick: () => void }) {
   return (
     <Button
       type="button"
-      variant="ghost"
+      variant="destructiveGhost"
       size="icon"
-      className="h-6 w-6 shrink-0 text-muted-foreground"
+      className="h-6 w-6 shrink-0"
       aria-label={remove.label}
       title={remove.label}
       onClick={remove.onClick}
@@ -100,6 +110,7 @@ function removeButton(remove?: { label: string; onClick: () => void }) {
 export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
   const t = useTranslations("TriggersPage.create");
   const [attempt, setAttempt] = useState(0);
+  const [showAllFiles, setShowAllFiles] = useState(false);
   const [loaded, setLoaded] = useState<{
     key: string;
     agent: AgentResponse | null;
@@ -371,11 +382,31 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
 
           <InfoPanelSection
             title={t("execution.files")}
-            action={props.fileControl}
+            action={
+              <div className="flex items-center gap-1">
+                {props.selectedFiles.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="destructiveGhost"
+                    size="xs"
+                    onClick={props.onClearFiles}
+                  >
+                    <X />
+                    {t("execution.clearFiles")}
+                  </Button>
+                )}
+                {props.fileControl}
+              </div>
+            }
             contentClassName="space-y-0.5 text-xs"
           >
             {props.selectedFiles.length === 0 && empty("execution.noFiles")}
-            {props.selectedFiles.map((path) => (
+            {/* A whole folder is one click in the picker, so this list can
+              run to hundreds: the first few, the rest on demand. */}
+            {(showAllFiles
+              ? props.selectedFiles
+              : props.selectedFiles.slice(0, FILES_PREVIEW)
+            ).map((path) => (
               <InfoPanelRow
                 key={path}
                 avatar={
@@ -386,14 +417,30 @@ export function TriggerExecutionContext(props: TriggerExecutionContextProps) {
                     aria-hidden
                   />
                 }
-                name={path}
-                sub={t("execution.thisTask")}
+                name={fileBasename(path)}
+                sub={folderOf(path)}
+                title={path}
                 trailing={removeButton({
                   label: t("execution.remove", { name: path }),
                   onClick: () => props.onRemoveFile(path),
                 })}
               />
             ))}
+            {props.selectedFiles.length > FILES_PREVIEW && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground"
+                onClick={() => setShowAllFiles((value) => !value)}
+              >
+                {showAllFiles
+                  ? t("execution.showLessFiles")
+                  : t("execution.showAllFiles", {
+                      count: props.selectedFiles.length,
+                    })}
+              </Button>
+            )}
           </InfoPanelSection>
 
           {resources.capabilities.length > 0 && (

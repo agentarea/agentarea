@@ -1988,7 +1988,10 @@
         "carriedOver": "These came from an older version of this trigger. Move them onto the agent — triggers no longer carry their own.",
         "viewInNetwork": "See this in the network",
         "disabledMethods": "Disabled methods",
-        "builtin": "Built-in"
+        "builtin": "Built-in",
+        "clearFiles": "Clear",
+        "showAllFiles": "Show all ({count})",
+        "showLessFiles": "Show less"
       },
       "taskText": "Task text",
       "taskTextPlaceholder": "Text to pass into each task created by this trigger",
@@ -2000,14 +2003,10 @@
       "taskTextFromCall": "This is the instruction the agent follows; the incoming call is attached as the event. Leave it empty to make the call itself the ask.",
       "taskTextFromStream": "The event's data is attached to the task automatically. The text here is the instruction the agent follows.",
       "taskFilesHint": "Select workspace files to include in every task.",
-      "searchFiles": "Search files",
-      "noFiles": "No more files to select.",
-      "manageFiles": "Manage workspace files",
       "taskMcpsHint": "Select MCP servers to make available to every task.",
       "taskSkillsHint": "Select skills to make available to every task.",
       "loadingResources": "Loading…",
       "resourcesLoadFailed": "Could not load resources. Try refreshing the list.",
-      "refreshResources": "Refresh list",
       "removeResource": "Remove {name}",
       "selectCredentialsHint": "Choose workspace secrets for the channel credentials.",
       "credentialsLaterHint": "Without a connection the automation is still created, but it receives nothing. You can add the secrets later.",
@@ -2575,7 +2574,12 @@
     "emptySkillsHint": "Package a procedure once, then attach it to any task or agent.",
     "emptyMcpsTitle": "No MCP servers yet",
     "emptyMcpsHint": "Connect one to give this task — and any agent — its tools.",
-    "nothingFoundTitle": "Nothing found"
+    "nothingFoundTitle": "Nothing found",
+    "filesHeading": "Files",
+    "emptyFilesTitle": "No files yet",
+    "emptyFilesHint": "Upload files to the workspace, then pick the ones every task should get.",
+    "uploadFiles": "Upload files",
+    "manageFilesLink": "Manage files"
   },
   "QuickTask": {
     "title": "New task",
