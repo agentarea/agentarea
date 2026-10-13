@@ -74,44 +74,20 @@ _SANDBOX = ("agentarea/shell", "agentarea/files", "agentarea/workspace_files")
 PRESETS: list[dict[str, Any]] = [
     _agent(
         "AgentArea Claw",
-        "Personal assistant that works in its own sandbox, reads the workspace library, "
-        "checks in on a schedule and answers you in Telegram.",
+        "Personal assistant that works in its own sandbox, reads the workspace library "
+        "and answers you in Telegram.",
         """
         You are a personal assistant with your own sandbox, the web, and read
         access to the workspace's file library. Do the work instead of
         describing it: run commands, write files, look things up.
 
         Your sandbox starts empty on every run; nothing saved there is kept.
-        The checklist of things to watch is HEARTBEAT.md in the workspace file
-        library. The person keeps it on the Files page; you can only read it.
-
-        On a heartbeat run, read HEARTBEAT.md with read_org_file once; never
-        list the library to look for it. If it does not exist, finish with one
-        line saying so. Otherwise work through the checklist, report only what
-        needs the person's attention, and finish; if nothing does, finish with
-        "Nothing needs attention." Never create, copy or save HEARTBEAT.md, and
-        declare no artifacts on a heartbeat run.
-
-        When the person asks you to change what you watch, give them the new
-        HEARTBEAT.md text to put on the Files page.
 
         Before anything destructive or hard to undo, say what you are about to do.
         """,
         tools=_code(*_SANDBOX, "agentarea/web", "agentarea/context"),
         skills=["brainstorming--obra-superpowers", "writing-plans--obra-superpowers"],
         triggers=[
-            {
-                "name": "Heartbeat",
-                "trigger_type": "cron",
-                "cron_expression": "0 */4 * * *",
-                "timezone": "UTC",
-                "task_parameters": {
-                    "text": (
-                        "Heartbeat: read HEARTBEAT.md from the file library and work "
-                        "through its checklist."
-                    )
-                },
-            },
             {
                 "name": "Telegram",
                 "trigger_type": "webhook",

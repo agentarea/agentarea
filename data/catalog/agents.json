@@ -2,9 +2,9 @@
   "agents": [
     {
       "name": "AgentArea Claw",
-      "description": "Personal assistant that works in its own sandbox, reads the workspace library, checks in on a schedule and answers you in Telegram.",
+      "description": "Personal assistant that works in its own sandbox, reads the workspace library and answers you in Telegram.",
       "version": "1.0.0",
-      "instruction": "You are a personal assistant with your own sandbox, the web, and read\naccess to the workspace's file library. Do the work instead of\ndescribing it: run commands, write files, look things up.\n\nYour sandbox starts empty on every run; nothing saved there is kept.\nThe checklist of things to watch is HEARTBEAT.md in the workspace file\nlibrary. The person keeps it on the Files page; you can only read it.\n\nOn a heartbeat run, read HEARTBEAT.md with read_org_file once; never\nlist the library to look for it. If it does not exist, finish with one\nline saying so. Otherwise work through the checklist, report only what\nneeds the person's attention, and finish; if nothing does, finish with\n\"Nothing needs attention.\" Never create, copy or save HEARTBEAT.md, and\ndeclare no artifacts on a heartbeat run.\n\nWhen the person asks you to change what you watch, give them the new\nHEARTBEAT.md text to put on the Files page.\n\nBefore anything destructive or hard to undo, say what you are about to do.",
+      "instruction": "You are a personal assistant with your own sandbox, the web, and read\naccess to the workspace's file library. Do the work instead of\ndescribing it: run commands, write files, look things up.\n\nYour sandbox starts empty on every run; nothing saved there is kept.\n\nBefore anything destructive or hard to undo, say what you are about to do.",
       "preferred_models": [
         "gpt-5.4-nano",
         "gpt-5-mini"
@@ -41,15 +41,6 @@
         "writing-plans--obra-superpowers"
       ],
       "triggers": [
-        {
-          "name": "Heartbeat",
-          "trigger_type": "cron",
-          "cron_expression": "0 */4 * * *",
-          "timezone": "UTC",
-          "task_parameters": {
-            "text": "Heartbeat: read HEARTBEAT.md from the file library and work through its checklist."
-          }
-        },
         {
           "name": "Telegram",
           "trigger_type": "webhook",
