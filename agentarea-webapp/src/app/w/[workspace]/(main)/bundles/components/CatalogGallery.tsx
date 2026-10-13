@@ -11,7 +11,7 @@ import React, {
   useState,
   useTransition,
 } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowDownAZ,
   BadgeCheck,
@@ -117,8 +117,14 @@ import {
   initialPaging,
   type CategoryFacet,
 } from "./catalog-paging";
+import {
+  formatMemory,
+  formatMoney,
+  formatVcpu,
+  monthlyFromHourly,
+} from "./catalog-pricing";
 import type { CatalogSection } from "./catalog-sections";
-import { PricingBadge, usePriceLabel } from "./PricingBadge";
+import { PriceChip, PricingBadge, usePriceLabel } from "./PricingBadge";
 
 // ── Registry types ──────────────────────────────────────────────────────────
 // One gallery for every catalog type. The look-and-feel is shared; the type is
@@ -1622,6 +1628,9 @@ function DetailView({
           </>
         )}
         {entry.pricing && <ConnectionPricing pricing={entry.pricing} />}
+        {entry.pricing?.compute && (
+          <ConnectionCompute compute={entry.pricing.compute} />
+        )}
         {entry.type === "connections" && <ConnectionFacts entry={entry} />}
         {entry.type === "skills" && (
           <>
@@ -2554,14 +2563,72 @@ function ConnectionPricing({
                 <dt className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
                   {price.tool ?? t("otherTools")}
                 </dt>
-                <dd className="shrink-0 font-medium tabular-nums">
-                  {priceLabel(price)}
+                <dd className="shrink-0">
+                  <PriceChip
+                    currency={price.currency}
+                    label={priceLabel(price, { full: true })}
+                  >
+                    {priceLabel(price)}
+                  </PriceChip>
                 </dd>
               </div>
             ))}
           </dl>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * What a server AgentArea runs reserves while it runs, and what an hour of that
+ * costs when billing prices it. Billed apart from any call.
+ */
+function ConnectionCompute({
+  compute,
+}: {
+  compute: NonNullable<NonNullable<CatalogEntry["pricing"]>["compute"]>;
+}) {
+  const t = useTranslations("CatalogPage.pricing");
+  const locale = useLocale();
+  const priced = compute.hourly != null && compute.currency;
+  const rows: [string, string][] = [
+    [t("computeCpu"), `${formatVcpu(compute.vcpu, locale)} vCPU`],
+    [t("computeMemory"), formatMemory(compute.memory_gib, locale)],
+  ];
+  if (compute.hourly != null && compute.currency) {
+    rows.push(
+      [
+        t("computePerHour"),
+        `≈ ${formatMoney(compute.hourly, compute.currency, locale)}`,
+      ],
+      [
+        t("computePerMonth"),
+        `≈ ${formatMoney(monthlyFromHourly(compute.hourly), compute.currency, locale, { whole: true })}`,
+      ]
+    );
+  }
+  return (
+    <div>
+      <SectionLabel>{t("computeTitle")}</SectionLabel>
+      <p className="text-sm text-muted-foreground">
+        {priced ? t("computeHint") : t("computeUnpricedHint")}
+      </p>
+      <div className="mt-2 overflow-hidden rounded-lg border border-border/60">
+        <dl className="divide-y divide-border/60">
+          {rows.map(([label, value]) => (
+            <div
+              key={label}
+              className="flex items-center gap-4 px-4 py-2.5 text-sm"
+            >
+              <dt className="min-w-0 flex-1 truncate text-muted-foreground">
+                {label}
+              </dt>
+              <dd className="shrink-0 font-medium tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </div>
   );
 }

@@ -889,6 +889,25 @@ func parseCPULimit(value string) (float64, error) {
 	return parsed, nil
 }
 
+// DefaultLimits is what a container whose request names no limits is started with:
+// CPU in millicores and memory in bytes, zero where none is configured.
+func DefaultLimits(cfg config.ContainerConfig) (cpuMillicores, memoryBytes int64, err error) {
+	if cfg.DefaultCPULimit != "" {
+		cpus, err := parseCPULimit(cfg.DefaultCPULimit)
+		if err != nil {
+			return 0, 0, fmt.Errorf("default cpu limit %q: %w", cfg.DefaultCPULimit, err)
+		}
+		cpuMillicores = int64(math.Round(cpus * 1000))
+	}
+	if cfg.DefaultMemoryLimit != "" {
+		memoryBytes, err = parseMemoryLimit(cfg.DefaultMemoryLimit)
+		if err != nil {
+			return 0, 0, fmt.Errorf("default memory limit %q: %w", cfg.DefaultMemoryLimit, err)
+		}
+	}
+	return cpuMillicores, memoryBytes, nil
+}
+
 // parseMemoryLimit reads the runtime's own memory syntax: a byte count with an
 // optional b/k/m/g suffix.
 func parseMemoryLimit(value string) (int64, error) {

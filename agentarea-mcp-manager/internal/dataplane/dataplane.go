@@ -118,6 +118,7 @@ func (s *Server) Routes(router gin.IRouter) {
 	group := router.Group("/dataplane/v1", s.authenticate)
 	group.POST("/instances", s.createInstance)
 	group.GET("/instances", s.listInstances)
+	group.GET("/reservation", s.defaultReservation)
 	group.GET("/instances/:id", s.getInstance)
 	group.DELETE("/instances/:id", s.deleteInstance)
 	group.GET("/instances/:id/health", s.healthCheck)
@@ -343,6 +344,22 @@ func (s *Server) createInstance(c *gin.Context) {
 		slog.String("runtime_class", spec.RuntimeClass),
 	)
 	c.JSON(http.StatusCreated, result)
+}
+
+// defaultReservation reports what a new instance whose spec names no resources
+// reserves on this data plane, which is where its requests and limits are set.
+func (s *Server) defaultReservation(c *gin.Context) {
+	reporter, ok := s.backend.(backends.DefaultReservationReporter)
+	if !ok {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "this backend cannot report a reservation"})
+		return
+	}
+	reservation, err := reporter.DefaultReservation(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, reservation)
 }
 
 func (s *Server) listInstances(c *gin.Context) {

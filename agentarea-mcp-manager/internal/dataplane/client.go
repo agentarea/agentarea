@@ -197,6 +197,16 @@ func (c *Client) ListInstances(ctx context.Context) ([]*backends.InstanceStatus,
 	return payload.Instances, nil
 }
 
+// DefaultReservation asks the data plane, whose configuration sets a new
+// instance's requests and limits.
+func (c *Client) DefaultReservation(ctx context.Context) (backends.Reservation, error) {
+	var reservation backends.Reservation
+	if err := c.Do(ctx, http.MethodGet, "/dataplane/v1/reservation", nil, &reservation); err != nil {
+		return backends.Reservation{}, err
+	}
+	return reservation, nil
+}
+
 // UpdateInstance is not offered by the data-plane API.
 //
 // Reported rather than silently ignored: a caller that believes it changed an

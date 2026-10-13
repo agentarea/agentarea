@@ -3444,15 +3444,24 @@
         "free": "Free"
       },
       "paid": "Paid",
-      "paidFrom": "Paid · from {price}",
+      "from": "from {price}",
       "ownKey": "Own key",
-      "perCall": "{price}/call",
-      "perUnit": "{price}/{unit}",
+      "perCall": "{price} / call",
+      "perUnit": "{price} / {unit}",
       "title": "Pricing",
       "paidHint": "Calls run on AgentArea's key and are charged to the workspace balance.",
       "paidOrOwnKeyHint": "Calls run on AgentArea's key and are charged to the workspace balance. You can connect your own key instead; then the vendor bills you.",
       "ownKeyHint": "Calls run on your own account with the vendor, and the vendor bills you. AgentArea counts the spend against your caps.",
-      "otherTools": "Other tools"
+      "otherTools": "Other tools",
+      "computeHourly": "≈ {price}/h",
+      "computeChipTitle": "≈ {hourly} per hour while the server runs",
+      "computeTitle": "Compute",
+      "computeHint": "While the server runs, AgentArea reserves this CPU and memory for it. Reserved compute is billed by the hour, apart from calls.",
+      "computeUnpricedHint": "While the server runs, AgentArea reserves this CPU and memory for it.",
+      "computeCpu": "CPU",
+      "computeMemory": "Memory",
+      "computePerHour": "Per hour while running",
+      "computePerMonth": "Per month if always on"
     }
   },
   "BundleInstall": {

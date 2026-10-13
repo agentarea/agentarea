@@ -3444,15 +3444,24 @@
         "free": "Бесплатно"
       },
       "paid": "Платно",
-      "paidFrom": "Платно · от {price}",
+      "from": "от {price}",
       "ownKey": "Свой ключ",
-      "perCall": "{price}/вызов",
-      "perUnit": "{price}/{unit}",
+      "perCall": "{price} / вызов",
+      "perUnit": "{price} / {unit}",
       "title": "Стоимость",
       "paidHint": "Вызовы идут через ключ AgentArea и списываются с баланса воркспейса.",
       "paidOrOwnKeyHint": "Вызовы идут через ключ AgentArea и списываются с баланса воркспейса. Можно подключить свой ключ — тогда счёт выставит вендор.",
       "ownKeyHint": "Вызовы идут через ваш аккаунт у вендора, счёт выставляет вендор. AgentArea учитывает расходы в лимитах.",
-      "otherTools": "Остальные инструменты"
+      "otherTools": "Остальные инструменты",
+      "computeHourly": "≈ {price}/ч",
+      "computeChipTitle": "≈ {hourly} в час, пока сервер запущен",
+      "computeTitle": "Ресурсы",
+      "computeHint": "Пока сервер запущен, AgentArea резервирует для него эти CPU и память. Резерв оплачивается почасово, отдельно от вызовов.",
+      "computeUnpricedHint": "Пока сервер запущен, AgentArea резервирует для него эти CPU и память.",
+      "computeCpu": "CPU",
+      "computeMemory": "Память",
+      "computePerHour": "В час, пока запущен",
+      "computePerMonth": "В месяц, если работает постоянно"
     }
   },
   "BundleInstall": {

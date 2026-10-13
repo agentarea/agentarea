@@ -7,9 +7,10 @@ from agentarea_common.extensions.customer_pricing import (
     CUSTOMER_PRICING_EXTENSION,
     CustomerPricing,
     CustomerPricingUnavailableError,
-    ProviderCostPricing,
     FxUnavailableError,
+    ProviderCostPricing,
     get_customer_pricing,
+    price_compute_hour,
     price_llm_call,
     price_vendor_cost,
     resolve_customer_pricing,
@@ -246,3 +247,32 @@ async def test_a_currency_an_installed_pricing_cannot_convert_is_its_error():
             currency="EUR",
             pricing=_NoEur(),
         )
+
+
+@pytest.mark.asyncio
+async def test_compute_is_unpriced_without_a_pricing_that_prices_it():
+    assert await price_compute_hour(vcpu=Decimal(1), memory_gib=Decimal(1)) is None
+    assert await price_compute_hour(vcpu=Decimal(1), memory_gib=Decimal(1), pricing=_Rub()) is None
+
+
+@pytest.mark.asyncio
+async def test_compute_is_priced_in_the_billing_currency():
+    class _Compute(_Rub):
+        async def price_compute_hour(self, *, vcpu, memory_gib):
+            return vcpu + memory_gib * Decimal("0.12")
+
+    assert await price_compute_hour(
+        vcpu=Decimal("0.5"), memory_gib=Decimal(1), pricing=_Compute()
+    ) == (Decimal("0.62"), "RUB")
+
+
+@pytest.mark.asyncio
+async def test_compute_billing_does_not_price_is_unpriced_not_an_error():
+    class _Unpriced(_Rub):
+        async def price_compute_hour(self, *, vcpu, memory_gib):
+            raise LookupError("no compute cards")
+
+    assert (
+        await price_compute_hour(vcpu=Decimal(1), memory_gib=Decimal(1), pricing=_Unpriced())
+        is None
+    )

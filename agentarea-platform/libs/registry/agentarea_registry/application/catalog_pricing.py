@@ -5,6 +5,11 @@ entry declares (``catalog_facets``). What a call costs the workspace is not: on
 the platform's key it is the vendor's rate as the installed billing prices it
 (markup, currency), so it is asked of the customer pricing seam when the entry is
 read. Without enterprise billing that is the vendor's rate in its own currency.
+
+An entry that runs on AgentArea also holds compute while its instance runs. That is
+billed per hour of what the instance reserved, separately from any call, so it is a
+separate estimate: the reservation as the MCP manager reports it, priced by billing
+when one is installed and left unpriced otherwise.
 """
 
 import logging
@@ -12,7 +17,11 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
-from agentarea_common.extensions.customer_pricing import FxUnavailableError, price_vendor_cost
+from agentarea_common.extensions.customer_pricing import (
+    FxUnavailableError,
+    price_compute_hour,
+    price_vendor_cost,
+)
 from agentarea_common.tool_cost import (
     CostSourceKind,
     Payer,
@@ -21,6 +30,7 @@ from agentarea_common.tool_cost import (
     parse_cost_model,
 )
 from agentarea_mcp.domain.metering import META_COST, META_PAYERS
+from agentarea_mcp.instance_reservation import instance_reservation
 
 from .catalog_facets import CatalogPricing, catalog_metadata
 
@@ -38,11 +48,24 @@ class ToolPrice:
 
 
 @dataclass(frozen=True)
+class ComputeEstimate:
+    """What a hosted entry's running instance reserves, and what an hour of it costs."""
+
+    vcpu: Decimal
+    memory_gib: Decimal
+    # None when nothing prices compute (no billing installed): the reservation alone.
+    hourly: Decimal | None
+    currency: str | None
+
+
+@dataclass(frozen=True)
 class CatalogItemPricing:
     kind: CatalogPricing
     payers: tuple[Payer, ...]
     # Priced on the platform's key; empty unless the entry is paid and declares rates.
     prices: tuple[ToolPrice, ...]
+    # Entries that run on AgentArea only; None where the reservation is unknown.
+    compute: ComputeEstimate | None = None
 
     @property
     def price_from(self) -> ToolPrice | None:
@@ -92,6 +115,17 @@ async def _rate_prices(item: Any, metadata: dict[str, Any]) -> tuple[ToolPrice, 
     return tuple(prices)
 
 
+async def _compute_estimate(item: Any) -> ComputeEstimate | None:
+    if getattr(item, "hosting", None) != "agentarea":
+        return None
+    reservation = await instance_reservation()
+    if reservation is None:
+        return None
+    priced = await price_compute_hour(vcpu=reservation.vcpu, memory_gib=reservation.memory_gib)
+    hourly, currency = priced if priced is not None else (None, None)
+    return ComputeEstimate(reservation.vcpu, reservation.memory_gib, hourly, currency)
+
+
 async def price_catalog_item(item: Any) -> CatalogItemPricing | None:
     """The entry's pricing, or None for an entry that has no pricing dimension."""
     kind: CatalogPricing | None = item.pricing
@@ -104,4 +138,4 @@ async def price_catalog_item(item: Any) -> CatalogItemPricing | None:
         logger.warning("Catalog entry %s declares malformed payers", item.id, exc_info=True)
         return None
     prices = await _rate_prices(item, metadata) if kind == "paid" else ()
-    return CatalogItemPricing(kind, payers, prices)
+    return CatalogItemPricing(kind, payers, prices, await _compute_estimate(item))

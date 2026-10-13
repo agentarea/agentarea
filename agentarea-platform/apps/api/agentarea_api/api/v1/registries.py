@@ -25,6 +25,7 @@ from agentarea_registry.application.catalog_facets import (
 )
 from agentarea_registry.application.catalog_pricing import (
     CatalogItemPricing,
+    ComputeEstimate,
     ToolPrice,
     price_catalog_item,
 )
@@ -131,18 +132,42 @@ class CatalogToolPrice(BaseModel):
         return cls(tool=price.tool, amount=price.amount, currency=price.currency, unit=price.unit)
 
 
+class CatalogComputeEstimate(BaseModel):
+    """What a running instance of an entry hosted on AgentArea reserves, and its hour.
+
+    ``hourly`` is null where nothing prices compute: the reservation is shown alone.
+    """
+
+    vcpu: Decimal
+    memory_gib: Decimal
+    hourly: Decimal | None
+    currency: str | None
+
+    @classmethod
+    def from_domain(cls, compute: ComputeEstimate) -> "CatalogComputeEstimate":
+        return cls(
+            vcpu=compute.vcpu,
+            memory_gib=compute.memory_gib,
+            hourly=compute.hourly,
+            currency=compute.currency,
+        )
+
+
 class CatalogItemPricingResponse(BaseModel):
     """Whether using a connection costs money through AgentArea (wiki ADR-0038).
 
     ``kind`` "paid": the platform's key may pay and the workspace is billed;
     ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
     the vendor bills the workspace's own account. "free": nothing is charged.
+    ``kind`` is about calls only; ``compute`` is the separate hourly reservation
+    of an entry that runs on AgentArea.
     """
 
     kind: CatalogPricing
     payers: list[str]
     price_from: CatalogToolPrice | None
     prices: list[CatalogToolPrice]
+    compute: CatalogComputeEstimate | None = None
 
     @classmethod
     def from_domain(cls, pricing: CatalogItemPricing) -> "CatalogItemPricingResponse":
@@ -153,6 +178,9 @@ class CatalogItemPricingResponse(BaseModel):
                 CatalogToolPrice.from_domain(pricing.price_from) if pricing.price_from else None
             ),
             prices=[CatalogToolPrice.from_domain(price) for price in pricing.prices],
+            compute=(
+                CatalogComputeEstimate.from_domain(pricing.compute) if pricing.compute else None
+            ),
         )
 
 
