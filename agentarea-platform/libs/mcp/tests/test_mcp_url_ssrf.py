@@ -171,6 +171,7 @@ def _capture_factory():
         captured["factory"] = kwargs.get("httpx_client_factory")
         client = MagicMock()
         client.call_tool = AsyncMock(return_value=MagicMock(content=[], is_error=False))
+        client.call_tool_once = client.call_tool
         client.list_tools = AsyncMock(return_value=MagicMock(tools=[]))
         yield client
 

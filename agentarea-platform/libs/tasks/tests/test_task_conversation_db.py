@@ -90,3 +90,18 @@ async def test_another_workspace_cannot_read_or_overwrite_the_log(session):
         await stranger.read(task_id, head_seqs=[0], tail_start=1, end_seq=2)
     _, tail = await owner.read(task_id, head_seqs=[0], tail_start=1, end_seq=2)
     assert [entry.content for entry in tail] == ["secret"]
+
+
+async def test_a_tool_entry_keeps_its_image_references(session):
+    task_id, workspace_id = uuid4(), str(uuid4())
+    repository = _repository(session, workspace_id)
+    images = [{"id": "mcp_tool_1_image_1", "mime_type": "image/png", "size": 10}]
+    await repository.write(
+        task_id,
+        [_entry(0, "[image 1: image/png]", role="tool", tool_call_id="c1", attachments=images)],
+    )
+
+    _, [entry] = await repository.read(task_id, head_seqs=[], tail_start=0, end_seq=1)
+
+    assert entry.attachments == images
+    assert entry.as_message()["attachments"] == images
