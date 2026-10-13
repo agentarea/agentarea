@@ -23,7 +23,7 @@ def _service(endpoint_url: str, managed_by: str | None = None) -> SimpleNamespac
     config = SimpleNamespace(
         provider_spec=SimpleNamespace(provider_type="openai"),
         endpoint_url=endpoint_url,
-        api_key="provider_config_key",
+        api_key="provider_config_key",  # pragma: allowlist secret
         managed_by=managed_by,
     )
     spec = SimpleNamespace(kind=ModelKind.CHAT, model_name="gpt-4o-mini")
