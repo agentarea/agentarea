@@ -460,6 +460,34 @@ export const zCatalogItemUpdate = z.object({
 });
 
 /**
+ * CatalogToolPrice
+ *
+ * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ */
+export const zCatalogToolPrice = z.object({
+  amount: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  currency: z.string(),
+  tool: z.string().nullable(),
+  unit: z.string(),
+});
+
+/**
+ * CatalogItemPricingResponse
+ *
+ * Whether using a connection costs money through AgentArea (wiki ADR-0038).
+ *
+ * ``kind`` "paid": the platform's key may pay and the workspace is billed;
+ * ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
+ * the vendor bills the workspace's own account. "free": nothing is charged.
+ */
+export const zCatalogItemPricingResponse = z.object({
+  kind: z.enum(["paid", "own_key", "free"]),
+  payers: z.array(z.string()),
+  price_from: zCatalogToolPrice.nullable(),
+  prices: z.array(zCatalogToolPrice),
+});
+
+/**
  * CategoryFacet
  */
 export const zCategoryFacet = z.object({
@@ -2345,6 +2373,7 @@ export const zRegistryItemResponse = z.object({
   installed_entity_id: z.string().uuid().nullable(),
   installed_version: z.string().nullable(),
   name: z.string(),
+  pricing: zCatalogItemPricingResponse.nullish(),
   registry_id: z.string().uuid(),
   spec: z.record(z.unknown()),
   tags: z.array(z.string()),
@@ -2372,6 +2401,7 @@ export const zCatalogBrowseResponse = z.object({
   categories: z.array(zCategoryFacet),
   hostings: z.array(zCategoryFacet).optional().default([]),
   items: z.array(zRegistryItemResponse),
+  pricings: z.array(zCategoryFacet).optional().default([]),
   protocols: z.array(zCategoryFacet),
   total: z.number().int(),
 });
@@ -6212,6 +6242,7 @@ export const zBrowseCatalogV1RegistriesCatalogBrowseGetQuery = z.object({
   category: z.string().nullish(),
   protocol: z.enum(["mcp", "api"]).nullish(),
   hosting: z.enum(["vendor", "agentarea"]).nullish(),
+  pricing: z.enum(["paid", "own_key", "free"]).nullish(),
   sort: z.string().nullish(),
   limit: z.number().int().gte(1).lte(500).optional().default(50),
   offset: z.number().int().gte(0).lte(1000000000).optional().default(0),

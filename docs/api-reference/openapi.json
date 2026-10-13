@@ -2549,6 +2549,14 @@
             "title": "Items",
             "type": "array"
           },
+          "pricings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CategoryFacet"
+            },
+            "title": "Pricings",
+            "type": "array"
+          },
           "protocols": {
             "items": {
               "$ref": "#/components/schemas/CategoryFacet"
@@ -2670,6 +2678,52 @@
         "title": "CatalogItemCreate",
         "type": "object"
       },
+      "CatalogItemPricingResponse": {
+        "description": "Whether using a connection costs money through AgentArea (wiki ADR-0038).\n\n``kind`` \"paid\": the platform's key may pay and the workspace is billed;\n``prices`` are per call on that key, ``price_from`` the cheapest. \"own_key\":\nthe vendor bills the workspace's own account. \"free\": nothing is charged.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "paid",
+              "own_key",
+              "free"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "payers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Payers",
+            "type": "array"
+          },
+          "price_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogToolPrice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogToolPrice"
+            },
+            "title": "Prices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "payers",
+          "price_from",
+          "prices"
+        ],
+        "title": "CatalogItemPricingResponse",
+        "type": "object"
+      },
       "CatalogItemUpdate": {
         "properties": {
           "description": {
@@ -2749,6 +2803,43 @@
           }
         },
         "title": "CatalogItemUpdate",
+        "type": "object"
+      },
+      "CatalogToolPrice": {
+        "description": "What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.",
+        "properties": {
+          "amount": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tool",
+          "amount",
+          "currency",
+          "unit"
+        ],
+        "title": "CatalogToolPrice",
         "type": "object"
       },
       "CategoryFacet": {
@@ -10502,6 +10593,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "pricing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogItemPricingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "registry_id": {
             "format": "uuid",
@@ -31384,6 +31485,29 @@
               ],
               "description": "Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or 'agentarea' (package the platform runs). Only valid for registry_type='mcp_servers'.",
               "title": "Hosting"
+            }
+          },
+          {
+            "description": "Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.",
+            "in": "query",
+            "name": "pricing",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "paid",
+                    "own_key",
+                    "free"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.",
+              "title": "Pricing"
             }
           },
           {

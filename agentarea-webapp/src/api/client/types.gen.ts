@@ -1467,6 +1467,10 @@ export type CatalogBrowseResponse = {
    */
   items: Array<RegistryItemResponse>;
   /**
+   * Pricings
+   */
+  pricings?: Array<CategoryFacet>;
+  /**
    * Protocols
    */
   protocols: Array<CategoryFacet>;
@@ -1537,6 +1541,31 @@ export type CatalogItemCreate = {
 };
 
 /**
+ * CatalogItemPricingResponse
+ *
+ * Whether using a connection costs money through AgentArea (wiki ADR-0038).
+ *
+ * ``kind`` "paid": the platform's key may pay and the workspace is billed;
+ * ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
+ * the vendor bills the workspace's own account. "free": nothing is charged.
+ */
+export type CatalogItemPricingResponse = {
+  /**
+   * Kind
+   */
+  kind: "paid" | "own_key" | "free";
+  /**
+   * Payers
+   */
+  payers: Array<string>;
+  price_from: CatalogToolPrice | null;
+  /**
+   * Prices
+   */
+  prices: Array<CatalogToolPrice>;
+};
+
+/**
  * CatalogItemUpdate
  */
 export type CatalogItemUpdate = {
@@ -1566,6 +1595,30 @@ export type CatalogItemUpdate = {
    * Version
    */
   version?: string | null;
+};
+
+/**
+ * CatalogToolPrice
+ *
+ * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ */
+export type CatalogToolPrice = {
+  /**
+   * Amount
+   */
+  amount: string;
+  /**
+   * Currency
+   */
+  currency: string;
+  /**
+   * Tool
+   */
+  tool: string | null;
+  /**
+   * Unit
+   */
+  unit: string;
 };
 
 /**
@@ -6012,6 +6065,7 @@ export type RegistryItemResponse = {
    * Name
    */
   name: string;
+  pricing?: CatalogItemPricingResponse | null;
   /**
    * Registry Id
    */
@@ -16721,6 +16775,12 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
      * Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or 'agentarea' (package the platform runs). Only valid for registry_type='mcp_servers'.
      */
     hosting?: "vendor" | "agentarea" | null;
+    /**
+     * Pricing
+     *
+     * Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.
+     */
+    pricing?: "paid" | "own_key" | "free" | null;
     /**
      * Sort
      *
