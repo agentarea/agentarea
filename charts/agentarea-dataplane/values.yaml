@@ -121,6 +121,10 @@ workloads:
     # -- Additional egress rules, as NetworkPolicy egress entries. For a host that
     # REDIRECTs some traffic to a local proxy, allow the redirect target here.
     extraEgress: []
+    # -- Proxy that MCP servers labelled agentarea.io/egress may reach; those
+    # servers get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
+    egressProxy: {}
 
 # Agent sandboxes: an OpenSandbox server the control plane creates them through
 # (AGENTAREA_SANDBOX_OSB_URL), running them here as BatchSandbox pods. Needs the

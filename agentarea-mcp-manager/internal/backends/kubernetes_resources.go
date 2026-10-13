@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/agentarea/mcp-manager/internal/config"
+	"github.com/agentarea/mcp-manager/internal/models"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -149,6 +150,10 @@ func (k *KubernetesBackend) createDeployment(ctx context.Context, instanceName s
 	delete(labels, dataPlaneOwnerLabel)
 	if owner := spec.Labels[dataPlaneOwnerLabel]; owner != "" {
 		labels[dataPlaneOwnerLabel] = owner
+	}
+	delete(labels, models.EgressLabel)
+	if egress := spec.Labels[models.EgressLabel]; egress != "" {
+		labels[models.EgressLabel] = egress
 	}
 
 	// Convert ResourceList to config.ResourceRequirements

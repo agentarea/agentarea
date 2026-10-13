@@ -771,6 +771,10 @@ mcpManager:
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
     # specific in-cluster dependency).
     extraEgress: []
+    # Proxy that instance pods labelled agentarea.io/egress may reach; those pods
+    # get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
+    egressProxy: {}
 
   # Operator customization merged onto every spawned MCP instance pod. All fields
   # are optional; empty = no change. Platform security invariants (managed-by

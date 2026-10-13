@@ -101,6 +101,11 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
+// EgressLabel marks an MCP workload pod whose egress an extension governs; the
+// default egress policies select only pods without it. The platform sets it,
+// never a member's json_spec labels.
+const EgressLabel = "agentarea.io/egress"
+
 // MCPServerInstance represents an MCP server instance from events
 type MCPServerInstance struct {
 	InstanceID   string                 `json:"instance_id"`

@@ -58,6 +58,8 @@ type Options struct {
 // Hooks is a control-plane extension's composition bundle. Every field is
 // optional; each is invoked once during startup, in the order declared.
 type Hooks struct {
+	// InstanceSpec amends every MCP workload spec before the backend creates it.
+	InstanceSpec providers.InstanceSpecHook
 	// Gateway attaches to the demand gateway before it serves requests.
 	Gateway func(*mcpgateway.SQLRepository, *mcpgateway.ProviderRuntime, *mcpgateway.Gateway) error
 	// Sandbox attaches to the base sandbox runtime before the workspace
@@ -182,6 +184,11 @@ func runControlPlane(
 		}
 		if hooks == nil {
 			return failed(logger, "Failed to initialize control-plane extension", errors.New("extension returned no hooks"))
+		}
+	}
+	if hooks.InstanceSpec != nil {
+		if err := providerManager.SetInstanceSpecHook(hooks.InstanceSpec); err != nil {
+			return failed(logger, "Failed to attach extension to MCP instance specs", err)
 		}
 	}
 	extension := newExtensionRun(ctx, hooks, logger)
