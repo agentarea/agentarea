@@ -1,16 +1,16 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: mcpconnections.agentarea.io
+  name: platformconnections.agentarea.io
 spec:
   group: agentarea.io
   names:
-    kind: MCPConnection
-    listKind: MCPConnectionList
-    plural: mcpconnections
-    singular: mcpconnection
+    kind: PlatformConnection
+    listKind: PlatformConnectionList
+    plural: platformconnections
+    singular: platformconnection
     shortNames:
-      - mcpc
+      - pconn
   scope: Namespaced
   versions:
     - name: v1alpha1
@@ -24,8 +24,12 @@ spec:
               type: object
               required:
                 - name
+                - transport
                 - endpointUrl
                 - tokenSecretRef
+              x-kubernetes-validations:
+                - rule: "self.transport != 'openapi' || has(self.catalogId)"
+                  message: "catalogId is required when transport is openapi"
               properties:
                 # The connection's ids are derived from this, and agents and
                 # clients attach those ids: renaming it is a new connection, not
@@ -36,17 +40,26 @@ spec:
                   description: "Human-readable name, shown in every workspace. Also the key the connection's ids are derived from."
                 description:
                   type: string
+                transport:
+                  type: string
+                  enum: [mcp, openapi]
+                  description: "mcp writes a platform MCP server and instance; openapi writes a platform OpenAPI connection."
                 endpointUrl:
                   type: string
                   minLength: 1
-                  description: "The MCP server's URL (e.g. http://tool-gateway.agentarea.svc.cluster.local:8080/mcp)"
-                transport:
+                  description: "mcp: the MCP server's URL. openapi: the API base URL (e.g. http://agentarea-llm-gateway.agentarea.svc.cluster.local:8080/tools/yandex-search)."
+                mcpTransport:
                   type: string
                   enum: [streamable-http, sse]
                   default: streamable-http
+                  description: "MCP wire transport; ignored for openapi."
+                catalogId:
+                  type: string
+                  minLength: 1
+                  description: "The catalog entry's id (registry_items.external_id, e.g. ru.yandex/search-api/openapi), which carries the connector's cost model. Required for openapi, where it also supplies the spec; optional for mcp."
                 tokenSecretRef:
                   type: object
-                  description: "Reference to a Kubernetes Secret holding the bearer token the platform presents to the server. Always resolved in this resource's own namespace."
+                  description: "Reference to a Kubernetes Secret holding the bearer token the platform presents to the endpoint. Always resolved in this resource's own namespace."
                   required:
                     - name
                     - key
@@ -68,27 +81,30 @@ spec:
                   enum: [Pending, Synced, Error]
                 message:
                   type: string
+                connectionId:
+                  type: string
+                  description: "UUID of the synced connection; what agents and clients attach (the MCP instance id, or the OpenAPI connection id)"
                 mcpServerId:
                   type: string
-                  description: "UUID of the synced MCP server spec in the database"
-                mcpInstanceId:
-                  type: string
-                  description: "UUID of the synced MCP server instance; what agents and clients attach"
+                  description: "UUID of the synced MCP server spec (mcp only)"
                 lastSyncedAt:
                   type: string
                   format: date-time
       subresources:
         status: {}
       additionalPrinterColumns:
+        - name: Transport
+          type: string
+          jsonPath: .spec.transport
         - name: Endpoint
           type: string
           jsonPath: .spec.endpointUrl
         - name: Status
           type: string
           jsonPath: .status.phase
-        - name: Instance
+        - name: Connection
           type: string
-          jsonPath: .status.mcpInstanceId
+          jsonPath: .status.connectionId
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp

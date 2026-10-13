@@ -208,8 +208,8 @@ def paid_client(monkeypatch, audit_events, upstream_calls):
         def currency(self) -> str:
             return "RUB"
 
-        async def price_tool_call(self, resource_ref: str) -> Decimal:
-            return Decimal("0.74")
+        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
+            return vendor_cost * Decimal("1.5")
 
     proxy = MCPAggregatorProxy(
         "Codex",
@@ -219,23 +219,29 @@ def paid_client(monkeypatch, audit_events, upstream_calls):
         {INSTANCE_ID: "Tools"},
         era_verdict_store=object(),
     )
-    gateway = SimpleNamespace(
-        id=INSTANCE_ID,
-        managed_by="platform",
-        get_available_tools=lambda: [
-            {"name": "yandex_search", "_meta": {"agentarea.ai/resource_ref": "yandex.search.web"}}
-        ],
-    )
+    gateway = SimpleNamespace(id=INSTANCE_ID, managed_by="platform", server_spec_id="spec")
+    catalog_entry = {
+        "name": "ru.yandex/search-api",
+        "metadata": {
+            "agentarea:payers": ["platform"],
+            "agentarea:cost": {
+                "default": {"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}}
+            },
+        },
+    }
+
+    async def server_spec(_user_ctx, instance):
+        assert instance is gateway
+        return catalog_entry
+
+    monkeypatch.setattr(client_mcp, "_catalog_server_spec", server_spec)
 
     async def discover(_member):
         return [{"name": "yandex_search", "inputSchema": {"type": "object"}}]
 
     async def call_member(_member, tool_name, arguments):
         upstream_calls.append((tool_name, arguments))
-        return CallToolResult(
-            content=[TextContent(type="text", text="[]")],
-            _meta={"agentarea.ai/usage": {"resource_ref": "yandex.search.web", "quantity": 1}},
-        )
+        return CallToolResult(content=[TextContent(type="text", text="[]")])
 
     monkeypatch.setattr(proxy, "_discover_member_tools", discover)
     monkeypatch.setattr(proxy, "_call_member_tool_result", call_member)
@@ -275,6 +281,7 @@ def paid_client(monkeypatch, audit_events, upstream_calls):
 async def test_a_paid_client_call_is_one_ledger_line_of_the_client_and_no_task(
     paid_client, upstream_calls
 ):
+    from decimal import Decimal
     from uuid import UUID
 
     ledger = paid_client(True)
@@ -286,12 +293,18 @@ async def test_a_paid_client_call_is_one_ledger_line_of_the_client_and_no_task(
     [entry] = ledger.entries
     assert (entry.task_id, entry.agent_id, entry.client_id) == (None, None, UUID(CLIENT_ID))
     assert (entry.workspace_id, entry.created_by) == ("client-ws", "user-1")
-    assert (entry.subject_id, entry.managed_by, entry.currency) == (
-        "yandex.search.web",
+    assert (entry.subject_id, entry.subject_name, entry.payer.value) == (
+        INSTANCE_ID,
+        "yandex_search",
         "platform",
+    )
+    assert (entry.vendor_cost, entry.vendor_currency, entry.amount, entry.currency) == (
+        Decimal("0.488"),
+        "RUB",
+        Decimal("0.7320"),
         "RUB",
     )
-    assert entry.evidence == {"quantity": 1, "unit": "call", "resource_ref": "yandex.search.web"}
+    assert entry.evidence["connector"] == "ru.yandex/search-api"
 
 
 @pytest.mark.asyncio
@@ -307,3 +320,194 @@ async def test_a_client_with_no_balance_is_refused_before_the_gateway_is_called(
     assert upstream_calls == [] and ledger.entries == []
     [event] = audit_events
     assert event.action == "tool.call.denied"
+
+
+CONNECTION_ID = "55555555-5555-5555-5555-555555555555"
+
+
+def _yandex_connection():
+    from uuid import UUID
+
+    return SimpleNamespace(
+        id=UUID(CONNECTION_ID),
+        name="Yandex Search",
+        managed_by="platform",
+        available_tools=[
+            {
+                "name": "search",
+                "description": "Web search",
+                "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}},
+            },
+            {"name": "wordstat", "description": "Phrase stats", "inputSchema": {"type": "object"}},
+        ],
+        spec_content={
+            "openapi": "3.0.0",
+            "x-agentarea-payers": ["platform"],
+            "x-agentarea-cost": {"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}},
+            "paths": {
+                "/search": {"post": {"operationId": "search", "summary": "Web search"}},
+                "/wordstat": {"post": {"operationId": "wordstat", "summary": "Phrase stats"}},
+            },
+        },
+        custom_query_params=[],
+        registry_item_id=None,
+        auth_config_id=None,
+    )
+
+
+@pytest.fixture
+def openapi_client(monkeypatch, audit_events):
+    """A client carrying the platform's Yandex OpenAPI connection, its ledger captured."""
+    from decimal import Decimal
+    from unittest.mock import AsyncMock, MagicMock
+
+    from agentarea_agents_sdk.tools.openapi_tool import OpenAPITool
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+    from agentarea_governance.tool_calls import entitlement_guard
+    from agentarea_mcp.domain.client_models import ClientOpenAPIConnectionLink
+    from agentarea_tasks.infrastructure import cost_repository
+
+    class Pricing(customer_pricing.ProviderCostPricing):
+        def currency(self) -> str:
+            return "RUB"
+
+        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
+            return vendor_cost * Decimal("1.5")
+
+    connection = _yandex_connection()
+    service = MagicMock()
+    service.get_connection = AsyncMock(return_value=connection)
+    service.catalog_connector = AsyncMock(return_value="ru.yandex/search-api")
+
+    @asynccontextmanager
+    async def connection_service(_user_ctx):
+        yield service
+
+    monkeypatch.setattr(client_mcp, "_openapi_connection_service", connection_service)
+    executed: list[tuple[str, dict]] = []
+
+    async def execute(self, **kwargs):
+        executed.append((self.name, kwargs))
+        return {"success": True, "result": "[]", "error": None, "status_code": 200, "body": []}
+
+    monkeypatch.setattr(OpenAPITool, "execute", execute)
+    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Pricing())
+    ledger = _Ledger()
+    monkeypatch.setattr(cost_repository, "CostEntryRepository", ledger)
+    link = ClientOpenAPIConnectionLink(
+        connection_id=CONNECTION_ID, name="Yandex Search", namespace_prefix=None, allowed_tools=None
+    )
+    state = SimpleNamespace(ledger=ledger, executed=executed, policy={}, link=link)
+
+    def with_scope(*, balance: bool = True, policy: dict | None = None):
+        ExtensionRegistry.clear()
+        entitlement_guard.cache_clear()
+        ExtensionRegistry.register("entitlement_guard", lambda: _Guard(balance))
+        scope = client_mcp.ClientScope(
+            proxy=MCPAggregatorProxy("Codex", "", [], {}, {}, era_verdict_store=object()),
+            skill_registry={},
+            platform_tools=frozenset(),
+            user_context=UserContext(user_id="user-1", workspace_id="client-ws"),
+            tool_policy=policy or {},
+            actor_type="client",
+            client_id=CLIENT_ID,
+            openapi=client_mcp.client_openapi_operations([state.link], [connection]),
+        )
+
+        async def resolve(_client_id):
+            return scope
+
+        monkeypatch.setattr(client_mcp, "_resolve_client_scope", resolve)
+        return state
+
+    token = client_mcp._client_id_var.set(CLIENT_ID)
+    yield with_scope
+    client_mcp._client_id_var.reset(token)
+    ExtensionRegistry.clear()
+    entitlement_guard.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_a_client_lists_the_operations_of_its_openapi_connection(openapi_client):
+    from agentarea_mcp.domain.client_models import ClientOpenAPIConnectionLink
+
+    state = openapi_client()
+    listed = await client_mcp._list_tools(None, None)
+    assert [tool.name for tool in listed.tools] == [
+        "yandex_search__search",
+        "yandex_search__wordstat",
+    ]
+    assert listed.tools[0].description == "Web search"
+
+    state.link = ClientOpenAPIConnectionLink(
+        connection_id=CONNECTION_ID,
+        name="Yandex Search",
+        namespace_prefix="ya",
+        allowed_tools=["wordstat"],
+    )
+    openapi_client(policy={"tools": {"denied": ["search"]}})
+    listed = await client_mcp._list_tools(None, None)
+    assert [tool.name for tool in listed.tools] == ["ya__wordstat"]
+
+
+@pytest.mark.asyncio
+async def test_a_client_call_of_a_platform_openapi_operation_is_one_ledger_line_of_the_client(
+    openapi_client, audit_events
+):
+    from decimal import Decimal
+    from uuid import UUID
+
+    state = openapi_client()
+
+    result = await _call("yandex_search__search", query="agentarea")
+
+    assert result.is_error is not True
+    assert state.executed == [("search", {"query": "agentarea"})]
+    [entry] = state.ledger.entries
+    assert (entry.task_id, entry.agent_id, entry.client_id) == (None, None, UUID(CLIENT_ID))
+    assert (entry.subject_id, entry.subject_name, entry.payer.value) == (
+        CONNECTION_ID,
+        "search",
+        "platform",
+    )
+    assert (entry.vendor_cost, entry.vendor_currency, entry.amount, entry.currency) == (
+        Decimal("0.488"),
+        "RUB",
+        Decimal("0.7320"),
+        "RUB",
+    )
+    assert entry.evidence["connector"] == "ru.yandex/search-api"
+    [event] = audit_events
+    assert event.action == "tool.call.allowed"
+    assert (event.resource_type, event.resource_id) == ("client", CLIENT_ID)
+    assert event.event_metadata["openapi_connection_id"] == CONNECTION_ID
+
+
+@pytest.mark.asyncio
+async def test_a_client_openapi_call_without_balance_is_refused_before_the_vendor(
+    openapi_client, audit_events
+):
+    state = openapi_client(balance=False)
+
+    result = await _call("yandex_search__search", query="agentarea")
+
+    assert result.is_error is True
+    assert "no credits remaining" in _text(result)
+    assert state.executed == [] and state.ledger.entries == []
+    [event] = audit_events
+    assert event.action == "tool.call.denied"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("rule", ["search", "Yandex Search", CONNECTION_ID])
+async def test_a_client_openapi_call_the_policy_denies_never_reaches_the_vendor(
+    openapi_client, audit_events, rule
+):
+    state = openapi_client(policy={"tools": {"denied": [rule]}})
+
+    result = await _call("yandex_search__search", query="agentarea")
+
+    assert result.is_error is True
+    assert "denied by policy" in _text(result)
+    assert state.executed == [] and state.ledger.entries == []

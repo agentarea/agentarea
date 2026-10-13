@@ -8,10 +8,10 @@ from agentarea_common.extensions.customer_pricing import (
     CustomerPricing,
     CustomerPricingUnavailableError,
     ProviderCostPricing,
+    FxUnavailableError,
     get_customer_pricing,
-    ToolCallUnpricedError,
     price_llm_call,
-    price_tool_call,
+    price_vendor_cost,
     resolve_customer_pricing,
 )
 from agentarea_common.extensions.registry import ExtensionRegistry
@@ -41,8 +41,9 @@ class _Rub:
     ):
         return provider_cost_usd * 95
 
-    async def price_tool_call(self, resource_ref):
-        return Decimal("0.732")
+    async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
+        markup = Decimal("1.5") if payer == "platform" else Decimal(1)
+        return vendor_cost * markup * (Decimal(95) if currency == "USD" else Decimal(1))
 
 
 @pytest.mark.asyncio
@@ -204,20 +205,44 @@ def test_a_working_copy_of_the_extension_supersedes_a_broken_one(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_without_billing_no_tool_call_has_a_price():
-    """OSS has nobody to charge for a call on the platform's credentials."""
-    with pytest.raises(ToolCallUnpricedError, match="yandex.search.web"):
-        await price_tool_call("yandex.search.web", pricing=ProviderCostPricing())
+async def test_without_billing_a_tool_cost_stays_in_the_vendors_currency():
+    """OSS converts nothing: a RUB-priced tool's line is RUB, a USD one's USD."""
+    for currency in ("USD", "RUB"):
+        amount, line_currency = await price_vendor_cost(
+            payer="platform",
+            connector="c",
+            tool="t",
+            vendor_cost=Decimal("0.488"),
+            currency=currency,
+            pricing=ProviderCostPricing(),
+        )
+
+        assert (amount, line_currency) == (Decimal("0.488"), currency)
 
 
 @pytest.mark.asyncio
-async def test_a_tool_call_is_priced_by_the_active_pricing():
+async def test_a_tool_cost_is_priced_by_the_active_pricing():
     ExtensionRegistry.register(CUSTOMER_PRICING_EXTENSION, _Rub)
 
-    assert await price_tool_call("yandex.search.web") == Decimal("0.732")
+    amount = await price_vendor_cost(
+        payer="platform", connector="c", tool="t", vendor_cost=Decimal("0.488"), currency="RUB"
+    )
+
+    assert amount == (Decimal("0.7320"), "RUB")
 
 
 @pytest.mark.asyncio
-async def test_an_unpriced_tool_call_raises_and_names_the_resource():
-    with pytest.raises(ToolCallUnpricedError, match="yandex.search.web"):
-        await price_tool_call("yandex.search.web")
+async def test_a_currency_an_installed_pricing_cannot_convert_is_its_error():
+    class _NoEur(_Rub):
+        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
+            raise LookupError(f"no rate for {currency}")
+
+    with pytest.raises(FxUnavailableError, match="EUR"):
+        await price_vendor_cost(
+            payer="workspace",
+            connector="c",
+            tool="t",
+            vendor_cost=Decimal(1),
+            currency="EUR",
+            pricing=_NoEur(),
+        )

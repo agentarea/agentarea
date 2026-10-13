@@ -1,0 +1,17 @@
+# Example: an MCP server offered to every workspace on the platform's token
+# 1. Create the secret: kubectl create secret generic agentarea-tools-token --from-literal=AGENTAREA_TOOLS_TOKEN_EXAMPLE_MCP=... -n agentarea
+# 2. Apply this: kubectl apply -f platform-connection-mcp.yaml
+apiVersion: agentarea.io/v1alpha1
+kind: PlatformConnection
+metadata:
+  name: example-mcp
+  namespace: agentarea
+spec:
+  name: "Example MCP"
+  transport: mcp
+  # The FQDN, so NO_PROXY's .svc.cluster.local suffix keeps the call in-cluster.
+  endpointUrl: "http://agentarea-llm-gateway.agentarea.svc.cluster.local:8080/tools/example-mcp/mcp"
+  mcpTransport: streamable-http
+  tokenSecretRef:
+    name: agentarea-tools-token
+    key: AGENTAREA_TOOLS_TOKEN_EXAMPLE_MCP

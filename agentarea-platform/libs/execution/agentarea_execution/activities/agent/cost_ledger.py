@@ -8,16 +8,20 @@ in the activity that stores the events, so the ledger covers every path without 
 workflow doing IO. A line is keyed by its event's id and category, which makes a
 retried batch write nothing twice.
 
-A call on a platform-managed connection is not among them: the tool-call layer
-writes its line when the call runs, the same way for a run and for /mcp, and the
-event's ``cost`` only reports it.
+A tool call the tool-call layer metered is not among them: the layer writes its
+lines (a connector's declared cost, a wallet payment) when the call runs, the same
+way for a run and for /mcp, and marks the event ``cost_metered``. A wallet payment
+on an event without that mark was made by a build before the layer metered
+payments; it is still derived here, keyed by the event, so each payment is one line.
 """
 
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.money import ZERO, to_money, to_optional_money
+from agentarea_common.tool_cost import Payer
 from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
 
 from ...workflows.constants import EventTypes
@@ -64,7 +68,7 @@ def cost_entries(
         subject_name: Any,
         call_ref: Any = None,
         provider_cost_usd: Any = None,
-        managed_by: Any = None,
+        payer: Payer = Payer.WORKSPACE,
         evidence: dict[str, Any],
     ) -> CostEntry:
         return CostEntry(
@@ -83,7 +87,7 @@ def cost_entries(
             source=source,
             occurred_at=datetime.fromisoformat(event["timestamp"]),
             provider_cost_usd=to_optional_money(provider_cost_usd),
-            managed_by=_label(managed_by, 32),
+            payer=payer,
             evidence={key: value for key, value in evidence.items() if value is not None},
         )
 
@@ -101,13 +105,19 @@ def cost_entries(
                 subject_id=data.get("model_id"),
                 subject_name=data.get("model_name"),
                 provider_cost_usd=data.get("provider_cost_usd"),
-                managed_by=data.get("managed_by"),
+                payer=(
+                    Payer.PLATFORM
+                    if data.get("managed_by") == MANAGED_BY_PLATFORM
+                    else Payer.WORKSPACE
+                ),
                 evidence={
                     "iteration": data.get("iteration"),
                     "purpose": data.get("purpose"),
                     "prompt_tokens": usage.get("prompt_tokens"),
                     "completion_tokens": usage.get("completion_tokens"),
                     "total_tokens": usage.get("total_tokens"),
+                    "cached_prompt_tokens": usage.get("cached_prompt_tokens"),
+                    "cache_creation_tokens": usage.get("cache_creation_tokens"),
                 },
             )
         ]
@@ -138,7 +148,7 @@ def cost_entries(
                 **tool,
             )
         )
-    if to_money(data.get("service_cost")) > ZERO:
+    if to_money(data.get("service_cost")) > ZERO and not data.get("cost_metered"):
         raw_payment = data.get("payment")
         payment: dict[str, Any] = raw_payment if isinstance(raw_payment, dict) else {}
         entries.append(
@@ -148,6 +158,7 @@ def cost_entries(
                 currency=SERVICE_COST_CURRENCY,
                 source=_PAYMENT_SOURCES.get(str(payment.get("protocol")), CostSource.TOOL_REPORTED),
                 provider_cost_usd=data.get("service_cost"),
+                payer=Payer.PER_CALL,
                 evidence={
                     **tool_evidence,
                     "payment": {

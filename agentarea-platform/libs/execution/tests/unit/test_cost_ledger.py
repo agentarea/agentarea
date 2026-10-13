@@ -4,6 +4,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from agentarea_execution.activities.agent.cost_ledger import cost_entries
+from agentarea_common.tool_cost import CostSourceKind, Payer
 from agentarea_tasks.domain.costs import CostCategory, CostSource, CostSubjectType
 
 TASK_ID, AGENT_ID = str(uuid4()), str(uuid4())
@@ -42,9 +43,35 @@ def test_a_priced_model_call_is_one_model_line_with_its_token_evidence():
     assert (line.subject_id, line.subject_name) == ("model-1", "kimi-k3")
     assert (line.amount, line.currency) == (Decimal("1.5"), "RUB")
     assert line.provider_cost_usd == Decimal("0.018")
-    assert line.managed_by == "platform"
+    assert line.payer == Payer.PLATFORM
     assert str(line.agent_id) == AGENT_ID
-    assert line.evidence == {"purpose": "compaction", "prompt_tokens": 900, "completion_tokens": 100}
+    assert line.evidence == {
+        "purpose": "compaction",
+        "prompt_tokens": 900,
+        "completion_tokens": 100,
+    }
+
+
+def test_a_model_line_keeps_how_much_of_the_prompt_came_from_the_cache():
+    event = _event(
+        "llm.call.completed",
+        cost="0.48",
+        usage={
+            "cost": "0.48",
+            "usage": {
+                "prompt_tokens": 1000,
+                "completion_tokens": 100,
+                "total_tokens": 1100,
+                "cached_prompt_tokens": 800,
+                "cache_creation_tokens": 0,
+            },
+        },
+    )
+
+    [line] = _lines(event)
+
+    assert line.evidence["cached_prompt_tokens"] == 800
+    assert line.evidence["cache_creation_tokens"] == 0
 
 
 def test_a_free_call_and_an_unpaid_event_have_no_lines():
@@ -76,6 +103,7 @@ def test_a_tool_that_paid_a_service_and_ran_a_model_is_two_lines():
     assert (model.category, model.source) == (CostCategory.MODEL, CostSource.TOOL_REPORTED)
     assert (model.amount, model.currency) == (Decimal("40"), "RUB")
     assert (service.category, service.source) == (CostCategory.SERVICE, CostSource.X402)
+    assert (model.payer, service.payer) == (Payer.WORKSPACE, Payer.PER_CALL)
     assert (service.amount, service.currency, service.provider_cost_usd) == (
         Decimal("0.25"),
         "USD",
@@ -103,16 +131,73 @@ def test_an_event_without_a_task_is_not_attributed():
     assert _lines(event) == []
 
 
-def test_a_platform_funded_call_is_not_a_line_of_its_event():
-    """The tool-call layer wrote its line when it ran; the event only reports it."""
+def test_a_metered_call_is_not_a_line_of_its_event():
+    """The tool-call layer wrote its lines when it ran; the event only reports them."""
     event = _event(
         "tool.result",
-        tool_name="yandex_search",
+        tool_name="yandex__web_search",
         tool_call_id="call-9",
-        source="mcp",
-        managed_by="platform",
-        usage={"resource_ref": "yandex.search.web", "quantity": 1},
+        source="openapi",
         cost="0.74",
+        payer="platform",
+        cost_metered=True,
+        service_cost="0.25",
+        payment={"protocol": "x402", "amount_usd": "0.25", "idempotency_key": "pay-1"},
     )
 
     assert _lines(event) == []
+
+
+def test_a_payment_is_one_line_whichever_build_recorded_it():
+    """An in-flight run replays events the old build persisted, then events the new one did.
+
+    An old event (no ``cost_metered``) is the payment's only record and is still a
+    line, keyed by the event. A new event's payment was written by the layer, keyed by
+    the call, and is not a line of the event. Replaying both twice stores one line each.
+    """
+    from agentarea_governance.tool_calls import ToolUsage
+    from agentarea_tasks.domain.costs import tool_call_entry
+    from datetime import UTC, datetime
+
+    payment = {"protocol": "x402", "amount_usd": "0.25", "idempotency_key": "pay-1"}
+    old = _event("tool.result", tool_call_id="call-1", service_cost="0.25", payment=payment)
+    new = _event(
+        "tool.result",
+        tool_call_id="call-2",
+        service_cost="0.25",
+        payment=payment,
+        cost_metered=True,
+    )
+    layer_line = tool_call_entry(
+        ToolUsage(
+            line_key=f"{TASK_ID}:call-2:payment:pay-1",
+            call_id=f"{TASK_ID}:call-2",
+            workspace_id="ws-1",
+            user_id="alice",
+            agent_id=None,
+            task_id=TASK_ID,
+            client_id=None,
+            tool_name="fetch",
+            connection_id=None,
+            connector=None,
+            tool=None,
+            payer=Payer.PER_CALL,
+            source=CostSourceKind.REPORTED,
+            quantity=Decimal(1),
+            unit="payment",
+            vendor_cost=Decimal("0.25"),
+            vendor_currency="USD",
+            amount=Decimal("0.25"),
+            currency="USD",
+            occurred_at=datetime.now(UTC),
+        )
+    )
+
+    stored: dict = {}
+    for _ in range(2):
+        for line in [*_lines(old), *_lines(new), layer_line]:
+            stored.setdefault((line.event_id, line.category), line)
+
+    service = [line for line in stored.values() if line.category == CostCategory.SERVICE]
+    assert sorted(line.call_ref for line in service) == sorted(["call-1", f"{TASK_ID}:call-2"])
+    assert {line.payer for line in service} == {Payer.PER_CALL}

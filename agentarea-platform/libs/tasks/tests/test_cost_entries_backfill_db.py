@@ -18,13 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 TEST_DATABASE_URL = os.getenv("TASKS_TEST_DATABASE_URL", "")
 pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TASKS_TEST_DATABASE_URL not set")
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3] / "apps/api/alembic/versions/20261008_1200_cost_entries.py"
-)
+VERSIONS = Path(__file__).resolve().parents[3] / "apps/api/alembic/versions"
 
 
-def _migration():
-    spec = importlib.util.spec_from_file_location("cost_entries", MIGRATION)
+def _migration(name: str = "20261008_1200_cost_entries"):
+    spec = importlib.util.spec_from_file_location(name, VERSIONS / f"{name}.py")
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -100,15 +98,22 @@ async def test_paid_events_become_lines_once_and_free_ones_none(session):
         },
     )
 
+    # The backfill ran before payer replaced managed_by; replay both, in this
+    # transaction, on the columns each was written for.
+    await session.execute(text("ALTER TABLE cost_entries ADD COLUMN managed_by varchar(32)"))
+    await session.execute(text("ALTER TABLE cost_entries ALTER COLUMN payer DROP NOT NULL"))
     for _ in range(2):
         for statement in _migration().BACKFILL_SQL:
             await session.execute(text(statement))
+    await session.execute(
+        text(_migration("20261013_1200_tool_call_cost_metering").PAYER_BACKFILL_SQL)
+    )
 
     rows = (
         await session.execute(
             text(
                 "SELECT event_id, category, agent_id, amount, currency, source, subject_name, "
-                "call_ref, evidence FROM cost_entries WHERE workspace_id = :ws "
+                "call_ref, evidence, payer FROM cost_entries WHERE workspace_id = :ws "
                 "ORDER BY amount"
             ),
             {"ws": workspace_id},
@@ -120,6 +125,7 @@ async def test_paid_events_become_lines_once_and_free_ones_none(session):
         (tool, "model", Decimal("2"), None, "tool_reported"),
     ]
     assert {r.agent_id for r in rows} == {agent_id}
+    assert [r.payer for r in rows] == ["per_call", "platform", "workspace"]
     service, model_call, _ = rows
     assert service.evidence["payment"] == {"protocol": "x402", "tx_hash": "0xabc"}
     assert (service.subject_name, service.call_ref) == ("fetch_report", "call-1")

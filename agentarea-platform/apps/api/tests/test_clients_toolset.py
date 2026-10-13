@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import clients_toolset
 from agentarea_api.tools.clients_toolset import ClientsToolset
 from agentarea_common.auth.authorization import AuthorizationService
@@ -19,7 +20,11 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import get_container
-from agentarea_mcp.domain.client_models import ClientMcpInstanceLink, ClientPlatformToolset
+from agentarea_mcp.domain.client_models import (
+    ClientMcpInstanceLink,
+    ClientOpenAPIConnectionLink,
+    ClientPlatformToolset,
+)
 from pydantic import ValidationError
 
 CLIENT_ID = uuid4()
@@ -53,6 +58,7 @@ class FakeClientService:
         self.instance_id = uuid4()
         self.links: dict = {}
         self.toolsets: dict = {}
+        self.openapi: dict = {}
 
     async def create_client(self, payload):
         self.created.append(payload)
@@ -98,6 +104,9 @@ class FakeClientService:
 
     async def platform_toolsets(self, client_ids):
         return self.toolsets
+
+    async def openapi_links(self, client_ids):
+        return self.openapi
 
 
 @pytest.fixture
@@ -156,6 +165,17 @@ async def test_get_reports_how_the_client_serves_its_attachments(service):
             ClientPlatformToolset(toolset="agentarea/runs", disabled_methods=["cancel"])
         ]
     }
+    connection_id = str(uuid4())
+    service.openapi = {
+        str(CLIENT_ID): [
+            ClientOpenAPIConnectionLink(
+                connection_id=connection_id,
+                name="Yandex Search",
+                namespace_prefix=None,
+                allowed_tools=["search"],
+            )
+        ]
+    }
 
     result = json.loads(await ClientsToolset().get(client_id=str(CLIENT_ID)))
 
@@ -165,6 +185,14 @@ async def test_get_reports_how_the_client_serves_its_attachments(service):
     assert (instance["namespace_prefix"], instance["allowed_tools"]) == ("gh", ["create_issue"])
     assert result["platform_toolsets"] == [
         {"name": "agentarea/runs", "disabled_methods": ["cancel"]}
+    ]
+    assert result["openapi_connections"] == [
+        {
+            "id": connection_id,
+            "name": "Yandex Search",
+            "namespace_prefix": None,
+            "allowed_tools": ["search"],
+        }
     ]
 
 
@@ -183,11 +211,9 @@ async def test_add_platform_toolset_stores_the_namespace_a_name_resolves_to(serv
 async def test_add_platform_toolset_refuses_what_a_client_cannot_carry(
     service, toolset, disabled_methods
 ):
-    result = json.loads(
+    with pytest.raises(ToolError):
         await ClientsToolset().add_platform_toolset(
             client_id=str(CLIENT_ID), toolset=toolset, disabled_methods=disabled_methods
         )
-    )
 
-    assert "error" in result
     assert service.associations == []

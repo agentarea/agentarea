@@ -1,41 +1,49 @@
-"""Metering vocabulary a platform-funded MCP connection speaks in ``_meta``.
+"""What a call of an MCP connection's tool costs, as its catalog entry declares it.
 
-The tool-gateway declares, per tool, the resource its calls are metered as, and
-reports, per call, what the call used — never a price. Only a platform-managed
-connection's declarations are believed: they are the platform's own server, while
-any tenant's server could put the same keys on its tools.
+A catalog MCP server declares, in its metadata, the payers it allows
+(``agentarea:payers``) and a cost per tool (``agentarea:cost``:
+``{"default": <declaration>, "tools": {<tool>: <declaration>}}``, see
+``agentarea_common.tool_cost``). A connection with no catalog server behind it
+declares nothing: its calls cost an unknown amount, and on the platform's key it is
+refused.
 """
 
 from typing import Any
 
 from agentarea_common.constants import MANAGED_BY_PLATFORM
+from agentarea_common.tool_cost import (
+    ToolConnection,
+    ToolCostError,
+    manual_connector,
+    tool_connection,
+)
 
-META_RESOURCE_REF = "agentarea.ai/resource_ref"
-META_USAGE = "agentarea.ai/usage"
+META_PAYERS = "agentarea:payers"
+META_COST = "agentarea:cost"
 
 
-def platform_funded_resource(instance: Any, tool_name: str) -> str | None:
-    """The resource a call of ``tool_name`` on ``instance`` is metered as.
+def mcp_tool_connection(
+    instance: Any, server_spec: dict[str, Any] | None, tool_name: str
+) -> ToolConnection:
+    """The connection a call of ``tool_name`` on ``instance`` runs on.
 
-    None for a connection that is not platform-managed: its calls cost the platform
-    nothing. An empty string for a platform-managed tool that declares none, which a
-    caller must refuse — it would run on the platform's credentials for nobody.
+    ``server_spec`` is the catalog server JSON the instance was made from, or None.
+    A malformed declaration raises ``ToolCostError``.
     """
-    if instance is None or getattr(instance, "managed_by", None) != MANAGED_BY_PLATFORM:
-        return None
-    for tool in instance.get_available_tools() or []:
-        if isinstance(tool, dict) and tool.get("name") == tool_name:
-            meta = tool.get("_meta") or {}
-            return str(meta.get(META_RESOURCE_REF) or "")
-    return ""
-
-
-def reported_quantity(meta: dict[str, Any] | None, resource_ref: str) -> int | None:
-    """How much of ``resource_ref`` a call reported using, or None if it did not say."""
-    usage = (meta or {}).get(META_USAGE)
-    if not isinstance(usage, dict) or usage.get("resource_ref") != resource_ref:
-        return None
-    quantity = usage.get("quantity")
-    if isinstance(quantity, bool) or not isinstance(quantity, int):
-        return None
-    return quantity
+    metadata = (server_spec or {}).get("metadata") or {}
+    cost = metadata.get(META_COST)
+    if cost is not None and not isinstance(cost, dict):
+        raise ToolCostError(f"{META_COST} must be an object of default and tools")
+    tools = (cost or {}).get("tools") or {}
+    if not isinstance(tools, dict):
+        raise ToolCostError(f"{META_COST}.tools must map tool names to declarations")
+    own = tools.get(tool_name)
+    name = (server_spec or {}).get("name")
+    return tool_connection(
+        connection_id=str(instance.id),
+        connector=str(name) if name else manual_connector(instance.id),
+        tool=tool_name,
+        platform_managed=getattr(instance, "managed_by", None) == MANAGED_BY_PLATFORM,
+        payers=metadata.get(META_PAYERS),
+        cost=own if own is not None else (cost or {}).get("default"),
+    )

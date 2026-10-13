@@ -209,6 +209,7 @@
           "reference/policy-syntax",
           "reference/limits",
           "reference/mcp-tool-call-context",
+          "reference/tool-costs",
           "reference/errors"
         ]
       },

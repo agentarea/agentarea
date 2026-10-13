@@ -1,8 +1,10 @@
 """Persistence of the spend ledger."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
@@ -17,23 +19,39 @@ from ..domain.costs import CostEntry
 from .orm import CostEntryORM
 
 
+@dataclass(frozen=True)
+class SpendScope:
+    """Which lines a sum counts: the workspace's, narrowed by any field that is set.
+
+    ``tool`` narrows a ``connection_id`` scope to the lines of one of its tools.
+    """
+
+    agent_id: UUID | None = None
+    client_id: UUID | None = None
+    connection_id: str | None = None
+    tool: str | None = None
+
+
 class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
     """Append-only store of a workspace's paid lines."""
 
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, CostEntryORM, user_context)
 
-    async def record(self, entries: Sequence[CostEntry]) -> None:
-        """Store each line once per (event, category); a repeated line is a no-op."""
+    async def record(self, entries: Sequence[CostEntry]) -> int:
+        """Store each line once per (event, category); returns how many were new.
+
+        A repeated line is a no-op and does not count.
+        """
         if not entries:
-            return
+            return 0
         for entry in entries:
             if entry.workspace_id != self.user_context.workspace_id:
                 raise ValueError(
                     f"Cost entry of event {entry.event_id} belongs to workspace "
                     f"{entry.workspace_id}, not {self.user_context.workspace_id}"
                 )
-        await self.session.execute(
+        result = await self.session.execute(
             pg_insert(CostEntryORM)
             .values(
                 [
@@ -53,7 +71,11 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                         "amount": entry.amount,
                         "currency": entry.currency,
                         "provider_cost_usd": entry.provider_cost_usd,
-                        "managed_by": entry.managed_by,
+                        "payer": entry.payer.value,
+                        "quantity": entry.quantity,
+                        "unit": entry.unit,
+                        "vendor_cost": entry.vendor_cost,
+                        "vendor_currency": entry.vendor_currency,
                         "source": entry.source.value,
                         "evidence": entry.evidence,
                         "supersedes_id": entry.supersedes_id,
@@ -63,19 +85,47 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                 ]
             )
             .on_conflict_do_nothing(index_elements=[CostEntryORM.event_id, CostEntryORM.category])
+            .returning(CostEntryORM.id)
         )
+        return len(result.all())
 
-    def _current_lines_since(self, since: datetime, currency: str, agent_id: UUID | None):
+    def _current_lines_since(
+        self, since: datetime, currency: str | None, scope: SpendScope
+    ) -> list[Any]:
         newer = aliased(CostEntryORM)
-        conditions = [
+        conditions: list[Any] = [
             self._get_workspace_filter(),
             CostEntryORM.occurred_at >= since,
-            or_(CostEntryORM.currency == currency, CostEntryORM.currency.is_(None)),
             ~exists().where(newer.supersedes_id == CostEntryORM.id),
         ]
-        if agent_id is not None:
-            conditions.append(CostEntryORM.agent_id == agent_id)
+        if currency is not None:
+            conditions.append(
+                or_(CostEntryORM.currency == currency, CostEntryORM.currency.is_(None))
+            )
+        if scope.agent_id is not None:
+            conditions.append(CostEntryORM.agent_id == scope.agent_id)
+        if scope.client_id is not None:
+            conditions.append(CostEntryORM.client_id == scope.client_id)
+        if scope.connection_id is not None:
+            conditions.append(CostEntryORM.subject_type == "tool")
+            conditions.append(CostEntryORM.subject_id == scope.connection_id)
+        if scope.tool is not None:
+            conditions.append(CostEntryORM.subject_name == scope.tool)
         return conditions
+
+    async def sum_by_currency_since(
+        self, since: datetime, scope: SpendScope | None = None
+    ) -> dict[str | None, Decimal]:
+        """Totals of the current lines since a UTC instant, per currency.
+
+        ``None`` is the backfilled lines' currency: the deployment's billing currency.
+        """
+        rows = await self.session.execute(
+            select(CostEntryORM.currency, func.sum(CostEntryORM.amount))
+            .where(*self._current_lines_since(since, None, scope or SpendScope()))
+            .group_by(CostEntryORM.currency)
+        )
+        return {row[0]: Decimal(row[1]) for row in rows}
 
     async def sum_by_day(
         self,
@@ -88,7 +138,7 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
         day = cast(func.timezone("UTC", CostEntryORM.occurred_at), Date)
         rows = await self.session.execute(
             select(day.label("day"), func.sum(CostEntryORM.amount))
-            .where(*self._current_lines_since(since, currency, agent_id))
+            .where(*self._current_lines_since(since, currency, SpendScope(agent_id=agent_id)))
             .group_by(day)
         )
         return {row[0]: Decimal(row[1]) for row in rows}
@@ -99,13 +149,15 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
         *,
         currency: str,
         agent_id: UUID | None = None,
+        scope: SpendScope | None = None,
     ) -> Decimal:
         """Total of the workspace's current lines in ``currency`` since a UTC instant.
 
         A line another line supersedes no longer counts. Lines in another
-        currency are not converted and do not count.
+        currency are not converted and do not count. ``scope`` narrows the sum;
+        ``agent_id`` is the agent-only scope.
         """
         stmt = select(func.coalesce(func.sum(CostEntryORM.amount), ZERO)).where(
-            *self._current_lines_since(since, currency, agent_id)
+            *self._current_lines_since(since, currency, scope or SpendScope(agent_id=agent_id))
         )
         return Decimal(await self.session.scalar(stmt) or ZERO)

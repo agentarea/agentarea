@@ -1,7 +1,8 @@
 """AgentArea K8s Operator — syncs LLMProviderConfig CRDs to the database.
 
-Also reconciles MCPConnection resources into a platform-managed MCP server spec,
-instance and bearer-token secret (see the MCPConnection section below).
+Also reconciles PlatformConnection resources into a platform-managed MCP server
+or OpenAPI connection and its bearer-token secret (see the PlatformConnection
+section below).
 
 Watches LLMProviderConfig resources and:
 1. Reads API key from referenced K8s Secret
@@ -32,6 +33,7 @@ from datetime import datetime, timezone
 
 import httpx
 import kopf
+import yaml
 from cryptography.fernet import Fernet, InvalidToken
 from kubernetes import client as k8s_client
 from sqlalchemy import URL, create_engine, text
@@ -94,6 +96,10 @@ def platform_mcp_server_id(name: str) -> str:
 
 def platform_mcp_instance_id(name: str) -> str:
     return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"mcp_instance:{name}"))
+
+
+def platform_openapi_connection_id(name: str) -> str:
+    return str(uuid.uuid5(PLATFORM_ID_NAMESPACE, f"openapi_connection:{name}"))
 
 
 # Workspace-scoped resources (``spec.workspaceId`` set) get derived ids too, for
@@ -802,15 +808,21 @@ def periodic_rediscovery(spec, meta, namespace, patch, **_):
         patch.status["message"] = f"Rediscovery failed: {e}"
 
 
-# ─── MCPConnection ───────────────────────────────────────────────────────
+# ─── PlatformConnection ──────────────────────────────────────────────────
 #
-# The same offer as a platform LLM provider, for one MCP server: a connection
-# every workspace can attach, on a credential only the platform holds. Three
-# rows — the server spec, the instance, and the bearer token in the platform
-# workspace's secret store under the name the runtime resolves the instance's
-# Authorization header from.
+# The same offer as a platform LLM provider, for one tool connection: a
+# connection every workspace can attach, on a credential only the platform
+# holds. ``transport: mcp`` writes an MCP server spec and instance,
+# ``transport: openapi`` an OpenAPI connection; either way the bearer token goes
+# to the platform workspace's secret store under the name the runtime resolves
+# the connection's Authorization header from. A ``catalogId`` names the catalog
+# entry the connection is an instance of, which is where its cost model lives.
 
 MCP_AUTH_ENV_VAR = "Authorization"
+OPENAPI_AUTH_HEADER = "Authorization"
+
+# A catalog entry that is missing now usually arrives with the next catalog sync.
+CATALOG_RETRY_DELAY = 600
 
 # Keep in sync with agentarea_mcp.domain.verification_types.DEFAULT_VERIFICATION.
 NEVER_ATTEMPTED_VERIFICATION = {
@@ -826,6 +838,29 @@ def mcp_secret_name_for(instance_id: str) -> str:
     return f"mcp_instance_{instance_id}_{MCP_AUTH_ENV_VAR}"
 
 
+def openapi_secret_name_for(connection_id: str) -> str:
+    """``openapi:{id}:header:{name}``: the reserved name OpenAPIConnectionService reads."""
+    return f"openapi:{connection_id}:header:{OPENAPI_AUTH_HEADER}"
+
+
+def catalog_item(conn, catalog_id: str) -> tuple[str, dict]:
+    """The active catalog entry ``catalog_id`` names, preferred registry first."""
+    row = conn.execute(
+        text(
+            "SELECT id, spec FROM registry_items "
+            "WHERE external_id = :ext AND registry_active "
+            "ORDER BY registry_priority, id LIMIT 1"
+        ),
+        {"ext": catalog_id},
+    ).fetchone()
+    if row is None:
+        raise kopf.TemporaryError(
+            f"Catalog item '{catalog_id}' not found (catalog not synced yet?)",
+            delay=CATALOG_RETRY_DELAY,
+        )
+    return str(row[0]), row[1] or {}
+
+
 def sync_mcp_connection(spec: dict, token: str) -> tuple[str, str]:
     """Upsert the server spec, instance and token secret. Returns their two ids.
 
@@ -838,19 +873,31 @@ def sync_mcp_connection(spec: dict, token: str) -> tuple[str, str]:
     name = spec["name"]
     description = spec.get("description") or ""
     endpoint_url = spec["endpointUrl"]
-    transport = spec.get("transport") or "streamable-http"
+    transport = spec.get("mcpTransport") or "streamable-http"
+    catalog_id = spec.get("catalogId")
     server_id = platform_mcp_server_id(name)
     instance_id = platform_mcp_instance_id(name)
-    server_json_spec = {"remotes": [{"type": transport, "url": endpoint_url}]}
+    remotes = [{"type": transport, "url": endpoint_url}]
     instance_json_spec = {"env_vars": [MCP_AUTH_ENV_VAR]}
 
     with engine.begin() as conn:
+        if catalog_id:
+            _, item_spec = catalog_item(conn, catalog_id)
+            raw_spec = item_spec.get("raw_spec") or {}
+            server_json_spec = {
+                "name": catalog_id,
+                "metadata": raw_spec.get("metadata") or {},
+                "remotes": remotes,
+            }
+        else:
+            server_json_spec = {"remotes": remotes}
+
         server = conn.execute(
             text("SELECT remote_url, json_spec FROM mcp_servers WHERE id = :id"),
             {"id": server_id},
         ).fetchone()
         endpoint_changed = server is not None and (
-            server[0] != endpoint_url or server[1] != server_json_spec
+            server[0] != endpoint_url or (server[1] or {}).get("remotes") != remotes
         )
 
         server_params = {
@@ -953,7 +1000,223 @@ def sync_mcp_connection(spec: dict, token: str) -> tuple[str, str]:
     return server_id, instance_id
 
 
-def _read_mcp_token(spec: dict, namespace: str, patch) -> str | None:
+class _SpecLoader(yaml.SafeLoader):
+    """Keeps timestamps as text, so the spec stays JSON-serialisable."""
+
+
+_SpecLoader.add_constructor("tag:yaml.org,2002:timestamp", _SpecLoader.construct_yaml_str)
+
+
+def fetch_openapi_spec(spec_url: str) -> dict:
+    """The OpenAPI 3.x document at ``spec_url``, JSON or YAML."""
+    resp = httpx.get(spec_url, timeout=30)
+    resp.raise_for_status()
+    body = resp.text
+    if spec_url.endswith((".yaml", ".yml")):
+        document = yaml.load(body, Loader=_SpecLoader)  # noqa: S506 -- a SafeLoader subclass
+    else:
+        try:
+            document = json.loads(body)
+        except json.JSONDecodeError:
+            document = yaml.load(body, Loader=_SpecLoader)  # noqa: S506
+    if not isinstance(document, dict):
+        raise ValueError(f"Spec at {spec_url} is not an object")
+    version = document.get("openapi")
+    if not isinstance(version, str) or not version.startswith("3."):
+        raise ValueError(f"Spec at {spec_url} is not OpenAPI 3.x (openapi: {version!r})")
+    return document
+
+
+_OPENAPI_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
+
+
+def _resolve_ref(obj, spec: dict, _seen: set[str] | None = None):
+    if not isinstance(obj, dict) or "$ref" not in obj:
+        return obj
+    ref = obj["$ref"]
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return obj
+    if _seen is None:
+        _seen = set()
+    if ref in _seen:
+        return {}
+    _seen.add(ref)
+    resolved = spec
+    for part in ref.lstrip("#/").split("/"):
+        part = part.replace("~1", "/").replace("~0", "~")
+        if not isinstance(resolved, dict):
+            return obj
+        resolved = resolved.get(part)
+        if resolved is None:
+            return obj
+    if isinstance(resolved, dict) and "$ref" in resolved:
+        return _resolve_ref(resolved, spec, _seen)
+    return resolved
+
+
+def _generate_name(method: str, path: str) -> str:
+    segments = [s for s in path.replace("{", "").replace("}", "").split("/") if s]
+    return f"{method}_{'_'.join(segments)}"
+
+
+# Mirrors agentarea_openapi.application.spec_parser.parse_openapi_spec.
+def openapi_tools(spec: dict) -> list[dict]:
+    """The ``available_tools`` projection of an OpenAPI spec: name, description, inputSchema."""
+    tools: list[dict] = []
+    for path, path_item in (spec.get("paths") or {}).items():
+        if not path_item or not isinstance(path_item, dict):
+            continue
+        path_params = [_resolve_ref(p, spec) for p in path_item.get("parameters") or []]
+        for method in _OPENAPI_METHODS:
+            if method not in path_item:
+                continue
+            operation = path_item[method]
+            merged: dict[tuple[str, str], dict] = {}
+            op_params = [_resolve_ref(p, spec) for p in operation.get("parameters") or []]
+            for param in path_params + op_params:
+                merged[(param.get("name", ""), param.get("in", ""))] = param
+
+            properties: dict = {}
+            required: list[str] = []
+            for param in merged.values():
+                param_name = param.get("name", "")
+                if not param_name:
+                    continue
+                properties[param_name] = _resolve_ref(
+                    param.get("schema", {"type": "string"}), spec
+                )
+                if param.get("required", False):
+                    required.append(param_name)
+
+            raw_body = operation.get("requestBody")
+            if raw_body:
+                body = _resolve_ref(raw_body, spec)
+                content = body.get("content") or {}
+                if "application/json" in content:
+                    body_schema = _resolve_ref(
+                        content["application/json"].get("schema", {}), spec
+                    )
+                    if body_schema:
+                        properties["body"] = body_schema
+                        if body.get("required", True):
+                            required.append("body")
+
+            tools.append(
+                {
+                    "name": operation.get("operationId") or _generate_name(method, path),
+                    "description": operation.get("summary")
+                    or operation.get("description")
+                    or "",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": required,
+                    },
+                }
+            )
+    return tools
+
+
+def sync_openapi_connection(spec: dict, token: str) -> str:
+    """Upsert the OpenAPI connection and its token secret. Returns the connection id.
+
+    The spec is fetched from the catalog entry's ``spec_url`` on every reconcile,
+    outside the write transaction; re-running against an unchanged spec changes
+    no row.
+    """
+    name = spec["name"]
+    catalog_id = spec.get("catalogId")
+    if not catalog_id:
+        raise kopf.PermanentError("catalogId is required when transport is openapi")
+    connection_id = platform_openapi_connection_id(name)
+
+    with engine.begin() as conn:
+        item_id, item_spec = catalog_item(conn, catalog_id)
+    spec_url = item_spec.get("spec_url")
+    if not spec_url:
+        raise kopf.TemporaryError(
+            f"Catalog item '{catalog_id}' has no spec_url", delay=CATALOG_RETRY_DELAY
+        )
+    document = fetch_openapi_spec(spec_url)
+
+    params = {
+        "id": connection_id,
+        "name": name,
+        "desc": spec.get("description") or "",
+        "spec_url": spec_url,
+        "spec_content": json.dumps(document),
+        "base_url": spec["endpointUrl"],
+        "item_id": item_id,
+        "tools": json.dumps(openapi_tools(document)),
+        "headers": json.dumps([{"name": OPENAPI_AUTH_HEADER, "secret": True, "value": None}]),
+        "managed_by": MANAGED_BY_PLATFORM,
+        "ws": PLATFORM_WORKSPACE_ID,
+    }
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text("SELECT id FROM openapi_connections WHERE id = :id"),
+            {"id": connection_id},
+        ).fetchone()
+        if existing is None:
+            conn.execute(
+                text(
+                    "INSERT INTO openapi_connections (id, name, description, spec_url, "
+                    "spec_content, base_url, registry_item_id, available_tools, "
+                    "custom_headers, allowed_auth_origins, status, managed_by, "
+                    "workspace_id, created_by, created_at, updated_at) "
+                    "VALUES (:id, :name, :desc, :spec_url, CAST(:spec_content AS JSONB), "
+                    ":base_url, :item_id, CAST(:tools AS JSONB), CAST(:headers AS JSON), "
+                    "NULL, 'active', :managed_by, :ws, :created_by, now(), now())"
+                ),
+                params | {"created_by": PLATFORM_PRINCIPAL_ID},
+            )
+        else:
+            # custom_headers and allowed_auth_origins are json, which has no
+            # equality operator; compared as jsonb.
+            conn.execute(
+                text(
+                    "UPDATE openapi_connections SET name = :name, description = :desc, "
+                    "spec_url = :spec_url, spec_content = CAST(:spec_content AS JSONB), "
+                    "base_url = :base_url, registry_item_id = :item_id, "
+                    "available_tools = CAST(:tools AS JSONB), "
+                    "custom_headers = CAST(:headers AS JSON), allowed_auth_origins = NULL, "
+                    "status = 'active', managed_by = :managed_by, updated_at = now() "
+                    "WHERE id = :id AND workspace_id = :ws AND ("
+                    "name, description, spec_url, spec_content, base_url, registry_item_id, "
+                    "available_tools, CAST(custom_headers AS JSONB), "
+                    "CAST(allowed_auth_origins AS JSONB), status, managed_by"
+                    ") IS DISTINCT FROM (:name, :desc, :spec_url, "
+                    "CAST(:spec_content AS JSONB), :base_url, CAST(:item_id AS UUID), "
+                    "CAST(:tools AS JSONB), CAST(:headers AS JSONB), CAST(NULL AS JSONB), "
+                    "'active', :managed_by)"
+                ),
+                params,
+            )
+
+        store_secret(
+            conn,
+            PLATFORM_WORKSPACE_ID,
+            openapi_secret_name_for(connection_id),
+            f"Bearer {token.strip()}",
+            owner_type="openapi_connection",
+            owner_id=connection_id,
+        )
+
+    return connection_id
+
+
+def sync_platform_connection(spec: dict, token: str) -> tuple[str, str | None]:
+    """Sync by transport. Returns (connection id, MCP server id or None)."""
+    transport = spec.get("transport")
+    if transport == "mcp":
+        server_id, instance_id = sync_mcp_connection(spec, token)
+        return instance_id, server_id
+    if transport == "openapi":
+        return sync_openapi_connection(spec, token), None
+    raise kopf.PermanentError(f"Unknown transport: {transport!r}")
+
+
+def _read_connection_token(spec: dict, namespace: str, patch) -> str | None:
     """The token, or None after recording why it could not be read."""
     secret_ref = spec.get("tokenSecretRef")
     if not secret_ref:
@@ -973,40 +1236,46 @@ def _read_mcp_token(spec: dict, namespace: str, patch) -> str | None:
         raise kopf.TemporaryError(str(e), delay=30) from e
 
 
-def _record_mcp_sync(patch, server_id: str, instance_id: str, message: str) -> None:
+def _record_connection_sync(
+    patch, connection_id: str, server_id: str | None, message: str
+) -> None:
     patch.status["phase"] = "Synced"
+    patch.status["connectionId"] = connection_id
+    # None removes the field, so a resource moved off mcp does not keep a stale id.
     patch.status["mcpServerId"] = server_id
-    patch.status["mcpInstanceId"] = instance_id
     patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()
     patch.status["message"] = message
 
 
-@kopf.on.create("agentarea.io", "v1alpha1", "mcpconnections")
-@kopf.on.update("agentarea.io", "v1alpha1", "mcpconnections")
-def on_mcp_connection_change(spec, meta, namespace, patch, **_):
+@kopf.on.create("agentarea.io", "v1alpha1", "platformconnections")
+@kopf.on.update("agentarea.io", "v1alpha1", "platformconnections")
+def on_platform_connection_change(spec, meta, namespace, patch, **_):
     cr_name = meta["name"]
-    logger.info("Syncing MCPConnection %s/%s", namespace, cr_name)
+    logger.info(
+        "Syncing PlatformConnection %s/%s (transport=%s)",
+        namespace, cr_name, spec.get("transport"),
+    )
 
-    token = _read_mcp_token(spec, namespace, patch)
+    token = _read_connection_token(spec, namespace, patch)
     if token is None:
         return
 
     try:
-        server_id, instance_id = sync_mcp_connection(spec, token)
-    except kopf.PermanentError as e:
+        connection_id, server_id = sync_platform_connection(spec, token)
+    except (kopf.PermanentError, kopf.TemporaryError) as e:
         patch.status["phase"] = "Error"
         patch.status["message"] = str(e)
         raise
     except Exception as e:
-        logger.exception("MCPConnection sync failed for %s/%s", namespace, cr_name)
+        logger.exception("PlatformConnection sync failed for %s/%s", namespace, cr_name)
         patch.status["phase"] = "Error"
         patch.status["message"] = str(e)
         raise kopf.TemporaryError(str(e), delay=60) from e
 
-    _record_mcp_sync(patch, server_id, instance_id, "Synced")
+    _record_connection_sync(patch, connection_id, server_id, "Synced")
     logger.info(
-        "Synced MCPConnection %s/%s → server=%s, instance=%s",
-        namespace, cr_name, server_id, instance_id,
+        "Synced PlatformConnection %s/%s → connection=%s",
+        namespace, cr_name, connection_id,
     )
 
 
@@ -1014,21 +1283,21 @@ def on_mcp_connection_change(spec, meta, namespace, patch, **_):
 # git is not a decision to withdraw a connection every workspace may be using.
 
 
-@kopf.on.timer("agentarea.io", "v1alpha1", "mcpconnections", interval=3600)
-def periodic_mcp_connection_resync(spec, meta, namespace, patch, **_):
+@kopf.on.timer("agentarea.io", "v1alpha1", "platformconnections", interval=3600)
+def periodic_platform_connection_resync(spec, meta, namespace, patch, **_):
     """Re-read the token hourly, so a rotated Secret reaches the platform."""
     cr_name = meta["name"]
     try:
-        token = _read_mcp_token(spec, namespace, patch)
+        token = _read_connection_token(spec, namespace, patch)
         if token is None:
             return
-        server_id, instance_id = sync_mcp_connection(spec, token)
+        connection_id, server_id = sync_platform_connection(spec, token)
     except Exception as e:
-        logger.exception("MCPConnection resync failed for %s/%s", namespace, cr_name)
+        logger.exception("PlatformConnection resync failed for %s/%s", namespace, cr_name)
         patch.status["phase"] = "Error"
         patch.status["message"] = f"Resync failed: {e}"
         return
-    _record_mcp_sync(patch, server_id, instance_id, "Re-synced")
+    _record_connection_sync(patch, connection_id, server_id, "Re-synced")
 
 
 # ─── RegistrySync handlers ───────────────────────────────────────────────

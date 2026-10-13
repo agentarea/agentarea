@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 CUSTOMER_PRICING_EXTENSION = "customer_pricing"
 
 
-class ToolCallUnpricedError(LookupError):
-    """No price exists for a call of this paid tool, so it must not run."""
+class FxUnavailableError(LookupError):
+    """An installed pricing could not express a tool cost in the billing currency."""
 
 
 @runtime_checkable
@@ -59,26 +59,33 @@ class CustomerPricing(Protocol):
 
 
 @runtime_checkable
-class ToolCallPricing(Protocol):
-    """A pricing that can also price calls of paid tools.
+class VendorCostPricing(Protocol):
+    """A pricing that can also express what a tool's vendor charged, for caps and display."""
 
-    Separate from ``CustomerPricing`` so a pricing that predates paid tools still
-    satisfies that: it simply prices none, and every paid call is refused.
-    """
+    async def price_vendor_cost(
+        self,
+        *,
+        payer: str,
+        connector: str,
+        tool: str,
+        vendor_cost: Decimal,
+        currency: str,
+    ) -> Decimal:
+        """Return the amount a tool call's line shows and caps count, in ``currency()``.
 
-    async def price_tool_call(self, resource_ref: str) -> Decimal:
-        """Return what one call of a paid tool costs the customer, in ``currency()``.
-
-        A paid tool runs on the operator's credentials, so the call is always bought
-        by the platform. Raises a ``LookupError`` when no price exists: there is no
-        estimate to fall back to, and a call nobody is charged for is one the platform
-        pays for alone.
+        ``vendor_cost`` is what the vendor charged the payer, in ``currency``. For
+        ``payer`` platform this is an estimate of the debit; billing is the money
+        authority. Raises a ``LookupError`` when ``currency`` cannot be converted.
         """
         ...
 
 
 class ProviderCostPricing:
-    """OSS default: the customer pays the provider cost, in USD."""
+    """OSS default: the customer pays the provider cost, in USD.
+
+    It converts nothing: a tool's vendor cost stays in the vendor's currency, and a
+    spend cap counts only the lines in its own currency.
+    """
 
     def currency(self) -> str:
         return "USD"
@@ -196,17 +203,34 @@ async def price_llm_call(
         ) from error
 
 
-async def price_tool_call(resource_ref: str, *, pricing: CustomerPricing | None = None) -> Decimal:
-    """What one call of a paid tool costs the customer, asked before the call runs.
+async def price_vendor_cost(
+    *,
+    payer: str,
+    connector: str,
+    tool: str,
+    vendor_cost: Decimal,
+    currency: str,
+    pricing: CustomerPricing | None = None,
+) -> tuple[Decimal, str]:
+    """A tool call's line amount and its currency.
 
-    Raises rather than prices at zero: a call with no price is refused, not given away.
+    An installed pricing that prices tool costs converts the vendor cost to the
+    billing currency, markup included where it applies. Without one the amount is
+    the vendor cost in the vendor's currency: nothing is converted. Raises
+    ``FxUnavailableError`` when an installed pricing cannot convert ``currency``.
     """
     active = pricing or get_customer_pricing()
-    if not isinstance(active, ToolCallPricing):
-        raise ToolCallUnpricedError(
-            f"{resource_ref} has no price: {type(active).__name__} does not price paid tools"
-        )
+    if not isinstance(active, VendorCostPricing):
+        return to_money(vendor_cost), currency
     try:
-        return to_money(await active.price_tool_call(resource_ref))
+        amount = await active.price_vendor_cost(
+            payer=payer,
+            connector=connector,
+            tool=tool,
+            vendor_cost=vendor_cost,
+            currency=currency,
+        )
     except LookupError as error:
-        raise ToolCallUnpricedError(str(error)) from error
+        # An extension cannot import this class; it raises its own LookupError.
+        raise FxUnavailableError(str(error)) from error
+    return to_money(amount), active.currency()

@@ -13,7 +13,9 @@ from sqlalchemy.dialects import postgresql
 def _repository() -> tuple[TaskRepository, MagicMock]:
     session = MagicMock()
     session.scalar = AsyncMock(return_value=0)
-    return TaskRepository(session, UserContext(user_id="alice", workspace_id="workspace-1")), session
+    return TaskRepository(
+        session, UserContext(user_id="alice", workspace_id="workspace-1")
+    ), session
 
 
 def _sql(session: MagicMock) -> str:

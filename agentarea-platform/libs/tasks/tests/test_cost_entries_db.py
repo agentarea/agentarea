@@ -66,8 +66,8 @@ async def test_a_retried_line_is_stored_once(session):
     line = _entry(workspace_id, agent_id, "0.25")
     repo = _repo(session, workspace_id)
 
-    await repo.record([line])
-    await repo.record([line])
+    assert await repo.record([line]) == 1
+    assert await repo.record([line]) == 0
 
     count = await session.scalar(
         text("SELECT count(*) FROM cost_entries WHERE event_id = :id"), {"id": line.event_id}

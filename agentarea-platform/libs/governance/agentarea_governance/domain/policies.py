@@ -98,12 +98,31 @@ class PolicyScope(BaseModel):
     scope_id: str
 
 
+class ScopedSpendCap(BaseModel):
+    """A monthly cap on the lines of one client, connection or tool of a connection.
+
+    ``own_agent`` narrows it further to the calling agent's lines: the rule was
+    bound to that agent. ``currency`` is the cap's currency, the billing currency
+    when absent; it sums only lines in it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    amount_usd: Money = Field(ge=ZERO)
+    own_agent: bool = False
+    client_id: str | None = None
+    connection_id: str | None = None
+    tool: str | None = None
+    currency: str | None = None
+
+
 class BudgetPolicy(BaseModel):
     """Budget-related ceilings.
 
     ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
     month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
-    alone, summed over all its runs in the month.
+    alone, summed over all its runs in the month. ``spend_caps`` are the monthly
+    caps narrowed to a client, a connection or one of its tools; every one applies.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -112,6 +131,7 @@ class BudgetPolicy(BaseModel):
     agent_monthly_spend_cap_usd: Money | None = Field(default=None, ge=ZERO)
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
     service_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    spend_caps: list[ScopedSpendCap] | None = None
 
 
 class TokenPolicy(BaseModel):
@@ -466,6 +486,7 @@ class PolicyResolver:
             ),
             run_budget_usd=_min_money(higher.run_budget_usd, lower.run_budget_usd),
             service_budget_usd=_min_money(higher.service_budget_usd, lower.service_budget_usd),
+            spend_caps=[*(higher.spend_caps or []), *(lower.spend_caps or [])] or None,
         )
 
     def _merge_tokens(

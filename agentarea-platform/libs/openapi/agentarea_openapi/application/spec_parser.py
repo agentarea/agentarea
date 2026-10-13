@@ -4,6 +4,7 @@ import re
 from collections.abc import Collection
 from typing import Any
 
+from agentarea_common.tool_cost import connector_payers, parse_cost_model
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 
 
@@ -32,6 +33,9 @@ def parse_openapi_operations(
 
     paths = _expect_object(spec.get("paths") or {}, "paths")
     operations: list[dict[str, Any]] = []
+    connector_payers(spec.get("x-agentarea-payers"))
+    default_cost = spec.get("x-agentarea-cost")
+    parse_cost_model(default_cost)
 
     for path, path_item in paths.items():
         if not isinstance(path, str):
@@ -101,6 +105,11 @@ def parse_openapi_operations(
             input_schema = _build_input_schema(
                 operation, path_params, spec, configured_query_params, op_where
             )
+            own_cost = operation.get("x-agentarea-cost")
+            parse_cost_model(own_cost)
+            response_transform = operation.get("x-agentarea-response-transform") or []
+            if not isinstance(response_transform, list):
+                raise ValueError(f"{op_where}.x-agentarea-response-transform must be a list")
 
             operations.append(
                 {
@@ -111,6 +120,8 @@ def parse_openapi_operations(
                     "parameters": parameters,
                     "request_body": request_body,
                     "input_schema": input_schema,
+                    "cost": own_cost if own_cost is not None else default_cost,
+                    "response_transform": response_transform,
                 }
             )
 

@@ -55,6 +55,15 @@ class McpInstanceAssociationBody(BaseModel):
     allowed_tools: list[str] | None = None
 
 
+class OpenAPIConnectionAssociationBody(BaseModel):
+    """Attach an OpenAPI connection, or replace how an attached one is served."""
+
+    id: str
+    namespace_prefix: str | None = None
+    # The connection's operations the client serves; omitted or null serves all of them.
+    allowed_tools: list[str] | None = None
+
+
 class PlatformToolsetAssociationBody(BaseModel):
     """Attach a platform toolset, or replace the methods an attached one leaves out."""
 
@@ -76,6 +85,11 @@ class ClientMcpInstanceRef(ClientRef):
     allowed_tools: list[str] | None = None
 
 
+class ClientOpenAPIConnectionRef(ClientRef):
+    namespace_prefix: str | None = None
+    allowed_tools: list[str] | None = None
+
+
 class ClientPlatformToolsetRef(BaseModel):
     name: str
     disabled_methods: list[str] | None = None
@@ -90,6 +104,7 @@ class ClientResponse(BaseModel):
     kind: str
     skills: list[ClientRef] = []
     mcp_instances: list[ClientMcpInstanceRef] = []
+    openapi_connections: list[ClientOpenAPIConnectionRef] = []
     platform_toolsets: list[ClientPlatformToolsetRef] = []
     mcp_endpoint_url: str | None = None
 
@@ -124,13 +139,14 @@ def client_mcp_endpoint_url(client_id: UUID) -> str:
 
 
 async def client_responses(service: ClientService, clients: list[Client]) -> list[ClientResponse]:
-    """Responses for *clients*, with how each serves its instances and toolsets.
+    """Responses for *clients*, with how each serves its connections and toolsets.
 
     Shared with the clients toolset, so both surfaces describe a client alike.
     """
     ids = [client.id for client in clients]
     links = await service.instance_links(ids)
     toolsets = await service.platform_toolsets(ids)
+    openapi_links = await service.openapi_links(ids)
     responses = []
     for client in clients:
         response = ClientResponse.model_validate(client)
@@ -140,6 +156,15 @@ async def client_responses(service: ClientService, clients: list[Client]) -> lis
             if link := client_links.get(str(instance.id)):
                 instance.namespace_prefix = link.namespace_prefix
                 instance.allowed_tools = link.allowed_tools
+        response.openapi_connections = [
+            ClientOpenAPIConnectionRef(
+                id=UUID(link.connection_id),
+                name=link.name,
+                namespace_prefix=link.namespace_prefix,
+                allowed_tools=link.allowed_tools,
+            )
+            for link in openapi_links.get(str(client.id), [])
+        ]
         response.platform_toolsets = [
             ClientPlatformToolsetRef(name=t.toolset, disabled_methods=t.disabled_methods)
             for t in toolsets.get(str(client.id), [])
@@ -331,6 +356,36 @@ async def remove_mcp_instance_from_client(
     service: ClientServiceDep,
 ):
     await service.remove_mcp_instance(client_id, mcp_instance_id)
+
+
+@router.post(
+    "/{client_id}/openapi-connections",
+    status_code=204,
+    dependencies=[requires("edit", "client", id_param="client_id")],
+)
+async def add_openapi_connection_to_client(
+    client_id: UUID,
+    body: OpenAPIConnectionAssociationBody,
+    user_context: UserContextDep,
+    service: ClientServiceDep,
+):
+    await service.add_openapi_connection(
+        client_id, body.id, body.namespace_prefix, body.allowed_tools
+    )
+
+
+@router.delete(
+    "/{client_id}/openapi-connections/{connection_id}",
+    status_code=204,
+    dependencies=[requires("edit", "client", id_param="client_id")],
+)
+async def remove_openapi_connection_from_client(
+    client_id: UUID,
+    connection_id: UUID,
+    user_context: UserContextDep,
+    service: ClientServiceDep,
+):
+    await service.remove_openapi_connection(client_id, connection_id)
 
 
 @router.post(

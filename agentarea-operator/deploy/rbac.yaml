@@ -14,8 +14,8 @@ rules:
     resources:
       - "llmproviderconfigs"
       - "llmproviderconfigs/status"
-      - "mcpconnections"
-      - "mcpconnections/status"
+      - "platformconnections"
+      - "platformconnections/status"
       - "registrysyncs"
       - "registrysyncs/status"
     verbs: ["get", "list", "watch", "patch", "update"]

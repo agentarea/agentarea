@@ -104,7 +104,7 @@ def test_registrysyncs_is_granted():
     assert "registrysyncs/status" in resources
 
 
-def test_mcpconnections_is_granted():
+def test_platformconnections_is_granted():
     resources: set[str] = set()
     for d in _load_docs():
         if d.get("kind") == "ClusterRole":
@@ -112,5 +112,5 @@ def test_mcpconnections_is_granted():
                 if rule.get("apiGroups") == ["agentarea.io"]:
                     resources.update(rule.get("resources", []))
 
-    assert "mcpconnections" in resources
-    assert "mcpconnections/status" in resources
+    assert "platformconnections" in resources
+    assert "platformconnections/status" in resources

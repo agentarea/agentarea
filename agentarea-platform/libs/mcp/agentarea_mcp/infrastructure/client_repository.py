@@ -19,8 +19,10 @@ from sqlalchemy.orm import selectinload
 from agentarea_mcp.domain.client_models import (
     Client,
     ClientMcpInstanceLink,
+    ClientOpenAPIConnectionLink,
     ClientPlatformToolset,
     client_mcp_instances,
+    client_openapi_connections,
     client_platform_toolsets,
     client_skills,
 )
@@ -168,6 +170,79 @@ class ClientRepository(WorkspaceScopedRepository[Client]):
         for client_id, instance_id, prefix, allowed in (await self.session.execute(query)).all():
             links.setdefault(str(client_id), {})[str(instance_id)] = ClientMcpInstanceLink(
                 namespace_prefix=prefix, allowed_tools=allowed
+            )
+        return links
+
+    # --- OpenAPI connection links ---
+
+    async def add_openapi_connection(
+        self,
+        client_id: UUID | str,
+        connection_id: UUID | str,
+        namespace_prefix: str | None = None,
+        allowed_tools: list[str] | None = None,
+    ) -> None:
+        """Attach a connection, or replace how an attached one is served."""
+        settings = {"namespace_prefix": namespace_prefix, "allowed_tools": allowed_tools}
+        stmt = (
+            insert(client_openapi_connections)
+            .values(client_id=client_id, openapi_connection_id=connection_id, **settings)
+            .on_conflict_do_update(
+                index_elements=["client_id", "openapi_connection_id"], set_=settings
+            )
+        )
+        await self.session.execute(stmt)
+        await self.session.commit()
+
+    async def remove_openapi_connection(
+        self, client_id: UUID | str, connection_id: UUID | str
+    ) -> None:
+        stmt = delete(client_openapi_connections).where(
+            client_openapi_connections.c.client_id == client_id,
+            client_openapi_connections.c.openapi_connection_id == connection_id,
+        )
+        await self.session.execute(stmt)
+        await self.session.commit()
+
+    async def get_openapi_links(
+        self, client_ids: Collection[UUID | str]
+    ) -> dict[str, list[ClientOpenAPIConnectionLink]]:
+        """``{client_id: [link, ...]}`` for this workspace's clients.
+
+        Only connections the workspace can see: its own and the platform's.
+        """
+        from agentarea_openapi.domain.models import OpenAPIConnection
+
+        workspace_id = self.user_context.workspace_id
+        query = (
+            select(
+                client_openapi_connections.c.client_id,
+                OpenAPIConnection.id,
+                OpenAPIConnection.name,
+                client_openapi_connections.c.namespace_prefix,
+                client_openapi_connections.c.allowed_tools,
+            )
+            .join(Client, Client.id == client_openapi_connections.c.client_id)
+            .join(
+                OpenAPIConnection,
+                OpenAPIConnection.id == client_openapi_connections.c.openapi_connection_id,
+            )
+            .where(self._get_workspace_filter())
+            .where(OpenAPIConnection.workspace_visibility(workspace_id))
+            .where(client_openapi_connections.c.client_id.in_([UUID(str(i)) for i in client_ids]))
+            .order_by(OpenAPIConnection.name)
+        )
+        links: dict[str, list[ClientOpenAPIConnectionLink]] = {}
+        for client_id, connection_id, name, prefix, allowed in (
+            await self.session.execute(query)
+        ).all():
+            links.setdefault(str(client_id), []).append(
+                ClientOpenAPIConnectionLink(
+                    connection_id=str(connection_id),
+                    name=name,
+                    namespace_prefix=prefix,
+                    allowed_tools=allowed,
+                )
             )
         return links
 
