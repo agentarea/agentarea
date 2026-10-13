@@ -406,8 +406,9 @@ async def test_an_image_endpoint_at_a_private_address_is_never_called():
         litellm_client=_http_handler(handler),
     )
 
-    with pytest.raises(ModelCallError, match="non-public address"):
+    with pytest.raises(ModelCallError, match="does not call") as refused:
         await model.generate("a lighthouse")
+    assert "169.254" not in str(refused.value)
 
 
 async def test_an_unknown_provider_video_status_fails_loud():

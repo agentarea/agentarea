@@ -20,7 +20,11 @@ from typing import Any, cast
 
 import httpx
 from agentarea_common.money import to_money
-from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, validate_outbound_url
+from agentarea_common.utils.url_safety import (
+    UnsafeUrlError,
+    endpoint_policy_for,
+    validate_outbound_url,
+)
 
 from agentarea_llm.domain.media import DecisionQuestionType, VideoJobStatus
 from agentarea_llm.domain.provider_profiles import profile_for
@@ -193,12 +197,15 @@ class ImageModel:
             api_base = endpoint.api_url("")
             # LiteLLM makes this request with its own client, so the member-set
             # address is checked here, as the SSRF-guarded client would.
+            policy = endpoint_policy_for(endpoint.managed_by)
             try:
-                await asyncio.to_thread(
-                    validate_outbound_url, api_base, policy=OutboundPolicy.from_env()
-                )
+                if policy is not None:
+                    await asyncio.to_thread(validate_outbound_url, api_base, policy=policy)
             except UnsafeUrlError as error:
-                raise ModelCallError(f"image model endpoint refused: {error}") from error
+                logger.warning(f"Image model endpoint refused by the outbound policy: {error}")
+                raise ModelCallError(
+                    "image model endpoint points to an address this deployment does not call"
+                ) from error
             kwargs["api_base"] = api_base
         if size:
             kwargs["size"] = size
@@ -207,7 +214,12 @@ class ImageModel:
         try:
             response = await litellm.aimage_generation(**kwargs)
         except Exception as error:
-            raise ModelCallError(f"image generation failed: {error}") from error
+            # LiteLLM may follow a redirect the pre-check never saw, so what came
+            # back is not repeated; it stays in the log (GHSA-pprc-x767-m6jg).
+            logger.warning(f"Image generation failed: {error}", exc_info=True)
+            status_code = getattr(error, "status_code", None)
+            detail = f"HTTP {status_code}" if isinstance(status_code, int) else type(error).__name__
+            raise ModelCallError(f"image generation failed: {detail}") from error
 
         if response.data is None:
             raise ModelCallError("image model returned no image data")

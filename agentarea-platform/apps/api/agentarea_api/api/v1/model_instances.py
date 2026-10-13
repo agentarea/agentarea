@@ -14,6 +14,7 @@ from agentarea_common.config import get_settings
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_common.utils.url_safety import UnsafeUrlError, endpoint_policy_for
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance, ModelKind
 from agentarea_llm.domain.provider_profiles import profile_for
@@ -371,6 +372,7 @@ async def validate_model_instance(
             model_name=model_name,
             api_key=api_key,
             endpoint_url=resolved_endpoint_url,
+            endpoint_policy=endpoint_policy_for(provider_config.managed_by),
         )
 
         llm_request = LLMRequest(
@@ -403,8 +405,14 @@ async def validate_model_instance(
 
         logger.exception(f"LLM test failed: {error_message}")
 
-        # Categorize common errors
-        if "AuthenticationError" in error_type or "api_key" in error_message.lower():
+        # Every message below is the platform's own. The provider's answer is
+        # never echoed: for an endpoint a member chose, it is whatever that
+        # address returned, and echoing it turns any reachable host into a
+        # readable one (GHSA-pprc-x767-m6jg).
+        if isinstance(e, UnsafeUrlError):
+            error_type = "EndpointRefused"
+            message = "The endpoint URL points to an address this deployment does not call"
+        elif "AuthenticationError" in error_type or "api_key" in error_message.lower():
             error_type = "AuthenticationError"
             message = "Authentication failed - please check your API key"
         elif "RateLimitError" in error_type or "rate limit" in error_message.lower():
@@ -422,7 +430,12 @@ async def validate_model_instance(
             error_type = "ConnectionError"
             message = "Connection failed - please check endpoint URL"
         else:
-            message = f"Test failed: {error_message}"
+            status_code = getattr(e, "status_code", None)
+            message = (
+                f"Test failed: the provider answered with HTTP {status_code}"
+                if isinstance(status_code, int)
+                else "Test failed: the provider call did not complete"
+            )
 
         return ModelInstanceTestResponse(
             success=False,

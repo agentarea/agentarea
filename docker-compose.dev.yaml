@@ -36,6 +36,10 @@ services:
       - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
+      # Member-set URLs may reach a model server on the host (Ollama, a local
+      # OpenAI-compatible router). localhost is what a config stores; calls
+      # rewrite it to host.docker.internal.
+      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       # Hydra OAuth2 AS
       - AGENTAREA_AUTH_HYDRA_URL=http://hydra:4444
       - AGENTAREA_AUTH_HYDRA_ADMIN_URL=http://hydra:4445
@@ -562,6 +566,8 @@ services:
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_TENANT_SCOPE=${AGENTAREA_DB_TENANT_SCOPE:?AGENTAREA_DB_TENANT_SCOPE is required (log|enforce)}
       - LLM_DOCKER_HOST=host.docker.internal
+      # Same host model servers as the app (see AGENTAREA_HTTP_PRIVATE_ALLOWLIST there).
+      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
 
       # S3 / RustFS (file tool artifacts land here, keyed by workspace+task)
       - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
