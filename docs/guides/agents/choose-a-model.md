@@ -64,6 +64,15 @@ different endpoint, a proxy — without touching any agent.
     `provider_spec_id` and `name` are the only required fields. `endpoint_url` points
     at a compatible proxy or self-hosted gateway. Prefer `api_key_secret_id`, a
     reference to a stored secret, over an inline `api_key`.
+
+    An `endpoint_url` that resolves to a private, loopback or link-local address is
+    refused when the configuration is saved and on every call, and so is one with a
+    query string or fragment. For a local model server such as Ollama, list its host
+    in `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` on the API and the worker (in Docker,
+    `localhost,host.docker.internal`: `localhost` is what the configuration stores,
+    and calls rewrite it to the host machine), or set `AGENTAREA_HTTP_ALLOW_PRIVATE` to allow every
+    private address. Name each server: a wildcard such as `*.svc.cluster.local` lets
+    every member reach every in-cluster service, the platform's own included.
   </Step>
 
   <Step title="Create a model instance">

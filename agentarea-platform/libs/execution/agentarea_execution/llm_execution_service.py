@@ -15,6 +15,7 @@ from agentarea_common.extensions.customer_pricing import (
     price_llm_call,
 )
 from agentarea_common.money import to_money, to_optional_money
+from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_credentials import resolve_provider_api_key
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
@@ -189,6 +190,7 @@ class LLMExecutionService:
                 endpoint_url=endpoint_url,
                 input_cost_per_token=to_optional_money(input_cost_per_token),
                 output_cost_per_token=to_optional_money(output_cost_per_token),
+                endpoint_policy=endpoint_policy_for(managed_by),
             )
             llm_request = LLMRequest(
                 messages=request.messages,

@@ -2,9 +2,9 @@
 
 Validation barrier for HTTP requests whose URL is influenced by user input
 (URL MCP upstreams, OpenAPI connections, A2A delegates, bundle sources, and a
-BYOK LLM ``endpoint_url`` during model discovery and media generation). LLM chat
-calls (runs, model tests, compaction) do not go through it: their egress is
-left to the deployment's network policy. It rejects the
+member-set LLM ``endpoint_url`` in model discovery, chat, compaction, model tests,
+trigger conditions and media generation; ``endpoint_policy_for`` decides which
+addresses are member-set). It rejects the
 universal IANA non-public address classes so it stays portable across clouds and
 hardcodes no provider-specific IPs: RFC1918 private, loopback, link-local
 (blocks ``169.254.169.254`` cloud metadata on every provider), reserved,
@@ -41,6 +41,7 @@ __all__ = [
     "SafeOutboundTransport",
     "UnsafeDestinationError",
     "UnsafeUrlError",
+    "endpoint_policy_for",
     "resolve_host",
     "safe_async_client",
     "validate_outbound_url",
@@ -200,6 +201,22 @@ class OutboundPolicy:
         if any(fnmatch.fnmatch(host.lower(), pattern) for pattern in self._host_patterns):
             return True
         return any(ip in network for network in self._networks)
+
+
+def endpoint_policy_for(managed_by: str | None) -> OutboundPolicy | None:
+    """The policy a provider configuration's ``endpoint_url`` is called under.
+
+    Who set the address decides, not what it looks like. A platform-managed
+    configuration's address is the deployment operator's own, typically an
+    in-cluster gateway, and is called as configured (``None``). Any other address
+    was set by a workspace member, and the member's request must not reach what
+    the platform can reach.
+    """
+    from agentarea_common.constants import MANAGED_BY_PLATFORM
+
+    if managed_by == MANAGED_BY_PLATFORM:
+        return None
+    return OutboundPolicy.from_env()
 
 
 Resolver = Callable[[str, int], Awaitable[list[str]]]

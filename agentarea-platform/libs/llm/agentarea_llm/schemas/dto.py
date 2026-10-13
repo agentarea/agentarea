@@ -14,6 +14,25 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+def _checked_endpoint_url(v: str | None) -> str | None:
+    """The shape of an endpoint address; where it resolves is checked by the service.
+
+    A query or fragment is refused because the provider path is appended to the
+    address: ``?`` would turn that path into a query string and hand the member
+    the full path on the host.
+    """
+    if not v:
+        return v
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(v)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("endpoint_url must be an http or https URL with a host")
+    if parts.query or parts.fragment or v.rstrip().endswith(("?", "#")):
+        raise ValueError("endpoint_url must not contain a query string or fragment")
+    return v
+
+
 class ProviderConfigCreate(BaseModel):
     """Payload for creating an LLM provider configuration."""
 
@@ -79,6 +98,11 @@ class ProviderConfigCreate(BaseModel):
                 "api_key stores a new secret, api_key_secret_id reuses an existing one."
             )
         return self
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def _check_endpoint_url(cls, v: str | None) -> str | None:
+        return _checked_endpoint_url(v)
 
     @field_validator("name")
     @classmethod
@@ -152,6 +176,11 @@ class ProviderConfigUpdate(BaseModel):
                 "api_key stores a new secret, api_key_secret_id reuses an existing one."
             )
         return self
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def _check_endpoint_url(cls, v: str | None) -> str | None:
+        return _checked_endpoint_url(v)
 
     @field_validator("api_key", mode="before")
     @classmethod

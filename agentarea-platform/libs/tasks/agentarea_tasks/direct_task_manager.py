@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.extensions.customer_pricing import get_customer_pricing, price_llm_call
 from agentarea_common.money import ZERO, serialize_money, to_money
+from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.domain.tool_calls import metered_tool_call_count
 
@@ -403,6 +404,7 @@ class DirectTaskManager(BaseTaskManager):
             endpoint_url=endpoint_url,
             input_cost_per_token=input_cost_per_token,
             output_cost_per_token=output_cost_per_token,
+            endpoint_policy=endpoint_policy_for(model_instance.provider_config.managed_by),
         )
 
         logger.info(

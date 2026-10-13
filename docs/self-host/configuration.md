@@ -429,6 +429,29 @@ and set the variable to its path inside the container.
 A path that does not exist, cannot be read, or holds no certificate stops the
 API and the worker at startup.
 
+### Outbound URL policy (not in `config.yaml`)
+
+Read by `HttpSettings` in the backend and the worker.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `AGENTAREA_HTTP_PRIVATE_ALLOWLIST` | none (set it in the env values) | empty |
+| `AGENTAREA_HTTP_ALLOW_PRIVATE` | none (set it in the env values) | `false` |
+
+Every address a workspace member supplies is refused when it resolves to a
+private, loopback, link-local or metadata address: a provider config's
+`endpoint_url` (model test, runs, compaction, trigger conditions, media), URL MCP
+servers, OpenAPI connections, A2A delegates, bundle and skill sources. Platform-managed
+provider configs are called as configured.
+
+`AGENTAREA_HTTP_PRIVATE_ALLOWLIST` admits named exceptions, comma-separated host
+globs and CIDRs (`localhost,host.docker.internal`, `192.168.1.50/32`) for a model
+server on the LAN or the host. Name each one: `*.svc.cluster.local` or a cluster
+CIDR lets every member reach every in-cluster service, the platform's own
+included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
+belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
+`localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
+
 ### Docker Compose variables
 
 Read from `.env` by `docker-compose.yaml`. Only the ones with no Kubernetes
