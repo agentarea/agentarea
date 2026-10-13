@@ -28,7 +28,7 @@ META_PREFIX = "agentarea/"
 # The slot the signing secret takes in the instance's secret store entries
 # (``mcp_instance_{id}_AGENTAREA_CONTEXT_SECRET``). It is not listed in the
 # instance's ``env_vars``, so it is never sent as a header or an env var.
-CONTEXT_SECRET_NAME = "AGENTAREA_CONTEXT_SECRET"  # noqa: S105 - a slot name, not a value
+CONTEXT_SECRET_NAME = "AGENTAREA_CONTEXT_SECRET"  # noqa: S105 - a slot name, not a value  # pragma: allowlist secret
 # ``json_spec`` flag that says a signing secret is stored, so a call does not
 # read the secret store for instances that have none.
 CONTEXT_SIGNING_FLAG = "context_signing"
