@@ -65,7 +65,10 @@ import {
   formatApiError,
   isApiNotFound,
 } from "@/lib/api-errors";
-import { existingConnectionsHref } from "@/lib/catalog-connections";
+import {
+  catalogServerSetupHref,
+  existingConnectionsHref,
+} from "@/lib/catalog-connections";
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -1441,7 +1444,7 @@ function DetailView({
   // (ADR-003); an HTTP API entry to its connect form.
   const connectHref = isCatalogApi
     ? `/connections/catalog/${entry.id}`
-    : `/connections/create/${entry.id}`;
+    : catalogServerSetupHref(entry.id);
   // Connecting again makes another account, so a connected item opens what
   // exists and offers another one second.
   const openHref = existingConnectionsHref(entry.id, entry.connections);

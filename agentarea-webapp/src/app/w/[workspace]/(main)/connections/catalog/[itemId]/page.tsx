@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getCatalogItem } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import {
+  catalogServerSetupHref,
+  isCatalogApi,
+} from "@/lib/catalog-connections";
+import { workspacePath } from "@/lib/workspace-routes";
 import { OAuthConnectPanel } from "../../OAuthConnectPanel";
 
 export const metadata: Metadata = {
@@ -12,13 +18,16 @@ export const metadata: Metadata = {
 export default async function CatalogConnectPage({
   params,
 }: {
-  params: Promise<{ itemId: string }>;
+  params: Promise<{ workspace: string; itemId: string }>;
 }) {
-  const { itemId } = await params;
+  const { workspace, itemId } = await params;
   const t = await getTranslations("MCPServersPage");
 
   const result = await getCatalogItem(itemId);
   const item = result.data;
+  if (item && !isCatalogApi(item.spec)) {
+    redirect(workspacePath(workspace, catalogServerSetupHref(itemId)));
+  }
 
   return (
     <ContentBlock
