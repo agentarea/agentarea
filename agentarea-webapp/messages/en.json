@@ -2117,7 +2117,6 @@
       },
       "metricsLoadFailed": "Failed to load metrics",
       "executionsLoadFailed": "Failed to load executions",
-      "periodHours": "Over the last {hours}h",
       "durationRange": "{min}s — {max}s range",
       "failures": "Failures",
       "timeouts": "{count} timed out",
@@ -2146,7 +2145,21 @@
       "columnDuration": "Duration",
       "openTask": "Open task",
       "copyExecutionId": "Copy ID",
-      "idCopied": "Copied"
+      "idCopied": "Copied",
+      "metricsPeriod": "Period",
+      "periodOption": {
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
+        "all": "All time"
+      },
+      "noFailures": "No failures",
+      "periodLabel": {
+        "24h": "Over the last 24 hours",
+        "7d": "Over the last 7 days",
+        "30d": "Over the last 30 days",
+        "all": "All time"
+      }
     },
     "error": {
       "createFailed": "Failed to create trigger",

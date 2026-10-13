@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import type { ExecutionHistoryResponse } from "@/api/client/types.gen";
+import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import OffsetPagination from "@/components/OffsetPagination";
 import { getTriggerExecutions, resolvePrincipals } from "@/lib/api";
@@ -25,14 +26,16 @@ export default async function TriggerExecutionsPage({
   const page = parsePageParam(resolvedSearchParams.page);
   if (page === null) {
     return (
-      <RetryEmptyState
-        title={t("noExecutionsOnPage")}
-        iconsType="triggers"
-        additionAction={{
-          label: t("firstPage"),
-          href: pageHref(path, resolvedSearchParams, 1),
-        }}
-      />
+      <div className="p-6">
+        <RetryEmptyState
+          title={t("noExecutionsOnPage")}
+          iconsType="triggers"
+          additionAction={{
+            label: t("firstPage"),
+            href: pageHref(path, resolvedSearchParams, 1),
+          }}
+        />
+      </div>
     );
   }
 
@@ -43,27 +46,28 @@ export default async function TriggerExecutionsPage({
 
   if (error || !data) {
     return (
-      <RetryEmptyState
-        title={t("executionsLoadFailed")}
-        iconsType="triggers"
-        additionAction={{
-          label: t("overview"),
-          href: `/triggers/${id}`,
-        }}
-      />
+      <div className="p-6">
+        <RetryEmptyState
+          title={t("executionsLoadFailed")}
+          iconsType="triggers"
+          additionAction={{
+            label: t("overview"),
+            href: `/triggers/${id}`,
+          }}
+        />
+      </div>
     );
   }
   const { executions, has_next: hasNext } = data as ExecutionHistoryResponse;
 
   if (executions.length === 0 && page === 1) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-center p-6">
-        <p className="text-lg font-medium text-muted-foreground">
-          {t("noExecutions")}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("noExecutionsDescription")}
-        </p>
+      <div className="p-6">
+        <EmptyState
+          title={t("noExecutions")}
+          description={t("noExecutionsDescription")}
+          iconsType="triggers"
+        />
       </div>
     );
   }
@@ -71,14 +75,16 @@ export default async function TriggerExecutionsPage({
   // Past the last page, e.g. from a stale link after history was trimmed.
   if (executions.length === 0) {
     return (
-      <RetryEmptyState
-        title={t("noExecutionsOnPage")}
-        iconsType="triggers"
-        additionAction={{
-          label: t("firstPage"),
-          href: pageHref(path, resolvedSearchParams, 1),
-        }}
-      />
+      <div className="p-6">
+        <RetryEmptyState
+          title={t("noExecutionsOnPage")}
+          iconsType="triggers"
+          additionAction={{
+            label: t("firstPage"),
+            href: pageHref(path, resolvedSearchParams, 1),
+          }}
+        />
+      </div>
     );
   }
 

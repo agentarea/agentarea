@@ -1,23 +1,29 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import { Clock, Gauge, Hash, Wallet } from "lucide-react";
+import { CalendarClock, Clock, Gauge, Hash, Wallet } from "lucide-react";
 import type { ExecutionMetricsResponse } from "@/api/client/types.gen";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { Stat, StatStrip } from "@/components/Overview/OverviewCard";
 import { getTriggerMetrics } from "@/lib/api";
 import { getPricingCurrency } from "@/lib/api-dashboard";
 import { formatTriggerCost } from "../../components/triggerDisplay";
+import { metricsPeriodHours, parseMetricsPeriod } from "./period";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
-
-/** The window this tab reports on. The overview shows the whole history. */
-const WINDOW_HOURS = 24;
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(2)}`;
 
-export default async function TriggerMetricsPage({ params }: Props) {
+export default async function TriggerMetricsPage({
+  params,
+  searchParams,
+}: Props) {
   const { id } = await params;
+  // The window comes from the subheader's period picker; the overview always
+  // shows the whole history.
+  const period = parseMetricsPeriod((await searchParams).period);
+  const hours = metricsPeriodHours(period);
   const t = await getTranslations("TriggersPage.detail");
   const locale = await getLocale();
   // Never guess a currency: a failed lookup threads through as null (see
@@ -26,7 +32,10 @@ export default async function TriggerMetricsPage({ params }: Props) {
   const currency = pricingCurrency.ok ? pricingCurrency.currency : null;
   const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
 
-  const { data, error } = await getTriggerMetrics(id, { hours: WINDOW_HOURS });
+  const { data, error } = await getTriggerMetrics(
+    id,
+    hours !== undefined ? { hours } : undefined
+  );
 
   if (error || !data) {
     return (
@@ -49,6 +58,12 @@ export default async function TriggerMetricsPage({ params }: Props) {
 
   return (
     <div className="bg-muted/20 px-4 pb-11 pt-[18px]">
+      {/* Every figure covers the picked window: said once, over the strip,
+          rather than as the same tag on each of the four. */}
+      <p className="mb-2 flex items-center gap-1.5 px-0.5 text-xs text-muted-foreground">
+        <CalendarClock className="h-3.5 w-3.5" />
+        {t(`periodLabel.${period}`)}
+      </p>
       <StatStrip>
         <Stat
           icon={<Gauge />}
@@ -71,22 +86,11 @@ export default async function TriggerMetricsPage({ params }: Props) {
           value={total}
           bar={null}
           sub={
-            failed > 0 ? (
-              <div className="grid min-w-0">
-                <span className="truncate">
-                  {t("failedRuns", { count: failed })}
-                </span>
-                <span className="truncate font-normal text-muted-foreground">
-                  {t("periodHours", {
-                    hours: metrics.period_hours ?? WINDOW_HOURS,
-                  })}
-                </span>
-              </div>
-            ) : (
-              t("periodHours", {
-                hours: metrics.period_hours ?? WINDOW_HOURS,
-              })
-            )
+            total === 0
+              ? t("noRuns")
+              : failed > 0
+                ? t("failedRuns", { count: failed })
+                : t("noFailures")
           }
         />
         <Stat

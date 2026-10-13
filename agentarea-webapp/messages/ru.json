@@ -2117,7 +2117,6 @@
       },
       "metricsLoadFailed": "Не удалось загрузить метрики",
       "executionsLoadFailed": "Не удалось загрузить список выполнений",
-      "periodHours": "За последние {hours} ч",
       "durationRange": "разброс {min}s — {max}s",
       "failures": "Сбои",
       "timeouts": "таймаутов: {count}",
@@ -2146,7 +2145,21 @@
       "columnDuration": "Длительность",
       "openTask": "Открыть задачу",
       "copyExecutionId": "Скопировать ID",
-      "idCopied": "Скопировано"
+      "idCopied": "Скопировано",
+      "metricsPeriod": "Период",
+      "periodOption": {
+        "24h": "24 часа",
+        "7d": "7 дней",
+        "30d": "30 дней",
+        "all": "Всё время"
+      },
+      "noFailures": "Без сбоев",
+      "periodLabel": {
+        "24h": "За последние 24 часа",
+        "7d": "За последние 7 дней",
+        "30d": "За последние 30 дней",
+        "all": "За всё время"
+      }
     },
     "error": {
       "createFailed": "Не удалось создать триггер",
