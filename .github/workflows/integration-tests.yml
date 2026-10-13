@@ -2,6 +2,14 @@ name: Integration Tests
 
 on:
   workflow_dispatch:  # Always available manually
+    inputs:
+      fuzz_coverage:
+        description: Run the schemathesis coverage phase (as the nightly run does)
+        type: boolean
+        default: false
+  schedule:
+    # Nightly: the fuzz with its coverage phase, which PRs skip for speed.
+    - cron: "0 2 * * *"
   pull_request:
     # The heavy jobs run on a PR when it touches what they exercise (the
     # `changes` job), or when it carries the `run-integration-tests` label;
@@ -382,6 +390,11 @@ jobs:
       - name: Install test deps
         working-directory: ./agentarea-platform
         run: uv sync --all-extras --group dev
+
+      # agentarea-platform/schemathesis.toml keeps it off for PRs and pushes.
+      - name: Enable the schemathesis coverage phase
+        if: github.event_name == 'schedule' || inputs.fuzz_coverage
+        run: printf '[phases.coverage]\nenabled = true\n' > agentarea-platform/schemathesis.toml
 
       # Fails when both modules skip at import (unreachable stack) instead
       # of passing on an empty run.

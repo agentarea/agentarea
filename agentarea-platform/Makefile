@@ -93,8 +93,13 @@ FLOW_TESTS := \
 # conftest as `tests.conftest`. Only the latter needs to be a package (it uses
 # `from .conftest import ...`), so dropping the __init__.py from the former lets
 # a single run collect both.
+#
+# Four workers: a GitHub runner's core count. Every worker collects the whole
+# suite, so more of them on a laptop costs more than it saves. xdist needs
+# each worker to collect the same test ids: a parametrize value built from
+# uuid4() at import differs per worker and aborts the run.
 test:
-	uv run python -m pytest libs apps tests -m "not integration"
+	uv run python -m pytest libs apps tests -m "not integration" -n 4
 
 # Canonical main-flow suite — run before a release. Hermetic, no infra.
 # Each flow is registered in agentarea_common.testing.flows.MainFlow and the

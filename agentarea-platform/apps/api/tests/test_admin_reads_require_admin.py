@@ -16,7 +16,6 @@ The API key reads are not here: a member now lists and reads their own keys
 
 from __future__ import annotations
 
-from uuid import uuid4
 
 import pytest
 from agentarea_api.api.v1.router import workspace_v1_router
@@ -29,7 +28,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 WORKSPACE = "ws-acme"
-SOME_ID = str(uuid4())
+SOME_ID = "91953e10-4807-4a1e-84b5-cf471632837d"
 
 ADMIN_READS = [
     f"/v1/workspaces/{WORKSPACE}/access-control/graph",

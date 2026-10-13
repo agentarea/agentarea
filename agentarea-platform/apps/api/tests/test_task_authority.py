@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import uuid4
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -32,8 +32,8 @@ from httpx import ASGITransport, AsyncClient
 WORKSPACE = "ws-acme"
 OWNER = "user-who-started-it"
 INTRUDER = "user-invited-yesterday"
-AGENT_ID = uuid4()
-TASK_ID = uuid4()
+AGENT_ID = UUID("c65e997a-5a74-4798-95c8-9aa6c052aa9f")
+TASK_ID = UUID("236be522-72a7-4773-b3f5-44ebc5f7bade")
 
 
 @pytest.fixture(autouse=True)

@@ -1245,7 +1245,7 @@ async def test_connect_page_query_and_fragment_are_not_carried_back(monkeypatch)
     "return_to",
     [
         f"{_APP}/w/other/connect/{_INSTANCE_ID}",
-        f"{_APP}/w/acme/connect/{uuid4()}",
+        f"{_APP}/w/acme/connect/f37e9858-f588-4911-b5bf-ae2f09f8cdbb",
         f"https://evil.example/w/acme/connect/{_INSTANCE_ID}",
         f"{_APP}/w/acme/connect/{_INSTANCE_ID}/../../settings",
         f"{_APP}/w/acme/connect/{_INSTANCE_ID}/extra",
