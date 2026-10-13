@@ -102,22 +102,19 @@ export default function TriggerHeaderControls({
           {skipped}
         </span>
       )}
-      {/* Primary action of the page, in the same slot and shape as the agent
-          header's "New task" — except on the edit form, where saving is. */}
-      <Button
-        size={isEditing ? "xs" : "sm"}
-        variant={isEditing ? "outline" : "default"}
-        className={
-          isEditing ? undefined : "h-7 gap-1.5 px-3 text-[12.5px] font-semibold"
-        }
-        type="button"
-        onClick={handleRunNow}
-        disabled={isRunning}
-        isLoading={isRunning}
-      >
-        <Play strokeWidth={2} />
-        {t("runNow")}
-      </Button>
+      {/* Header buttons are all xs (Design.md, "Buttons in headers"), and
+          the page's main action sits rightmost, as on the other detail and
+          create pages: Delete, then the toggle, then Run now — or Save on
+          the edit form, where running is secondary. */}
+      <DeleteButton
+        size="xs"
+        itemId={triggerId}
+        itemName={triggerName}
+        onDelete={deleteTriggerAction}
+        redirectPath="/triggers"
+        title={t("delete")}
+        errorMessages={{ failedToDelete: tError("deleteFailed") }}
+      />
       <Button
         size="xs"
         variant="outline"
@@ -138,6 +135,17 @@ export default function TriggerHeaderControls({
           </>
         )}
       </Button>
+      <Button
+        size="xs"
+        variant={isEditing ? "outline" : "default"}
+        type="button"
+        onClick={handleRunNow}
+        disabled={isRunning}
+        isLoading={isRunning}
+      >
+        <Play />
+        {t("runNow")}
+      </Button>
       {isEditing && (
         <Button
           size="xs"
@@ -149,15 +157,6 @@ export default function TriggerHeaderControls({
           {tCreate("updateButton")}
         </Button>
       )}
-      <DeleteButton
-        size="xs"
-        itemId={triggerId}
-        itemName={triggerName}
-        onDelete={deleteTriggerAction}
-        redirectPath="/triggers"
-        title={t("delete")}
-        errorMessages={{ failedToDelete: tError("deleteFailed") }}
-      />
     </div>
   );
 }
