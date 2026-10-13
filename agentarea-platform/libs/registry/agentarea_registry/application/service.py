@@ -974,6 +974,7 @@ class RegistryService:
             max_output_tokens=spec.get("max_output_tokens"),
             input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
             output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
+            cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )
@@ -1387,6 +1388,7 @@ class RegistryService:
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),
+                        "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "is_active": entry.get("is_active", True),
                     },

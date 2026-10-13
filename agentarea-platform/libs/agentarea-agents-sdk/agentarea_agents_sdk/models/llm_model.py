@@ -43,6 +43,32 @@ else:
     litellm.callbacks = []
 
 
+class LLMProviderHTTPError(RuntimeError):
+    """The provider answered a model call with an HTTP error status."""
+
+    def __init__(self, status_code: int, provider_message: str) -> None:
+        super().__init__(f"Provider returned HTTP {status_code}: {provider_message}")
+        self.status_code = status_code
+        self.provider_message = provider_message
+
+
+def _error_body_message(body: bytes) -> str:
+    """The provider's own words from an error response body."""
+    text = body.decode("utf-8", errors="replace").strip()
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        return text[:500]
+    error = parsed.get("error") if isinstance(parsed, dict) else None
+    if isinstance(error, dict) and isinstance(error.get("message"), str):
+        return error["message"][:500]
+    if isinstance(error, str):
+        return error[:500]
+    if isinstance(parsed, dict) and isinstance(parsed.get("message"), str):
+        return parsed["message"][:500]
+    return text[:500]
+
+
 @dataclass
 class LLMRequest:
     """Request parameters for LLM calls."""
@@ -55,11 +81,64 @@ class LLMRequest:
 
 @dataclass
 class LLMUsage:
-    """Token usage information from LLM response."""
+    """Token usage information from LLM response.
+
+    ``prompt_tokens`` counts every prompt token, cached or not; the cache
+    counts say how many of them were read from (or written to) the provider's
+    prompt cache.
+    """
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    cached_prompt_tokens: int = 0
+    cache_creation_tokens: int = 0
+
+
+def _fields(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if hasattr(raw, "model_dump"):
+        return raw.model_dump()
+    return dict(getattr(raw, "__dict__", {}))
+
+
+def _tokens(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return 0
+    return max(int(value), 0)
+
+
+def usage_from_provider(raw: Any) -> LLMUsage:
+    """Read a provider's usage block, in OpenAI, Anthropic or LiteLLM shape.
+
+    A block without ``total_tokens`` totals its parts; one without any counts
+    stays at zero, which callers treat as no usage reported.
+    """
+    fields = _fields(raw)
+    details = _fields(fields.get("prompt_tokens_details"))
+    cache_read = _tokens(fields.get("cache_read_input_tokens"))
+    cache_write = _tokens(fields.get("cache_creation_input_tokens"))
+    if fields.get("prompt_tokens") is None and fields.get("input_tokens") is not None:
+        prompt = _tokens(fields.get("input_tokens")) + cache_read + cache_write
+        completion = _tokens(fields.get("output_tokens"))
+    else:
+        prompt = _tokens(fields.get("prompt_tokens"))
+        completion = _tokens(fields.get("completion_tokens"))
+    cached = (
+        _tokens(details.get("cached_tokens"))
+        or cache_read
+        or _tokens(fields.get("prompt_cache_hit_tokens"))
+    )
+    return LLMUsage(
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        total_tokens=_tokens(fields.get("total_tokens")) or prompt + completion,
+        cached_prompt_tokens=min(cached, prompt),
+        cache_creation_tokens=_tokens(details.get("cache_creation_tokens")) or cache_write,
+    )
 
 
 @dataclass
@@ -85,6 +164,7 @@ class LLMModel:
         endpoint_url: str | None = None,
         input_cost_per_token: Decimal | None = None,
         output_cost_per_token: Decimal | None = None,
+        cached_input_cost_per_token: Decimal | None = None,
     ):
         """Initialize LLM model with explicit parameters.
 
@@ -95,6 +175,8 @@ class LLMModel:
             endpoint_url: Custom endpoint URL (optional, uses provider defaults)
             input_cost_per_token: Persisted input-token price; zero means explicitly free.
             output_cost_per_token: Persisted output-token price; zero means explicitly free.
+            cached_input_cost_per_token: Price of a prompt token read from the provider's
+                cache; None prices cached tokens as any other input token.
         """
         self.provider_type = provider_type
         self.model_name = model_name
@@ -102,6 +184,7 @@ class LLMModel:
         self.endpoint_url = endpoint_url
         self.input_cost_per_token = input_cost_per_token
         self.output_cost_per_token = output_cost_per_token
+        self.cached_input_cost_per_token = cached_input_cost_per_token
 
     def _configured_cost(self, usage: LLMUsage) -> Decimal:
         """Calculate cost from the persisted model spec.
@@ -111,9 +194,18 @@ class LLMModel:
         """
         if self.input_cost_per_token is None or self.output_cost_per_token is None:
             return Decimal(0)
-        return usage.prompt_tokens * Decimal(
-            str(self.input_cost_per_token)
-        ) + usage.completion_tokens * Decimal(str(self.output_cost_per_token))
+        input_rate = Decimal(str(self.input_cost_per_token))
+        cached = (
+            min(usage.cached_prompt_tokens, usage.prompt_tokens)
+            if self.cached_input_cost_per_token is not None
+            else 0
+        )
+        cached_rate = Decimal(str(self.cached_input_cost_per_token)) if cached else Decimal(0)
+        return (
+            (usage.prompt_tokens - cached) * input_rate
+            + cached * cached_rate
+            + usage.completion_tokens * Decimal(str(self.output_cost_per_token))
+        )
 
     def _safe_json_serialize(self, obj: Any) -> str:
         """Convert any Python object to JSON-serializable string safely."""
@@ -346,13 +438,16 @@ class LLMModel:
                     client.build_request("POST", url, json=payload, headers=headers),
                     stream=True,
                 )
-                resp.raise_for_status()
+                if resp.status_code >= 400:
+                    body = await resp.aread()
+                    await resp.aclose()
+                    raise LLMProviderHTTPError(resp.status_code, _error_body_message(body))
 
             try:
                 async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
+                    if not line.startswith("data:"):
                         continue
-                    data_str = line[6:].strip()
+                    data_str = line[5:].strip()
                     if data_str == "[DONE]":
                         break
 
@@ -363,11 +458,7 @@ class LLMModel:
 
                     usage_data = chunk.get("usage")
                     if usage_data:
-                        final_usage = LLMUsage(
-                            prompt_tokens=usage_data.get("prompt_tokens", 0),
-                            completion_tokens=usage_data.get("completion_tokens", 0),
-                            total_tokens=usage_data.get("total_tokens", 0),
-                        )
+                        final_usage = usage_from_provider(usage_data)
 
                     choices = chunk.get("choices", [])
                     if not choices:
@@ -482,11 +573,7 @@ class LLMModel:
         response_usage = getattr(response, "usage", None)
         if response_usage:
             # Update usage statistics
-            usage = LLMUsage(
-                prompt_tokens=getattr(response_usage, "prompt_tokens", 0),
-                completion_tokens=getattr(response_usage, "completion_tokens", 0),
-                total_tokens=getattr(response_usage, "total_tokens", 0),
-            )
+            usage = usage_from_provider(response_usage)
 
             # litellm includes cost calculation in some cases
             if hasattr(response_usage, "completion_tokens_cost"):
@@ -711,11 +798,7 @@ class LLMModel:
             # Create usage object
             usage = LLMUsage()
             if usage_info:
-                usage = LLMUsage(
-                    prompt_tokens=getattr(usage_info, "prompt_tokens", 0),
-                    completion_tokens=getattr(usage_info, "completion_tokens", 0),
-                    total_tokens=getattr(usage_info, "total_tokens", 0),
-                )
+                usage = usage_from_provider(usage_info)
                 if cost == 0.0:
                     cost = self._configured_cost(usage)
 
@@ -1008,11 +1091,7 @@ class LLMModel:
                     # Build usage object only when present on this chunk
                     usage_delta = None
                     if hasattr(chunk, "usage") and chunk.usage:
-                        usage_delta = LLMUsage(
-                            prompt_tokens=getattr(chunk.usage, "prompt_tokens", 0),
-                            completion_tokens=getattr(chunk.usage, "completion_tokens", 0),
-                            total_tokens=getattr(chunk.usage, "total_tokens", 0),
-                        )
+                        usage_delta = usage_from_provider(chunk.usage)
                         usage = usage_delta
                         if cost == 0.0:
                             cost = self._configured_cost(usage_delta)

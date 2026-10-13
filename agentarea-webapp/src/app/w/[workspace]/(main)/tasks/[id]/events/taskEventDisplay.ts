@@ -136,7 +136,7 @@ export type EventFact =
   | { kind: "model"; value: string }
   | { kind: "iteration"; value: number }
   | { kind: "messages"; value: number }
-  | { kind: "tokens"; input: number; output: number }
+  | { kind: "tokens"; input: number; output: number; cached: number | null }
   | { kind: "cost"; value: number }
   | { kind: "errorType"; value: string };
 
@@ -179,12 +179,15 @@ export function eventFacts(
   const messages = count(data.message_count);
   if (messages !== null) facts.push({ kind: "messages", value: messages });
 
-  const usage = record(data.usage);
+  // llm.call.completed nests the counts: data.usage = { cost, usage: {...} }.
+  const outerUsage = record(data.usage);
+  const usage = record(outerUsage?.usage) ?? outerUsage;
   if (usage) {
     const input = count(usage.prompt_tokens ?? usage.input_tokens);
     const output = count(usage.completion_tokens ?? usage.output_tokens);
+    const cached = count(usage.cached_prompt_tokens);
     if (input !== null && output !== null) {
-      facts.push({ kind: "tokens", input, output });
+      facts.push({ kind: "tokens", input, output, cached: cached || null });
     }
   }
 

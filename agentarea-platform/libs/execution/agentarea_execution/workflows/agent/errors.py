@@ -8,6 +8,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 with workflow.unsafe.imports_passed_through():
     from agentarea_governance.domain.exceptions import GovernanceDeniedError
 
+from ...llm_failures import LLM_FAILURE_DETAIL
 from .base import AgentWorkflowBase
 
 # failure_reason of a gate denial that carries no entitlement code of its own.
@@ -63,11 +64,31 @@ class ErrorReportingMixin(AgentWorkflowBase):
         return GOVERNANCE_DENIED_FAILURE_REASON, message
 
     @staticmethod
+    def _llm_failure(error: BaseException) -> dict[str, Any] | None:
+        """The cause the model-call activity classified its failure as, if any."""
+        cause = error.cause if isinstance(error, ActivityError) else error
+        if not isinstance(cause, ApplicationError):
+            return None
+        for detail in cause.details or ():
+            if isinstance(detail, dict) and isinstance(detail.get(LLM_FAILURE_DETAIL), dict):
+                return detail[LLM_FAILURE_DETAIL]
+        return None
+
+    @staticmethod
+    def _failure_cause(error: Exception) -> str | None:
+        """The stable code of a classified model-call failure, for failure_reason."""
+        failure = ErrorReportingMixin._llm_failure(error)
+        return failure.get("cause") if failure else None
+
+    @staticmethod
     def _get_user_facing_error(error: Exception) -> str:
         """Return a short, user-friendly error message (no stack traces)."""
         denial = ErrorReportingMixin._governance_denial(error)
         if denial is not None:
             return denial[1]
+        failure = ErrorReportingMixin._llm_failure(error)
+        if failure and failure.get("message"):
+            return failure["message"]
         if isinstance(error, ApplicationError) and error.type == RUN_INPUT_EXCEEDS_CONTEXT_WINDOW:
             return error.message
 
@@ -119,6 +140,9 @@ class ErrorReportingMixin(AgentWorkflowBase):
             return "GovernanceDenied"
         if isinstance(error, ApplicationError) and error.type == RUN_INPUT_EXCEEDS_CONTEXT_WINDOW:
             return "ContextWindowExceeded"
+        failure = ErrorReportingMixin._llm_failure(error)
+        if failure and failure.get("error_type"):
+            return failure["error_type"]
         combined = str(error).lower()
         if isinstance(error, ActivityError):
             if error.cause:
@@ -139,6 +163,12 @@ class ErrorReportingMixin(AgentWorkflowBase):
         if "model_id" in combined and "none" in combined:
             return "ConfigurationError"
         return "Error"
+
+    @staticmethod
+    def _error_detail(error: Exception) -> str:
+        """What the failing activity itself said, without Temporal's wrapping."""
+        cause = error.cause if isinstance(error, ActivityError) and error.cause else error
+        return str(cause)
 
     def _extract_temporal_error_details(self, error: Exception) -> str:
         """Extract actionable details from Temporal errors (Activity/ApplicationError)."""
