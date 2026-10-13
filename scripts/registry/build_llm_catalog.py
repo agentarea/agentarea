@@ -8,6 +8,7 @@ recorded spec so the catalog stops being reproducible on exactly one laptop:
   source          LiteLLM model_prices_and_context_window_backup.json
   allowed_modes   chat, completion, embedding, responses
   context_window  <- max_input_tokens
+  cached_input_cost_per_token <- cache_read_input_token_cost (null when unpriced)
   model_name      the LiteLLM key with its leading "<provider>/" stripped, because
                   the SDK calls LiteLLM as provider_type/model_name
   plus the AgentArea bootstrap models, carried over from the current catalog
@@ -172,6 +173,7 @@ def build_models(
                 "max_output_tokens": max_output_tokens,
                 "input_cost_per_token": entry["input_cost_per_token"],
                 "output_cost_per_token": entry["output_cost_per_token"],
+                "cached_input_cost_per_token": entry.get("cache_read_input_token_cost"),
                 "supports_function_calling": bool(entry.get("supports_function_calling")),
                 "is_active": True,
                 "tags": [f"mode:{mode}", f"provider:{provider_key}", "source:litellm"],
