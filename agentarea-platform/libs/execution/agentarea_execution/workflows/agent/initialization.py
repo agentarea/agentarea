@@ -136,6 +136,7 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         self.state.tokens_used = snapshot.tokens_used
         self.state.last_prompt_tokens = snapshot.last_prompt_tokens
         self._budget.add_cost(resume.total_cost)
+        self.state.llm_cost_used = resume.llm_cost
         if resume.own_cost is not None:
             self._delegated_cost = max(resume.total_cost - resume.own_cost, ZERO)
         self._resume_system_prompt_missing = resume.system_prompt_missing

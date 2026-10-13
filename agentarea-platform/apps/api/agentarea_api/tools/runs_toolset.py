@@ -32,7 +32,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
-from agentarea_tasks.domain.exceptions import RunStillClosingError
+from agentarea_tasks.domain.exceptions import BudgetCapExceededError, RunStillClosingError
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
@@ -185,12 +185,15 @@ class RunsToolset(Toolset):
             _,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            submitted = await service.start_run(
-                payload,
-                workspace_id=user_ctx.workspace_id,
-                user_id=user_ctx.user_id,
-                created_via="mcp",
-            )
+            try:
+                submitted = await service.start_run(
+                    payload,
+                    workspace_id=user_ctx.workspace_id,
+                    user_id=user_ctx.user_id,
+                    created_via="mcp",
+                )
+            except BudgetCapExceededError as exc:
+                raise ToolError(str(exc)) from None
             return json.dumps(
                 {
                     "run_id": str(submitted.id),

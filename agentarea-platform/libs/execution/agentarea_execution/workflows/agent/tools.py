@@ -202,6 +202,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                 if self.budget_tracker is None:
                     raise RuntimeError("Workflow budget tracker is not initialized")
                 self.budget_tracker.add_cost(model_cost + paid_cost)
+                self.state.llm_cost_used += model_cost
                 self._enforce_agent_spend_cap()
 
             # Failure path: surface the error to the LLM and emit ToolCallFailed

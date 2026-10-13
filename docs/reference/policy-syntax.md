@@ -105,11 +105,12 @@ name.
 |---|---|---|---|---|
 | `cap` | `spend` | `amount_usd` | string \| number | Required. Omitted means the rule is skipped. |
 | `cap` | `spend` | `period` | `"month"` \| `"run"` | Any other value skips the rule. Defaults to `"month"` when absent. |
-| `cap` | `spend` | `client_id` | string | Optional. Counts only this Registered Client's lines. Monthly only. |
-| `cap` | `spend` | `connection_id` | string | Optional. Counts only this connection's tool lines. Monthly only. See [tool costs](/reference/tool-costs). |
+| `cap` | `spend` | `category` | `"llm"` \| `"tools"` | Optional. Counts only model calls (`llm`) or only tool calls (`tools`). Absent: all spend. See [Spend caps by kind](#spend-caps-by-kind). |
+| `cap` | `spend` | `client_id` | string | Optional. Counts only this Registered Client's lines. Monthly only. Not with `category: llm`. |
+| `cap` | `spend` | `connection_id` | string | Optional. Counts only this connection's tool lines. Not with `category: llm`. See [tool costs](/reference/tool-costs). |
 | `cap` | `spend` | `tool` | string | Optional, with `connection_id`. Counts only this tool of the connection. A scoped cap bound to an agent also counts only that agent's lines; every scoped cap that matches a call applies. |
 | `cap` | `spend` | `currency` | ISO 4217 code | Optional. The cap's currency; `amount_usd` is in it, and the cap counts only lines in it. Default: the billing currency. Monthly only. Nothing is converted. |
-| `cap` | `service` | `amount_usd` | string \| number | Required. |
+| `cap` | `service` | `amount_usd` | string \| number | Required. Caps the run's wallet payments (x402, MPP) in USD. For all tool spend use `cap` on `spend` with `category: tools`. |
 | `cap` | `tokens` | `max_tokens` | integer | Optional. |
 | `cap` | `tokens` | `max_tokens_per_call` | integer | Optional in an individual rule, but required in the resolved runtime contract and enforced on every LLM call. |
 | `approval` | `*`, `tool:*` | `approvers` | array of subject refs | Optional. Empty means any caller may approve. |
@@ -118,6 +119,33 @@ name.
 | `safety` | `content` | `output_sanitizer` | boolean | Coerced with `bool()`. |
 | `safety` | `content` | `answer_check` | object | `{enabled?: bool = true, language?: string, rewrite_instruction?: string (≤4000)}`; unknown keys are refused. See [Answer check](#answer-check). |
 | `egress` | `mcp:<id>` | `allowed_hosts` | array of strings | A non-list value skips the rule. |
+
+### Spend caps by kind
+
+A `cap` on `spend` takes one `period` and at most one `category`, and binds to the
+workspace (every agent's spend), an agent (its own) or, with `client_id`, a Registered
+Client. Every cap that matches applies.
+
+| Counts | `period: month` | `period: run` |
+|---|---|---|
+| All spend | `{}` | `{}`, the run budget |
+| LLM spend | `{category: llm}` | `{category: llm}` |
+| Tool spend | `{category: tools}` | `{category: tools}` |
+| One connection or tool | `{connection_id, tool?}` | `{connection_id, tool?}` |
+| One client | `{client_id}` | — |
+
+| Cap | Checked | What stops |
+|---|---|---|
+| All spend, month | When a run is submitted or starts, and before every tool call | The run, or the call |
+| All spend, run | Before every model turn and every tool call | The run; in a chat it waits for a continuation grant |
+| LLM spend, month | When a run is submitted, starts or resumes | The run; tool calls by Registered Clients still go through |
+| LLM spend, run | Before every model turn | The run, with `failure_reason` `llm_run_cap_exceeded`; no continuation |
+| Tool spend, connection or tool, month | Before every tool call, over the month's lines | The call; the model is told why and the run goes on |
+| Tool spend, connection or tool, run | Before every tool call, over the run's lines | The call; the run goes on |
+
+A run's tool spend is the sum of its own task's ledger lines, across resumed runs;
+a delegated agent's calls count against its own task. A cap is reached once its sum
+equals it, and the call or turn that crosses it is not undone.
 
 Approver references are `user:<id>`, `group:<id>`, or a userset
 `<type>:<id>#<relation>`. A bare id is rejected at write time. Only `user:<id>`
@@ -216,7 +244,7 @@ and the API returns it while the runtime never sees it.
 
 | Surface | Status |
 |---|---|
-| `cap` on `spend` / `service` / `tokens` | Enforced |
+| `cap` on `spend` / `service` / `tokens` | Enforced. See [Spend caps by kind](#spend-caps-by-kind) |
 | `deny` on `tool:<name>` | Enforced |
 | `allow` on `tool:<name>` | Enforced |
 | `approval` on `*`, `tool:*`, `tool:<name>` | Enforced in the agent workflow only |

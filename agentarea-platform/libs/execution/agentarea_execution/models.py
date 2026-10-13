@@ -138,6 +138,8 @@ class AgentExecutionResume(BaseModel):
     snapshot: ConversationResumeSnapshot
     total_cost: Money = Field(default=ZERO, ge=ZERO)
     own_cost: Money | None = Field(default=None, ge=ZERO)
+    # What the task's own model calls cost so far, which a run's LLM spend cap counts.
+    llm_cost: Money = Field(default=ZERO, ge=ZERO)
     system_prompt_missing: bool = False
     retry: bool = False
 
@@ -785,7 +787,8 @@ class MonthlySpendCapRequest(BaseModel):
     """Compare month-to-date spend with the run's monthly caps.
 
     ``cap_usd`` is the workspace cap; ``agent_cap_usd`` the cap on ``agent_id``'s
-    own spend. Either may be absent, not both.
+    own spend; ``llm_caps`` the monthly caps on LLM spend, as the policy's
+    ``budget.spend_caps`` entries. At least one is set.
     """
 
     workspace_id: str
@@ -793,6 +796,7 @@ class MonthlySpendCapRequest(BaseModel):
     user_context_data: dict[str, Any]
     agent_id: str | None = None
     agent_cap_usd: Money | None = None
+    llm_caps: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MonthlySpendCapResult(BaseModel):
@@ -806,6 +810,8 @@ class MonthlySpendCapResult(BaseModel):
     agent_exceeded: bool = False
     agent_month_to_date_usd: Money | None = None
     agent_cap_usd: Money | None = None
+    # Why the run may not start: a monthly cap on LLM spend is reached.
+    llm_cap_message: str | None = None
 
 
 class CompactMessagesRequest(BaseModel):

@@ -18,10 +18,11 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.tool_authorization import ToolAuthorizationRequest
 from agentarea_common.extensions import customer_pricing
 from agentarea_common.tool_cost import Payer, parse_cost_model
+from agentarea_governance.domain.policies import BudgetPolicy
 from agentarea_governance.tool_calls import GovernedToolCall, ToolConnection
 from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
-from agentarea_tasks.spend_gate import spend_cap_refusal
+from agentarea_tasks.spend_gate import monthly_llm_cap_reached, spend_cap_refusal
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DATABASE_URL = os.getenv("TASKS_TEST_DATABASE_URL", "")
@@ -59,15 +60,21 @@ def _line(
     tool="search",
     currency="USD",
     occurred_at=NOW,
+    task_id=None,
+    category=CostCategory.SERVICE,
 ):
     return CostEntry(
         workspace_id=workspace_id,
         created_by="runner",
         event_id=uuid4(),
-        category=CostCategory.SERVICE,
-        task_id=None if client_id else uuid4(),
+        category=category,
+        task_id=task_id or (None if client_id else uuid4()),
         agent_id=agent_id,
-        subject_type=CostSubjectType.TOOL,
+        subject_type=(
+            CostSubjectType.TOOL
+            if category is CostCategory.SERVICE
+            else CostSubjectType.MODEL_INSTANCE
+        ),
         subject_id=connection,
         subject_name=tool,
         call_ref="call",
@@ -89,6 +96,7 @@ def _call(
     cost=USD_RATE,
     connection="conn-1",
     tool="search",
+    task_id=None,
 ):
     return GovernedToolCall(
         authorization=ToolAuthorizationRequest(
@@ -100,7 +108,7 @@ def _call(
         ),
         call_id="call",
         agent_id=agent_id,
-        task_id=None,
+        task_id=str(task_id) if task_id else None,
         client_id=str(client_id) if client_id else None,
         connection=ToolConnection(
             connection, "vendor/api", tool, Payer.WORKSPACE, parse_cost_model(cost)
@@ -201,3 +209,84 @@ async def test_no_cap_asks_nothing(session):
     repo = await _seed(session, workspace_id, [_line(workspace_id, amount="0.488", currency="RUB")])
 
     assert await spend_cap_refusal(repo, _call(workspace_id, None, cost=RUB_RATE), now=NOW) is None
+
+
+async def test_a_tools_cap_counts_tool_lines_only_and_an_llm_cap_never_refuses_a_tool(session):
+    workspace_id = str(uuid4())
+    repo = await _seed(
+        session,
+        workspace_id,
+        [
+            _line(workspace_id, amount="5", category=CostCategory.MODEL),
+            _line(workspace_id, amount="0.50"),
+        ],
+    )
+
+    def cap(category):
+        return {"budget": {"spend_caps": [{"amount_usd": "1", "category": category}]}}
+
+    assert await spend_cap_refusal(repo, _call(workspace_id, cap("tools")), now=NOW) is None
+    assert await spend_cap_refusal(repo, _call(workspace_id, cap("llm")), now=NOW) is None
+
+    await repo.record([_line(workspace_id, amount="0.50")])
+    refused = await spend_cap_refusal(repo, _call(workspace_id, cap("tools")), now=NOW)
+
+    assert refused == "monthly tools spend cap of 1 USD reached: 1 USD spent this month"
+
+
+async def test_a_run_cap_counts_the_runs_own_lines_whenever_they_were_spent(session):
+    workspace_id, task_id = str(uuid4()), uuid4()
+    repo = await _seed(
+        session,
+        workspace_id,
+        [
+            _line(workspace_id, amount="0.60", task_id=task_id),
+            _line(
+                workspace_id,
+                amount="0.30",
+                task_id=task_id,
+                occurred_at=datetime(2026, 9, 30, tzinfo=UTC),
+            ),
+            _line(workspace_id, amount="9", task_id=task_id, category=CostCategory.MODEL),
+            _line(workspace_id, amount="9"),
+        ],
+    )
+
+    def cap(amount, **scope):
+        return {"budget": {"spend_caps": [{"amount_usd": amount, "period": "run", **scope}]}}
+
+    tools = cap("1", category="tools")
+    assert await spend_cap_refusal(repo, _call(workspace_id, tools, task_id=task_id), now=NOW) is None
+    # A call outside a run (a Registered Client's) has no run to count.
+    assert await spend_cap_refusal(repo, _call(workspace_id, cap("0.10")), now=NOW) is None
+
+    refused = await spend_cap_refusal(
+        repo, _call(workspace_id, cap("0.90", connection_id="conn-1"), task_id=task_id), now=NOW
+    )
+
+    assert refused == "run connection spend cap of 0.9 USD reached: 0.9 USD spent in this run"
+
+
+async def test_a_monthly_llm_cap_counts_model_lines_only(session):
+    workspace_id, agent_id = str(uuid4()), uuid4()
+    repo = await _seed(
+        session,
+        workspace_id,
+        [
+            _line(workspace_id, amount="9", agent_id=agent_id),
+            _line(workspace_id, amount="0.70", agent_id=agent_id, category=CostCategory.MODEL),
+            _line(workspace_id, amount="0.50", category=CostCategory.MODEL),
+        ],
+    )
+
+    def budget(**cap):
+        return BudgetPolicy(spend_caps=[{"amount_usd": "1", "category": "llm", **cap}])
+
+    agent_cap = budget(own_agent=True)
+    assert await monthly_llm_cap_reached(repo, agent_cap, agent_id, "USD", now=NOW) is None
+    assert await monthly_llm_cap_reached(repo, budget(category="tools"), None, "USD", now=NOW) is None
+    assert await monthly_llm_cap_reached(repo, budget(period="run"), None, "USD", now=NOW) is None
+
+    reached = await monthly_llm_cap_reached(repo, budget(), agent_id, "USD", now=NOW)
+
+    assert (reached.spent, reached.cap, reached.agent_id) == (Decimal("1.2"), Decimal(1), None)

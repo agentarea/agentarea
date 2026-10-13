@@ -4,7 +4,7 @@ from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from agentarea_common.money import ZERO, Money, serialize_money
+    from agentarea_common.money import ZERO, Money, serialize_money, to_money
     from agentarea_governance.domain.policies import effective_policy_from_json
 
     from ..helpers import BudgetTracker
@@ -16,6 +16,7 @@ from .base import AgentWorkflowBase
 from .patches import MONTHLY_CAP_AT_START_PATCH
 
 MONTHLY_CAP_FAILURE_REASON = "monthly_spend_cap_exceeded"
+LLM_RUN_CAP_FAILURE_REASON = "llm_run_cap_exceeded"
 
 
 class BudgetMixin(AgentWorkflowBase):
@@ -48,6 +49,7 @@ class BudgetMixin(AgentWorkflowBase):
         """
         self._require_total_tokens(total_tokens, source)
         self._budget.add_cost(cost)
+        self.state.llm_cost_used += to_money(cost)
         self._enforce_agent_spend_cap()
         self._enforce_run_budget(source)
         self.state.tokens_used += total_tokens
@@ -67,6 +69,7 @@ class BudgetMixin(AgentWorkflowBase):
         """
         self._require_total_tokens(total_tokens, source)
         self._budget.add_cost(cost)
+        self.state.llm_cost_used += to_money(cost)
         self.state.tokens_used += total_tokens
         self._enforce_agent_spend_cap()
 
@@ -136,6 +139,24 @@ class BudgetMixin(AgentWorkflowBase):
             )
             await self._publish_events_immediately()
 
+    def _llm_run_cap_message(self) -> str | None:
+        """Why the run may not call its model again: its LLM spend reached a per-run cap.
+
+        Tool spend joins the run budget but never this cap. The lowest cap applies.
+        """
+        budget = effective_policy_from_json(self.state.effective_policy).budget
+        caps = [
+            cap.amount_usd
+            for cap in (budget.spend_caps or [] if budget else [])
+            if cap.category == "llm" and cap.period == "run"
+        ]
+        if not caps or self.state.llm_cost_used < min(caps):
+            return None
+        return (
+            f"LLM spend cap of this run reached ({self._budget.describe(self.state.llm_cost_used)}"
+            f"/{self._budget.describe(min(caps))})"
+        )
+
     @property
     def _agent_run_spend(self) -> Money:
         """What this run has spent towards its agent's cap, children excluded."""
@@ -179,7 +200,12 @@ class BudgetMixin(AgentWorkflowBase):
         budget = effective_policy_from_json(self.state.effective_policy).budget
         cap = budget.monthly_spend_cap_usd if budget else None
         agent_cap = budget.agent_monthly_spend_cap_usd if budget else None
-        if cap is None and agent_cap is None:
+        llm_caps = [
+            spend_cap.model_dump(mode="json", exclude_none=True)
+            for spend_cap in (budget.spend_caps or [] if budget else [])
+            if spend_cap.category == "llm" and spend_cap.period is None
+        ]
+        if cap is None and agent_cap is None and not llm_caps:
             return
         result: MonthlySpendCapResult = await workflow.execute_activity(
             Activities.CHECK_MONTHLY_SPEND_CAP,
@@ -188,8 +214,9 @@ class BudgetMixin(AgentWorkflowBase):
                     workspace_id=self.state.workspace_id,
                     cap_usd=cap,
                     user_context_data=self.state.user_context_data,
-                    agent_id=self.state.agent_id if agent_cap is not None else None,
+                    agent_id=self.state.agent_id if agent_cap is not None or llm_caps else None,
                     agent_cap_usd=agent_cap,
+                    llm_caps=llm_caps,
                 )
             ],
             result_type=MonthlySpendCapResult,
@@ -213,3 +240,5 @@ class BudgetMixin(AgentWorkflowBase):
             self._monthly_cap_message = self._agent_cap_message(
                 result.agent_month_to_date_usd or ZERO, result.agent_cap_usd
             )
+        elif result.llm_cap_message:
+            self._monthly_cap_message = result.llm_cap_message

@@ -241,8 +241,9 @@ class TaskService(BaseTaskService):
         """Reject task creation or continuation once a monthly cap is reached.
 
         The workspace cap is checked against the workspace's month-to-date
-        spend, the agent cap against ``agent_id``'s own. No-op when the
-        workspace is missing or the policy configures neither cap.
+        spend, the agent cap against ``agent_id``'s own, and a cap on LLM spend
+        against the month's model lines. No-op when the workspace is missing or
+        the policy configures no such cap.
         """
         if not workspace_id:
             return
@@ -272,6 +273,18 @@ class TaskService(BaseTaskService):
                     cap_usd=agent_cap,
                     currency=get_customer_pricing().currency(),
                     agent_id=str(agent_id),
+                )
+
+        if budget and budget.spend_caps:
+            reached = await self.task_repository.monthly_llm_cap_reached(budget, agent_id)
+            if reached is not None:
+                raise BudgetCapExceededError(
+                    workspace_id=workspace_id,
+                    current_mtd_usd=reached.spent,
+                    cap_usd=reached.cap,
+                    currency=reached.currency,
+                    agent_id=str(reached.agent_id) if reached.agent_id else None,
+                    kind="llm",
                 )
 
     async def _validate_agent_exists(self, agent_id: UUID):
@@ -1097,6 +1110,7 @@ class TaskService(BaseTaskService):
         result = task.result if isinstance(task.result, dict) else {}
         total_cost = to_money(result.get("total_cost") or 0)
         own_cost = to_money(result["own_cost"]) if result.get("own_cost") is not None else None
+        llm_cost = to_money(await self.task_repository.sum_task_llm_spend(task.id))
         conversation = self.repository_factory.create_repository(TaskConversationRepository)
         stored = (task.metadata or {}).get(_CONVERSATION_RESUME_METADATA_KEY)
         if stored is not None:
@@ -1108,6 +1122,7 @@ class TaskService(BaseTaskService):
                     snapshot=snapshot,
                     total_cost=total_cost,
                     own_cost=own_cost,
+                    llm_cost=llm_cost,
                 )
             logger.warning(
                 "Task %s resume snapshot ends at %s, not where its log does; rebuilding",
@@ -1126,6 +1141,7 @@ class TaskService(BaseTaskService):
             snapshot=rebuilt.snapshot,
             total_cost=total_cost,
             own_cost=own_cost,
+            llm_cost=llm_cost,
             system_prompt_missing=rebuilt.system_prompt_missing,
         )
 

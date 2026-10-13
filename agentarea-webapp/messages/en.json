@@ -3206,7 +3206,7 @@
       "budget": {
         "type": "Budget type",
         "spend": "Spend budget",
-        "perService": "Per-service budget",
+        "perService": "Wallet payments per task",
         "tokens": "Token budget",
         "maxTokens": "Max tokens",
         "maxTokensPerCall": "Max tokens per call",
@@ -3214,6 +3214,10 @@
         "period": "Period",
         "perMonth": "Per month",
         "perTask": "Per task",
+        "counts": "Counts",
+        "countsAll": "All spend",
+        "countsLlm": "LLM only",
+        "countsTools": "Tools only",
         "moneyPlaceholder": "0.00",
         "numberPlaceholder": "optional"
       },

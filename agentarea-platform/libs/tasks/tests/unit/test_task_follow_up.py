@@ -44,6 +44,9 @@ class _Tasks:
     async def sum_spend_mtd(self) -> float:
         return 0.0
 
+    async def sum_task_llm_spend(self, task_id: UUID) -> Decimal:
+        return Decimal("0.0080") if task_id == self.task.id else Decimal(0)
+
 
 class _Conversation:
     def __init__(self, entries: list[ConversationEntry], *, logged_up_to: int | None = None):
@@ -189,6 +192,7 @@ async def test_completed_task_with_closed_workflow_resumes_from_its_snapshot():
     assert resume.snapshot.model_dump() == SNAPSHOT
     assert resume.total_cost == Decimal("0.03")
     assert resume.own_cost == Decimal("0.01")
+    assert resume.llm_cost == Decimal("0.008")
     assert resume.system_prompt_missing is False
     assert conversation.written == []
     # The new run gets today's policy, recorded as the task's next revision.

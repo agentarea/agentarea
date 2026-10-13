@@ -20,7 +20,7 @@ from ..constants import (
     ExecutionStatus,
 )
 from ..retry import bookkeeping_retry_policy
-from .budget import MONTHLY_CAP_FAILURE_REASON
+from .budget import LLM_RUN_CAP_FAILURE_REASON, MONTHLY_CAP_FAILURE_REASON
 from .continue_as_new import ContinueAsNewMixin
 from .limits import run_limit_reason
 from .llm_turn import LLMTurnMixin
@@ -141,7 +141,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
 
     async def _await_continuation(self, failure_reason: str, message: str) -> bool:
         """Idle durably until the user grants resources or the window expires."""
-        if failure_reason == MONTHLY_CAP_FAILURE_REASON:
+        if failure_reason in (MONTHLY_CAP_FAILURE_REASON, LLM_RUN_CAP_FAILURE_REASON):
             return False
         if (
             self._interaction_contract_enabled
@@ -296,6 +296,10 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
 
         if self._monthly_cap_message:
             return False, MONTHLY_CAP_FAILURE_REASON, self._monthly_cap_message
+
+        llm_cap_message = self._llm_run_cap_message()
+        if llm_cap_message:
+            return False, LLM_RUN_CAP_FAILURE_REASON, llm_cap_message
 
         # Check maximum iterations
         if self.state.goal is None:

@@ -8,7 +8,7 @@ and that runtime governance can translate into InterceptorContext.execution_stat
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, NamedTuple, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from agentarea_common.money import ZERO, Money, to_money
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -99,11 +99,14 @@ class PolicyScope(BaseModel):
 
 
 class ScopedSpendCap(BaseModel):
-    """A monthly cap on the lines of one client, connection or tool of a connection.
+    """A cap on part of the spend: one kind, client, connection or tool of a connection.
 
-    ``own_agent`` narrows it further to the calling agent's lines: the rule was
-    bound to that agent. ``currency`` is the cap's currency, the billing currency
-    when absent; it sums only lines in it.
+    ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+    ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+    narrows it further to the calling agent's lines: the rule was bound to that
+    agent. ``currency`` is the cap's currency, the billing currency when absent; it
+    sums only lines in it. Absent fields are left out of the snapshot, so a cap
+    that sets none serializes as it did before they existed.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -114,6 +117,8 @@ class ScopedSpendCap(BaseModel):
     connection_id: str | None = None
     tool: str | None = None
     currency: str | None = None
+    category: Literal["llm", "tools"] | None = None
+    period: Literal["run"] | None = None
 
 
 class BudgetPolicy(BaseModel):
@@ -121,8 +126,9 @@ class BudgetPolicy(BaseModel):
 
     ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
     month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
-    alone, summed over all its runs in the month. ``spend_caps`` are the monthly
-    caps narrowed to a client, a connection or one of its tools; every one applies.
+    alone, summed over all its runs in the month. ``spend_caps`` are the caps
+    narrowed to model or tool spend, a client, a connection or one of its tools,
+    per month or per run; every one applies.
     """
 
     model_config = ConfigDict(extra="forbid")

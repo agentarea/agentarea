@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from typing import cast as type_cast
 from uuid import UUID
 
@@ -17,10 +17,15 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.base_service import TaskNotFoundError
-from ..domain.costs import CostEntry
+from ..domain.costs import CostCategory, CostEntry
 from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
-from .cost_repository import CostEntryRepository
+from .cost_repository import CostEntryRepository, SpendScope
 from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
+
+if TYPE_CHECKING:
+    from agentarea_governance.domain.policies import BudgetPolicy
+
+    from ..spend_gate import LlmCapReached
 
 
 class TaskRepository(WorkspaceScopedRepository[TaskORM]):
@@ -327,6 +332,27 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             since,
             currency=get_customer_pricing().currency(),
             agent_id=agent_id,
+        )
+
+    async def monthly_llm_cap_reached(
+        self, budget: "BudgetPolicy | None", agent_id: UUID | None = None
+    ) -> "LlmCapReached | None":
+        """The first monthly cap on LLM spend that this month's model lines reached."""
+        from ..spend_gate import monthly_llm_cap_reached
+
+        return await monthly_llm_cap_reached(
+            CostEntryRepository(self.session, self.user_context),
+            budget,
+            agent_id,
+            get_customer_pricing().currency(),
+        )
+
+    async def sum_task_llm_spend(self, task_id: UUID) -> Decimal:
+        """What a task's own model calls cost over all its runs, in the billing currency."""
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            datetime(1970, 1, 1, tzinfo=UTC),
+            currency=get_customer_pricing().currency(),
+            scope=SpendScope(task_id=task_id, category=CostCategory.MODEL),
         )
 
     async def record_costs(self, entries: Sequence[CostEntry]) -> None:

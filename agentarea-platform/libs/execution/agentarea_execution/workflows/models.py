@@ -141,6 +141,8 @@ class ContinueAsNewState(BaseModel):
     # Service budget (wallet payments)
     service_budget_usd: Money | None = None
     service_cost_used: Money = ZERO
+    # The run's own model spend, which a cap on LLM spend per run counts.
+    llm_cost_used: Money = ZERO
     wallet_id: str | None = None
     # Cached model resolution — preserved across continue-as-new
     resolved_model: dict | None = None
@@ -241,6 +243,8 @@ class AgentExecutionState(BaseModel):
     # Service budget (wallet payments)
     service_budget_usd: Money | None = None
     service_cost_used: Money = ZERO
+    # The run's own model spend, which a cap on LLM spend per run counts.
+    llm_cost_used: Money = ZERO
     wallet_id: str | None = None
     # Cached model resolution — resolved once at workflow start
     resolved_model: dict | None = None

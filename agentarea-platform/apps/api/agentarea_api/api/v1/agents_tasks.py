@@ -1017,8 +1017,9 @@ async def create_task_for_agent_with_stream(
             creation_error = ("Agent model is not configured", "model_not_configured")
         except BudgetCapExceededError as exc:
             scope = "Agent" if exc.agent_id else "Workspace"
+            spend = "LLM spend" if exc.kind == "llm" else "spend"
             creation_error = (
-                f"{scope} monthly spend cap reached ({exc.current_mtd_usd} {exc.currency}/"
+                f"{scope} monthly {spend} cap reached ({exc.current_mtd_usd} {exc.currency}/"
                 f"{exc.cap_usd} {exc.currency})",
                 "monthly_spend_cap_exceeded",
             )

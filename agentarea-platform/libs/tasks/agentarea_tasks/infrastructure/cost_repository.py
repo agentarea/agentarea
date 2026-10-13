@@ -15,7 +15,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from ..domain.costs import CostEntry
+from ..domain.costs import CostCategory, CostEntry
 from .orm import CostEntryORM
 
 
@@ -23,13 +23,16 @@ from .orm import CostEntryORM
 class SpendScope:
     """Which lines a sum counts: the workspace's, narrowed by any field that is set.
 
-    ``tool`` narrows a ``connection_id`` scope to the lines of one of its tools.
+    ``tool`` narrows a ``connection_id`` scope to the lines of one of its tools;
+    ``category`` to model or tool lines; ``task_id`` to one run's.
     """
 
     agent_id: UUID | None = None
     client_id: UUID | None = None
     connection_id: str | None = None
     tool: str | None = None
+    task_id: UUID | None = None
+    category: CostCategory | None = None
 
 
 class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
@@ -111,6 +114,10 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             conditions.append(CostEntryORM.subject_id == scope.connection_id)
         if scope.tool is not None:
             conditions.append(CostEntryORM.subject_name == scope.tool)
+        if scope.task_id is not None:
+            conditions.append(CostEntryORM.task_id == scope.task_id)
+        if scope.category is not None:
+            conditions.append(CostEntryORM.category == scope.category.value)
         return conditions
 
     async def sum_by_currency_since(

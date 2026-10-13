@@ -76,6 +76,9 @@ const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
 type CapKind = "spend" | "service" | "tokens";
 type ScopeMode = "workspace" | "agents";
 type PolicyPeriod = "month" | "run";
+type SpendCategory = "all" | "llm" | "tools";
+// Params of a spend cap the editor shows no field for; kept as they are on save.
+const SPEND_SCOPE_KEYS = ["client_id", "connection_id", "tool", "currency"];
 
 interface OpenAPIConnectionOption {
   id: string;
@@ -131,6 +134,8 @@ interface FormState {
   capKind: CapKind;
   amountUsd: string;
   period: PolicyPeriod;
+  spendCategory: SpendCategory;
+  spendScope: Record<string, unknown>;
   maxTokens: string;
   maxTokensPerCall: string;
   // deny / approval tools
@@ -153,6 +158,8 @@ const EMPTY_FORM: FormState = {
   capKind: "spend",
   amountUsd: "",
   period: "month",
+  spendCategory: "all",
+  spendScope: {},
   maxTokens: "",
   maxTokensPerCall: "",
   tools: [],
@@ -400,6 +407,14 @@ function policyToForm(policy: Policy): {
       form.capKind = "spend";
       form.amountUsd = str(p.amount_usd);
       form.period = p.period === "run" ? "run" : "month";
+      form.spendCategory =
+        p.category === "llm" || p.category === "tools" ? p.category : "all";
+      form.spendScope = Object.fromEntries(
+        SPEND_SCOPE_KEYS.filter((key) => p[key] != null).map((key) => [
+          key,
+          p[key],
+        ])
+      );
     }
   } else if (policy.effect === "deny") {
     form.tools = policy.target.startsWith("tool:")
@@ -473,7 +488,14 @@ function buildRuleBodies(
         {
           target: "spend",
           effect,
-          params: { amount_usd: amount, period: form.period },
+          params: {
+            amount_usd: amount,
+            period: form.period,
+            ...(form.spendCategory === "all"
+              ? {}
+              : { category: form.spendCategory }),
+            ...form.spendScope,
+          },
         },
       ],
     };
@@ -1002,6 +1024,10 @@ function previewParams(effect: PolicyEffect, form: FormState): string {
     }
     return `amount=${form.amountUsd || "pending"}${
       form.capKind === "spend" ? ` period=${form.period}` : ""
+    }${
+      form.capKind === "spend" && form.spendCategory !== "all"
+        ? ` category=${form.spendCategory}`
+        : ""
     }`;
   }
   if (effect === "deny") {
@@ -1702,6 +1728,26 @@ export default function PolicyEditor({
                           <SelectContent>
                             <SelectItem value="month">{t("budget.perMonth")}</SelectItem>
                             <SelectItem value="run">{t("budget.perTask")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {form.capKind === "spend" && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cap-category">{t("budget.counts")}</Label>
+                        <Select
+                          value={form.spendCategory}
+                          onValueChange={(v) =>
+                            update("spendCategory", v as SpendCategory)
+                          }
+                        >
+                          <SelectTrigger id="cap-category">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">{t("budget.countsAll")}</SelectItem>
+                            <SelectItem value="llm">{t("budget.countsLlm")}</SelectItem>
+                            <SelectItem value="tools">{t("budget.countsTools")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

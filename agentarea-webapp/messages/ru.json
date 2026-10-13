@@ -3206,7 +3206,7 @@
       "budget": {
         "type": "Тип бюджета",
         "spend": "Бюджет расходов",
-        "perService": "Бюджет на сервис",
+        "perService": "Платежи кошелька на задачу",
         "tokens": "Бюджет токенов",
         "maxTokens": "Максимум токенов",
         "maxTokensPerCall": "Максимум токенов за вызов",
@@ -3214,6 +3214,10 @@
         "period": "Период",
         "perMonth": "В месяц",
         "perTask": "На задачу",
+        "counts": "Что учитывать",
+        "countsAll": "Все расходы",
+        "countsLlm": "Только LLM",
+        "countsTools": "Только инструменты",
         "moneyPlaceholder": "0,00",
         "numberPlaceholder": "необязательно"
       },

@@ -110,11 +110,13 @@ the vendor's currency. `amount` is what spend caps count and what the UI shows. 
 
 ## Spend caps on tool cost
 
-Monthly `cap` rules on `spend` count these lines like every other paid line. A rule
-can be narrowed to one Registered Client, one connection, or one tool of a connection
-with `client_id`, `connection_id` and `tool` in its params; see
-[policy syntax](/reference/policy-syntax). A cap already reached refuses the call
-before the vendor is called.
+`cap` rules on `spend` count these lines like every other paid line. A rule can be
+narrowed to tool spend alone with `category: tools`, to one Registered Client, one
+connection, or one tool of a connection with `client_id`, `connection_id` and `tool`
+in its params, and to one run with `period: run`; see
+[spend caps by kind](/reference/policy-syntax#spend-caps-by-kind). A cap already
+reached refuses the call before the vendor is called, and the model is told why. A
+cap on LLM spend (`category: llm`) never refuses a tool call.
 
 Nothing is converted. Without a billing extension a tool line keeps its vendor's
 currency (a RUB-priced Yandex call is a RUB line), as an LLM line keeps the provider's

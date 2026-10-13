@@ -143,28 +143,35 @@ def parse_target(selector: str) -> tuple[str, str | None]:
     return kind, value
 
 
-SPEND_CAP_SCOPE_KEYS = ("client_id", "connection_id", "tool", "currency")
+SPEND_CAP_SCOPE_KEYS = ("client_id", "connection_id", "tool", "currency", "category")
+SPEND_CAP_CATEGORIES = ("llm", "tools")
 
 
 def is_scoped_spend_cap(params: dict[str, Any] | None) -> bool:
-    """Whether a spend cap counts only one client's, connection's, tool's or currency's lines."""
+    """Whether a spend cap counts only part of the spend.
+
+    One kind (LLM or tools), client, connection, tool or currency.
+    """
     return any((params or {}).get(key) for key in SPEND_CAP_SCOPE_KEYS)
 
 
 class SpendCapParams(BaseModel):
     """``params`` for a ``cap`` on ``spend`` (per calendar month or per run).
 
-    A monthly cap bound to an agent caps that agent's own spend; bound to the
-    workspace or a user it caps the workspace's. ``client_id``, ``connection_id``
-    and ``tool`` narrow a monthly cap to the lines of that client, connection or
-    tool of the connection. ``currency`` is the currency the cap is in: it sums only
-    lines in that currency, and nothing is converted. Without it, the billing currency.
+    A cap bound to an agent caps that agent's own spend; bound to the workspace or a
+    user it caps the workspace's (per run: the run's). ``category`` counts only model
+    (``llm``) or tool (``tools``) spend. ``connection_id`` and ``tool`` narrow a cap
+    to the lines of that connection or tool of the connection, ``client_id`` a monthly
+    cap to one client's. ``currency`` is the currency a monthly cap is in: it sums
+    only lines in that currency, and nothing is converted. Without it, the billing
+    currency.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     amount_usd: Decimal = Field(ge=0)
     period: Literal["month", "run"] = "month"
+    category: Literal["llm", "tools"] | None = None
     client_id: str | None = None
     connection_id: str | None = None
     tool: str | None = None
@@ -176,8 +183,12 @@ class SpendCapParams(BaseModel):
         # BudgetPolicy.run_budget_usd refuses it when the rule is compiled.
         if self.period == "run" and self.amount_usd == 0:
             raise ValueError("a per-run spend cap must be greater than 0")
-        if self.period != "month" and is_scoped_spend_cap(self.model_dump()):
-            raise ValueError("a client, connection, tool or currency spend cap is per month")
+        if self.period != "month" and (self.client_id or self.currency):
+            raise ValueError("a client or currency spend cap is per month")
+        if self.category == "llm" and (self.client_id or self.connection_id or self.tool):
+            raise ValueError(
+                "a client, connection or tool cap counts tool spend; it cannot be an llm cap"
+            )
         if self.tool and not self.connection_id:
             raise ValueError("a tool spend cap names the connection_id the tool belongs to")
         return self
@@ -512,22 +523,27 @@ def _apply_cap(
             logger.debug("skipping cap rule %s: spend cap missing amount_usd", rule.id)
             return
         period = params.get("period", "month")
-        if period == "month" and is_scoped_spend_cap(params):
+        if period not in ("month", "run"):
+            logger.debug("skipping cap rule %s: unknown spend period %r", rule.id, period)
+        elif params.get("category") and params["category"] not in SPEND_CAP_CATEGORIES:
+            logger.debug(
+                "skipping cap rule %s: unknown spend category %r", rule.id, params["category"]
+            )
+        elif is_scoped_spend_cap(params):
             acc.budget.setdefault("spend_caps", []).append(
                 {
                     "amount_usd": to_money(amount),
                     "own_agent": rule.subject_type == PolicySubjectType.AGENT,
                     **{key: params[key] for key in SPEND_CAP_SCOPE_KEYS if params.get(key)},
+                    **({"period": "run"} if period == "run" else {}),
                 }
             )
         elif period == "month" and rule.subject_type == PolicySubjectType.AGENT:
             acc.budget["agent_monthly_spend_cap_usd"] = to_money(amount)
         elif period == "month":
             acc.budget["monthly_spend_cap_usd"] = to_money(amount)
-        elif period == "run":
-            acc.budget["run_budget_usd"] = to_money(amount)
         else:
-            logger.debug("skipping cap rule %s: unknown spend period %r", rule.id, period)
+            acc.budget["run_budget_usd"] = to_money(amount)
         return
 
     if kind == "service":
