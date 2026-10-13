@@ -246,6 +246,10 @@ export type AgentCreateRequest = {
      */
     agent_type?: 'stateless' | 'stateful';
     /**
+     * Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting.
+     */
+    answer_check?: AnswerCheckPolicy | null;
+    /**
      * Description
      *
      * Short summary of what the agent does.
@@ -390,6 +394,7 @@ export type AgentResponse = {
      * Agent Type
      */
     agent_type?: string;
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Description
      */
@@ -502,6 +507,7 @@ export type AgentUpdate = {
      * Agent Type
      */
     agent_type?: 'stateless' | 'stateful';
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Capabilities
      */
@@ -904,7 +910,8 @@ export type BudgetPeriod = 'execution' | 'daily' | 'monthly';
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
+ * caps narrowed to a client, a connection or one of its tools; every one applies.
  */
 export type BudgetPolicyInput = {
     /**
@@ -923,6 +930,10 @@ export type BudgetPolicyInput = {
      * Service Budget Usd
      */
     service_budget_usd?: number | string | null;
+    /**
+     * Spend Caps
+     */
+    spend_caps?: Array<ScopedSpendCapInput> | null;
 };
 /**
  * BudgetPolicy
@@ -931,7 +942,8 @@ export type BudgetPolicyInput = {
  *
  * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
  * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month.
+ * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
+ * caps narrowed to a client, a connection or one of its tools; every one applies.
  */
 export type BudgetPolicyOutput = {
     /**
@@ -950,6 +962,10 @@ export type BudgetPolicyOutput = {
      * Service Budget Usd
      */
     service_budget_usd?: string | null;
+    /**
+     * Spend Caps
+     */
+    spend_caps?: Array<ScopedSpendCapOutput> | null;
 };
 /**
  * Bundle
@@ -1577,6 +1593,27 @@ export type ClientMcpInstanceRef = {
     namespace_prefix?: string | null;
 };
 /**
+ * ClientOpenAPIConnectionRef
+ */
+export type ClientOpenApiConnectionRef = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
+};
+/**
  * ClientPlatformToolsetRef
  */
 export type ClientPlatformToolsetRef = {
@@ -1634,6 +1671,10 @@ export type ClientResponse = {
      * Name
      */
     name: string;
+    /**
+     * Openapi Connections
+     */
+    openapi_connections?: Array<ClientOpenApiConnectionRef>;
     /**
      * Platform Toolsets
      */
@@ -1870,6 +1911,19 @@ export type CreateWorkspaceDirectoryRequest = {
     path: string;
 };
 /**
+ * CurrencySpend
+ */
+export type CurrencySpend = {
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Currency
+     */
+    currency: string;
+};
+/**
  * DailySpendPoint
  */
 export type DailySpendPoint = {
@@ -1965,6 +2019,10 @@ export type DashboardTask = {
  */
 export type DiscoverPreviewModelResponse = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
+    /**
      * Context Window
      */
     context_window: number | null;
@@ -2056,6 +2114,10 @@ export type DiscoverPreviewResponse = {
  * DiscoveredModelResponse
  */
 export type DiscoveredModelResponse = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
     /**
      * Context Window
      */
@@ -2308,7 +2370,7 @@ export type ExecutionMetricsResponse = {
     /**
      * Failure Rate
      *
-     * Percentage, 0-100.
+     * Percentage, 0-100, of the runs that tried to start a task; skips excluded.
      */
     failure_rate: number;
     /**
@@ -2326,9 +2388,15 @@ export type ExecutionMetricsResponse = {
      */
     period_hours?: number | null;
     /**
+     * Skipped Executions
+     *
+     * Events the trigger's conditions turned away, or that came while it was off.
+     */
+    skipped_executions: number;
+    /**
      * Success Rate
      *
-     * Percentage, 0-100.
+     * Percentage, 0-100, of the runs that tried to start a task; skips excluded.
      */
     success_rate: number;
     /**
@@ -3862,6 +3930,10 @@ export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
  */
 export type ModelSpecCreate = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: number | string | null;
+    /**
      * Context Window
      */
     context_window?: number | null;
@@ -3907,6 +3979,10 @@ export type ModelSpecCreate = {
  * ModelSpecUpdate
  */
 export type ModelSpecUpdate = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: number | string | null;
     /**
      * Context Window
      */
@@ -4291,6 +4367,25 @@ export type OAuthPreflightResponse = {
      * Status
      */
     status: 'ready' | 'oauth_app_required' | 'unsupported';
+};
+/**
+ * OpenAPIConnectionAssociationBody
+ *
+ * Attach an OpenAPI connection, or replace how an attached one is served.
+ */
+export type OpenApiConnectionAssociationBody = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
 };
 /**
  * OpenAPIConnectionCreate
@@ -6161,6 +6256,76 @@ export type ScheduledRun = {
     trigger_id: string;
 };
 /**
+ * ScopedSpendCap
+ *
+ * A monthly cap on the lines of one client, connection or tool of a connection.
+ *
+ * ``own_agent`` narrows it further to the calling agent's lines: the rule was
+ * bound to that agent. ``currency`` is the cap's currency, the billing currency
+ * when absent; it sums only lines in it.
+ */
+export type ScopedSpendCapInput = {
+    /**
+     * Amount Usd
+     */
+    amount_usd: number | string;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Own Agent
+     */
+    own_agent?: boolean;
+    /**
+     * Tool
+     */
+    tool?: string | null;
+};
+/**
+ * ScopedSpendCap
+ *
+ * A monthly cap on the lines of one client, connection or tool of a connection.
+ *
+ * ``own_agent`` narrows it further to the calling agent's lines: the rule was
+ * bound to that agent. ``currency`` is the cap's currency, the billing currency
+ * when absent; it sums only lines in it.
+ */
+export type ScopedSpendCapOutput = {
+    /**
+     * Amount Usd
+     */
+    amount_usd: string;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Own Agent
+     */
+    own_agent?: boolean;
+    /**
+     * Tool
+     */
+    tool?: string | null;
+};
+/**
  * SecretConsumer
  */
 export type SecretConsumer = {
@@ -6704,6 +6869,10 @@ export type SpendCard = {
      * Mtd Usd
      */
     mtd_usd: string;
+    /**
+     * Not Covered
+     */
+    not_covered?: Array<CurrencySpend>;
     /**
      * Pct Of Cap
      */
@@ -9023,6 +9192,10 @@ export type AgentareaApiApiV1AccessControlSyncResponse = {
  */
 export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
+    /**
      * Context Window
      */
     context_window: number | null;
@@ -9100,6 +9273,10 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
     /**
      * Context Window
      */
@@ -10741,6 +10918,34 @@ export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses = {
      */
     200: unknown;
 };
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/retry';
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostError = RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors[keyof RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors];
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 export type ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData = {
     body?: never;
     path: {
@@ -11482,6 +11687,60 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
     204: void;
 };
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostData = {
+    body: OpenApiConnectionAssociationBody;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections';
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostError = AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors[keyof AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors];
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponse = AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses[keyof AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses];
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}';
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteError = RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors[keyof RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors];
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponse = RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses[keyof RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses];
 export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData = {
     body: PlatformToolsetAssociationBody;
     path: {
@@ -16683,7 +16942,7 @@ export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData = {
         /**
          * Status
          *
-         * Filter by execution status (success, failed, timeout)
+         * Filter by execution status (success, failed, timeout, cancelled, skipped)
          */
         status?: string | null;
         /**

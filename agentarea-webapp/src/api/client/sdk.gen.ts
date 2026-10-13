@@ -22,6 +22,9 @@ import type {
   AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostData,
   AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostErrors,
   AddMcpInstanceToProjectV1ProjectsProjectIdMcpInstancesPostResponses,
+  AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostData,
+  AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors,
+  AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses,
   AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData,
   AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostErrors,
   AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostResponses,
@@ -730,6 +733,9 @@ import type {
   RemoveMemberV1MembersUserIdDeleteData,
   RemoveMemberV1MembersUserIdDeleteErrors,
   RemoveMemberV1MembersUserIdDeleteResponses,
+  RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteData,
+  RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors,
+  RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses,
   RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteData,
   RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteErrors,
   RemovePlatformToolsetFromClientV1ClientsClientIdPlatformToolsetsToolsetDeleteResponses,
@@ -760,6 +766,9 @@ import type {
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostData,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors,
   ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses,
+  RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostData,
+  RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors,
+  RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostResponses,
   RevokeApiKeyV1ApiKeysTokenIdDeleteData,
   RevokeApiKeyV1ApiKeysTokenIdDeleteErrors,
   RevokeApiKeyV1ApiKeysTokenIdDeleteResponses,
@@ -3102,6 +3111,43 @@ export const resumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePost = <
   });
 
 /**
+ * Retry Agent Task
+ *
+ * Re-run the turn a failed task ended on, on the same conversation.
+ *
+ * A new run of the task continues its conversation with no new message, so
+ * the model is called again on the input that failed; the run records a
+ * ``task.retried`` event.
+ */
+export const retryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostResponses,
+  RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostResponses,
+    RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/retry",
+    ...options,
+  });
+
+/**
  * List Task Sandbox Files
  *
  * Inspect regular files in the existing live sandbox without recreating it.
@@ -3933,6 +3979,70 @@ export const removeMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstance
         },
       ],
       url: "/v1/workspaces/{workspace}/clients/{client_id}/mcp-instances/{mcp_instance_id}",
+      ...options,
+    });
+
+/**
+ * Add Openapi Connection To Client
+ */
+export const addOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPost =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses,
+    AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).post<
+      AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses,
+      AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+
+/**
+ * Remove Openapi Connection From Client
+ */
+export const removeOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDelete =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses,
+    RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).delete<
+      RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses,
+      RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}",
       ...options,
     });
 
@@ -10642,7 +10752,7 @@ export const executeTriggerV1TriggersTriggerIdExecutePost = <
  * trigger_id: The unique identifier of the trigger
  * page: Page number for pagination
  * page_size: Number of executions per page
- * status: Optional status filter (success, failed, timeout)
+ * status: Optional status filter (success, failed, timeout, cancelled, skipped)
  * start_time: Optional start time filter
  * end_time: Optional end time filter
  * user_context: Authentication context

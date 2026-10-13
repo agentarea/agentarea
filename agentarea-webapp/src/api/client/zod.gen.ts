@@ -297,46 +297,6 @@ export const zBodyUploadWorkspaceLogoV1LogoPut = z.object({
 export const zBudgetPeriod = z.enum(["execution", "daily", "monthly"]);
 
 /**
- * BudgetPolicy
- *
- * Budget-related ceilings.
- *
- * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
- * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month.
- */
-export const zBudgetPolicyInput = z.object({
-  agent_monthly_spend_cap_usd: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .nullish(),
-  monthly_spend_cap_usd: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .nullish(),
-  run_budget_usd: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .nullish(),
-  service_budget_usd: z
-    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
-    .nullish(),
-});
-
-/**
- * BudgetPolicy
- *
- * Budget-related ceilings.
- *
- * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
- * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
- * alone, summed over all its runs in the month.
- */
-export const zBudgetPolicyOutput = z.object({
-  agent_monthly_spend_cap_usd: z.string().nullish(),
-  monthly_spend_cap_usd: z.string().nullish(),
-  run_budget_usd: z.string().nullish(),
-  service_budget_usd: z.string().nullish(),
-});
-
-/**
  * BundleAgent
  *
  * An agent to create for the package.
@@ -546,6 +506,16 @@ export const zClientMcpInstanceRef = z.object({
 });
 
 /**
+ * ClientOpenAPIConnectionRef
+ */
+export const zClientOpenApiConnectionRef = z.object({
+  allowed_tools: z.array(z.string()).nullish(),
+  id: z.string().uuid(),
+  name: z.string(),
+  namespace_prefix: z.string().nullish(),
+});
+
+/**
  * ClientPlatformToolsetRef
  */
 export const zClientPlatformToolsetRef = z.object({
@@ -572,6 +542,10 @@ export const zClientResponse = z.object({
   mcp_endpoint_url: z.string().nullish(),
   mcp_instances: z.array(zClientMcpInstanceRef).optional().default([]),
   name: z.string(),
+  openapi_connections: z
+    .array(zClientOpenApiConnectionRef)
+    .optional()
+    .default([]),
   platform_toolsets: z.array(zClientPlatformToolsetRef).optional().default([]),
   skills: z.array(zClientRef).optional().default([]),
   workspace_id: z.string(),
@@ -708,6 +682,14 @@ export const zCreateWorkspaceDirectoryRequest = z.object({
 });
 
 /**
+ * CurrencySpend
+ */
+export const zCurrencySpend = z.object({
+  amount: z.string(),
+  currency: z.string(),
+});
+
+/**
  * DailySpendPoint
  */
 export const zDailySpendPoint = z.object({
@@ -826,6 +808,7 @@ export const zExecutionMetricsResponse = z.object({
   max_execution_time_ms: z.number().int(),
   min_execution_time_ms: z.number().int(),
   period_hours: z.number().int().nullish(),
+  skipped_executions: z.number().int(),
   success_rate: z.number(),
   successful_executions: z.number().int(),
   timeout_executions: z.number().int(),
@@ -1472,6 +1455,7 @@ export const zModelKind = z.enum([
  * DiscoverPreviewModelResponse
  */
 export const zDiscoverPreviewModelResponse = z.object({
+  cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   description: z.string().nullish(),
   display_name: z.string(),
@@ -1491,6 +1475,7 @@ export const zDiscoverPreviewModelResponse = z.object({
  * DiscoveredModelResponse
  */
 export const zDiscoveredModelResponse = z.object({
+  cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   description: z.string().nullish(),
   display_name: z.string(),
@@ -1543,6 +1528,9 @@ export const zModelInstanceBulkCreateResponse = z.object({
  * ModelSpecCreate
  */
 export const zModelSpecCreate = z.object({
+  cached_input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   context_window: z.number().int().gt(0).lte(2147483647).nullish(),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
@@ -1564,6 +1552,9 @@ export const zModelSpecCreate = z.object({
  * ModelSpecUpdate
  */
 export const zModelSpecUpdate = z.object({
+  cached_input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   context_window: z.number().int().gt(0).lte(2147483647).nullish(),
   default_context_strategy: z.string().nullish(),
   description: z.string().nullish(),
@@ -1746,6 +1737,17 @@ export const zOAuthPreflightResponse = z.object({
 });
 
 /**
+ * OpenAPIConnectionAssociationBody
+ *
+ * Attach an OpenAPI connection, or replace how an attached one is served.
+ */
+export const zOpenApiConnectionAssociationBody = z.object({
+  allowed_tools: z.array(z.string()).nullish(),
+  id: z.string(),
+  namespace_prefix: z.string().nullish(),
+});
+
+/**
  * OpenAPIToolResponse
  */
 export const zOpenApiToolResponse = z.object({
@@ -1787,6 +1789,7 @@ export const zAgentResponse = z.object({
   a2a_url: z.string().nullish(),
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.string().optional().default("stateless"),
+  answer_check: zAnswerCheckPolicy.nullish(),
   description: z.string().nullish(),
   id: z.string().uuid(),
   instruction: z.string().nullish(),
@@ -1819,6 +1822,7 @@ export const zAgentResponse = z.object({
 export const zAgentUpdate = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.enum(["stateless", "stateful"]).optional(),
+  answer_check: zAnswerCheckPolicy.nullish(),
   capabilities: z.array(z.string()).nullish(),
   description: z.string().max(1000).nullish(),
   instruction: z.string().max(20000).nullish(),
@@ -2549,6 +2553,89 @@ export const zSchedule = z.object({
 });
 
 /**
+ * ScopedSpendCap
+ *
+ * A monthly cap on the lines of one client, connection or tool of a connection.
+ *
+ * ``own_agent`` narrows it further to the calling agent's lines: the rule was
+ * bound to that agent. ``currency`` is the cap's currency, the billing currency
+ * when absent; it sums only lines in it.
+ */
+export const zScopedSpendCapInput = z.object({
+  amount_usd: z.union([
+    z.number().gte(0),
+    z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  ]),
+  client_id: z.string().nullish(),
+  connection_id: z.string().nullish(),
+  currency: z.string().nullish(),
+  own_agent: z.boolean().optional().default(false),
+  tool: z.string().nullish(),
+});
+
+/**
+ * BudgetPolicy
+ *
+ * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
+ * caps narrowed to a client, a connection or one of its tools; every one applies.
+ */
+export const zBudgetPolicyInput = z.object({
+  agent_monthly_spend_cap_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
+  monthly_spend_cap_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
+  run_budget_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
+  service_budget_usd: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
+  spend_caps: z.array(zScopedSpendCapInput).nullish(),
+});
+
+/**
+ * ScopedSpendCap
+ *
+ * A monthly cap on the lines of one client, connection or tool of a connection.
+ *
+ * ``own_agent`` narrows it further to the calling agent's lines: the rule was
+ * bound to that agent. ``currency`` is the cap's currency, the billing currency
+ * when absent; it sums only lines in it.
+ */
+export const zScopedSpendCapOutput = z.object({
+  amount_usd: z.string(),
+  client_id: z.string().nullish(),
+  connection_id: z.string().nullish(),
+  currency: z.string().nullish(),
+  own_agent: z.boolean().optional().default(false),
+  tool: z.string().nullish(),
+});
+
+/**
+ * BudgetPolicy
+ *
+ * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month. ``spend_caps`` are the monthly
+ * caps narrowed to a client, a connection or one of its tools; every one applies.
+ */
+export const zBudgetPolicyOutput = z.object({
+  agent_monthly_spend_cap_usd: z.string().nullish(),
+  monthly_spend_cap_usd: z.string().nullish(),
+  run_budget_usd: z.string().nullish(),
+  service_budget_usd: z.string().nullish(),
+  spend_caps: z.array(zScopedSpendCapOutput).nullish(),
+});
+
+/**
  * SecretConsumer
  */
 export const zSecretConsumer = z.object({
@@ -2919,6 +3006,7 @@ export const zSpecPreviewResponse = z.object({
 export const zSpendCard = z.object({
   cap_usd: z.string().nullable(),
   mtd_usd: z.string(),
+  not_covered: z.array(zCurrencySpend).optional(),
   pct_of_cap: z.number().nullable(),
   projected_eom_usd: z.string().nullable(),
   projection_method: z.string().optional().default("linear-mtd"),
@@ -3560,6 +3648,7 @@ export const zTriggerSpec = z.object({
 export const zAgentCreateRequest = z.object({
   a2ui_enabled: z.boolean().nullish(),
   agent_type: z.enum(["stateless", "stateful"]).optional().default("stateless"),
+  answer_check: zAnswerCheckPolicy.nullish(),
   description: z.string().max(1000).optional().default(""),
   instruction: z.string().max(20000).optional().default(""),
   model_id: z.string().nullish(),
@@ -4071,6 +4160,7 @@ export const zAgentareaApiApiV1AccessControlSyncResponse = z.object({
  * ModelSpecResponse
  */
 export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
+  cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   created_at: z.string().datetime(),
   default_context_strategy: z.string().nullable(),
@@ -4096,6 +4186,7 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
  * ModelSpecResponse
  */
 export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
+  cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   created_at: z.string().datetime(),
   description: z.string().nullable(),
@@ -4631,6 +4722,11 @@ export const zResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostPath =
     task_id: z.string().uuid(),
   });
 
+export const zRetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostPath = z.object({
+  agent_id: z.string().uuid(),
+  task_id: z.string().uuid(),
+});
+
 export const zListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetPath =
   z.object({
     agent_id: z.string().uuid(),
@@ -4902,6 +4998,32 @@ export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanc
  * Successful Response
  */
 export const zRemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse =
+  z.void();
+
+export const zAddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostBody =
+  zOpenApiConnectionAssociationBody;
+
+export const zAddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostPath =
+  z.object({
+    client_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zAddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponse =
+  z.void();
+
+export const zRemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeletePath =
+  z.object({
+    client_id: z.string().uuid(),
+    connection_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponse =
   z.void();
 
 export const zAddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostBody =
