@@ -3,7 +3,7 @@
 {{- if not .Values.exposure.hostNetwork.enabled }}
 {{- $fromPods = include "dataplane.selectorLabels" . }}
 {{- end }}
-{{ include "dataplane.workloadNetworkPolicies" (dict "root" . "namespace" .Values.workloads.namespace "np" .Values.workloads.networkPolicy "ingressName" "ingress-from-dataplane-only" "fromPods" $fromPods "ingressPorts" list) }}
+{{ include "dataplane.workloadNetworkPolicies" (dict "root" . "namespace" .Values.workloads.namespace "np" .Values.workloads.networkPolicy "ingressName" "ingress-from-dataplane-only" "fromPods" $fromPods "ingressPorts" list "egressLabel" true) }}
 {{- end }}
 {{- if and .Values.sandboxes.enabled .Values.sandboxes.networkPolicy.enabled }}
 {{- $fromPods := "" }}

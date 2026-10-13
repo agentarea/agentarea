@@ -142,6 +142,7 @@ rejected by the API server.
 | workloads.networkPolicy.denyCIDRs | list | `["169.254.0.0/16","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","100.64.0.0/10"]` | Destinations MCP servers may not open connections to. Covers the cloud metadata service, private ranges (including this cluster's pod and service ranges and the network the control plane sits on) and carrier-grade NAT. |
 | workloads.networkPolicy.dns | object | `{"namespace":"kube-system","podLabels":{"k8s-app":"kube-dns"}}` | Labels of the cluster DNS pods MCP servers may query. |
 | workloads.networkPolicy.extraEgress | list | `[]` | Additional egress rules, as NetworkPolicy egress entries. For a host that REDIRECTs some traffic to a local proxy, allow the redirect target here. |
+| workloads.networkPolicy.egressProxy | object | `{}` | Proxy that MCP servers labelled agentarea.io/egress may reach; those servers get DNS and this proxy only, and DNS only while it is empty. Shape: {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128} |
 | sandboxes.enabled | bool | `false` | Run the sandbox server and confine the sandboxes it creates. |
 | sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The mcp-manager adapter is tested against v0.2.2. |
 | sandboxes.server.image.tag | string | `"v0.2.2@sha256:8f8762af7565ed9c6f9dbcf009dd56727aa1fef8ce58a17f2b007b88cfe542bb"` | Tag, optionally with a digest. |

@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -83,4 +84,22 @@ func (pm *ProviderManager) GetProvider(instance *models.MCPServerInstance) (Prov
 		return pm.urlProvider, nil
 	}
 	return nil, fmt.Errorf("no providers available")
+}
+
+// SetInstanceSpecHook installs hook on every container provider. A URL-only
+// manager runs no workloads, so it refuses a non-nil hook.
+func (pm *ProviderManager) SetInstanceSpecHook(hook InstanceSpecHook) error {
+	if pm.dockerProvider == nil && pm.backendProvider == nil {
+		if hook != nil {
+			return errors.New("an instance-spec hook needs a container provider")
+		}
+		return nil
+	}
+	if pm.dockerProvider != nil {
+		pm.dockerProvider.SetInstanceSpecHook(hook)
+	}
+	if pm.backendProvider != nil {
+		pm.backendProvider.SetInstanceSpecHook(hook)
+	}
+	return nil
 }

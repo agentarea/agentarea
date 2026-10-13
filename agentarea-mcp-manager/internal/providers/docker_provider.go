@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 
 	"github.com/agentarea/mcp-manager/internal/mcpstorage"
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -16,6 +17,7 @@ type DockerProvider struct {
 	containerManager ContainerManagerInterface
 	storage          *mcpstorage.Issuer
 	logger           *slog.Logger
+	hook             InstanceSpecHook
 }
 
 // ContainerManagerInterface defines the interface for container management
@@ -32,6 +34,12 @@ func NewDockerProvider(secretResolver secrets.SecretResolver, containerManager C
 		storage:          storage,
 		logger:           logger,
 	}
+}
+
+// SetInstanceSpecHook installs the hook called on every assembled spec before
+// its container is created.
+func (p *DockerProvider) SetInstanceSpecHook(hook InstanceSpecHook) {
+	p.hook = hook
 }
 
 // CreateInstance creates a new Docker container for the MCP server using the container manager
@@ -55,6 +63,9 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		return err
 	}
 	resolvedSpec = withEnvironment(resolvedSpec, storageEnvironment)
+	if resolvedSpec, err = p.applyInstanceSpecHook(ctx, instance, resolvedSpec); err != nil {
+		return err
+	}
 
 	// Use the container manager to create the container
 	// This ensures the container is properly tracked in the manager's internal map
@@ -71,6 +82,30 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 		slog.String("name", instance.Name))
 
 	return nil
+}
+
+// applyInstanceSpecHook shows the hook the container's environment as a backend
+// spec and returns jsonSpec carrying the environment the hook left.
+func (p *DockerProvider) applyInstanceSpecHook(ctx context.Context, instance *models.MCPServerInstance, jsonSpec map[string]any) (map[string]any, error) {
+	if p.hook == nil {
+		return jsonSpec, nil
+	}
+	assembled := *instance
+	assembled.JSONSpec = jsonSpec
+	spec := (&BackendProvider{}).convertToInstanceSpec(&assembled)
+	if err := p.hook(ctx, instance, spec); err != nil {
+		p.logger.Error("Instance spec hook refused the instance",
+			slog.String("instance_id", instance.InstanceID),
+			slog.String("error", err.Error()))
+		return nil, fmt.Errorf("instance spec hook: %w", err)
+	}
+	environment := make(map[string]any, len(spec.Environment))
+	for key, value := range spec.Environment {
+		environment[key] = value
+	}
+	out := maps.Clone(jsonSpec)
+	out["environment"] = environment
+	return out, nil
 }
 
 // DeleteInstance removes the Docker container using the container manager

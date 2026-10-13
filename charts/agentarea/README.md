@@ -339,6 +339,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.instanceNetworkPolicy.probeIngressCIDRs[1] | string | `"172.16.0.0/12"` |  |
 | mcpManager.instanceNetworkPolicy.probeIngressCIDRs[2] | string | `"192.168.0.0/16"` |  |
 | mcpManager.instanceNetworkPolicy.extraEgress | list | `[]` |  |
+| mcpManager.instanceNetworkPolicy.egressProxy | object | `{}` |  |
 | mcpManager.instancePod.labels | object | `{}` |  |
 | mcpManager.instancePod.annotations | object | `{}` |  |
 | mcpManager.instancePod.nodeSelector | object | `{}` |  |
