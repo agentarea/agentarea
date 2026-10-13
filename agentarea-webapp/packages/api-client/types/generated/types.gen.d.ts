@@ -1427,6 +1427,31 @@ export type CatalogBrowseResponse = {
     total: number;
 };
 /**
+ * CatalogComputeEstimate
+ *
+ * What a running instance of an entry hosted on AgentArea reserves, and its hour.
+ *
+ * ``hourly`` is null where nothing prices compute: the reservation is shown alone.
+ */
+export type CatalogComputeEstimate = {
+    /**
+     * Currency
+     */
+    currency: string | null;
+    /**
+     * Hourly
+     */
+    hourly: string | null;
+    /**
+     * Memory Gib
+     */
+    memory_gib: string;
+    /**
+     * Vcpu
+     */
+    vcpu: string;
+};
+/**
  * CatalogConnection
  *
  * One existing connection made from a catalog item.
@@ -1492,8 +1517,11 @@ export type CatalogItemCreate = {
  * ``kind`` "paid": the platform's key may pay and the workspace is billed;
  * ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
  * the vendor bills the workspace's own account. "free": nothing is charged.
+ * ``kind`` is about calls only; ``compute`` is the separate hourly reservation
+ * of an entry that runs on AgentArea.
  */
 export type CatalogItemPricingResponse = {
+    compute?: CatalogComputeEstimate | null;
     /**
      * Kind
      */

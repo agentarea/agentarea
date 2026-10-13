@@ -422,6 +422,23 @@ export const zBundleSkill = z.object({
 });
 
 /**
+ * CatalogComputeEstimate
+ *
+ * What a running instance of an entry hosted on AgentArea reserves, and its hour.
+ *
+ * ``hourly`` is null where nothing prices compute: the reservation is shown alone.
+ */
+export const zCatalogComputeEstimate = z.object({
+  currency: z.string().nullable(),
+  hourly: z
+    .string()
+    .regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)
+    .nullable(),
+  memory_gib: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  vcpu: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+});
+
+/**
  * CatalogConnection
  *
  * One existing connection made from a catalog item.
@@ -479,8 +496,11 @@ export const zCatalogToolPrice = z.object({
  * ``kind`` "paid": the platform's key may pay and the workspace is billed;
  * ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
  * the vendor bills the workspace's own account. "free": nothing is charged.
+ * ``kind`` is about calls only; ``compute`` is the separate hourly reservation
+ * of an entry that runs on AgentArea.
  */
 export const zCatalogItemPricingResponse = z.object({
+  compute: zCatalogComputeEstimate.nullish(),
   kind: z.enum(["paid", "own_key", "free"]),
   payers: z.array(z.string()),
   price_from: zCatalogToolPrice.nullable(),

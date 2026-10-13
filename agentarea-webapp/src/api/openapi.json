@@ -2578,6 +2578,52 @@
         "title": "CatalogBrowseResponse",
         "type": "object"
       },
+      "CatalogComputeEstimate": {
+        "description": "What a running instance of an entry hosted on AgentArea reserves, and its hour.\n\n``hourly`` is null where nothing prices compute: the reservation is shown alone.",
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "hourly": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly"
+          },
+          "memory_gib": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Memory Gib",
+            "type": "string"
+          },
+          "vcpu": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Vcpu",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vcpu",
+          "memory_gib",
+          "hourly",
+          "currency"
+        ],
+        "title": "CatalogComputeEstimate",
+        "type": "object"
+      },
       "CatalogConnection": {
         "description": "One existing connection made from a catalog item.",
         "properties": {
@@ -2679,8 +2725,18 @@
         "type": "object"
       },
       "CatalogItemPricingResponse": {
-        "description": "Whether using a connection costs money through AgentArea (wiki ADR-0038).\n\n``kind`` \"paid\": the platform's key may pay and the workspace is billed;\n``prices`` are per call on that key, ``price_from`` the cheapest. \"own_key\":\nthe vendor bills the workspace's own account. \"free\": nothing is charged.",
+        "description": "Whether using a connection costs money through AgentArea (wiki ADR-0038).\n\n``kind`` \"paid\": the platform's key may pay and the workspace is billed;\n``prices`` are per call on that key, ``price_from`` the cheapest. \"own_key\":\nthe vendor bills the workspace's own account. \"free\": nothing is charged.\n``kind`` is about calls only; ``compute`` is the separate hourly reservation\nof an entry that runs on AgentArea.",
         "properties": {
+          "compute": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogComputeEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "kind": {
             "enum": [
               "paid",
