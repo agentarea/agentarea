@@ -201,6 +201,15 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
             "total_tokens": 15,
             "cached_prompt_tokens": 0,
             "cache_creation_tokens": 0,
+            "billing": {
+                "amount": "0.02",
+                "currency": "USD",
+                "vendor_cost": "0.02",
+                "vendor_currency": "USD",
+                "estimate": False,
+                "settle": None,
+                "hold_id": None,
+            },
         },
         "interrupted": False,
     }
@@ -487,6 +496,15 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
                 "total_tokens": 15,
                 "cached_prompt_tokens": 0,
                 "cache_creation_tokens": 0,
+                "billing": {
+                    "amount": "0.02",
+                    "currency": "USD",
+                    "vendor_cost": "0.02",
+                    "vendor_currency": "USD",
+                    "estimate": False,
+                    "settle": None,
+                    "hold_id": None,
+                },
             },
             "interrupted": False,
         }
@@ -544,108 +562,121 @@ async def test_error_publication_failure_does_not_replace_provider_error(
     provider.ainvoke_stream.assert_not_called()
 
 
-class _RecordingPricing:
-    """Stands in for a customer_pricing extension: RUB, 95 per provider dollar."""
+class _Billing:
+    """Billing in RUB: holds 19 RUB per call, prices the platform's 1 USD at 142.5."""
 
-    def __init__(self, error: Exception | None = None):
-        self.calls = []
-        self._error = error
+    def __init__(self, *, allowed=True, quote_fails=False):
+        self.allowed, self.quote_fails = allowed, quote_fails
+        self.authorizations, self.quotes, self.voids = [], [], []
 
     def currency(self):
         return "RUB"
 
-    async def price_llm_call(self, **kwargs):
-        self.calls.append(kwargs)
-        if self._error is not None:
-            raise self._error
-        return kwargs["provider_cost_usd"] * 95
+    async def authorize(self, **request):
+        self.authorizations.append(request)
+        return SimpleNamespace(
+            allowed=self.allowed,
+            code="ok" if self.allowed else "no_credits",
+            reason="" if self.allowed else "no credits remaining",
+            hold_id="hold-1" if self.allowed else None,
+            amount=to_money("19.00") if self.allowed else None,
+            currency="RUB",
+            expires_at=None,
+        )
 
+    async def capture(self, **request):
+        raise AssertionError("the settlement worker captures")
 
-@pytest.mark.parametrize("stream", [True, False], ids=["streamed", "completed"])
-@pytest.mark.parametrize(
-    ("managed_by", "platform_funded"),
-    [("platform", True), (None, False)],
-    ids=["platform-key", "customer-key"],
-)
-async def test_result_cost_is_what_the_customer_pays(
-    provider, make_service, user_context, stream, managed_by, platform_funded
-):
-    request = _request()
-    request.resolved_model["managed_by"] = managed_by
-    pricing = _RecordingPricing()
+    async def void(self, *, hold_id):
+        self.voids.append(hold_id)
 
-    result = await make_service(stream=stream, customer_pricing=pricing).execute(
-        request, user_context=user_context
-    )
-
-    assert result.cost == to_money("1.90")
-    assert result.provider_cost_usd == to_money("0.02")
-    assert result.currency == "RUB"
-    assert pricing.calls == [
-        {
-            "model_instance_id": MODEL_ID,
-            "platform_funded": platform_funded,
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-            "provider_cost_usd": to_money("0.02"),
-        }
-    ]
-
-
-async def test_uncached_model_prices_with_the_record_funding(
-    provider, make_service, model_scope, user_context
-):
-    model_scope.record.provider_config.managed_by = "platform"
-    pricing = _RecordingPricing()
-
-    result = await make_service(
-        model_service_scope=model_scope.scope, customer_pricing=pricing
-    ).execute(_request(resolved_model=None), user_context=user_context)
-
-    assert pricing.calls[0]["platform_funded"] is True
-    # Reported on the result so the event does not have to trust the empty cache.
-    assert result.managed_by == "platform"
+    async def quote(self, lines):
+        self.quotes.extend(lines)
+        if self.quote_fails:
+            raise ConnectionError("billing down")
+        factor = to_money("142.5") if lines[0].payer == "platform" else to_money(95)
+        return [SimpleNamespace(amount=line.vendor_cost * factor, code="ok") for line in lines]
 
 
 @pytest.fixture
-def registered_pricing(monkeypatch):
-    """A customer_pricing extension installed the way discovery installs one."""
-    from agentarea_common.extensions import customer_pricing
+def billing(monkeypatch):
+    from agentarea_common.extensions import tool_billing
     from agentarea_common.extensions.registry import ExtensionRegistry
 
-    pricing = _RecordingPricing()
-    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": lambda: pricing})
-    customer_pricing.get_customer_pricing.cache_clear()
-    yield pricing
-    customer_pricing.get_customer_pricing.cache_clear()
+    installed = _Billing()
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"tool_billing": lambda: installed})
+    tool_billing.get_tool_billing.cache_clear()
+    yield installed
+    tool_billing.get_tool_billing.cache_clear()
 
 
-async def test_default_pricing_comes_from_the_extension_registry(
-    registered_pricing, provider, make_service, user_context
+@pytest.mark.parametrize("stream", [True, False], ids=["streamed", "completed"])
+async def test_a_platform_call_is_held_and_its_line_is_billings_price(
+    billing, provider, make_service, user_context, stream
+):
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
+
+    result = await make_service(stream=stream).execute(request, user_context=user_context)
+
+    [hold] = billing.authorizations
+    assert (hold["kind"], hold["tool"], hold["vendor_currency"]) == ("model", MODEL_ID, "USD")
+    assert hold["vendor_cost"] > to_money("0.02")
+    assert (result.cost, result.currency) == (to_money("2.85"), "RUB")
+    assert result.provider_cost_usd == to_money("0.02")
+    assert result.usage.billing["hold_id"] == "hold-1"
+    assert result.usage.billing["settle"] == "capture"
+    assert billing.voids == []
+
+
+async def test_a_customer_key_call_holds_nothing_and_is_converted_without_markup(
+    billing, provider, make_service, user_context
 ):
     result = await make_service().execute(_request(), user_context=user_context)
 
-    assert result.cost == to_money("1.90")
-    assert len(registered_pricing.calls) == 1
+    assert billing.authorizations == []
+    assert (result.cost, result.currency) == (to_money("1.90"), "RUB")
+    assert result.usage.billing["hold_id"] is None
 
 
-async def test_pricing_failure_fails_the_call_without_recording_provider_cost(
-    provider, make_service, user_context
+async def test_no_credits_refuses_the_call_before_the_provider_is_asked(
+    billing, provider, make_service, user_context
 ):
-    from agentarea_execution.activities.event_publisher import _is_non_retryable_error
+    from agentarea_common.model_charges import ModelCallRefusedError
 
-    progress, errors = _Progress(), AsyncMock()
-    pricing = _RecordingPricing(error=ConnectionError("billing down"))
+    billing.allowed = False
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
 
-    with pytest.raises(RuntimeError, match="customer pricing failed") as raised:
-        await make_service(customer_pricing=pricing).execute(
-            _request(), user_context=user_context, on_chunk=progress, on_error=errors
-        )
+    with pytest.raises(ModelCallRefusedError, match="no_credits"):
+        await make_service().execute(request, user_context=user_context)
 
-    assert not any(event[2] for event in progress.events)
-    errors.assert_awaited_once_with(raised.value, "openai")
-    # Retrying would pay the provider again for a call that already succeeded.
-    assert _is_non_retryable_error(raised.value)
+    provider.ainvoke_stream.assert_not_called()
+
+
+async def test_a_failed_platform_call_voids_its_hold(billing, provider, make_service, user_context):
+    provider.ainvoke_stream.side_effect = RuntimeError("provider down")
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
+
+    with pytest.raises(RuntimeError, match="provider down"):
+        await make_service().execute(request, user_context=user_context)
+
+    assert billing.voids == ["hold-1"]
+
+
+async def test_billing_unable_to_price_keeps_the_hold_on_the_line(
+    billing, provider, make_service, user_context
+):
+    billing.quote_fails = True
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
+
+    result = await make_service().execute(request, user_context=user_context)
+
+    assert (result.cost, result.currency) == (to_money("19.00"), "RUB")
+    assert result.usage.billing["settle"] == "capture"
 
 
 @pytest.fixture
@@ -708,10 +739,10 @@ async def test_activity_context_failure_never_calls_the_provider(provider, activ
     provider.complete.assert_not_awaited()
 
 
-async def test_compaction_cost_is_priced_like_the_loop_calls(
-    monkeypatch, registered_pricing, provider, activity_boundary
+async def test_compaction_is_held_and_priced_like_the_loop_calls(
+    monkeypatch, billing, provider, activity_boundary
 ):
-    """Compaction spends the same run budget, so it must be in the same currency."""
+    """Compaction spends the same run budget, so it is billed the same way."""
     from agentarea_execution.activities import agent_execution_activities as activities
     from agentarea_execution.activities.agent import llm as llm_activities
     from agentarea_execution.models import CompactMessagesRequest, ConversationWindow
@@ -752,13 +783,14 @@ async def test_compaction_cost_is_priced_like_the_loop_calls(
         ),
     )
 
-    assert result.cost == to_money("1.90")
+    assert result.cost == to_money("2.85")
+    assert result.usage.billing["hold_id"] == "hold-1"
     assert result.original_message_count == 4
     assert result.conversation.head_seqs == [0, 7]
     assert result.conversation.tail_start == 5
     assert [entry.kind for entry in written] == ["summary"]
-    assert registered_pricing.calls[0]["platform_funded"] is True
-    assert registered_pricing.calls[0]["model_instance_id"] == MODEL_ID
+    [hold] = billing.authorizations
+    assert (hold["kind"], hold["tool"]) == ("model", MODEL_ID)
 
 
 async def test_a_stop_after_the_provider_reported_usage_returns_what_was_billed(

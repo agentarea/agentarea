@@ -201,3 +201,44 @@ def test_a_payment_is_one_line_whichever_build_recorded_it():
     service = [line for line in stored.values() if line.category == CostCategory.SERVICE]
     assert sorted(line.call_ref for line in service) == sorted(["call-1", f"{TASK_ID}:call-2"])
     assert {line.payer for line in service} == {Payer.PER_CALL}
+
+
+def test_a_held_model_call_is_a_line_billing_priced_with_its_hold_to_capture():
+    billing = {
+        "amount": "2.85",
+        "currency": "RUB",
+        "vendor_cost": "0.02",
+        "vendor_currency": "USD",
+        "estimate": True,
+        "settle": "capture",
+        "hold_id": "hold-1",
+    }
+    event = _event(
+        "llm.call.completed",
+        model_id="model-1",
+        managed_by="platform",
+        cost="2.85",
+        provider_cost_usd="0.02",
+        usage={"cost": "2.85", "usage": {"prompt_tokens": 10, "billing": billing}},
+    )
+
+    [line] = _lines(event, currency="EUR")
+
+    assert (line.amount, line.currency, line.estimate) == (Decimal("2.85"), "RUB", True)
+    assert (line.vendor_cost, line.vendor_currency) == (Decimal("0.02"), "USD")
+    assert (line.evidence["hold_id"], line.evidence["settle"]) == ("hold-1", "capture")
+
+
+def test_a_model_call_from_before_holds_keeps_its_cost_in_the_billing_currency():
+    event = _event(
+        "llm.call.completed",
+        model_id="model-1",
+        managed_by="platform",
+        cost="1.5",
+        usage={"cost": "1.5", "usage": {"prompt_tokens": 10}},
+    )
+
+    [line] = _lines(event)
+
+    assert (line.amount, line.currency, line.estimate) == (Decimal("1.5"), "RUB", False)
+    assert "hold_id" not in line.evidence

@@ -70,6 +70,9 @@ def cost_entries(
         provider_cost_usd: Any = None,
         payer: Payer = Payer.WORKSPACE,
         evidence: dict[str, Any],
+        vendor_cost: Any = None,
+        vendor_currency: str | None = None,
+        estimate: bool = False,
     ) -> CostEntry:
         return CostEntry(
             workspace_id=workspace_id,
@@ -89,17 +92,27 @@ def cost_entries(
             provider_cost_usd=to_optional_money(provider_cost_usd),
             payer=payer,
             evidence={key: value for key, value in evidence.items() if value is not None},
+            vendor_cost=to_optional_money(vendor_cost),
+            vendor_currency=vendor_currency,
+            estimate=estimate,
         )
 
     if event_type == EventTypes.LLM_CALL_COMPLETED:
-        if to_money(data.get("cost")) <= ZERO:
-            return []
         usage = (data.get("usage") or {}).get("usage") or {}
+        # What billing said the call comes to, and the hold still to capture; absent
+        # on calls made before holds, whose cost is in the billing currency.
+        raw_billing = usage.get("billing")
+        billing: dict[str, Any] = raw_billing if isinstance(raw_billing, dict) else {}
+        if to_money(billing.get("amount", data.get("cost"))) <= ZERO and not billing.get("hold_id"):
+            return []
         return [
             line(
                 CostCategory.MODEL,
-                data.get("cost"),
-                currency=billing_currency,
+                billing.get("amount", data.get("cost")),
+                currency=str(billing.get("currency") or billing_currency),
+                vendor_cost=billing.get("vendor_cost"),
+                vendor_currency=billing.get("vendor_currency"),
+                estimate=bool(billing.get("estimate")),
                 source=CostSource.TOKEN_PRICING,
                 subject_type=CostSubjectType.MODEL_INSTANCE,
                 subject_id=data.get("model_id"),
@@ -118,6 +131,8 @@ def cost_entries(
                     "total_tokens": usage.get("total_tokens"),
                     "cached_prompt_tokens": usage.get("cached_prompt_tokens"),
                     "cache_creation_tokens": usage.get("cache_creation_tokens"),
+                    "hold_id": billing.get("hold_id"),
+                    "settle": billing.get("settle"),
                 },
             )
         ]

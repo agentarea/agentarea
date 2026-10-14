@@ -209,6 +209,10 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     cached_input_cost_per_token: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 12), nullable=True
     )
+    # Price of a prompt token written to the provider's cache; null prices it as input.
+    cache_creation_input_cost_per_token: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 12), nullable=True
+    )
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )

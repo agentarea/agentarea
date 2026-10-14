@@ -2309,6 +2309,7 @@ async def _resolve_model_info(
         "input_cost_per_token": model_spec.input_cost_per_token,
         "output_cost_per_token": model_spec.output_cost_per_token,
         "cached_input_cost_per_token": model_spec.cached_input_cost_per_token,
+        "cache_creation_input_cost_per_token": model_spec.cache_creation_input_cost_per_token,
         "display_name": model_spec.display_name,
         "provider_display_name": provider_spec.name,
         "supports_vision": model_spec.supports_vision,

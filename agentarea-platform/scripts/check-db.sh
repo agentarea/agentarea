@@ -40,6 +40,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   model prices: a per-token price survives the numeric column exactly.
 #   platform-managed providers: a platform config is readable from every
 #     workspace and writable from none, a rule only the WHERE clause enforces.
+#   cache price resync: a catalog cache price reaches every workspace's copy of the
+#     model whose price is unset or the catalog's previous one, across workspaces.
 #   catalog model instances: a built-in model is added by copying it into the
 #     workspace's model_specs, the table the instance's foreign key references,
 #     and the catalog query is jsonb.
@@ -107,6 +109,7 @@ PY_SUITES=(
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
+  libs/llm/tests/test_cache_price_resync_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
   libs/agents/tests/test_catalog_presets_db.py

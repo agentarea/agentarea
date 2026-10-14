@@ -1,14 +1,10 @@
-"""What the customer pays for an LLM call, in the billing account's currency.
+"""The currency billing keeps its ledger in, and what an hour of compute costs.
 
-The platform knows what a call cost the provider, in USD. What the customer is
-charged is decided by billing — its currency, its exchange rate, its per-model
-price — and that declaration lives once, on the billing side. This module is the
-seam through which the platform asks, so it never re-declares any of it.
-
-Every amount downstream of an LLM call (task totals, events, dashboards, budget
-and cap enforcement) is converted here, at one point, and carried as-is from then
-on. The ``*_usd`` field names on those amounts are kept for API compatibility;
-their meaning is "billing currency", which ``CustomerPricing.currency()`` names.
+What a model or tool call costs the workspace is billing's live answer
+(``tool_billing``, ``model_charges``); nothing here prices a call. This seam names
+the billing currency for amounts read back (dashboards, task totals) and estimates
+an hour of reserved compute for display. The ``*_usd`` field names on amounts are
+kept for API compatibility; their meaning is "billing currency".
 
 Additive extension point (see AGENTS.md → EXTENSION POINTS): there is no config
 that selects a pricing backend, so an installed ``customer_pricing`` extension is
@@ -36,23 +32,6 @@ class CustomerPricing(Protocol):
         """ISO 4217 code every priced amount is denominated in, e.g. ``"RUB"``."""
         ...
 
-    async def price_llm_call(
-        self,
-        *,
-        model_instance_id: str | None,
-        platform_funded: bool,
-        prompt_tokens: int,
-        completion_tokens: int,
-        provider_cost_usd: Decimal,
-    ) -> Decimal:
-        """Return what this call costs the customer, in ``currency()``.
-
-        ``platform_funded`` is True when the call ran on the operator's credentials
-        (the customer buys the tokens from us), False when it ran on the customer's
-        own key (the provider bills them; any amount here is an estimate).
-        """
-        ...
-
 
 @runtime_checkable
 class ComputePricing(Protocol):
@@ -72,17 +51,6 @@ class ProviderCostPricing:
 
     def currency(self) -> str:
         return "USD"
-
-    async def price_llm_call(
-        self,
-        *,
-        model_instance_id: str | None,
-        platform_funded: bool,
-        prompt_tokens: int,
-        completion_tokens: int,
-        provider_cost_usd: Decimal,
-    ) -> Decimal:
-        return provider_cost_usd
 
 
 class CustomerPricingUnavailableError(RuntimeError):
@@ -144,46 +112,6 @@ def get_customer_pricing() -> CustomerPricing:
     and is not cached, so the next use tries again.
     """
     return resolve_customer_pricing()
-
-
-async def price_llm_call(
-    *,
-    model_instance_id: str | None,
-    platform_funded: bool,
-    prompt_tokens: int,
-    completion_tokens: int,
-    provider_cost_usd: Decimal,
-    pricing: CustomerPricing | None = None,
-) -> Decimal:
-    """What one finished LLM call costs the customer — the only conversion point.
-
-    Every path that makes an LLM call and counts its cost against a budget or a
-    task total goes through here, once, as the call returns; nothing after it
-    converts again. Two paths converting differently, or one not converting at
-    all, would sum RUB and USD into one total.
-
-    A pricing failure — including an installed extension that cannot be
-    resolved — fails the call rather than falling back to the USD provider
-    cost: that number would be read as billing currency by every budget and total
-    after this, so an outage would mis-charge silently. The message marks it an
-    accounting error, which the activity layer does not retry — a retry would pay
-    the provider again for a call that was already answered.
-    """
-    try:
-        active = pricing or get_customer_pricing()
-        return to_money(
-            await active.price_llm_call(
-                model_instance_id=model_instance_id,
-                platform_funded=platform_funded,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                provider_cost_usd=provider_cost_usd,
-            )
-        )
-    except Exception as error:
-        raise RuntimeError(
-            f"LLM usage accounting unavailable: customer pricing failed: {error}"
-        ) from error
 
 
 async def price_compute_hour(

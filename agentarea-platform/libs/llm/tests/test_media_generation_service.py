@@ -10,7 +10,6 @@ from agentarea_llm.application.media_generation_service import (
     MediaModelNotConfiguredError,
     VideoJobNotFoundError,
 )
-from agentarea_common.extensions.customer_pricing import ProviderCostPricing
 from agentarea_llm.domain.media import VideoJobStatus
 from agentarea_llm.infrastructure.model_clients import (
     GeneratedMedia,
@@ -109,7 +108,7 @@ def _service(video: _Video, jobs: _Jobs, **overrides) -> MediaGenerationService:
         "call_ref": "task-1:call-1",
     }
     return MediaGenerationService(
-        models=_Models(video), jobs=jobs, pricing=ProviderCostPricing(), **{**options, **overrides}
+        models=_Models(video), jobs=jobs, **{**options, **overrides}
     )
 
 

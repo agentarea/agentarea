@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
-from agentarea_common.extensions.customer_pricing import CustomerPricing
 from agentarea_common.money import Money
 
 from agentarea_llm.application.model_call_pricing import price_model_call
@@ -77,13 +76,10 @@ class MediaGenerationService:
         image_model_id: str | None,
         video_model_id: str | None,
         call_ref: str,
-        pricing: CustomerPricing | None = None,
     ) -> None:
         # The tool call this service acts for, the same on every retry of it; a
         # finished video is billed to exactly one call.
         self._call_ref = call_ref
-        # None = the process-wide pricing, resolved per call (see get_customer_pricing).
-        self._pricing = pricing
         self._models = models
         self._jobs = jobs
         self._task_id = task_id
@@ -97,9 +93,7 @@ class MediaGenerationService:
         image = await model.generate(prompt, size=size)
         if image.cost_usd is None:
             raise ModelCostUnavailableError("the image model reported no cost")
-        priced = await price_model_call(
-            model.endpoint, provider_cost_usd=image.cost_usd, pricing=self._pricing
-        )
+        priced = await price_model_call(model.endpoint, provider_cost_usd=image.cost_usd)
         return BilledMedia(
             content=image.content,
             media_type=image.media_type,
@@ -169,9 +163,7 @@ class MediaGenerationService:
                 f"video job {job_id} finished without a reported cost, so it cannot be billed"
             )
         video = await model.content(job.provider_job_id)
-        priced = await price_model_call(
-            model.endpoint, provider_cost_usd=status.cost_usd, pricing=self._pricing
-        )
+        priced = await price_model_call(model.endpoint, provider_cost_usd=status.cost_usd)
         return VideoCheck(
             job_id=job_id,
             status=VideoJobStatus.COMPLETED,

@@ -16,11 +16,16 @@ deployment currency, and a process whose ``AGENTAREA_SPEND_CURRENCY`` disagrees 
 to start.
 
 The protocol is structural: an extension returns any objects with the attributes
-named below.
+named below. ``kind`` says what is bought: ``tool`` (a connector's tool) or ``model``
+(an inference call on a model instance, ``tool`` then naming the instance).
+
+Every round trip is bounded by ``BILLING_TIMEOUT`` and its latency logged.
 """
 
+import asyncio
 import logging
-from collections.abc import Sequence
+import time
+from collections.abc import Awaitable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -33,6 +38,10 @@ from .registry import ExtensionRegistry
 logger = logging.getLogger(__name__)
 
 TOOL_BILLING_EXTENSION = "tool_billing"
+# How long one billing round trip may take before the caller treats billing as down.
+BILLING_TIMEOUT = 5.0
+KIND_TOOL = "tool"
+KIND_MODEL = "model"
 
 
 @runtime_checkable
@@ -70,6 +79,7 @@ class QuoteLine:
     tool: str
     vendor_cost: Decimal
     vendor_currency: str
+    kind: str = KIND_TOOL
 
 
 @runtime_checkable
@@ -100,6 +110,7 @@ class ToolBilling(Protocol):
         quantity: Decimal,
         unit: str,
         idempotency_key: str,
+        kind: str = KIND_TOOL,
     ) -> HoldDecision:
         """Hold the customer amount of an estimated vendor cost, or refuse.
 
@@ -120,6 +131,7 @@ class ToolBilling(Protocol):
         unit: str,
         idempotency_key: str,
         metadata: dict[str, Any],
+        kind: str = KIND_TOOL,
     ) -> Charge:
         """Charge the actual vendor cost against a hold and release the rest.
 
@@ -187,3 +199,86 @@ def deployment_currency() -> str:
     """The currency caps count and lines are expressed in: billing's ledger, else the env."""
     billing = get_tool_billing()
     return billing.currency() if billing is not None else get_spend_currency()
+
+
+def usable_tool_billing() -> tuple[ToolBilling | None, str | None]:
+    """The installed billing, or why an installed one cannot be used."""
+    try:
+        return get_tool_billing(), None
+    except (ToolBillingUnavailableError, SpendCurrencyMismatchError) as error:
+        logger.error("Tool billing is installed but unusable", exc_info=True)
+        return None, str(error)
+
+
+async def billing_call[T](name: str, call: Awaitable[T]) -> T:
+    """One billing round trip, bounded by ``BILLING_TIMEOUT``, its latency logged."""
+    started = time.monotonic()
+    try:
+        return await asyncio.wait_for(call, timeout=BILLING_TIMEOUT)
+    finally:
+        logger.info("Billing %s took %.0f ms", name, (time.monotonic() - started) * 1000)
+
+
+@dataclass(frozen=True)
+class Converted:
+    """A cost as its line's amount: in the deployment currency, or left in its own."""
+
+    amount: Decimal
+    currency: str
+    # Billing could not answer; the settlement worker converts it later.
+    pending: bool = False
+
+
+async def convert_cost(
+    *,
+    payer: str,
+    connector: str,
+    tool: str,
+    vendor_cost: Decimal,
+    vendor_currency: str,
+    kind: str = KIND_TOOL,
+) -> Converted:
+    """A cost on the payer's own money in the deployment currency, without markup.
+
+    As is when it is in that currency; converted by billing otherwise. Without
+    billing nothing converts it, and the line keeps the vendor's currency, which
+    caps in the deployment currency do not cover.
+    """
+    currency = deployment_currency()
+    if vendor_currency == currency:
+        return Converted(vendor_cost, currency)
+    billing, _ = usable_tool_billing()
+    if billing is None:
+        return Converted(vendor_cost, vendor_currency)
+    line = QuoteLine(
+        payer="workspace",
+        connector=connector,
+        tool=tool,
+        vendor_cost=vendor_cost,
+        vendor_currency=vendor_currency,
+        kind=kind,
+    )
+    try:
+        [quote] = await billing_call("quote", billing.quote([line]))
+    except Exception:
+        logger.error(
+            "A %s cost of %s#%s (%s) could not be converted to %s now; left for settlement",
+            vendor_currency,
+            connector,
+            tool,
+            payer,
+            currency,
+            exc_info=True,
+        )
+        return Converted(vendor_cost, vendor_currency, pending=True)
+    if quote.amount is None:
+        logger.warning(
+            "Billing cannot express a %s cost of %s#%s in %s (%s); not covered by caps",
+            vendor_currency,
+            connector,
+            tool,
+            currency,
+            quote.code,
+        )
+        return Converted(vendor_cost, vendor_currency)
+    return Converted(quote.amount, currency)

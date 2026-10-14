@@ -175,6 +175,7 @@ class LLMModel:
         output_cost_per_token: Decimal | None = None,
         cached_input_cost_per_token: Decimal | None = None,
         endpoint_policy: "OutboundPolicy | None" = None,
+        cache_creation_input_cost_per_token: Decimal | None = None,
     ):
         """Initialize LLM model with explicit parameters.
 
@@ -187,6 +188,8 @@ class LLMModel:
             output_cost_per_token: Persisted output-token price; zero means explicitly free.
             cached_input_cost_per_token: Price of a prompt token read from the provider's
                 cache; None prices cached tokens as any other input token.
+            cache_creation_input_cost_per_token: Price of a prompt token written to the
+                provider's cache; None prices it as any other input token.
             endpoint_policy: Set when ``endpoint_url`` came from someone other than
                 whoever runs this process (a workspace member): every call to it is
                 refused unless the address passes this policy. None calls it as given.
@@ -198,6 +201,7 @@ class LLMModel:
         self.input_cost_per_token = input_cost_per_token
         self.output_cost_per_token = output_cost_per_token
         self.cached_input_cost_per_token = cached_input_cost_per_token
+        self.cache_creation_input_cost_per_token = cache_creation_input_cost_per_token
         self.endpoint_policy = endpoint_policy
 
     def _configured_cost(self, usage: LLMUsage) -> Decimal:
@@ -215,9 +219,18 @@ class LLMModel:
             else 0
         )
         cached_rate = Decimal(str(self.cached_input_cost_per_token)) if cached else Decimal(0)
+        written = (
+            min(usage.cache_creation_tokens, usage.prompt_tokens - cached)
+            if self.cache_creation_input_cost_per_token is not None
+            else 0
+        )
+        written_rate = (
+            Decimal(str(self.cache_creation_input_cost_per_token)) if written else Decimal(0)
+        )
         return (
-            (usage.prompt_tokens - cached) * input_rate
+            (usage.prompt_tokens - cached - written) * input_rate
             + cached * cached_rate
+            + written * written_rate
             + usage.completion_tokens * Decimal(str(self.output_cost_per_token))
         )
 

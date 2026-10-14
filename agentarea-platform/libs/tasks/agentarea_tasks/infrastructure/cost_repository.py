@@ -1,5 +1,6 @@
 """Persistence of the spend ledger."""
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -58,15 +59,20 @@ class CrossWorkspaceCostLines:
     ) -> list[CostEntryORM]:
         """Lines marked for settlement, superseded by none, due now; locked SKIP LOCKED.
 
-        A line is retried every tick while young, then every tenth of its age, up to
-        ``max_interval``: due when such an interval boundary passed in the last tick.
+        A line is retried every tick while young, then about every tenth of its age
+        (a power-of-two number of ticks), up to ``max_interval``: due when such an
+        interval boundary passed in the last tick.
         Lines older than ``since`` are left as they are.
         """
         newer = aliased(CostEntryORM)
+        seconds = tick.total_seconds()
         age = func.extract("epoch", now - CostEntryORM.occurred_at)
-        interval = func.least(
-            func.greatest(age / 10, tick.total_seconds()), max_interval.total_seconds()
+        # A tenth of the age, rounded down to a power-of-two number of ticks: an
+        # interval that stays put between claims, so its boundaries fall once each.
+        ticks = func.power(
+            2, func.floor(func.ln(func.greatest(age / (10 * seconds), 1)) / math.log(2))
         )
+        interval = func.least(ticks * seconds, max_interval.total_seconds())
         epoch = now.timestamp()
         due = func.floor(epoch / interval) != func.floor((epoch - tick.total_seconds()) / interval)
         rows = await self._session.execute(

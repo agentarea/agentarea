@@ -6,15 +6,22 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
 from agentarea_agents_sdk.skills import SkillContextGuard
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.extensions.customer_pricing import price_llm_call
+from agentarea_common.model_charges import (
+    ModelCallRefusedError,
+    charge_model_call,
+    estimate_vendor_cost,
+    hold_model_call,
+    release_model_hold,
+)
 from agentarea_common.money import ZERO, to_money, to_optional_money
 from agentarea_common.utils.url_safety import endpoint_policy_for
+from agentarea_governance.domain.exceptions import GovernanceDeniedError
 from agentarea_tasks.domain.models import ConversationEntry
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -50,7 +57,23 @@ logger = logging.getLogger(__name__)
 
 
 def _model_call_failure(message: str, error: Exception) -> ApplicationError:
-    """The activity failure for a model call, carrying its classified cause."""
+    """The activity failure for a model call, carrying its classified cause.
+
+    Billing refusing to hold the call is a gate verdict, read by the workflow as the
+    entitlement gate's is: the same code, never retried.
+    """
+    if isinstance(error, ModelCallRefusedError):
+        return ApplicationError(
+            f"billing: {error.reason}",
+            {
+                "interceptor_name": "billing",
+                "reason": error.reason,
+                "metadata": {"entitlement_code": error.code},
+                "phase": "pre_llm_call",
+            },
+            type=GovernanceDeniedError.__name__,
+            non_retryable=True,
+        )
     failure = classify_llm_failure(error)
     return ApplicationError(
         message,
@@ -128,6 +151,9 @@ def make_llm_activities(
             cached_input_cost_per_token = getattr(
                 model_instance.model_spec, "cached_input_cost_per_token", None
             )
+            cache_creation_input_cost_per_token = getattr(
+                model_instance.model_spec, "cache_creation_input_cost_per_token", None
+            )
             api_key_secret = getattr(model_instance.provider_config, "api_key", None)
             managed_by = getattr(model_instance.provider_config, "managed_by", None)
             display_name = getattr(model_instance.model_spec, "display_name", None)
@@ -148,6 +174,7 @@ def make_llm_activities(
             input_cost_per_token=input_cost_per_token,
             output_cost_per_token=output_cost_per_token,
             cached_input_cost_per_token=cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=cache_creation_input_cost_per_token,
             display_name=display_name,
             supports_vision=supports_vision,
             provider_display_name=provider_display_name,
@@ -270,6 +297,7 @@ def make_llm_activities(
             input_cost_per_token = None
             output_cost_per_token = None
             cached_input_cost_per_token = None
+            cache_creation_input_cost_per_token = None
 
             if request.resolved_model:
                 cached = request.resolved_model
@@ -280,6 +308,9 @@ def make_llm_activities(
                 input_cost_per_token = cached.get("input_cost_per_token")
                 output_cost_per_token = cached.get("output_cost_per_token")
                 cached_input_cost_per_token = cached.get("cached_input_cost_per_token")
+                cache_creation_input_cost_per_token = cached.get(
+                    "cache_creation_input_cost_per_token"
+                )
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
@@ -325,6 +356,9 @@ def make_llm_activities(
                     cached_input_cost_per_token = getattr(
                         model_instance.model_spec, "cached_input_cost_per_token", None
                     )
+                    cache_creation_input_cost_per_token = getattr(
+                        model_instance.model_spec, "cache_creation_input_cost_per_token", None
+                    )
 
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
@@ -355,6 +389,9 @@ def make_llm_activities(
                 input_cost_per_token=to_optional_money(input_cost_per_token),
                 output_cost_per_token=to_optional_money(output_cost_per_token),
                 cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
+                cache_creation_input_cost_per_token=to_optional_money(
+                    cache_creation_input_cost_per_token
+                ),
                 endpoint_policy=endpoint_policy_for(managed_by),
             )
 
@@ -407,28 +444,45 @@ def make_llm_activities(
             complete_content = ""
             final_usage = None
             final_cost = ZERO
-            async for chunk in llm_model.ainvoke_stream(summary_request):
-                if chunk.content:
-                    complete_content += chunk.content
-                if chunk.usage is not None:
-                    final_usage = chunk.usage
-                if chunk.cost and chunk.cost > final_cost:
-                    final_cost = to_money(chunk.cost)
-
-            if final_usage is None or final_usage.total_tokens <= 0:
-                raise RuntimeError(
-                    "compaction usage accounting unavailable; budget cannot be enforced"
-                )
-
-            # Compaction spends against the same run budget as the loop's calls, so
-            # its cost has to be in the same currency they are.
-            cost = await price_llm_call(
+            # Compaction spends against the same run budget as the loop's calls, and
+            # is held and priced by billing the same way.
+            platform_funded = managed_by == MANAGED_BY_PLATFORM
+            hold = await hold_model_call(
+                workspace_id=str(user_context.workspace_id),
                 model_instance_id=str(model_uuid),
-                platform_funded=managed_by == MANAGED_BY_PLATFORM,
-                prompt_tokens=final_usage.prompt_tokens,
-                completion_tokens=final_usage.completion_tokens,
-                provider_cost_usd=final_cost,
+                platform_funded=platform_funded,
+                vendor_cost_estimate=estimate_vendor_cost(
+                    summary_request.messages,
+                    summary_request.max_tokens,
+                    input_cost_per_token,
+                    output_cost_per_token,
+                ),
+                idempotency_key=f"llm:{window.task_id}:compaction:{uuid4().hex}",
             )
+            try:
+                async for chunk in llm_model.ainvoke_stream(summary_request):
+                    if chunk.content:
+                        complete_content += chunk.content
+                    if chunk.usage is not None:
+                        final_usage = chunk.usage
+                    if chunk.cost and chunk.cost > final_cost:
+                        final_cost = to_money(chunk.cost)
+
+                if final_usage is None or final_usage.total_tokens <= 0:
+                    raise RuntimeError(
+                        "compaction usage accounting unavailable; budget cannot be enforced"
+                    )
+            except BaseException:
+                await release_model_hold(hold, "the compaction call did not complete")
+                raise
+
+            charge = await charge_model_call(
+                model_instance_id=str(model_uuid),
+                platform_funded=platform_funded,
+                vendor_cost=final_cost,
+                hold=hold,
+            )
+            cost = charge.amount
 
             next_seq = end_seq
             carried: list[ConversationEntry] = []
@@ -477,6 +531,7 @@ def make_llm_activities(
                     total_tokens=final_usage.total_tokens,
                     cached_prompt_tokens=final_usage.cached_prompt_tokens,
                     cache_creation_tokens=final_usage.cache_creation_tokens,
+                    billing=charge.as_billing(),
                 ),
             )
 

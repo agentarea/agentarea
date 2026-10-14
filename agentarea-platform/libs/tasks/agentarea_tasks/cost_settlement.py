@@ -30,6 +30,8 @@ from uuid import UUID, uuid5
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped, workspace_scope
 from agentarea_common.extensions import tool_billing
+from agentarea_common.extensions.tool_billing import KIND_MODEL, KIND_TOOL
+from agentarea_common.model_charges import MODEL_CONNECTOR
 from agentarea_common.money import to_money
 from agentarea_common.tool_cost import CostSourceKind, MeteredCost, Payer
 from agentarea_governance.tool_calls import (
@@ -117,11 +119,12 @@ async def _capture(line: CostEntryORM) -> CostEntry:
         raise RuntimeError(
             f"line {line.id} holds {evidence.get('hold_id')} but no billing is installed"
         )
-    charge = await billing.capture(
+    model = line.subject_type == CostSubjectType.MODEL_INSTANCE.value
+    capture = billing.capture(
         hold_id=str(evidence["hold_id"]),
         workspace_id=line.workspace_id,
-        connector=str(evidence.get("connector") or ""),
-        tool=str(line.subject_name or ""),
+        connector=MODEL_CONNECTOR if model else str(evidence.get("connector") or ""),
+        tool=str(line.subject_id if model else line.subject_name or ""),
         vendor_cost=Decimal(line.vendor_cost or 0),
         vendor_currency=str(line.vendor_currency),
         quantity=Decimal(line.quantity if line.quantity is not None else 1),
@@ -137,7 +140,9 @@ async def _capture(line: CostEntryORM) -> CostEntry:
             "client_id": str(line.client_id) if line.client_id else None,
             "occurred_at": line.occurred_at.isoformat(),
         },
+        kind=KIND_MODEL if model else KIND_TOOL,
     )
+    charge = await tool_billing.billing_call("capture", capture)
     return _successor(
         line,
         SETTLE_CAPTURE,

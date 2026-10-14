@@ -556,6 +556,7 @@ class RegistryService:
                     )
 
                     if existing:
+                        previous_spec = dict(existing.spec or {})
                         for field in (
                             "name",
                             "description",
@@ -584,6 +585,8 @@ class RegistryService:
 
                         await self.item_repo.session.commit()
                         await self.item_repo.session.refresh(existing)
+                        if registry.registry_type == "llm_models":
+                            await self._resync_model_cache_prices(previous_spec, existing.spec)
 
                         # Backfill json_spec on linked entity if missing
                         if existing.installed_entity_id:
@@ -942,6 +945,31 @@ class RegistryService:
 
     # ── LLM model handlers ──
 
+    async def _resync_model_cache_prices(
+        self, previous: dict[str, Any], current: dict[str, Any] | None
+    ) -> None:
+        """A model's cache prices, changed in the catalog, reach the workspaces' copies."""
+        current = current or {}
+        if not (self.model_spec_repo and self.provider_spec_repo):
+            raise ValueError("Provider and model spec repositories required")
+        provider = await self.provider_spec_repo.get_by_provider_key(current.get("provider_key"))
+        if provider is None or not current.get("model_name"):
+            return
+        changed = await self.model_spec_repo.resync_cache_prices(
+            provider_spec_id=provider.id,
+            model_name=current["model_name"],
+            previous=previous,
+            current=current,
+        )
+        await self.model_spec_repo.session.commit()
+        if changed:
+            logger.info(
+                "Catalog cache prices of %s/%s reached %d workspace copies",
+                current.get("provider_key"),
+                current["model_name"],
+                changed,
+            )
+
     async def _create_llm_model(self, item: RegistryItem) -> str:
         if not (self.model_spec_repo and self.provider_spec_repo):
             raise ValueError("Provider and model spec repositories required")
@@ -981,6 +1009,9 @@ class RegistryService:
             input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
             output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
             cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
+            cache_creation_input_cost_per_token=to_optional_money(
+                spec.get("cache_creation_input_cost_per_token")
+            ),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )
@@ -1395,6 +1426,9 @@ class RegistryService:
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),
                         "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
+                        "cache_creation_input_cost_per_token": entry.get(
+                            "cache_creation_input_cost_per_token"
+                        ),
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "is_active": entry.get("is_active", True),
                     },

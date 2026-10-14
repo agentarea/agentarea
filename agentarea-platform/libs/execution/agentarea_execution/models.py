@@ -42,6 +42,7 @@ class ResolvedModelInfo(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cache_creation_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     # The model spec says the model reads images; None in states resolved before.
@@ -86,6 +87,7 @@ class ChangeModelPayload(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cache_creation_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
@@ -564,6 +566,11 @@ class LLMUsage(BaseModel):
     total_tokens: int = 0
     cached_prompt_tokens: int = 0
     cache_creation_tokens: int = 0
+    # How the call's spend line is settled (wiki ADR-0038 rev 2): its amount and
+    # currency as billing said them, the vendor cost, and the hold still to capture.
+    # Rides inside ``usage`` so the event carries it with no workflow change. None on
+    # calls recorded before it existed.
+    billing: dict[str, Any] | None = None
 
 
 class LLMCallResult(BaseModel):

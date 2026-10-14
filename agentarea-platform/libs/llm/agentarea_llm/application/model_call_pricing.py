@@ -1,4 +1,4 @@
-"""What a non-chat model call costs the customer, in the billing currency."""
+"""What a non-chat model call costs the workspace, as billing says it."""
 
 from __future__ import annotations
 
@@ -6,11 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.extensions.customer_pricing import (
-    CustomerPricing,
-    get_customer_pricing,
-    price_llm_call,
-)
+from agentarea_common.model_charges import charge_model_call
 from agentarea_common.money import Money
 
 from agentarea_llm.infrastructure.model_clients import ModelEndpoint
@@ -22,25 +18,16 @@ class PricedCost:
     currency: str
 
 
-async def price_model_call(
-    endpoint: ModelEndpoint,
-    *,
-    provider_cost_usd: Decimal,
-    prompt_tokens: int = 0,
-    completion_tokens: int = 0,
-    pricing: CustomerPricing | None = None,
-) -> PricedCost:
-    """Convert a call's provider cost once, through the same seam LLM calls use.
+async def price_model_call(endpoint: ModelEndpoint, *, provider_cost_usd: Decimal) -> PricedCost:
+    """A media or decision model call's line amount, from its provider cost in USD.
 
     Everything downstream (tool results, budgets, task totals) carries the amount
     returned here, unconverted.
     """
-    amount = await price_llm_call(
+    charge = await charge_model_call(
         model_instance_id=endpoint.instance_id,
         platform_funded=endpoint.managed_by == MANAGED_BY_PLATFORM,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        provider_cost_usd=provider_cost_usd,
-        pricing=pricing,
+        vendor_cost=provider_cost_usd,
+        hold=None,
     )
-    return PricedCost(amount=amount, currency=(pricing or get_customer_pricing()).currency())
+    return PricedCost(amount=charge.amount, currency=charge.currency)

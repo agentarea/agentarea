@@ -14,7 +14,12 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.extensions.customer_pricing import get_customer_pricing, price_llm_call
+from agentarea_common.model_charges import (
+    charge_model_call,
+    estimate_vendor_cost,
+    hold_model_call,
+    release_model_hold,
+)
 from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_common.tool_cost import Payer
 from agentarea_common.utils.url_safety import endpoint_policy_for
@@ -152,29 +157,49 @@ class DirectTaskManager(BaseTaskManager):
             for iteration in range(1, max_iterations + 1):
                 logger.info(f"DirectTaskManager: iteration {iteration}")
 
-                response = await llm.complete(
-                    LLMRequest(
-                        messages=messages,
-                        tools=tools,
-                        temperature=0.1,
-                        max_tokens=max_tokens_per_call,
-                    )
+                hold = await hold_model_call(
+                    workspace_id=task.workspace_id,
+                    model_instance_id=model_instance_id,
+                    platform_funded=platform_funded,
+                    vendor_cost_estimate=(
+                        estimate_vendor_cost(
+                            messages,
+                            max_tokens_per_call,
+                            llm.input_cost_per_token,
+                            llm.output_cost_per_token,
+                        )
+                        if platform_funded
+                        else ZERO
+                    ),
+                    idempotency_key=f"llm:{task.id}:{iteration}:{uuid4().hex}",
                 )
-
-                if response.usage is None or response.usage.total_tokens <= 0:
-                    raise RuntimeError(
-                        "LLM provider returned no usage; token and cost policy cannot be enforced"
+                try:
+                    response = await llm.complete(
+                        LLMRequest(
+                            messages=messages,
+                            tools=tools,
+                            temperature=0.1,
+                            max_tokens=max_tokens_per_call,
+                        )
                     )
+                    if response.usage is None or response.usage.total_tokens <= 0:
+                        raise RuntimeError(
+                            "LLM provider returned no usage; token and cost policy cannot be "
+                            "enforced"
+                        )
+                except BaseException:
+                    await release_model_hold(hold, "the model call did not complete")
+                    raise
+                charge = await charge_model_call(
+                    model_instance_id=model_instance_id,
+                    platform_funded=platform_funded,
+                    vendor_cost=to_money(response.cost),
+                    hold=hold,
+                )
                 tokens_used += response.usage.total_tokens
                 if tokens_used > max_tokens_total:
                     raise RuntimeError(f"token budget exceeded: {tokens_used}/{max_tokens_total}")
-                call_cost = await price_llm_call(
-                    model_instance_id=model_instance_id,
-                    platform_funded=platform_funded,
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
-                    provider_cost_usd=to_money(response.cost),
-                )
+                call_cost = charge.amount
                 cost_used += call_cost
                 if call_cost > ZERO:
                     # No workflow events here, so the ledger line is written directly.
@@ -192,21 +217,27 @@ class DirectTaskManager(BaseTaskManager):
                                 subject_name=None,
                                 call_ref=None,
                                 amount=call_cost,
-                                currency=get_customer_pricing().currency(),
+                                currency=charge.currency,
                                 source=CostSource.TOKEN_PRICING,
                                 occurred_at=datetime.now(UTC),
                                 provider_cost_usd=to_money(response.cost),
                                 payer=Payer.PLATFORM if platform_funded else Payer.WORKSPACE,
+                                vendor_cost=charge.vendor_cost,
+                                vendor_currency=charge.vendor_currency,
+                                estimate=charge.estimate,
                                 evidence={
                                     "iteration": iteration,
                                     "prompt_tokens": response.usage.prompt_tokens,
                                     "completion_tokens": response.usage.completion_tokens,
+                                    "cached_prompt_tokens": response.usage.cached_prompt_tokens,
+                                    "cache_creation_tokens": response.usage.cache_creation_tokens,
+                                    **charge.evidence(),
                                 },
                             )
                         ]
                     )
                 if cost_used > to_money(run_budget):
-                    currency = get_customer_pricing().currency()
+                    currency = charge.currency
                     raise RuntimeError(
                         f"run budget exceeded: {cost_used} {currency}/"
                         f"{to_money(run_budget)} {currency}"
@@ -406,6 +437,7 @@ class DirectTaskManager(BaseTaskManager):
             input_cost_per_token=input_cost_per_token,
             output_cost_per_token=output_cost_per_token,
             cached_input_cost_per_token=model_instance.model_spec.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=model_instance.model_spec.cache_creation_input_cost_per_token,
             endpoint_policy=endpoint_policy_for(model_instance.provider_config.managed_by),
         )
 

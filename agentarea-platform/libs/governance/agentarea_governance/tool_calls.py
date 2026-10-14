@@ -40,6 +40,7 @@ from agentarea_common.auth.tool_authorization import (
     authorize_tool_invocation,
 )
 from agentarea_common.extensions import tool_billing
+from agentarea_common.extensions.tool_billing import Converted
 from agentarea_common.money import ZERO, to_money
 from agentarea_common.tool_cost import (
     CostSourceKind,
@@ -165,74 +166,24 @@ PendingCost = tuple[Decimal, str]
 SpendGate = Callable[[GovernedToolCall, PendingCost | None], Awaitable[str | None]]
 
 
-@dataclass(frozen=True)
-class Converted:
-    """A cost as its line's amount: in the deployment currency, or left in its own."""
-
-    amount: Decimal
-    currency: str
-    # Billing could not answer; the settlement worker converts it later.
-    pending: bool = False
-
-
 def _denied(reason: str) -> ToolAuthorizationDecision:
     return ToolAuthorizationDecision(ToolAuthorizationAction.DENY, reason)
 
 
 def _billing() -> tuple[tool_billing.ToolBilling | None, str | None]:
-    """The installed billing, or why it cannot be used."""
-    try:
-        return tool_billing.get_tool_billing(), None
-    except (tool_billing.ToolBillingUnavailableError, tool_billing.SpendCurrencyMismatchError) as e:
-        logger.error("Tool billing is installed but unusable", exc_info=True)
-        return None, str(e)
+    return tool_billing.usable_tool_billing()
 
 
 async def convert_cost(payer: Payer, connector: str, tool: str, cost: MeteredCost) -> Converted:
-    """A cost in the deployment currency: as is, or converted by billing without markup.
-
-    Without billing nothing converts it, and the line keeps the vendor's currency,
-    which caps in the deployment currency do not cover.
-    """
-    currency = tool_billing.deployment_currency()
-    if cost.currency == currency:
-        return Converted(to_money(cost.vendor_cost), currency)
-    billing, _ = _billing()
-    if billing is None:
-        return Converted(to_money(cost.vendor_cost), cost.currency)
-    try:
-        [quote] = await billing.quote(
-            [
-                tool_billing.QuoteLine(
-                    payer=Payer.WORKSPACE.value,
-                    connector=connector,
-                    tool=tool,
-                    vendor_cost=cost.vendor_cost,
-                    vendor_currency=cost.currency,
-                )
-            ]
-        )
-    except Exception:
-        logger.error(
-            "A %s cost of %s#%s could not be converted to %s now; it is left for settlement",
-            cost.currency,
-            connector,
-            tool,
-            currency,
-            exc_info=True,
-        )
-        return Converted(to_money(cost.vendor_cost), cost.currency, pending=True)
-    if quote.amount is None:
-        logger.warning(
-            "Billing cannot express a %s cost of %s#%s in %s (%s); not covered by caps",
-            cost.currency,
-            connector,
-            tool,
-            currency,
-            quote.code,
-        )
-        return Converted(to_money(cost.vendor_cost), cost.currency)
-    return Converted(to_money(quote.amount), currency)
+    """A tool cost in the deployment currency; see ``tool_billing.convert_cost``."""
+    converted = await tool_billing.convert_cost(
+        payer=payer.value,
+        connector=connector,
+        tool=tool,
+        vendor_cost=cost.vendor_cost,
+        vendor_currency=cost.currency,
+    )
+    return Converted(to_money(converted.amount), converted.currency, converted.pending)
 
 
 def _usage(
@@ -403,7 +354,7 @@ async def _void(billing: tool_billing.ToolBilling | None, hold: Any, why: str) -
     if billing is None or hold is None:
         return
     try:
-        await billing.void(hold_id=str(hold.hold_id))
+        await tool_billing.billing_call("void", billing.void(hold_id=str(hold.hold_id)))
     except Exception:
         logger.error(
             "Hold %s (%s) could not be voided; it expires", hold.hold_id, why, exc_info=True
@@ -458,15 +409,18 @@ async def _before(
             ),
         )
     try:
-        hold = await billing.authorize(
-            workspace_id=str(call.authorization.workspace_id or ""),
-            connector=connection.connector,
-            tool=connection.tool,
-            vendor_cost=cost.vendor_cost,
-            vendor_currency=cost.currency,
-            quantity=cost.quantity,
-            unit=cost.unit,
-            idempotency_key=f"hold:{call.call_id}:{uuid4().hex}",
+        hold = await tool_billing.billing_call(
+            "authorize",
+            billing.authorize(
+                workspace_id=str(call.authorization.workspace_id or ""),
+                connector=connection.connector,
+                tool=connection.tool,
+                vendor_cost=cost.vendor_cost,
+                vendor_currency=cost.currency,
+                quantity=cost.quantity,
+                unit=cost.unit,
+                idempotency_key=f"hold:{call.call_id}:{uuid4().hex}",
+            ),
         )
     except Exception:
         logger.error(

@@ -10,7 +10,6 @@ from agentarea_common.extensions.customer_pricing import (
     ProviderCostPricing,
     get_customer_pricing,
     price_compute_hour,
-    price_llm_call,
     resolve_customer_pricing,
 )
 from agentarea_common.extensions.registry import ExtensionRegistry
@@ -41,20 +40,10 @@ class _Rub:
         return provider_cost_usd * 95
 
 
-@pytest.mark.asyncio
-async def test_default_is_provider_cost_in_usd():
+def test_default_is_usd():
     pricing = ProviderCostPricing()
 
-    amount = await pricing.price_llm_call(
-        model_instance_id="m",
-        platform_funded=True,
-        prompt_tokens=1000,
-        completion_tokens=500,
-        provider_cost_usd=Decimal("0.0123"),
-    )
-
     assert pricing.currency() == "USD"
-    assert amount == Decimal("0.0123")
     assert isinstance(pricing, CustomerPricing)
 
 
@@ -105,23 +94,6 @@ def test_failed_resolution_is_not_cached():
     with pytest.raises(CustomerPricingUnavailableError):
         get_customer_pricing()
     assert get_customer_pricing().currency() == "RUB"
-
-
-@pytest.mark.asyncio
-async def test_lazy_resolution_failure_fails_the_call_as_accounting_error():
-    """Never price in USD because the installed extension did not resolve."""
-    ExtensionRegistry.register(CUSTOMER_PRICING_EXTENSION, lambda: object())
-
-    with pytest.raises(RuntimeError, match="LLM usage accounting unavailable") as raised:
-        await price_llm_call(
-            model_instance_id="m",
-            platform_funded=True,
-            prompt_tokens=1,
-            completion_tokens=1,
-            provider_cost_usd=Decimal("0.01"),
-        )
-
-    assert isinstance(raised.value.__cause__, CustomerPricingUnavailableError)
 
 
 def test_process_pricing_is_resolved_once_and_lazily():

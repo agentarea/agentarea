@@ -391,6 +391,9 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "input_cost_per_token": entry.get("input_cost_per_token"),
                     "output_cost_per_token": entry.get("output_cost_per_token"),
                     "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
+                    "cache_creation_input_cost_per_token": entry.get(
+                        "cache_creation_input_cost_per_token"
+                    ),
                     "supports_function_calling": entry.get(
                         "supports_function_calling", False
                     ),
@@ -532,6 +535,8 @@ def reconcile(
         existing = _get_registry_item(conn, registry_id, item["external_id"])
         if existing:
             _update_registry_item(conn, existing["id"], item)
+            if registry_type == "llm_models":
+                _resync_model_cache_prices(conn, existing["spec"], item.get("spec") or {})
             entity_id = existing["installed_entity_id"]
             if entity_id:
                 _update_entity(
@@ -629,7 +634,7 @@ def _upsert_registry(
 def _get_registry_item(conn, registry_id: str, external_id: str) -> dict | None:
     row = conn.execute(
         _text(
-            "SELECT id, installed_entity_id, installed_version FROM registry_items "
+            "SELECT id, installed_entity_id, installed_version, spec FROM registry_items "
             "WHERE registry_id = :rid AND external_id = :ext"
         ),
         {"rid": registry_id, "ext": external_id},
@@ -640,6 +645,7 @@ def _get_registry_item(conn, registry_id: str, external_id: str) -> dict | None:
         "id": str(row[0]),
         "installed_entity_id": str(row[1]) if row[1] else None,
         "installed_version": row[2],
+        "spec": row[3] or {},
     }
 
 
@@ -820,6 +826,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
                 "context_window = :cw, max_output_tokens = :mot, "
                 "input_cost_per_token = :icpt, output_cost_per_token = :ocpt, "
                 "cached_input_cost_per_token = :cicpt, "
+                "cache_creation_input_cost_per_token = :ccicpt, "
                 "supports_function_calling = :sfc, is_active = :active, updated_at = now() "
                 "WHERE id = :id"
             ),
@@ -832,6 +839,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
                 "icpt": spec.get("input_cost_per_token"),
                 "ocpt": spec.get("output_cost_per_token"),
                 "cicpt": spec.get("cached_input_cost_per_token"),
+                "ccicpt": spec.get("cache_creation_input_cost_per_token"),
                 "sfc": spec.get("supports_function_calling", False),
                 "active": spec.get("is_active", True),
             },
@@ -842,10 +850,11 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         _text(
             "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
             "description, context_window, max_output_tokens, input_cost_per_token, "
-            "output_cost_per_token, cached_input_cost_per_token, supports_function_calling, "
+            "output_cost_per_token, cached_input_cost_per_token, "
+            "cache_creation_input_cost_per_token, supports_function_calling, "
             "is_active, workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
-            ":mot, :icpt, :ocpt, :cicpt, :sfc, :active, :ws, :created_by, now(), now())"
+            ":mot, :icpt, :ocpt, :cicpt, :ccicpt, :sfc, :active, :ws, :created_by, now(), now())"
         ),
         {
             "id": mid,
@@ -858,6 +867,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
             "icpt": spec.get("input_cost_per_token"),
             "ocpt": spec.get("output_cost_per_token"),
             "cicpt": spec.get("cached_input_cost_per_token"),
+            "ccicpt": spec.get("cache_creation_input_cost_per_token"),
             "sfc": spec.get("supports_function_calling", False),
             "active": spec.get("is_active", True),
             "ws": workspace_id,
@@ -865,6 +875,39 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         },
     )
     return mid
+
+
+# Prices the catalog carries that a workspace's copy of a model did not get when added.
+CACHE_PRICE_COLUMNS = ("cached_input_cost_per_token", "cache_creation_input_cost_per_token")
+
+
+def _resync_model_cache_prices(conn, previous: dict[str, Any], spec: dict[str, Any]) -> None:
+    """Carry a model's catalog cache prices into every workspace's copy of it.
+
+    A copy freezes the catalog's prices when it is first added, so a cache price the
+    catalog gained later never reached it. A copy whose price is unset, or still the
+    catalog's previous one, takes the current one; a workspace's own price stays.
+    """
+    prow = conn.execute(
+        _text("SELECT id FROM provider_specs WHERE provider_key = :pk"),
+        {"pk": spec.get("provider_key")},
+    ).fetchone()
+    if not prow or not spec.get("model_name"):
+        return
+    for column in CACHE_PRICE_COLUMNS:
+        new = spec.get(column)
+        if new is None:
+            continue
+        old = previous.get(column)
+        conn.execute(
+            _text(
+                f"UPDATE model_specs SET {column} = :new, updated_at = now() "
+                "WHERE provider_spec_id = :pid AND model_name = :mn "
+                f"AND ({column} IS NULL OR {column} = :old) "
+                f"AND {column} IS DISTINCT FROM :new"
+            ),
+            {"new": new, "old": old, "pid": str(prow[0]), "mn": spec["model_name"]},
+        )
 
 
 def _upsert_mcp_server(

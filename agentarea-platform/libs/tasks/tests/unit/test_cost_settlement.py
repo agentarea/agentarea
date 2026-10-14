@@ -232,3 +232,23 @@ async def test_a_conversion_is_made_once_billing_answers():
         False,
     )
     assert successor.evidence == {"connector": "x"}
+
+
+async def test_a_held_model_line_is_captured_as_a_model_call():
+    billing = _install()
+    line = _line(
+        subject_type="model_instance",
+        subject_id="model-1",
+        subject_name="kimi-k3",
+        vendor_cost=Decimal("0.02"),
+        vendor_currency="USD",
+        evidence={"hold_id": "hold-9", "settle": "capture", "prompt_tokens": 10},
+    )
+
+    successor = await settle(line, _no_vendor)
+
+    [capture] = billing.captures
+    assert (capture["kind"], capture["connector"], capture["tool"]) == ("model", "llm", "model-1")
+    assert (capture["vendor_cost"], capture["vendor_currency"]) == (Decimal("0.02"), "USD")
+    assert (successor.amount, successor.estimate) == (Decimal("0.66"), False)
+    assert successor.evidence == {"hold_id": "hold-9", "prompt_tokens": 10}

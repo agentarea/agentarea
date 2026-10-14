@@ -117,6 +117,29 @@ def test_cached_prompt_tokens_are_priced_at_the_cached_rate():
     assert _model("0.0001")._configured_cost(usage) == Decimal("0.48")
 
 
+def test_cache_writes_are_priced_at_their_own_rate_when_declared():
+    usage = LLMUsage(
+        prompt_tokens=1000,
+        completion_tokens=100,
+        total_tokens=1100,
+        cached_prompt_tokens=700,
+        cache_creation_tokens=200,
+    )
+    model = LLMModel(
+        provider_type="anthropic",
+        model_name="m",
+        input_cost_per_token=Decimal("0.001"),
+        output_cost_per_token=Decimal("0.002"),
+        cached_input_cost_per_token=Decimal("0.0001"),
+        cache_creation_input_cost_per_token=Decimal("0.00125"),
+    )
+
+    # 100 fresh * 0.001 + 700 read * 0.0001 + 200 written * 0.00125 + 100 out * 0.002
+    assert model._configured_cost(usage) == Decimal("0.62")
+    # Without a write rate a written token costs what a fresh one does.
+    assert _model("0.0001")._configured_cost(usage) == Decimal("0.57")
+
+
 def test_without_a_cached_rate_every_prompt_token_is_full_price():
     usage = LLMUsage(
         prompt_tokens=1000, completion_tokens=100, total_tokens=1100, cached_prompt_tokens=800

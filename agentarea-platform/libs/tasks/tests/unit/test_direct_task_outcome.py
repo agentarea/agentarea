@@ -157,44 +157,76 @@ async def test_completion_does_not_consume_direct_tool_call_quota():
     )
 
 
-@pytest.mark.asyncio
-async def test_direct_execution_counts_what_the_customer_pays(monkeypatch):
-    """The run budget and task total are in billing currency on this engine too."""
-    from agentarea_common.extensions import customer_pricing
+class _Billing:
+    """Billing in RUB: holds each platform call, prices 1 USD of it at 142.5 RUB."""
+
+    def __init__(self):
+        self.authorizations = []
+
+    def currency(self):
+        return "RUB"
+
+    async def authorize(self, **request):
+        self.authorizations.append(request)
+        return SimpleNamespace(
+            allowed=True,
+            code="ok",
+            reason="",
+            hold_id=f"hold-{len(self.authorizations)}",
+            amount=to_money("10.00"),
+            currency="RUB",
+            expires_at=None,
+        )
+
+    async def capture(self, **request):
+        raise AssertionError("the settlement worker captures")
+
+    async def void(self, *, hold_id):
+        return None
+
+    async def quote(self, lines):
+        return [
+            SimpleNamespace(amount=line.vendor_cost * to_money("142.5"), code="ok")
+            for line in lines
+        ]
+
+
+@pytest.fixture
+def billing(monkeypatch):
+    from agentarea_common.extensions import tool_billing
     from agentarea_common.extensions.registry import ExtensionRegistry
 
-    calls = []
+    installed = _Billing()
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(ExtensionRegistry, "_factories", {"tool_billing": lambda: installed})
+    tool_billing.get_tool_billing.cache_clear()
+    yield installed
+    tool_billing.get_tool_billing.cache_clear()
 
-    class _Rub:
-        def currency(self):
-            return "RUB"
 
-        async def price_llm_call(self, **kwargs):
-            calls.append(kwargs)
-            return kwargs["provider_cost_usd"] * 95
-
-    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": _Rub})
-    customer_pricing.get_customer_pricing.cache_clear()
-
-    repository = AsyncMock()
-    manager = DirectTaskManager(repository)
-    llm = SimpleNamespace(
+def _platform_llm(cost, tool_calls):
+    return SimpleNamespace(
+        input_cost_per_token=to_money("0.000001"),
+        output_cost_per_token=to_money("0.000002"),
         complete=AsyncMock(
             return_value=SimpleNamespace(
                 content="",
-                cost=0.01,
-                usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2, total_tokens=5),
-                tool_calls=[
-                    {
-                        "id": "call-completion",
-                        "function": {"name": "completion", "arguments": '{"result":"done"}'},
-                    }
-                ],
+                cost=cost,
+                usage=SimpleNamespace(
+                    prompt_tokens=3,
+                    completion_tokens=2,
+                    total_tokens=5,
+                    cached_prompt_tokens=0,
+                    cache_creation_tokens=0,
+                ),
+                tool_calls=tool_calls,
             )
-        )
+        ),
     )
-    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", True))
-    task = AgentTask(
+
+
+def _task(run_budget: str) -> AgentTask:
+    return AgentTask(
         title="Task",
         description="Task",
         query="Task",
@@ -204,7 +236,7 @@ async def test_direct_execution_counts_what_the_customer_pays(monkeypatch):
         status="running",
         created_at=datetime.now(UTC),
         effective_policy=EffectivePolicy(
-            budget=BudgetPolicy(run_budget_usd=to_money("100.00")),
+            budget=BudgetPolicy(run_budget_usd=to_money(run_budget)),
             tokens=TokenPolicy(max_tokens=1000, max_tokens_per_call=100),
             execution=ExecutionLimitsPolicy(
                 max_model_turns=3,
@@ -214,79 +246,42 @@ async def test_direct_execution_counts_what_the_customer_pays(monkeypatch):
         ).to_json_dict(),
     )
 
-    try:
-        await manager._execute(task)
-    finally:
-        customer_pricing.get_customer_pricing.cache_clear()
+
+@pytest.mark.asyncio
+async def test_direct_execution_holds_each_call_and_counts_billings_price(billing):
+    """On this engine too a platform call is held and its line is billing's price."""
+    repository = AsyncMock()
+    manager = DirectTaskManager(repository)
+    completion = [
+        {"id": "call-completion", "function": {"name": "completion", "arguments": '{"result":"done"}'}}
+    ]
+    llm = _platform_llm(0.01, completion)
+    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", True))
+    task = _task("100.00")
+
+    await manager._execute(task)
 
     assert task.status == "completed"
-    assert task.result["total_cost"] == "0.95"
-    assert calls == [
-        {
-            "model_instance_id": "model-1",
-            "platform_funded": True,
-            "prompt_tokens": 3,
-            "completion_tokens": 2,
-            "provider_cost_usd": to_money("0.01"),
-        }
-    ]
+    assert task.result["total_cost"] == "1.425"
+    [hold] = billing.authorizations
+    assert (hold["kind"], hold["tool"]) == ("model", "model-1")
     [line] = repository.record_costs.await_args.args[0]
-    assert (line.amount, line.currency, line.agent_id) == (to_money("0.95"), "RUB", task.agent_id)
-    assert (line.subject_id, line.payer.value) == ("model-1", "platform")
+    assert (line.amount, line.currency, line.agent_id) == (to_money("1.425"), "RUB", task.agent_id)
+    assert (line.subject_id, line.payer.value, line.estimate) == ("model-1", "platform", True)
+    assert line.evidence["hold_id"] == "hold-1" and line.evidence["settle"] == "capture"
+    assert (line.vendor_cost, line.vendor_currency) == (to_money("0.01"), "USD")
 
 
 @pytest.mark.asyncio
-async def test_direct_run_budget_error_names_the_billing_currency(monkeypatch):
-    from agentarea_common.extensions import customer_pricing
-    from agentarea_common.extensions.registry import ExtensionRegistry
-
-    class _Rub:
-        def currency(self):
-            return "RUB"
-
-        async def price_llm_call(self, **kwargs):
-            return kwargs["provider_cost_usd"] * 95
-
-    monkeypatch.setattr(ExtensionRegistry, "_factories", {"customer_pricing": _Rub})
-    customer_pricing.get_customer_pricing.cache_clear()
-
+async def test_direct_run_budget_error_names_the_billing_currency(billing):
     repository = AsyncMock()
     manager = DirectTaskManager(repository)
-    llm = SimpleNamespace(
-        complete=AsyncMock(
-            return_value=SimpleNamespace(
-                content="",
-                cost=0.1,
-                usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2, total_tokens=5),
-                tool_calls=[],
-            )
-        )
+    manager._resolve_agent = AsyncMock(
+        return_value=(_platform_llm(0.1, []), "", [], "model-1", True)
     )
-    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", True))
-    task = AgentTask(
-        title="Task",
-        description="Task",
-        query="Task",
-        user_id=str(uuid4()),
-        workspace_id=str(uuid4()),
-        agent_id=uuid4(),
-        status="running",
-        created_at=datetime.now(UTC),
-        effective_policy=EffectivePolicy(
-            budget=BudgetPolicy(run_budget_usd=to_money("1.00")),
-            tokens=TokenPolicy(max_tokens=1000, max_tokens_per_call=100),
-            execution=ExecutionLimitsPolicy(
-                max_model_turns=3,
-                max_tool_calls_per_turn=1,
-                max_tool_calls_total=1,
-            ),
-        ).to_json_dict(),
-    )
+    task = _task("1.00")
 
-    try:
-        await manager._execute(task)
-    finally:
-        customer_pricing.get_customer_pricing.cache_clear()
+    await manager._execute(task)
 
     error = repository.update_status.await_args.kwargs["error"]
-    assert error == "run budget exceeded: 9.5 RUB/1.00 RUB"
+    assert error == "run budget exceeded: 14.25 RUB/1.00 RUB"

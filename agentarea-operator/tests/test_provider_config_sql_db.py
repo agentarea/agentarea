@@ -268,3 +268,70 @@ def test_reconciling_a_workspace_resource_again_updates_its_rows(handler, provid
         assert [str(i.id) for i in instances] == [
             handler.workspace_instance_id(config_id, "test-model")
         ]
+
+
+def test_a_models_cache_prices_are_written_and_an_omitted_one_kept(handler, provider_spec):
+    """Cached-read and cache-write prices reach the model spec; leaving one out keeps it."""
+    spec = _spec(provider_spec)
+    spec["models"][0]["cachedInputCostPerToken"] = 1.0e-7
+    spec["models"][0]["cacheCreationInputCostPerToken"] = 1.25e-6
+    handler.sync_provider_config(spec, api_key="t", cr_name="test-cr", namespace="agentarea")
+    del spec["models"][0]["cachedInputCostPerToken"]
+    handler.sync_provider_config(spec, api_key="t", cr_name="test-cr", namespace="agentarea")
+
+    with handler.engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "SELECT ms.cached_input_cost_per_token, ms.cache_creation_input_cost_per_token "
+                "FROM model_specs ms JOIN provider_specs ps ON ps.id = ms.provider_spec_id "
+                "WHERE ps.provider_key = :key AND ms.model_name = 'test-model'"
+            ),
+            {"key": provider_spec},
+        ).fetchone()
+
+    assert float(row[0]) == pytest.approx(1.0e-7)
+    assert float(row[1]) == pytest.approx(1.25e-6)
+
+
+def test_a_catalog_cache_price_reaches_workspace_copies_that_never_set_one(provider_spec):
+    """A workspace copy frozen without a cache price takes the catalog's; its own stays."""
+    import registry_sync
+
+    engine = create_engine(DSN)
+    with engine.begin() as conn:
+        pid = conn.execute(
+            text("SELECT id FROM provider_specs WHERE provider_key = :k"), {"k": provider_spec}
+        ).scalar_one()
+        for workspace, price in (("ws-unset", None), ("ws-own", 5.0e-8)):
+            conn.execute(
+                text(
+                    "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
+                    "context_window, input_cost_per_token, output_cost_per_token, "
+                    "cached_input_cost_per_token, is_active, workspace_id, created_by, "
+                    "created_at, updated_at) VALUES (:id, :pid, 'copied', 'copied', 1024, "
+                    "1e-6, 2e-6, :c, true, :ws, 'test', now(), now())"
+                ),
+                {"id": uuid.uuid4(), "pid": pid, "c": price, "ws": workspace},
+            )
+        registry_sync._resync_model_cache_prices(
+            conn,
+            {"provider_key": provider_spec, "model_name": "copied"},
+            {
+                "provider_key": provider_spec,
+                "model_name": "copied",
+                "cached_input_cost_per_token": 1.0e-7,
+            },
+        )
+        rows = dict(
+            conn.execute(
+                text(
+                    "SELECT workspace_id, cached_input_cost_per_token FROM model_specs "
+                    "WHERE provider_spec_id = :pid AND model_name = 'copied'"
+                ),
+                {"pid": pid},
+            ).fetchall()
+        )
+    engine.dispose()
+
+    assert float(rows["ws-unset"]) == pytest.approx(1.0e-7)
+    assert float(rows["ws-own"]) == pytest.approx(5.0e-8)
