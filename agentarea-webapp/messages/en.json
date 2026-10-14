@@ -1057,7 +1057,10 @@
     "sections": {
       "attention": "Needs attention",
       "active": "In use",
-      "idle": "Idle"
+      "idle": "Idle",
+      "mcp": "MCP",
+      "openapi": "OpenAPI",
+      "all": "All connections"
     },
     "listFilters": {
       "all": "All",
@@ -1132,7 +1135,13 @@
         "deleteFailed": "Couldn't delete the connection"
       }
     },
-    "sourceFilter": "From the catalog: {name}"
+    "sourceFilter": "From the catalog: {name}",
+    "group": {
+      "grouping": "Grouping",
+      "byState": "State",
+      "byType": "Type",
+      "none": "No grouping"
+    }
   },
   "Models": {
     "title": "Provider Management",

@@ -1057,7 +1057,10 @@
     "sections": {
       "attention": "Требуют внимания",
       "active": "В работе",
-      "idle": "Простаивают"
+      "idle": "Простаивают",
+      "mcp": "MCP",
+      "openapi": "OpenAPI",
+      "all": "Все подключения"
     },
     "listFilters": {
       "all": "Все",
@@ -1132,7 +1135,13 @@
         "deleteFailed": "Не удалось удалить подключение"
       }
     },
-    "sourceFilter": "Из каталога: {name}"
+    "sourceFilter": "Из каталога: {name}",
+    "group": {
+      "grouping": "Группировка",
+      "byState": "Состояние",
+      "byType": "Тип",
+      "none": "Без группировки"
+    }
   },
   "Models": {
     "title": "Управление провайдерами",
