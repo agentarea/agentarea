@@ -61,7 +61,7 @@ async def test_search_uses_configured_searxng_endpoint(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "agentarea_agents_sdk.tools.web_toolset.httpx.AsyncClient",
+        "agentarea_common.outbound.httpx.AsyncClient",
         _patched_client_factory(httpx.MockTransport(handler)),
     )
 

@@ -165,13 +165,12 @@ class WebToolset(Toolset):
         if isinstance(max_results, bool) or not 1 <= max_results <= 20:
             return "Error: max_results must be between 1 and 20"
 
-        from agentarea_common.utils.outbound_tls import outbound_ssl_context
+        from agentarea_common.outbound import Destination, outbound_client
 
         try:
-            async with httpx.AsyncClient(
-                timeout=_DEFAULT_TIMEOUT_SECONDS,
-                follow_redirects=True,
-                verify=outbound_ssl_context(),
+            # The search service is the operator's, at an address the operator set.
+            async with outbound_client(
+                Destination.VENDOR, timeout=_DEFAULT_TIMEOUT_SECONDS, follow_redirects=True
             ) as client:
                 response = await client.get(
                     f"{self.search_base_url}/search",
