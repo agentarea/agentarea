@@ -16,7 +16,7 @@
   },
   "litellm": {
     "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 3,
-    "libs/llm/agentarea_llm/infrastructure/model_clients.py": 1
+    "libs/llm/agentarea_llm/infrastructure/model_clients.py": 2
   },
   "mail": {
     "libs/triggers/agentarea_triggers/channels/email.py": 1
