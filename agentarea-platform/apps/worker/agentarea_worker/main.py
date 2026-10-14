@@ -124,6 +124,7 @@ class AgentAreaWorker:
         self._inbound_dedup = None
         self.container_monitor = None
         self.dispatch_stamps = None
+        self.cost_settlement = None
         self.worker_shutdown_event = asyncio.Event()
         self.health = WorkerHealth()
         # All interfaces: the kubelet probes the pod IP, not loopback.
@@ -196,6 +197,11 @@ class AgentAreaWorker:
         from agentarea_common.extensions.customer_pricing import get_customer_pricing
 
         logger.info("Billing currency: %s", get_customer_pricing().currency())
+        # Installed billing must keep its ledger in AGENTAREA_SPEND_CURRENCY, or caps
+        # would count lines in a currency billing does not charge in.
+        from agentarea_common.extensions.tool_billing import deployment_currency
+
+        logger.info("Spend currency: %s", deployment_currency())
 
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.EDITION)
@@ -462,6 +468,17 @@ class AgentAreaWorker:
             },
         )
 
+        # Spend lines that are not final yet (a hold to capture, a vendor cost to read,
+        # a conversion to make) are finalised here, claimed SKIP LOCKED like the relay.
+        from agentarea_execution.activities.dependencies import ActivityServiceContainer
+        from agentarea_execution.vendor_settlement import make_vendor_settle
+        from agentarea_tasks.cost_settlement import CostSettlement
+
+        self.cost_settlement = CostSettlement(
+            session_factory=get_database().async_session_factory,
+            vendor_settle=make_vendor_settle(ActivityServiceContainer(dependencies)),
+        )
+
     async def run(self) -> None:
         """Run the worker until shutdown signal."""
         if not self.worker:
@@ -480,6 +497,8 @@ class AgentAreaWorker:
             await self.delivery_autoclaimer.start()
         if self.outbox_relay:
             await self.outbox_relay.start()
+        if self.cost_settlement:
+            await self.cost_settlement.start()
         if self.stream_runtime:
             await self.stream_runtime.start()
 
@@ -563,6 +582,9 @@ class AgentAreaWorker:
         if self.outbox_relay:
             await self.outbox_relay.stop()
             self.outbox_relay = None
+        if self.cost_settlement:
+            await self.cost_settlement.stop()
+            self.cost_settlement = None
         if self.inbound_subscriber:
             await self.inbound_subscriber.stop()
             self.inbound_subscriber = None

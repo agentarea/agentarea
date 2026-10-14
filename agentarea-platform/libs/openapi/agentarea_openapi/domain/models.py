@@ -6,6 +6,7 @@ from uuid import UUID
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from sqlalchemy import JSON, ColumnElement, ForeignKey, String, Text, or_
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,6 +64,11 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
     # platform workspace, on a credential only the platform holds; every workspace
     # can call it and none can edit it. NULL: the workspace's own connection.
     managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # A cost declaration a member set on a connection the workspace pays for; it wins
+    # over the connector's (wiki ADR-0038 §2.3). NULL: the connector's own.
+    cost: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=True
+    )
 
     @classmethod
     def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:

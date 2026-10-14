@@ -8,6 +8,7 @@ from uuid import UUID
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Index,
     Integer,
@@ -113,6 +114,7 @@ class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     supersedes_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 Index(
@@ -125,6 +127,11 @@ Index(
     CostEntryORM.occurred_at,
     CostEntryORM.id,
     postgresql_where=CostEntryORM.payer == "platform",
+)
+Index(
+    "ix_cost_entries_unsettled",
+    CostEntryORM.occurred_at,
+    postgresql_where=CostEntryORM.evidence.has_key("settle"),
 )
 Index(
     "ix_cost_entries_client_occurred",

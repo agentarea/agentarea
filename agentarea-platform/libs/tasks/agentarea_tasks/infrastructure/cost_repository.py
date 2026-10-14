@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -24,7 +24,8 @@ class SpendScope:
     """Which lines a sum counts: the workspace's, narrowed by any field that is set.
 
     ``tool`` narrows a ``connection_id`` scope to the lines of one of its tools;
-    ``category`` to model or tool lines; ``task_id`` to one run's.
+    ``category`` to model or tool lines; ``task_id`` to one run's; ``estimate`` to
+    the lines whose amount is or is not final yet.
     """
 
     agent_id: UUID | None = None
@@ -33,6 +34,54 @@ class SpendScope:
     tool: str | None = None
     task_id: UUID | None = None
     category: CostCategory | None = None
+    estimate: bool | None = None
+
+
+class CrossWorkspaceCostLines:
+    """The one ledger read that spans every workspace: lines waiting to be settled.
+
+    Run inside an ``unscoped`` block; each claimed line is then settled in its own
+    workspace's scope. Never commits.
+    """
+
+    def __init__(self, session: AsyncSession):
+        self._session = session
+
+    async def claim_unsettled(
+        self,
+        *,
+        now: datetime,
+        since: datetime,
+        tick: timedelta,
+        max_interval: timedelta,
+        limit: int,
+    ) -> list[CostEntryORM]:
+        """Lines marked for settlement, superseded by none, due now; locked SKIP LOCKED.
+
+        A line is retried every tick while young, then every tenth of its age, up to
+        ``max_interval``: due when such an interval boundary passed in the last tick.
+        Lines older than ``since`` are left as they are.
+        """
+        newer = aliased(CostEntryORM)
+        age = func.extract("epoch", now - CostEntryORM.occurred_at)
+        interval = func.least(
+            func.greatest(age / 10, tick.total_seconds()), max_interval.total_seconds()
+        )
+        epoch = now.timestamp()
+        due = func.floor(epoch / interval) != func.floor((epoch - tick.total_seconds()) / interval)
+        rows = await self._session.execute(
+            select(CostEntryORM)
+            .where(
+                CostEntryORM.evidence.has_key("settle"),
+                CostEntryORM.occurred_at >= since,
+                ~exists().where(newer.supersedes_id == CostEntryORM.id),
+                due,
+            )
+            .order_by(CostEntryORM.occurred_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True, of=CostEntryORM)
+        )
+        return list(rows.scalars().all())
 
 
 class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
@@ -83,6 +132,7 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                         "evidence": entry.evidence,
                         "supersedes_id": entry.supersedes_id,
                         "occurred_at": entry.occurred_at,
+                        "estimate": entry.estimate,
                     }
                     for entry in entries
                 ]
@@ -118,6 +168,8 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             conditions.append(CostEntryORM.task_id == scope.task_id)
         if scope.category is not None:
             conditions.append(CostEntryORM.category == scope.category.value)
+        if scope.estimate is not None:
+            conditions.append(CostEntryORM.estimate.is_(scope.estimate))
         return conditions
 
     async def sum_by_currency_since(

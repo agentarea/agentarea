@@ -24,6 +24,7 @@ import {
   getOpenAPIConnectionAction as getOpenAPIConnection,
   updateOpenAPIConnectionAction as updateOpenAPIConnection,
 } from "@/lib/server-actions";
+import { ConnectionCostSection } from "../../components/ConnectionCostSection";
 import { CustomHeadersEditor } from "../../components/CustomHeadersEditor";
 import { CustomHeadersList } from "../../components/CustomHeadersList";
 import { CustomQueryParamsEditor } from "../../components/CustomQueryParamsEditor";
@@ -304,6 +305,13 @@ export default function OpenAPIConnectionDetailPage() {
             </p>
           </div>
         </div>
+
+        <ConnectionCostSection
+          cost={connection.cost}
+          managedBy={connection.managed_by}
+          onSave={(cost) => updateOpenAPIConnection(connectionId, { cost })}
+          onSaved={() => setReloadKey((key) => key + 1)}
+        />
 
         {/* Custom Headers */}
         <div className="space-y-2">

@@ -841,6 +841,11 @@ class MCPServerInstanceService:
             update_kwargs["name"] = patch["name"]
         if "description" in patch:
             update_kwargs["description"] = patch["description"]
+        if "cost" in patch:
+            instance = await self.repository.get_by_id(id)
+            if instance is not None and instance.managed_by == MANAGED_BY_PLATFORM:
+                raise MCPValidationError(["the cost of a platform connection is not set on it"])
+            update_kwargs["cost"] = patch["cost"]
 
         if "json_spec" in patch and patch["json_spec"] is not None:
             json_spec = _normalize_url_keys(patch["json_spec"])
@@ -1142,6 +1147,17 @@ class MCPServerInstanceService:
         """The headers this connection sends its upstream, secret ones included."""
         transport_spec = await self.get_transport_spec_for_instance(instance)
         return await self._outbound_headers(instance, transport_spec)
+
+    async def credential_headers(self, instance: MCPServerInstance) -> dict[str, str]:
+        """Every header that authenticates this connection: its own and its auth config's.
+
+        For a request its catalog entry declares on the same vendor, such as reading
+        what a call cost later (wiki ADR-0038 §2.3).
+        """
+        return {
+            **await self.outbound_headers(instance),
+            **await self._resolve_auth_headers(instance),
+        }
 
     async def _outbound_headers(
         self, instance: MCPServerInstance, transport_spec: dict[str, Any]

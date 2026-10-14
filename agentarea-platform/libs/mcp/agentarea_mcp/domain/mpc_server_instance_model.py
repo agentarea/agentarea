@@ -68,6 +68,11 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     # operator, its credential kept in the platform workspace. Every call on one is
     # bought by the platform, so it is gated on and charged to the caller's balance.
     managed_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # A cost declaration a member set on a connection the workspace pays for; it wins
+    # over the catalog entry's (wiki ADR-0038 §2.3). NULL: the catalog's own.
+    cost: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=True
+    )
 
     @classmethod
     def workspace_visibility(cls, workspace_id: str) -> ColumnElement[bool]:

@@ -53,6 +53,7 @@ from agentarea_execution.workflows.helpers import approvers_for_tool
 from agentarea_governance.domain.tool_call_approvals import GateVerdict, ToolCallRequest
 from agentarea_governance.tool_calls import (
     GovernedToolCall,
+    PendingCost,
     ToolCallOutcome,
     ToolUsage,
     Verdict,
@@ -650,7 +651,9 @@ async def _record_tool_call_costs(user_ctx: UserContext, usages: list[ToolUsage]
             )
 
 
-async def _spend_cap_refusal(user_ctx: UserContext, call: GovernedToolCall) -> str | None:
+async def _spend_cap_refusal(
+    user_ctx: UserContext, call: GovernedToolCall, pending: PendingCost | None
+) -> str | None:
     from agentarea_common.base.tenant_scope import workspace_scope
     from agentarea_common.config.database import get_database
     from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
@@ -658,7 +661,7 @@ async def _spend_cap_refusal(user_ctx: UserContext, call: GovernedToolCall) -> s
 
     with workspace_scope(user_ctx.workspace_id):
         async with get_database().session() as session:
-            return await spend_cap_refusal(CostEntryRepository(session, user_ctx), call)
+            return await spend_cap_refusal(CostEntryRepository(session, user_ctx), call, pending)
 
 
 async def _catalog_server_spec(user_ctx: UserContext, instance: Any) -> dict | None:
@@ -745,8 +748,8 @@ async def _governed_call(
     async def ledger(usages: list[ToolUsage]) -> None:
         await _record_tool_call_costs(user_ctx, usages)
 
-    async def spend_gate(governed: GovernedToolCall) -> str | None:
-        return await _spend_cap_refusal(user_ctx, governed)
+    async def spend_gate(governed: GovernedToolCall, pending: PendingCost | None) -> str | None:
+        return await _spend_cap_refusal(user_ctx, governed, pending)
 
     async def audit_refusal(decision: ToolAuthorizationDecision) -> None:
         if not decision.allowed:

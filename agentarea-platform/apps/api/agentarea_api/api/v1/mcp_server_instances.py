@@ -62,6 +62,8 @@ class MCPServerInstanceResponse(BaseModel):
     # "platform" for a connection the deployment supplies to every workspace on its
     # own credential (read-only here; its calls are charged to the workspace balance).
     managed_by: str | None = None
+    # A member-set cost that wins over the catalog's (wiki ADR-0038 §2.3).
+    cost: dict[str, Any] | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -113,6 +115,7 @@ class MCPServerInstanceResponse(BaseModel):
                 "tools": instance.tools,
                 "auth_config_id": instance.auth_config_id,
                 "managed_by": instance.managed_by,
+                "cost": instance.cost,
                 "created_at": instance.created_at,
                 "updated_at": instance.updated_at,
             }

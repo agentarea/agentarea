@@ -1,7 +1,8 @@
 """The tool-call layer's spend gate, against the migrated ledger.
 
 A cap counts only the current lines of its scope (agent, client, connection, tool)
-this month, and a cap that would have to count spend it cannot convert refuses.
+this month, nothing is converted, and a call whose known cost would take a cap past
+its amount is refused before it runs.
 Only the query on the migrated table proves which lines a scope reaches.
 
 Set TASKS_TEST_DATABASE_URL to a postgresql+asyncpg URL for a disposable,
@@ -16,7 +17,7 @@ from uuid import uuid4
 import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.tool_authorization import ToolAuthorizationRequest
-from agentarea_common.extensions import customer_pricing
+from agentarea_common.extensions import tool_billing
 from agentarea_common.tool_cost import Payer, parse_cost_model
 from agentarea_governance.domain.policies import BudgetPolicy
 from agentarea_governance.tool_calls import GovernedToolCall, ToolConnection
@@ -44,10 +45,8 @@ async def session():
 
 
 @pytest.fixture(autouse=True)
-def oss_pricing(monkeypatch):
-    monkeypatch.setattr(
-        customer_pricing, "get_customer_pricing", lambda: customer_pricing.ProviderCostPricing()
-    )
+def oss_usd(monkeypatch):
+    monkeypatch.setattr(tool_billing, "deployment_currency", lambda: "USD")
 
 
 def _line(
@@ -290,3 +289,74 @@ async def test_a_monthly_llm_cap_counts_model_lines_only(session):
     reached = await monthly_llm_cap_reached(repo, budget(), agent_id, "USD", now=NOW)
 
     assert (reached.spent, reached.cap, reached.agent_id) == (Decimal("1.2"), Decimal(1), None)
+
+
+async def test_a_call_whose_known_cost_would_exceed_what_a_cap_has_left_is_refused(session):
+    workspace_id = str(uuid4())
+    repo = await _seed(session, workspace_id, [_line(workspace_id, amount="0.90")])
+    policy = {"budget": {"monthly_spend_cap_usd": "1"}}
+    call = _call(workspace_id, policy)
+
+    refused = await spend_cap_refusal(repo, call, (Decimal("0.20"), "USD"), now=NOW)
+
+    assert refused == (
+        "workspace monthly spend cap of 1 USD would be exceeded: 0.9 USD spent this month, "
+        "this call costs 0.2 USD"
+    )
+    assert await spend_cap_refusal(repo, call, (Decimal("0.10"), "USD"), now=NOW) is None
+    # A cost in another currency is not covered by the cap, so it cannot exceed it.
+    assert await spend_cap_refusal(repo, call, (Decimal("50"), "RUB"), now=NOW) is None
+
+
+async def test_an_agent_may_spend_one_dollar_a_run_of_which_tools_twenty_cents(session):
+    """The owner's example (ADR-0038 §2.6): a per-run cap and a per-run cap on tools."""
+    workspace_id, task_id = str(uuid4()), uuid4()
+    policy = {
+        "budget": {
+            "spend_caps": [
+                {"amount_usd": "1", "period": "run"},
+                {"amount_usd": "0.20", "period": "run", "category": "tools"},
+            ]
+        }
+    }
+    repo = await _seed(
+        session,
+        workspace_id,
+        [
+            _line(workspace_id, amount="0.70", task_id=task_id, category=CostCategory.MODEL),
+            _line(workspace_id, amount="0.15", task_id=task_id),
+        ],
+    )
+    call = _call(workspace_id, policy, task_id=task_id)
+
+    tools = await spend_cap_refusal(repo, call, (Decimal("0.10"), "USD"), now=NOW)
+    assert tools is not None and tools.startswith("run tools spend cap of 0.2 USD would be")
+    assert await spend_cap_refusal(repo, call, (Decimal("0.05"), "USD"), now=NOW) is None
+
+    await repo.record(
+        [_line(workspace_id, amount="0.12", task_id=task_id, category=CostCategory.MODEL)]
+    )
+    total = await spend_cap_refusal(repo, call, (Decimal("0.05"), "USD"), now=NOW)
+    assert total is not None and total.startswith("run spend cap of 1 USD would be exceeded")
+
+
+async def test_the_runs_budget_refuses_a_tool_call_that_would_take_the_run_past_it(session):
+    """A per-run cap with no narrowing compiles to the run budget, which the gate also reads."""
+    workspace_id, task_id = str(uuid4()), uuid4()
+    repo = await _seed(
+        session,
+        workspace_id,
+        [
+            _line(workspace_id, amount="0.10", task_id=task_id, category=CostCategory.MODEL),
+            _line(workspace_id, amount="0.64", task_id=task_id),
+        ],
+    )
+    call = _call(workspace_id, {"budget": {"run_budget_usd": "0.80"}}, task_id=task_id)
+
+    refused = await spend_cap_refusal(repo, call, (Decimal("0.64"), "USD"), now=NOW)
+
+    assert refused == (
+        "run spend cap of 0.8 USD would be exceeded: 0.74 USD spent in this run, "
+        "this call costs 0.64 USD"
+    )
+    assert await spend_cap_refusal(repo, call, (Decimal("0.05"), "USD"), now=NOW) is None

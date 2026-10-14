@@ -21,6 +21,7 @@ from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_common.tool_cost import ToolConnection, ToolCostError
 from agentarea_governance.tool_calls import (
     GovernedToolCall,
+    PendingCost,
     ToolCallOutcome,
     ToolUsage,
     Verdict,
@@ -315,12 +316,16 @@ def make_tools_activities(
                 [tool_call_entry(usage) for usage in usages]
             )
 
-    async def _spend_gate(request: MCPToolRequest, call: GovernedToolCall) -> str | None:
+    async def _spend_gate(
+        request: MCPToolRequest, call: GovernedToolCall, pending: PendingCost | None
+    ) -> str | None:
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
-            return await spend_cap_refusal(CostEntryRepository(session, user_context), call)
+            return await spend_cap_refusal(
+                CostEntryRepository(session, user_context), call, pending
+            )
 
     async def _record_tool_progress(
         data: dict[str, Any], *, request: MCPToolRequest, user_context: Any
@@ -411,8 +416,8 @@ def make_tools_activities(
             approval_granted=request.policy_approval_granted,
         )
 
-        async def spend_gate(governed: GovernedToolCall) -> str | None:
-            return await _spend_gate(request, governed)
+        async def spend_gate(governed: GovernedToolCall, pending: PendingCost | None) -> str | None:
+            return await _spend_gate(request, governed, pending)
 
         layered = await run_tool_call(
             call, invoke, audit=audit, ledger=ledger, spend_gate=spend_gate

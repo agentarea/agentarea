@@ -35,7 +35,7 @@ from agentarea_governance.domain.rules import (
 )
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.domain.statuses import TASK_STATUSES, TaskStatus
-from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository, SpendScope
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.spend_gate import spend_not_covered, workspace_cap_currencies
@@ -109,6 +109,9 @@ class SpendCard(BaseModel):
     # Month-to-date spend in a currency no workspace monthly cap is in: never
     # converted, never blocked. Empty when the workspace has no such cap.
     not_covered: list[CurrencySpend] = Field(default_factory=list)
+    # The part of ``mtd_usd`` that is an estimate (a public rate, a held amount not
+    # captured yet, a cost the vendor has still to settle); the rest is exact.
+    mtd_estimate_usd: Money = Decimal(0)
 
 
 class HitlBlocker(BaseModel):
@@ -394,8 +397,11 @@ async def get_dashboard(
     billing_currency = get_customer_pricing().currency()
     covered = await _workspace_cap_currencies(factory, workspace_id, billing_currency)
     now = datetime.now(UTC)
-    by_currency = await factory.create_repository(CostEntryRepository).sum_by_currency_since(
-        datetime(now.year, now.month, 1, tzinfo=UTC)
+    month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
+    cost_lines = factory.create_repository(CostEntryRepository)
+    by_currency = await cost_lines.sum_by_currency_since(month_start)
+    mtd_estimate = await cost_lines.sum_since(
+        month_start, currency=billing_currency, scope=SpendScope(estimate=True)
     )
     spend = SpendCard(
         today_usd=today_usd,
@@ -407,6 +413,7 @@ async def get_dashboard(
             CurrencySpend(currency=currency, amount=amount)
             for currency, amount in spend_not_covered(by_currency, covered).items()
         ],
+        mtd_estimate_usd=to_money(mtd_estimate),
     )
 
     # ----- agent name lookup (single query) -----

@@ -42,7 +42,7 @@ Every variable AgentArea reads is `AGENTAREA_<DOMAIN>_<KEY>`, at most 40
 characters, with at most three segments after the domain. The domain comes from
 a closed list: `DB` `S3` `AUTH` `AUTHZ` `SECRET` `MCP` `SANDBOX` `TEMPORAL`
 `WORKER` `TASK` `TRIGGER` `CHANNEL` `EVENT` `CORS` `LOG` `REDIS` `KAFKA` `TOOL` `K8S`
-`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A`. Domains are whole words; only
+`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND`. Domains are whole words; only
 established acronyms are abbreviated. A handful of
 app-level names carry no domain — `AGENTAREA_ENV`, `AGENTAREA_API_URL`,
 `AGENTAREA_APP_URL`, `AGENTAREA_EDITION`.
@@ -451,6 +451,20 @@ CIDR lets every member reach every in-cluster service, the platform's own
 included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
+
+### Spend currency (not in `config.yaml`)
+
+Read by `SpendSettings` in the backend and the worker.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `AGENTAREA_SPEND_CURRENCY` | none (set it in the env values) | `USD` |
+
+The one currency spend caps count and tool costs are declared in, as an ISO 4217
+code. Nothing converts other currencies: a tool cost declared in another currency is
+recorded in that currency and shown as not covered by caps. With the enterprise
+billing extension installed, billing's ledger currency is the source of truth and
+this must name it, or the backend and the worker refuse to start.
 
 ### Docker Compose variables
 

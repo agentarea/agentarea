@@ -52,6 +52,7 @@ def _make_instance(
     inst.server_spec_id = "test-spec-id"
     inst.auth_config_id = None
     inst.managed_by = None
+    inst.cost = None
     inst.get_configured_env_vars = MagicMock(return_value=[])
 
     if instance_type in ("docker", "command"):

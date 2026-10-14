@@ -64,6 +64,11 @@ async def initialize_services():
         from agentarea_common.extensions.customer_pricing import get_customer_pricing
 
         logger.info("Billing currency: %s", get_customer_pricing().currency())
+        # Installed billing must keep its ledger in AGENTAREA_SPEND_CURRENCY, or caps
+        # would count lines in a currency billing does not charge in.
+        from agentarea_common.extensions.tool_billing import deployment_currency
+
+        logger.info("Spend currency: %s", deployment_currency())
 
         app_settings = get_app_settings()
         mode = DeploymentMode(app_settings.EDITION)

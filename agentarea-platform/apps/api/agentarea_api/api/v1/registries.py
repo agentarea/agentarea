@@ -4,7 +4,7 @@ Sync auto-creates entities for new items. Version updates are manual.
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_registry_service
@@ -28,6 +28,7 @@ from agentarea_registry.application.catalog_pricing import (
     ComputeEstimate,
     ToolPrice,
     price_catalog_item,
+    price_catalog_items,
 )
 from agentarea_registry.application.service import (
     VALID_REGISTRY_TYPES,
@@ -120,16 +121,30 @@ class RegistryResponse(BaseModel):
 
 
 class CatalogToolPrice(BaseModel):
-    """What the workspace is charged per unit of a tool's calls; ``tool`` null is the default."""
+    """What one unit of a tool's calls costs; ``tool`` null is the connector's default.
+
+    ``basis`` "price": billing's price on the platform's key, markup included.
+    "vendor_cost": the vendor's own cost, with no markup. ``unavailable``: billing could
+    not be asked for its price, so the vendor cost stands in.
+    """
 
     tool: str | None
     amount: Decimal
     currency: str
     unit: str
+    basis: Literal["price", "vendor_cost"]
+    unavailable: bool = False
 
     @classmethod
     def from_domain(cls, price: ToolPrice) -> "CatalogToolPrice":
-        return cls(tool=price.tool, amount=price.amount, currency=price.currency, unit=price.unit)
+        return cls(
+            tool=price.tool,
+            amount=price.amount,
+            currency=price.currency,
+            unit=price.unit,
+            basis=price.basis,
+            unavailable=price.unavailable,
+        )
 
 
 class CatalogComputeEstimate(BaseModel):
@@ -480,14 +495,13 @@ async def browse_catalog(
         if registry_type == PROTOCOL_REGISTRY_TYPE and items
         else None
     )
+    pricings_of = await price_catalog_items(items)
     return CatalogBrowseResponse(
         items=[
             RegistryItemResponse.from_domain(
-                i,
-                None if found is None else found.get(str(i.id), []),
-                await price_catalog_item(i),
+                i, None if found is None else found.get(str(i.id), []), item_pricing
             )
-            for i in items
+            for i, item_pricing in zip(items, pricings_of, strict=True)
         ],
         total=total,
         categories=[CategoryFacet(value=v, count=c) for v, c in categories],

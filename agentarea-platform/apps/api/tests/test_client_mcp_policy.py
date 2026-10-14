@@ -177,21 +177,36 @@ class _Ledger:
         self.entries.extend(entries)
 
 
-class _Guard:
-    name = "entitlement_guard"
+class _Billing:
+    """Billing as the layer asks it: a hold of 0.64 RUB per platform call, or no credits."""
 
     def __init__(self, allow: bool) -> None:
         self.allow = allow
 
-    async def execute(self, context):
-        from agentarea_governance.domain.enums import InterceptorAction
-        from agentarea_governance.domain.models import InterceptorResult
+    def currency(self) -> str:
+        return "RUB"
 
-        return InterceptorResult(
-            action=InterceptorAction.ALLOW if self.allow else InterceptorAction.DENY,
-            interceptor_name=self.name,
-            reason="ok" if self.allow else "no credits remaining",
+    async def authorize(self, **request):
+        from decimal import Decimal
+
+        return SimpleNamespace(
+            allowed=self.allow,
+            code="ok" if self.allow else "no_credits",
+            reason="" if self.allow else "no credits remaining",
+            hold_id="hold-1" if self.allow else None,
+            amount=Decimal("0.64") if self.allow else None,
+            currency="RUB" if self.allow else None,
+            expires_at=None,
         )
+
+    async def void(self, *, hold_id):
+        return None
+
+    async def capture(self, **request):
+        raise AssertionError("the settlement worker captures")
+
+    async def quote(self, lines):
+        raise AssertionError("every cost here is in the deployment currency")
 
 
 @pytest.fixture
@@ -199,17 +214,9 @@ def paid_client(monkeypatch, audit_events, upstream_calls):
     """A client carrying the platform's tool-gateway, priced, its ledger captured."""
     from decimal import Decimal
 
-    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions import tool_billing
     from agentarea_common.extensions.registry import ExtensionRegistry
-    from agentarea_governance.tool_calls import entitlement_guard
     from agentarea_tasks.infrastructure import cost_repository
-
-    class Pricing(customer_pricing.ProviderCostPricing):
-        def currency(self) -> str:
-            return "RUB"
-
-        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
-            return vendor_cost * Decimal("1.5")
 
     proxy = MCPAggregatorProxy(
         "Codex",
@@ -245,7 +252,7 @@ def paid_client(monkeypatch, audit_events, upstream_calls):
 
     monkeypatch.setattr(proxy, "_discover_member_tools", discover)
     monkeypatch.setattr(proxy, "_call_member_tool_result", call_member)
-    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Pricing())
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
     ledger = _Ledger()
     monkeypatch.setattr(cost_repository, "CostEntryRepository", ledger)
     scope = client_mcp.ClientScope(
@@ -267,14 +274,14 @@ def paid_client(monkeypatch, audit_events, upstream_calls):
 
     def with_balance(allow: bool) -> _Ledger:
         ExtensionRegistry.clear()
-        entitlement_guard.cache_clear()
-        ExtensionRegistry.register("entitlement_guard", lambda: _Guard(allow))
+        tool_billing.get_tool_billing.cache_clear()
+        ExtensionRegistry.register("tool_billing", lambda: _Billing(allow))
         return ledger
 
     yield with_balance
     client_mcp._client_id_var.reset(token)
     ExtensionRegistry.clear()
-    entitlement_guard.cache_clear()
+    tool_billing.get_tool_billing.cache_clear()
 
 
 @pytest.mark.asyncio
@@ -301,7 +308,7 @@ async def test_a_paid_client_call_is_one_ledger_line_of_the_client_and_no_task(
     assert (entry.vendor_cost, entry.vendor_currency, entry.amount, entry.currency) == (
         Decimal("0.488"),
         "RUB",
-        Decimal("0.7320"),
+        Decimal("0.64"),
         "RUB",
     )
     assert entry.evidence["connector"] == "ru.yandex/search-api"
@@ -362,18 +369,10 @@ def openapi_client(monkeypatch, audit_events):
     from unittest.mock import AsyncMock, MagicMock
 
     from agentarea_agents_sdk.tools.openapi_tool import OpenAPITool
-    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions import tool_billing
     from agentarea_common.extensions.registry import ExtensionRegistry
-    from agentarea_governance.tool_calls import entitlement_guard
     from agentarea_mcp.domain.client_models import ClientOpenAPIConnectionLink
     from agentarea_tasks.infrastructure import cost_repository
-
-    class Pricing(customer_pricing.ProviderCostPricing):
-        def currency(self) -> str:
-            return "RUB"
-
-        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
-            return vendor_cost * Decimal("1.5")
 
     connection = _yandex_connection()
     service = MagicMock()
@@ -392,7 +391,7 @@ def openapi_client(monkeypatch, audit_events):
         return {"success": True, "result": "[]", "error": None, "status_code": 200, "body": []}
 
     monkeypatch.setattr(OpenAPITool, "execute", execute)
-    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Pricing())
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
     ledger = _Ledger()
     monkeypatch.setattr(cost_repository, "CostEntryRepository", ledger)
     link = ClientOpenAPIConnectionLink(
@@ -402,8 +401,8 @@ def openapi_client(monkeypatch, audit_events):
 
     def with_scope(*, balance: bool = True, policy: dict | None = None):
         ExtensionRegistry.clear()
-        entitlement_guard.cache_clear()
-        ExtensionRegistry.register("entitlement_guard", lambda: _Guard(balance))
+        tool_billing.get_tool_billing.cache_clear()
+        ExtensionRegistry.register("tool_billing", lambda: _Billing(balance))
         scope = client_mcp.ClientScope(
             proxy=MCPAggregatorProxy("Codex", "", [], {}, {}, era_verdict_store=object()),
             skill_registry={},
@@ -425,7 +424,7 @@ def openapi_client(monkeypatch, audit_events):
     yield with_scope
     client_mcp._client_id_var.reset(token)
     ExtensionRegistry.clear()
-    entitlement_guard.cache_clear()
+    tool_billing.get_tool_billing.cache_clear()
 
 
 @pytest.mark.asyncio
@@ -474,7 +473,7 @@ async def test_a_client_call_of_a_platform_openapi_operation_is_one_ledger_line_
     assert (entry.vendor_cost, entry.vendor_currency, entry.amount, entry.currency) == (
         Decimal("0.488"),
         "RUB",
-        Decimal("0.7320"),
+        Decimal("0.64"),
         "RUB",
     )
     assert entry.evidence["connector"] == "ru.yandex/search-api"

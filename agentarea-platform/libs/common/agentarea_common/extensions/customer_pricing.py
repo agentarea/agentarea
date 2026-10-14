@@ -30,10 +30,6 @@ logger = logging.getLogger(__name__)
 CUSTOMER_PRICING_EXTENSION = "customer_pricing"
 
 
-class FxUnavailableError(LookupError):
-    """An installed pricing could not express a tool cost in the billing currency."""
-
-
 @runtime_checkable
 class CustomerPricing(Protocol):
     def currency(self) -> str:
@@ -59,28 +55,6 @@ class CustomerPricing(Protocol):
 
 
 @runtime_checkable
-class VendorCostPricing(Protocol):
-    """A pricing that can also express what a tool's vendor charged, for caps and display."""
-
-    async def price_vendor_cost(
-        self,
-        *,
-        payer: str,
-        connector: str,
-        tool: str,
-        vendor_cost: Decimal,
-        currency: str,
-    ) -> Decimal:
-        """Return the amount a tool call's line shows and caps count, in ``currency()``.
-
-        ``vendor_cost`` is what the vendor charged the payer, in ``currency``. For
-        ``payer`` platform this is an estimate of the debit; billing is the money
-        authority. Raises a ``LookupError`` when ``currency`` cannot be converted.
-        """
-        ...
-
-
-@runtime_checkable
 class ComputePricing(Protocol):
     """A pricing that also knows what an hour of reserved compute costs, for display."""
 
@@ -94,11 +68,7 @@ class ComputePricing(Protocol):
 
 
 class ProviderCostPricing:
-    """OSS default: the customer pays the provider cost, in USD.
-
-    It converts nothing: a tool's vendor cost stays in the vendor's currency, and a
-    spend cap counts only the lines in its own currency.
-    """
+    """OSS default: the customer pays the provider cost, in USD."""
 
     def currency(self) -> str:
         return "USD"
@@ -214,39 +184,6 @@ async def price_llm_call(
         raise RuntimeError(
             f"LLM usage accounting unavailable: customer pricing failed: {error}"
         ) from error
-
-
-async def price_vendor_cost(
-    *,
-    payer: str,
-    connector: str,
-    tool: str,
-    vendor_cost: Decimal,
-    currency: str,
-    pricing: CustomerPricing | None = None,
-) -> tuple[Decimal, str]:
-    """A tool call's line amount and its currency.
-
-    An installed pricing that prices tool costs returns the customer's amount in
-    the billing currency. Without one the amount is
-    the vendor cost in the vendor's currency: nothing is converted. Raises
-    ``FxUnavailableError`` when an installed pricing cannot convert ``currency``.
-    """
-    active = pricing or get_customer_pricing()
-    if not isinstance(active, VendorCostPricing):
-        return to_money(vendor_cost), currency
-    try:
-        amount = await active.price_vendor_cost(
-            payer=payer,
-            connector=connector,
-            tool=tool,
-            vendor_cost=vendor_cost,
-            currency=currency,
-        )
-    except LookupError as error:
-        # An extension cannot import this class; it raises its own LookupError.
-        raise FxUnavailableError(str(error)) from error
-    return to_money(amount), active.currency()
 
 
 async def price_compute_hour(

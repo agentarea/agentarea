@@ -236,6 +236,7 @@ class OpenAPIConnectionsToolset(Toolset):
         custom_headers_json: str = "",
         custom_query_params_json: str = "",
         url_variables_json: str = "",
+        cost_json: str = "",
     ) -> str:
         """Update fields on an existing OpenAPI connection. Only fields explicitly
         set are written. ``custom_headers_json`` replaces the full header set;
@@ -245,7 +246,10 @@ class OpenAPIConnectionsToolset(Toolset):
         full ``[{"name", "value"}]`` set, which must match the ``{name}``
         placeholders in ``base_url``. Secret values are stored encrypted in the
         secret manager. Call ``discover_tools`` afterwards to refresh the
-        discovered tools list when the spec changes.
+        discovered tools list when the spec changes. ``cost_json`` sets what a call
+        costs on a connection the workspace pays for, e.g. ``{"source": "rate",
+        "rate": {"amount": "0.01", "currency": "USD"}}``; ``null`` restores the
+        connector's own.
         """
         patch: dict[str, Any] = {}
         if name is not None:
@@ -271,6 +275,8 @@ class OpenAPIConnectionsToolset(Toolset):
         if url_variables_json:
             raw_url_variables = json.loads(url_variables_json)
             patch["url_variables"] = [UrlVariableInput.model_validate(v) for v in raw_url_variables]
+        if cost_json:
+            patch["cost"] = json.loads(cost_json)
 
         if not patch:
             raise ToolError("no fields to update")

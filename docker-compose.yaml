@@ -55,6 +55,8 @@ services:
       # PEM file of CA certificates trusted on outbound TLS on top of the public
       # roots; a path inside the container, mounted by an override file.
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
@@ -476,6 +478,8 @@ services:
       # PEM file of CA certificates trusted on outbound TLS on top of the public
       # roots; a path inside the container, mounted by an override file.
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
 
       # Temporal
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}

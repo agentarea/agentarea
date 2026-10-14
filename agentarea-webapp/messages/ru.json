@@ -2781,7 +2781,8 @@
     "perDay": "×{count}/день",
     "fromDate": "с {date}",
     "moreRuns": "ещё {count}",
-    "runCount": "Запланировано запусков: {count}"
+    "runCount": "Запланировано запусков: {count}",
+    "estimatePart": "в т. ч. ≈ {amount} — оценка"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Не удалось загрузить данные бюджета",
@@ -3461,7 +3462,9 @@
       "computeCpu": "CPU",
       "computeMemory": "Память",
       "computePerHour": "В час, пока запущен",
-      "computePerMonth": "В месяц, если работает постоянно"
+      "computePerMonth": "В месяц, если работает постоянно",
+      "vendorCost": "{price} — стоимость у поставщика, без наценки",
+      "priceUnavailable": "{price} · цена недоступна, стоимость у поставщика без наценки"
     }
   },
   "BundleInstall": {
@@ -3560,5 +3563,35 @@
   "ToolPart": {
     "blockedByPolicy": "Заблокировано политикой",
     "rejectedByApprover": "Отклонено согласующим"
+  },
+  "ConnectionCost": {
+    "title": "Стоимость вызова",
+    "edit": "Изменить",
+    "save": "Сохранить",
+    "saving": "Сохраняем…",
+    "cancel": "Отмена",
+    "saveFailed": "Не удалось сохранить стоимость",
+    "hint": "Сколько стоит вызов этого подключения на вашем ключе. Лимиты расходов учитывают её; счёт выставляет поставщик.",
+    "mode": "Стоимость",
+    "amount": "Сумма",
+    "currency": "Валюта",
+    "unit": "Единица",
+    "unitPlaceholder": "страница, фраза, элемент",
+    "quantity": "Откуда считать единицы (аргумент или $.path в ответе)",
+    "path": "Поле в ответе ($.path)",
+    "modes": {
+      "connector": "Как объявляет коннектор",
+      "per_call": "За вызов",
+      "per_unit": "За единицу",
+      "from_response": "Из поля ответа",
+      "free": "Бесплатно"
+    },
+    "summary": {
+      "connector": "Как объявляет коннектор.",
+      "per_call": "{amount} {currency} за вызов.",
+      "per_unit": "{amount} {currency} за {unit}, количество из {quantity}.",
+      "from_response": "Берётся из {path} в ответе, в {currency}.",
+      "free": "Бесплатно."
+    }
   }
 }

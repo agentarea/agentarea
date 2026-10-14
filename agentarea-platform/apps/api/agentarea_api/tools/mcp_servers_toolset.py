@@ -458,8 +458,14 @@ class MCPServersToolset(Toolset):
         name: str | None = None,
         description: str | None = None,
         json_spec_json: str = "",
+        cost_json: str = "",
     ) -> str:
-        """Update fields on an existing MCP server instance."""
+        """Update fields on an existing MCP server instance.
+
+        ``cost_json`` sets what a call costs on a connection the workspace pays for,
+        e.g. ``{"source": "rate", "rate": {"amount": "0.01", "currency": "USD"}}``;
+        ``null`` restores the catalog's own.
+        """
         patch: dict[str, Any] = {}
         if name is not None:
             patch["name"] = name
@@ -467,6 +473,8 @@ class MCPServersToolset(Toolset):
             patch["description"] = description
         if json_spec_json:
             patch["json_spec"] = json.loads(json_spec_json)
+        if cost_json:
+            patch["cost"] = json.loads(cost_json)
 
         if not patch:
             raise ToolError("no fields to update")

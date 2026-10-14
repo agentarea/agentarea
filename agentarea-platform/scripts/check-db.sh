@@ -66,6 +66,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     other currencies, and the backfill turns stored paid events into lines.
 #     The tool-call spend gate's caps reach only their scope's lines (agent,
 #     client, connection, tool), a query on the migrated table.
+#     The settlement worker claims only lines marked for settlement that no line
+#     supersedes, through the partial index, and finalises each once.
 #   task provenance: a task's origin, correlation, causation and parent id are
 #     plain nullable columns the migrated schema must carry; a mocked session
 #     never catches a missing column.
@@ -118,6 +120,7 @@ PY_SUITES=(
   libs/tasks/tests/test_cost_entries_db.py
   libs/tasks/tests/test_cost_entries_backfill_db.py
   libs/tasks/tests/test_spend_gate_db.py
+  libs/tasks/tests/test_cost_settlement_db.py
   libs/tasks/tests/test_inbox_counts_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py

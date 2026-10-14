@@ -40,6 +40,8 @@ services:
       # OpenAI-compatible router). localhost is what a config stores; calls
       # rewrite it to host.docker.internal.
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
       # Hydra OAuth2 AS
       - AGENTAREA_AUTH_HYDRA_URL=http://hydra:4444
       - AGENTAREA_AUTH_HYDRA_ADMIN_URL=http://hydra:4445
@@ -568,6 +570,8 @@ services:
       - LLM_DOCKER_HOST=host.docker.internal
       # Same host model servers as the app (see AGENTAREA_HTTP_PRIVATE_ALLOWLIST there).
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
 
       # S3 / RustFS (file tool artifacts land here, keyed by workspace+task)
       - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}

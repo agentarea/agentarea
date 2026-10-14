@@ -54,6 +54,7 @@
     "libs/streams/agentarea_streams/application/dispatcher.py": 2,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 1,
     "libs/streams/agentarea_streams/infrastructure/repository.py": 1,
+    "libs/tasks/agentarea_tasks/cost_settlement.py": 1,
     "libs/triggers/agentarea_triggers/channels/inbound_subscriber.py": 1,
     "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1,
     "libs/triggers/agentarea_triggers/channels/origin_guard.py": 1,
