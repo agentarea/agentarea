@@ -117,7 +117,8 @@ class VideoStatus:
 @dataclass(frozen=True)
 class DecisionResult:
     answers: dict[str, dict[str, Any]]
-    cost_usd: Decimal
+    # None when neither the provider nor the spec says what the call cost.
+    cost_usd: Decimal | None
     input_tokens: int
     output_tokens: int
 
@@ -233,8 +234,11 @@ class ImageModel:
 
         cost = _provider_cost(_litellm_provider_cost(response))
         if cost is None:
-            raise ModelCostUnavailableError(
-                f"image model {endpoint.model_name} reported no cost, so the call cannot be billed"
+            # The provider was paid for this image: it is kept, its cost unknown.
+            logger.error(
+                "Image model instance %s (%s) reported no cost; the call's cost is unknown",
+                endpoint.instance_id,
+                endpoint.model_name,
             )
         return GeneratedMedia(content=content, media_type=_image_media_type(content), cost_usd=cost)
 
@@ -405,16 +409,22 @@ class DecisionModel:
             output_tokens=output_tokens,
         )
 
-    def _cost(self, usage: Mapping[str, Any], input_tokens: int, output_tokens: int) -> Decimal:
+    def _cost(
+        self, usage: Mapping[str, Any], input_tokens: int, output_tokens: int
+    ) -> Decimal | None:
         reported = _provider_cost(usage.get("cost"))
         if reported is not None:
             return reported
         endpoint = self._endpoint
         if endpoint.input_cost_per_token is None or endpoint.output_cost_per_token is None:
-            raise ModelCostUnavailableError(
-                f"decision model {endpoint.model_name} reported no cost and its spec has no "
-                "per-token prices, so the call cannot be billed"
+            # The provider was paid for this answer: it is kept, its cost unknown.
+            logger.error(
+                "Decision model instance %s (%s) reported no cost and its spec has no "
+                "per-token prices; the call's cost is unknown",
+                endpoint.instance_id,
+                endpoint.model_name,
             )
+            return None
         return to_money(
             Decimal(input_tokens) * endpoint.input_cost_per_token
             + Decimal(output_tokens) * endpoint.output_cost_per_token

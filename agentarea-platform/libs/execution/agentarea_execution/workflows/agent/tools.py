@@ -181,9 +181,12 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
             # whether its ledger lines are written (``cost_metered``), so they are
             # not derived from the event again. Absent in older histories.
             paid_cost = to_money(result_dict.get("cost"))
-            priced_cost_fields = (
+            priced_cost_fields: dict[str, Any] = (
                 {"model_cost": serialize_money(model_cost)} if model_cost > ZERO else {}
             )
+            # Absent in older histories, like model_cost.
+            if result_dict.get("cost_unknown"):
+                priced_cost_fields["cost_unknown"] = True
             paid_call_fields: dict[str, Any] = {}
             if paid_cost > ZERO:
                 paid_call_fields["cost"] = serialize_money(paid_cost)

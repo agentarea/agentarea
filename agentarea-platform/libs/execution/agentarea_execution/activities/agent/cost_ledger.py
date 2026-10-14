@@ -163,6 +163,20 @@ def cost_entries(
                 **tool,
             )
         )
+    if data.get("cost_unknown"):
+        # A platform model the tool paid for without saying what it cost: the line
+        # records that it happened, at no amount, so no cap counts a guess.
+        entries.append(
+            line(
+                CostCategory.MODEL,
+                ZERO,
+                currency=billing_currency,
+                source=CostSource.TOOL_REPORTED,
+                estimate=True,
+                evidence={**tool_evidence, "cost_unknown": True},
+                **tool,
+            )
+        )
     if to_money(data.get("service_cost")) > ZERO and not data.get("cost_metered"):
         raw_payment = data.get("payment")
         payment: dict[str, Any] = raw_payment if isinstance(raw_payment, dict) else {}

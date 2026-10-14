@@ -96,12 +96,14 @@ async def test_image_generation_returns_bytes_type_and_provider_cost():
     assert seen["body"]["messages"] == [{"role": "user", "content": "a lighthouse at dusk"}]
 
 
-async def test_image_generation_without_a_provider_cost_is_refused():
+async def test_an_image_without_a_provider_cost_is_kept_with_its_cost_unknown():
     usage = {"prompt_tokens": 6, "completion_tokens": 1290, "total_tokens": 1296}
     model = ImageModel(_endpoint(), litellm_client=_http_handler(_image_handler({}, usage=usage)))
 
-    with pytest.raises(ModelCostUnavailableError):
-        await model.generate("a lighthouse")
+    image = await model.generate("a lighthouse")
+
+    assert image.content == PNG
+    assert image.cost_usd is None
 
 
 async def test_image_generation_that_returns_no_image_is_an_error():
@@ -322,7 +324,7 @@ async def test_decision_cost_falls_to_the_spec_token_prices_when_the_provider_om
     assert result.cost_usd == Decimal("0.000120")
 
 
-async def test_decision_without_any_price_is_refused():
+async def test_a_decision_without_any_price_is_kept_with_its_cost_unknown():
     model = DecisionModel(
         _endpoint(),
         http_client_factory=_client_factory(
@@ -330,8 +332,11 @@ async def test_decision_without_any_price_is_refused():
         ),
     )
 
-    with pytest.raises(ModelCostUnavailableError):
-        await model.evaluate("state", _QUESTIONS)
+    result = await model.evaluate("state", _QUESTIONS)
+
+    assert result.answers
+    assert result.cost_usd is None
+    assert (result.input_tokens, result.output_tokens) == (100, 2)
 
 
 async def test_a_missing_answer_is_an_error():

@@ -23,8 +23,8 @@ class VideoGenerationJobRepository(WorkspaceScopedRepository[VideoGenerationJob]
         job_id: UUID,
         file_path: str,
         *,
-        cost_usd: Decimal,
-        billed_cost: Decimal,
+        cost_usd: Decimal | None,
+        billed_cost: Decimal | None,
         call_ref: str,
     ) -> bool:
         """Record the finished video and which tool call bills it, once.

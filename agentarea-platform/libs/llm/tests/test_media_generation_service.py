@@ -13,7 +13,6 @@ from agentarea_llm.application.media_generation_service import (
 from agentarea_llm.domain.media import VideoJobStatus
 from agentarea_llm.infrastructure.model_clients import (
     GeneratedMedia,
-    ModelCostUnavailableError,
     ModelEndpoint,
     SubmittedVideo,
     VideoStatus,
@@ -85,9 +84,10 @@ class _Video:
 
 
 class _Models:
-    def __init__(self, video: _Video):
+    def __init__(self, video: _Video, image_cost: Decimal | None = Decimal("0.04")):
         self.video = video
         self.video_ids: list = []
+        self.image_cost = image_cost
 
     async def video_model(self, instance_id):
         self.video_ids.append(str(instance_id))
@@ -95,7 +95,7 @@ class _Models:
 
     async def image_model(self, instance_id):
         async def generate(prompt, size=None):
-            return GeneratedMedia(content=b"png", media_type="image/png", cost_usd=Decimal("0.04"))
+            return GeneratedMedia(content=b"png", media_type="image/png", cost_usd=self.image_cost)
 
         return SimpleNamespace(endpoint=_endpoint(instance_id), generate=generate)
 
@@ -170,13 +170,33 @@ async def test_a_finished_video_is_billed_to_exactly_one_tool_call():
     )
 
 
-async def test_a_finished_job_without_a_cost_is_refused():
+async def test_a_finished_job_without_a_cost_is_delivered_with_its_cost_unknown():
     jobs, video = _Jobs(), _Video(VideoStatus(status=VideoJobStatus.COMPLETED, cost_usd=None, error=None))
     service = _service(video, jobs)
     job_id = (await service.submit_video("waves")).job_id
 
-    with pytest.raises(ModelCostUnavailableError):
-        await service.check_video(job_id)
+    check = await service.check_video(job_id)
+
+    assert check.video is not None and check.video.content == b"mp4"
+    assert (check.cost_usd, check.cost, check.cost_unknown) == (None, None, True)
+    assert await service.record_video_saved(job_id, "media/v.mp4", None, None)
+
+
+async def test_an_image_without_a_cost_is_delivered_with_its_cost_unknown():
+    jobs, video = _Jobs(), _Video(VideoStatus(status=VideoJobStatus.PENDING, cost_usd=None, error=None))
+    service = MediaGenerationService(
+        models=_Models(video, image_cost=None),  # type: ignore[arg-type]
+        jobs=jobs,  # type: ignore[arg-type]
+        task_id=TASK,
+        image_model_id=IMAGE_MODEL,
+        video_model_id=VIDEO_MODEL,
+        call_ref="task-1:call-1",
+    )
+
+    image = await service.generate_image("a cat")
+
+    assert image.content == b"png"
+    assert (image.cost, image.currency, image.cost_unknown) == (None, None, True)
 
 
 async def test_a_failed_job_keeps_its_error():

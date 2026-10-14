@@ -650,6 +650,9 @@ class MCPToolResult(BaseModel):
     # in the billing currency; it counts toward the run budget and task total the
     # way an LLM call's cost does.
     model_cost: Money = ZERO
+    # The tool ran a platform model and paid for it, but no cost was reported:
+    # nothing joins the budget, and the event and ledger say the cost is unknown.
+    cost_unknown: bool = False
     # What the call's connector declares it cost, as the tool-call layer metered it
     # and wrote its ledger lines: ``cost`` in the billing currency (wallet payments
     # aside, which are ``service_cost``), on whose key (``payer``). Like an LLM

@@ -1033,6 +1033,7 @@ def make_tools_activities(
                     artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
                     service_cost=to_money(result.get("service_cost")),
                     model_cost=to_money(result.get("model_cost")),
+                    cost_unknown=bool(result.get("cost_unknown")),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)
                     else None,

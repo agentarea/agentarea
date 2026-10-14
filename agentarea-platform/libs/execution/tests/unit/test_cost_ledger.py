@@ -242,3 +242,19 @@ def test_a_model_call_from_before_holds_keeps_its_cost_in_the_billing_currency()
 
     assert (line.amount, line.currency, line.estimate) == (Decimal("1.5"), "RUB", False)
     assert "hold_id" not in line.evidence
+
+
+def test_a_tool_whose_model_cost_is_unknown_is_an_estimate_line_marked_unknown():
+    event = _event(
+        "tool.result",
+        tool_name="generate_image",
+        tool_call_id="call-9",
+        server_instance_id="srv-1",
+        cost_unknown=True,
+    )
+
+    [line] = _lines(event)
+
+    assert (line.category, line.source) == (CostCategory.MODEL, CostSource.TOOL_REPORTED)
+    assert (line.amount, line.estimate) == (Decimal("0"), True)
+    assert line.evidence["cost_unknown"] is True

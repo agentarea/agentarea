@@ -21,6 +21,7 @@ class _File:
     content: bytes
     media_type: str
     cost: Decimal | None = None
+    cost_unknown: bool = False
 
 
 @dataclass
@@ -38,16 +39,20 @@ class _Check:
     cost_usd: Decimal | None = None
     cost: Decimal | None = None
     file_path: str | None = None
+    cost_unknown: bool = False
 
 
 class _Backend:
-    def __init__(self, check: _Check | None = None):
+    def __init__(self, check: _Check | None = None, image: _File | None = None):
         self.check = check
+        self.image = image or _File(
+            content=b"\x89PNG....", media_type="image/png", cost=Decimal("4.00")
+        )
         self.saved: list = []
         self.submitted: list = []
 
     async def generate_image(self, prompt, *, size=None):
-        return _File(content=b"\x89PNG....", media_type="image/png", cost=Decimal("4.00"))
+        return self.image
 
     async def submit_video(self, prompt, **options):
         self.submitted.append((prompt, options))
@@ -122,6 +127,34 @@ async def test_a_finished_video_is_saved_and_billed_once():
     assert first["model_cost"] == "150"
     assert second["model_cost"] == "0"
     assert backend.saved[0] == ("j", "media/video-j.mp4", Decimal("1.5"), Decimal("150"))
+    assert (await storage.get(WORKSPACE, "media/video-j.mp4")) == (b"mp4", "video/mp4")
+
+
+async def test_an_image_of_unknown_cost_is_saved_and_says_its_cost_is_unknown():
+    image = _File(content=b"\x89PNG....", media_type="image/png", cost_unknown=True)
+    storage = InMemoryStorage()
+    result = await _media(_Backend(image=image), storage).execute(
+        action="generate_image", prompt="a cat"
+    )
+
+    assert result["success"] is True
+    [path] = result["artifact_paths"]
+    assert (await storage.get(WORKSPACE, path)) == (b"\x89PNG....", "image/png")
+    assert result["cost_unknown"] is True
+    assert "model_cost" not in result
+
+
+async def test_a_finished_video_of_unknown_cost_is_saved_and_says_so():
+    video = _File(content=b"mp4", media_type="video/mp4")
+    backend = _Backend(_Check(job_id="j", status="completed", video=video, cost_unknown=True))
+    storage = InMemoryStorage()
+
+    result = await _media(backend, storage).execute(action="get_video", job_id="j")
+
+    assert result["artifact_paths"] == ["media/video-j.mp4"]
+    assert result["cost_unknown"] is True
+    assert "model_cost" not in result
+    assert backend.saved == [("j", "media/video-j.mp4", None, None)]
     assert (await storage.get(WORKSPACE, "media/video-j.mp4")) == (b"mp4", "video/mp4")
 
 

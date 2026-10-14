@@ -37,7 +37,9 @@ class MediaFile(Protocol):
 
 
 class BilledFile(MediaFile, Protocol):
-    cost: Decimal
+    # None, with cost_unknown, when the provider was paid but reported no cost.
+    cost: Decimal | None
+    cost_unknown: bool
 
 
 class SubmittedJob(Protocol):
@@ -53,6 +55,7 @@ class VideoJobCheck(Protocol):
     cost_usd: Decimal | None
     cost: Decimal | None
     file_path: str | None
+    cost_unknown: bool
 
 
 class MediaBackend(Protocol):
@@ -70,7 +73,7 @@ class MediaBackend(Protocol):
     async def check_video(self, job_id: str) -> VideoJobCheck: ...
 
     async def record_video_saved(
-        self, job_id: str, file_path: str, cost_usd: Decimal, cost: Decimal
+        self, job_id: str, file_path: str, cost_usd: Decimal | None, cost: Decimal | None
     ) -> bool: ...
 
 
@@ -136,6 +139,9 @@ class MediaToolset(Toolset):
         ``size`` is an optional ``WIDTHxHEIGHT`` hint such as ``1024x1536``.
         """
         image = await self.backend.generate_image(prompt, size=size)
+        cost_fields: dict[str, Any] = (
+            {"cost_unknown": True} if image.cost_unknown else {"model_cost": str(image.cost)}
+        )
         try:
             path = await self._save(f"image-{uuid.uuid4().hex[:12]}", image)
         except Exception as error:
@@ -146,7 +152,7 @@ class MediaToolset(Toolset):
                 "success": False,
                 "result": f"The image was generated but could not be saved: {error}",
                 "error": str(error),
-                "model_cost": str(image.cost),
+                **cost_fields,
             }
         return {
             "success": True,
@@ -154,7 +160,7 @@ class MediaToolset(Toolset):
                 {"file_path": path, "media_type": image.media_type, "size": len(image.content)}
             ),
             "artifact_paths": [path],
-            "model_cost": str(image.cost),
+            **cost_fields,
         }
 
     @tool_method(effect="write")
@@ -206,10 +212,15 @@ class MediaToolset(Toolset):
                 "result": json.dumps({"job_id": job_id, "status": check.status}),
             }
 
-        if check.cost_usd is None or check.cost is None:
+        if not check.cost_unknown and (check.cost_usd is None or check.cost is None):
             raise RuntimeError("the video model reported no cost")
         path = await self._save(f"video-{job_id}", check.video)
         billed = await self.backend.record_video_saved(job_id, path, check.cost_usd, check.cost)
+        cost_fields = (
+            {"cost_unknown": True}
+            if check.cost_unknown
+            else {"model_cost": str(check.cost) if billed else "0"}
+        )
         return {
             "success": True,
             "result": json.dumps(
@@ -222,5 +233,5 @@ class MediaToolset(Toolset):
                 }
             ),
             "artifact_paths": [path],
-            "model_cost": str(check.cost) if billed else "0",
+            **cost_fields,
         }
