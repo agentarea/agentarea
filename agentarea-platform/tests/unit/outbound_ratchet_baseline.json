@@ -1,0 +1,41 @@
+{
+  "http": {
+    "apps/api/agentarea_api/api/v1/agents_tasks.py": 2,
+    "apps/api/agentarea_api/api/v1/mcp_oauth_as.py": 5,
+    "apps/api/agentarea_api/api/v1/mcp_proxy.py": 1,
+    "apps/api/agentarea_api/api/v1/mcp_server_instances.py": 2,
+    "apps/api/agentarea_api/api/v1/sandboxes.py": 1,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 1,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/a2a_agent_tool.py": 1,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/sandbox_file_store.py": 1,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/shell_toolset.py": 1,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/web_toolset.py": 1,
+    "libs/agents/agentarea_agents/infrastructure/github_skill_importer.py": 2,
+    "libs/common/agentarea_common/auth/identity_directory.py": 2,
+    "libs/common/agentarea_common/auth/providers/base.py": 1,
+    "libs/common/agentarea_common/rebac/openfga_bootstrap.py": 1,
+    "libs/common/agentarea_common/rebac/openfga_client.py": 1,
+    "libs/execution/agentarea_execution/activities/artifact_validation.py": 1,
+    "libs/execution/agentarea_execution/activities/mcp_payment_httpx.py": 1,
+    "libs/execution/agentarea_execution/activities/runtime_discovery.py": 1,
+    "libs/llm/agentarea_llm/application/model_discovery_service.py": 1,
+    "libs/llm/agentarea_llm/application/model_service.py": 1,
+    "libs/mcp/agentarea_mcp/application/mcp_client.py": 2,
+    "libs/mcp/agentarea_mcp/application/validation_service.py": 1,
+    "libs/mcp/agentarea_mcp/instance_reservation.py": 1,
+    "libs/mcp/agentarea_mcp/package_import.py": 2,
+    "libs/registry/agentarea_registry/application/service.py": 1,
+    "libs/triggers/agentarea_triggers/channels/adapters.py": 2,
+    "libs/triggers/agentarea_triggers/channels/sender_admission.py": 2,
+    "libs/triggers/agentarea_triggers/channels/telegram.py": 3,
+    "libs/triggers/agentarea_triggers/webhook_verification.py": 1
+  },
+  "litellm": {
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 3,
+    "libs/llm/agentarea_llm/infrastructure/model_clients.py": 1
+  },
+  "mail": {
+    "libs/triggers/agentarea_triggers/channels/email.py": 1,
+    "libs/triggers/agentarea_triggers/extractors/imap.py": 2
+  }
+}
