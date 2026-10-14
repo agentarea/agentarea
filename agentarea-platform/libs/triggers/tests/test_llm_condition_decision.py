@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from litellm import ModelResponse
 from agentarea_triggers.llm_condition_evaluator import (
     LLMConditionEvaluationError,
     LLMConditionEvaluator,
@@ -42,6 +43,7 @@ class _Decisions:
             model_name="gpt-4",
             api_key="sk-resolved",  # pragma: allowlist secret
             endpoint_url=None,
+            managed_by=None,
         )
 
     async def decision_model(self, instance_id):
@@ -67,7 +69,7 @@ def _evaluator(kind: str, decisions: _Decisions) -> LLMConditionEvaluator:
 async def test_a_decision_model_answers_the_condition(choice, expected):
     decisions = _Decisions(choice)
 
-    with patch("agentarea_triggers.llm_condition_evaluator.litellm.acompletion") as chat:
+    with patch("agentarea_agents_sdk.models.llm_model.acompletion") as chat:
         met = await _evaluator("decision", decisions).evaluate_condition(CONDITION, EVENT)
 
     assert met is expected
@@ -89,17 +91,19 @@ async def test_a_decision_model_answers_the_condition(choice, expected):
 
 async def test_a_chat_model_keeps_the_completion_path():
     decisions = _Decisions("true")
-    response = MagicMock()
-    response.choices = [
-        MagicMock(
-            message=MagicMock(
-                content='{"verdict": "met", "score": 0.9, "reason": "refund"}'
-            )
-        )
-    ]
+    response = ModelResponse(
+        choices=[
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": '{"verdict": "met", "score": 0.9, "reason": "refund"}',
+                }
+            }
+        ]
+    )
 
     with patch(
-        "agentarea_triggers.llm_condition_evaluator.litellm.acompletion",
+        "agentarea_agents_sdk.models.llm_model.acompletion",
         new=AsyncMock(return_value=response),
     ) as chat:
         met = await _evaluator("chat", decisions).evaluate_condition(CONDITION, EVENT)

@@ -93,6 +93,8 @@ export type TriggerOverviewModel = {
     total: number;
     successful: number;
     failed: number;
+    /** Runs that tried to start a task: the success rate's denominator. */
+    attempted: number;
     /** Percentage, 0-100, as the API reports it. */
     successRate: number;
     avgMs: number;
@@ -178,6 +180,7 @@ export async function TriggerOverviewView({
   const editHref = `/triggers/${triggerId}/edit`;
   const total = metrics?.total ?? 0;
   const successPct = metrics?.successRate ?? 0;
+  const attempted = metrics?.attempted ?? 0;
 
   const last = relParts(model.lastExecutionAt);
   const next = relParts(model.nextRunTime);
@@ -291,19 +294,19 @@ export async function TriggerOverviewView({
             icon={<Gauge />}
             label={t("successRate")}
             period={t("periodOption.all")}
-            value={total > 0 ? successPct.toFixed(0) : "—"}
-            unit={total > 0 ? "%" : undefined}
-            bar={total > 0 ? { pct: successPct } : null}
+            value={attempted > 0 ? successPct.toFixed(0) : "—"}
+            unit={attempted > 0 ? "%" : undefined}
+            bar={attempted > 0 ? { pct: successPct } : null}
             sub={
               failing
                 ? t("failureWarning", {
                     count: failure.consecutive,
                     threshold: failure.threshold,
                   })
-                : total > 0
+                : attempted > 0
                   ? t("ofRuns", {
                       successful: metrics?.successful ?? 0,
-                      total,
+                      total: attempted,
                     })
                   : t("noRuns")
             }

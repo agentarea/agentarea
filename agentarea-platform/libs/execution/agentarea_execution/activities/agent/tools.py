@@ -4,21 +4,33 @@ import functools
 import itertools
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from agentarea_agents_sdk import ToolExecutor
-from agentarea_agents_sdk.tools.decide_toolset import DECIDE_TOOLSET
 from agentarea_agents_sdk.tools.invocation_context import ToolInvocationContext
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
 from agentarea_agents_sdk.tools.tool_builders import allowed_tool_names
 from agentarea_common.auth.tool_authorization import (
-    ToolAuthorizationAction,
+    ToolAuthorizationDecision,
     ToolAuthorizationRequest,
-    authorize_tool_invocation,
 )
 from agentarea_common.money import ZERO, serialize_money, to_money
+from agentarea_common.tool_cost import ToolConnection, ToolCostError
+from agentarea_governance.tool_calls import (
+    GovernedToolCall,
+    ToolCallOutcome,
+    ToolUsage,
+    Verdict,
+    run_tool_call,
+)
+from agentarea_mcp.domain.metering import mcp_tool_connection
+from agentarea_mcp.tool_context import call_context_from_task
+from agentarea_tasks.domain.costs import tool_call_entry
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+from agentarea_tasks.spend_gate import spend_cap_refusal
 from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
 from temporalio import activity
@@ -29,6 +41,7 @@ from ...workflows.helpers import tool_config_aliases, tool_policy_aliases
 from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_control_auth_secret, sandbox_file_auth_secret
 from .tool_audit import TOOL_CALL_DENIED, argument_keys
+from .tool_progress import make_tool_progress_relay
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
@@ -154,13 +167,63 @@ async def _offload_large_activity_output(
         )
 
 
+async def _store_tool_images(
+    *,
+    workspace_id: str | None,
+    task_id: str | None,
+    output_id: str,
+    images: list[dict[str, str]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    from agentarea_execution.tool_images import store_tool_images
+    from agentarea_execution.workflows.context_store import ContextStore
+
+    if images and (not workspace_id or not task_id):
+        return [], [f"[{len(images)} image(s) not kept: the call belongs to no task]"]
+    if not images:
+        return [], []
+    store = ContextStore(str(workspace_id), str(task_id))
+    return await store_tool_images(images, store=store, output_id=output_id)
+
+
+REPLAYED_META = "agentarea/replayed"
+
+
+def _retry_attempt() -> int | None:
+    """This activity's attempt number when it is a retry of the same call, else None."""
+    attempt = activity.info().attempt
+    return attempt if attempt > 1 else None
+
+
+def _served_before(result: MCPToolResult) -> bool:
+    """The server said it served a stored answer, or a payment had already settled."""
+    meta = result.metered_meta or {}
+    payment = result.payment if isinstance(result.payment, dict) else {}
+    payments = payment.get("payments") if "payments" in payment else [payment]
+    return meta.get(REPLAYED_META) is True or any(
+        isinstance(p, dict) and p.get("already_settled") for p in payments or []
+    )
+
+
+def _settled_payments(payment: dict[str, Any] | None) -> tuple[dict[str, Any], ...]:
+    """The wallet payments a call settled, from its result's one or many."""
+    if not isinstance(payment, dict):
+        return ()
+    payments = payment.get("payments") if "payments" in payment else [payment]
+    return tuple(p for p in payments or [] if isinstance(p, dict) and p.get("success"))
+
+
 def make_tools_activities(
     dependencies: ActivityDependencies, container: "ActivityServiceContainer"
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 
     async def _audited_denial(request: MCPToolRequest, reason: str) -> MCPToolResult:
-        """Refuse the call and leave its refusal in the workspace's audit trail.
+        """Refuse the call and leave its refusal in the workspace's audit trail."""
+        await _record_denial(request, reason)
+        return _deny_tool_result(request.tool_name, reason)
+
+    async def _record_denial(request: MCPToolRequest, reason: str) -> None:
+        """Leave a refusal in the workspace's audit trail.
 
         The row id is the activity's identity, so a retried attempt that
         refuses again does not record a second denial.
@@ -187,16 +250,150 @@ def make_tools_activities(
                     "requested_by": request.user_id,
                 },
             )
-        return _deny_tool_result(request.tool_name, reason)
+
+    async def _tool_connection(request: MCPToolRequest) -> ToolConnection | None:
+        """The connection a call runs on and its connector's cost declaration, if any.
+
+        An MCP route names its instance; an OpenAPI operation is found among the
+        agent's attached connections. A built-in tool runs on no connection.
+        """
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            route = request.mcp_route
+            if route is not None:
+                service = await ctx.get_mcp_server_instance_service()
+                instance = await service.get(UUID(route.instance_id))
+                if instance is None:
+                    return None
+                server = await service.mcp_server_repository.get_server_by_id(
+                    instance.server_spec_id
+                )
+                return mcp_tool_connection(
+                    instance, getattr(server, "json_spec", None), route.raw_name
+                )
+            openapi_configs = [
+                tc
+                for tc in request.tools or []
+                if isinstance(tc, dict) and tc.get("type") == "openapi"
+            ]
+            if not openapi_configs:
+                return None
+            from agentarea_agents_sdk.tools.openapi_tool import OpenAPIToolFactory
+            from agentarea_openapi.application.metering import openapi_tool_connection
+
+            connection_service = await ctx.get_openapi_connection_service()
+            for tool_config in openapi_configs:
+                settings = tool_config.get("settings") or {}
+                connection_ref = settings.get("openapi_connection_id") or tool_config.get("name")
+                if not connection_ref:
+                    continue
+                for tool in await OpenAPIToolFactory.create_tools_from_connection(
+                    connection_name_or_id=connection_ref,
+                    allowed_tools=None,
+                    openapi_connection_service=connection_service,
+                    payment_handler=None,
+                ):
+                    if tool.name != request.tool_name:
+                        continue
+                    connection = await connection_service.get_connection(tool.connection_id)
+                    if connection is None:
+                        return None
+                    return openapi_tool_connection(
+                        connection,
+                        await connection_service.catalog_connector(connection),
+                        tool.operation_name,
+                    )
+        return None
+
+    async def _ledger(request: MCPToolRequest, usages: list[ToolUsage]) -> int:
+        """Write a call's cost lines to the spend ledger, once per call; how many were new."""
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            return await CostEntryRepository(session, user_context).record(
+                [tool_call_entry(usage) for usage in usages]
+            )
+
+    async def _spend_gate(request: MCPToolRequest, call: GovernedToolCall) -> str | None:
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            return await spend_cap_refusal(CostEntryRepository(session, user_context), call)
+
+    async def _record_tool_progress(
+        data: dict[str, Any], *, request: MCPToolRequest, user_context: Any
+    ) -> None:
+        """Store a ``tool.progress`` event, then put it on the task's live stream.
+
+        Its own short transaction, so the row is visible while the call still runs.
+        """
+        from agentarea_common.events.contract import TOOL_PROGRESS
+        from agentarea_common.events.task_stream import publish_task_event
+
+        event_id = uuid4()
+        timestamp = datetime.now(UTC)
+        async with ActivityContext(container, user_context) as progress_ctx:
+            task_event_service = await progress_ctx.get_task_event_service()
+            await task_event_service.create_workflow_event(
+                task_id=UUID(str(request.task_id)),
+                event_id=event_id,
+                event_type=TOOL_PROGRESS,
+                data=data,
+                timestamp=timestamp,
+                workspace_id=str(request.workspace_id),
+                created_by=str(user_context.user_id),
+            )
+        if dependencies.broker_client is not None:
+            await publish_task_event(
+                dependencies.broker_client,
+                task_id=str(request.task_id),
+                event_type=TOOL_PROGRESS,
+                data=data,
+                event_id=str(event_id),
+                timestamp=timestamp.isoformat(),
+            )
 
     @activity.defn
     @auto_heartbeater
     async def execute_mcp_tool_activity(
         request: MCPToolRequest,
     ) -> MCPToolResult:
-        """Execute an MCP tool or built-in tool."""
-        decision = await authorize_tool_invocation(
-            ToolAuthorizationRequest(
+        """Execute an MCP tool or built-in tool through the one tool-call layer.
+
+        The layer judges the call (PDP), checks the spend caps and, on the platform's
+        key, the balance, runs it, and writes its cost lines. The result carries their
+        amount for the run's budget, and says the call was metered so the event is
+        not read for a wallet payment's line again.
+        """
+        try:
+            connection = await _tool_connection(request)
+        except ToolCostError as error:
+            return await _audited_denial(
+                request, f"the tool's cost declaration is invalid: {error}"
+            )
+
+        async def audit(decision: ToolAuthorizationDecision) -> None:
+            if not decision.allowed:
+                await _record_denial(request, decision.reason)
+
+        async def invoke() -> ToolCallOutcome:
+            result = await _dispatch(request)
+            return ToolCallOutcome(
+                success=result.success,
+                value=result,
+                body=result.metered_body,
+                meta=result.metered_meta,
+                payments=_settled_payments(result.payment),
+                replayed=_served_before(result),
+            )
+
+        async def ledger(usages: list[ToolUsage]) -> int:
+            return await _ledger(request, usages)
+
+        call = GovernedToolCall(
+            authorization=ToolAuthorizationRequest(
                 tool_name=request.tool_name,
                 tool_args=request.tool_args,
                 user_id=request.user_id,
@@ -206,18 +403,36 @@ def make_tools_activities(
                 restricting_aliases=tool_config_aliases(
                     request.tool_name, request.tools, request.openapi_operation_tools
                 ),
-            )
+            ),
+            call_id=_payment_call_ref(request),
+            agent_id=request.agent_id,
+            task_id=request.task_id,
+            connection=connection,
+            approval_granted=request.policy_approval_granted,
         )
-        if decision.action is ToolAuthorizationAction.DENY:
-            return await _audited_denial(request, decision.reason)
-        if (
-            decision.action is ToolAuthorizationAction.REQUIRE_APPROVAL
-            and not request.policy_approval_granted
-        ):
+
+        async def spend_gate(governed: GovernedToolCall) -> str | None:
+            return await _spend_gate(request, governed)
+
+        layered = await run_tool_call(
+            call, invoke, audit=audit, ledger=ledger, spend_gate=spend_gate
+        )
+        if layered.verdict is Verdict.HELD:
             return await _audited_denial(
                 request,
-                f"{decision.reason}; approval must be resolved before activity execution",
+                f"{layered.decision.reason}; approval must be resolved before activity execution",
             )
+        if layered.verdict is Verdict.DENIED or layered.outcome is None:
+            return _deny_tool_result(request.tool_name, layered.decision.reason)
+        result: MCPToolResult = layered.outcome.value
+        result.cost = layered.cost
+        result.cost_metered = layered.metered
+        result.payer = connection.payer.value if connection else None
+        result.replayed = layered.replayed
+        result.attempt = _retry_attempt()
+        return result
+
+    async def _dispatch(request: MCPToolRequest) -> MCPToolResult:
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             mcp_server_instance_service = await ctx.get_mcp_server_instance_service()
@@ -278,6 +493,10 @@ def make_tools_activities(
                             extra_kwargs["workspace_slug"] = await workspace_slug_for(
                                 str(request.workspace_id)
                             )
+                            # Its files are this task's, so links name the task.
+                            extra_kwargs["task_id"] = (
+                                str(request.task_id) if request.task_id else ""
+                            )
                     elif tool_name == "agentarea/context":
                         # Read-only access to the org context store (tier 1).
                         # ArtifactService is workspace-scoped, so the task can
@@ -331,15 +550,6 @@ def make_tools_activities(
                                 auth_secret=sandbox_file_auth_secret(dependencies),
                             ),
                             "workspace_id": str(request.workspace_id),
-                        }
-                    elif tool_name == DECIDE_TOOLSET:
-                        from agentarea_llm.application.decision_service import DecisionService
-
-                        extra_kwargs = {
-                            "backend": DecisionService(
-                                models=await ctx.get_model_service(),
-                                model_id=settings.get("model_id"),
-                            ),
                         }
                     elif tool_name == "agentarea/triggers":
                         # The triggers tool defaults agent_id/workspace_id/user_id to
@@ -705,12 +915,33 @@ def make_tools_activities(
                             on_payment=on_mcp_payment,
                         )
 
+                call_context = call_context_from_task(
+                    task_id=request.task_id,
+                    tool_call_id=request.tool_call_id,
+                    workspace_id=str(request.workspace_id),
+                    agent_id=str(request.agent_id) if request.agent_id else None,
+                    task_metadata=request.metadata,
+                )
+                progress_relay = None
+                if call_context is not None:
+                    progress_relay = make_tool_progress_relay(
+                        record=functools.partial(
+                            _record_tool_progress, request=request, user_context=user_context
+                        ),
+                        task_id=call_context.task_id,
+                        tool_name=request.tool_name,
+                        tool_call_id=call_context.tool_call_id,
+                        heartbeat=activity.heartbeat,
+                    )
+
                 try:
                     mcp_result = await mcp_server_instance_service.execute_tool(
                         UUID(str(instance.id)),
                         route.raw_name,
                         request.tool_args,
                         httpx_client_factory=payment_httpx_client_factory,
+                        call_context=call_context,
+                        progress_callback=progress_relay,
                     )
                 except Exception as e:
                     logger.error("MCP tool execution failed: %s", e, exc_info=True)
@@ -726,13 +957,22 @@ def make_tools_activities(
                         server_icon=_server_icon_from_instance(instance),
                     )
 
+                output_id = _activity_output_id("mcp_tool")
+                image_refs, image_notes = await _store_tool_images(
+                    workspace_id=request.workspace_id,
+                    task_id=request.task_id,
+                    output_id=output_id,
+                    images=mcp_result.get("images") or [],
+                )
                 result_text = await _offload_large_activity_output(
                     workspace_id=request.workspace_id,
                     task_id=request.task_id,
-                    output_id=_activity_output_id("mcp_tool"),
-                    content=str(mcp_result.get("result") or ""),
+                    output_id=output_id,
+                    content="\n".join([str(mcp_result.get("result") or ""), *image_notes]),
                 )
-                return MCPToolResult(
+                return MCPToolResult.metered(
+                    mcp_result.get("structured_content"),
+                    mcp_result.get("meta"),
                     success=bool(mcp_result.get("success", False)),
                     result=result_text,
                     execution_time="",
@@ -750,6 +990,9 @@ def make_tools_activities(
                     server_instance_id=str(instance.id),
                     server_name=getattr(instance, "name", None),
                     server_icon=_server_icon_from_instance(instance),
+                    structured_content=mcp_result.get("structured_content"),
+                    structured_content_dropped=bool(mcp_result.get("structured_content_dropped")),
+                    images=image_refs,
                 )
 
             try:
@@ -773,7 +1016,9 @@ def make_tools_activities(
                 # OpenAPI tools may self-declare source; otherwise infer from
                 # whether the tool resolved against an MCP server instance.
                 source = result.get("source") or ("mcp" if server_instance_id else "builtin")
-                return MCPToolResult(
+                return MCPToolResult.metered(
+                    result.get("body"),
+                    None,
                     success=result.get("success", False),
                     result=result_text,
                     execution_time=str(result.get("execution_time") or ""),

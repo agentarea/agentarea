@@ -133,7 +133,7 @@ class ChannelDeliveryConsumer:
                     block_ms=self._block_ms,
                 )
                 for msg in msgs:
-                    await self._handle(msg)
+                    await self.handle(msg)
                 backoff = 1.0
             except asyncio.CancelledError:
                 raise
@@ -149,7 +149,7 @@ class ChannelDeliveryConsumer:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
 
-    async def _handle(self, msg: BrokerMessage) -> None:
+    async def handle(self, msg: BrokerMessage) -> None:
         fields = msg.fields
         dedup_key = fields.get("dedup_key") or msg.id
 
@@ -183,11 +183,12 @@ class ChannelDeliveryConsumer:
 
         adapter = self._resolve_adapter(channel_type)
         if adapter is None:
-            # Unknown channel_type is often transient: a partial rollout
-            # where the adapter hasn't been registered yet, or a
-            # config-driven extension not loaded. Release dedup and let
-            # the broker redeliver; if it stays unresolvable, the
-            # delivery_count cap above will DLQ it eventually.
+            # Unknown channel_type is often transient: during a rolling
+            # deploy an older worker reads a channel only newer ones have an
+            # adapter for. Release dedup and leave it un-ACKed; a worker's
+            # StreamAutoclaimer reclaims it once idle and hands it to that
+            # worker's handle. If it stays unresolvable, the delivery_count
+            # cap above will DLQ it eventually.
             logger.warning(
                 "no adapter for %r (dedup_key=%s, delivery_count=%d) — releasing for redelivery",
                 channel_type,

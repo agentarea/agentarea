@@ -52,6 +52,7 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         max_output_tokens=spec.get("max_output_tokens"),
         input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
         output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
+        cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
         supports_function_calling=spec.get("supports_function_calling", False),
         is_active=spec.get("is_active", True),
     )
@@ -292,6 +293,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 max_output_tokens=preferred.max_output_tokens,
                 input_cost_per_token=preferred.input_cost_per_token,
                 output_cost_per_token=preferred.output_cost_per_token,
+                cached_input_cost_per_token=preferred.cached_input_cost_per_token,
                 supports_function_calling=preferred.supports_function_calling,
                 is_active=preferred.is_active,
             )

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import triggers_toolset
 from agentarea_api.tools.triggers_toolset import TriggersToolset
 from agentarea_streams.domain.models import TriggerBinding
@@ -105,12 +106,10 @@ async def test_create_stream_refuses_a_stream_the_caller_may_not_read(harness, m
     monkeypatch.setattr(triggers_toolset, "require_stream_readable", check)
     stream_id = uuid4()
 
-    result = json.loads(
+    with pytest.raises(ToolError, match=r"^Permission denied$"):
         await TriggersToolset().create_stream(
             name="on push", agent_id=str(uuid4()), stream_id=str(stream_id)
         )
-    )
 
-    assert result == {"error": "Permission denied"}
     check.assert_awaited_once_with(stream_id, "u")
     harness.create_trigger_from_payload.assert_not_called()

@@ -21,7 +21,7 @@ from ..constants import (
 from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .errors import ErrorReportingMixin
-from .patches import CONVERSATION_RESUME_SNAPSHOT_PATCH
+from .patches import CONVERSATION_RESUME_SNAPSHOT_PATCH, RESUME_AFTER_STOP_OR_FAILURE_PATCH
 
 
 class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
@@ -31,6 +31,9 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
         """Finalize workflow execution and return result."""
         workflow.logger.info("Finalizing workflow execution")
         execution_cancelled = self.state.status == ExecutionStatus.CANCELLED
+        # A stop that interrupted a tool or model call is final now, but the run
+        # stays open to record what that call did; the live feed stays open too.
+        settling = execution_cancelled and self._has_stopped_work()
 
         # Determine final status.
         # If task_complete was already called, the task succeeded regardless of
@@ -69,6 +72,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     "success": self.state.success,
                     "iterations_completed": self.state.current_iteration,
                     "total_cost": serialize_money(self._budget.cost),
+                    "tokens_used": self.state.tokens_used,
                     "final_response": self.state.final_response,
                     "status": self.state.status,
                     "failure_reason": self.state.failure_reason,
@@ -79,6 +83,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                         if self._interaction_contract_enabled
                         else {}
                     ),
+                    **({"execution_status": "settling"} if settling else {}),
                     "validation_state": self.state.validation_state,
                 },
             )
@@ -95,11 +100,18 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
         else:
             final_status = "failed"
         conversation_pending = self._conversation_payload()
-        # A completed conversation can be continued by a later message after the
-        # workflow closes; the snapshot tells that run where the log stands.
+        # A completed, stopped or failed conversation can be continued by a later
+        # message, or a retry, after the workflow closes; the snapshot tells that
+        # run where the log stands.
         conversation_resume = (
             self._conversation_resume_snapshot(len(conversation_pending))
-            if final_status == "completed"
+            if (
+                final_status == "completed"
+                or (
+                    final_status in ("cancelled", "failed")
+                    and workflow.patched(RESUME_AFTER_STOP_OR_FAILURE_PATCH)
+                )
+            )
             and not self._is_delegation_child()
             and workflow.patched(CONVERSATION_RESUME_SNAPSHOT_PATCH)
             else None
@@ -124,6 +136,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                     own_cost=self._own_cost,
+                    tokens_used=self.state.tokens_used,
                     conversation=self._conversation_window(),
                     conversation_pending=conversation_pending,
                     conversation_resume=conversation_resume,
@@ -133,19 +146,8 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             retry_policy=bookkeeping_retry_policy(),
         )
         self._mark_conversation_written()
-        if self._interaction_contract_enabled:
-            self._events.add_event(
-                EventTypes.EXECUTION_FINISHED,
-                {
-                    "status": self.state.status,
-                    "execution_status": "cancelled" if execution_cancelled else "completed",
-                    "success": self.state.success,
-                    "final_response": self.state.final_response,
-                    "failure_reason": self.state.failure_reason,
-                    "blocked": self.state.status == ExecutionStatus.BLOCKED,
-                    "blocked_reason": self.state.blocked_reason,
-                },
-            )
+        if self._interaction_contract_enabled and not settling:
+            self._add_execution_finished_event(execution_cancelled)
             await self._publish_events_immediately()
 
         return AgentExecutionResult(
@@ -178,6 +180,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
         """Handle workflow-level errors."""
         error_details = self._extract_temporal_error_details(error)
         user_message = self._get_user_facing_error(error)
+        blocked = self.state.status == ExecutionStatus.BLOCKED
 
         if self.event_manager:
             self.event_manager.add_event(
@@ -185,7 +188,14 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                 {
                     "error": user_message,
                     "error_type": self._get_user_facing_error_type(error),
+                    "failure_reason": self._failure_cause(error),
+                    "error_detail": self._error_detail(error),
+                    **({"blocked": True, "retryable": False} if blocked else {}),
                     "iterations_completed": self.state.current_iteration,
+                    "total_cost": serialize_money(
+                        self.budget_tracker.cost if self.budget_tracker else ZERO
+                    ),
+                    "tokens_used": self.state.tokens_used,
                     "status": self.state.status,
                     "blocked_reason": self.state.blocked_reason,
                 },
@@ -195,7 +205,17 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
 
         # Update task status to failed
         if self.state and self.state.task_id:
-            status = "blocked" if self.state.status == ExecutionStatus.BLOCKED else "failed"
+            status = "blocked" if blocked else "failed"
+            conversation_resume = None
+            if (
+                status == "failed"
+                and not self._is_delegation_child()
+                and workflow.patched(RESUME_AFTER_STOP_OR_FAILURE_PATCH)
+            ):
+                self._answer_unanswered_tool_calls(
+                    "Not executed: the run failed before this call ran."
+                )
+                conversation_resume = self._conversation_resume_snapshot(len(self.state.messages))
             await workflow.execute_activity(
                 Activities.UPDATE_TASK_STATUS,
                 args=[
@@ -207,8 +227,10 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                         workspace_id=self.state.workspace_id,
                         total_cost=self.budget_tracker.cost if self.budget_tracker else None,
                         own_cost=self._own_cost if self.budget_tracker else None,
+                        tokens_used=self.state.tokens_used,
                         conversation=self._conversation_window(),
                         conversation_pending=self._conversation_payload(),
+                        conversation_resume=conversation_resume,
                     )
                 ],
                 start_to_close_timeout=ACTIVITY_TIMEOUT,

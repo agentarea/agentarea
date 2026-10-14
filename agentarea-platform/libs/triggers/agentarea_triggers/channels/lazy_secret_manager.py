@@ -39,12 +39,15 @@ class LazySecretReader:
             # Resolve workspace context from an id embedded in the secret name.
             # Channel creds:   "channel_cred:<channel_type>:<trigger_id>"  → TriggerORM
             # A2A push tokens: "a2a_push_token:<task_id>:<config_id>"      → TaskORM
+            # Task webhooks:   "task_webhook:<task_id>"                     → TaskORM
             user_context: UserContext | None = None
             with unscoped(
                 "a background secret read names a trigger or task; its workspace decides"
             ):
                 parts = name.split(":")
-                if name.startswith("a2a_push_token:") and len(parts) >= 3:
+                if (name.startswith("a2a_push_token:") and len(parts) >= 3) or (
+                    name.startswith("task_webhook:") and len(parts) == 2
+                ):
                     try:
                         from agentarea_tasks.infrastructure.orm import TaskORM
 

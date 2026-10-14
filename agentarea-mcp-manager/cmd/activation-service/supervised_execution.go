@@ -68,7 +68,7 @@ func runAttestedSandboxCommand(ctx context.Context, request supervisedCommandReq
 	command.Env = request.Environment
 	command.Stdout = request.Stdout
 	command.Stderr = request.Stderr
-	if err := command.Run(); err != nil {
+	if err := runStoppable(ctx, command); err != nil {
 		return execsupervisor.Status{}, fmt.Errorf("execution supervisor did not complete cleanly: %w", err)
 	}
 	status, statusErr := readLocalExecutionStatus(statusPath, request.Attestation)
@@ -79,6 +79,21 @@ func runAttestedSandboxCommand(ctx context.Context, request supervisedCommandReq
 		removeErr = nil
 	}
 	return status, errors.Join(statusErr, removeErr)
+}
+
+// runStoppable runs the supervisor so that a caller who stops waiting stops the
+// command too. The supervisor gets SIGTERM, on which it kills the command's
+// whole process tree and records its status; SIGKILL would leave that tree
+// running in its own process group. A supervisor that settles cleanly after
+// the caller's cancel is a clean run, so the workspace and executor stay.
+func runStoppable(ctx context.Context, command *exec.Cmd) error {
+	command.Cancel = func() error { return command.Process.Signal(syscall.SIGTERM) }
+	command.WaitDelay = execsupervisor.CompletionGrace
+	err := command.Run()
+	if err != nil && ctx.Err() != nil && command.ProcessState != nil && command.ProcessState.Success() {
+		return nil
+	}
+	return err
 }
 
 func verifyLocalExecutionSupervisor(expected execsupervisor.Attestation) error {

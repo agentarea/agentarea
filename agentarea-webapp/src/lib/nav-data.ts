@@ -14,7 +14,6 @@ import {
   ScrollText,
   ShieldCheck,
   Sparkles,
-  Terminal,
   Users,
   Wallet,
   Zap,
@@ -119,12 +118,6 @@ export const navData = {
           titleKey: "automation",
           url: "/triggers",
           icon: Zap,
-        },
-        {
-          title: "Harnesses",
-          titleKey: "clients",
-          url: "/clients",
-          icon: Terminal,
         },
         {
           title: "Models",

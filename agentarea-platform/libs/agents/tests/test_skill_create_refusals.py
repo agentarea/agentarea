@@ -156,3 +156,29 @@ async def test_a_valid_zip_still_creates_the_skill_with_its_package(repo, s3_cli
     assert skill.s3_path == f"skills/w1/{skill.id}/"
     keys = {call.kwargs["Key"] for call in s3_client.put_object.call_args_list}
     assert keys == {f"skills/w1/{skill.id}/SKILL.md", f"skills/w1/{skill.id}/scripts/run.sh"}
+
+
+COLON_SKILL_MD = "---\nname: colon\ndescription: Do X: then Y\n---\nhi"
+
+
+async def test_an_unquoted_colon_in_the_frontmatter_creates_the_skill_from_content_and_zip(
+    repo, s3_client
+):
+    from_content = await _service(repo).create_from_content(
+        SkillCreateFromContent(content=COLON_SKILL_MD)
+    )
+    from_zip = await _service(repo).create_from_zip(_zip({"SKILL.md": COLON_SKILL_MD}))
+
+    assert (from_content.name, from_content.description) == ("colon", "Do X: then Y")
+    assert (from_zip.name, from_zip.description) == ("colon", "Do X: then Y")
+
+
+async def test_a_frontmatter_line_that_is_not_key_value_is_refused_naming_the_line(
+    repo, s3_client
+):
+    content = "---\nname: broken\nnot a key value line\n---\nhi"
+
+    with pytest.raises(ValueError, match=r"line 3.*not a key value line"):
+        await _service(repo).create_from_content(SkillCreateFromContent(content=content))
+
+    assert repo.created_kwargs == []

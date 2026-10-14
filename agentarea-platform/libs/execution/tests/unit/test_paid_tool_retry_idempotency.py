@@ -317,16 +317,19 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
         "import_module",
         lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
     )
-    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda: server)
+    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda **_kwargs: server)
 
-    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
+    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory, **_options):
         async with httpx_client_factory() as client:
             response = await client.post(PAID_URL, json=tool_args)
         return {"success": response.status_code == 200, "result": response.text}
 
-    instance = SimpleNamespace(id=uuid4(), name="Paid MCP", json_spec=None)
+    instance = SimpleNamespace(
+        id=uuid4(), name="Paid MCP", json_spec=None, server_spec_id="spec", managed_by=None
+    )
     mcp_service = ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
+    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
 
     request = _request(
@@ -344,6 +347,7 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
     assert retried.service_cost == 0.0
     assert retried.payment["already_settled"] is True
     assert retried.payment["idempotency_key"] == wallet_service.records[0].idempotency_key
+    assert retried.replayed is True
 
 
 class SettledThenFailedServer(PaidServer):
@@ -397,16 +401,19 @@ async def test_payment_that_settled_before_the_request_failed_is_spent(
         "import_module",
         lambda name: SimpleNamespace(x402HTTPClient=FakeHTTPClient),
     )
-    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda: server)
+    monkeypatch.setattr(mcp_payment_httpx.httpx2, "AsyncHTTPTransport", lambda **_kwargs: server)
 
-    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory):
+    async def execute_tool(instance_id, raw_name, tool_args, httpx_client_factory, **_options):
         async with httpx_client_factory() as client:
             response = await client.post(PAID_URL, json=tool_args)
         return {"success": response.status_code == 200, "result": response.text}
 
-    instance = SimpleNamespace(id=uuid4(), name="Paid MCP", json_spec=None)
+    instance = SimpleNamespace(
+        id=uuid4(), name="Paid MCP", json_spec=None, server_spec_id="spec", managed_by=None
+    )
     mcp_service = ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
+    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
 
     request = _request(
@@ -446,6 +453,9 @@ async def test_retried_http_tool_does_not_pay_again(monkeypatch, activity_fns, w
     monkeypatch.setattr(payment_handler, "handle_402_payment", payments)
 
     class PaidHttpTool(BaseTool):
+        operation_name = "paid_search"
+        connection_id = uuid4()
+
         def __init__(self, handler):
             self._handler = handler
 
@@ -470,10 +480,22 @@ async def test_retried_http_tool_does_not_pay_again(monkeypatch, activity_fns, w
             )
             return {"success": bool(payment["success"]), "result": "", "payment": payment}
 
-    async def create_tools(*, payment_handler, **_):
+    async def create_tools(*, payment_handler=None, **_):
         return [PaidHttpTool(payment_handler)]
 
     monkeypatch.setattr(OpenAPIToolFactory, "create_tools_from_connection", create_tools)
+    ctx, _ = activity_fns
+    connection_service = ctx.get_openapi_connection_service.return_value
+    connection_service.catalog_connector = AsyncMock(return_value="connection:paid-api")
+    connection_service.get_connection = AsyncMock(
+        return_value=SimpleNamespace(
+            id=PaidHttpTool.connection_id,
+            spec_content={"openapi": "3.0.0", "paths": {}},
+            custom_query_params=None,
+            managed_by=None,
+            registry_item_id=None,
+        )
+    )
 
     request = _request(
         tools=[{"type": "openapi", "name": "paid-api", "settings": {}}],
@@ -488,6 +510,7 @@ async def test_retried_http_tool_does_not_pay_again(monkeypatch, activity_fns, w
     ]
     assert retried.payment["already_settled"] is True
     assert retried.payment["tx_hash"] == "0xsettled"
+    assert retried.replayed is True
 
 
 def test_key_is_stable_per_call_and_distinct_across_calls_and_requests():
@@ -508,3 +531,262 @@ def test_call_ref_without_tool_call_id_uses_the_activity_identity():
     assert (
         tool_activities._payment_call_ref(_request(task_id="t-1", tool_call_id="c-1")) == "t-1:c-1"
     )
+
+
+GATEWAY_ID = "9a0c6d8e-0000-4000-8000-000000000001"
+YANDEX = {
+    "name": "ru.yandex/search-api",
+    "metadata": {
+        "agentarea:payers": ["workspace", "platform"],
+        "agentarea:cost": {
+            "tools": {
+                "yandex_search": {
+                    "source": "rate",
+                    "unit": "request",
+                    "rate": {"amount": "0.488", "currency": "RUB"},
+                }
+            }
+        },
+    },
+}
+
+
+class GatewayService:
+    """A connection made from a catalog entry that declares what its tool costs."""
+
+    def __init__(self, managed_by="platform"):
+        self.calls: list[str] = []
+        self.instance = SimpleNamespace(
+            id=GATEWAY_ID,
+            name="Yandex Search",
+            json_spec={},
+            server_spec_id="spec-yandex",
+            managed_by=managed_by,
+        )
+        server = SimpleNamespace(json_spec=YANDEX)
+        self.mcp_server_repository = SimpleNamespace(
+            get_server_by_id=AsyncMock(return_value=server)
+        )
+
+    async def get(self, instance_id):
+        return self.instance
+
+    async def execute_tool(
+        self, instance_id, raw_name, tool_args, httpx_client_factory=None, **_options
+    ):
+        self.calls.append(raw_name)
+        return {"success": True, "result": "[]"}
+
+
+class Ledger:
+    """The spend ledger, keyed like the real table on (event id, category)."""
+
+    def __init__(self):
+        self.lines = {}
+
+    def __call__(self, session, user_context):
+        return self
+
+    async def record(self, entries):
+        new = [e for e in entries if (e.event_id, e.category) not in self.lines]
+        for entry in new:
+            self.lines[(entry.event_id, entry.category)] = entry
+        return len(new)
+
+
+class Guard:
+    name = "entitlement_guard"
+
+    def __init__(self, allow=True):
+        self.allow = allow
+        self.contexts = []
+
+    async def execute(self, context):
+        from agentarea_governance.domain.enums import InterceptorAction
+        from agentarea_governance.domain.models import InterceptorResult
+
+        self.contexts.append(context)
+        return InterceptorResult(
+            action=InterceptorAction.ALLOW if self.allow else InterceptorAction.DENY,
+            interceptor_name=self.name,
+            reason="ok" if self.allow else "no credits remaining",
+        )
+
+
+def _install_gateway(monkeypatch, activity_fns, *, managed_by="platform", guard=None):
+    from agentarea_common.extensions import customer_pricing
+    from agentarea_common.extensions.registry import ExtensionRegistry
+    from agentarea_governance.tool_calls import entitlement_guard
+
+    class Rub(customer_pricing.ProviderCostPricing):
+        def currency(self) -> str:
+            return "RUB"
+
+        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
+            return vendor_cost * (Decimal("1.5") if payer == "platform" else Decimal(1))
+
+    ctx, _ = activity_fns
+    service = GatewayService(managed_by)
+    ctx.get_mcp_server_instance_service = AsyncMock(return_value=service)
+    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Rub())
+    monkeypatch.setattr(
+        tool_activities,
+        "_offload_large_activity_output",
+        AsyncMock(side_effect=lambda **k: k["content"]),
+    )
+    ledger = Ledger()
+    monkeypatch.setattr(tool_activities, "CostEntryRepository", ledger)
+    ExtensionRegistry.clear()
+    entitlement_guard.cache_clear()
+    guard = guard or Guard()
+    ExtensionRegistry.register("entitlement_guard", lambda: guard)
+    return service, ledger, guard
+
+
+@pytest.fixture(autouse=True)
+def _clear_guard():
+    from agentarea_common.extensions.registry import ExtensionRegistry
+    from agentarea_governance.tool_calls import entitlement_guard
+
+    yield
+    ExtensionRegistry.clear()
+    entitlement_guard.cache_clear()
+
+
+def _gateway_request(raw_name: str = "yandex_search") -> MCPToolRequest:
+    return _request(
+        tool_name=f"yandex__{raw_name}",
+        tool_args={"query": "agentarea"},
+        tools=[{"type": "mcp", "name": GATEWAY_ID}],
+        mcp_route=McpToolRoute(
+            instance_id=GATEWAY_ID, raw_name=raw_name, attachment_ref=GATEWAY_ID
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_platform_call_is_gated_then_writes_one_line_at_vendor_cost(
+    monkeypatch, activity_fns
+):
+    from agentarea_tasks.domain.costs import tool_call_event_id
+
+    _, execute_mcp_tool_activity = activity_fns
+    service, ledger, guard = _install_gateway(monkeypatch, activity_fns)
+    request = _gateway_request()
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+    retry = ActivityEnvironment()
+    retry.info = dataclasses.replace(retry.info, attempt=2)
+    again = await retry.run(execute_mcp_tool_activity, request)
+
+    assert (result.replayed, result.attempt) == (False, None)
+    assert (again.replayed, again.attempt) == (True, 2)
+    assert result.success is True
+    assert (result.payer, result.cost, result.cost_metered) == (
+        "platform",
+        Decimal("0.7320"),
+        True,
+    )
+    assert service.calls == ["yandex_search", "yandex_search"]
+    assert guard.contexts[0].execution_state["paid_call"] == {
+        "payer": "platform",
+        "metric_type": "tool.vendor_cost.RUB",
+        "resource_ref": "ru.yandex/search-api#yandex_search",
+    }
+    [line] = ledger.lines.values()
+    assert line.event_id == tool_call_event_id(f"{request.task_id}:call_1")
+    assert (str(line.task_id), line.agent_id, line.client_id) == (
+        request.task_id,
+        request.agent_id,
+        None,
+    )
+    assert (line.subject_id, line.subject_name, line.payer.value) == (
+        GATEWAY_ID,
+        "yandex_search",
+        "platform",
+    )
+    assert (line.vendor_cost, line.vendor_currency, line.amount, line.currency) == (
+        Decimal("0.488"),
+        "RUB",
+        Decimal("0.7320"),
+        "RUB",
+    )
+    assert (line.quantity, line.unit, line.source.value) == (Decimal(1), "request", "rate")
+    assert line.evidence == {
+        "connector": "ru.yandex/search-api",
+        "tool_name": "yandex__yandex_search",
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_customer_key_call_is_metered_without_asking_billing(monkeypatch, activity_fns):
+    _, execute_mcp_tool_activity = activity_fns
+    _, ledger, guard = _install_gateway(monkeypatch, activity_fns, managed_by=None)
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, _gateway_request())
+
+    assert (result.payer, result.cost) == ("workspace", Decimal("0.488"))
+    assert guard.contexts == []
+    [line] = ledger.lines.values()
+    assert (line.payer.value, line.amount) == ("workspace", Decimal("0.488"))
+
+
+@pytest.mark.asyncio
+async def test_no_balance_refuses_before_the_vendor_is_called(monkeypatch, activity_fns, audit):
+    _, execute_mcp_tool_activity = activity_fns
+    service, ledger, _ = _install_gateway(monkeypatch, activity_fns, guard=Guard(allow=False))
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, _gateway_request())
+
+    assert result.success is False
+    assert "no credits remaining" in (result.error or "")
+    assert service.calls == [] and ledger.lines == {}
+    [row] = audit.rows.values()
+    assert row["action"] == "tool.call.denied"
+
+
+@pytest.mark.asyncio
+async def test_a_platform_tool_its_catalog_entry_does_not_price_is_refused(
+    monkeypatch, activity_fns
+):
+    _, execute_mcp_tool_activity = activity_fns
+    service, _, _ = _install_gateway(monkeypatch, activity_fns)
+
+    result = await ActivityEnvironment().run(
+        execute_mcp_tool_activity, _gateway_request(raw_name="undeclared")
+    )
+
+    assert result.success is False
+    assert "declares no rate or reported cost" in (result.error or "")
+    assert service.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_free_call_costs_nothing(monkeypatch, activity_fns):
+    _, execute_mcp_tool_activity = activity_fns
+    _prepare_fake_code_tool(monkeypatch)
+    request = _request(
+        tool_name="example", tool_args={}, tools=[{"type": "code", "name": "agentarea/example"}]
+    )
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
+
+    assert (result.payer, result.cost, result.cost_metered) == (None, 0, True)
+
+
+@pytest.mark.asyncio
+async def test_a_result_the_server_served_from_its_cache_is_marked_replayed(
+    monkeypatch, activity_fns
+):
+    _, execute_mcp_tool_activity = activity_fns
+    service, ledger, _ = _install_gateway(monkeypatch, activity_fns, managed_by=None)
+
+    async def cached(instance_id, raw_name, tool_args, httpx_client_factory=None, **_options):
+        return {"success": True, "result": "[]", "meta": {"agentarea/replayed": True}}
+
+    service.execute_tool = cached
+
+    result = await ActivityEnvironment().run(execute_mcp_tool_activity, _gateway_request())
+
+    assert result.replayed is True
+    assert len(ledger.lines) == 1

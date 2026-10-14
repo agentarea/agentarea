@@ -39,6 +39,7 @@ agentarea-webapp/
 
 ## CONVENTIONS
 
+- **State & data** (full rules: `.agents/skills/aa-webapp-ui/SKILL.md`): backend data is loaded by **server components** (`await @/lib/api`, `Promise.all`, `<Suspense>`) and passed down as props; load failures go through `@/lib/server-resource` + `error.tsx`/`notFound()`. Edited fields live in react-hook-form, mutation pending/result in `useActionState`/`useTransition`, shareable view state (filter, tab, selection) in the URL via `nuqs`, multi-step progress in one discriminated-union `useState`. `useState` is for local ephemeral UI only. No state-management or data-fetching library (Zustand, Effector, Redux, React Query, SWR).
 - **API access**: server-only via `src/lib/api.ts` (typed SDK over the generated `@hey-api` client). Client components reach the backend through **server actions** that call `@/lib/api` — never `fetch()` the backend from the browser.
 - **API types & schemas**: generated from the OpenAPI spec into `@/api/client` (`types.gen.ts`, `zod.gen.ts`). Never hand-write a type or Zod schema that mirrors a backend contract. Regenerate with `pnpm generate:api` (refreshes `src/api/openapi.json` from the backend, then the client).
 - **Forms**: react-hook-form holding a typed object + `zodResolver` on the generated `z*`; the server action validates the same `z*` and maps form→contract via a thin pure adapter (reference: `agents/create/actions.ts` + `agents/shared/agentContract.ts`). A native `<form action>` is fine for simple forms. Use `FormData` only for file/multipart uploads.
@@ -149,6 +150,8 @@ inbox, workplace, admin, settings, ...).
 
 ## ANTI-PATTERNS (THIS DIR)
 
+- Never load data through a server action called from `useEffect` — Next runs client-invoked server actions one at a time per page, so a load blocks every save queued behind it. Server actions are for mutations; data comes from a server component.
+- Never mirror server data or form fields in `useState` (`loading`, `loadError`, `notFound`, `reloadKey`, `editName`, `hasChanges`, `saving`/`saved`) — see the State & data convention above. A component past ~5 `useState` is doing one of these.
 - Never `fetch("/api/proxy/v1/...")` for JSON from the browser — use a server action on `@/lib/api`. `/api/proxy` is only for file download/streaming, SSE, and multipart upload.
 - Never hand-write a Zod schema or TS type that duplicates a backend contract — import from `@/api/client`.
 - Never `as any` a backend response — use the generated types/zod.

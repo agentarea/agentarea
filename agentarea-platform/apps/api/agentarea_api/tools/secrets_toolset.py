@@ -2,6 +2,7 @@
 
 import json
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -81,12 +82,12 @@ class SecretsToolset(Toolset):
             try:
                 await assert_workspace_admin(user_ctx)
             except HTTPException as exc:
-                return json.dumps({"created": False, "error": exc.detail})
+                raise ToolError(exc.detail) from exc
             catalog = SecretCatalogService(session, user_ctx, secret_mgr)
             try:
                 secret = await catalog.create_user_secret(name, value, description)
             except (SecretNameError, DuplicateSecretNameError) as exc:
-                return json.dumps({"created": False, "name": name, "error": str(exc)})
+                raise ToolError(str(exc)) from exc
             return json.dumps({"created": True, "id": str(secret.id), "name": name})
 
     @tool_method(effect="destructive")
@@ -103,15 +104,15 @@ class SecretsToolset(Toolset):
             try:
                 await assert_workspace_admin(user_ctx)
             except HTTPException as exc:
-                return json.dumps({"deleted": False, "error": exc.detail})
+                raise ToolError(exc.detail) from exc
             catalog = SecretCatalogService(session, user_ctx, secret_mgr)
             try:
                 secret = await catalog.get_by_name(name)
                 await catalog.delete_user_secret(secret.id)
             except SecretNotFoundError:
-                return json.dumps({"deleted": False, "name": name, "error": "No such secret"})
+                raise ToolError("No such secret") from None
             except ManagedSecretError as exc:
-                return json.dumps({"deleted": False, "name": name, "error": str(exc)})
+                raise ToolError(str(exc)) from exc
             except SecretInUseError as exc:
-                return json.dumps({"deleted": False, "name": name, "error": str(exc)})
+                raise ToolError(str(exc)) from exc
             return json.dumps({"deleted": True, "name": name})

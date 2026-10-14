@@ -158,6 +158,9 @@ function EventFactItem({ fact }: { fact: EventFact }) {
         <Fact icon={Hash} title={t("tokens")}>
           <span className="tabular-nums">
             {format.number(fact.input)} → {format.number(fact.output)}
+            {fact.cached !== null
+              ? ` · ${t("cached", { count: format.number(fact.cached) })}`
+              : null}
           </span>
         </Fact>
       );

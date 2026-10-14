@@ -9,10 +9,16 @@ enabling:
 
 import asyncio
 from collections.abc import Callable, Coroutine
+from datetime import timedelta
 from functools import wraps
 from typing import Any
 
 from temporalio import activity
+
+# How soon a running activity hears that it was cancelled: cancellation only
+# reaches it in the answer to a heartbeat, so it heartbeats this often and the
+# worker sends each one on (its throttle is set to the same interval).
+CANCELLATION_DELIVERY_INTERVAL = timedelta(seconds=2)
 
 
 async def _heartbeat_every(delay: float) -> None:
@@ -27,8 +33,9 @@ def auto_heartbeater[**P, R](
 ) -> Callable[P, Coroutine[Any, Any, R]]:
     """Decorator that auto-heartbeats during long-running activities.
 
-    If heartbeat_timeout is configured on the activity execution,
-    sends heartbeats at twice the frequency of the timeout.
+    If heartbeat_timeout is configured on the activity execution, sends
+    heartbeats at twice the frequency of the timeout, and at least every
+    CANCELLATION_DELIVERY_INTERVAL so a stop reaches the activity promptly.
     If no heartbeat_timeout is set, the activity runs without heartbeating.
     """
 
@@ -38,7 +45,12 @@ def auto_heartbeater[**P, R](
         heartbeat_task = None
         if heartbeat_timeout:
             heartbeat_task = asyncio.create_task(
-                _heartbeat_every(heartbeat_timeout.total_seconds() / 2)
+                _heartbeat_every(
+                    min(
+                        heartbeat_timeout.total_seconds() / 2,
+                        CANCELLATION_DELIVERY_INTERVAL.total_seconds(),
+                    )
+                )
             )
         try:
             return await fn(*args, **kwargs)

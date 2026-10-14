@@ -6,6 +6,7 @@ import {
 import {
   cancelAgentTaskAction,
   resolveEscalationAction,
+  retryAgentTaskAction,
   sendTaskCommandAction,
   submitTaskInputAction,
 } from "@/lib/server-actions";
@@ -78,6 +79,12 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
     return cancelAgentTaskAction(agentId, taskId);
   }, [agentId, taskId]);
 
+  /** Re-run the turn a failed task ended on, on the same conversation. */
+  const retry = useCallback(async (): Promise<ActionResult> => {
+    if (!agentId || !taskId) return NO_TARGET;
+    return retryAgentTaskAction(agentId, taskId);
+  }, [agentId, taskId]);
+
   /**
    * Start a fresh follow-up task for the same agent; its id is `data`. The
    * create endpoint streams SSE; the task_id lands in the first chunk, so we
@@ -99,6 +106,7 @@ export function useTaskActions(agentId: string | null, taskId: string | null) {
     resolveEscalation,
     queueMessage,
     cancel,
+    retry,
     createFollowupTask,
   };
 }

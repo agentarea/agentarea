@@ -144,9 +144,7 @@ async def test_several_statuses_match_any_of_them(session):
 
 
 def _service(session: AsyncSession) -> TaskService:
-    factory = RepositoryFactory(
-        session, UserContext(user_id="user-1", workspace_id=WORKSPACE)
-    )
+    factory = RepositoryFactory(session, UserContext(user_id="user-1", workspace_id=WORKSPACE))
     return TaskService(factory, event_broker=MagicMock(), task_manager=MagicMock())
 
 

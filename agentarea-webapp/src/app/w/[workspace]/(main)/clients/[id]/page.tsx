@@ -13,9 +13,11 @@ import {
 import ContentBlock from "@/components/ContentBlock";
 import DeleteButton from "@/components/DeleteButton";
 import EmptyState from "@/components/EmptyState";
+import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { DetailSkeleton } from "@/components/Skeleton";
+import { SkillTile } from "@/components/SkillTile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CopyableText } from "@/components/ui/copyable-text";
@@ -36,7 +38,7 @@ import {
   isApiNotFound,
 } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
-import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
+import { mcpRefIdentity } from "@/lib/mcp/resolveMcpRef";
 import {
   addMcpInstanceToClientAction,
   addPlatformToolsetToClientAction,
@@ -152,10 +154,12 @@ export default function ClientDetailPage() {
   const harness = harnessOf(client.kind);
   const HarnessGlyph = harness.icon;
 
-  const instanceIconSrc = (instance: AttachmentItem) => {
-    const resolved = resolveMcpRef(instance.id, allMcp, mcpServers);
-    return resolved.status === "unresolved" ? undefined : resolved.iconSrc;
-  };
+  const mcpMark = (instance: AttachmentItem) => (
+    <EntityMark
+      identity={mcpRefIdentity(instance.id, allMcp, mcpServers)}
+      className="h-5 w-5 shrink-0 rounded-md"
+    />
+  );
 
   const toolsetItems = (platformCatalog ?? []).map((toolset) => ({
     id: toolset.name,
@@ -313,7 +317,7 @@ export default function ClientDetailPage() {
             removeMcpInstanceFromClientAction(clientId, item.id)
           }
           onChanged={fetchClient}
-          getIconSrc={instanceIconSrc}
+          renderMark={mcpMark}
           renderDetails={(item) => {
             const attachment = client.mcp_instances?.find(
               (instance) => instance.id === item.id
@@ -413,6 +417,7 @@ export default function ClientDetailPage() {
           onAdd={(item) => addSkillToClientAction(clientId, item.id)}
           onRemove={(item) => removeSkillFromClientAction(clientId, item.id)}
           onChanged={fetchClient}
+          renderMark={(item) => <SkillTile skillId={item.id} />}
         />
       </div>
 

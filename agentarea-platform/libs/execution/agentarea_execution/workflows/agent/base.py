@@ -15,10 +15,16 @@ with workflow.unsafe.imports_passed_through():
 
     from ..context_manager import ContextWindowManager
     from ..helpers import SEEN_URLS_LIMIT, BudgetTracker, EventManager, external_urls
-    from ..models import AgentExecutionState, PendingEscalation
+    from ..models import AgentExecutionState, Message, PendingEscalation
 
 from ...models import ConversationWindow, WorkflowEventsRequest
-from ..constants import EVENT_PUBLISH_TIMEOUT, EVENT_PUBLISH_WINDOW, Activities
+from ..constants import (
+    EVENT_PUBLISH_TIMEOUT,
+    EVENT_PUBLISH_WINDOW,
+    Activities,
+    EventTypes,
+    ExecutionStatus,
+)
 from ..retry import make_retry_policy
 from .patches import CANCELLATION_PROPAGATES_PATCH
 
@@ -57,17 +63,28 @@ class AgentWorkflowBase:
         self._message_queue: list[dict[str, Any]] = []
         # Track if completion event has been published (to avoid double-publish at termination)
         self._completion_event_published = False
+        # The model-call failure _call_llm already reported as llm.call.failed.
+        self._reported_llm_failure: BaseException | None = None
         self._waiting_for_continuation = False
         self._continuation_failure_reason: str | None = None
         self._continuation_message: str | None = None
         self._continuation_count = 0
         self._delegated_cost: Money = ZERO
         self._monthly_cap_message: str | None = None
+        # The agent's month-to-date spend at the last cap check, and this run's
+        # own spend at that moment; None while the run's agent has no cap.
+        self._agent_spend_baseline: Money | None = None
+        self._agent_spend_mark: Money = ZERO
+        self._agent_cap_counts_service = False
+        self._agent_cap_currency: str | None = None
         # A resumed run whose log predates the logged system prompt writes one first.
         self._resume_system_prompt_missing = False
         # Old histories retain their recorded command sequence.
         self._interaction_contract_enabled = True
         self._wait_tool_enabled = False
+        # Tool and model calls still running when the run was stopped, settled after it.
+        self._stopped_tool_calls: list[Any] = []
+        self._stopped_model_call: Any = None
 
     @property
     def _questions_available(self) -> bool:
@@ -101,6 +118,58 @@ class AgentWorkflowBase:
         """
         return is_cancelled_exception(error) and workflow.patched(CANCELLATION_PROPAGATES_PATCH)
 
+    def _answer_unanswered_tool_calls(self, content: str) -> None:
+        """Give every tool call of the last model turn a result.
+
+        A turn that stops before its tool calls ran would otherwise leave the
+        conversation with calls no result answers, and providers reject that on
+        the next model call.
+        """
+        last_assistant = next(
+            (
+                index
+                for index in range(len(self.state.messages) - 1, -1, -1)
+                if self.state.messages[index].role == "assistant"
+            ),
+            None,
+        )
+        if last_assistant is None:
+            return
+        answered = {
+            message.tool_call_id
+            for message in self.state.messages[last_assistant + 1 :]
+            if message.role == "tool"
+        }
+        for tool_call in self.state.messages[last_assistant].tool_calls or []:
+            call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
+            if call_id and call_id not in answered:
+                self.state.messages.append(
+                    Message(
+                        role="tool",
+                        content=content,
+                        tool_call_id=call_id,
+                        name=(tool_call.get("function") or {}).get("name"),
+                    )
+                )
+
+    def _has_stopped_work(self) -> bool:
+        """Whether a stop interrupted a call whose outcome the run has yet to record."""
+        return bool(self._stopped_tool_calls) or self._stopped_model_call is not None
+
+    def _add_execution_finished_event(self, execution_cancelled: bool) -> None:
+        self._events.add_event(
+            EventTypes.EXECUTION_FINISHED,
+            {
+                "status": self.state.status,
+                "execution_status": "cancelled" if execution_cancelled else "completed",
+                "success": self.state.success,
+                "final_response": self.state.final_response,
+                "failure_reason": self.state.failure_reason,
+                "blocked": self.state.status == ExecutionStatus.BLOCKED,
+                "blocked_reason": self.state.blocked_reason,
+            },
+        )
+
     def _is_delegation_child(self) -> bool:
         """True iff this workflow was spawned via parent's delegation tool.
 
@@ -115,7 +184,7 @@ class AgentWorkflowBase:
         payload: list[dict[str, Any]] = []
         for msg in self.state.messages:
             message: dict[str, Any] = {"role": msg.role, "content": msg.content}
-            for key in ("tool_call_id", "name", "tool_calls"):
+            for key in ("tool_call_id", "name", "tool_calls", "attachments"):
                 value = getattr(msg, key)
                 if value is not None:
                     message[key] = value

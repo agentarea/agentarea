@@ -44,13 +44,23 @@ class _Item:
         self.category = category
         self.featured = featured
         self.hosting = None
+        self.pricing = None
         self.created_at = datetime(2026, 1, 1)
         self.updated_at = datetime(2026, 1, 1)
 
 
 class _Service:
-    def __init__(self, items=None, total=0, categories=None, protocols=None, hostings=None):
-        self._result = (items or [], total, categories or [], protocols or [], hostings or [])
+    def __init__(
+        self, items=None, total=0, categories=None, protocols=None, hostings=None, pricings=None
+    ):
+        self._result = (
+            items or [],
+            total,
+            categories or [],
+            protocols or [],
+            hostings or [],
+            pricings or [],
+        )
         self.calls = []
 
     async def browse_catalog(self, **kwargs):
@@ -143,6 +153,7 @@ class TestParameterPassThrough:
             category="other",
             protocol="api",
             hosting="vendor",
+            pricing="paid",
             sort="name",
             limit=24,
             offset=48,
@@ -154,6 +165,7 @@ class TestParameterPassThrough:
                 "category": "other",
                 "protocol": "api",
                 "hosting": "vendor",
+                "pricing": "paid",
                 "sort": "name",
                 "limit": 24,
                 "offset": 48,
@@ -169,6 +181,7 @@ class TestParameterPassThrough:
         assert call["sort"] is None
         assert call["protocol"] is None
         assert call["hosting"] is None
+        assert call["pricing"] is None
         assert call["offset"] == 0
 
 

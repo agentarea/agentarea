@@ -103,3 +103,16 @@ class TestEgressAllowlist:
             validate_outbound_url(
                 "http://192.168.1.50/x", allowed_hosts=["*.github.com"], allow_private=True
             )
+
+
+class TestEndpointPolicyFor:
+    def test_a_platform_managed_endpoint_is_called_as_configured(self):
+        from agentarea_common.constants import MANAGED_BY_PLATFORM
+        from agentarea_common.utils.url_safety import endpoint_policy_for
+
+        assert endpoint_policy_for(MANAGED_BY_PLATFORM) is None
+
+    def test_a_member_endpoint_gets_the_deployment_policy(self):
+        from agentarea_common.utils.url_safety import OutboundPolicy, endpoint_policy_for
+
+        assert isinstance(endpoint_policy_for(None), OutboundPolicy)

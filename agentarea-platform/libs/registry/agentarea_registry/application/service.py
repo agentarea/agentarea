@@ -25,6 +25,7 @@ from uuid import UUID
 
 import yaml
 from agentarea_common.money import to_optional_money
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
@@ -339,12 +340,14 @@ class RegistryService:
         category: str | None = None,
         protocol: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
         sort: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[
         list[RegistryItem],
         int,
+        list[tuple[str, int]],
         list[tuple[str, int]],
         list[tuple[str, int]],
         list[tuple[str, int]],
@@ -361,20 +364,24 @@ class RegistryService:
             category=category,
             protocol=protocol,
             hosting=hosting,
+            pricing=pricing,
             sort=sort or DEFAULT_CATALOG_SORT,
             limit=limit,
             offset=offset,
         )
         categories = await self.item_repo.category_counts(
-            registry_type, q=query, protocol=protocol, hosting=hosting
+            registry_type, q=query, protocol=protocol, hosting=hosting, pricing=pricing
         )
         protocols = await self.item_repo.protocol_counts(
-            registry_type, q=query, category=category, hosting=hosting
+            registry_type, q=query, category=category, hosting=hosting, pricing=pricing
         )
         hostings = await self.item_repo.hosting_counts(
-            registry_type, q=query, category=category, protocol=protocol
+            registry_type, q=query, category=category, protocol=protocol, pricing=pricing
         )
-        return items, total, categories, protocols, hostings
+        pricings = await self.item_repo.pricing_counts(
+            registry_type, q=query, category=category, protocol=protocol, hosting=hosting
+        )
+        return items, total, categories, protocols, hostings, pricings
 
     async def search_catalog(
         self,
@@ -973,6 +980,7 @@ class RegistryService:
             max_output_tokens=spec.get("max_output_tokens"),
             input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
             output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
+            cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )
@@ -994,7 +1002,9 @@ class RegistryService:
                     "User-Agent": "agentarea-registry-sync",
                 },
             )
-            with urllib.request.urlopen(req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS) as resp:  # noqa: S310
+            with urllib.request.urlopen(  # noqa: S310
+                req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS, context=outbound_ssl_context()
+            ) as resp:
                 raw = resp.read().decode("utf-8")
                 content_type = resp.headers.get("Content-Type", "")
         else:
@@ -1384,6 +1394,7 @@ class RegistryService:
                         "max_output_tokens": entry.get("max_output_tokens"),
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),
+                        "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "is_active": entry.get("is_active", True),
                     },

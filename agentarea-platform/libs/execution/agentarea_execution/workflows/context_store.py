@@ -105,6 +105,23 @@ class ContextStore:
 
         return result
 
+    # --- Tool images ---
+
+    async def store_image(self, image_id: str, data: bytes, mime_type: str) -> None:
+        """Store an image a tool returned, for the model calls that follow."""
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=f"{self.prefix}/images/{image_id}",
+            Body=data,
+            ContentType=mime_type,
+        )
+
+    async def read_image(self, image_id: str) -> bytes:
+        response = self.client.get_object(
+            Bucket=self.bucket, Key=f"{self.prefix}/images/{image_id}"
+        )
+        return response["Body"].read()
+
     # --- History chunks ---
 
     async def store_history_chunk(self, chunk_index: int, messages: list[dict[str, Any]]) -> None:

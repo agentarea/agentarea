@@ -37,6 +37,9 @@ class ExecutionStatus(StrEnum):
     FAILED = "failed"
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
+    # Turned away by its conditions, or by the trigger being off: no task, and
+    # not a failure -- it neither counts toward nor resets failure_threshold.
+    SKIPPED = "skipped"
 
 
 class WebhookType(StrEnum):

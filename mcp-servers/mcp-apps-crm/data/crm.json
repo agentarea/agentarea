@@ -1,0 +1,4550 @@
+{
+  "version": 1,
+  "asOf": "2026-10-05T07:00:00.000Z",
+  "account": {
+    "name": "Meridian Systems",
+    "baseCurrency": "RUB"
+  },
+  "fxRates": {
+    "RUB": 1,
+    "USD": 92
+  },
+  "lostReasons": [
+    "Price too high",
+    "Chose a competitor",
+    "No budget this year",
+    "Went silent",
+    "Timing — revisit next quarter",
+    "Missing integration"
+  ],
+  "sources": [
+    "Inbound — website",
+    "Outbound",
+    "Referral",
+    "Partner",
+    "Trade show",
+    "Webinar"
+  ],
+  "owners": [
+    {
+      "id": "own_01",
+      "name": "Anna Sokolova",
+      "title": "Head of Sales",
+      "email": "anna.sokolova@meridian.ru",
+      "kind": "human"
+    },
+    {
+      "id": "own_02",
+      "name": "Dmitry Volkov",
+      "title": "Account Executive",
+      "email": "dmitry.volkov@meridian.ru",
+      "kind": "human"
+    },
+    {
+      "id": "own_03",
+      "name": "Elena Petrova",
+      "title": "Account Executive",
+      "email": "elena.petrova@meridian.ru",
+      "kind": "human"
+    },
+    {
+      "id": "own_04",
+      "name": "Ivan Kuznetsov",
+      "title": "Sales Development Rep",
+      "email": "ivan.kuznetsov@meridian.ru",
+      "kind": "human"
+    },
+    {
+      "id": "own_05",
+      "name": "Scout",
+      "title": "AI sales agent",
+      "email": "scout@meridian.ru",
+      "kind": "agent"
+    }
+  ],
+  "pipelines": [
+    {
+      "id": "default",
+      "name": "Sales pipeline",
+      "stages": [
+        {
+          "id": "lead",
+          "name": "Lead in",
+          "probability": 0.1,
+          "rottenAfterDays": 7,
+          "outcome": null
+        },
+        {
+          "id": "qualified",
+          "name": "Qualified",
+          "probability": 0.25,
+          "rottenAfterDays": 10,
+          "outcome": null
+        },
+        {
+          "id": "proposal",
+          "name": "Proposal sent",
+          "probability": 0.5,
+          "rottenAfterDays": 14,
+          "outcome": null
+        },
+        {
+          "id": "negotiation",
+          "name": "Negotiation",
+          "probability": 0.75,
+          "rottenAfterDays": 10,
+          "outcome": null
+        },
+        {
+          "id": "won",
+          "name": "Won",
+          "probability": 1,
+          "rottenAfterDays": null,
+          "outcome": "won"
+        },
+        {
+          "id": "lost",
+          "name": "Lost",
+          "probability": 0,
+          "rottenAfterDays": null,
+          "outcome": "lost"
+        }
+      ]
+    }
+  ],
+  "companies": [
+    {
+      "id": "cmp_001",
+      "name": "Volga Logistics",
+      "domain": "volgalog.ru",
+      "industry": "Logistics",
+      "size": "201-500",
+      "city": "Nizhny Novgorod",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-11T07:50:00.000Z"
+    },
+    {
+      "id": "cmp_002",
+      "name": "Kama Freight",
+      "domain": "kamafreight.ru",
+      "industry": "Logistics",
+      "size": "201-500",
+      "city": "Kazan",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-13T08:37:00.000Z"
+    },
+    {
+      "id": "cmp_003",
+      "name": "Baltic Cold Chain",
+      "domain": "balticcold.ru",
+      "industry": "Cold storage",
+      "size": "1000+",
+      "city": "Saint Petersburg",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-29T07:47:00.000Z"
+    },
+    {
+      "id": "cmp_004",
+      "name": "Sibir Agro",
+      "domain": "sibiragro.ru",
+      "industry": "Agriculture",
+      "size": "51-200",
+      "city": "Novosibirsk",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-04T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_005",
+      "name": "Neva Retail Group",
+      "domain": "nevaretail.ru",
+      "industry": "Retail",
+      "size": "51-200",
+      "city": "Saint Petersburg",
+      "ownerId": "own_01",
+      "createdAt": "2026-06-22T06:36:00.000Z"
+    },
+    {
+      "id": "cmp_006",
+      "name": "Tver Pharma Distribution",
+      "domain": "tverpharma.ru",
+      "industry": "Pharma distribution",
+      "size": "51-200",
+      "city": "Tver",
+      "ownerId": "own_03",
+      "createdAt": "2026-07-24T06:34:00.000Z"
+    },
+    {
+      "id": "cmp_007",
+      "name": "Altai Foods",
+      "domain": "altaifoods.ru",
+      "industry": "Food production",
+      "size": "11-50",
+      "city": "Barnaul",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-31T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_008",
+      "name": "Krasny Bor Furniture",
+      "domain": "krasnybor.ru",
+      "industry": "Manufacturing",
+      "size": "201-500",
+      "city": "Yekaterinburg",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-01T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_009",
+      "name": "Ural Metal Supply",
+      "domain": "uralmetal.ru",
+      "industry": "Metals wholesale",
+      "size": "11-50",
+      "city": "Chelyabinsk",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-24T08:51:00.000Z"
+    },
+    {
+      "id": "cmp_010",
+      "name": "Don Agroholding",
+      "domain": "donagro.ru",
+      "industry": "Agriculture",
+      "size": "201-500",
+      "city": "Rostov-on-Don",
+      "ownerId": "own_04",
+      "createdAt": "2026-07-20T06:49:00.000Z"
+    },
+    {
+      "id": "cmp_011",
+      "name": "Vector Electronics",
+      "domain": "vector-el.ru",
+      "industry": "Electronics distribution",
+      "size": "51-200",
+      "city": "Moscow",
+      "ownerId": "own_02",
+      "createdAt": "2026-05-04T08:22:00.000Z"
+    },
+    {
+      "id": "cmp_012",
+      "name": "Polar Fisheries",
+      "domain": "polarfish.ru",
+      "industry": "Food production",
+      "size": "51-200",
+      "city": "Murmansk",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-02T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_013",
+      "name": "Kazan Auto Parts",
+      "domain": "kazanautoparts.ru",
+      "industry": "Automotive",
+      "size": "201-500",
+      "city": "Kazan",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-18T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_014",
+      "name": "Stolitsa Office Supply",
+      "domain": "stolitsa-office.ru",
+      "industry": "Wholesale",
+      "size": "11-50",
+      "city": "Moscow",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-05T08:26:00.000Z"
+    },
+    {
+      "id": "cmp_015",
+      "name": "Tula Packaging",
+      "domain": "tulapack.ru",
+      "industry": "Manufacturing",
+      "size": "501-1000",
+      "city": "Tula",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-06T06:58:00.000Z"
+    },
+    {
+      "id": "cmp_016",
+      "name": "Samara Building Materials",
+      "domain": "samarabm.ru",
+      "industry": "Construction materials",
+      "size": "51-200",
+      "city": "Samara",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-28T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_017",
+      "name": "Rostov Grain Terminal",
+      "domain": "rostovgrain.ru",
+      "industry": "Ports & terminals",
+      "size": "1000+",
+      "city": "Rostov-on-Don",
+      "ownerId": "own_03",
+      "createdAt": "2026-08-13T06:22:00.000Z"
+    },
+    {
+      "id": "cmp_018",
+      "name": "Yug Wine Distribution",
+      "domain": "yugwine.ru",
+      "industry": "Beverage distribution",
+      "size": "201-500",
+      "city": "Krasnodar",
+      "ownerId": "own_03",
+      "createdAt": "2026-05-15T06:54:00.000Z"
+    },
+    {
+      "id": "cmp_019",
+      "name": "Primorye Port Services",
+      "domain": "primport.ru",
+      "industry": "Ports & terminals",
+      "size": "201-500",
+      "city": "Vladivostok",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-20T07:17:00.000Z"
+    },
+    {
+      "id": "cmp_020",
+      "name": "Omsk Chemicals",
+      "domain": "omskchem.ru",
+      "industry": "Chemicals",
+      "size": "501-1000",
+      "city": "Omsk",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-21T08:32:00.000Z"
+    },
+    {
+      "id": "cmp_021",
+      "name": "Perm Paper Mill",
+      "domain": "permpaper.ru",
+      "industry": "Manufacturing",
+      "size": "501-1000",
+      "city": "Perm",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-03T07:00:00.000Z"
+    },
+    {
+      "id": "cmp_022",
+      "name": "Caspian Trade FZE",
+      "domain": "caspiantrade.ae",
+      "industry": "Wholesale",
+      "size": "11-50",
+      "city": "Dubai",
+      "ownerId": "own_02",
+      "createdAt": "2026-06-16T06:58:00.000Z"
+    },
+    {
+      "id": "cmp_023",
+      "name": "Ararat Logistics",
+      "domain": "araratlog.am",
+      "industry": "Logistics",
+      "size": "501-1000",
+      "city": "Yerevan",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-28T07:37:00.000Z"
+    },
+    {
+      "id": "cmp_024",
+      "name": "Steppe Retail",
+      "domain": "stepperetail.kz",
+      "industry": "Retail",
+      "size": "1000+",
+      "city": "Almaty",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-28T08:00:00.000Z"
+    },
+    {
+      "id": "cmp_025",
+      "name": "Danube Distribution",
+      "domain": "danubedist.rs",
+      "industry": "Wholesale",
+      "size": "11-50",
+      "city": "Belgrade",
+      "ownerId": "own_02",
+      "createdAt": "2026-07-20T07:52:00.000Z"
+    }
+  ],
+  "contacts": [
+    {
+      "id": "ct_001",
+      "companyId": "cmp_001",
+      "name": "Mikhail Belyaev",
+      "title": "Head of Logistics",
+      "email": "mikhail.belyaev@volgalog.ru",
+      "phone": "+7 986 213-59-54",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-11T09:50:00.000Z"
+    },
+    {
+      "id": "ct_002",
+      "companyId": "cmp_001",
+      "name": "Tatiana Egorova",
+      "title": "Commercial Director",
+      "email": "tatiana.egorova@volgalog.ru",
+      "phone": "+7 980 367-05-13",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-11T10:50:00.000Z"
+    },
+    {
+      "id": "ct_003",
+      "companyId": "cmp_002",
+      "name": "Yulia Medvedeva",
+      "title": "IT Director",
+      "email": "yulia.medvedeva@kamafreight.ru",
+      "phone": "+7 907 958-21-22",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-13T08:37:00.000Z"
+    },
+    {
+      "id": "ct_004",
+      "companyId": "cmp_002",
+      "name": "Olga Sorokina",
+      "title": "Warehouse Manager",
+      "email": "olga.sorokina@kamafreight.ru",
+      "phone": "+7 910 877-40-37",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-13T08:37:00.000Z"
+    },
+    {
+      "id": "ct_005",
+      "companyId": "cmp_003",
+      "name": "Konstantin Vinogradov",
+      "title": "CEO",
+      "email": "konstantin.vinogradov@balticcold.ru",
+      "phone": "+7 936 718-44-38",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-29T10:47:00.000Z"
+    },
+    {
+      "id": "ct_006",
+      "companyId": "cmp_003",
+      "name": "Yulia Sorokina",
+      "title": "Head of Supply Chain",
+      "email": "yulia.sorokina@balticcold.ru",
+      "phone": "+7 908 359-57-46",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-29T07:47:00.000Z"
+    },
+    {
+      "id": "ct_007",
+      "companyId": "cmp_004",
+      "name": "Irina Nikitina",
+      "title": "COO",
+      "email": "irina.nikitina@sibiragro.ru",
+      "phone": "+7 915 805-61-17",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-04T10:00:00.000Z"
+    },
+    {
+      "id": "ct_008",
+      "companyId": "cmp_004",
+      "name": "Artem Belyaev",
+      "title": "Procurement Director",
+      "email": "artem.belyaev@sibiragro.ru",
+      "phone": "+7 938 958-68-03",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-04T07:00:00.000Z"
+    },
+    {
+      "id": "ct_009",
+      "companyId": "cmp_005",
+      "name": "Olga Orlova",
+      "title": "CEO",
+      "email": "olga.orlova@nevaretail.ru",
+      "phone": "+7 983 367-72-11",
+      "ownerId": "own_01",
+      "createdAt": "2026-06-22T06:36:00.000Z"
+    },
+    {
+      "id": "ct_010",
+      "companyId": "cmp_005",
+      "name": "Konstantin Morozov",
+      "title": "Warehouse Manager",
+      "email": "konstantin.morozov@nevaretail.ru",
+      "phone": "+7 955 554-53-72",
+      "ownerId": "own_01",
+      "createdAt": "2026-06-22T06:36:00.000Z"
+    },
+    {
+      "id": "ct_011",
+      "companyId": "cmp_006",
+      "name": "Yulia Ivanova",
+      "title": "CEO",
+      "email": "yulia.ivanova@tverpharma.ru",
+      "phone": "+7 995 733-86-14",
+      "ownerId": "own_03",
+      "createdAt": "2026-07-24T08:34:00.000Z"
+    },
+    {
+      "id": "ct_012",
+      "companyId": "cmp_006",
+      "name": "Oleg Fedorov",
+      "title": "IT Director",
+      "email": "oleg.fedorov@tverpharma.ru",
+      "phone": "+7 916 873-89-96",
+      "ownerId": "own_03",
+      "createdAt": "2026-07-24T07:34:00.000Z"
+    },
+    {
+      "id": "ct_013",
+      "companyId": "cmp_007",
+      "name": "Sergey Kozlov",
+      "title": "COO",
+      "email": "sergey.kozlov@altaifoods.ru",
+      "phone": "+7 984 625-96-33",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-31T08:00:00.000Z"
+    },
+    {
+      "id": "ct_014",
+      "companyId": "cmp_007",
+      "name": "Ekaterina Nikitina",
+      "title": "CEO",
+      "email": "ekaterina.nikitina@altaifoods.ru",
+      "phone": "+7 958 029-41-07",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-31T09:00:00.000Z"
+    },
+    {
+      "id": "ct_015",
+      "companyId": "cmp_008",
+      "name": "Natalia Komarova",
+      "title": "COO",
+      "email": "natalia.komarova@krasnybor.ru",
+      "phone": "+7 956 241-94-80",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-01T08:00:00.000Z"
+    },
+    {
+      "id": "ct_016",
+      "companyId": "cmp_008",
+      "name": "Pavel Belov",
+      "title": "Procurement Director",
+      "email": "pavel.belov@krasnybor.ru",
+      "phone": "+7 962 087-95-70",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-01T07:00:00.000Z"
+    },
+    {
+      "id": "ct_017",
+      "companyId": "cmp_009",
+      "name": "Yulia Morozova",
+      "title": "Procurement Director",
+      "email": "yulia.morozova@uralmetal.ru",
+      "phone": "+7 934 835-28-75",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-24T11:51:00.000Z"
+    },
+    {
+      "id": "ct_018",
+      "companyId": "cmp_009",
+      "name": "Ekaterina Novikova",
+      "title": "Operations Manager",
+      "email": "ekaterina.novikova@uralmetal.ru",
+      "phone": "+7 925 168-42-75",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-24T08:51:00.000Z"
+    },
+    {
+      "id": "ct_019",
+      "companyId": "cmp_010",
+      "name": "Oleg Vinogradov",
+      "title": "Operations Manager",
+      "email": "oleg.vinogradov@donagro.ru",
+      "phone": "+7 954 778-29-73",
+      "ownerId": "own_04",
+      "createdAt": "2026-07-20T09:49:00.000Z"
+    },
+    {
+      "id": "ct_020",
+      "companyId": "cmp_010",
+      "name": "Mikhail Vinogradov",
+      "title": "CFO",
+      "email": "mikhail.vinogradov@donagro.ru",
+      "phone": "+7 937 871-19-73",
+      "ownerId": "own_04",
+      "createdAt": "2026-07-20T08:49:00.000Z"
+    },
+    {
+      "id": "ct_021",
+      "companyId": "cmp_011",
+      "name": "Ksenia Morozova",
+      "title": "Procurement Director",
+      "email": "ksenia.morozova@vector-el.ru",
+      "phone": "+7 908 903-90-83",
+      "ownerId": "own_02",
+      "createdAt": "2026-05-04T10:22:00.000Z"
+    },
+    {
+      "id": "ct_022",
+      "companyId": "cmp_011",
+      "name": "Maria Guseva",
+      "title": "IT Director",
+      "email": "maria.guseva@vector-el.ru",
+      "phone": "+7 937 283-24-10",
+      "ownerId": "own_02",
+      "createdAt": "2026-05-04T09:22:00.000Z"
+    },
+    {
+      "id": "ct_023",
+      "companyId": "cmp_012",
+      "name": "Vera Lebedeva",
+      "title": "Commercial Director",
+      "email": "vera.lebedeva@polarfish.ru",
+      "phone": "+7 982 803-42-02",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-02T09:00:00.000Z"
+    },
+    {
+      "id": "ct_024",
+      "companyId": "cmp_012",
+      "name": "Daria Fedorova",
+      "title": "Procurement Director",
+      "email": "daria.fedorova@polarfish.ru",
+      "phone": "+7 929 018-25-46",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-02T09:00:00.000Z"
+    },
+    {
+      "id": "ct_025",
+      "companyId": "cmp_013",
+      "name": "Daria Lebedeva",
+      "title": "Head of Supply Chain",
+      "email": "daria.lebedeva@kazanautoparts.ru",
+      "phone": "+7 938 110-95-68",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-18T09:00:00.000Z"
+    },
+    {
+      "id": "ct_026",
+      "companyId": "cmp_013",
+      "name": "Daria Vinogradova",
+      "title": "Procurement Director",
+      "email": "daria.vinogradova@kazanautoparts.ru",
+      "phone": "+7 979 185-65-65",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-18T09:00:00.000Z"
+    },
+    {
+      "id": "ct_027",
+      "companyId": "cmp_014",
+      "name": "Nikolai Popov",
+      "title": "Head of Logistics",
+      "email": "nikolai.popov@stolitsa-office.ru",
+      "phone": "+7 978 814-19-12",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-05T11:26:00.000Z"
+    },
+    {
+      "id": "ct_028",
+      "companyId": "cmp_014",
+      "name": "Maxim Nikitin",
+      "title": "IT Director",
+      "email": "maxim.nikitin@stolitsa-office.ru",
+      "phone": "+7 973 600-90-50",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-05T11:26:00.000Z"
+    },
+    {
+      "id": "ct_029",
+      "companyId": "cmp_015",
+      "name": "Nikolai Pavlov",
+      "title": "Warehouse Manager",
+      "email": "nikolai.pavlov@tulapack.ru",
+      "phone": "+7 992 131-25-06",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-06T07:58:00.000Z"
+    },
+    {
+      "id": "ct_030",
+      "companyId": "cmp_015",
+      "name": "Mikhail Pavlov",
+      "title": "IT Director",
+      "email": "mikhail.pavlov@tulapack.ru",
+      "phone": "+7 935 124-75-77",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-06T06:58:00.000Z"
+    },
+    {
+      "id": "ct_031",
+      "companyId": "cmp_016",
+      "name": "Daria Pavlova",
+      "title": "CFO",
+      "email": "daria.pavlova@samarabm.ru",
+      "phone": "+7 910 451-79-50",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-28T09:00:00.000Z"
+    },
+    {
+      "id": "ct_032",
+      "companyId": "cmp_016",
+      "name": "Maria Ivanova",
+      "title": "CEO",
+      "email": "maria.ivanova@samarabm.ru",
+      "phone": "+7 930 133-73-70",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-28T07:00:00.000Z"
+    },
+    {
+      "id": "ct_033",
+      "companyId": "cmp_017",
+      "name": "Tatiana Tarasova",
+      "title": "CFO",
+      "email": "tatiana.tarasova@rostovgrain.ru",
+      "phone": "+7 995 024-60-24",
+      "ownerId": "own_03",
+      "createdAt": "2026-08-13T06:22:00.000Z"
+    },
+    {
+      "id": "ct_034",
+      "companyId": "cmp_017",
+      "name": "Svetlana Zaitseva",
+      "title": "CEO",
+      "email": "svetlana.zaitseva@rostovgrain.ru",
+      "phone": "+7 982 958-68-10",
+      "ownerId": "own_03",
+      "createdAt": "2026-08-13T06:22:00.000Z"
+    },
+    {
+      "id": "ct_035",
+      "companyId": "cmp_018",
+      "name": "Alexey Smirnov",
+      "title": "CEO",
+      "email": "alexey.smirnov@yugwine.ru",
+      "phone": "+7 954 699-15-45",
+      "ownerId": "own_03",
+      "createdAt": "2026-05-15T07:54:00.000Z"
+    },
+    {
+      "id": "ct_036",
+      "companyId": "cmp_018",
+      "name": "Irina Fedorova",
+      "title": "CFO",
+      "email": "irina.fedorova@yugwine.ru",
+      "phone": "+7 944 436-43-39",
+      "ownerId": "own_03",
+      "createdAt": "2026-05-15T08:54:00.000Z"
+    },
+    {
+      "id": "ct_037",
+      "companyId": "cmp_019",
+      "name": "Daria Zaitseva",
+      "title": "Head of Logistics",
+      "email": "daria.zaitseva@primport.ru",
+      "phone": "+7 926 518-71-34",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-20T10:17:00.000Z"
+    },
+    {
+      "id": "ct_038",
+      "companyId": "cmp_019",
+      "name": "Alexey Orlov",
+      "title": "IT Director",
+      "email": "alexey.orlov@primport.ru",
+      "phone": "+7 909 589-06-85",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-20T09:17:00.000Z"
+    },
+    {
+      "id": "ct_039",
+      "companyId": "cmp_020",
+      "name": "Roman Egorov",
+      "title": "Operations Manager",
+      "email": "roman.egorov@omskchem.ru",
+      "phone": "+7 980 729-49-16",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-21T08:32:00.000Z"
+    },
+    {
+      "id": "ct_040",
+      "companyId": "cmp_020",
+      "name": "Konstantin Gusev",
+      "title": "COO",
+      "email": "konstantin.gusev@omskchem.ru",
+      "phone": "+7 907 178-57-66",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-21T10:32:00.000Z"
+    },
+    {
+      "id": "ct_041",
+      "companyId": "cmp_021",
+      "name": "Daria Belova",
+      "title": "CEO",
+      "email": "daria.belova@permpaper.ru",
+      "phone": "+7 931 105-21-51",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-03T07:00:00.000Z"
+    },
+    {
+      "id": "ct_042",
+      "companyId": "cmp_021",
+      "name": "Vera Komarova",
+      "title": "Commercial Director",
+      "email": "vera.komarova@permpaper.ru",
+      "phone": "+7 902 059-97-11",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-03T10:00:00.000Z"
+    },
+    {
+      "id": "ct_043",
+      "companyId": "cmp_022",
+      "name": "Karim Aziz",
+      "title": "COO",
+      "email": "karim.aziz@caspiantrade.ae",
+      "phone": "+971 50 570 7120",
+      "ownerId": "own_02",
+      "createdAt": "2026-06-16T08:58:00.000Z"
+    },
+    {
+      "id": "ct_044",
+      "companyId": "cmp_022",
+      "name": "Rania Saleh",
+      "title": "Operations Manager",
+      "email": "rania.saleh@caspiantrade.ae",
+      "phone": "+971 50 296 8384",
+      "ownerId": "own_02",
+      "createdAt": "2026-06-16T08:58:00.000Z"
+    },
+    {
+      "id": "ct_045",
+      "companyId": "cmp_023",
+      "name": "Armen Petrosyan",
+      "title": "Warehouse Manager",
+      "email": "armen.petrosyan@araratlog.am",
+      "phone": "+374 91 097 840",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-28T08:37:00.000Z"
+    },
+    {
+      "id": "ct_046",
+      "companyId": "cmp_023",
+      "name": "Lilit Grigoryan",
+      "title": "COO",
+      "email": "lilit.grigoryan@araratlog.am",
+      "phone": "+374 95 232 068",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-28T10:37:00.000Z"
+    },
+    {
+      "id": "ct_047",
+      "companyId": "cmp_024",
+      "name": "Yerlan Abenov",
+      "title": "Commercial Director",
+      "email": "yerlan.abenov@stepperetail.kz",
+      "phone": "+7 939 296-65-20",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-28T09:00:00.000Z"
+    },
+    {
+      "id": "ct_048",
+      "companyId": "cmp_024",
+      "name": "Dana Seitkali",
+      "title": "CEO",
+      "email": "dana.seitkali@stepperetail.kz",
+      "phone": "+7 967 945-47-42",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-28T11:00:00.000Z"
+    },
+    {
+      "id": "ct_049",
+      "companyId": "cmp_025",
+      "name": "Marko Jovanovic",
+      "title": "Procurement Director",
+      "email": "marko.jovanovic@danubedist.rs",
+      "phone": "+381 63 632 3804",
+      "ownerId": "own_02",
+      "createdAt": "2026-07-20T07:52:00.000Z"
+    },
+    {
+      "id": "ct_050",
+      "companyId": "cmp_025",
+      "name": "Jelena Markovic",
+      "title": "Head of Logistics",
+      "email": "jelena.markovic@danubedist.rs",
+      "phone": "+381 62 574 9359",
+      "ownerId": "own_02",
+      "createdAt": "2026-07-20T07:52:00.000Z"
+    }
+  ],
+  "deals": [
+    {
+      "id": "deal_001",
+      "title": "Perm Paper — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_021",
+      "contactIds": [
+        "ct_041"
+      ],
+      "ownerId": "own_02",
+      "value": 750000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-24",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-07T06:43:00.000Z",
+      "updatedAt": "2026-09-29T08:42:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-07T06:43:00.000Z",
+          "leftAt": "2026-09-14T08:10:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-14T08:10:00.000Z",
+          "leftAt": "2026-09-29T08:42:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-29T08:42:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_002",
+      "title": "Don Agroholding — WMS rollout, 5 warehouses",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "Timing — revisit next quarter",
+      "companyId": "cmp_010",
+      "contactIds": [
+        "ct_019",
+        "ct_020"
+      ],
+      "ownerId": "own_04",
+      "value": 1280000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-09-14",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-04T07:55:00.000Z",
+      "updatedAt": "2026-09-14T07:00:00.000Z",
+      "closedAt": "2026-09-14T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-04T07:55:00.000Z",
+          "leftAt": "2026-09-14T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-09-14T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_003",
+      "title": "Steppe Retail — Pilot, 25 seats",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_024",
+      "contactIds": [
+        "ct_047"
+      ],
+      "ownerId": "own_03",
+      "value": 43000,
+      "currency": "USD",
+      "expectedCloseDate": "2026-10-01",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-04T08:00:00.000Z",
+      "updatedAt": "2026-10-01T11:48:00.000Z",
+      "closedAt": "2026-10-01T11:48:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-04T08:00:00.000Z",
+          "leftAt": "2026-09-15T07:30:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-15T07:30:00.000Z",
+          "leftAt": "2026-09-24T07:57:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-24T07:57:00.000Z",
+          "leftAt": "2026-09-29T09:19:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-29T09:19:00.000Z",
+          "leftAt": "2026-10-01T11:48:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-10-01T11:48:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_004",
+      "title": "Vector Electronics — Pilot, 40 seats",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_011",
+      "contactIds": [
+        "ct_021"
+      ],
+      "ownerId": "own_01",
+      "value": 8050000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-26",
+      "source": "Inbound — website",
+      "createdAt": "2026-10-05T05:33:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-10-05T05:33:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_005",
+      "title": "Kama Freight — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_002",
+      "contactIds": [
+        "ct_003"
+      ],
+      "ownerId": "own_04",
+      "value": 4550000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-02",
+      "source": "Outbound",
+      "createdAt": "2026-08-31T08:37:00.000Z",
+      "updatedAt": "2026-10-02T09:24:00.000Z",
+      "closedAt": "2026-10-02T09:24:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-31T08:37:00.000Z",
+          "leftAt": "2026-09-08T07:20:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-08T07:20:00.000Z",
+          "leftAt": "2026-09-10T08:19:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-10T08:19:00.000Z",
+          "leftAt": "2026-09-25T07:54:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-25T07:54:00.000Z",
+          "leftAt": "2026-10-02T09:24:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-10-02T09:24:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_006",
+      "title": "Ural Metal — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "negotiation",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_009",
+      "contactIds": [
+        "ct_017",
+        "ct_018"
+      ],
+      "ownerId": "own_02",
+      "value": 10640000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-21",
+      "source": "Outbound",
+      "createdAt": "2026-08-31T08:51:00.000Z",
+      "updatedAt": "2026-10-01T07:26:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-31T08:51:00.000Z",
+          "leftAt": "2026-09-10T07:56:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-10T07:56:00.000Z",
+          "leftAt": "2026-09-17T07:15:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-17T07:15:00.000Z",
+          "leftAt": "2026-10-01T07:26:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-10-01T07:26:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_007",
+      "title": "Stolitsa Office — 1C integration",
+      "pipelineId": "default",
+      "stageId": "negotiation",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_014",
+      "contactIds": [
+        "ct_027",
+        "ct_028"
+      ],
+      "ownerId": "own_04",
+      "value": 2300000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-13",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-09T06:13:00.000Z",
+      "updatedAt": "2026-10-02T06:46:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-09T06:13:00.000Z",
+          "leftAt": "2026-09-23T07:33:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-23T07:33:00.000Z",
+          "leftAt": "2026-09-28T07:52:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-28T07:52:00.000Z",
+          "leftAt": "2026-10-02T06:46:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-10-02T06:46:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_008",
+      "title": "Danube Distribution — Pilot, 50 seats",
+      "pipelineId": "default",
+      "stageId": "negotiation",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_025",
+      "contactIds": [
+        "ct_049",
+        "ct_050"
+      ],
+      "ownerId": "own_02",
+      "value": 9000,
+      "currency": "USD",
+      "expectedCloseDate": "2026-12-09",
+      "source": "Trade show",
+      "createdAt": "2026-09-07T08:57:00.000Z",
+      "updatedAt": "2026-10-03T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-07T08:57:00.000Z",
+          "leftAt": "2026-09-14T06:31:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-14T06:31:00.000Z",
+          "leftAt": "2026-09-24T07:12:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-24T07:12:00.000Z",
+          "leftAt": "2026-09-28T08:00:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-28T08:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_009",
+      "title": "Volga Logistics — WMS rollout, 6 warehouses",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_001",
+      "contactIds": [
+        "ct_001",
+        "ct_002"
+      ],
+      "ownerId": "own_01",
+      "value": 710000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-08",
+      "source": "Webinar",
+      "createdAt": "2026-09-01T06:15:00.000Z",
+      "updatedAt": "2026-10-01T12:57:08.189Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-01T06:15:00.000Z",
+          "leftAt": "2026-09-07T06:16:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-07T06:16:00.000Z",
+          "leftAt": "2026-09-18T07:10:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-18T07:10:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_010",
+      "title": "Ararat Logistics — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_023",
+      "contactIds": [
+        "ct_045",
+        "ct_046"
+      ],
+      "ownerId": "own_01",
+      "value": 13000,
+      "currency": "USD",
+      "expectedCloseDate": "2026-11-05",
+      "source": "Referral",
+      "createdAt": "2026-09-02T07:37:00.000Z",
+      "updatedAt": "2026-10-03T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-02T07:37:00.000Z",
+          "leftAt": "2026-09-14T06:05:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-14T06:05:00.000Z",
+          "leftAt": "2026-09-25T06:20:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-25T06:20:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_011",
+      "title": "Primorye Port — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_019",
+      "contactIds": [
+        "ct_037"
+      ],
+      "ownerId": "own_01",
+      "value": 430000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-11",
+      "source": "Referral",
+      "createdAt": "2026-08-24T07:17:00.000Z",
+      "updatedAt": "2026-10-04T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-24T07:17:00.000Z",
+          "leftAt": "2026-08-31T08:39:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-08-31T08:39:00.000Z",
+          "leftAt": "2026-09-15T06:55:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-15T06:55:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_012",
+      "title": "Samara Building — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_016",
+      "contactIds": [
+        "ct_031",
+        "ct_032"
+      ],
+      "ownerId": "own_05",
+      "value": 3440000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-25",
+      "source": "Outbound",
+      "createdAt": "2026-09-07T06:57:00.000Z",
+      "updatedAt": "2026-10-01T14:59:12.662Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-07T06:57:00.000Z",
+          "leftAt": "2026-09-14T06:07:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-14T06:07:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_013",
+      "title": "Tver Pharma — Demand forecasting",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_006",
+      "contactIds": [
+        "ct_011",
+        "ct_012"
+      ],
+      "ownerId": "own_03",
+      "value": 430000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-09-30",
+      "source": "Inbound — website",
+      "createdAt": "2026-08-18T08:40:00.000Z",
+      "updatedAt": "2026-09-30T07:00:00.000Z",
+      "closedAt": "2026-09-30T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-18T08:40:00.000Z",
+          "leftAt": "2026-08-24T06:47:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-08-24T06:47:00.000Z",
+          "leftAt": "2026-08-31T08:22:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-08-31T08:22:00.000Z",
+          "leftAt": "2026-09-15T08:31:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-15T08:31:00.000Z",
+          "leftAt": "2026-09-30T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-09-30T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_014",
+      "title": "Neva Retail — Fleet telematics bundle",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "Missing integration",
+      "companyId": "cmp_005",
+      "contactIds": [
+        "ct_009"
+      ],
+      "ownerId": "own_01",
+      "value": 1480000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-07-13",
+      "source": "Webinar",
+      "createdAt": "2026-06-23T06:36:00.000Z",
+      "updatedAt": "2026-07-13T07:48:43.220Z",
+      "closedAt": "2026-07-13T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-06-23T06:36:00.000Z",
+          "leftAt": "2026-07-07T08:24:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-07-07T08:24:00.000Z",
+          "leftAt": "2026-07-13T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-07-13T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_015",
+      "title": "Omsk Chemicals — Demand forecasting",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_020",
+      "contactIds": [
+        "ct_039"
+      ],
+      "ownerId": "own_02",
+      "value": 1170000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-09-21",
+      "source": "Trade show",
+      "createdAt": "2026-08-31T08:32:00.000Z",
+      "updatedAt": "2026-09-21T07:00:00.000Z",
+      "closedAt": "2026-09-21T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-31T08:32:00.000Z",
+          "leftAt": "2026-09-09T07:04:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-09T07:04:00.000Z",
+          "leftAt": "2026-09-14T07:22:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-14T07:22:00.000Z",
+          "leftAt": "2026-09-21T06:00:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-21T06:00:00.000Z",
+          "leftAt": "2026-09-21T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-09-21T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_016",
+      "title": "Yug Wine — Premium support upgrade",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_018",
+      "contactIds": [
+        "ct_035",
+        "ct_036"
+      ],
+      "ownerId": "own_03",
+      "value": 3980000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-25",
+      "source": "Partner",
+      "createdAt": "2026-09-15T08:55:00.000Z",
+      "updatedAt": "2026-10-02T08:26:24.967Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-15T08:55:00.000Z",
+          "leftAt": "2026-09-21T07:25:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-21T07:25:00.000Z",
+          "leftAt": "2026-10-02T06:46:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-10-02T06:46:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_017",
+      "title": "Altai Foods — Route optimization module",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_007",
+      "contactIds": [
+        "ct_013",
+        "ct_014"
+      ],
+      "ownerId": "own_04",
+      "value": 10540000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-29",
+      "source": "Partner",
+      "createdAt": "2026-09-23T06:00:00.000Z",
+      "updatedAt": "2026-10-05T06:55:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-23T06:00:00.000Z",
+          "leftAt": "2026-10-05T05:47:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-10-05T05:47:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_018",
+      "title": "Krasny Bor — 1C integration",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "Timing — revisit next quarter",
+      "companyId": "cmp_008",
+      "contactIds": [
+        "ct_015"
+      ],
+      "ownerId": "own_03",
+      "value": 2770000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-09-11",
+      "source": "Referral",
+      "createdAt": "2026-09-07T06:21:00.000Z",
+      "updatedAt": "2026-09-11T07:00:00.000Z",
+      "closedAt": "2026-09-11T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-07T06:21:00.000Z",
+          "leftAt": "2026-09-11T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-09-11T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_019",
+      "title": "Sibir Agro — Route optimization module",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_004",
+      "contactIds": [
+        "ct_007"
+      ],
+      "ownerId": "own_05",
+      "value": 8250000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-15",
+      "source": "Inbound — website",
+      "createdAt": "2026-10-01T06:25:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-10-01T06:25:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_020",
+      "title": "Kazan Auto — Premium support upgrade",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_013",
+      "contactIds": [
+        "ct_025"
+      ],
+      "ownerId": "own_04",
+      "value": 770000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-12-03",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-22T06:31:00.000Z",
+      "updatedAt": "2026-10-01T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-22T06:31:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_021",
+      "title": "Baltic Cold — Pilot, 25 seats",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_003",
+      "contactIds": [
+        "ct_005",
+        "ct_006"
+      ],
+      "ownerId": "own_04",
+      "value": 1250000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-08-04",
+      "source": "Inbound — website",
+      "createdAt": "2026-06-29T07:47:00.000Z",
+      "updatedAt": "2026-08-04T07:00:00.000Z",
+      "closedAt": "2026-08-04T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-06-29T07:47:00.000Z",
+          "leftAt": "2026-07-06T08:23:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-07-06T08:23:00.000Z",
+          "leftAt": "2026-07-16T06:45:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-07-16T06:45:00.000Z",
+          "leftAt": "2026-07-30T08:41:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-07-30T08:41:00.000Z",
+          "leftAt": "2026-08-04T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-08-04T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_022",
+      "title": "Tula Packaging — Pilot, 50 seats",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_015",
+      "contactIds": [
+        "ct_029"
+      ],
+      "ownerId": "own_01",
+      "value": 8090000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-12-02",
+      "source": "Partner",
+      "createdAt": "2026-08-24T06:58:00.000Z",
+      "updatedAt": "2026-09-28T09:22:06.371Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-24T06:58:00.000Z",
+          "leftAt": "2026-08-31T07:29:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-08-31T07:29:00.000Z",
+          "leftAt": "2026-09-07T08:11:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-07T08:11:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_023",
+      "title": "Polar Fisheries — Yard management",
+      "pipelineId": "default",
+      "stageId": "negotiation",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_012",
+      "contactIds": [
+        "ct_023",
+        "ct_024"
+      ],
+      "ownerId": "own_04",
+      "value": 520000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-27",
+      "source": "Webinar",
+      "createdAt": "2026-09-14T05:23:00.000Z",
+      "updatedAt": "2026-10-05T06:30:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-14T05:23:00.000Z",
+          "leftAt": "2026-09-14T06:23:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-14T06:23:00.000Z",
+          "leftAt": "2026-09-22T06:57:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-22T06:57:00.000Z",
+          "leftAt": "2026-09-28T06:42:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-28T06:42:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_024",
+      "title": "Caspian Trade — Demand forecasting",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "Chose a competitor",
+      "companyId": "cmp_022",
+      "contactIds": [
+        "ct_043",
+        "ct_044"
+      ],
+      "ownerId": "own_02",
+      "value": 16500,
+      "currency": "USD",
+      "expectedCloseDate": "2026-08-10",
+      "source": "Outbound",
+      "createdAt": "2026-07-06T06:58:00.000Z",
+      "updatedAt": "2026-08-10T09:20:44.736Z",
+      "closedAt": "2026-08-10T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-07-06T06:58:00.000Z",
+          "leftAt": "2026-07-15T07:25:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-07-15T07:25:00.000Z",
+          "leftAt": "2026-07-20T07:58:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-07-20T07:58:00.000Z",
+          "leftAt": "2026-07-31T06:38:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-07-31T06:38:00.000Z",
+          "leftAt": "2026-08-10T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-08-10T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_025",
+      "title": "Rostov Grain — Pilot, 80 seats",
+      "pipelineId": "default",
+      "stageId": "proposal",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_017",
+      "contactIds": [
+        "ct_033"
+      ],
+      "ownerId": "own_03",
+      "value": 2160000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-24",
+      "source": "Inbound — website",
+      "createdAt": "2026-08-31T06:22:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-31T06:22:00.000Z",
+          "leftAt": "2026-09-07T07:49:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-07T07:49:00.000Z",
+          "leftAt": "2026-09-11T07:54:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-11T07:54:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_026",
+      "title": "Perm Paper — Pilot, 80 seats",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_021",
+      "contactIds": [
+        "ct_041"
+      ],
+      "ownerId": "own_01",
+      "value": 7820000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-28",
+      "source": "Webinar",
+      "createdAt": "2026-10-05T05:42:00.000Z",
+      "updatedAt": "2026-10-05T06:08:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-10-05T05:42:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_027",
+      "title": "Don Agroholding — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_010",
+      "contactIds": [
+        "ct_019"
+      ],
+      "ownerId": "own_04",
+      "value": 520000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-08-31",
+      "source": "Inbound — website",
+      "createdAt": "2026-07-28T06:49:00.000Z",
+      "updatedAt": "2026-08-31T07:00:00.000Z",
+      "closedAt": "2026-08-31T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-07-28T06:49:00.000Z",
+          "leftAt": "2026-08-07T08:01:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-08-07T08:01:00.000Z",
+          "leftAt": "2026-08-10T07:53:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-08-10T07:53:00.000Z",
+          "leftAt": "2026-08-24T06:46:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-08-24T06:46:00.000Z",
+          "leftAt": "2026-08-31T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-08-31T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_028",
+      "title": "Steppe Retail — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_024",
+      "contactIds": [
+        "ct_047"
+      ],
+      "ownerId": "own_05",
+      "value": 44500,
+      "currency": "USD",
+      "expectedCloseDate": "2026-10-27",
+      "source": "Outbound",
+      "createdAt": "2026-09-16T06:41:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-16T06:41:00.000Z",
+          "leftAt": "2026-09-28T06:48:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-28T06:48:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_029",
+      "title": "Vector Electronics — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "No budget this year",
+      "companyId": "cmp_011",
+      "contactIds": [
+        "ct_021",
+        "ct_022"
+      ],
+      "ownerId": "own_02",
+      "value": 2090000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-06-18",
+      "source": "Webinar",
+      "createdAt": "2026-05-18T08:22:00.000Z",
+      "updatedAt": "2026-06-18T07:00:00.000Z",
+      "closedAt": "2026-06-18T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-05-18T08:22:00.000Z",
+          "leftAt": "2026-05-21T07:41:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-05-21T07:41:00.000Z",
+          "leftAt": "2026-05-25T08:02:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-05-25T08:02:00.000Z",
+          "leftAt": "2026-06-08T08:30:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-06-08T08:30:00.000Z",
+          "leftAt": "2026-06-18T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-06-18T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_030",
+      "title": "Kama Freight — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_002",
+      "contactIds": [
+        "ct_003",
+        "ct_004"
+      ],
+      "ownerId": "own_04",
+      "value": 1270000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-04",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-30T07:20:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-30T07:20:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_031",
+      "title": "Ural Metal — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_009",
+      "contactIds": [
+        "ct_017"
+      ],
+      "ownerId": "own_02",
+      "value": 2490000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-12-06",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-29T08:00:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-29T08:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_032",
+      "title": "Stolitsa Office — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "Missing integration",
+      "companyId": "cmp_014",
+      "contactIds": [
+        "ct_027"
+      ],
+      "ownerId": "own_04",
+      "value": 2330000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-06-24",
+      "source": "Referral",
+      "createdAt": "2026-06-11T08:26:00.000Z",
+      "updatedAt": "2026-06-24T07:00:00.000Z",
+      "closedAt": "2026-06-24T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-06-11T08:26:00.000Z",
+          "leftAt": "2026-06-22T06:16:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-06-22T06:16:00.000Z",
+          "leftAt": "2026-06-24T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-06-24T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_033",
+      "title": "Danube Distribution — WMS rollout, 5 warehouses",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_025",
+      "contactIds": [
+        "ct_049"
+      ],
+      "ownerId": "own_02",
+      "value": 8000,
+      "currency": "USD",
+      "expectedCloseDate": "2026-08-24",
+      "source": "Trade show",
+      "createdAt": "2026-08-04T07:52:00.000Z",
+      "updatedAt": "2026-08-24T07:00:00.000Z",
+      "closedAt": "2026-08-24T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-04T07:52:00.000Z",
+          "leftAt": "2026-08-07T08:17:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-08-07T08:17:00.000Z",
+          "leftAt": "2026-08-10T06:32:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-08-10T06:32:00.000Z",
+          "leftAt": "2026-08-18T08:07:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-08-18T08:07:00.000Z",
+          "leftAt": "2026-08-24T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-08-24T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_034",
+      "title": "Volga Logistics — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "negotiation",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_001",
+      "contactIds": [
+        "ct_001",
+        "ct_002"
+      ],
+      "ownerId": "own_04",
+      "value": 8790000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-12-04",
+      "source": "Inbound — website",
+      "createdAt": "2026-08-31T07:50:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-31T07:50:00.000Z",
+          "leftAt": "2026-09-04T07:52:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-04T07:52:00.000Z",
+          "leftAt": "2026-09-14T06:52:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-14T06:52:00.000Z",
+          "leftAt": "2026-09-24T07:52:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-09-24T07:52:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_035",
+      "title": "Ararat Logistics — Premium support upgrade",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_023",
+      "contactIds": [
+        "ct_045",
+        "ct_046"
+      ],
+      "ownerId": "own_05",
+      "value": 74500,
+      "currency": "USD",
+      "expectedCloseDate": "2026-10-17",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-18T07:15:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-18T07:15:00.000Z",
+          "leftAt": "2026-09-28T08:33:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-28T08:33:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_036",
+      "title": "Primorye Port — Fleet telematics bundle",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_019",
+      "contactIds": [
+        "ct_037"
+      ],
+      "ownerId": "own_01",
+      "value": 3940000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-12-05",
+      "source": "Partner",
+      "createdAt": "2026-09-24T07:47:00.000Z",
+      "updatedAt": "2026-10-04T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-24T07:47:00.000Z",
+          "leftAt": "2026-10-01T06:08:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-10-01T06:08:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_037",
+      "title": "Samara Building — 1C integration",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_016",
+      "contactIds": [
+        "ct_031"
+      ],
+      "ownerId": "own_05",
+      "value": 310000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-14",
+      "source": "Partner",
+      "createdAt": "2026-09-28T06:18:00.000Z",
+      "updatedAt": "2026-10-03T05:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-28T06:18:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_038",
+      "title": "Tver Pharma — Annual license renewal",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_006",
+      "contactIds": [
+        "ct_011"
+      ],
+      "ownerId": "own_03",
+      "value": 570000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-09-11",
+      "source": "Inbound — website",
+      "createdAt": "2026-08-10T06:34:00.000Z",
+      "updatedAt": "2026-09-11T07:00:00.000Z",
+      "closedAt": "2026-09-11T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-08-10T06:34:00.000Z",
+          "leftAt": "2026-08-21T06:12:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-08-21T06:12:00.000Z",
+          "leftAt": "2026-08-25T08:48:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-08-25T08:48:00.000Z",
+          "leftAt": "2026-08-31T06:13:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-08-31T06:13:00.000Z",
+          "leftAt": "2026-09-11T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-09-11T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_039",
+      "title": "Neva Retail — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_005",
+      "contactIds": [
+        "ct_009"
+      ],
+      "ownerId": "own_01",
+      "value": 430000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-17",
+      "source": "Trade show",
+      "createdAt": "2026-09-09T06:28:00.000Z",
+      "updatedAt": "2026-10-01T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-09T06:28:00.000Z",
+          "leftAt": "2026-09-14T07:46:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-14T07:46:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_040",
+      "title": "Omsk Chemicals — Demand forecasting",
+      "pipelineId": "default",
+      "stageId": "lost",
+      "status": "lost",
+      "lostReason": "Went silent",
+      "companyId": "cmp_020",
+      "contactIds": [
+        "ct_039",
+        "ct_040"
+      ],
+      "ownerId": "own_02",
+      "value": 1410000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-09-28",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-16T07:52:00.000Z",
+      "updatedAt": "2026-09-28T08:57:22.721Z",
+      "closedAt": "2026-09-28T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-16T07:52:00.000Z",
+          "leftAt": "2026-09-21T06:06:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-21T06:06:00.000Z",
+          "leftAt": "2026-09-23T08:24:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-09-23T08:24:00.000Z",
+          "leftAt": "2026-09-28T07:00:00.000Z"
+        },
+        {
+          "stageId": "lost",
+          "enteredAt": "2026-09-28T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_041",
+      "title": "Yug Wine — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "won",
+      "status": "won",
+      "lostReason": null,
+      "companyId": "cmp_018",
+      "contactIds": [
+        "ct_035"
+      ],
+      "ownerId": "own_03",
+      "value": 1110000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-07-20",
+      "source": "Trade show",
+      "createdAt": "2026-06-04T06:54:00.000Z",
+      "updatedAt": "2026-07-20T07:00:00.000Z",
+      "closedAt": "2026-07-20T07:00:00.000Z",
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-06-04T06:54:00.000Z",
+          "leftAt": "2026-06-11T08:31:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-06-11T08:31:00.000Z",
+          "leftAt": "2026-06-22T08:41:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-06-22T08:41:00.000Z",
+          "leftAt": "2026-07-07T06:33:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-07-07T06:33:00.000Z",
+          "leftAt": "2026-07-20T07:00:00.000Z"
+        },
+        {
+          "stageId": "won",
+          "enteredAt": "2026-07-20T07:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_042",
+      "title": "Altai Foods — 1C integration",
+      "pipelineId": "default",
+      "stageId": "lead",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_007",
+      "contactIds": [
+        "ct_013"
+      ],
+      "ownerId": "own_04",
+      "value": 770000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-12-10",
+      "source": "Partner",
+      "createdAt": "2026-10-05T06:00:00.000Z",
+      "updatedAt": "2026-10-05T07:00:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-10-05T06:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_043",
+      "title": "Krasny Bor — Analytics add-on",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_008",
+      "contactIds": [
+        "ct_015",
+        "ct_016"
+      ],
+      "ownerId": "own_04",
+      "value": 690000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-16",
+      "source": "Inbound — website",
+      "createdAt": "2026-09-21T08:17:00.000Z",
+      "updatedAt": "2026-10-02T10:54:37.764Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-21T08:17:00.000Z",
+          "leftAt": "2026-09-29T06:27:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-29T06:27:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_044",
+      "title": "Sibir Agro — Demand forecasting",
+      "pipelineId": "default",
+      "stageId": "qualified",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_004",
+      "contactIds": [
+        "ct_007",
+        "ct_008"
+      ],
+      "ownerId": "own_05",
+      "value": 330000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-11-22",
+      "source": "Outbound",
+      "createdAt": "2026-09-25T07:24:00.000Z",
+      "updatedAt": "2026-10-05T06:20:23.445Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-25T07:24:00.000Z",
+          "leftAt": "2026-10-05T06:00:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-10-05T06:00:00.000Z",
+          "leftAt": null
+        }
+      ]
+    },
+    {
+      "id": "deal_045",
+      "title": "Kazan Auto — Fleet telematics bundle",
+      "pipelineId": "default",
+      "stageId": "negotiation",
+      "status": "open",
+      "lostReason": null,
+      "companyId": "cmp_013",
+      "contactIds": [
+        "ct_025",
+        "ct_026"
+      ],
+      "ownerId": "own_04",
+      "value": 1090000,
+      "currency": "RUB",
+      "expectedCloseDate": "2026-10-06",
+      "source": "Partner",
+      "createdAt": "2026-09-16T07:22:00.000Z",
+      "updatedAt": "2026-10-05T05:54:00.000Z",
+      "closedAt": null,
+      "stageHistory": [
+        {
+          "stageId": "lead",
+          "enteredAt": "2026-09-16T07:22:00.000Z",
+          "leftAt": "2026-09-25T06:18:00.000Z"
+        },
+        {
+          "stageId": "qualified",
+          "enteredAt": "2026-09-25T06:18:00.000Z",
+          "leftAt": "2026-10-01T07:49:00.000Z"
+        },
+        {
+          "stageId": "proposal",
+          "enteredAt": "2026-10-01T07:49:00.000Z",
+          "leftAt": "2026-10-05T05:54:00.000Z"
+        },
+        {
+          "stageId": "negotiation",
+          "enteredAt": "2026-10-05T05:54:00.000Z",
+          "leftAt": null
+        }
+      ]
+    }
+  ],
+  "activities": [
+    {
+      "id": "act_0001",
+      "type": "meeting",
+      "subject": "Negotiation meeting",
+      "note": "",
+      "dueAt": "2026-06-01T06:41:07.518Z",
+      "done": true,
+      "doneAt": "2026-06-01T07:38:07.518Z",
+      "dealId": "deal_029",
+      "contactId": "ct_022",
+      "ownerId": "own_02",
+      "createdAt": "2026-05-30T06:41:07.518Z"
+    },
+    {
+      "id": "act_0002",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-06-08T09:36:00.794Z",
+      "done": true,
+      "doneAt": "2026-06-08T11:06:00.794Z",
+      "dealId": "deal_029",
+      "contactId": "ct_021",
+      "ownerId": "own_02",
+      "createdAt": "2026-06-08T09:36:00.794Z"
+    },
+    {
+      "id": "act_0003",
+      "type": "call",
+      "subject": "Follow-up call",
+      "note": "",
+      "dueAt": "2026-06-15T07:11:11.658Z",
+      "done": true,
+      "doneAt": "2026-06-15T08:35:11.658Z",
+      "dealId": "deal_041",
+      "contactId": "ct_035",
+      "ownerId": "own_03",
+      "createdAt": "2026-06-13T07:11:11.658Z"
+    },
+    {
+      "id": "act_0004",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "Procurement needs three quotes and a security questionnaire.",
+      "dueAt": "2026-06-17T07:55:24.759Z",
+      "done": true,
+      "doneAt": "2026-06-17T08:13:24.759Z",
+      "dealId": "deal_032",
+      "contactId": "ct_027",
+      "ownerId": "own_04",
+      "createdAt": "2026-06-16T07:55:24.759Z"
+    },
+    {
+      "id": "act_0005",
+      "type": "note",
+      "subject": "Decision maker identified",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-06-19T06:13:29.559Z",
+      "done": true,
+      "doneAt": "2026-06-19T07:09:29.559Z",
+      "dealId": "deal_032",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-06-17T06:13:29.559Z"
+    },
+    {
+      "id": "act_0006",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-06-22T07:39:48.556Z",
+      "done": true,
+      "doneAt": "2026-06-22T08:12:48.556Z",
+      "dealId": "deal_041",
+      "contactId": "ct_035",
+      "ownerId": "own_03",
+      "createdAt": "2026-06-21T07:39:48.556Z"
+    },
+    {
+      "id": "act_0007",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "",
+      "dueAt": "2026-06-24T11:40:02.459Z",
+      "done": true,
+      "doneAt": "2026-06-24T12:06:02.459Z",
+      "dealId": "deal_014",
+      "contactId": "ct_009",
+      "ownerId": "own_01",
+      "createdAt": "2026-06-24T11:40:02.459Z"
+    },
+    {
+      "id": "act_0008",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-07-02T08:11:20.450Z",
+      "done": true,
+      "doneAt": "2026-07-02T08:34:20.450Z",
+      "dealId": "deal_014",
+      "contactId": "ct_009",
+      "ownerId": "own_01",
+      "createdAt": "2026-07-01T08:11:20.450Z"
+    },
+    {
+      "id": "act_0009",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-07-07T07:36:50.484Z",
+      "done": true,
+      "doneAt": "2026-07-07T08:21:50.484Z",
+      "dealId": "deal_024",
+      "contactId": "ct_043",
+      "ownerId": "own_02",
+      "createdAt": "2026-07-06T06:58:00.000Z"
+    },
+    {
+      "id": "act_0010",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "",
+      "dueAt": "2026-07-08T07:26:15.706Z",
+      "done": true,
+      "doneAt": "2026-07-08T08:50:15.706Z",
+      "dealId": "deal_021",
+      "contactId": "ct_006",
+      "ownerId": "own_04",
+      "createdAt": "2026-07-08T07:26:15.706Z"
+    },
+    {
+      "id": "act_0011",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-07-13T06:41:43.220Z",
+      "done": true,
+      "doneAt": "2026-07-13T07:48:43.220Z",
+      "dealId": "deal_014",
+      "contactId": "ct_009",
+      "ownerId": "own_01",
+      "createdAt": "2026-07-11T06:41:43.220Z"
+    },
+    {
+      "id": "act_0012",
+      "type": "note",
+      "subject": "Decision maker identified",
+      "note": "They run two warehouses on spreadsheets today and want a single stock view.",
+      "dueAt": "2026-07-14T11:50:54.533Z",
+      "done": true,
+      "doneAt": "2026-07-14T12:09:54.533Z",
+      "dealId": "deal_021",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-07-13T11:50:54.533Z"
+    },
+    {
+      "id": "act_0013",
+      "type": "note",
+      "subject": "Requirements summary",
+      "note": "Procurement needs three quotes and a security questionnaire.",
+      "dueAt": "2026-07-17T07:23:00.679Z",
+      "done": true,
+      "doneAt": "2026-07-17T08:02:00.679Z",
+      "dealId": "deal_041",
+      "contactId": null,
+      "ownerId": "own_03",
+      "createdAt": "2026-07-14T07:23:00.679Z"
+    },
+    {
+      "id": "act_0014",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-07-21T06:24:25.620Z",
+      "done": true,
+      "doneAt": "2026-07-21T07:46:25.620Z",
+      "dealId": "deal_024",
+      "contactId": "ct_043",
+      "ownerId": "own_02",
+      "createdAt": "2026-07-19T06:24:25.620Z"
+    },
+    {
+      "id": "act_0015",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "",
+      "dueAt": "2026-07-28T09:29:45.359Z",
+      "done": true,
+      "doneAt": "2026-07-28T10:50:45.359Z",
+      "dealId": "deal_021",
+      "contactId": "ct_005",
+      "ownerId": "own_04",
+      "createdAt": "2026-07-28T09:29:45.359Z"
+    },
+    {
+      "id": "act_0016",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-08-03T09:27:01.407Z",
+      "done": true,
+      "doneAt": "2026-08-03T09:37:01.407Z",
+      "dealId": "deal_027",
+      "contactId": "ct_019",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-02T09:27:01.407Z"
+    },
+    {
+      "id": "act_0017",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-08-05T13:54:21.082Z",
+      "done": true,
+      "doneAt": "2026-08-05T14:48:21.082Z",
+      "dealId": "deal_033",
+      "contactId": "ct_049",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-04T07:52:00.000Z"
+    },
+    {
+      "id": "act_0018",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "Asked for a reference customer in the same industry.",
+      "dueAt": "2026-08-10T08:24:44.736Z",
+      "done": true,
+      "doneAt": "2026-08-10T09:20:44.736Z",
+      "dealId": "deal_024",
+      "contactId": "ct_043",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-07T08:24:44.736Z"
+    },
+    {
+      "id": "act_0019",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-08-11T13:49:03.006Z",
+      "done": true,
+      "doneAt": "2026-08-11T14:01:03.006Z",
+      "dealId": "deal_027",
+      "contactId": "ct_019",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-09T13:49:03.006Z"
+    },
+    {
+      "id": "act_0020",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-08-12T13:17:35.778Z",
+      "done": true,
+      "doneAt": "2026-08-12T13:30:35.778Z",
+      "dealId": "deal_038",
+      "contactId": "ct_011",
+      "ownerId": "own_03",
+      "createdAt": "2026-08-12T13:17:35.778Z"
+    },
+    {
+      "id": "act_0021",
+      "type": "meeting",
+      "subject": "On-site warehouse visit",
+      "note": "",
+      "dueAt": "2026-08-17T08:09:33.643Z",
+      "done": true,
+      "doneAt": "2026-08-17T09:31:33.643Z",
+      "dealId": "deal_033",
+      "contactId": "ct_049",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-14T08:09:33.643Z"
+    },
+    {
+      "id": "act_0022",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-08-21T11:17:43.185Z",
+      "done": true,
+      "doneAt": "2026-08-21T11:28:43.185Z",
+      "dealId": "deal_033",
+      "contactId": "ct_049",
+      "ownerId": "own_02",
+      "createdAt": "2026-08-18T11:17:43.185Z"
+    },
+    {
+      "id": "act_0023",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-08-24T07:01:12.133Z",
+      "done": true,
+      "doneAt": "2026-08-24T08:12:12.133Z",
+      "dealId": "deal_038",
+      "contactId": "ct_011",
+      "ownerId": "own_03",
+      "createdAt": "2026-08-22T07:01:12.133Z"
+    },
+    {
+      "id": "act_0024",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-08-24T08:56:07.064Z",
+      "done": true,
+      "doneAt": "2026-08-24T09:21:07.064Z",
+      "dealId": "deal_027",
+      "contactId": "ct_019",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-24T08:56:07.064Z"
+    },
+    {
+      "id": "act_0025",
+      "type": "meeting",
+      "subject": "On-site warehouse visit",
+      "note": "",
+      "dueAt": "2026-08-25T07:21:58.772Z",
+      "done": true,
+      "doneAt": "2026-08-25T07:51:58.772Z",
+      "dealId": "deal_013",
+      "contactId": "ct_011",
+      "ownerId": "own_03",
+      "createdAt": "2026-08-23T07:21:58.772Z"
+    },
+    {
+      "id": "act_0026",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-08-27T10:46:22.901Z",
+      "done": true,
+      "doneAt": "2026-08-27T11:25:22.901Z",
+      "dealId": "deal_011",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-08-25T10:46:22.901Z"
+    },
+    {
+      "id": "act_0027",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-09-01T09:11:37.650Z",
+      "done": true,
+      "doneAt": "2026-09-01T09:27:37.650Z",
+      "dealId": "deal_034",
+      "contactId": "ct_001",
+      "ownerId": "own_04",
+      "createdAt": "2026-08-31T07:50:00.000Z"
+    },
+    {
+      "id": "act_0028",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-09-02T06:45:24.148Z",
+      "done": true,
+      "doneAt": "2026-09-02T07:04:24.148Z",
+      "dealId": "deal_005",
+      "contactId": "ct_003",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-02T06:45:24.148Z"
+    },
+    {
+      "id": "act_0029",
+      "type": "email",
+      "subject": "Sent company overview",
+      "note": "",
+      "dueAt": "2026-09-03T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-03T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_008",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-03T07:00:00.000Z"
+    },
+    {
+      "id": "act_0030",
+      "type": "call",
+      "subject": "Intro call",
+      "note": "",
+      "dueAt": "2026-09-03T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-03T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_024",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-03T07:00:00.000Z"
+    },
+    {
+      "id": "act_0031",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-09-04T11:07:52.365Z",
+      "done": true,
+      "doneAt": "2026-09-04T11:18:52.365Z",
+      "dealId": "deal_015",
+      "contactId": "ct_039",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-02T11:07:52.365Z"
+    },
+    {
+      "id": "act_0032",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-09-07T06:22:28.085Z",
+      "done": true,
+      "doneAt": "2026-09-07T07:17:28.085Z",
+      "dealId": "deal_002",
+      "contactId": "ct_019",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-06T06:22:28.085Z"
+    },
+    {
+      "id": "act_0033",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-09-07T06:31:00.206Z",
+      "done": true,
+      "doneAt": "2026-09-07T07:19:00.206Z",
+      "dealId": "deal_022",
+      "contactId": "ct_029",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-07T06:31:00.206Z"
+    },
+    {
+      "id": "act_0034",
+      "type": "call",
+      "subject": "Intro call",
+      "note": "",
+      "dueAt": "2026-09-07T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-07T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_012",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-07T07:00:00.000Z"
+    },
+    {
+      "id": "act_0035",
+      "type": "email",
+      "subject": "Sent company overview",
+      "note": "",
+      "dueAt": "2026-09-07T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-07T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_010",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-07T07:00:00.000Z"
+    },
+    {
+      "id": "act_0036",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "",
+      "dueAt": "2026-09-07T07:39:27.871Z",
+      "done": true,
+      "doneAt": "2026-09-07T09:03:27.871Z",
+      "dealId": "deal_003",
+      "contactId": "ct_047",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-04T08:00:00.000Z"
+    },
+    {
+      "id": "act_0037",
+      "type": "call",
+      "subject": "Follow-up call",
+      "note": "",
+      "dueAt": "2026-09-07T12:27:48.474Z",
+      "done": true,
+      "doneAt": "2026-09-07T13:13:48.474Z",
+      "dealId": "deal_038",
+      "contactId": "ct_011",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-05T12:27:48.474Z"
+    },
+    {
+      "id": "act_0038",
+      "type": "call",
+      "subject": "Intro call",
+      "note": "",
+      "dueAt": "2026-09-08T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-08T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_036",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-08T07:00:00.000Z"
+    },
+    {
+      "id": "act_0039",
+      "type": "note",
+      "subject": "Met at the logistics expo",
+      "note": "Interested in route optimization next year; no budget now.",
+      "dueAt": "2026-09-09T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-09T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_020",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-09T07:00:00.000Z"
+    },
+    {
+      "id": "act_0040",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-09-09T08:18:48.479Z",
+      "done": true,
+      "doneAt": "2026-09-09T09:18:48.479Z",
+      "dealId": "deal_018",
+      "contactId": "ct_015",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-08T08:18:48.479Z"
+    },
+    {
+      "id": "act_0041",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-09-09T09:53:43.862Z",
+      "done": true,
+      "doneAt": "2026-09-09T11:03:43.862Z",
+      "dealId": "deal_013",
+      "contactId": "ct_012",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-09T09:53:43.862Z"
+    },
+    {
+      "id": "act_0042",
+      "type": "meeting",
+      "subject": "Negotiation meeting",
+      "note": "Procurement needs three quotes and a security questionnaire.",
+      "dueAt": "2026-09-09T14:37:45.367Z",
+      "done": true,
+      "doneAt": "2026-09-09T14:50:45.367Z",
+      "dealId": "deal_018",
+      "contactId": "ct_015",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-09T14:37:45.367Z"
+    },
+    {
+      "id": "act_0043",
+      "type": "email",
+      "subject": "Sent product overview",
+      "note": "",
+      "dueAt": "2026-09-10T07:08:12.411Z",
+      "done": true,
+      "doneAt": "2026-09-10T08:05:12.411Z",
+      "dealId": "deal_025",
+      "contactId": "ct_033",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-08T07:08:12.411Z"
+    },
+    {
+      "id": "act_0044",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-09-10T09:42:44.055Z",
+      "done": true,
+      "doneAt": "2026-09-10T10:58:44.055Z",
+      "dealId": "deal_001",
+      "contactId": "ct_041",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-10T09:42:44.055Z"
+    },
+    {
+      "id": "act_0045",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-09-10T09:46:37.388Z",
+      "done": true,
+      "doneAt": "2026-09-10T10:15:37.388Z",
+      "dealId": "deal_007",
+      "contactId": "ct_027",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-09T09:46:37.388Z"
+    },
+    {
+      "id": "act_0046",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-09-11T06:54:23.566Z",
+      "done": true,
+      "doneAt": "2026-09-11T07:42:23.566Z",
+      "dealId": "deal_002",
+      "contactId": "ct_020",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-08T06:54:23.566Z"
+    },
+    {
+      "id": "act_0047",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "Asked for a reference customer in the same industry.",
+      "dueAt": "2026-09-14T06:51:46.147Z",
+      "done": true,
+      "doneAt": "2026-09-14T07:53:46.147Z",
+      "dealId": "deal_010",
+      "contactId": "ct_046",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-11T06:51:46.147Z"
+    },
+    {
+      "id": "act_0048",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-09-14T07:09:13.476Z",
+      "done": true,
+      "doneAt": "2026-09-14T08:01:13.476Z",
+      "dealId": "deal_012",
+      "contactId": "ct_031",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-13T07:09:13.476Z"
+    },
+    {
+      "id": "act_0049",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-09-14T07:42:00.939Z",
+      "done": true,
+      "doneAt": "2026-09-14T08:55:00.939Z",
+      "dealId": "deal_039",
+      "contactId": "ct_009",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-13T07:42:00.939Z"
+    },
+    {
+      "id": "act_0050",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-09-14T07:56:43.549Z",
+      "done": true,
+      "doneAt": "2026-09-14T08:34:43.549Z",
+      "dealId": "deal_015",
+      "contactId": "ct_039",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-12T07:56:43.549Z"
+    },
+    {
+      "id": "act_0051",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-09-14T08:43:21.572Z",
+      "done": true,
+      "doneAt": "2026-09-14T10:01:21.572Z",
+      "dealId": "deal_011",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-13T08:43:21.572Z"
+    },
+    {
+      "id": "act_0052",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-09-14T09:45:17.649Z",
+      "done": true,
+      "doneAt": "2026-09-14T10:06:17.649Z",
+      "dealId": "deal_034",
+      "contactId": "ct_002",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-11T09:45:17.649Z"
+    },
+    {
+      "id": "act_0053",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-09-15T08:42:14.141Z",
+      "done": true,
+      "doneAt": "2026-09-15T09:59:14.141Z",
+      "dealId": "deal_015",
+      "contactId": "ct_039",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-12T08:42:14.141Z"
+    },
+    {
+      "id": "act_0054",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "Procurement needs three quotes and a security questionnaire.",
+      "dueAt": "2026-09-15T10:14:46.621Z",
+      "done": true,
+      "doneAt": "2026-09-15T11:43:46.621Z",
+      "dealId": "deal_005",
+      "contactId": "ct_003",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-15T10:14:46.621Z"
+    },
+    {
+      "id": "act_0055",
+      "type": "note",
+      "subject": "Decision maker identified",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-09-16T14:00:40.054Z",
+      "done": true,
+      "doneAt": "2026-09-16T14:13:40.054Z",
+      "dealId": "deal_045",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-09-16T14:00:40.054Z"
+    },
+    {
+      "id": "act_0056",
+      "type": "task",
+      "subject": "Update proposal after feedback",
+      "note": "",
+      "dueAt": "2026-09-17T07:59:58.673Z",
+      "done": true,
+      "doneAt": "2026-09-17T09:17:58.673Z",
+      "dealId": "deal_040",
+      "contactId": "ct_040",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-17T07:59:58.673Z"
+    },
+    {
+      "id": "act_0057",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "Procurement needs three quotes and a security questionnaire.",
+      "dueAt": "2026-09-17T08:29:29.105Z",
+      "done": true,
+      "doneAt": "2026-09-17T09:00:29.105Z",
+      "dealId": "deal_016",
+      "contactId": "ct_035",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-17T08:29:29.105Z"
+    },
+    {
+      "id": "act_0058",
+      "type": "note",
+      "subject": "Procurement process notes",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-09-17T09:52:53.590Z",
+      "done": true,
+      "doneAt": "2026-09-17T10:18:53.590Z",
+      "dealId": "deal_025",
+      "contactId": null,
+      "ownerId": "own_03",
+      "createdAt": "2026-09-17T09:52:53.590Z"
+    },
+    {
+      "id": "act_0059",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "",
+      "dueAt": "2026-09-18T06:34:14.257Z",
+      "done": true,
+      "doneAt": "2026-09-18T07:59:14.257Z",
+      "dealId": "deal_023",
+      "contactId": "ct_023",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-16T06:34:14.257Z"
+    },
+    {
+      "id": "act_0060",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-09-18T07:02:23.908Z",
+      "done": true,
+      "doneAt": "2026-09-18T07:26:23.908Z",
+      "dealId": "deal_034",
+      "contactId": "ct_002",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-15T07:02:23.908Z"
+    },
+    {
+      "id": "act_0061",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-09-21T06:06:49.894Z",
+      "done": true,
+      "doneAt": "2026-09-21T06:16:49.894Z",
+      "dealId": "deal_013",
+      "contactId": "ct_011",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-21T06:06:49.894Z"
+    },
+    {
+      "id": "act_0062",
+      "type": "call",
+      "subject": "Intro call",
+      "note": "",
+      "dueAt": "2026-09-21T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-21T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_042",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-21T07:00:00.000Z"
+    },
+    {
+      "id": "act_0063",
+      "type": "meeting",
+      "subject": "On-site warehouse visit",
+      "note": "",
+      "dueAt": "2026-09-21T07:21:42.725Z",
+      "done": true,
+      "doneAt": "2026-09-21T07:39:42.725Z",
+      "dealId": "deal_007",
+      "contactId": "ct_028",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-18T07:21:42.725Z"
+    },
+    {
+      "id": "act_0064",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "",
+      "dueAt": "2026-09-21T07:44:11.814Z",
+      "done": true,
+      "doneAt": "2026-09-21T08:59:11.814Z",
+      "dealId": "deal_040",
+      "contactId": "ct_039",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-21T07:44:11.814Z"
+    },
+    {
+      "id": "act_0065",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-09-21T08:11:23.086Z",
+      "done": true,
+      "doneAt": "2026-09-21T09:35:23.086Z",
+      "dealId": "deal_035",
+      "contactId": "ct_045",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-19T08:11:23.086Z"
+    },
+    {
+      "id": "act_0066",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-09-21T09:20:14.749Z",
+      "done": true,
+      "doneAt": "2026-09-21T09:36:14.749Z",
+      "dealId": "deal_028",
+      "contactId": "ct_047",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-19T09:20:14.749Z"
+    },
+    {
+      "id": "act_0067",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-09-21T09:36:27.264Z",
+      "done": true,
+      "doneAt": "2026-09-21T10:42:27.264Z",
+      "dealId": "deal_010",
+      "contactId": "ct_045",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-20T09:36:27.264Z"
+    },
+    {
+      "id": "act_0068",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-09-21T12:30:55.076Z",
+      "done": true,
+      "doneAt": "2026-09-21T12:54:55.076Z",
+      "dealId": "deal_012",
+      "contactId": "ct_031",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-19T12:30:55.076Z"
+    },
+    {
+      "id": "act_0069",
+      "type": "call",
+      "subject": "Follow-up call",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-09-22T09:20:27.048Z",
+      "done": true,
+      "doneAt": "2026-09-22T09:30:27.048Z",
+      "dealId": "deal_006",
+      "contactId": "ct_018",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-20T09:20:27.048Z"
+    },
+    {
+      "id": "act_0070",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "",
+      "dueAt": "2026-09-22T10:17:33.224Z",
+      "done": true,
+      "doneAt": "2026-09-22T11:47:33.224Z",
+      "dealId": "deal_011",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-21T10:17:33.224Z"
+    },
+    {
+      "id": "act_0071",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-09-23T13:33:45.487Z",
+      "done": true,
+      "doneAt": "2026-09-23T14:00:45.487Z",
+      "dealId": "deal_043",
+      "contactId": "ct_016",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-22T13:33:45.487Z"
+    },
+    {
+      "id": "act_0072",
+      "type": "call",
+      "subject": "Follow-up call",
+      "note": "",
+      "dueAt": "2026-09-24T06:39:51.702Z",
+      "done": true,
+      "doneAt": "2026-09-24T08:07:51.702Z",
+      "dealId": "deal_016",
+      "contactId": "ct_036",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-22T06:39:51.702Z"
+    },
+    {
+      "id": "act_0073",
+      "type": "note",
+      "subject": "Met at the logistics expo",
+      "note": "Interested in route optimization next year; no budget now.",
+      "dueAt": "2026-09-24T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-24T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_045",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-24T07:00:00.000Z"
+    },
+    {
+      "id": "act_0074",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-09-24T08:26:41.988Z",
+      "done": true,
+      "doneAt": "2026-09-24T09:04:41.988Z",
+      "dealId": "deal_001",
+      "contactId": "ct_041",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-22T08:26:41.988Z"
+    },
+    {
+      "id": "act_0075",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-09-24T09:27:51.480Z",
+      "done": true,
+      "doneAt": "2026-09-24T10:20:51.480Z",
+      "dealId": "deal_040",
+      "contactId": "ct_040",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-24T09:27:51.480Z"
+    },
+    {
+      "id": "act_0076",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-09-25T06:47:07.726Z",
+      "done": true,
+      "doneAt": "2026-09-25T06:52:07.726Z",
+      "dealId": "deal_036",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-25T06:47:07.726Z"
+    },
+    {
+      "id": "act_0077",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-09-25T07:26:54.794Z",
+      "done": true,
+      "doneAt": "2026-09-25T08:36:54.794Z",
+      "dealId": "deal_017",
+      "contactId": "ct_014",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-25T07:26:54.794Z"
+    },
+    {
+      "id": "act_0078",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-09-28T06:18:59.690Z",
+      "done": true,
+      "doneAt": "2026-09-28T06:27:59.690Z",
+      "dealId": "deal_043",
+      "contactId": "ct_016",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-28T06:18:59.690Z"
+    },
+    {
+      "id": "act_0079",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-09-28T06:50:36.112Z",
+      "done": true,
+      "doneAt": "2026-09-28T07:33:36.112Z",
+      "dealId": "deal_044",
+      "contactId": "ct_008",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-26T06:50:36.112Z"
+    },
+    {
+      "id": "act_0080",
+      "type": "task",
+      "subject": "Prepare pilot plan",
+      "note": "",
+      "dueAt": "2026-09-28T07:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_001",
+      "contactId": null,
+      "ownerId": "own_02",
+      "createdAt": "2026-09-27T07:00:00.000Z"
+    },
+    {
+      "id": "act_0081",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-09-28T07:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_012",
+      "contactId": "ct_031",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-25T07:00:00.000Z"
+    },
+    {
+      "id": "act_0082",
+      "type": "email",
+      "subject": "Sent company overview",
+      "note": "",
+      "dueAt": "2026-09-28T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-09-28T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_045",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-28T07:00:00.000Z"
+    },
+    {
+      "id": "act_0083",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-09-28T07:25:23.942Z",
+      "done": true,
+      "doneAt": "2026-09-28T08:08:23.942Z",
+      "dealId": "deal_028",
+      "contactId": "ct_047",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-26T07:25:23.942Z"
+    },
+    {
+      "id": "act_0084",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-09-28T07:32:05.548Z",
+      "done": true,
+      "doneAt": "2026-09-28T08:27:05.548Z",
+      "dealId": "deal_035",
+      "contactId": "ct_046",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-25T07:32:05.548Z"
+    },
+    {
+      "id": "act_0085",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-09-28T08:06:22.721Z",
+      "done": true,
+      "doneAt": "2026-09-28T08:57:22.721Z",
+      "dealId": "deal_040",
+      "contactId": "ct_039",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-25T08:06:22.721Z"
+    },
+    {
+      "id": "act_0086",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-09-28T08:15:06.371Z",
+      "done": true,
+      "doneAt": "2026-09-28T09:22:06.371Z",
+      "dealId": "deal_022",
+      "contactId": "ct_029",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-27T08:15:06.371Z"
+    },
+    {
+      "id": "act_0087",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-09-28T08:20:30.437Z",
+      "done": true,
+      "doneAt": "2026-09-28T09:43:30.437Z",
+      "dealId": "deal_007",
+      "contactId": "ct_028",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-27T08:20:30.437Z"
+    },
+    {
+      "id": "act_0088",
+      "type": "note",
+      "subject": "Requirements summary",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-09-28T08:44:34.513Z",
+      "done": true,
+      "doneAt": "2026-09-28T10:08:34.513Z",
+      "dealId": "deal_036",
+      "contactId": null,
+      "ownerId": "own_01",
+      "createdAt": "2026-09-28T08:44:34.513Z"
+    },
+    {
+      "id": "act_0089",
+      "type": "email",
+      "subject": "Sent product overview",
+      "note": "",
+      "dueAt": "2026-09-28T12:18:27.475Z",
+      "done": true,
+      "doneAt": "2026-09-28T13:15:27.475Z",
+      "dealId": "deal_037",
+      "contactId": "ct_031",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-28T06:18:00.000Z"
+    },
+    {
+      "id": "act_0090",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-09-28T14:07:03.131Z",
+      "done": true,
+      "doneAt": "2026-09-28T14:12:03.131Z",
+      "dealId": "deal_008",
+      "contactId": "ct_049",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-25T14:07:03.131Z"
+    },
+    {
+      "id": "act_0091",
+      "type": "meeting",
+      "subject": "Demo for the operations team",
+      "note": "",
+      "dueAt": "2026-09-28T14:23:21.521Z",
+      "done": true,
+      "doneAt": "2026-09-28T15:29:21.521Z",
+      "dealId": "deal_039",
+      "contactId": "ct_009",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-27T14:23:21.521Z"
+    },
+    {
+      "id": "act_0092",
+      "type": "note",
+      "subject": "Budget confirmed",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-09-29T06:50:23.016Z",
+      "done": true,
+      "doneAt": "2026-09-29T07:05:23.016Z",
+      "dealId": "deal_017",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-09-27T06:50:23.016Z"
+    },
+    {
+      "id": "act_0093",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-09-29T07:31:14.185Z",
+      "done": true,
+      "doneAt": "2026-09-29T08:02:14.185Z",
+      "dealId": "deal_020",
+      "contactId": "ct_025",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-29T07:31:14.185Z"
+    },
+    {
+      "id": "act_0094",
+      "type": "meeting",
+      "subject": "Negotiation meeting",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-09-29T07:39:20.886Z",
+      "done": true,
+      "doneAt": "2026-09-29T08:54:20.886Z",
+      "dealId": "deal_016",
+      "contactId": "ct_035",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-29T07:39:20.886Z"
+    },
+    {
+      "id": "act_0095",
+      "type": "note",
+      "subject": "Budget confirmed",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-09-29T12:02:41.782Z",
+      "done": true,
+      "doneAt": "2026-09-29T12:52:41.782Z",
+      "dealId": "deal_003",
+      "contactId": null,
+      "ownerId": "own_03",
+      "createdAt": "2026-09-29T12:02:41.782Z"
+    },
+    {
+      "id": "act_0096",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "",
+      "dueAt": "2026-09-30T06:45:48.085Z",
+      "done": true,
+      "doneAt": "2026-09-30T07:11:48.085Z",
+      "dealId": "deal_043",
+      "contactId": "ct_015",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-28T06:45:48.085Z"
+    },
+    {
+      "id": "act_0097",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-09-30T07:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_044",
+      "contactId": "ct_007",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-26T07:00:00.000Z"
+    },
+    {
+      "id": "act_0098",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "",
+      "dueAt": "2026-09-30T07:55:55.162Z",
+      "done": true,
+      "doneAt": "2026-09-30T09:25:55.162Z",
+      "dealId": "deal_035",
+      "contactId": "ct_045",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-30T07:55:55.162Z"
+    },
+    {
+      "id": "act_0099",
+      "type": "note",
+      "subject": "Requirements summary",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-09-30T08:17:24.255Z",
+      "done": true,
+      "doneAt": "2026-09-30T08:32:24.255Z",
+      "dealId": "deal_005",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-09-30T08:17:24.255Z"
+    },
+    {
+      "id": "act_0100",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-09-30T08:28:34.914Z",
+      "done": true,
+      "doneAt": "2026-09-30T09:10:34.914Z",
+      "dealId": "deal_030",
+      "contactId": "ct_004",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-30T07:20:00.000Z"
+    },
+    {
+      "id": "act_0101",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-09-30T08:49:39.513Z",
+      "done": true,
+      "doneAt": "2026-09-30T09:42:39.513Z",
+      "dealId": "deal_044",
+      "contactId": "ct_008",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-30T08:49:39.513Z"
+    },
+    {
+      "id": "act_0102",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-09-30T08:53:33.601Z",
+      "done": true,
+      "doneAt": "2026-09-30T09:41:33.601Z",
+      "dealId": "deal_031",
+      "contactId": "ct_017",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-29T08:53:33.601Z"
+    },
+    {
+      "id": "act_0103",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-10-01T07:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_022",
+      "contactId": "ct_029",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-26T07:00:00.000Z"
+    },
+    {
+      "id": "act_0104",
+      "type": "call",
+      "subject": "Pricing call with procurement",
+      "note": "",
+      "dueAt": "2026-10-01T07:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_026",
+      "contactId": "ct_041",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-05T05:42:00.000Z"
+    },
+    {
+      "id": "act_0105",
+      "type": "note",
+      "subject": "Met at the logistics expo",
+      "note": "Interested in route optimization next year; no budget now.",
+      "dueAt": "2026-10-01T07:00:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-01T07:00:00.000Z",
+      "dealId": null,
+      "contactId": "ct_043",
+      "ownerId": "own_02",
+      "createdAt": "2026-10-01T07:00:00.000Z"
+    },
+    {
+      "id": "act_0106",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-10-01T12:04:08.189Z",
+      "done": true,
+      "doneAt": "2026-10-01T12:57:08.189Z",
+      "dealId": "deal_009",
+      "contactId": "ct_001",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-01T12:04:08.189Z"
+    },
+    {
+      "id": "act_0107",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-10-01T14:37:12.662Z",
+      "done": true,
+      "doneAt": "2026-10-01T14:59:12.662Z",
+      "dealId": "deal_012",
+      "contactId": "ct_031",
+      "ownerId": "own_05",
+      "createdAt": "2026-09-29T14:37:12.662Z"
+    },
+    {
+      "id": "act_0108",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "",
+      "dueAt": "2026-10-02T06:24:05.833Z",
+      "done": true,
+      "doneAt": "2026-10-02T06:33:05.833Z",
+      "dealId": "deal_030",
+      "contactId": "ct_004",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-01T06:24:05.833Z"
+    },
+    {
+      "id": "act_0109",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "",
+      "dueAt": "2026-10-02T07:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_006",
+      "contactId": "ct_017",
+      "ownerId": "own_02",
+      "createdAt": "2026-09-28T07:00:00.000Z"
+    },
+    {
+      "id": "act_0110",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-10-02T07:11:24.967Z",
+      "done": true,
+      "doneAt": "2026-10-02T08:26:24.967Z",
+      "dealId": "deal_016",
+      "contactId": "ct_036",
+      "ownerId": "own_03",
+      "createdAt": "2026-09-30T07:11:24.967Z"
+    },
+    {
+      "id": "act_0111",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-10-02T09:30:43.358Z",
+      "done": true,
+      "doneAt": "2026-10-02T10:42:43.358Z",
+      "dealId": "deal_036",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-02T09:30:43.358Z"
+    },
+    {
+      "id": "act_0112",
+      "type": "meeting",
+      "subject": "Demo for the operations team",
+      "note": "",
+      "dueAt": "2026-10-02T10:17:37.764Z",
+      "done": true,
+      "doneAt": "2026-10-02T10:54:37.764Z",
+      "dealId": "deal_043",
+      "contactId": "ct_016",
+      "ownerId": "own_04",
+      "createdAt": "2026-09-29T10:17:37.764Z"
+    },
+    {
+      "id": "act_0113",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "Competitor is in the deal with a lower price but no 1C integration.",
+      "dueAt": "2026-10-02T11:05:08.987Z",
+      "done": true,
+      "doneAt": "2026-10-02T11:10:08.987Z",
+      "dealId": "deal_019",
+      "contactId": "ct_007",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-01T06:25:00.000Z"
+    },
+    {
+      "id": "act_0114",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-10-02T13:07:57.231Z",
+      "done": true,
+      "doneAt": "2026-10-02T14:14:57.231Z",
+      "dealId": "deal_010",
+      "contactId": "ct_045",
+      "ownerId": "own_01",
+      "createdAt": "2026-09-29T13:07:57.231Z"
+    },
+    {
+      "id": "act_0115",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "",
+      "dueAt": "2026-10-04T05:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_023",
+      "contactId": "ct_023",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-01T05:00:00.000Z"
+    },
+    {
+      "id": "act_0116",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-10-04T05:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_037",
+      "contactId": "ct_031",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-03T05:00:00.000Z"
+    },
+    {
+      "id": "act_0117",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "",
+      "dueAt": "2026-10-05T05:32:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:50:00.000Z",
+      "dealId": "deal_004",
+      "contactId": "ct_021",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-05T05:33:00.000Z"
+    },
+    {
+      "id": "act_0118",
+      "type": "email",
+      "subject": "Sent revised pricing",
+      "note": "",
+      "dueAt": "2026-10-05T05:38:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:31:00.000Z",
+      "dealId": "deal_019",
+      "contactId": "ct_007",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-03T05:38:00.000Z"
+    },
+    {
+      "id": "act_0119",
+      "type": "email",
+      "subject": "Sent product overview",
+      "note": "",
+      "dueAt": "2026-10-05T05:38:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:30:00.000Z",
+      "dealId": "deal_023",
+      "contactId": "ct_023",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-04T05:38:00.000Z"
+    },
+    {
+      "id": "act_0120",
+      "type": "note",
+      "subject": "Competitor in the deal",
+      "note": "They run two warehouses on spreadsheets today and want a single stock view.",
+      "dueAt": "2026-10-05T05:38:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:08:00.000Z",
+      "dealId": "deal_026",
+      "contactId": null,
+      "ownerId": "own_01",
+      "createdAt": "2026-10-05T05:42:00.000Z"
+    },
+    {
+      "id": "act_0121",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-10-05T05:50:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:55:00.000Z",
+      "dealId": "deal_017",
+      "contactId": "ct_014",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-04T05:50:00.000Z"
+    },
+    {
+      "id": "act_0122",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "Procurement needs three quotes and a security questionnaire.",
+      "dueAt": "2026-10-05T05:52:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_025",
+      "contactId": "ct_033",
+      "ownerId": "own_03",
+      "createdAt": "2026-10-05T05:52:00.000Z"
+    },
+    {
+      "id": "act_0123",
+      "type": "call",
+      "subject": "Intro call",
+      "note": "",
+      "dueAt": "2026-10-05T05:52:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T05:52:00.000Z",
+      "dealId": null,
+      "contactId": "ct_043",
+      "ownerId": "own_02",
+      "createdAt": "2026-10-05T05:52:00.000Z"
+    },
+    {
+      "id": "act_0124",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "Budget is approved for Q4; final sign-off sits with the CFO.",
+      "dueAt": "2026-10-05T05:54:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_034",
+      "contactId": "ct_001",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-03T05:54:00.000Z"
+    },
+    {
+      "id": "act_0125",
+      "type": "note",
+      "subject": "Requirements summary",
+      "note": "Asked for a reference customer in the same industry.",
+      "dueAt": "2026-10-05T05:57:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:39:00.000Z",
+      "dealId": "deal_004",
+      "contactId": null,
+      "ownerId": "own_01",
+      "createdAt": "2026-10-05T05:33:00.000Z"
+    },
+    {
+      "id": "act_0126",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "",
+      "dueAt": "2026-10-05T06:04:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:12:00.000Z",
+      "dealId": "deal_042",
+      "contactId": "ct_013",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-05T06:04:00.000Z"
+    },
+    {
+      "id": "act_0127",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-10-05T06:06:45.183Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_042",
+      "contactId": "ct_013",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-05T06:00:00.000Z"
+    },
+    {
+      "id": "act_0128",
+      "type": "note",
+      "subject": "Budget confirmed",
+      "note": "Main pain: late deliveries and no visibility into picking times.",
+      "dueAt": "2026-10-05T06:07:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_042",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-10-05T06:00:00.000Z"
+    },
+    {
+      "id": "act_0129",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "They run two warehouses on spreadsheets today and want a single stock view.",
+      "dueAt": "2026-10-05T06:14:23.445Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:20:23.445Z",
+      "dealId": "deal_044",
+      "contactId": "ct_008",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-03T06:14:23.445Z"
+    },
+    {
+      "id": "act_0130",
+      "type": "note",
+      "subject": "Met at the logistics expo",
+      "note": "Interested in route optimization next year; no budget now.",
+      "dueAt": "2026-10-05T06:15:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T06:15:00.000Z",
+      "dealId": null,
+      "contactId": "ct_003",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-05T06:15:00.000Z"
+    },
+    {
+      "id": "act_0131",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "Asked for a reference customer in the same industry.",
+      "dueAt": "2026-10-05T06:18:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_019",
+      "contactId": "ct_007",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-04T06:18:00.000Z"
+    },
+    {
+      "id": "act_0132",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-10-05T06:19:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_028",
+      "contactId": "ct_047",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-04T06:19:00.000Z"
+    },
+    {
+      "id": "act_0133",
+      "type": "email",
+      "subject": "Shared customer case study",
+      "note": "",
+      "dueAt": "2026-10-05T06:19:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_035",
+      "contactId": "ct_046",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-05T06:19:00.000Z"
+    },
+    {
+      "id": "act_0134",
+      "type": "note",
+      "subject": "Budget confirmed",
+      "note": "Asked for a reference customer in the same industry.",
+      "dueAt": "2026-10-05T06:20:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_004",
+      "contactId": null,
+      "ownerId": "own_01",
+      "createdAt": "2026-10-05T05:33:00.000Z"
+    },
+    {
+      "id": "act_0135",
+      "type": "email",
+      "subject": "Sent commercial proposal",
+      "note": "Asked for a reference customer in the same industry.",
+      "dueAt": "2026-10-05T06:23:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_031",
+      "contactId": "ct_017",
+      "ownerId": "own_02",
+      "createdAt": "2026-10-03T06:23:00.000Z"
+    },
+    {
+      "id": "act_0136",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "They run two warehouses on spreadsheets today and want a single stock view.",
+      "dueAt": "2026-10-05T06:28:00.000Z",
+      "done": true,
+      "doneAt": "2026-10-05T07:00:00.000Z",
+      "dealId": "deal_030",
+      "contactId": "ct_004",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-02T06:28:00.000Z"
+    },
+    {
+      "id": "act_0137",
+      "type": "email",
+      "subject": "Sent product overview",
+      "note": "",
+      "dueAt": "2026-10-05T10:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_035",
+      "contactId": "ct_046",
+      "ownerId": "own_05",
+      "createdAt": "2026-10-04T07:00:00.000Z"
+    },
+    {
+      "id": "act_0138",
+      "type": "call",
+      "subject": "Discovery call",
+      "note": "",
+      "dueAt": "2026-10-06T07:23:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_010",
+      "contactId": "ct_045",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-03T07:00:00.000Z"
+    },
+    {
+      "id": "act_0139",
+      "type": "task",
+      "subject": "Prepare ROI estimate",
+      "note": "",
+      "dueAt": "2026-10-06T07:47:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_039",
+      "contactId": null,
+      "ownerId": "own_01",
+      "createdAt": "2026-10-01T07:00:00.000Z"
+    },
+    {
+      "id": "act_0140",
+      "type": "task",
+      "subject": "Prepare pilot plan",
+      "note": "",
+      "dueAt": "2026-10-07T07:20:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_017",
+      "contactId": null,
+      "ownerId": "own_04",
+      "createdAt": "2026-10-04T07:00:00.000Z"
+    },
+    {
+      "id": "act_0141",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "",
+      "dueAt": "2026-10-07T07:29:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_043",
+      "contactId": "ct_015",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-02T07:00:00.000Z"
+    },
+    {
+      "id": "act_0142",
+      "type": "meeting",
+      "subject": "Security review session",
+      "note": "",
+      "dueAt": "2026-10-07T08:25:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_030",
+      "contactId": "ct_003",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-02T07:00:00.000Z"
+    },
+    {
+      "id": "act_0143",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-10-08T09:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_042",
+      "contactId": "ct_013",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-05T06:00:00.000Z"
+    },
+    {
+      "id": "act_0144",
+      "type": "meeting",
+      "subject": "Negotiation meeting",
+      "note": "",
+      "dueAt": "2026-10-09T07:34:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_011",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-04T07:00:00.000Z"
+    },
+    {
+      "id": "act_0145",
+      "type": "email",
+      "subject": "Follow-up email",
+      "note": "",
+      "dueAt": "2026-10-09T08:54:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_020",
+      "contactId": "ct_025",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-01T07:00:00.000Z"
+    },
+    {
+      "id": "act_0146",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "",
+      "dueAt": "2026-10-12T06:05:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_034",
+      "contactId": "ct_002",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-01T07:00:00.000Z"
+    },
+    {
+      "id": "act_0147",
+      "type": "meeting",
+      "subject": "Kick-off meeting",
+      "note": "",
+      "dueAt": "2026-10-12T06:16:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_031",
+      "contactId": "ct_017",
+      "ownerId": "own_02",
+      "createdAt": "2026-10-01T07:00:00.000Z"
+    },
+    {
+      "id": "act_0148",
+      "type": "call",
+      "subject": "Follow-up call",
+      "note": "",
+      "dueAt": "2026-10-12T07:58:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_016",
+      "contactId": "ct_036",
+      "ownerId": "own_03",
+      "createdAt": "2026-10-02T07:00:00.000Z"
+    },
+    {
+      "id": "act_0149",
+      "type": "call",
+      "subject": "Check-in call",
+      "note": "",
+      "dueAt": "2026-10-12T08:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_036",
+      "contactId": "ct_037",
+      "ownerId": "own_01",
+      "createdAt": "2026-10-04T07:00:00.000Z"
+    },
+    {
+      "id": "act_0150",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "",
+      "dueAt": "2026-10-12T08:20:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_045",
+      "contactId": "ct_026",
+      "ownerId": "own_04",
+      "createdAt": "2026-10-03T07:00:00.000Z"
+    },
+    {
+      "id": "act_0151",
+      "type": "call",
+      "subject": "Call about pilot results",
+      "note": "",
+      "dueAt": "2026-10-12T11:00:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_008",
+      "contactId": "ct_050",
+      "ownerId": "own_02",
+      "createdAt": "2026-10-03T07:00:00.000Z"
+    },
+    {
+      "id": "act_0152",
+      "type": "meeting",
+      "subject": "On-site warehouse visit",
+      "note": "",
+      "dueAt": "2026-10-15T06:51:00.000Z",
+      "done": false,
+      "doneAt": null,
+      "dealId": "deal_025",
+      "contactId": "ct_033",
+      "ownerId": "own_03",
+      "createdAt": "2026-10-04T07:00:00.000Z"
+    }
+  ]
+}

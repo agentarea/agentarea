@@ -8,14 +8,16 @@ workflow. Run authority inside the workspace is covered in
 """
 
 import json
+import re
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from agentarea_agents.application.execution_service import EscalationNotPendingError
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import runs_toolset
-from agentarea_api.tools.runs_toolset import RunsToolset
+from agentarea_api.tools.runs_toolset import RUN_NOT_FOUND, RunsToolset
 
 RUN_ID = uuid4()
 
@@ -47,6 +49,12 @@ class FakeTaskService:
     def __init__(self, task):
         self.task = task
         self.continued: list = []
+        self.follow_ups: list = []
+        self.follow_up_delivered = True
+
+    async def queue_follow_up(self, task_id, message):
+        self.follow_ups.append((task_id, message))
+        return self.follow_up_delivered
 
     async def get_task(self, task_id):
         return self.task
@@ -112,13 +120,18 @@ async def test_control_tools_never_signal_a_run_outside_the_workspace(harness):
     harness.tasks.task = None
 
     for call in (
-        RunsToolset().pause(run_id=str(RUN_ID)),
-        RunsToolset().resume(run_id=str(RUN_ID)),
-        RunsToolset().send_input(run_id=str(RUN_ID), input_request_id="req-1"),
-        RunsToolset().send_command(run_id=str(RUN_ID), command="queue_message", message="hi"),
-        RunsToolset().resolve_escalation(run_id=str(RUN_ID), escalation_id="e-1", approved=True),
+        lambda: RunsToolset().pause(run_id=str(RUN_ID)),
+        lambda: RunsToolset().resume(run_id=str(RUN_ID)),
+        lambda: RunsToolset().send_input(run_id=str(RUN_ID), input_request_id="req-1"),
+        lambda: RunsToolset().send_command(
+            run_id=str(RUN_ID), command="queue_message", message="hi"
+        ),
+        lambda: RunsToolset().resolve_escalation(
+            run_id=str(RUN_ID), escalation_id="e-1", approved=True
+        ),
     ):
-        assert json.loads(await call) == {"error": "Run not found"}
+        with pytest.raises(ToolError, match=re.escape(RUN_NOT_FOUND)):
+            await call()
 
     assert harness.workflow.calls == []
 
@@ -139,20 +152,16 @@ async def test_send_input_forwards_answers_as_a_submit_user_input_command(harnes
 
 
 async def test_send_command_rejects_a_queue_message_without_a_message(harness):
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("message is required for queue_message")):
         await RunsToolset().send_command(run_id=str(RUN_ID), command="queue_message")
-    )
 
-    assert "error" in result
     assert harness.workflow.calls == []
 
 
 async def test_send_command_rejects_an_unknown_command(harness):
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("Unknown command: self_destruct")):
         await RunsToolset().send_command(run_id=str(RUN_ID), command="self_destruct")
-    )
 
-    assert "error" in result
     assert harness.workflow.calls == []
 
 
@@ -175,13 +184,10 @@ async def test_resolve_escalation_that_is_not_pending_reports_an_error(harness, 
 
     monkeypatch.setattr(harness.workflow, "resolve_escalation", not_pending)
 
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("Escalation not found or no longer pending")):
         await RunsToolset().resolve_escalation(
             run_id=str(RUN_ID), escalation_id="None", approved=True
         )
-    )
-
-    assert result == {"error": "Escalation not found or no longer pending"}
 
 
 async def test_continue_run_parses_budget_through_the_rest_dto(harness):
@@ -216,7 +222,20 @@ async def test_undelivered_command_is_reported_as_a_failure(harness, monkeypatch
     monkeypatch.setattr(harness.workflow, "send_workflow_command", undelivered)
 
     result = json.loads(
+        await RunsToolset().send_command(
+            run_id=str(RUN_ID), command="remove_message", message_id="m-1"
+        )
+    )
+
+    assert result["delivered"] is False
+
+
+async def test_a_message_the_run_cannot_take_is_reported_as_a_failure(harness):
+    harness.tasks.follow_up_delivered = False
+
+    result = json.loads(
         await RunsToolset().send_command(run_id=str(RUN_ID), command="queue_message", message="hi")
     )
 
     assert result["delivered"] is False
+    assert harness.tasks.follow_ups == [(RUN_ID, "hi")]

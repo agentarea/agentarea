@@ -99,7 +99,7 @@ class InboundMessageStreamConsumer:
                     block_ms=self._block_ms,
                 )
                 for msg in msgs:
-                    await self._handle(msg)
+                    await self.handle(msg)
                 backoff = 1.0
             except asyncio.CancelledError:
                 raise
@@ -115,7 +115,7 @@ class InboundMessageStreamConsumer:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
 
-    async def _handle(self, msg: BrokerMessage) -> None:
+    async def handle(self, msg: BrokerMessage) -> None:
         fields = msg.fields
         dedup_key = fields.get("dedup_key") or msg.id
 

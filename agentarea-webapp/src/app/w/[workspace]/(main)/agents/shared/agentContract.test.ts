@@ -62,9 +62,11 @@ describe("toAgentCreate", () => {
       tools_config: { mcp_server_configs: [] },
       planning: false,
       a2ui_enabled: false,
+      answer_check: { enabled: false, language: "", rewrite_instruction: null },
     });
 
     expect(body.tools).toEqual([]);
+    expect(body.answer_check).toBeNull();
     expect(body.triggers).toEqual([]);
     expect(body).not.toHaveProperty("events_config");
   });
@@ -115,15 +117,6 @@ const tools: NonNullable<AgentResponse["tools"]> = [
       disabled_methods: null,
       requires_user_confirmation: false,
       image_model_id: "0b6f1c7e-8a4d-4f6e-9d3a-6c1f2e4b5a01",
-    },
-  },
-  {
-    type: "code",
-    name: "agentarea/decide",
-    settings: {
-      disabled_methods: null,
-      requires_user_confirmation: false,
-      model_id: "5e2a9d10-3c7b-4b8e-a1f4-7d9c0b2e6f02",
     },
   },
   delegation,
@@ -182,5 +175,40 @@ describe("fromAgent -> toAgentUpdate", () => {
 
     expect(update.skill_ids).toEqual([]);
     expect(update.tools).toEqual([delegation]);
+  });
+});
+
+describe("answer check", () => {
+  it("keeps the instruction the form does not edit and turns the check off", () => {
+    const values = fromAgent({
+      ...agent,
+      answer_check: { enabled: true, language: "ru", rewrite_instruction: "Свой промпт" },
+    });
+    expect(values.answer_check).toEqual({
+      enabled: true,
+      language: "ru",
+      rewrite_instruction: "Свой промпт",
+    });
+
+    values.answer_check.enabled = false;
+    expect(toAgentUpdate(values).answer_check).toEqual({
+      enabled: false,
+      language: "ru",
+      rewrite_instruction: "Свой промпт",
+    });
+  });
+
+  it("sends nothing for an agent that never set it", () => {
+    expect(toAgentUpdate(fromAgent(agent)).answer_check).toBeNull();
+  });
+
+  it("an enabled check with no language sends a null language", () => {
+    const values = fromAgent(agent);
+    values.answer_check = { enabled: true, language: "  ", rewrite_instruction: null };
+    expect(toAgentUpdate(values).answer_check).toEqual({
+      enabled: true,
+      language: null,
+      rewrite_instruction: null,
+    });
   });
 });

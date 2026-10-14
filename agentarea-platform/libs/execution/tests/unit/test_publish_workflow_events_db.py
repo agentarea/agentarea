@@ -115,3 +115,62 @@ async def test_a_batch_retried_after_a_stream_failure_stores_each_event_once(mak
                 text("DELETE FROM task_events WHERE task_id = :task_id"), {"task_id": task_id}
             )
             await session.commit()
+
+
+async def test_a_retried_batch_records_each_paid_line_once(maker):
+    workspace_id, task_id, agent_id = str(uuid4()), str(uuid4()), str(uuid4())
+    at = datetime(2026, 10, 8, 12, 0, tzinfo=UTC).isoformat()
+    events = [
+        {
+            "event_id": str(uuid4()),
+            "event_type": "llm.call.completed",
+            "timestamp": at,
+            "data": {"task_id": task_id, "agent_id": agent_id, "cost": "0.40"},
+        },
+        {
+            "event_id": str(uuid4()),
+            "event_type": "tool.result",
+            "timestamp": at,
+            "data": {
+                "task_id": task_id,
+                "agent_id": agent_id,
+                "tool_name": "fetch_report",
+                "service_cost": "0.10",
+            },
+        },
+    ]
+    request = WorkflowEventsRequest(
+        events_json=[json.dumps(e) for e in events], workspace_id=workspace_id, user_id="writer"
+    )
+    dependencies = SimpleNamespace(
+        event_broker=SimpleNamespace(publish=AsyncMock()),
+        broker_client=None,
+        channel_delivery_settings=None,
+    )
+    [publish] = make_events_activities(dependencies, _Container(maker))
+
+    try:
+        await publish(request)
+        await publish(request)
+
+        async with maker() as session:
+            rows = (
+                await session.execute(
+                    text(
+                        "SELECT category, amount, currency, agent_id FROM cost_entries "
+                        "WHERE task_id = :task_id ORDER BY category"
+                    ),
+                    {"task_id": task_id},
+                )
+            ).fetchall()
+        assert [(r.category, str(r.amount), r.currency, str(r.agent_id)) for r in rows] == [
+            ("model", "0.400000000000", "USD", agent_id),
+            ("service", "0.100000000000", "USD", agent_id),
+        ]
+    finally:
+        async with maker() as session:
+            for table in ("cost_entries", "task_events"):
+                await session.execute(
+                    text(f"DELETE FROM {table} WHERE task_id = :task_id"), {"task_id": task_id}
+                )
+            await session.commit()

@@ -1,0 +1,20 @@
+# Example: Yandex Search API, offered to every workspace through the AgentArea gateway
+# 1. Create the secret: kubectl create secret generic agentarea-tools-token --from-literal=AGENTAREA_TOOLS_TOKEN_YANDEX_SEARCH=... -n agentarea
+# 2. Apply this: kubectl apply -f platform-connection-yandex.yaml
+apiVersion: agentarea.io/v1alpha1
+kind: PlatformConnection
+metadata:
+  name: yandex-search
+  namespace: agentarea
+spec:
+  # The connection's ids are derived from this name; changing it is a new connection.
+  name: "Yandex Search"
+  description: "Web search by Yandex, paid by AgentArea"
+  transport: openapi
+  # The gateway route; the gateway injects the vendor key and forwards.
+  endpointUrl: "http://agentarea-llm-gateway.agentarea.svc.cluster.local:8080/tools/yandex-search"
+  # The catalog entry supplies the spec and the cost model.
+  catalogId: "ru.yandex/search-api/openapi"
+  tokenSecretRef:
+    name: agentarea-tools-token
+    key: AGENTAREA_TOOLS_TOKEN_YANDEX_SEARCH

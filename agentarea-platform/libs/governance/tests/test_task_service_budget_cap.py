@@ -8,6 +8,7 @@ from agentarea_governance.domain.policies import (
     BudgetPolicy,
     ExecutionLimitsPolicy,
     PolicyDocument,
+    PolicyResolver,
     PolicyValidationError,
     TokenPolicy,
 )
@@ -102,6 +103,45 @@ def mock_task_repo():
     return AsyncMock()
 
 
+def _agent_cap_policy(cap) -> PolicyDocument:
+    return PolicyDocument(budget=BudgetPolicy(agent_monthly_spend_cap_usd=str(cap)))
+
+
+class TestEnforceAgentBudgetCap:
+    async def test_refuses_when_the_agents_own_month_to_date_spend_reached_its_cap(
+        self, workspace_id, mock_task_repo
+    ):
+        agent_id = uuid4()
+
+        async def sum_spend_mtd(agent_id=None):
+            return 9.0 if agent_id is not None else 1.0
+
+        mock_task_repo.sum_spend_mtd.side_effect = sum_spend_mtd
+        service = _make_service(task_repository=mock_task_repo)
+        effective = PolicyResolver().resolve([_agent_cap_policy("9.00")])
+
+        with pytest.raises(BudgetCapExceededError) as exc_info:
+            await service._enforce_budget_cap(workspace_id, effective, agent_id)
+
+        err = exc_info.value
+        assert err.agent_id == str(agent_id)
+        assert err.current_mtd_usd == 9
+        assert err.cap_usd == 9
+        assert str(agent_id) in str(err)
+
+    async def test_allows_the_agent_below_its_cap_whatever_the_workspace_spent(
+        self, workspace_id, mock_task_repo
+    ):
+        async def sum_spend_mtd(agent_id=None):
+            return 2.0 if agent_id is not None else 500.0
+
+        mock_task_repo.sum_spend_mtd.side_effect = sum_spend_mtd
+        service = _make_service(task_repository=mock_task_repo)
+        effective = PolicyResolver().resolve([_agent_cap_policy("9.00")])
+
+        await service._enforce_budget_cap(workspace_id, effective, uuid4())
+
+
 class TestEnforceBudgetCap:
     async def test_raises_budget_cap_exceeded_when_mtd_spend_equals_cap(
         self, workspace_id, mock_task_repo
@@ -185,6 +225,33 @@ class TestEnforceBudgetCap:
         assert "0.000058 USD" in message
         assert "0.000001 USD" in message
         assert "0.00 USD" not in message
+
+
+class TestEnforceLlmBudgetCap:
+    async def test_refuses_a_run_once_a_monthly_llm_cap_is_reached(
+        self, workspace_id, mock_task_repo
+    ):
+        from decimal import Decimal
+
+        from agentarea_tasks.spend_gate import LlmCapReached
+
+        agent_id = uuid4()
+        mock_task_repo.monthly_llm_cap_reached.return_value = LlmCapReached(
+            Decimal("3"), Decimal("2"), "RUB", agent_id
+        )
+        service = _make_service(task_repository=mock_task_repo)
+        budget = BudgetPolicy(
+            spend_caps=[{"amount_usd": "2", "category": "llm", "own_agent": True}]
+        )
+        effective = PolicyResolver().resolve([PolicyDocument(budget=budget)])
+
+        with pytest.raises(BudgetCapExceededError) as exc_info:
+            await service._enforce_budget_cap(workspace_id, effective, agent_id)
+
+        err = exc_info.value
+        assert (err.kind, err.agent_id, err.currency) == ("llm", str(agent_id), "RUB")
+        assert "MTD LLM spend 3 RUB" in str(err)
+        mock_task_repo.monthly_llm_cap_reached.assert_awaited_once_with(effective.budget, agent_id)
 
 
 class TestCreationEntryPointsInvokeBudgetCap:

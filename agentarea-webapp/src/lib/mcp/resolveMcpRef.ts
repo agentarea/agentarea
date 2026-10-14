@@ -1,5 +1,9 @@
 import type { McpServerInstanceResponse, McpServerResponse } from "@/api/client/types.gen";
-import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
+import {
+  getMCPConnectionIconSrc,
+  mcpIdentity,
+  type EntityIdentity,
+} from "@/lib/entity-identity";
 
 /**
  * Resolves an agent's MCP tool reference to a concrete instance/server.
@@ -120,4 +124,18 @@ export function resolveMcpRef(
   }
 
   return { status: "unresolved", ref, displayName: ref };
+}
+
+/** The `EntityMark` identity of an MCP ref, resolved the same way as `resolveMcpRef`. */
+export function mcpRefIdentity(
+  ref: string,
+  instances: readonly McpInstance[],
+  servers: readonly McpServer[]
+): EntityIdentity {
+  const resolved = resolveMcpRef(ref, instances, servers);
+  if (resolved.status === "instance") {
+    return mcpIdentity(resolved.instance, resolved.server);
+  }
+  if (resolved.status === "server") return mcpIdentity(resolved.server);
+  return mcpIdentity({});
 }

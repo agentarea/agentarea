@@ -246,6 +246,10 @@ export type AgentCreateRequest = {
      */
     agent_type?: 'stateless' | 'stateful';
     /**
+     * Check the agent's final answer for leaks (other scripts, tool names, codes, JSON, stack traces) and have the model rewrite it once before the person sees it. Null leaves it off. A governance safety rule that sets answer_check overrides this setting.
+     */
+    answer_check?: AnswerCheckPolicy | null;
+    /**
      * Description
      *
      * Short summary of what the agent does.
@@ -390,6 +394,7 @@ export type AgentResponse = {
      * Agent Type
      */
     agent_type?: string;
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Description
      */
@@ -502,6 +507,7 @@ export type AgentUpdate = {
      * Agent Type
      */
     agent_type?: 'stateless' | 'stateful';
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Capabilities
      */
@@ -557,6 +563,28 @@ export type AnalyzeRequest = {
      * URL to fetch raw bundle source from (YAML or JSON).
      */
     source_url?: string | null;
+};
+/**
+ * AnswerCheckPolicy
+ *
+ * Check an agent's final answer and have the model rewrite it once if it leaks.
+ *
+ * Leaks: CJK characters, tool names and snake_case codes, stack traces, raw
+ * JSON, and (for ``language: ru``) lowercase English words in a Russian answer.
+ */
+export type AnswerCheckPolicy = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Language
+     */
+    language?: string | null;
+    /**
+     * Rewrite Instruction
+     */
+    rewrite_instruction?: string | null;
 };
 /**
  * ApprovalDecision
@@ -879,8 +907,18 @@ export type BudgetPeriod = 'execution' | 'daily' | 'monthly';
  * BudgetPolicy
  *
  * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export type BudgetPolicyInput = {
+    /**
+     * Agent Monthly Spend Cap Usd
+     */
+    agent_monthly_spend_cap_usd?: number | string | null;
     /**
      * Monthly Spend Cap Usd
      */
@@ -893,13 +931,27 @@ export type BudgetPolicyInput = {
      * Service Budget Usd
      */
     service_budget_usd?: number | string | null;
+    /**
+     * Spend Caps
+     */
+    spend_caps?: Array<ScopedSpendCapInput> | null;
 };
 /**
  * BudgetPolicy
  *
  * Budget-related ceilings.
+ *
+ * ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+ * month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+ * alone, summed over all its runs in the month. ``spend_caps`` are the caps
+ * narrowed to model or tool spend, a client, a connection or one of its tools,
+ * per month or per run; every one applies.
  */
 export type BudgetPolicyOutput = {
+    /**
+     * Agent Monthly Spend Cap Usd
+     */
+    agent_monthly_spend_cap_usd?: string | null;
     /**
      * Monthly Spend Cap Usd
      */
@@ -912,6 +964,10 @@ export type BudgetPolicyOutput = {
      * Service Budget Usd
      */
     service_budget_usd?: string | null;
+    /**
+     * Spend Caps
+     */
+    spend_caps?: Array<ScopedSpendCapOutput> | null;
 };
 /**
  * Bundle
@@ -1172,6 +1228,12 @@ export type BundleMcp = {
         [key: string]: string;
     };
     /**
+     * Context Secret
+     *
+     * URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.
+     */
+    context_secret?: string | null;
+    /**
      * Json Spec
      *
      * Native MCP runtime spec. Must include 'type' (command|docker|url).
@@ -1352,6 +1414,10 @@ export type CatalogBrowseResponse = {
      */
     items: Array<RegistryItemResponse>;
     /**
+     * Pricings
+     */
+    pricings?: Array<CategoryFacet>;
+    /**
      * Protocols
      */
     protocols: Array<CategoryFacet>;
@@ -1359,6 +1425,31 @@ export type CatalogBrowseResponse = {
      * Total
      */
     total: number;
+};
+/**
+ * CatalogComputeEstimate
+ *
+ * What a running instance of an entry hosted on AgentArea reserves, and its hour.
+ *
+ * ``hourly`` is null where nothing prices compute: the reservation is shown alone.
+ */
+export type CatalogComputeEstimate = {
+    /**
+     * Currency
+     */
+    currency: string | null;
+    /**
+     * Hourly
+     */
+    hourly: string | null;
+    /**
+     * Memory Gib
+     */
+    memory_gib: string;
+    /**
+     * Vcpu
+     */
+    vcpu: string;
 };
 /**
  * CatalogConnection
@@ -1378,92 +1469,6 @@ export type CatalogConnection = {
      * Name
      */
     name: string;
-};
-/**
- * CatalogConnectionPreflight
- *
- * What the connect form needs to know before it offers Connect.
- *
- * ``ready`` — AGENTAREA_MCP_OAUTH_APPS configures an OAuth app for the provider.
- * ``oauth_app_required`` — the user must register their own app first.
- */
-export type CatalogConnectionPreflight = {
-    /**
-     * Description
-     */
-    description?: string | null;
-    /**
-     * Detail
-     */
-    detail: string;
-    /**
-     * Existing Connections
-     */
-    existing_connections?: Array<CatalogConnection>;
-    /**
-     * Item Id
-     */
-    item_id: string;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Redirect Uri
-     */
-    redirect_uri: string;
-    /**
-     * Status
-     */
-    status: 'ready' | 'oauth_app_required';
-};
-/**
- * CatalogConnectionRequest
- *
- * Connect with AgentArea credentials, or override them from Advanced.
- */
-export type CatalogConnectionRequest = {
-    /**
-     * Client Id
-     */
-    client_id?: string | null;
-    /**
-     * Client Id Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client ID.
-     */
-    client_id_secret_id?: string | null;
-    /**
-     * Client Secret
-     */
-    client_secret?: string | null;
-    /**
-     * Client Secret Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client secret.
-     */
-    client_secret_secret_id?: string | null;
-    /**
-     * Credential Mode
-     */
-    credential_mode?: 'managed' | 'custom';
-    /**
-     * Return To
-     */
-    return_to?: string;
-};
-/**
- * CatalogConnectionResponse
- */
-export type CatalogConnectionResponse = {
-    /**
-     * Authorize Url
-     */
-    authorize_url: string;
-    /**
-     * Connection Id
-     */
-    connection_id: string;
 };
 /**
  * CatalogItemCreate
@@ -1505,6 +1510,33 @@ export type CatalogItemCreate = {
     version?: string | null;
 };
 /**
+ * CatalogItemPricingResponse
+ *
+ * Whether using a connection costs money through AgentArea (wiki ADR-0038).
+ *
+ * ``kind`` "paid": the platform's key may pay and the workspace is billed;
+ * ``prices`` are per call on that key, ``price_from`` the cheapest. "own_key":
+ * the vendor bills the workspace's own account. "free": nothing is charged.
+ * ``kind`` is about calls only; ``compute`` is the separate hourly reservation
+ * of an entry that runs on AgentArea.
+ */
+export type CatalogItemPricingResponse = {
+    compute?: CatalogComputeEstimate | null;
+    /**
+     * Kind
+     */
+    kind: 'paid' | 'own_key' | 'free';
+    /**
+     * Payers
+     */
+    payers: Array<string>;
+    price_from: CatalogToolPrice | null;
+    /**
+     * Prices
+     */
+    prices: Array<CatalogToolPrice>;
+};
+/**
  * CatalogItemUpdate
  */
 export type CatalogItemUpdate = {
@@ -1534,6 +1566,29 @@ export type CatalogItemUpdate = {
      * Version
      */
     version?: string | null;
+};
+/**
+ * CatalogToolPrice
+ *
+ * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ */
+export type CatalogToolPrice = {
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Tool
+     */
+    tool: string | null;
+    /**
+     * Unit
+     */
+    unit: string;
 };
 /**
  * CategoryFacet
@@ -1619,6 +1674,27 @@ export type ClientMcpInstanceRef = {
     namespace_prefix?: string | null;
 };
 /**
+ * ClientOpenAPIConnectionRef
+ */
+export type ClientOpenApiConnectionRef = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
+};
+/**
  * ClientPlatformToolsetRef
  */
 export type ClientPlatformToolsetRef = {
@@ -1677,6 +1753,10 @@ export type ClientResponse = {
      */
     name: string;
     /**
+     * Openapi Connections
+     */
+    openapi_connections?: Array<ClientOpenApiConnectionRef>;
+    /**
      * Platform Toolsets
      */
     platform_toolsets?: Array<ClientPlatformToolsetRef>;
@@ -1728,8 +1808,8 @@ export type CodeToolConfig = {
  * Settings for a built-in code toolset.
  *
  * The model ids are model instances of the workspace, each of the kind its
- * toolset needs: ``agentarea/media`` takes an image and/or a video model,
- * ``agentarea/decide`` a decision model. No other toolset takes one.
+ * toolset needs: ``agentarea/media`` takes an image and/or a video model.
+ * No other toolset takes one.
  */
 export type CodeToolSettings = {
     /**
@@ -1742,12 +1822,6 @@ export type CodeToolSettings = {
      * agentarea/media: model instance generating images.
      */
     image_model_id?: string | null;
-    /**
-     * Model Id
-     *
-     * agentarea/decide: decision model instance.
-     */
-    model_id?: string | null;
     /**
      * Requires User Confirmation
      */
@@ -1833,6 +1907,7 @@ export type CollectionUpdateRequest = {
  * Content-safety governance controls.
  */
 export type ContentSafetyPolicy = {
+    answer_check?: AnswerCheckPolicy | null;
     /**
      * Output Sanitizer Enabled
      */
@@ -1909,6 +1984,19 @@ export type CreateWorkspaceDirectoryRequest = {
      * Path
      */
     path: string;
+};
+/**
+ * CurrencySpend
+ */
+export type CurrencySpend = {
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Currency
+     */
+    currency: string;
 };
 /**
  * DailySpendPoint
@@ -2006,6 +2094,10 @@ export type DashboardTask = {
  */
 export type DiscoverPreviewModelResponse = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
+    /**
      * Context Window
      */
     context_window: number | null;
@@ -2097,6 +2189,10 @@ export type DiscoverPreviewResponse = {
  * DiscoveredModelResponse
  */
 export type DiscoveredModelResponse = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
     /**
      * Context Window
      */
@@ -2349,7 +2445,7 @@ export type ExecutionMetricsResponse = {
     /**
      * Failure Rate
      *
-     * Percentage, 0-100.
+     * Percentage, 0-100, of the runs that tried to start a task; skips excluded.
      */
     failure_rate: number;
     /**
@@ -2367,9 +2463,15 @@ export type ExecutionMetricsResponse = {
      */
     period_hours?: number | null;
     /**
+     * Skipped Executions
+     *
+     * Events the trigger's conditions turned away, or that came while it was off.
+     */
+    skipped_executions: number;
+    /**
      * Success Rate
      *
-     * Percentage, 0-100.
+     * Percentage, 0-100, of the runs that tried to start a task; skips excluded.
      */
     success_rate: number;
     /**
@@ -3113,94 +3215,6 @@ export type McpInstanceHealthResponse = {
     status: string;
 };
 /**
- * MCPOAuthAuthorizeRequest
- *
- * Start an OAuth flow for one MCP instance.
- *
- * ``auto`` registers AgentArea with the authorization server (RFC 7591), or
- * uses the operator's platform app when the server has no registration.
- * ``custom`` uses an OAuth app the workspace registered with the provider —
- * the only option when the provider has no Dynamic Client Registration.
- */
-export type McpoAuthAuthorizeRequest = {
-    /**
-     * Client Id
-     */
-    client_id?: string | null;
-    /**
-     * Client Id Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client ID.
-     */
-    client_id_secret_id?: string | null;
-    /**
-     * Client Secret
-     */
-    client_secret?: string | null;
-    /**
-     * Client Secret Secret Id
-     *
-     * Existing user-owned workspace secret containing the OAuth client secret.
-     */
-    client_secret_secret_id?: string | null;
-    /**
-     * Credential Mode
-     */
-    credential_mode?: 'auto' | 'custom';
-    /**
-     * Instance Id
-     */
-    instance_id: string;
-    /**
-     * Return To
-     */
-    return_to?: string;
-};
-/**
- * MCPOAuthPreflightResponse
- *
- * What the UI needs before it can offer a Connect action.
- *
- * ``ready`` — Connect can run unattended (the server supports DCR, or the
- * operator registered a platform app for it).
- * ``oauth_app_required`` — ask for a client ID/secret first.
- * ``unsupported`` — this server cannot be authorized this way; say why.
- */
-export type McpoAuthPreflightResponse = {
-    /**
-     * Authorization Endpoint
-     */
-    authorization_endpoint?: string | null;
-    /**
-     * Connected
-     */
-    connected: boolean;
-    /**
-     * Detail
-     */
-    detail?: string;
-    /**
-     * Instance Id
-     */
-    instance_id?: string | null;
-    /**
-     * Issuer
-     */
-    issuer?: string | null;
-    /**
-     * Scopes
-     */
-    scopes?: Array<string>;
-    /**
-     * Server Id
-     */
-    server_id?: string | null;
-    /**
-     * Status
-     */
-    status: 'ready' | 'oauth_app_required' | 'unsupported';
-};
-/**
  * MCPServerConnectionCreateRequest
  */
 export type McpServerConnectionCreateRequest = {
@@ -3311,6 +3325,12 @@ export type McpServerInstanceCreate = {
      */
     auth_config_id?: string | null;
     /**
+     * Context Secret
+     *
+     * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+     */
+    context_secret?: string | null;
+    /**
      * Description
      *
      * Optional human-readable description of the instance.
@@ -3345,6 +3365,12 @@ export type McpServerInstanceCreateWithoutSpec = {
      * Auth Config Id
      */
     auth_config_id?: string | null;
+    /**
+     * Context Secret
+     *
+     * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead.
+     */
+    context_secret?: string | null;
     /**
      * Description
      */
@@ -3393,6 +3419,10 @@ export type McpServerInstanceResponse = {
         [key: string]: unknown;
     } | null;
     /**
+     * Managed By
+     */
+    managed_by?: string | null;
+    /**
      * Name
      */
     name: string;
@@ -3424,6 +3454,12 @@ export type McpServerInstanceResponse = {
  * Patch payload for an MCP server instance. All fields optional — unset = unchanged.
  */
 export type McpServerInstanceUpdate = {
+    /**
+     * Context Secret
+     *
+     * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.
+     */
+    context_secret?: string | null;
     /**
      * Description
      */
@@ -3969,6 +4005,10 @@ export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
  */
 export type ModelSpecCreate = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: number | string | null;
+    /**
      * Context Window
      */
     context_window?: number | null;
@@ -4014,6 +4054,10 @@ export type ModelSpecCreate = {
  * ModelSpecUpdate
  */
 export type ModelSpecUpdate = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: number | string | null;
     /**
      * Context Window
      */
@@ -4222,6 +4266,70 @@ export type NetworkTopologyResponse = {
     nodes: Array<NetworkNode>;
 };
 /**
+ * OAuthAuthorizeRequest
+ *
+ * Start a sign-in for one MCP instance or one catalog API.
+ *
+ * ``auto`` uses the operator's platform app when one serves the provider, else
+ * registers AgentArea with it (RFC 7591). ``custom`` uses an OAuth app the
+ * workspace registered with the provider, and overrides either.
+ */
+export type OAuthAuthorizeRequest = {
+    /**
+     * Catalog Item Id
+     *
+     * Catalog API to connect; the connection is created by this request.
+     */
+    catalog_item_id?: string | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Client Id Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client ID.
+     */
+    client_id_secret_id?: string | null;
+    /**
+     * Client Secret
+     */
+    client_secret?: string | null;
+    /**
+     * Client Secret Secret Id
+     *
+     * Existing user-owned workspace secret containing the OAuth client secret.
+     */
+    client_secret_secret_id?: string | null;
+    /**
+     * Credential Mode
+     */
+    credential_mode?: 'auto' | 'custom';
+    /**
+     * Instance Id
+     *
+     * MCP instance to sign in to.
+     */
+    instance_id?: string | null;
+    /**
+     * Return To
+     */
+    return_to?: string;
+};
+/**
+ * OAuthAuthorizeResponse
+ */
+export type OAuthAuthorizeResponse = {
+    /**
+     * Authorize Url
+     */
+    authorize_url: string;
+    /**
+     * Connection Id
+     */
+    connection_id: string;
+};
+/**
  * OAuthLinkCreateRequest
  */
 export type OAuthLinkCreateRequest = {
@@ -4290,6 +4398,69 @@ export type OAuthLinkResponse = {
      * Token
      */
     token: string;
+};
+/**
+ * OAuthPreflightResponse
+ *
+ * What the UI needs before it can offer Connect.
+ *
+ * ``ready`` — Connect runs unattended, with the client ``credential_source``
+ * names: the operator's ``platform`` app, or one registered ``dynamic``-ally.
+ * ``oauth_app_required`` — ask for a client ID/secret first.
+ * ``unsupported`` — this cannot be authorized with OAuth; ``detail`` says why.
+ */
+export type OAuthPreflightResponse = {
+    /**
+     * Authorization Endpoint
+     */
+    authorization_endpoint?: string | null;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Credential Source
+     */
+    credential_source?: 'platform' | 'dynamic' | null;
+    /**
+     * Detail
+     */
+    detail?: string;
+    /**
+     * Issuer
+     */
+    issuer?: string | null;
+    /**
+     * Redirect Uri
+     */
+    redirect_uri: string;
+    /**
+     * Scopes
+     */
+    scopes?: Array<string>;
+    /**
+     * Status
+     */
+    status: 'ready' | 'oauth_app_required' | 'unsupported';
+};
+/**
+ * OpenAPIConnectionAssociationBody
+ *
+ * Attach an OpenAPI connection, or replace how an attached one is served.
+ */
+export type OpenApiConnectionAssociationBody = {
+    /**
+     * Allowed Tools
+     */
+    allowed_tools?: Array<string> | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Namespace Prefix
+     */
+    namespace_prefix?: string | null;
 };
 /**
  * OpenAPIConnectionCreate
@@ -5677,6 +5848,7 @@ export type RegistryItemResponse = {
      * Name
      */
     name: string;
+    pricing?: CatalogItemPricingResponse | null;
     /**
      * Registry Id
      */
@@ -6095,7 +6267,21 @@ export type ScheduleTaskCreate = {
      * Description
      */
     description: string;
+    /**
+     * End User Id
+     *
+     * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+     */
+    end_user_id?: string | null;
     execution?: RunExecutionConfig | null;
+    /**
+     * Metadata
+     *
+     * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -6115,6 +6301,10 @@ export type ScheduleTaskCreate = {
      */
     scheduled_at: string;
     task_policy?: PolicyDocument | null;
+    /**
+     * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
+     */
+    webhook?: TaskWebhook | null;
 };
 /**
  * ScheduledRun
@@ -6140,6 +6330,98 @@ export type ScheduledRun = {
      * Trigger Id
      */
     trigger_id: string;
+};
+/**
+ * ScopedSpendCap
+ *
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ *
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
+ */
+export type ScopedSpendCapInput = {
+    /**
+     * Amount Usd
+     */
+    amount_usd: number | string;
+    /**
+     * Category
+     */
+    category?: 'llm' | 'tools' | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Own Agent
+     */
+    own_agent?: boolean;
+    /**
+     * Period
+     */
+    period?: 'run' | null;
+    /**
+     * Tool
+     */
+    tool?: string | null;
+};
+/**
+ * ScopedSpendCap
+ *
+ * A cap on part of the spend: one kind, client, connection or tool of a connection.
+ *
+ * ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+ * ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+ * narrows it further to the calling agent's lines: the rule was bound to that
+ * agent. ``currency`` is the cap's currency, the billing currency when absent; it
+ * sums only lines in it. Absent fields are left out of the snapshot, so a cap
+ * that sets none serializes as it did before they existed.
+ */
+export type ScopedSpendCapOutput = {
+    /**
+     * Amount Usd
+     */
+    amount_usd: string;
+    /**
+     * Category
+     */
+    category?: 'llm' | 'tools' | null;
+    /**
+     * Client Id
+     */
+    client_id?: string | null;
+    /**
+     * Connection Id
+     */
+    connection_id?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Own Agent
+     */
+    own_agent?: boolean;
+    /**
+     * Period
+     */
+    period?: 'run' | null;
+    /**
+     * Tool
+     */
+    tool?: string | null;
 };
 /**
  * SecretConsumer
@@ -6686,6 +6968,10 @@ export type SpendCard = {
      */
     mtd_usd: string;
     /**
+     * Not Covered
+     */
+    not_covered?: Array<CurrencySpend>;
+    /**
      * Pct Of Cap
      */
     pct_of_cap: number | null;
@@ -7076,7 +7362,21 @@ export type TaskCreate = {
      * Description
      */
     description: string;
+    /**
+     * End User Id
+     *
+     * The caller's own id for the end user this task runs for. Only API keys and service clients may set it.
+     */
+    end_user_id?: string | null;
     execution?: RunExecutionConfig | null;
+    /**
+     * Metadata
+     *
+     * Trusted task metadata for tool servers, e.g. {"chatId": "..."}. At most 4096 bytes of JSON. Only API keys and service clients may set it.
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -7092,6 +7392,10 @@ export type TaskCreate = {
      */
     requires_human_approval?: boolean | null;
     task_policy?: PolicyDocument | null;
+    /**
+     * POSTed on task.completed, task.failed and task.cancelled with the task's total_cost, tokens_used, end_user_id and metadata. Only API keys and service clients may set it.
+     */
+    webhook?: TaskWebhook | null;
 };
 /**
  * TaskEvent
@@ -7103,6 +7407,16 @@ export type TaskEvent = {
      * Agent Id
      */
     agent_id: string;
+    /**
+     * Data
+     */
+    data?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Event Id
+     */
+    event_id?: string | null;
     /**
      * Event Type
      */
@@ -7232,6 +7546,10 @@ export type TaskResponse = {
      */
     description: string;
     /**
+     * End User Id
+     */
+    end_user_id?: string | null;
+    /**
      * Error
      */
     error?: string | null;
@@ -7247,6 +7565,12 @@ export type TaskResponse = {
      * Id
      */
     id: string;
+    /**
+     * Metadata
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -7272,6 +7596,10 @@ export type TaskResponse = {
      * Total Cost
      */
     total_cost?: number | null;
+    /**
+     * Total Tokens
+     */
+    total_tokens?: number | null;
 };
 /**
  * TaskSummary
@@ -7359,6 +7687,25 @@ export type TaskSummary = {
     workspace_id: string;
 };
 /**
+ * TaskWebhook
+ *
+ * Where to POST each terminal event of the task, with its cost.
+ */
+export type TaskWebhook = {
+    /**
+     * Secret
+     *
+     * Signs each delivery as X-AgentArea-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">. Write-only: stored in the secret manager.
+     */
+    secret?: string | null;
+    /**
+     * Url
+     *
+     * http(s) URL to POST to.
+     */
+    url: string;
+};
+/**
  * TaskWithAgent
  *
  * Task response with agent information for global task listing.
@@ -7385,6 +7732,10 @@ export type TaskWithAgent = {
      */
     description: string;
     /**
+     * End User Id
+     */
+    end_user_id?: string | null;
+    /**
      * Error
      */
     error?: string | null;
@@ -7408,6 +7759,12 @@ export type TaskWithAgent = {
      * Id
      */
     id: string;
+    /**
+     * Metadata
+     */
+    metadata?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Parameters
      */
@@ -7433,6 +7790,10 @@ export type TaskWithAgent = {
      * Total Cost
      */
     total_cost?: number | null;
+    /**
+     * Total Tokens
+     */
+    total_tokens?: number | null;
 };
 /**
  * TelegramLinkRequest
@@ -7473,6 +7834,124 @@ export type TokenPolicy = {
      */
     max_tokens_per_call?: number | null;
 };
+/**
+ * ToolCallApprovalDecision
+ */
+export type ToolCallApprovalDecision = {
+    /**
+     * Approved
+     */
+    approved: boolean;
+    /**
+     * Comment
+     */
+    comment?: string | null;
+};
+/**
+ * ToolCallApprovalListResponse
+ */
+export type ToolCallApprovalListResponse = {
+    /**
+     * Items
+     */
+    items: Array<ToolCallApprovalResponse>;
+    /**
+     * Page
+     */
+    page: number;
+    /**
+     * Page Size
+     */
+    page_size: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+/**
+ * ToolCallApprovalResponse
+ */
+export type ToolCallApprovalResponse = {
+    /**
+     * Arguments
+     */
+    arguments: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Can Decide
+     */
+    can_decide: boolean;
+    /**
+     * Client Id
+     */
+    client_id: string | null;
+    /**
+     * Client Name
+     */
+    client_name: string | null;
+    /**
+     * Comment
+     */
+    comment: string | null;
+    /**
+     * Connector
+     */
+    connector: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Decided At
+     */
+    decided_at: string | null;
+    /**
+     * Decided By
+     */
+    decided_by: string | null;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+    /**
+     * Hint
+     */
+    hint: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Mcp Instance Id
+     */
+    mcp_instance_id: string | null;
+    /**
+     * Policy Name
+     */
+    policy_name: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Requested By
+     */
+    requested_by: string;
+    status: ToolCallApprovalStatus;
+    /**
+     * Tool
+     */
+    tool: string;
+    /**
+     * Url
+     */
+    url: string;
+};
+/**
+ * ToolCallApprovalStatus
+ */
+export type ToolCallApprovalStatus = 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired';
 /**
  * ToolMethodResponse
  *
@@ -8811,6 +9290,10 @@ export type AgentareaApiApiV1AccessControlSyncResponse = {
  */
 export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
+    /**
      * Context Window
      */
     context_window: number | null;
@@ -8888,6 +9371,10 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
+    /**
+     * Cached Input Cost Per Token
+     */
+    cached_input_cost_per_token?: string | null;
     /**
      * Context Window
      */
@@ -9325,42 +9812,6 @@ export type GetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetResponses = {
      */
     200: unknown;
 };
-export type OauthCallbackV1ConnectionsOauthCallbackGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Code
-         */
-        code?: string | null;
-        /**
-         * State
-         */
-        state?: string | null;
-        /**
-         * Error
-         */
-        error?: string | null;
-        /**
-         * Error Description
-         */
-        error_description?: string | null;
-    };
-    url: '/v1/connections/oauth/callback';
-};
-export type OauthCallbackV1ConnectionsOauthCallbackGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type OauthCallbackV1ConnectionsOauthCallbackGetError = OauthCallbackV1ConnectionsOauthCallbackGetErrors[keyof OauthCallbackV1ConnectionsOauthCallbackGetErrors];
-export type OauthCallbackV1ConnectionsOauthCallbackGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 export type AcceptInvitationV1InvitationsAcceptPostData = {
     body: AcceptInvitationBody;
     path?: never;
@@ -9401,42 +9852,6 @@ export type PreviewInvitationV1InvitationsPreviewPostResponses = {
     200: InvitationPreviewResponse;
 };
 export type PreviewInvitationV1InvitationsPreviewPostResponse = PreviewInvitationV1InvitationsPreviewPostResponses[keyof PreviewInvitationV1InvitationsPreviewPostResponses];
-export type OauthCallbackV1McpOauthCallbackGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Code
-         */
-        code?: string;
-        /**
-         * State
-         */
-        state?: string;
-        /**
-         * Error
-         */
-        error?: string;
-        /**
-         * Error Description
-         */
-        error_description?: string;
-    };
-    url: '/v1/mcp-oauth/callback';
-};
-export type OauthCallbackV1McpOauthCallbackGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type OauthCallbackV1McpOauthCallbackGetError = OauthCallbackV1McpOauthCallbackGetErrors[keyof OauthCallbackV1McpOauthCallbackGetErrors];
-export type OauthCallbackV1McpOauthCallbackGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 export type ProxyInstanceV1McpInstanceIdMcpDeleteData = {
     body?: never;
     path: {
@@ -9569,6 +9984,42 @@ export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse
     204: void;
 };
 export type UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponse = UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses[keyof UnlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDeleteResponses];
+export type OauthCallbackV1OauthCallbackGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Code
+         */
+        code?: string | null;
+        /**
+         * State
+         */
+        state?: string | null;
+        /**
+         * Error
+         */
+        error?: string | null;
+        /**
+         * Error Description
+         */
+        error_description?: string | null;
+    };
+    url: '/v1/oauth/callback';
+};
+export type OauthCallbackV1OauthCallbackGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthCallbackV1OauthCallbackGetError = OauthCallbackV1OauthCallbackGetErrors[keyof OauthCallbackV1OauthCallbackGetErrors];
+export type OauthCallbackV1OauthCallbackGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
 export type GetPricingCurrencyV1PricingCurrencyGetData = {
     body?: never;
     path?: never;
@@ -10085,7 +10536,14 @@ export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostData = {
          */
         agent_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Follow
+         *
+         * Keep the stream open through the follow-up window (up to 30 minutes) and relay follow-up turns. By default the stream ends at the turn's terminal event (task.completed, task.failed, task.cancelled); read follow-ups from GET .../tasks/{task_id}/events/stream.
+         */
+        follow?: boolean;
+    };
     url: '/v1/workspaces/{workspace}/agents/{agent_id}/tasks/';
 };
 export type CreateTaskForAgentWithStreamV1AgentsAgentIdTasksPostErrors = {
@@ -10553,6 +11011,34 @@ export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors = {
 };
 export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostError = ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors[keyof ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostErrors];
 export type ResumeAgentTaskV1AgentsAgentIdTasksTaskIdResumePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+        /**
+         * Task Id
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/retry';
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostError = RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors[keyof RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostErrors];
+export type RetryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPostResponses = {
     /**
      * Successful Response
      */
@@ -11299,6 +11785,60 @@ export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceI
     204: void;
 };
 export type RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponse = RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses[keyof RemoveMcpInstanceFromClientV1ClientsClientIdMcpInstancesMcpInstanceIdDeleteResponses];
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostData = {
+    body: OpenApiConnectionAssociationBody;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections';
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostError = AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors[keyof AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostErrors];
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponse = AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses[keyof AddOpenapiConnectionToClientV1ClientsClientIdOpenapiConnectionsPostResponses];
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Client Id
+         */
+        client_id: string;
+        /**
+         * Connection Id
+         */
+        connection_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}';
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteError = RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors[keyof RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteErrors];
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponse = RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses[keyof RemoveOpenapiConnectionFromClientV1ClientsClientIdOpenapiConnectionsConnectionIdDeleteResponses];
 export type AddPlatformToolsetToClientV1ClientsClientIdPlatformToolsetsPostData = {
     body: PlatformToolsetAssociationBody;
     path: {
@@ -11407,56 +11947,6 @@ export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses =
     204: void;
 };
 export type RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponse = RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses[keyof RemoveSkillFromClientV1ClientsClientIdSkillsSkillIdDeleteResponses];
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostData = {
-    body: CatalogConnectionRequest;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/connections/catalog/{item_id}/connect';
-};
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostError = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostErrors];
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogConnectionResponse;
-};
-export type ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponse = ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses[keyof ConnectCatalogItemV1ConnectionsCatalogItemIdConnectPostResponses];
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetData = {
-    body?: never;
-    path: {
-        /**
-         * Item Id
-         */
-        item_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/connections/catalog/{item_id}/preflight';
-};
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetError = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetErrors];
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: CatalogConnectionPreflight;
-};
-export type PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponse = PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses[keyof PreflightCatalogItemV1ConnectionsCatalogItemIdPreflightGetResponses];
 export type GetDashboardV1DashboardGetData = {
     body?: never;
     path?: never;
@@ -12157,63 +12647,6 @@ export type GetOauthLinkV1McpOauthLinksLinkIdGetResponses = {
     200: OAuthLinkResponse;
 };
 export type GetOauthLinkV1McpOauthLinksLinkIdGetResponse = GetOauthLinkV1McpOauthLinksLinkIdGetResponses[keyof GetOauthLinkV1McpOauthLinksLinkIdGetResponses];
-export type OauthAuthorizeV1McpOauthAuthorizePostData = {
-    body: McpoAuthAuthorizeRequest;
-    path?: never;
-    query?: never;
-    url: '/v1/workspaces/{workspace}/mcp-oauth/authorize';
-};
-export type OauthAuthorizeV1McpOauthAuthorizePostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type OauthAuthorizeV1McpOauthAuthorizePostError = OauthAuthorizeV1McpOauthAuthorizePostErrors[keyof OauthAuthorizeV1McpOauthAuthorizePostErrors];
-export type OauthAuthorizeV1McpOauthAuthorizePostResponses = {
-    /**
-     * Response Oauth Authorize V1 Mcp Oauth Authorize Post
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: string;
-    };
-};
-export type OauthAuthorizeV1McpOauthAuthorizePostResponse = OauthAuthorizeV1McpOauthAuthorizePostResponses[keyof OauthAuthorizeV1McpOauthAuthorizePostResponses];
-export type OauthPreflightV1McpOauthPreflightGetData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Instance Id
-         *
-         * MCP instance to inspect
-         */
-        instance_id?: string | null;
-        /**
-         * Server Id
-         *
-         * Catalog spec to inspect before any instance exists
-         */
-        server_id?: string | null;
-    };
-    url: '/v1/workspaces/{workspace}/mcp-oauth/preflight';
-};
-export type OauthPreflightV1McpOauthPreflightGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type OauthPreflightV1McpOauthPreflightGetError = OauthPreflightV1McpOauthPreflightGetErrors[keyof OauthPreflightV1McpOauthPreflightGetErrors];
-export type OauthPreflightV1McpOauthPreflightGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: McpoAuthPreflightResponse;
-};
-export type OauthPreflightV1McpOauthPreflightGetResponse = OauthPreflightV1McpOauthPreflightGetResponses[keyof OauthPreflightV1McpOauthPreflightGetResponses];
 export type ListMcpServerInstancesV1McpServerInstancesGetData = {
     body?: never;
     path?: never;
@@ -13259,6 +13692,65 @@ export type GetNetworkTopologyV1NetworkTopologyGetResponses = {
     200: NetworkTopologyResponse;
 };
 export type GetNetworkTopologyV1NetworkTopologyGetResponse = GetNetworkTopologyV1NetworkTopologyGetResponses[keyof GetNetworkTopologyV1NetworkTopologyGetResponses];
+export type OauthAuthorizeV1OauthAuthorizePostData = {
+    body: OAuthAuthorizeRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/oauth/authorize';
+};
+export type OauthAuthorizeV1OauthAuthorizePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthAuthorizeV1OauthAuthorizePostError = OauthAuthorizeV1OauthAuthorizePostErrors[keyof OauthAuthorizeV1OauthAuthorizePostErrors];
+export type OauthAuthorizeV1OauthAuthorizePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthAuthorizeResponse;
+};
+export type OauthAuthorizeV1OauthAuthorizePostResponse = OauthAuthorizeV1OauthAuthorizePostResponses[keyof OauthAuthorizeV1OauthAuthorizePostResponses];
+export type OauthPreflightV1OauthPreflightGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Instance Id
+         *
+         * MCP instance to inspect
+         */
+        instance_id?: string | null;
+        /**
+         * Server Id
+         *
+         * Catalog MCP spec to inspect before any instance exists
+         */
+        server_id?: string | null;
+        /**
+         * Catalog Item Id
+         *
+         * Catalog API to inspect before connecting it
+         */
+        catalog_item_id?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/oauth/preflight';
+};
+export type OauthPreflightV1OauthPreflightGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type OauthPreflightV1OauthPreflightGetError = OauthPreflightV1OauthPreflightGetErrors[keyof OauthPreflightV1OauthPreflightGetErrors];
+export type OauthPreflightV1OauthPreflightGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthPreflightResponse;
+};
+export type OauthPreflightV1OauthPreflightGetResponse = OauthPreflightV1OauthPreflightGetResponses[keyof OauthPreflightV1OauthPreflightGetResponses];
 export type ListConnectionsV1OpenapiConnectionsGetData = {
     body?: never;
     path?: never;
@@ -14467,6 +14959,12 @@ export type BrowseCatalogV1RegistriesCatalogBrowseGetData = {
          * Restrict MCP connections to where they run: 'vendor' (hosted endpoint) or 'agentarea' (package the platform runs). Only valid for registry_type='mcp_servers'.
          */
         hosting?: 'vendor' | 'agentarea' | null;
+        /**
+         * Pricing
+         *
+         * Restrict connections to what using them costs: 'paid' (billed through AgentArea), 'own_key' (the vendor bills the workspace) or 'free'. Only valid for registry_type='mcp_servers'.
+         */
+        pricing?: 'paid' | 'own_key' | 'free' | null;
         /**
          * Sort
          *
@@ -16102,6 +16600,89 @@ export type ContinueTaskExecutionV1TasksTaskIdContinuePostResponses = {
      */
     200: unknown;
 };
+export type ListToolCallApprovalsV1ToolCallApprovalsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         */
+        status?: ToolCallApprovalStatus | null;
+        /**
+         * Page
+         */
+        page?: number;
+        /**
+         * Page Size
+         */
+        page_size?: number;
+    };
+    url: '/v1/workspaces/{workspace}/tool-call-approvals';
+};
+export type ListToolCallApprovalsV1ToolCallApprovalsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListToolCallApprovalsV1ToolCallApprovalsGetError = ListToolCallApprovalsV1ToolCallApprovalsGetErrors[keyof ListToolCallApprovalsV1ToolCallApprovalsGetErrors];
+export type ListToolCallApprovalsV1ToolCallApprovalsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ToolCallApprovalListResponse;
+};
+export type ListToolCallApprovalsV1ToolCallApprovalsGetResponse = ListToolCallApprovalsV1ToolCallApprovalsGetResponses[keyof ListToolCallApprovalsV1ToolCallApprovalsGetResponses];
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Approval Id
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}';
+};
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetError = GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors[keyof GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetErrors];
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ToolCallApprovalResponse;
+};
+export type GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponse = GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses[keyof GetToolCallApprovalV1ToolCallApprovalsApprovalIdGetResponses];
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostData = {
+    body: ToolCallApprovalDecision;
+    path: {
+        /**
+         * Approval Id
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/tool-call-approvals/{approval_id}/decide';
+};
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostError = DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors[keyof DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostErrors];
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ToolCallApprovalResponse;
+};
+export type DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponse = DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses[keyof DecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostResponses];
 export type ListTriggersV1TriggersGetData = {
     body?: never;
     path?: never;
@@ -16465,7 +17046,7 @@ export type GetExecutionHistoryV1TriggersTriggerIdExecutionsGetData = {
         /**
          * Status
          *
-         * Filter by execution status (success, failed, timeout)
+         * Filter by execution status (success, failed, timeout, cancelled, skipped)
          */
         status?: string | null;
         /**

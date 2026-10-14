@@ -23,13 +23,15 @@ from agentarea_common.events.contract import LLM_CHUNK
 from agentarea_common.events.task_stream import TaskEventEnvelope, iter_task_event_feed
 from agentarea_common.utils.types import utc_isoformat
 from agentarea_tasks.domain.models import TaskEvent
-from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from agentarea_tasks.infrastructure.repository import TaskEventRepository, TaskRepository
 
 logger = logging.getLogger(__name__)
 
 # Rows per catch-up query. Each batch opens its own short session, so a slow
 # client never holds a pooled connection while it drains the snapshot.
 SNAPSHOT_BATCH_SIZE = 500
+# Statuses of a task whose last run ended; any other means a run is under way.
+_ENDED_TASK_STATUSES = frozenset({"completed", "failed", "cancelled", "blocked"})
 
 
 def _envelope(event: TaskEvent) -> TaskEventEnvelope:
@@ -56,6 +58,15 @@ async def _load_cursor(
             UUID(task_id), event_uuid
         )
     return _envelope(event) if event else None
+
+
+async def _run_open(task_id: str, user_context: UserContext) -> bool:
+    """Whether the task has a run that has not ended: a follow-up or a retry started one."""
+    from agentarea_api.api.deps.database import get_db_session
+
+    async with get_db_session() as session:
+        task = await TaskRepository(session, user_context).get_task(UUID(task_id))
+    return task is not None and task.status not in _ENDED_TASK_STATUSES
 
 
 async def _iter_snapshot(
@@ -140,6 +151,7 @@ async def open_task_event_feed(
             exclude_types=exclude_types,
             follow_execution=follow_execution,
             resume_after=resume_after,
+            run_open=lambda: _run_open(tid, user_context),
         ):
             yield env
     finally:

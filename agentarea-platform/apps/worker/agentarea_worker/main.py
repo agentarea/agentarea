@@ -25,8 +25,10 @@ from agentarea_common.config import (
 from agentarea_common.events.factory import create_event_broker
 from agentarea_common.logging import setup_logging
 from agentarea_common.observability import get_temporal_plugins, setup_otel
+from agentarea_common.utils.outbound_tls import install_outbound_trust
 from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution import create_activities_for_worker
+from agentarea_execution.activities.heartbeat import CANCELLATION_DELIVERY_INTERVAL
 from agentarea_execution.interfaces import ActivityDependencies
 
 # Import workflow and activity definitions from the execution library
@@ -285,6 +287,8 @@ class AgentAreaWorker:
             max_concurrent_activities=settings.temporal.MAX_ACTIVITIES,
             max_cached_workflows=settings.temporal.MAX_CACHED,
             graceful_shutdown_timeout=settings.temporal.SHUTDOWN_GRACE,
+            max_heartbeat_throttle_interval=CANCELLATION_DELIVERY_INTERVAL,
+            default_heartbeat_throttle_interval=CANCELLATION_DELIVERY_INTERVAL,
         )
 
         # Create trigger execution worker on the trigger-schedules queue
@@ -404,6 +408,7 @@ class AgentAreaWorker:
             stream=delivery_cfg.IN_STREAM,
             group=delivery_cfg.IN_GROUP,
             consumer_id="inbound-autoclaimer",
+            handle=self.inbound_subscriber.handle,
             min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
             interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
         )
@@ -431,6 +436,7 @@ class AgentAreaWorker:
             stream=delivery_cfg.OUT_STREAM,
             group=delivery_cfg.OUT_GROUP,
             consumer_id="autoclaimer",
+            handle=self.delivery_consumer.handle,
             min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
             interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
         )
@@ -530,6 +536,7 @@ class AgentAreaWorker:
     async def start(self) -> None:
         """Start the worker with proper initialization."""
         try:
+            install_outbound_trust()
             await self.health_server.start()
             await self.connect()
             await self.create_worker()

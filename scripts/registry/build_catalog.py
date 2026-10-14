@@ -26,6 +26,8 @@ OUT_DIR = Path(__file__).resolve().parents[2] / "data" / "catalog"
 # Models that agents reference. AgentCreate.model_id accepts a literal provider
 # id, so the catalog is portable; the workspace just needs that provider keyed.
 DEFAULT_MODEL = "gpt-4o"
+# Catalog agents' model hints, in order: current and cheap, all in llm-models.json.
+PREFERRED_MODELS = ["gpt-5.4-nano", "gpt-5-mini"]
 
 
 # ── Agents catalog (matches RegistryService._parse_agents) ──────────────────
@@ -50,7 +52,7 @@ def _agent(
         # The catalog is global and model instances are per-workspace, so
         # RegistryService._parse_agents carries `preferred_models` (slugs) and
         # ignores `model_id` — emitting the latter reconciles to no preference.
-        "preferred_models": [DEFAULT_MODEL],
+        "preferred_models": PREFERRED_MODELS,
         "tools": tools or [],
         "planning": planning,
         "tags": tags or [],
@@ -72,31 +74,20 @@ _SANDBOX = ("agentarea/shell", "agentarea/files", "agentarea/workspace_files")
 PRESETS: list[dict[str, Any]] = [
     _agent(
         "AgentArea Claw",
-        "Personal assistant that works in its own sandbox, remembers context, "
-        "checks in on a schedule and answers you in Telegram.",
+        "Personal assistant that works in its own sandbox, reads the workspace library "
+        "and answers you in Telegram.",
         """
-        You are a personal assistant with your own sandbox, the web, and a memory
-        of the workspace. Do the work instead of describing it: run commands,
-        write files, look things up.
+        You are a personal assistant with your own sandbox, the web, and read
+        access to the workspace's file library. Do the work instead of
+        describing it: run commands, write files, look things up.
 
-        Keep HEARTBEAT.md in your workspace files as a short checklist of things
-        to watch. On a heartbeat run, work through that checklist; if nothing
-        needs attention, finish without doing anything else.
+        Your sandbox starts empty on every run; nothing saved there is kept.
 
         Before anything destructive or hard to undo, say what you are about to do.
         """,
         tools=_code(*_SANDBOX, "agentarea/web", "agentarea/context"),
         skills=["brainstorming--obra-superpowers", "writing-plans--obra-superpowers"],
         triggers=[
-            {
-                "name": "Heartbeat",
-                "trigger_type": "cron",
-                "cron_expression": "*/30 * * * *",
-                "timezone": "UTC",
-                "task_parameters": {
-                    "text": "Heartbeat: read HEARTBEAT.md and work through its checklist."
-                },
-            },
             {
                 "name": "Telegram",
                 "trigger_type": "webhook",

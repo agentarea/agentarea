@@ -1,7 +1,7 @@
 ---
 title: Combine several MCP servers behind one endpoint
 type: guide
-description: "Aggregate MCP instances and AgentArea platform toolsets into a single namespaced endpoint by attaching them to a registered client, then point a harness at it."
+description: "Aggregate MCP instances, OpenAPI connections and AgentArea platform toolsets into a single namespaced endpoint by attaching them to a registered client, then point a harness at it."
 prerequisites:
   - /guides/mcp/add-a-hosted-server
 related:
@@ -9,7 +9,7 @@ related:
   - /guides/mcp/connect-a-remote-server
   - /guides/mcp/issue-access-tokens
   - /concepts/integration/mcp
-last_updated: 2026-10-01
+last_updated: 2026-10-13
 ---
 
 Do this when a client — a Codex or Claude harness, an IDE, another agent — should
@@ -19,8 +19,8 @@ tools; an agent is configured with its own tool list and does not need an
 aggregate.
 
 The mechanism is a **registered client** (shown as a *harness* in the web app).
-A client is a governable entity that owns a set of MCP instances, platform
-toolsets, and skills, and gets a single MCP endpoint that merges them. There is
+A client is a governable entity that owns a set of MCP instances, OpenAPI
+connections, platform toolsets, and skills, and gets a single MCP endpoint that merges them. There is
 no separate "compound MCP" resource in the API — earlier drafts of these docs
 described a compound-mcps collection that was never part of the shipped surface.
 
@@ -58,6 +58,7 @@ from another entity.
       "kind": "harness",
       "skills": [],
       "mcp_instances": [],
+      "openapi_connections": [],
       "platform_toolsets": [],
       "mcp_endpoint_url": "https://api.example.com/mcp/clients/b4c8f210-..."
     }
@@ -89,6 +90,31 @@ from another entity.
     serves; omit it or send `null` to serve all of them. A tool left out is neither
     listed nor callable through the endpoint. Posting the same instance again
     replaces both `namespace_prefix` and `allowed_tools`, so send both every time.
+  </Step>
+
+  <Step title="Attach OpenAPI connections, if the harness should call REST APIs">
+    ```bash
+    curl -s -o /dev/null -w '%{http_code}\n' \
+      -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/clients/$CLIENT_ID/openapi-connections" \
+      -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "{\"id\": \"$CONNECTION_ID\", \"namespace_prefix\": \"ya\", \"allowed_tools\": [\"search\"]}"
+    ```
+
+    ```text
+    204
+    ```
+
+    The workspace's own connections can be attached, and so can a connection the
+    platform supplies on its own key. Each operation is served as
+    `<namespace_prefix>__<operation>` (`ya__search`); without a prefix the
+    connection's name is the namespace, lowercased with characters outside
+    `[a-zA-Z0-9_-]` replaced by `_`. `allowed_tools` names operations, as the
+    connection lists them in `available_tools`. A call is judged by the workspace
+    policy as an agent's call of the same operation is, checked against the spend
+    caps and, on the platform's key, the balance, and its cost is recorded against
+    the client; see [Tool costs](/reference/tool-costs). Detach one with
+    `DELETE /v1/workspaces/{workspace}/clients/{client_id}/openapi-connections/{connection_id}`.
   </Step>
 
   <Step title="Attach platform toolsets, if the harness should manage AgentArea">

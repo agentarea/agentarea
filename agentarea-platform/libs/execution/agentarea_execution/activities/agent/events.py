@@ -9,10 +9,13 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.events.task_stream import publish_task_event
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import WorkflowEventsRequest, WorkflowEventsResult
+from .cost_ledger import cost_entries
 from .tool_audit import record_tool_audit, tool_audit_entry
 
 if TYPE_CHECKING:
@@ -24,7 +27,14 @@ logger = logging.getLogger(__name__)
 async def load_task_parameters(
     container: "ActivityServiceContainer", user_context: UserContext, task_id: str
 ) -> dict[str, Any]:
-    """The task's parameters, which carry its channel origin and A2A push configs."""
+    """Where the task's events go: its parameters and the routing part of its metadata.
+
+    Parameters carry the channel origin and A2A push configs. From the trusted
+    metadata only the task webhook config and what its delivery reports (the
+    caller's end user id and metadata) are copied, under reserved keys.
+    """
+    from agentarea_common.utils.task_webhook import TASK_WEBHOOK_KEY
+    from agentarea_mcp.tool_context import APP_METADATA_KEY, END_USER_ID_KEY
     from agentarea_tasks.infrastructure.repository import TaskRepository
 
     from ..dependencies import ActivityContext
@@ -33,7 +43,21 @@ async def load_task_parameters(
         session = container._database.async_session_factory()
         ctx._sessions.append(session)
         task = await TaskRepository(session, user_context).get_task(UUID(task_id))
-    return dict(task.parameters or {}) if task else {}
+    if not task:
+        return {}
+    parameters = dict(task.parameters or {})
+    metadata = task.metadata or {}
+    if isinstance(metadata.get(TASK_WEBHOOK_KEY), dict):
+        parameters[_WEBHOOK_ROUTE_KEY] = {
+            **metadata[TASK_WEBHOOK_KEY],
+            "end_user_id": metadata.get(END_USER_ID_KEY),
+            "app_metadata": metadata.get(APP_METADATA_KEY),
+        }
+    return parameters
+
+
+# Not a task parameter: added by load_task_parameters from trusted metadata only.
+_WEBHOOK_ROUTE_KEY = "__task_webhook_route"
 
 
 def make_events_activities(
@@ -48,7 +72,8 @@ def make_events_activities(
         """Store each workflow event, then fan it out to live readers and channels.
 
         The ``task_events`` row is the source of truth and is committed first,
-        together with the audit rows of the tool-call outcomes the batch holds.
+        together with the audit rows of the tool-call outcomes and the spend
+        ledger lines of the paid calls the batch holds.
         Any failure raises so Temporal retries the whole batch; every step is
         safe to repeat because it is keyed by the workflow's ``event_id``: the
         row inserts are no-ops for a stored id, the stream carries that id for the
@@ -92,6 +117,21 @@ def make_events_activities(
                         await record_tool_audit(
                             audit, event_id, entry, requested_by=request.user_id
                         )
+                billing_currency = get_customer_pricing().currency()
+                costs = [
+                    entry
+                    for event in events
+                    for entry in cost_entries(
+                        event,
+                        workspace_id=request.workspace_id,
+                        created_by=request.user_id,
+                        billing_currency=billing_currency,
+                    )
+                ]
+                if costs:
+                    session = container._database.async_session_factory()
+                    ctx._sessions.append(session)
+                    await CostEntryRepository(session, user_context).record(costs)
 
             for event, stored in zip(events, stored_events, strict=True):
                 if dependencies.broker_client is not None:
@@ -154,6 +194,29 @@ async def _emit_channel_deliveries(
         broker=broker,
         stream=stream,
     )
+
+    webhook = (await parameters_of(task_id)).get(_WEBHOOK_ROUTE_KEY)
+    if isinstance(webhook, dict) and webhook.get("url"):
+        await emit_channel_delivery(
+            event={
+                **event_with_id,
+                "timestamp": event.get("timestamp"),
+                "data": {
+                    **data,
+                    "end_user_id": webhook.get("end_user_id"),
+                    "app_metadata": webhook.get("app_metadata"),
+                },
+            },
+            channel_origin={
+                "type": "task_webhook",
+                "url": webhook["url"],
+                "signed": bool(webhook.get("signed")),
+                "presentation": "silent",
+            },
+            broker=broker,
+            stream=stream,
+            dedup_suffix="task_webhook",
+        )
 
     push_configs = (await parameters_of(task_id)).get("a2a_push_configs")
     for cfg in push_configs if isinstance(push_configs, list) else []:

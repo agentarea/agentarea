@@ -100,6 +100,7 @@ class ContextToolsMixin(AgentWorkflowBase):
             result: RecallHistoryResult = await workflow.execute_activity(
                 Activities.RECALL_HISTORY,
                 args=[request],
+                result_type=RecallHistoryResult,
                 start_to_close_timeout=ACTIVITY_TIMEOUT,
                 retry_policy=make_retry_policy(2),
             )

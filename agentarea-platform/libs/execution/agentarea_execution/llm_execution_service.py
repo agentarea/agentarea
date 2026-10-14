@@ -1,11 +1,13 @@
 """Execute one model request independently of workflow and progress transports."""
 
+import asyncio
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, aclosing
 from typing import Any, Protocol, cast
 from uuid import UUID
 
+import litellm
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
@@ -15,12 +17,15 @@ from agentarea_common.extensions.customer_pricing import (
     price_llm_call,
 )
 from agentarea_common.money import to_money, to_optional_money
+from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.provider_credentials import resolve_provider_api_key
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 
 from .exceptions import ModelInstanceNotFoundError
 from .models import LLMCallRequest, LLMCallResult, LLMUsage
+from .tool_images import resolve_tool_images
+from .workflows.context_store import ContextStore
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +63,29 @@ def resolve_llm_max_tokens(
             raise ValueError(f"{name} must be a positive integer")
         candidates.append(value)
     return min(candidates)
+
+
+def model_reads_images(provider_type: str, model_name: str, spec_flag: bool | None) -> bool:
+    """The model spec's word when it says yes; otherwise litellm's model map.
+
+    Discovery leaves the spec flag unset for most models, so a ``False`` there
+    is no evidence the model is blind.
+    """
+    if spec_flag:
+        return True
+    return bool(litellm.supports_vision(model=f"{provider_type}/{model_name}"))
+
+
+async def _with_tool_images(
+    request: LLMCallRequest, user_context: UserContext, *, vision: bool
+) -> list[dict[str, Any]]:
+    """The request's messages with the images tools returned attached."""
+    if not any(message.get("attachments") for message in request.messages):
+        return request.messages
+    if not request.task_id:
+        raise ValueError("tool images need the task they were stored under")
+    store = ContextStore(str(user_context.workspace_id), str(request.task_id))
+    return await resolve_tool_images(request.messages, read_image=store.read_image, vision=vision)
 
 
 class LLMExecutionService:
@@ -106,15 +134,19 @@ class LLMExecutionService:
             max_output_tokens = None
             input_cost_per_token = None
             output_cost_per_token = None
+            cached_input_cost_per_token = None
 
+            supports_vision: bool | None = None
             if request.resolved_model:
                 cached = request.resolved_model
+                supports_vision = cached.get("supports_vision")
                 provider_type = cached.get("provider_type")
                 model_name = cached.get("model_name")
                 endpoint_url = cached.get("endpoint_url")
                 max_output_tokens = cached.get("max_output_tokens")
                 input_cost_per_token = cached.get("input_cost_per_token")
                 output_cost_per_token = cached.get("output_cost_per_token")
+                cached_input_cost_per_token = cached.get("cached_input_cost_per_token")
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
                 if api_key_secret_name:
@@ -161,7 +193,11 @@ class LLMExecutionService:
                     output_cost_per_token = getattr(
                         model_instance.model_spec, "output_cost_per_token", None
                     )
+                    cached_input_cost_per_token = getattr(
+                        model_instance.model_spec, "cached_input_cost_per_token", None
+                    )
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
+                    supports_vision = getattr(model_instance.model_spec, "supports_vision", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
                     if api_key_secret_name:
                         api_key = await resolve_provider_api_key(
@@ -189,9 +225,15 @@ class LLMExecutionService:
                 endpoint_url=endpoint_url,
                 input_cost_per_token=to_optional_money(input_cost_per_token),
                 output_cost_per_token=to_optional_money(output_cost_per_token),
+                cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
+                endpoint_policy=endpoint_policy_for(managed_by),
             )
             llm_request = LLMRequest(
-                messages=request.messages,
+                messages=await _with_tool_images(
+                    request,
+                    user_context,
+                    vision=model_reads_images(str(provider_type), str(model_name), supports_vision),
+                ),
                 tools=request.tools,
                 temperature=request.temperature,
                 max_tokens=resolve_llm_max_tokens(
@@ -208,35 +250,44 @@ class LLMExecutionService:
             final_cost = 0.0
             chunk_index = 0
 
+            interrupted = False
             if self._stream:
                 # The SDK yields from an async generator but annotates it as AsyncIterator.
                 responses = cast(
                     AsyncGenerator[LLMResponse, None], llm_model.ainvoke_stream(llm_request)
                 )
-                async with aclosing(responses):
-                    async for response in responses:
-                        if response.reasoning_content:
-                            thinking_parts.append(response.reasoning_content)
-                            if on_chunk is not None:
-                                await on_chunk(
-                                    response.reasoning_content,
-                                    chunk_index,
-                                    False,
-                                    chunk_type="thinking",
-                                )
-                                chunk_index += 1
-                        if response.content:
-                            content_parts.append(response.content)
-                            if on_chunk is not None:
-                                await on_chunk(response.content, chunk_index, False)
-                                chunk_index += 1
-                        # Tool calls are cumulative snapshots, not additional calls.
-                        if response.tool_calls:
-                            complete_tool_calls = response.tool_calls
-                        if response.usage is not None:
-                            final_usage = response.usage
-                        if response.cost and response.cost > 0:
-                            final_cost = max(final_cost, response.cost)
+                try:
+                    async with aclosing(responses):
+                        async for response in responses:
+                            if response.reasoning_content:
+                                thinking_parts.append(response.reasoning_content)
+                                if on_chunk is not None:
+                                    await on_chunk(
+                                        response.reasoning_content,
+                                        chunk_index,
+                                        False,
+                                        chunk_type="thinking",
+                                    )
+                                    chunk_index += 1
+                            if response.content:
+                                content_parts.append(response.content)
+                                if on_chunk is not None:
+                                    await on_chunk(response.content, chunk_index, False)
+                                    chunk_index += 1
+                            # Tool calls are cumulative snapshots, not additional calls.
+                            if response.tool_calls:
+                                complete_tool_calls = response.tool_calls
+                            if response.usage is not None:
+                                final_usage = response.usage
+                            if response.cost and response.cost > 0:
+                                final_cost = max(final_cost, response.cost)
+                except asyncio.CancelledError:
+                    # Stopped mid-reply. Usage the provider already reported is
+                    # what it bills; without it nothing is known, and the stop
+                    # stands as a cancellation.
+                    if final_usage is None or final_usage.total_tokens <= 0:
+                        raise
+                    interrupted = True
             else:
                 response = await llm_model.complete(llm_request)
                 if response.content:
@@ -249,15 +300,17 @@ class LLMExecutionService:
                 if response.cost and response.cost > 0:
                     final_cost = response.cost
 
-            if final_usage is None or getattr(final_usage, "total_tokens", 0) <= 0:
+            if final_usage is None or final_usage.total_tokens <= 0:
                 raise RuntimeError(
                     "LLM usage accounting unavailable; token and cost policy cannot be enforced"
                 )
 
             usage = LLMUsage(
-                prompt_tokens=getattr(final_usage, "prompt_tokens", 0),
-                completion_tokens=getattr(final_usage, "completion_tokens", 0),
-                total_tokens=getattr(final_usage, "total_tokens", 0),
+                prompt_tokens=final_usage.prompt_tokens,
+                completion_tokens=final_usage.completion_tokens,
+                total_tokens=final_usage.total_tokens,
+                cached_prompt_tokens=final_usage.cached_prompt_tokens,
+                cache_creation_tokens=final_usage.cache_creation_tokens,
             )
             # Provider cost (USD) becomes what the customer pays, in the billing
             # currency. Events, task totals and budget enforcement all carry this
@@ -286,6 +339,7 @@ class LLMExecutionService:
                 currency=(self._customer_pricing or get_customer_pricing()).currency(),
                 managed_by=managed_by,
                 usage=usage,
+                interrupted=interrupted,
             )
         except Exception as error:
             if on_error is not None:

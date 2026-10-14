@@ -2,41 +2,36 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-
 import { CustomOAuthAppFields } from "@/components/CustomOAuthAppFields";
 import { Button } from "@/components/ui/button";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { CopyableText } from "@/components/ui/copyable-text";
-import { apiErrorMessage } from "@/lib/api-errors";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
 import { isSafeRedirectUrl } from "@/lib/safe-redirect";
 import {
   listWorkspaceSecretsAction,
-  mcpOAuthPreflightAction,
   oauthAuthorizeAction,
+  oauthPreflightAction,
 } from "@/lib/server-actions";
-
-import {
-  catalogConnectionPreflightAction,
-  connectCatalogConnectionAction,
-} from "../bundles/components/actions";
 import {
   buildAuthorizeRequest,
-  buildCatalogConnectRequest,
   canAuthorize,
-  catalogPreflightToMCP,
+  canUseOwnApp,
   deriveOAuthConnectState,
-  type MCPOAuthPreflight,
+  preflightAfterAuthorizeError,
   type OAuthConnectState,
+  type OAuthPreflight,
 } from "./oauth-connect-state";
 
 /**
- * The single place a remote MCP connection is authorized from.
+ * The single place a connection — a remote MCP server or a catalog API — is
+ * signed in to.
  *
- * It asks the API what is possible before rendering anything: a provider
- * without dynamic client registration gets a client ID/secret form, a provider
- * with no OAuth at all gets an explanation, and only a provider that can
- * actually complete the flow gets a bare Connect button.
+ * It asks the API what is possible before rendering anything: a provider with
+ * neither the operator's OAuth app nor dynamic client registration gets a
+ * client ID/secret form, a provider with no OAuth at all gets an explanation,
+ * and only a provider that can actually complete the flow gets a bare Connect
+ * button — with a way to use the person's own app over the operator's.
  */
 /**
  * What is being authorized: an existing connection, a catalog spec whose
@@ -79,17 +74,18 @@ export function OAuthConnectPanel({
   /** Authorization could not start; `code` is the API's problem code. */
   onAuthorizeError?: (code: string | null) => void;
   /** The page already asked the API; the panel then does not ask again. */
-  preflight?: MCPOAuthPreflight;
+  preflight?: OAuthPreflight;
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail.oauth");
-  const [fetchedPreflight, setPreflight] = useState<MCPOAuthPreflight | null>(
+  const [fetchedPreflight, setPreflight] = useState<OAuthPreflight | null>(
     null
   );
-  const preflight = givenPreflight ?? fetchedPreflight;
+  const preflight = fetchedPreflight ?? givenPreflight ?? null;
   const hasGivenPreflight = givenPreflight !== undefined;
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const [credentials, setCredentials] =
     useState<CustomOAuthAppCredentials | null>(null);
+  const [useOwnApp, setUseOwnApp] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectError, setConnectError] = useState<string | null>(null);
   const targetKind = target.kind;
@@ -103,30 +99,19 @@ export function OAuthConnectPanel({
   useEffect(() => {
     if (!isUrlType || hasGivenPreflight) return;
     let active = true;
-    if (targetKind === "catalog") {
-      catalogConnectionPreflightAction(targetKey).then((result) => {
-        if (!active) return;
-        if (result.error || !result.data) {
-          setPreflightError(apiErrorMessage(result, t("preflightFailed")));
-          return;
-        }
-        setPreflight(catalogPreflightToMCP(result.data));
-      });
-      return () => {
-        active = false;
-      };
-    }
-    mcpOAuthPreflightAction(
+    oauthPreflightAction(
       targetKind === "instance"
         ? { instance_id: targetKey }
-        : { server_id: targetKey }
+        : targetKind === "catalog"
+          ? { catalog_item_id: targetKey }
+          : { server_id: targetKey }
     ).then(({ data, error }) => {
       if (!active) return;
       if (error || !data) {
         setPreflightError(error || t("preflightFailed"));
         return;
       }
-      setPreflight(data as MCPOAuthPreflight);
+      setPreflight(data);
     });
     return () => {
       active = false;
@@ -137,15 +122,21 @@ export function OAuthConnectPanel({
     isUrlType,
     preflight,
     error: preflightError,
+    useOwnApp,
   });
 
   const onStateChangeRef = useRef(onStateChange);
   onStateChangeRef.current = onStateChange;
   useEffect(() => {
     onStateChangeRef.current?.(
-      deriveOAuthConnectState({ isUrlType, preflight, error: preflightError })
+      deriveOAuthConnectState({
+        isUrlType,
+        preflight,
+        error: preflightError,
+        useOwnApp,
+      })
     );
-  }, [isUrlType, preflight, preflightError]);
+  }, [isUrlType, preflight, preflightError, useOwnApp]);
 
   const handleConnect = useCallback(async () => {
     if (!canAuthorize({ state, credentials })) return;
@@ -155,50 +146,39 @@ export function OAuthConnectPanel({
     onConnectStart?.();
     const returnTo = `${window.location.origin}${returnPath ?? ""}`;
     try {
-      let authorizeUrl: string;
-      if (target.kind === "catalog") {
-        const request = buildCatalogConnectRequest({
-          state,
-          credentials,
-          returnTo,
-        });
-        if (!request) return;
-        const result = await connectCatalogConnectionAction(
-          target.itemId,
-          request
-        );
-        if (result.error || !result.data) {
-          setConnectError(apiErrorMessage(result, t("startFailed")));
-          return;
-        }
-        authorizeUrl = result.data.authorize_url;
-      } else {
-        const instanceId =
-          target.kind === "instance"
-            ? target.instanceId
-            : await target.ensureInstance();
-        const request = buildAuthorizeRequest({
-          instanceId,
-          state,
-          credentials,
-          returnTo,
-        });
-        if (!request) return;
-        const { data, error, code } = await oauthAuthorizeAction(request);
-        if (error || !data?.authorize_url) {
-          setConnectError(error || t("startFailed"));
-          onAuthorizeError?.(code);
-          return;
-        }
-        authorizeUrl = data.authorize_url;
+      const request = buildAuthorizeRequest({
+        target:
+          target.kind === "catalog"
+            ? { catalog_item_id: target.itemId }
+            : {
+                instance_id:
+                  target.kind === "instance"
+                    ? target.instanceId
+                    : await target.ensureInstance(),
+              },
+        state,
+        credentials,
+        returnTo,
+      });
+      if (!request) return;
+      const { data, error, code } = await oauthAuthorizeAction(request);
+      if (error || !data?.authorize_url) {
+        const message = error || t("startFailed");
+        setConnectError(message);
+        setPreflight(preflightAfterAuthorizeError(preflight, code, message));
+        onAuthorizeError?.(code);
+        return;
       }
+      const authorizeUrl = data.authorize_url;
       if (!isSafeRedirectUrl(authorizeUrl)) {
         setConnectError(t("startFailed"));
         return;
       }
       window.location.href = authorizeUrl;
     } catch (error) {
-      setConnectError(error instanceof Error ? error.message : t("startFailed"));
+      setConnectError(
+        error instanceof Error ? error.message : t("startFailed")
+      );
     } finally {
       setIsConnecting(false);
     }
@@ -210,6 +190,7 @@ export function OAuthConnectPanel({
     onConnectStart,
     onAuthorizeError,
     returnPath,
+    preflight,
   ]);
 
   if (state.kind === "hidden") return null;
@@ -305,6 +286,17 @@ export function OAuthConnectPanel({
           {!bare && button}
         </Row>
         {bare && button}
+        {canUseOwnApp(preflight) && (
+          <Button
+            variant="link"
+            size="xs"
+            className="h-auto px-0 text-muted-foreground"
+            onClick={() => setUseOwnApp(true)}
+            disabled={isConnecting}
+          >
+            {t("useOwnApp")}
+          </Button>
+        )}
         {connectError && <ErrorLine message={connectError} />}
       </div>
     );
@@ -328,11 +320,15 @@ export function OAuthConnectPanel({
         />
         <div className="min-w-0">
           <p className="text-sm font-medium">
-            {state.connected
-              ? t("needsAppTitleConnected")
-              : t("needsAppTitle")}
+            {state.optional
+              ? t("ownAppTitle")
+              : state.connected
+                ? t("needsAppTitleConnected")
+                : t("needsAppTitle")}
           </p>
-          <p className="text-xs text-muted-foreground">{state.reason}</p>
+          <p className="text-xs text-muted-foreground">
+            {state.optional ? t("ownAppDetail") : state.reason}
+          </p>
         </div>
       </div>
       {state.redirectUri && (
@@ -346,11 +342,7 @@ export function OAuthConnectPanel({
         onChange={setCredentials}
         disabled={isConnecting}
       />
-      <div
-        className={
-          bare ? "flex flex-col gap-2" : "flex items-center gap-2"
-        }
-      >
+      <div className={bare ? "flex flex-col gap-2" : "flex items-center gap-2"}>
         <Button
           size={buttonSize}
           className={bare ? "w-full" : undefined}
@@ -364,6 +356,17 @@ export function OAuthConnectPanel({
           <span className="text-xs text-muted-foreground">
             {t("needsAppHint")}
           </span>
+        )}
+        {state.optional && (
+          <Button
+            variant="link"
+            size="xs"
+            className="h-auto px-0 text-muted-foreground"
+            onClick={() => setUseOwnApp(false)}
+            disabled={isConnecting}
+          >
+            {t("usePlatformApp")}
+          </Button>
         )}
       </div>
       {connectError && <ErrorLine message={connectError} />}

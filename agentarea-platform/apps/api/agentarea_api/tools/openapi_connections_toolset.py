@@ -9,9 +9,12 @@ kwargs and DTO fields.
 """
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -24,6 +27,19 @@ from agentarea_openapi.schemas.dto import (
 )
 
 from .base import platform_context, platform_read_context
+
+
+@contextmanager
+def _refusal_reaches_caller() -> Iterator[None]:
+    """Give the caller the reason a request was refused, as the REST routes do.
+
+    Any other exception still reaches MCP as an unexpected error, its text kept
+    in the server log.
+    """
+    try:
+        yield
+    except (ValueError, PermissionError) as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def _serialize(conn: Any) -> dict:
@@ -157,7 +173,8 @@ class OpenAPIConnectionsToolset(Toolset):
             secret_mgr,
         ):
             service = _build_service(repo_factory, secret_mgr)
-            conn = await service.create_connection(payload)
+            with _refusal_reaches_caller():
+                conn = await service.create_connection(payload)
             return json.dumps(_serialize(conn), default=str)
 
     @tool_method(effect="read")
@@ -197,7 +214,7 @@ class OpenAPIConnectionsToolset(Toolset):
             service = _build_service(repo_factory, secret_mgr)
             conn = await service.get_connection(UUID(connection_id))
             if not conn:
-                return json.dumps({"error": "Connection not found"})
+                raise ToolError("Connection not found")
             payload = _serialize(conn)
             payload["tools"] = [
                 {"name": t["name"], "description": t.get("description", "")}
@@ -256,7 +273,7 @@ class OpenAPIConnectionsToolset(Toolset):
             patch["url_variables"] = [UrlVariableInput.model_validate(v) for v in raw_url_variables]
 
         if not patch:
-            return json.dumps({"error": "no fields to update"})
+            raise ToolError("no fields to update")
 
         payload = OpenAPIConnectionUpdate.model_validate(patch)
 
@@ -268,9 +285,10 @@ class OpenAPIConnectionsToolset(Toolset):
             secret_mgr,
         ):
             service = _build_service(repo_factory, secret_mgr)
-            conn = await service.update_connection(UUID(connection_id), payload)
+            with _refusal_reaches_caller():
+                conn = await service.update_connection(UUID(connection_id), payload)
             if not conn:
-                return json.dumps({"error": "Connection not found"})
+                raise ToolError("Connection not found")
             return json.dumps(_serialize(conn), default=str)
 
     @tool_method(effect="write")
@@ -285,7 +303,8 @@ class OpenAPIConnectionsToolset(Toolset):
             secret_mgr,
         ):
             service = _build_service(repo_factory, secret_mgr)
-            result = await service.discover_tools(UUID(connection_id))
+            with _refusal_reaches_caller():
+                result = await service.discover_tools(UUID(connection_id))
             return json.dumps(result, default=str)
 
     @tool_method(effect="destructive")

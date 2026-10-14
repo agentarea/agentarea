@@ -161,7 +161,7 @@ class RegistryItem(BaseModel):
             "ix_registry_items_browse_facets",
             "registry_type",
             "category",
-            postgresql_include=["protocol", "hosting"],
+            postgresql_include=["protocol", "hosting", "pricing"],
             postgresql_where=text("registry_active"),
         ),
         # Free-text search is `ILIKE '%term%'`, which no btree can answer.
@@ -206,6 +206,8 @@ class RegistryItem(BaseModel):
     protocol: Mapped[str | None] = mapped_column(String(10), nullable=True)
     # "vendor" or "agentarea" for MCP connections, NULL otherwise.
     hosting: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # "paid", "own_key" or "free" for connections, NULL otherwise.
+    pricing: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Curation order within the owning registry: lower comes first. Sources are
     # already authored best-first (the curated skills artifact is ordered by
     # GitHub stars, the connection artifact leads with official integrations),
@@ -248,6 +250,7 @@ class RegistryItem(BaseModel):
         recommendation_rank: int = 0,
         protocol: str | None = None,
         hosting: str | None = None,
+        pricing: str | None = None,
         *,
         registry_type: str,
         registry_priority: int,
@@ -261,6 +264,7 @@ class RegistryItem(BaseModel):
         self.registry_active = registry_active
         self.protocol = protocol
         self.hosting = hosting
+        self.pricing = pricing
         self.external_id = external_id
         self.name = name
         self.description = description

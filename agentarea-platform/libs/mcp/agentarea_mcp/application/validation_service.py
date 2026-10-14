@@ -8,6 +8,8 @@ from urllib.parse import urljoin
 import httpx
 from agentarea_common.config import get_settings
 
+from agentarea_mcp.tool_timeout import tool_timeout_error
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,6 +119,10 @@ class MCPConfigurationValidator:
                         )
                     if not isinstance(value, str):
                         errors.append(f"Environment variable '{key}' value must be a string")
+
+        timeout_error = tool_timeout_error(json_spec)
+        if timeout_error:
+            errors.append(timeout_error)
 
         # Validate command if present
         if "cmd" in json_spec:

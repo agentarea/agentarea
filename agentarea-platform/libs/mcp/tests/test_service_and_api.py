@@ -51,6 +51,7 @@ def _make_instance(
     inst.tools = None
     inst.server_spec_id = "test-spec-id"
     inst.auth_config_id = None
+    inst.managed_by = None
     inst.get_configured_env_vars = MagicMock(return_value=[])
 
     if instance_type in ("docker", "command"):
@@ -1060,6 +1061,7 @@ class TestServiceExecuteTool:
             transport=None,
             verdict_key=None,
             verdict_store=None,
+            **_call_options,
         ):
             captured["factory"] = httpx_client_factory
             return MagicMock(

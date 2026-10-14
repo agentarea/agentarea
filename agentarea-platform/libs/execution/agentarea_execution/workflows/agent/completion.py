@@ -6,8 +6,16 @@ from temporalio import workflow
 from temporalio.exceptions import ActivityError
 
 with workflow.unsafe.imports_passed_through():
-    from agentarea_common.money import ZERO
+    from agentarea_common.money import ZERO, serialize_money
 
+    from ..answer_check import (
+        accept_rewrite,
+        answer_check_config,
+        find_leaks,
+        rewrite_messages,
+        strip_unreadable,
+        tool_names_of,
+    )
     from ..models import Message, ToolCall
 
 from ...models import (
@@ -15,24 +23,34 @@ from ...models import (
     ArtifactValidationRequest,
     ArtifactValidationResult,
     CapabilityUnavailableResult,
+    LLMCallRequest,
+    LLMCallResult,
     UpdateTaskStatusRequest,
 )
 from ..constants import (
     ACTIVITY_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
+    HEARTBEAT_TIMEOUT,
+    LLM_CALL_TIMEOUT,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy, make_retry_policy
+from ..retry import bookkeeping_retry_policy, make_retry_policy, model_call_retry_policy
 from .budget import BudgetMixin
+from .patches import ANSWER_CHECK_REWRITE_PATCH
 
 
 class CompletionMixin(BudgetMixin):
     """The completion tool: validating the answer and its artifacts."""
 
-    async def _handle_task_completion(self, completion_call: ToolCall) -> None:
-        """Gate completion on code-enforced validation of published artifacts."""
+    async def _handle_task_completion(
+        self, completion_call: ToolCall, *, answer_checked: bool = False
+    ) -> None:
+        """Gate completion on code-enforced validation of published artifacts.
+
+        ``answer_checked``: the result is a reply the answer check already saw.
+        """
         if self._interaction_contract_enabled and self._pending_input_requests:
             self._reject_invalid_completion_arguments(
                 completion_call, "required input is still pending; await its matching submission"
@@ -124,6 +142,19 @@ class CompletionMixin(BudgetMixin):
             self._append_validation_feedback(completion_call, validation)
             return
 
+        if outcome == "completed" and not answer_checked:
+            checked = await self._checked_answer(result_text)
+            if checked != result_text:
+                # The follow-up turns read this reply from the conversation;
+                # give them the answer the person saw.
+                for message in reversed(self.state.messages):
+                    if message.role == "assistant" and (message.content or "").strip() == (
+                        result_text
+                    ):
+                        message.content = checked
+                        break
+            result_text = checked
+
         # An explicit completion function call is already present in the
         # conversation as an assistant message. Pair it before the workflow
         # waits for another chat turn; otherwise OpenAI-compatible providers
@@ -197,6 +228,7 @@ class CompletionMixin(BudgetMixin):
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                     own_cost=self._own_cost,
+                    tokens_used=self.state.tokens_used,
                 )
             ],
             start_to_close_timeout=ACTIVITY_TIMEOUT,
@@ -217,6 +249,109 @@ class CompletionMixin(BudgetMixin):
             },
         )
         await self._publish_events_immediately()
+
+    def _answer_check(self) -> dict | None:
+        """The run's answer check: a governance rule's, else the agent's own, or None."""
+        return answer_check_config(
+            self.state.effective_policy, self.state.agent_config.get("answer_check")
+        )
+
+    async def _checked_answer(self, text: str) -> str:
+        """The final answer after the answer check: as is, rewritten once, or stripped.
+
+        Off unless ``_answer_check`` is on. The rewrite is a silent call to the
+        agent's own model (no chunks, no conversation write). Its
+        ``llm.call.completed`` (``purpose: answer_check``) meters it and carries
+        the answer the person sees; ``AnswerChecked`` records what was found and
+        the model's account of what it changed. A failed or unusable rewrite
+        keeps the original, minus CJK characters when those were the leak.
+        """
+        config = self._answer_check()
+        if config is None:
+            return text
+        language = config.get("language")
+        leaks = find_leaks(text, tool_names_of(self.state.available_tools), language)
+        if not leaks or not workflow.patched(ANSWER_CHECK_REWRITE_PATCH):
+            return text
+
+        strip_cjk = any(leak.kind == "cjk" for leak in leaks)
+        checked = strip_unreadable(text) if strip_cjk else text
+        rewrite = None
+        try:
+            response: LLMCallResult = await workflow.execute_activity(
+                Activities.CALL_LLM,
+                args=[
+                    LLMCallRequest(
+                        messages=rewrite_messages(
+                            text, leaks, language, config.get("rewrite_instruction")
+                        ),
+                        model_id=str(self.state.agent_config.get("model_id") or ""),
+                        tools=None,
+                        workspace_id=self.state.user_context_data["workspace_id"],
+                        user_context_data=self.state.user_context_data,
+                        temperature=0,
+                        max_tokens=4000,
+                        agent_id=self.state.agent_id,
+                        execution_id=self.state.execution_id,
+                        resolved_model=self.state.resolved_model,
+                        effective_policy=self.state.effective_policy,
+                        cost_used=self.budget_tracker.cost if self.budget_tracker else None,
+                        tokens_used=self.state.tokens_used,
+                        service_cost_used=self.state.service_cost_used,
+                    )
+                ],
+                result_type=LLMCallResult,
+                start_to_close_timeout=LLM_CALL_TIMEOUT,
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
+                retry_policy=model_call_retry_policy(),
+            )
+            usage = response.usage.model_dump() if response.usage else {}
+            self._account_inference_usage(
+                cost=response.cost,
+                total_tokens=usage.get("total_tokens", 0),
+                source="answer check",
+            )
+            rewrite = accept_rewrite(text, response.content, strip_cjk=strip_cjk)
+            if rewrite is None:
+                workflow.logger.warning("Answer check rewrite was unusable, keeping the answer")
+            else:
+                checked = rewrite.answer
+            self._events.add_event(
+                EventTypes.LLM_CALL_COMPLETED,
+                {
+                    "iteration": self.state.current_iteration,
+                    "purpose": "answer_check",
+                    "model_id": self.state.agent_config.get("model_id"),
+                    "model_name": (self.state.resolved_model or {}).get("model_name"),
+                    "managed_by": (self.state.resolved_model or {}).get("managed_by"),
+                    "cost": serialize_money(response.cost),
+                    "provider_cost_usd": (
+                        serialize_money(response.provider_cost_usd)
+                        if response.provider_cost_usd is not None
+                        else None
+                    ),
+                    "total_cost": serialize_money(self._budget.cost),
+                    "usage": {"cost": serialize_money(response.cost), "usage": usage},
+                    "content": checked,
+                    "thinking": "",
+                    "tool_calls": [],
+                    "role": "assistant",
+                },
+            )
+        except ActivityError as exc:
+            workflow.logger.warning(f"Answer check rewrite failed, keeping the answer: {exc}")
+
+        self._events.add_event(
+            EventTypes.ANSWER_CHECKED,
+            {
+                "iteration": self.state.current_iteration,
+                "leaks": [leak.as_dict() for leak in leaks],
+                "rewritten": rewrite is not None,
+                "changes": rewrite.changes if rewrite else None,
+            },
+        )
+        await self._publish_events_immediately()
+        return checked
 
     def _reject_invalid_completion_arguments(self, completion_call: ToolCall, reason: str) -> None:
         """Return a tool-paired contract error instead of inventing completion data."""

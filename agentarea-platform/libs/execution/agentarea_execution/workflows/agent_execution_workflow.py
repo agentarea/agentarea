@@ -27,7 +27,7 @@ from .agent.commands import CommandsMixin
 from .agent.finalization import FinalizationMixin
 from .agent.initialization import InitializationMixin
 from .agent.lifecycle import LifecycleMixin
-from .agent.patches import APPROVAL_RESPONSE_ONCE_PATCH
+from .agent.patches import APPROVAL_RESPONSE_ONCE_PATCH, RESUME_AFTER_STOP_OR_FAILURE_PATCH
 from .constants import (
     ACTIVITY_TIMEOUT,
     Activities,
@@ -303,7 +303,11 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
         if not self.state.success:
             self.state.failure_reason = "cancelled"
             self.state.error_message = "Task cancelled"
+        if workflow.patched(RESUME_AFTER_STOP_OR_FAILURE_PATCH):
+            self._answer_stopped_tool_calls()
         await asyncio.shield(self._finalize_execution({}))
+        # The stop is final and visible before the run waits on what it interrupted.
+        await asyncio.shield(self._settle_stopped_work(self.state.status))
 
     # Query methods for external inspection
     @workflow.query

@@ -28,6 +28,10 @@ spec:
         {{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/env-configmap.yaml") . | sha256sum }}
+        {{- if .Values.global.http.extraCaCerts }}
+        # The trust store is loaded once per process; a changed bundle needs new pods.
+        checksum/extra-ca-certs: {{ .Values.global.http.extraCaCerts | sha256sum }}
+        {{- end }}
         {{- with .Values.backend.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -133,8 +137,10 @@ spec:
               value: {{ .Values.openfga.accessControl.autoApplyModel | quote }}
             - name: AGENTAREA_AUTHZ_FGA_STORE_NAME
               value: {{ .Values.openfga.accessControl.storeName | default "agentarea" | quote }}
-            - name: AGENTAREA_AUTHZ_FGA_MODEL_PATH
-              value: "/etc/agentarea/openfga/authorization-model.json"
+            {{- end }}
+            {{- if .Values.global.http.extraCaCerts }}
+            - name: AGENTAREA_HTTP_EXTRA_CA_CERTS
+              value: {{ include "agentarea.extraCaCerts.path" . | quote }}
             {{- end }}
             {{- if or .Values.backend.envVars .Values.global.envVars }}
             {{- $backendEnv := default dict .Values.backend.envVars -}}
@@ -197,23 +203,23 @@ spec:
               memory: {{ .Values.global.workloads.resources.mainContainer.memory.request }}
             {{- end }}
           {{- end }}
-          {{- if or .Values.openfga.enabled .Values.backend.extraVolumeMounts }}
+          {{- if or .Values.global.http.extraCaCerts .Values.backend.extraVolumeMounts }}
           volumeMounts:
-            {{- if .Values.openfga.enabled }}
-            - name: openfga-authorization-model
-              mountPath: /etc/agentarea/openfga
+            {{- if .Values.global.http.extraCaCerts }}
+            - name: extra-ca-certs
+              mountPath: {{ include "agentarea.extraCaCerts.dir" . }}
               readOnly: true
             {{- end }}
             {{- with .Values.backend.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
-      {{- if or .Values.openfga.enabled .Values.backend.extraVolumes }}
+      {{- if or .Values.global.http.extraCaCerts .Values.backend.extraVolumes }}
       volumes:
-        {{- if .Values.openfga.enabled }}
-        - name: openfga-authorization-model
+        {{- if .Values.global.http.extraCaCerts }}
+        - name: extra-ca-certs
           configMap:
-            name: {{ include "agentarea.fullname" . }}-openfga-authorization-model
+            name: {{ include "agentarea.fullname" . }}-extra-ca-certs
         {{- end }}
         {{- with .Values.backend.extraVolumes }}
         {{- toYaml . | nindent 8 }}

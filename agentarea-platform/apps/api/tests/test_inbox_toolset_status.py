@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import inbox as inbox_router
 from agentarea_api.tools import inbox_toolset
 from agentarea_api.tools.inbox_toolset import InboxToolset
@@ -52,6 +53,12 @@ def repository(monkeypatch):
         "agentarea_tasks.task_service.TaskService",
         lambda **_: SimpleNamespace(task_repository=repository),
     )
+    repository.approvals = AsyncMock(return_value=([], 0))
+    monkeypatch.setattr(
+        inbox_toolset,
+        "ToolCallApprovalService",
+        lambda _factory: SimpleNamespace(list=repository.approvals),
+    )
     repository.opened = opened
     return repository
 
@@ -63,9 +70,9 @@ def test_the_router_and_the_tool_share_one_vocabulary() -> None:
 
 @pytest.mark.asyncio
 async def test_an_unknown_status_is_refused(repository) -> None:
-    result = json.loads(await InboxToolset().list(status="running"))
+    with pytest.raises(ToolError, match="running"):
+        await InboxToolset().list(status="running")
 
-    assert "running" in result["error"]
     assert not repository.opened
     repository.list_by_statuses.assert_not_awaited()
 
@@ -85,6 +92,55 @@ async def test_no_status_asks_for_the_whole_vocabulary(repository) -> None:
 
 
 @pytest.mark.asyncio
+async def test_tool_calls_waiting_on_approval_are_listed_with_their_link(
+    repository, monkeypatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from agentarea_api.api.v1 import tool_call_approvals
+
+    monkeypatch.setattr(
+        tool_call_approvals,
+        "get_settings",
+        lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.example")),
+    )
+
+    @asynccontextmanager
+    async def context():
+        yield (
+            None,
+            UserContext(user_id="u", workspace_id="ws-1", workspace_slug="acme"),
+            None,
+            None,
+            None,
+        )
+
+    monkeypatch.setattr(inbox_toolset, "platform_read_context", context)
+    now = datetime(2026, 10, 6, tzinfo=UTC)
+    repository.approvals.return_value = (
+        [
+            SimpleNamespace(
+                id="a-1",
+                connector="Instantly",
+                tool="create_campaign",
+                requested_by="u",
+                client_name=None,
+                created_at=now,
+                expires_at=now,
+            )
+        ],
+        1,
+    )
+
+    result = json.loads(await InboxToolset().list())
+    narrowed = json.loads(await InboxToolset().list(status="completed"))
+
+    [approval] = result["tool_call_approvals"]
+    assert approval["url"] == "https://app.example/w/acme/approve/a-1"
+    assert (approval["connector"], approval["tool"]) == ("Instantly", "create_campaign")
+    assert narrowed["tool_call_approvals"] == []
+
+
 async def test_the_total_is_narrowed_to_the_agent_the_items_are(repository) -> None:
     agent_id = uuid4()
 

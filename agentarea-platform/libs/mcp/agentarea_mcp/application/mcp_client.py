@@ -6,8 +6,9 @@ import asyncio
 import hashlib
 import json
 import logging
-from collections.abc import AsyncIterator, Callable, Mapping
-from contextlib import AsyncExitStack, asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
+from contextvars import ContextVar
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -44,6 +45,29 @@ GATEWAY_START_FAILURE_HEADER = "X-AgentArea-MCP-Start-Failure"
 # The manager's default MCP_GATEWAY_STARTUP_TIMEOUT. A start still running past
 # it has failed, and the gateway answers with that failure instead.
 GATEWAY_START_WAIT_SECONDS = 300.0
+
+_call_headers: ContextVar[Mapping[str, str] | None] = ContextVar("mcp_call_headers", default=None)
+
+
+@contextmanager
+def call_headers(headers: Mapping[str, str] | None) -> Iterator[None]:
+    """Send ``headers`` on the requests one call makes, and on no other request.
+
+    A connected client may serve many calls; a header that belongs to one call,
+    such as its signed context, must not become one of the client's own. The SDK
+    carries the caller's context to the request it sends for that call.
+    """
+    token = _call_headers.set(dict(headers) if headers else None)
+    try:
+        yield
+    finally:
+        _call_headers.reset(token)
+
+
+async def _add_call_headers(request: httpx2.Request) -> None:
+    headers = _call_headers.get()
+    if headers:
+        request.headers.update(headers)
 
 
 class EraVerdictStore(Protocol):
@@ -340,10 +364,12 @@ class _ConnectedClient:
         verdict_key: str | None,
         verdict_store: EraVerdictStore | None,
         httpx_client_factory: Callable[..., Any],
+        read_timeout_seconds: float = SSE_READ_TIMEOUT_SECONDS,
     ) -> None:
         self._url = url
         self._headers = headers
         self._timeout_seconds = float(timeout_seconds)
+        self._read_timeout_seconds = float(read_timeout_seconds)
         self._transport = transport
         self._verdict_key = verdict_key
         self._verdict_store = verdict_store
@@ -363,10 +389,16 @@ class _ConnectedClient:
         timeout: httpx2.Timeout | None = None,
         auth: httpx2.Auth | None = None,
     ) -> httpx2.AsyncClient:
-        """A client from the caller's factory that records an upstream refusal."""
+        """A client from the caller's factory that records an upstream refusal
+        and sends the current call's own headers.
+        """
         client = self._httpx_client_factory(headers=headers, timeout=timeout, auth=auth)
         hooks = client.event_hooks
-        client.event_hooks = {**hooks, "response": [*hooks["response"], self._observe]}
+        client.event_hooks = {
+            **hooks,
+            "request": [*hooks["request"], _add_call_headers],
+            "response": [*hooks["response"], self._observe],
+        }
         return client
 
     async def _observe(self, response: httpx2.Response) -> None:
@@ -413,7 +445,7 @@ class _ConnectedClient:
         last_error: BaseException | None = None
         refused: MCPUpstreamUnauthorizedError | None = None
         factory = self._observed_client
-        timeout = httpx2.Timeout(self._timeout_seconds, read=SSE_READ_TIMEOUT_SECONDS)
+        timeout = httpx2.Timeout(self._timeout_seconds, read=self._read_timeout_seconds)
 
         for streamable_url in self._streamable_urls:
             stack = AsyncExitStack()
@@ -455,7 +487,7 @@ class _ConnectedClient:
                 transport = sse_client(
                     self._sse_url,
                     timeout=self._timeout_seconds,
-                    sse_read_timeout=SSE_READ_TIMEOUT_SECONDS,
+                    sse_read_timeout=self._read_timeout_seconds,
                     headers=self._headers,
                     httpx_client_factory=factory,
                 )
@@ -479,38 +511,61 @@ class _ConnectedClient:
             raise refused from last_error
         raise last_error or RuntimeError(f"No usable MCP transport for {self._url}")
 
-    async def _invoke(self, method: str, *args: Any, **kwargs: Any) -> Any:
+    async def _invoke_once(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        """One request on the current connection; a refusal raises as such."""
         client = self._client
         if client is None:
             raise RuntimeError("MCP client is not connected")
         self._refused_status = None
         try:
-            result = await getattr(client, method)(*args, **kwargs)
+            return await getattr(client, method)(*args, **kwargs)
         except Exception as exc:
             refused = self._refusal(self._url)
             if refused is not None:
                 raise refused from exc
-            if not isinstance(exc, MCPError):
+            raise
+
+    async def forget_stale_verdict(self, exc: BaseException) -> bool:
+        """Drop a cached era verdict the server just contradicted.
+
+        True when ``exc`` is a negotiation error on a connection opened from a
+        cached verdict, the first time: a new connection then negotiates afresh.
+        """
+        if not isinstance(exc, MCPError):
+            return False
+        if not self._cached or self._retried or exc.code not in NEGOTIATION_ERROR_CODES:
+            return False
+        if self._verdict_key and self._verdict_store is not None:
+            await self._verdict_store.delete(self._verdict_key)
+        self._retried = True
+        self._cached = False
+        self._mode = "auto"
+        self._prior_discover = None
+        return True
+
+    async def _invoke(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return await self._invoke_once(method, *args, **kwargs)
+        except Exception as exc:
+            if not await self.forget_stale_verdict(exc):
                 raise
-            if not self._cached or self._retried or exc.code not in NEGOTIATION_ERROR_CODES:
-                raise
-            if self._verdict_key and self._verdict_store is not None:
-                await self._verdict_store.delete(self._verdict_key)
-            self._retried = True
-            self._cached = False
-            self._mode = "auto"
-            self._prior_discover = None
-            await self._close()
-            client = await self._open()
-            await _write_verdict(self._verdict_key, self._verdict_store, client)
-            result = await getattr(client, method)(*args, **kwargs)
-        return result
+        await self._close()
+        client = await self._open()
+        await _write_verdict(self._verdict_key, self._verdict_store, client)
+        return await getattr(client, method)(*args, **kwargs)
 
     async def call_tool(self, *args: Any, **kwargs: Any) -> Any:
         return await self._invoke("call_tool", *args, **kwargs)
 
+    async def call_tool_once(self, *args: Any, **kwargs: Any) -> Any:
+        """``call_tool`` without reconnecting: for a connection another task owns."""
+        return await self._invoke_once("call_tool", *args, **kwargs)
+
     async def list_tools(self, *args: Any, **kwargs: Any) -> Any:
         return await self._invoke("list_tools", *args, **kwargs)
+
+
+ConnectedMCPClient = _ConnectedClient
 
 
 async def _read_verdict(
@@ -560,12 +615,14 @@ async def connected_mcp_client(
     verdict_key: str | None = None,
     verdict_store: EraVerdictStore | None = None,
     httpx_client_factory: Callable[..., Any],
+    read_timeout_seconds: float = SSE_READ_TIMEOUT_SECONDS,
 ) -> AsyncIterator[_ConnectedClient]:
     """Yield a connected v2 ``mcp.Client`` over streamable HTTP or SSE.
 
     ``httpx_client_factory`` is required so every caller decides who chose the
     address: ``pinned_client_factory()`` for a member-supplied URL,
     ``platform_client_factory`` for the platform's own manager gateway.
+    ``read_timeout_seconds`` is how long a response may go silent.
     """
     connected = _ConnectedClient(
         url=url,
@@ -575,6 +632,7 @@ async def connected_mcp_client(
         verdict_key=verdict_key,
         verdict_store=verdict_store,
         httpx_client_factory=httpx_client_factory,
+        read_timeout_seconds=read_timeout_seconds,
     )
     async with connected:
         yield connected

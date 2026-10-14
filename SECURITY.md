@@ -4,10 +4,12 @@
 
 We actively support the following versions of AgentArea with security updates:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
-| 0.x.x   | :x:                |
+| Version                 | Supported          |
+| ----------------------- | ------------------ |
+| Latest release and `main` | :white_check_mark: |
+| Older releases          | :x:                |
+
+Fixes ship on `main` first and in the next release; there are no backports to older releases.
 
 ## Reporting a Vulnerability
 
@@ -17,7 +19,11 @@ We take the security of AgentArea seriously. If you believe you have found a sec
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@agentarea.ai**
+Instead, report them privately through GitHub:
+**[Report a vulnerability](https://github.com/agentarea/agentarea/security/advisories/new)**.
+Only the maintainers see the report, and we discuss and fix it there.
+
+If you cannot use GitHub, email **security@agentarea.ai**.
 
 ### What to Include
 
@@ -106,7 +112,7 @@ When deploying AgentArea, please follow these security best practices:
 AgentArea includes several built-in security features:
 
 - **Authentication**: JWT-based authentication with refresh tokens
-- **Authorization**: Role-based access control (RBAC)
+- **Authorization**: Relationship-based access control (ReBAC), scoped per workspace
 - **Input Validation**: Comprehensive input sanitization and validation
 - **Rate Limiting**: API rate limiting to prevent abuse
 - **Audit Logging**: Comprehensive audit trails for all actions
@@ -122,16 +128,18 @@ When we release security fixes, we will:
 3. Notify users through our communication channels
 4. Credit the reporter (if desired) in our security advisory
 
-### Bug Bounty Program
+### Rewards
 
-We are currently evaluating the implementation of a bug bounty program. Please check back for updates or contact us at security@agentarea.ai for more information.
+We do not run a paid bug bounty program. We credit every reporter on the
+published GitHub security advisory and in the acknowledgments below, and request
+a CVE where one applies.
 
 ### Contact
 
 For any security-related questions or concerns, please contact:
 
+- **GitHub**: [private vulnerability reporting](https://github.com/agentarea/agentarea/security/advisories/new)
 - **Email**: security@agentarea.ai
-- **PGP Key**: Available upon request
 
 ### Acknowledgments
 

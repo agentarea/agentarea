@@ -5,7 +5,8 @@ import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Copy, Star } from "lucide-react";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import type { Skill } from "@/types/skill";
-import { scopeMeta, shortAge, SkillTile, sourceMeta } from "./skillsMeta";
+import { SkillTile } from "@/components/SkillTile";
+import { scopeMeta, shortAge } from "./skillsMeta";
 
 interface SkillRowProps {
   skill: Skill;
@@ -20,9 +21,7 @@ export default function SkillRow({
 }: SkillRowProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("SkillsPage");
-  const source = sourceMeta(skill.source_type);
   const scope = scopeMeta(skill.network_scope);
-  const SourceIcon = source.icon;
   const ScopeIcon = scope.icon;
 
   const open = () => router.push(`/skills/${skill.id}`);
@@ -34,10 +33,6 @@ export default function SkillRow({
       contentClassName="gap-3"
       end={
         <>
-          <span className="skill-col-source inline-flex h-[22px] items-center gap-1.5 rounded-full border border-border bg-background px-2 text-[11.5px] font-normal text-foreground/80">
-            <SourceIcon className="h-3 w-3" strokeWidth={1.7} />
-            {source.label}
-          </span>
           <span className="skill-col-scope inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
             <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
             {scope.label}

@@ -46,6 +46,7 @@ def agent(*, tools=None, skills=None):
         skills=skills or [],
         planning=False,
         a2ui_enabled=False,
+        answer_check=None,
         agent_type="stateful",
     )
 

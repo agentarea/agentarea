@@ -29,6 +29,8 @@ import (
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/mcpgateway"
+	"github.com/agentarea/mcp-manager/internal/mcpstorage"
+	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/packageimage"
 	"github.com/agentarea/mcp-manager/internal/providers"
 	"github.com/agentarea/mcp-manager/internal/publishedsecrets"
@@ -41,7 +43,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 // Options holds the optional extension factories of a distribution. The zero
 // value runs the manager without extensions.
@@ -145,6 +147,13 @@ func runControlPlane(
 	if err != nil {
 		return failed(logger, "Failed to configure sandbox workspace policy", err)
 	}
+	// The manager as MCP instance containers reach it, handed to instances that
+	// opt into storage.
+	managerURL, err := mcpstorage.ParseManagerURL(os.Getenv("AGENTAREA_MCP_MANAGER_URL"))
+	if err != nil {
+		return failed(logger, "Failed to configure MCP storage", err)
+	}
+	gatewaySecret := []byte(os.Getenv("AGENTAREA_MCP_GATEWAY_SECRET"))
 
 	secretResolver, err := secrets.NewSecretResolver(logger)
 	if err != nil {
@@ -154,7 +163,7 @@ func runControlPlane(
 	if containerManager != nil {
 		containerManager.SetSecretResolver(secretResolver)
 	}
-	providerManager := initProviderManager(runtime.envType, backend, containerManager, secretResolver, logger)
+	providerManager := initProviderManager(runtime.envType, backend, containerManager, secretResolver, mcpstorage.NewIssuer(gatewaySecret, managerURL), logger)
 
 	sandboxControlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
 	if err != nil {
@@ -236,6 +245,9 @@ func runControlPlane(
 	handler.SetSandboxArtifactStore(artifactRepository)
 	handler.SetupRoutes(router)
 	router.Any("/mcp/:instance_id/mcp", gin.WrapH(mcpGateway))
+	if err := mountStorage(ctx, router, gatewaySecret, workspaceConfig, gatewayRepository, logger); err != nil {
+		return err
+	}
 	router.DELETE("/mcp/:instance_id", gin.WrapF(mcpGateway.RetireHTTP))
 
 	if err := startBackgroundWork(ctx, cfg, backend, sandboxRuntime, sandboxProviderName, workspaceConfig, logger); err != nil {
@@ -257,6 +269,32 @@ func runControlPlane(
 	shutdownBackend(backend, containerManager, logger)
 	logger.Info("Server shutdown complete")
 	return runErr
+}
+
+// mountStorage serves each MCP instance's storage next to its MCP endpoint.
+func mountStorage(ctx context.Context, router *gin.Engine, secret []byte, workspaceConfig workspace.RepositoryConfig, repository *mcpgateway.SQLRepository, logger *slog.Logger) error {
+	store, err := mcpstorage.NewObjectStore(ctx, workspaceConfig)
+	if err != nil {
+		return failed(logger, "Failed to configure MCP storage", err)
+	}
+	handler, err := mcpstorage.NewHandler(secret, workspaceConfig.Bucket, store, storageInstances{repository: repository}, logger)
+	if err != nil {
+		return failed(logger, "Failed to configure MCP storage", err)
+	}
+	router.Any(mcpstorage.Route, gin.WrapH(handler))
+	return nil
+}
+
+type storageInstances struct {
+	repository *mcpgateway.SQLRepository
+}
+
+func (s storageInstances) Instance(ctx context.Context, instanceID string) (*models.MCPServerInstance, error) {
+	instance, err := s.repository.LoadInstance(ctx, instanceID)
+	if errors.Is(err, mcpgateway.ErrInstanceNotFound) {
+		return nil, mcpstorage.ErrInstanceNotFound
+	}
+	return instance, err
 }
 
 // extensionRun owns the control-plane extension's background run. stop is
@@ -622,12 +660,13 @@ func initProviderManager(
 	backend backends.Backend,
 	containerManager *container.Manager,
 	secretResolver secrets.SecretResolver,
+	storage *mcpstorage.Issuer,
 	logger *slog.Logger,
 ) *providers.ProviderManager {
 	urlProvider := providers.NewURLProvider(logger)
 	switch {
 	case envType == "docker" && containerManager != nil:
-		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, logger)
+		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, storage, logger)
 		return providers.NewProviderManager(dockerProvider, nil, urlProvider)
 	case envType == "kubernetes" || envType == "dataplane":
 		// Both drive workloads through a Backend rather than a local container
@@ -636,7 +675,7 @@ func initProviderManager(
 		// to the URL-only manager and every container-backed instance failed
 		// with "no container provider available".
 		adapter := &backendAdapter{inner: backend}
-		backendProvider := providers.NewBackendProvider(adapter, secretResolver, logger)
+		backendProvider := providers.NewBackendProvider(adapter, secretResolver, storage, logger)
 		return providers.NewProviderManager(nil, backendProvider, urlProvider)
 	default:
 		// Fallback - only URL provider

@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import files_toolset
 from agentarea_api.tools.files_toolset import FilesToolset
 from agentarea_common.auth.context import UserContext
@@ -129,9 +130,9 @@ async def test_a_malformed_entry_is_reported_on_its_own(service) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("count", [0, 101])
 async def test_the_batch_size_is_bounded(service, count) -> None:
-    result = await _upload(*[{"path": f"f{i}.md", "sha256": SHA} for i in range(count)])
+    with pytest.raises(ToolError):
+        await _upload(*[{"path": f"f{i}.md", "sha256": SHA} for i in range(count)])
 
-    assert "error" in result
     service.authorize_put.assert_not_awaited()
 
 

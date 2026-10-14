@@ -789,3 +789,51 @@ async def test_bash_writes_no_inputs_when_none_durable():
     _, payload = fake.calls[0]
     assert "input_refs" not in payload["command"]
     assert payload["command"]["command_body"] == "echo ok"
+
+
+async def test_a_stopped_call_cancels_its_running_sandbox_command():
+    """A tool call stopped while its command runs asks the sandbox to kill it."""
+    import asyncio
+
+    from agentarea_agents_sdk.tools.sandbox_control_auth import SandboxControlSigner
+    from agentarea_agents_sdk.tools.shell_toolset import wait_for_sandbox_execution
+
+    class _RunningClient:
+        def __init__(self) -> None:
+            self.polled = asyncio.Event()
+            self.delete_calls: list[str] = []
+
+        async def get(self, url: str, *, headers: dict[str, str]) -> _FakeResponse:
+            self.polled.set()
+            await asyncio.sleep(3600)
+            raise AssertionError("unreachable")
+
+        async def delete(self, url: str, *, headers: dict[str, str]) -> _FakeResponse:
+            self.delete_calls.append(url)
+            return _FakeResponse(
+                payload={"id": "sexec-test", "status": "running", "cancel_requested_at": "now"}
+            )
+
+    client = _RunningClient()
+    created = _FakeResponse(
+        status_code=202,
+        payload={
+            "id": "sexec-test",
+            "status": "running",
+            "execution_expires_at": "2999-01-01T00:00:00Z",
+        },
+    )
+    waiting = asyncio.create_task(
+        wait_for_sandbox_execution(
+            client,
+            created,
+            "http://mcp-manager",
+            SandboxControlSigner(TEST_CONTROL_SECRET, "workspace-1", "task-1"),
+        )
+    )
+    await client.polled.wait()
+    waiting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting
+
+    assert client.delete_calls == ["http://mcp-manager/sandbox/executions/sexec-test"]

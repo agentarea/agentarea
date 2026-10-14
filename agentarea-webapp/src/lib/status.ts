@@ -314,6 +314,8 @@ export function getTriggerExecutionStatusPresentation(
       return { label: "Timed out", labelKey: "timeout", kind: "failed" };
     case "cancelled":
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
+    case "skipped":
+      return { label: "Skipped", labelKey: "skipped", kind: "off" };
     default:
       return fallbackStatusPresentation(status);
   }

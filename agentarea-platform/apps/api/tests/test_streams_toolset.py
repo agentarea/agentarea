@@ -1,9 +1,12 @@
 import json
+import re
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import get_platform_tools
 from agentarea_api.tools.streams_toolset import StreamsToolset
 
@@ -28,12 +31,10 @@ async def test_create_forward_refuses_its_own_input(monkeypatch):
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
     monkeypatch.setattr("agentarea_api.tools.streams_toolset.require_permission", AsyncMock())
     stream = str(uuid4())
-    result = json.loads(
+    with pytest.raises(ToolError, match="own input"):
         await StreamsToolset().create_forward.__wrapped__(
             StreamsToolset(), stream_id=stream, output_stream_ids=[stream]
         )
-    )
-    assert "own input" in result["error"]
 
 
 async def test_create_forward_refuses_an_output_the_caller_may_not_edit(monkeypatch):
@@ -51,12 +52,10 @@ async def test_create_forward_refuses_an_output_the_caller_may_not_edit(monkeypa
         "agentarea_api.tools.streams_toolset.require_permission",
         AsyncMock(side_effect=HTTPException(status_code=403, detail="forbidden")),
     )
-    result = json.loads(
+    with pytest.raises(ToolError, match=r"^forbidden$"):
         await StreamsToolset().create_forward.__wrapped__(
             StreamsToolset(), stream_id=str(uuid4()), output_stream_ids=[str(uuid4())]
         )
-    )
-    assert result == {"error": "forbidden"}
     service.create_forward.assert_not_called()
 
 
@@ -72,8 +71,10 @@ async def test_create_reports_a_taken_name_instead_of_failing(monkeypatch):
 
     monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_context", ctx)
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
-    result = json.loads(await StreamsToolset().create(name="orders"))
-    assert result == {"error": "A stream named 'orders' already exists in this workspace"}
+    with pytest.raises(
+        ToolError, match=re.escape("A stream named 'orders' already exists in this workspace")
+    ):
+        await StreamsToolset().create(name="orders")
 
 
 def test_the_streams_toolset_is_declared_where_its_writes_belong():
@@ -86,17 +87,15 @@ def test_the_streams_toolset_is_declared_where_its_writes_belong():
 
 
 async def test_list_refuses_a_limit_past_the_rest_bound():
-    result = json.loads(await StreamsToolset().list(limit=1001))
-    assert "limit must be between 1 and 1000" in result["error"]
+    with pytest.raises(ToolError, match="limit must be between 1 and 1000"):
+        await StreamsToolset().list(limit=1001)
 
 
 async def test_list_events_refuses_a_limit_past_the_rest_bound():
-    result = json.loads(
+    with pytest.raises(ToolError, match="limit must be between 1 and 200"):
         await StreamsToolset().list_events.__wrapped__(
             StreamsToolset(), stream_id=str(uuid4()), limit=201
         )
-    )
-    assert "limit must be between 1 and 200" in result["error"]
 
 
 def _write_ctx(session):
@@ -120,12 +119,10 @@ async def test_create_webhook_source_refuses_a_verifier_without_its_secret(monke
             "webhook_service": AsyncMock(),
         },
     )
-    result = json.loads(
+    with pytest.raises(ToolError, match="needs client_secret"):
         await StreamsToolset().create_webhook_source.__wrapped__(
             StreamsToolset(), stream_id=str(uuid4()), webhook_type="sentry"
         )
-    )
-    assert "needs client_secret" in result["error"]
     service.add_webhook_source.assert_not_called()
     session.rollback.assert_awaited_once()
 
@@ -143,12 +140,10 @@ async def test_delete_webhook_source_refuses_a_source_a_live_trigger_owns(monkey
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
     monkeypatch.setattr("agentarea_api.tools.streams_toolset.release_webhook_source", released)
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._secret_ports", lambda *_a: {})
-    result = json.loads(
+    with pytest.raises(ToolError, match=str(trigger_id)):
         await StreamsToolset().delete_webhook_source.__wrapped__(
             StreamsToolset(), stream_id=str(uuid4()), source_id=str(uuid4())
         )
-    )
-    assert str(trigger_id) in result["error"]
     released.assert_not_called()
 
 
@@ -170,10 +165,8 @@ async def test_delete_refuses_a_stream_a_forward_writes_into(monkeypatch):
             "webhook_service": AsyncMock(),
         },
     )
-    result = json.loads(
+    with pytest.raises(ToolError, match=str(forward)):
         await StreamsToolset().delete.__wrapped__(StreamsToolset(), stream_id=str(stream))
-    )
-    assert str(forward) in result["error"]
     service.delete_stream.assert_not_called()
 
 
@@ -207,12 +200,10 @@ async def test_delete_forward_refuses_a_triggers_subscription(monkeypatch):
         "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
     )
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
-    result = json.loads(
+    with pytest.raises(ToolError, match=str(trigger)):
         await StreamsToolset().delete_forward.__wrapped__(
             StreamsToolset(), stream_id=str(uuid4()), subscription_id=str(subscription)
         )
-    )
-    assert str(trigger) in result["error"]
     service.delete_forward.assert_not_called()
 
 

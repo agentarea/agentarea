@@ -108,6 +108,7 @@ class ContinueAsNewMixin(CompactionMixin):
                 ]
         self.state.service_budget_usd = state.service_budget_usd
         self.state.service_cost_used = state.service_cost_used
+        self.state.llm_cost_used = state.llm_cost_used
         self.state.wallet_id = state.wallet_id
         self.state.resolved_model = state.resolved_model
         self.state.effective_policy = state.effective_policy
@@ -276,6 +277,7 @@ class ContinueAsNewMixin(CompactionMixin):
             mcp_tool_routes=self.state.mcp_tool_routes,
             service_budget_usd=self.state.service_budget_usd,
             service_cost_used=self.state.service_cost_used,
+            llm_cost_used=self.state.llm_cost_used,
             wallet_id=self.state.wallet_id,
             resolved_model=self.state.resolved_model,
             effective_policy=self.state.effective_policy,

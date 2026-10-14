@@ -1,0 +1,4401 @@
+{
+  "version": 1,
+  "asOf": "2026-10-05T09:00:00.000Z",
+  "viewerId": "usr_01",
+  "people": [
+    {
+      "id": "usr_01",
+      "name": "Maya Chen",
+      "handle": "maya",
+      "kind": "human",
+      "title": "Engineering Manager"
+    },
+    {
+      "id": "usr_02",
+      "name": "Daniel Okafor",
+      "handle": "daniel",
+      "kind": "human",
+      "title": "Senior Frontend Engineer"
+    },
+    {
+      "id": "usr_03",
+      "name": "Priya Raman",
+      "handle": "priya",
+      "kind": "human",
+      "title": "Platform Engineer"
+    },
+    {
+      "id": "usr_04",
+      "name": "Lena Fischer",
+      "handle": "lena",
+      "kind": "human",
+      "title": "Growth Marketing Lead"
+    },
+    {
+      "id": "agt_01",
+      "name": "Atlas",
+      "handle": "atlas",
+      "kind": "agent",
+      "title": "Triage and QA agent"
+    },
+    {
+      "id": "agt_02",
+      "name": "Relay",
+      "handle": "relay",
+      "kind": "agent",
+      "title": "Release and operations agent"
+    }
+  ],
+  "projects": [
+    {
+      "id": "prj_web",
+      "key": "WEB",
+      "name": "Web App",
+      "description": "The customer-facing web application: UI, client performance and the APIs it talks to.",
+      "leadId": "usr_02",
+      "voice": "eng",
+      "nextNumber": 22
+    },
+    {
+      "id": "prj_ops",
+      "key": "OPS",
+      "name": "Platform & Ops",
+      "description": "Infrastructure, reliability, security and the on-call rotation.",
+      "leadId": "usr_03",
+      "voice": "eng",
+      "nextNumber": 22
+    },
+    {
+      "id": "prj_mkt",
+      "key": "MKT",
+      "name": "Marketing",
+      "description": "Launches, website, content and campaigns.",
+      "leadId": "usr_04",
+      "voice": "mkt",
+      "nextNumber": 22
+    }
+  ],
+  "labels": [
+    {
+      "name": "bug",
+      "color": "red"
+    },
+    {
+      "name": "customer",
+      "color": "orange"
+    },
+    {
+      "name": "feature",
+      "color": "blue"
+    },
+    {
+      "name": "improvement",
+      "color": "teal"
+    },
+    {
+      "name": "tech-debt",
+      "color": "gray"
+    },
+    {
+      "name": "design",
+      "color": "pink"
+    },
+    {
+      "name": "performance",
+      "color": "yellow"
+    },
+    {
+      "name": "accessibility",
+      "color": "purple"
+    },
+    {
+      "name": "docs",
+      "color": "gray"
+    },
+    {
+      "name": "infra",
+      "color": "green"
+    },
+    {
+      "name": "security",
+      "color": "red"
+    },
+    {
+      "name": "launch",
+      "color": "purple"
+    },
+    {
+      "name": "content",
+      "color": "blue"
+    },
+    {
+      "name": "seo",
+      "color": "green"
+    },
+    {
+      "name": "website",
+      "color": "teal"
+    },
+    {
+      "name": "event",
+      "color": "orange"
+    },
+    {
+      "name": "analytics",
+      "color": "yellow"
+    },
+    {
+      "name": "partnerships",
+      "color": "pink"
+    }
+  ],
+  "issues": [
+    {
+      "id": "iss_001",
+      "projectId": "prj_mkt",
+      "number": 1,
+      "key": "MKT-1",
+      "title": "Webinar: automating triage with agents",
+      "description": "45-minute session with a live demo and a customer guest.\n\n**Acceptance criteria**\n- Links carry UTM parameters\n- Draft reviewed by product\n- Final copy approved by Lena",
+      "status": "in_progress",
+      "priority": "low",
+      "assigneeId": "usr_04",
+      "labels": [
+        "event"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-07-17T08:22:00.000Z",
+      "updatedAt": "2026-10-01T09:30:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_106",
+          "authorId": "usr_04",
+          "body": "Let's agree on the one message before anyone writes copy.",
+          "createdAt": "2026-08-19T10:24:00.000Z"
+        },
+        {
+          "id": "cmt_107",
+          "authorId": "agt_01",
+          "body": "Drafted a first version from the brief. Checked every link: two were broken, fixed in the draft.",
+          "createdAt": "2026-09-24T10:31:00.000Z"
+        },
+        {
+          "id": "cmt_108",
+          "authorId": "agt_01",
+          "body": "Generated three headline variants and scored them against the messaging doc; the second fits best.",
+          "createdAt": "2026-09-28T09:13:00.000Z"
+        },
+        {
+          "id": "cmt_109",
+          "authorId": "agt_01",
+          "body": "Generated three headline variants and scored them against the messaging doc; the second fits best.",
+          "createdAt": "2026-10-01T09:30:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0207",
+          "actorId": "agt_01",
+          "at": "2026-07-17T08:22:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0208",
+          "actorId": "usr_04",
+          "at": "2026-07-20T10:39:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        },
+        {
+          "id": "act_0209",
+          "actorId": "usr_04",
+          "at": "2026-08-31T08:06:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_002",
+      "projectId": "prj_web",
+      "number": 1,
+      "key": "WEB-1",
+      "title": "Document the component library in Storybook",
+      "description": "New contributors rebuild components that already exist because nothing is discoverable.\n\n**Acceptance criteria**\n- Done criteria checked in review\n- Owner agreed on scope\n- Stakeholders notified when it ships",
+      "status": "todo",
+      "priority": "low",
+      "assigneeId": "usr_01",
+      "labels": [
+        "docs"
+      ],
+      "dueDate": "2026-10-01",
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-07-17T09:00:00.000Z",
+      "updatedAt": "2026-08-31T08:11:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_041",
+          "authorId": "agt_01",
+          "body": "Dry run finished in 14 minutes with no errors. Logs are attached to the PR.",
+          "createdAt": "2026-07-27T10:00:00.000Z"
+        },
+        {
+          "id": "cmt_042",
+          "authorId": "usr_01",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-08-03T16:02:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0086",
+          "actorId": "agt_01",
+          "at": "2026-07-17T09:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0087",
+          "actorId": "agt_01",
+          "at": "2026-08-05T08:58:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0088",
+          "actorId": "usr_02",
+          "at": "2026-08-31T08:11:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_003",
+      "projectId": "prj_ops",
+      "number": 1,
+      "key": "OPS-1",
+      "title": "Rotate the leaked CI deploy token",
+      "description": "A deploy token was printed in a public build log. Rotate it and scrub the log.\n\n**Acceptance criteria**\n- Evidence stored in the compliance folder\n- Reviewed by a second engineer",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": "agt_02",
+      "labels": [
+        "security"
+      ],
+      "dueDate": null,
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-07-20T08:00:00.000Z",
+      "updatedAt": "2026-08-07T14:43:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_062",
+          "authorId": "agt_02",
+          "body": "Verified in production: the failing scenario from the description now passes.",
+          "createdAt": "2026-08-07T14:43:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0135",
+          "actorId": "usr_03",
+          "at": "2026-07-20T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0136",
+          "actorId": "usr_03",
+          "at": "2026-07-27T10:40:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0137",
+          "actorId": "agt_02",
+          "at": "2026-08-05T12:29:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0138",
+          "actorId": "agt_02",
+          "at": "2026-08-05T13:11:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0139",
+          "actorId": "usr_03",
+          "at": "2026-08-05T17:07:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_004",
+      "projectId": "prj_mkt",
+      "number": 2,
+      "key": "MKT-2",
+      "title": "Localize landing pages for DACH",
+      "description": "German versions of the homepage, pricing and the two top landing pages.\n\n**Acceptance criteria**\n- Lighthouse score stays above 90\n- Tested on mobile Safari\n- Copy approved by marketing",
+      "status": "in_review",
+      "priority": "medium",
+      "assigneeId": "usr_01",
+      "labels": [
+        "website"
+      ],
+      "dueDate": "2026-10-19",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_01",
+      "createdAt": "2026-07-20T08:19:00.000Z",
+      "updatedAt": "2026-09-22T09:10:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_122",
+          "authorId": "usr_04",
+          "body": "Let's agree on the one message before anyone writes copy.",
+          "createdAt": "2026-07-27T08:08:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0239",
+          "actorId": "usr_01",
+          "at": "2026-07-20T08:19:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0240",
+          "actorId": "usr_04",
+          "at": "2026-07-28T10:43:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "medium"
+        },
+        {
+          "id": "act_0241",
+          "actorId": "usr_04",
+          "at": "2026-08-03T08:08:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0242",
+          "actorId": "usr_04",
+          "at": "2026-08-12T10:18:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0243",
+          "actorId": "usr_04",
+          "at": "2026-08-25T10:21:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0244",
+          "actorId": "usr_01",
+          "at": "2026-09-22T09:10:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        }
+      ]
+    },
+    {
+      "id": "iss_005",
+      "projectId": "prj_web",
+      "number": 2,
+      "key": "WEB-2",
+      "title": "Search results ignore the workspace filter",
+      "description": "Global search returns issues from every workspace the user belongs to, regardless of the selected one.\n\n**Acceptance criteria**\n- Fix verified on staging by someone other than the author\n- Reproduced with a failing test before the fix",
+      "status": "canceled",
+      "priority": "high",
+      "assigneeId": "usr_01",
+      "labels": [
+        "bug"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-07-24T09:47:00.000Z",
+      "updatedAt": "2026-08-10T16:02:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_019",
+          "authorId": "usr_02",
+          "body": "Turned out smaller than estimated, should land this week.",
+          "createdAt": "2026-08-05T09:20:00.000Z"
+        },
+        {
+          "id": "cmt_020",
+          "authorId": "usr_02",
+          "body": "Moved the due date: this depends on the review of the parent issue.",
+          "createdAt": "2026-08-07T16:37:00.000Z"
+        },
+        {
+          "id": "cmt_021",
+          "authorId": "usr_02",
+          "body": "Merged and deployed. Thanks everyone.",
+          "createdAt": "2026-08-10T16:02:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0029",
+          "actorId": "usr_02",
+          "at": "2026-07-24T09:47:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0030",
+          "actorId": "usr_02",
+          "at": "2026-07-27T10:45:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0031",
+          "actorId": "usr_01",
+          "at": "2026-07-28T09:03:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "canceled"
+        },
+        {
+          "id": "act_0032",
+          "actorId": "usr_02",
+          "at": "2026-08-05T09:13:00.000Z",
+          "kind": "priority",
+          "from": "urgent",
+          "to": "high"
+        }
+      ]
+    },
+    {
+      "id": "iss_006",
+      "projectId": "prj_ops",
+      "number": 2,
+      "key": "OPS-2",
+      "title": "API latency dashboard by route",
+      "description": "p50/p95/p99 per route with deploy markers.\n\n**Acceptance criteria**\n- Behind a feature flag until the review\n- Copy reviewed by design\n- Works at 380 px wide",
+      "status": "todo",
+      "priority": "urgent",
+      "assigneeId": "usr_03",
+      "labels": [
+        "feature"
+      ],
+      "dueDate": null,
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-07-27T09:00:00.000Z",
+      "updatedAt": "2026-10-01T10:41:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_067",
+          "authorId": "usr_03",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-08-20T09:30:00.000Z"
+        },
+        {
+          "id": "cmt_068",
+          "authorId": "usr_03",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-09-14T08:42:00.000Z"
+        },
+        {
+          "id": "cmt_069",
+          "authorId": "agt_02",
+          "body": "Triage: no open duplicate found. Suggested priority from customer impact: 4 paying workspaces affected.",
+          "createdAt": "2026-09-14T15:06:00.000Z"
+        },
+        {
+          "id": "cmt_070",
+          "authorId": "agt_02",
+          "body": "Triage: reproduced on staging (build 2026.09.4). Linked three related support tickets, all from EU workspaces.",
+          "createdAt": "2026-09-15T10:58:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0154",
+          "actorId": "agt_01",
+          "at": "2026-07-27T09:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0155",
+          "actorId": "agt_01",
+          "at": "2026-09-30T08:35:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_03"
+        },
+        {
+          "id": "act_0156",
+          "actorId": "usr_03",
+          "at": "2026-10-01T10:41:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_007",
+      "projectId": "prj_web",
+      "number": 3,
+      "key": "WEB-3",
+      "title": "Notification preferences page",
+      "description": "Let people choose email, in-app or none per event type.\n\n**Acceptance criteria**\n- Docs page updated\n- Events added to the analytics plan\n- Behind a feature flag until the review",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": "usr_03",
+      "labels": [
+        "feature"
+      ],
+      "dueDate": "2026-08-10",
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-07-27T09:18:00.000Z",
+      "updatedAt": "2026-08-12T11:56:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_031",
+          "authorId": "usr_03",
+          "body": "I can pick this up after the release freeze.",
+          "createdAt": "2026-07-29T08:01:00.000Z"
+        },
+        {
+          "id": "cmt_032",
+          "authorId": "agt_01",
+          "body": "Ran the acceptance checks on staging. Two of three pass; the layout still overflows at 380 px.",
+          "createdAt": "2026-08-04T14:11:00.000Z"
+        },
+        {
+          "id": "cmt_033",
+          "authorId": "agt_01",
+          "body": "Release check: the change is in v2.14.0 and deployed to all regions. No new errors in the 24 hours since.",
+          "createdAt": "2026-08-12T11:56:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0065",
+          "actorId": "usr_02",
+          "at": "2026-07-27T09:18:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0066",
+          "actorId": "usr_02",
+          "at": "2026-07-28T08:21:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_03"
+        },
+        {
+          "id": "act_0067",
+          "actorId": "usr_02",
+          "at": "2026-08-03T08:07:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0068",
+          "actorId": "usr_03",
+          "at": "2026-08-03T11:51:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0069",
+          "actorId": "usr_02",
+          "at": "2026-08-05T17:08:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0070",
+          "actorId": "usr_02",
+          "at": "2026-08-06T09:54:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        },
+        {
+          "id": "act_0071",
+          "actorId": "usr_03",
+          "at": "2026-08-10T09:54:00.000Z",
+          "kind": "due",
+          "from": "2026-08-07",
+          "to": "2026-08-10"
+        }
+      ]
+    },
+    {
+      "id": "iss_008",
+      "projectId": "prj_web",
+      "number": 4,
+      "key": "WEB-4",
+      "title": "Migrate settings pages to the new form components",
+      "description": "Settings still use the legacy form wrapper, which blocks removing it from the bundle.\n\n**Acceptance criteria**\n- Docs page updated\n- Behind a feature flag until the review",
+      "status": "done",
+      "priority": "urgent",
+      "assigneeId": "usr_01",
+      "labels": [
+        "tech-debt"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-07-27T09:46:00.000Z",
+      "updatedAt": "2026-08-17T11:22:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0037",
+          "actorId": "usr_02",
+          "at": "2026-07-27T09:46:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0038",
+          "actorId": "usr_02",
+          "at": "2026-07-31T12:12:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0039",
+          "actorId": "usr_02",
+          "at": "2026-07-31T16:44:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0040",
+          "actorId": "usr_02",
+          "at": "2026-08-03T09:05:00.000Z",
+          "kind": "priority",
+          "from": "low",
+          "to": "urgent"
+        },
+        {
+          "id": "act_0041",
+          "actorId": "usr_01",
+          "at": "2026-08-11T10:35:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0042",
+          "actorId": "usr_01",
+          "at": "2026-08-11T11:07:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0043",
+          "actorId": "usr_02",
+          "at": "2026-08-17T11:22:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_009",
+      "projectId": "prj_mkt",
+      "number": 3,
+      "key": "MKT-3",
+      "title": "Edit the case study video",
+      "description": "Cut the 40-minute interview into a 2-minute story and three short clips.\n\n**Acceptance criteria**\n- Links carry UTM parameters\n- Published and shared in #launches",
+      "status": "todo",
+      "priority": "low",
+      "assigneeId": "agt_01",
+      "labels": [
+        "content"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-03T08:52:00.000Z",
+      "updatedAt": "2026-10-01T17:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_116",
+          "authorId": "agt_01",
+          "body": "Collected five customer quotes from recent calls that fit this angle; linked in the brief.",
+          "createdAt": "2026-08-07T10:08:00.000Z"
+        },
+        {
+          "id": "cmt_117",
+          "authorId": "usr_04",
+          "body": "Brief is in the shared drive; comments welcome before Thursday.",
+          "createdAt": "2026-08-19T10:01:00.000Z"
+        },
+        {
+          "id": "cmt_118",
+          "authorId": "agt_01",
+          "body": "Pulled the numbers for the brief: last quarter's comparable post drove 1,840 visits and 61 sign-ups.",
+          "createdAt": "2026-09-02T11:52:00.000Z"
+        },
+        {
+          "id": "cmt_119",
+          "authorId": "agt_01",
+          "body": "Collected five customer quotes from recent calls that fit this angle; linked in the brief.",
+          "createdAt": "2026-09-23T14:30:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0233",
+          "actorId": "usr_04",
+          "at": "2026-08-03T08:52:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0234",
+          "actorId": "usr_04",
+          "at": "2026-10-01T17:00:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        }
+      ]
+    },
+    {
+      "id": "iss_010",
+      "projectId": "prj_web",
+      "number": 5,
+      "key": "WEB-5",
+      "title": "Billing page shows the old plan after upgrading",
+      "description": "The plan card reads from a cached subscription until a hard reload.\n\n**Acceptance criteria**\n- No new errors in Sentry for 48 hours after release\n- Root cause written up in the PR description\n- Fix verified on staging by someone other than the author",
+      "status": "in_progress",
+      "priority": "high",
+      "assigneeId": "usr_01",
+      "labels": [
+        "bug",
+        "customer"
+      ],
+      "dueDate": "2026-10-10",
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-03T09:06:00.000Z",
+      "updatedAt": "2026-09-21T17:39:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0083",
+          "actorId": "usr_02",
+          "at": "2026-08-03T09:06:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0084",
+          "actorId": "usr_02",
+          "at": "2026-08-24T08:49:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0085",
+          "actorId": "usr_01",
+          "at": "2026-09-21T17:39:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_011",
+      "projectId": "prj_mkt",
+      "number": 4,
+      "key": "MKT-4",
+      "title": "Co-marketing brief with Cobalt Cloud",
+      "description": "Joint webinar and a listing on their marketplace.\n\n**Acceptance criteria**\n- Owner agreed on scope\n- Done criteria checked in review\n- Stakeholders notified when it ships",
+      "status": "canceled",
+      "priority": "high",
+      "assigneeId": "usr_04",
+      "labels": [
+        "partnerships"
+      ],
+      "dueDate": "2026-08-27",
+      "estimate": 8,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-10T08:32:00.000Z",
+      "updatedAt": "2026-08-27T16:42:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_120",
+          "authorId": "agt_01",
+          "body": "Generated three headline variants and scored them against the messaging doc; the second fits best.",
+          "createdAt": "2026-08-18T13:17:00.000Z"
+        },
+        {
+          "id": "cmt_121",
+          "authorId": "agt_01",
+          "body": "Checked the live page: metadata, UTM links and the sign-up form all work.",
+          "createdAt": "2026-08-27T16:42:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0235",
+          "actorId": "usr_04",
+          "at": "2026-08-10T08:32:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0236",
+          "actorId": "usr_04",
+          "at": "2026-08-20T09:38:00.000Z",
+          "kind": "priority",
+          "from": "urgent",
+          "to": "high"
+        },
+        {
+          "id": "act_0237",
+          "actorId": "usr_04",
+          "at": "2026-08-24T08:33:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        },
+        {
+          "id": "act_0238",
+          "actorId": "usr_04",
+          "at": "2026-08-24T09:31:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "canceled"
+        }
+      ]
+    },
+    {
+      "id": "iss_012",
+      "projectId": "prj_ops",
+      "number": 3,
+      "key": "OPS-3",
+      "title": "Tag every cloud resource by team",
+      "description": "Finance needs a cost split by team before budget planning.\n\n**Acceptance criteria**\n- Docs page updated\n- Behind a feature flag until the review",
+      "status": "in_review",
+      "priority": "medium",
+      "assigneeId": null,
+      "labels": [
+        "improvement"
+      ],
+      "dueDate": "2026-09-29",
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-10T09:27:00.000Z",
+      "updatedAt": "2026-09-22T09:07:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_077",
+          "authorId": "usr_03",
+          "body": "I can pick this up after the release freeze.",
+          "createdAt": "2026-08-14T10:42:00.000Z"
+        },
+        {
+          "id": "cmt_078",
+          "authorId": "usr_03",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-08-24T11:18:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0165",
+          "actorId": "agt_02",
+          "at": "2026-08-10T09:27:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0166",
+          "actorId": "usr_03",
+          "at": "2026-08-17T10:11:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0167",
+          "actorId": "usr_03",
+          "at": "2026-09-22T09:07:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        }
+      ]
+    },
+    {
+      "id": "iss_013",
+      "projectId": "prj_ops",
+      "number": 4,
+      "key": "OPS-4",
+      "title": "SOC 2 evidence collection",
+      "description": "Evidence for the Type II window that closes at the end of the quarter.\n\n**Acceptance criteria**\n- Secrets never appear in logs\n- Reviewed by a second engineer",
+      "status": "in_progress",
+      "priority": "medium",
+      "assigneeId": "agt_02",
+      "labels": [
+        "security"
+      ],
+      "dueDate": null,
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-08-10T09:35:00.000Z",
+      "updatedAt": "2026-09-15T13:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_049",
+          "authorId": "agt_02",
+          "body": "Triage: reproduced on staging (build 2026.09.4). Linked three related support tickets, all from EU workspaces.",
+          "createdAt": "2026-08-10T12:46:00.000Z"
+        },
+        {
+          "id": "cmt_050",
+          "authorId": "usr_03",
+          "body": "Let's keep the scope tight here and split anything extra into a follow-up.",
+          "createdAt": "2026-08-12T11:22:00.000Z"
+        },
+        {
+          "id": "cmt_051",
+          "authorId": "usr_03",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-08-28T14:30:00.000Z"
+        },
+        {
+          "id": "cmt_052",
+          "authorId": "agt_02",
+          "body": "Triage: reproduced on staging (build 2026.09.4). Linked three related support tickets, all from EU workspaces.",
+          "createdAt": "2026-09-07T10:52:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0114",
+          "actorId": "agt_01",
+          "at": "2026-08-10T09:35:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0115",
+          "actorId": "usr_03",
+          "at": "2026-08-12T08:02:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0116",
+          "actorId": "agt_02",
+          "at": "2026-09-15T13:00:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_014",
+      "projectId": "prj_ops",
+      "number": 5,
+      "key": "OPS-5",
+      "title": "Refresh the on-call handbook",
+      "description": "Half the runbook links point at dashboards that no longer exist.\n\n**Acceptance criteria**\n- Stakeholders notified when it ships\n- Owner agreed on scope",
+      "status": "in_progress",
+      "priority": "medium",
+      "assigneeId": null,
+      "labels": [
+        "docs"
+      ],
+      "dueDate": null,
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-10T09:45:00.000Z",
+      "updatedAt": "2026-09-21T08:28:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0162",
+          "actorId": "agt_02",
+          "at": "2026-08-10T09:45:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0163",
+          "actorId": "usr_03",
+          "at": "2026-09-18T15:58:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0164",
+          "actorId": "usr_03",
+          "at": "2026-09-21T08:28:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "medium"
+        }
+      ]
+    },
+    {
+      "id": "iss_015",
+      "projectId": "prj_web",
+      "number": 6,
+      "key": "WEB-6",
+      "title": "Login loop when the session token expires mid-request",
+      "description": "Two enterprise customers report being bounced between /login and /home after lunch breaks. Looks like a refresh race.\n\n**Acceptance criteria**\n- Reproduced with a failing test before the fix\n- Root cause written up in the PR description\n- No new errors in Sentry for 48 hours after release",
+      "status": "done",
+      "priority": "low",
+      "assigneeId": null,
+      "labels": [
+        "bug",
+        "customer"
+      ],
+      "dueDate": "2026-09-12",
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-10T10:54:00.000Z",
+      "updatedAt": "2026-09-07T10:21:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_018",
+          "authorId": "usr_02",
+          "body": "Verified on production, closing.",
+          "createdAt": "2026-09-07T10:21:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0025",
+          "actorId": "usr_02",
+          "at": "2026-08-10T10:54:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0026",
+          "actorId": "usr_02",
+          "at": "2026-08-24T10:30:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0027",
+          "actorId": "usr_02",
+          "at": "2026-08-24T16:08:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0028",
+          "actorId": "usr_02",
+          "at": "2026-08-26T08:26:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_016",
+      "projectId": "prj_ops",
+      "number": 6,
+      "key": "OPS-6",
+      "title": "Nightly backup job overruns its window",
+      "description": "The 02:00 backup now runs past 06:00 and overlaps with the EU morning peak.\n\n**Acceptance criteria**\n- Rollback tested once\n- Change applied through Terraform, not the console",
+      "status": "done",
+      "priority": "high",
+      "assigneeId": "agt_02",
+      "labels": [
+        "infra",
+        "performance"
+      ],
+      "dueDate": null,
+      "estimate": 3,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-11T08:31:00.000Z",
+      "updatedAt": "2026-09-14T10:43:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_059",
+          "authorId": "agt_02",
+          "body": "Triage: reproduced on staging (build 2026.09.4). Linked three related support tickets, all from EU workspaces.",
+          "createdAt": "2026-08-17T08:46:00.000Z"
+        },
+        {
+          "id": "cmt_060",
+          "authorId": "usr_03",
+          "body": "Blocked on access to the staging account, asked in #infra.",
+          "createdAt": "2026-09-03T08:27:00.000Z"
+        },
+        {
+          "id": "cmt_061",
+          "authorId": "agt_02",
+          "body": "Verified in production: the failing scenario from the description now passes.",
+          "createdAt": "2026-09-14T10:43:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0130",
+          "actorId": "agt_02",
+          "at": "2026-08-11T08:31:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0131",
+          "actorId": "usr_03",
+          "at": "2026-08-12T08:49:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0132",
+          "actorId": "usr_03",
+          "at": "2026-08-24T08:34:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0133",
+          "actorId": "agt_02",
+          "at": "2026-09-07T10:43:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0134",
+          "actorId": "agt_02",
+          "at": "2026-09-08T08:54:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_017",
+      "projectId": "prj_ops",
+      "number": 7,
+      "key": "OPS-7",
+      "title": "Export quarterly access reviews",
+      "description": "Auditors want signed-off access reviews for every production system.\n\n**Acceptance criteria**\n- Reviewed by a second engineer\n- Secrets never appear in logs",
+      "status": "done",
+      "priority": "low",
+      "assigneeId": "agt_02",
+      "labels": [
+        "security"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": "iss_013",
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-11T10:52:00.000Z",
+      "updatedAt": "2026-09-15T13:52:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_053",
+          "authorId": "agt_02",
+          "body": "Dry run finished in 14 minutes with no errors. Logs are attached to the PR.",
+          "createdAt": "2026-09-02T09:31:00.000Z"
+        },
+        {
+          "id": "cmt_054",
+          "authorId": "agt_02",
+          "body": "Verified in production: the failing scenario from the description now passes.",
+          "createdAt": "2026-09-15T13:52:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0117",
+          "actorId": "agt_02",
+          "at": "2026-08-11T10:52:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0118",
+          "actorId": "agt_02",
+          "at": "2026-08-21T09:27:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0119",
+          "actorId": "usr_03",
+          "at": "2026-09-08T10:11:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0120",
+          "actorId": "usr_03",
+          "at": "2026-09-08T13:45:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0121",
+          "actorId": "agt_02",
+          "at": "2026-09-09T16:38:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0122",
+          "actorId": "agt_02",
+          "at": "2026-09-14T11:37:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_018",
+      "projectId": "prj_ops",
+      "number": 8,
+      "key": "OPS-8",
+      "title": "Enable audit logging on the admin API",
+      "description": "Every admin action needs actor, target and timestamp retained for a year.\n\n**Acceptance criteria**\n- Secrets never appear in logs\n- Evidence stored in the compliance folder",
+      "status": "in_progress",
+      "priority": "high",
+      "assigneeId": "usr_03",
+      "labels": [
+        "security"
+      ],
+      "dueDate": null,
+      "estimate": 1,
+      "parentId": "iss_013",
+      "creatorId": "usr_01",
+      "createdAt": "2026-08-11T16:35:00.000Z",
+      "updatedAt": "2026-09-21T12:51:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_055",
+          "authorId": "agt_02",
+          "body": "Opened a draft PR with a fix and a regression test. CI is green; waiting on a human review.",
+          "createdAt": "2026-09-09T10:19:00.000Z"
+        },
+        {
+          "id": "cmt_056",
+          "authorId": "agt_02",
+          "body": "Opened a draft PR with a fix and a regression test. CI is green; waiting on a human review.",
+          "createdAt": "2026-09-21T12:51:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0123",
+          "actorId": "usr_01",
+          "at": "2026-08-11T16:35:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0124",
+          "actorId": "usr_03",
+          "at": "2026-08-13T10:11:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_03"
+        },
+        {
+          "id": "act_0125",
+          "actorId": "usr_03",
+          "at": "2026-08-18T08:51:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_019",
+      "projectId": "prj_mkt",
+      "number": 5,
+      "key": "MKT-5",
+      "title": "Social calendar for the next four weeks",
+      "description": "Three posts a week, tied to the launch timeline.\n\n**Acceptance criteria**\n- Published and shared in #launches\n- Final copy approved by Lena",
+      "status": "todo",
+      "priority": "high",
+      "assigneeId": "usr_04",
+      "labels": [
+        "content"
+      ],
+      "dueDate": "2026-09-28",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-12T08:00:00.000Z",
+      "updatedAt": "2026-09-17T09:19:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_114",
+          "authorId": "usr_04",
+          "body": "Sales asked for this twice last month, bumping it up.",
+          "createdAt": "2026-08-19T10:06:00.000Z"
+        },
+        {
+          "id": "cmt_115",
+          "authorId": "usr_04",
+          "body": "Waiting on the customer's approval for the quote.",
+          "createdAt": "2026-09-08T08:20:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0228",
+          "actorId": "usr_04",
+          "at": "2026-08-12T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0229",
+          "actorId": "usr_04",
+          "at": "2026-09-14T08:34:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        },
+        {
+          "id": "act_0230",
+          "actorId": "usr_04",
+          "at": "2026-09-17T09:19:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_020",
+      "projectId": "prj_mkt",
+      "number": 6,
+      "key": "MKT-6",
+      "title": "October newsletter",
+      "description": "Product updates, the webinar invite and one customer story.\n\n**Acceptance criteria**\n- Links carry UTM parameters\n- Published and shared in #launches\n- Draft reviewed by product",
+      "status": "backlog",
+      "priority": "medium",
+      "assigneeId": null,
+      "labels": [
+        "content"
+      ],
+      "dueDate": "2026-10-09",
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-13T08:04:00.000Z",
+      "updatedAt": "2026-08-13T08:04:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0216",
+          "actorId": "agt_02",
+          "at": "2026-08-13T08:04:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        }
+      ]
+    },
+    {
+      "id": "iss_021",
+      "projectId": "prj_mkt",
+      "number": 7,
+      "key": "MKT-7",
+      "title": "Refresh the homepage hero copy",
+      "description": "The current headline still describes the product we sold last year.\n\n**Acceptance criteria**\n- Tested on mobile Safari\n- Copy approved by marketing",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": null,
+      "labels": [
+        "website",
+        "content"
+      ],
+      "dueDate": "2026-09-18",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-17T08:40:00.000Z",
+      "updatedAt": "2026-09-08T15:12:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0210",
+          "actorId": "usr_04",
+          "at": "2026-08-17T08:40:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0211",
+          "actorId": "usr_04",
+          "at": "2026-08-26T14:33:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "none"
+        },
+        {
+          "id": "act_0212",
+          "actorId": "usr_04",
+          "at": "2026-08-28T08:37:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0213",
+          "actorId": "usr_04",
+          "at": "2026-09-04T08:31:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0214",
+          "actorId": "usr_04",
+          "at": "2026-09-08T08:33:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0215",
+          "actorId": "usr_04",
+          "at": "2026-09-08T15:12:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_022",
+      "projectId": "prj_web",
+      "number": 7,
+      "key": "WEB-7",
+      "title": "Inline editing for project names",
+      "description": "Renaming a project takes four clicks through settings today.\n\n**Acceptance criteria**\n- Docs page updated\n- Events added to the analytics plan\n- Works at 380 px wide",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": null,
+      "labels": [
+        "feature"
+      ],
+      "dueDate": "2026-09-15",
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-17T10:43:00.000Z",
+      "updatedAt": "2026-09-09T09:43:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_026",
+          "authorId": "usr_02",
+          "body": "I can pick this up after the release freeze.",
+          "createdAt": "2026-08-24T09:11:00.000Z"
+        },
+        {
+          "id": "cmt_027",
+          "authorId": "usr_02",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-08-26T10:28:00.000Z"
+        },
+        {
+          "id": "cmt_028",
+          "authorId": "agt_01",
+          "body": "Verified in production: the failing scenario from the description now passes.",
+          "createdAt": "2026-09-09T09:43:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0053",
+          "actorId": "usr_03",
+          "at": "2026-08-17T10:43:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0054",
+          "actorId": "usr_02",
+          "at": "2026-08-24T11:40:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0055",
+          "actorId": "usr_02",
+          "at": "2026-08-26T09:31:00.000Z",
+          "kind": "due",
+          "from": "2026-09-08",
+          "to": "2026-09-15"
+        },
+        {
+          "id": "act_0056",
+          "actorId": "usr_02",
+          "at": "2026-09-01T11:38:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0057",
+          "actorId": "usr_02",
+          "at": "2026-09-02T08:22:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0058",
+          "actorId": "usr_02",
+          "at": "2026-09-07T10:46:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_023",
+      "projectId": "prj_mkt",
+      "number": 8,
+      "key": "MKT-8",
+      "title": "Referral program landing page",
+      "description": "Explain the reward, link to the referral form, track sign-ups.\n\n**Acceptance criteria**\n- Copy approved by marketing\n- Tested on mobile Safari",
+      "status": "backlog",
+      "priority": "medium",
+      "assigneeId": "usr_04",
+      "labels": [
+        "website",
+        "launch"
+      ],
+      "dueDate": "2026-10-18",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-18T10:15:00.000Z",
+      "updatedAt": "2026-09-28T10:35:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0247",
+          "actorId": "usr_04",
+          "at": "2026-08-18T10:15:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0248",
+          "actorId": "usr_04",
+          "at": "2026-09-28T10:35:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        }
+      ]
+    },
+    {
+      "id": "iss_024",
+      "projectId": "prj_web",
+      "number": 8,
+      "key": "WEB-8",
+      "title": "Cut the editor route bundle below 300 KB",
+      "description": "The editor chunk grew to 540 KB gzipped after the diagram plugin landed.\n\n**Acceptance criteria**\n- Behind a feature flag until the review\n- Copy reviewed by design\n- Events added to the analytics plan",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": "agt_01",
+      "labels": [
+        "performance"
+      ],
+      "dueDate": null,
+      "estimate": 8,
+      "parentId": null,
+      "creatorId": "usr_01",
+      "createdAt": "2026-08-18T10:22:00.000Z",
+      "updatedAt": "2026-09-14T16:07:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_036",
+          "authorId": "agt_01",
+          "body": "Ran the acceptance checks on staging. Two of three pass; the layout still overflows at 380 px.",
+          "createdAt": "2026-08-20T09:22:00.000Z"
+        },
+        {
+          "id": "cmt_037",
+          "authorId": "agt_01",
+          "body": "Verified in production: the failing scenario from the description now passes.",
+          "createdAt": "2026-09-14T16:07:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0075",
+          "actorId": "usr_01",
+          "at": "2026-08-18T10:22:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0076",
+          "actorId": "usr_02",
+          "at": "2026-08-18T16:38:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        },
+        {
+          "id": "act_0077",
+          "actorId": "agt_01",
+          "at": "2026-08-25T08:40:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0078",
+          "actorId": "agt_01",
+          "at": "2026-08-28T09:22:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0079",
+          "actorId": "agt_01",
+          "at": "2026-09-09T08:52:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0080",
+          "actorId": "agt_01",
+          "at": "2026-09-14T09:08:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_025",
+      "projectId": "prj_mkt",
+      "number": 9,
+      "key": "MKT-9",
+      "title": "Customer story: Northwind Logistics",
+      "description": "They cut triage time by 60% after moving support intake to agents.\n\n**Acceptance criteria**\n- Links carry UTM parameters\n- Published and shared in #launches",
+      "status": "in_progress",
+      "priority": "high",
+      "assigneeId": "usr_01",
+      "labels": [
+        "content",
+        "customer"
+      ],
+      "dueDate": "2026-10-16",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-08-19T09:00:00.000Z",
+      "updatedAt": "2026-10-05T08:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_102",
+          "authorId": "usr_01",
+          "body": "Sales asked for this twice last month, bumping it up.",
+          "createdAt": "2026-08-27T17:35:00.000Z"
+        },
+        {
+          "id": "cmt_103",
+          "authorId": "usr_01",
+          "body": "Can we get this into the launch timeline, or is it a nice-to-have?",
+          "createdAt": "2026-09-07T08:51:00.000Z"
+        },
+        {
+          "id": "cmt_104",
+          "authorId": "usr_04",
+          "body": "Sales asked for this twice last month, bumping it up.",
+          "createdAt": "2026-09-11T08:01:00.000Z"
+        },
+        {
+          "id": "cmt_105",
+          "authorId": "usr_04",
+          "body": "Moved the due date to line up with the launch.",
+          "createdAt": "2026-09-14T13:48:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0202",
+          "actorId": "agt_01",
+          "at": "2026-08-19T09:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0203",
+          "actorId": "usr_04",
+          "at": "2026-09-21T08:22:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0204",
+          "actorId": "usr_04",
+          "at": "2026-09-23T09:05:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0205",
+          "actorId": "usr_01",
+          "at": "2026-09-30T09:01:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0206",
+          "actorId": "usr_04",
+          "at": "2026-10-05T08:00:00.000Z",
+          "kind": "priority",
+          "from": "urgent",
+          "to": "high"
+        }
+      ]
+    },
+    {
+      "id": "iss_026",
+      "projectId": "prj_ops",
+      "number": 9,
+      "key": "OPS-9",
+      "title": "502s from the edge proxy right after deploys",
+      "description": "Each deploy produces a burst of 502s for about 20 seconds. Probably missing connection draining.\n\n**Acceptance criteria**\n- Fix verified on staging by someone other than the author\n- No new errors in Sentry for 48 hours after release",
+      "status": "done",
+      "priority": "medium",
+      "assigneeId": null,
+      "labels": [
+        "bug"
+      ],
+      "dueDate": "2026-09-21",
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-19T10:41:00.000Z",
+      "updatedAt": "2026-09-09T08:29:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_079",
+          "authorId": "usr_03",
+          "body": "Blocked on access to the staging account, asked in #infra.",
+          "createdAt": "2026-08-31T09:35:00.000Z"
+        },
+        {
+          "id": "cmt_080",
+          "authorId": "usr_03",
+          "body": "Turned out smaller than estimated, should land this week.",
+          "createdAt": "2026-08-31T10:24:00.000Z"
+        },
+        {
+          "id": "cmt_081",
+          "authorId": "agt_02",
+          "body": "Release check: the change is in v2.14.0 and deployed to all regions. No new errors in the 24 hours since.",
+          "createdAt": "2026-09-09T08:29:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0168",
+          "actorId": "usr_03",
+          "at": "2026-08-19T10:41:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0169",
+          "actorId": "usr_03",
+          "at": "2026-08-24T08:56:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0170",
+          "actorId": "usr_03",
+          "at": "2026-08-24T09:02:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0171",
+          "actorId": "usr_03",
+          "at": "2026-08-27T11:02:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0172",
+          "actorId": "usr_03",
+          "at": "2026-09-07T10:18:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_027",
+      "projectId": "prj_web",
+      "number": 9,
+      "key": "WEB-9",
+      "title": "File upload fails silently over 25 MB",
+      "description": "The request is rejected by the proxy and the UI shows a finished upload anyway.\n\n**Acceptance criteria**\n- Fix verified on staging by someone other than the author\n- No new errors in Sentry for 48 hours after release",
+      "status": "done",
+      "priority": "urgent",
+      "assigneeId": "usr_01",
+      "labels": [
+        "bug",
+        "customer"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-20T10:16:00.000Z",
+      "updatedAt": "2026-09-09T09:30:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0046",
+          "actorId": "usr_02",
+          "at": "2026-08-20T10:16:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0047",
+          "actorId": "usr_02",
+          "at": "2026-08-21T14:41:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0048",
+          "actorId": "usr_02",
+          "at": "2026-08-26T12:18:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0049",
+          "actorId": "usr_01",
+          "at": "2026-08-28T08:21:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0050",
+          "actorId": "usr_01",
+          "at": "2026-09-03T08:24:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0051",
+          "actorId": "usr_01",
+          "at": "2026-09-08T10:52:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        },
+        {
+          "id": "act_0052",
+          "actorId": "usr_02",
+          "at": "2026-09-09T09:30:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "urgent"
+        }
+      ]
+    },
+    {
+      "id": "iss_028",
+      "projectId": "prj_ops",
+      "number": 10,
+      "key": "OPS-10",
+      "title": "Postgres 17 upgrade",
+      "description": "Primary and replicas move from 15 to 17 with under five minutes of write downtime.\n\n**Acceptance criteria**\n- Change applied through Terraform, not the console\n- Alerting covers the new failure mode",
+      "status": "done",
+      "priority": "urgent",
+      "assigneeId": "usr_03",
+      "labels": [
+        "infra"
+      ],
+      "dueDate": "2026-10-05",
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-24T08:00:00.000Z",
+      "updatedAt": "2026-09-28T14:14:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_043",
+          "authorId": "usr_03",
+          "body": "First pass is up as a draft PR. Still missing tests for the edge cases.",
+          "createdAt": "2026-09-03T09:29:00.000Z"
+        },
+        {
+          "id": "cmt_044",
+          "authorId": "usr_03",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-09-09T11:34:00.000Z"
+        },
+        {
+          "id": "cmt_045",
+          "authorId": "usr_03",
+          "body": "Shipped. Follow-up for the remaining polish is filed separately.",
+          "createdAt": "2026-09-28T14:14:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0089",
+          "actorId": "usr_03",
+          "at": "2026-08-24T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0090",
+          "actorId": "usr_03",
+          "at": "2026-08-25T10:30:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_03"
+        },
+        {
+          "id": "act_0091",
+          "actorId": "usr_03",
+          "at": "2026-09-21T14:04:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0092",
+          "actorId": "usr_03",
+          "at": "2026-09-22T17:55:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0093",
+          "actorId": "usr_03",
+          "at": "2026-09-24T10:43:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0094",
+          "actorId": "usr_03",
+          "at": "2026-09-24T11:42:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_029",
+      "projectId": "prj_ops",
+      "number": 11,
+      "key": "OPS-11",
+      "title": "Clean up orphaned volumes in the EU cluster",
+      "description": "Roughly 40 unattached volumes are still billed every month.\n\n**Acceptance criteria**\n- Docs page updated\n- Behind a feature flag until the review",
+      "status": "backlog",
+      "priority": "high",
+      "assigneeId": "usr_03",
+      "labels": [
+        "tech-debt"
+      ],
+      "dueDate": null,
+      "estimate": 8,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-24T09:00:00.000Z",
+      "updatedAt": "2026-09-22T16:46:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_071",
+          "authorId": "agt_02",
+          "body": "Ran the acceptance checks on staging. Two of three pass; the layout still overflows at 380 px.",
+          "createdAt": "2026-08-31T10:32:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0157",
+          "actorId": "agt_02",
+          "at": "2026-08-24T09:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0158",
+          "actorId": "usr_03",
+          "at": "2026-09-22T16:46:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_03"
+        }
+      ]
+    },
+    {
+      "id": "iss_030",
+      "projectId": "prj_web",
+      "number": 10,
+      "key": "WEB-10",
+      "title": "Adopt the React compiler on the editor route",
+      "description": "",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": "usr_02",
+      "labels": [
+        "tech-debt",
+        "performance"
+      ],
+      "dueDate": null,
+      "estimate": 8,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-24T10:12:00.000Z",
+      "updatedAt": "2026-09-14T09:58:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_029",
+          "authorId": "usr_02",
+          "body": "First pass is up as a draft PR. Still missing tests for the edge cases.",
+          "createdAt": "2026-08-26T16:54:00.000Z"
+        },
+        {
+          "id": "cmt_030",
+          "authorId": "usr_02",
+          "body": "Verified on production, closing.",
+          "createdAt": "2026-09-14T09:58:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0059",
+          "actorId": "usr_02",
+          "at": "2026-08-24T10:12:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0060",
+          "actorId": "usr_02",
+          "at": "2026-08-26T11:28:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_02"
+        },
+        {
+          "id": "act_0061",
+          "actorId": "usr_02",
+          "at": "2026-08-28T11:00:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0062",
+          "actorId": "usr_02",
+          "at": "2026-08-31T09:35:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0063",
+          "actorId": "usr_02",
+          "at": "2026-09-07T13:23:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0064",
+          "actorId": "usr_02",
+          "at": "2026-09-09T08:40:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_031",
+      "projectId": "prj_mkt",
+      "number": 10,
+      "key": "MKT-10",
+      "title": "Comparison page against legacy trackers",
+      "description": "",
+      "status": "in_review",
+      "priority": "none",
+      "assigneeId": "usr_04",
+      "labels": [
+        "website",
+        "seo"
+      ],
+      "dueDate": "2026-10-12",
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "usr_01",
+      "createdAt": "2026-08-25T10:23:00.000Z",
+      "updatedAt": "2026-10-01T11:50:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_110",
+          "authorId": "usr_04",
+          "body": "Moved the due date to line up with the launch.",
+          "createdAt": "2026-09-16T10:37:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0217",
+          "actorId": "usr_01",
+          "at": "2026-08-25T10:23:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0218",
+          "actorId": "usr_01",
+          "at": "2026-09-02T09:05:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        },
+        {
+          "id": "act_0219",
+          "actorId": "usr_04",
+          "at": "2026-09-14T09:54:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0220",
+          "actorId": "usr_04",
+          "at": "2026-09-21T08:07:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0221",
+          "actorId": "usr_04",
+          "at": "2026-10-01T11:50:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        }
+      ]
+    },
+    {
+      "id": "iss_032",
+      "projectId": "prj_ops",
+      "number": 12,
+      "key": "OPS-12",
+      "title": "Write the rollback runbook",
+      "description": "Step-by-step rollback, including how to repoint the replicas.\n\n**Acceptance criteria**\n- Stakeholders notified when it ships\n- Done criteria checked in review",
+      "status": "done",
+      "priority": "none",
+      "assigneeId": "agt_02",
+      "labels": [
+        "docs"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": "iss_028",
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-25T12:00:00.000Z",
+      "updatedAt": "2026-09-07T09:34:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0107",
+          "actorId": "usr_03",
+          "at": "2026-08-25T12:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0108",
+          "actorId": "usr_03",
+          "at": "2026-09-01T11:25:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0109",
+          "actorId": "usr_03",
+          "at": "2026-09-02T10:47:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0110",
+          "actorId": "agt_02",
+          "at": "2026-09-04T08:11:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0111",
+          "actorId": "agt_02",
+          "at": "2026-09-04T12:00:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0112",
+          "actorId": "usr_03",
+          "at": "2026-09-04T13:56:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        },
+        {
+          "id": "act_0113",
+          "actorId": "usr_03",
+          "at": "2026-09-07T09:34:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "none"
+        }
+      ]
+    },
+    {
+      "id": "iss_033",
+      "projectId": "prj_ops",
+      "number": 13,
+      "key": "OPS-13",
+      "title": "Update pgbouncer and connection limits",
+      "description": "The new version changes the default max_connections we rely on.\n\n**Acceptance criteria**\n- Alerting covers the new failure mode\n- Change applied through Terraform, not the console\n- Runbook updated",
+      "status": "done",
+      "priority": "medium",
+      "assigneeId": "agt_02",
+      "labels": [
+        "infra"
+      ],
+      "dueDate": "2026-09-25",
+      "estimate": 5,
+      "parentId": "iss_028",
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-26T08:56:00.000Z",
+      "updatedAt": "2026-09-25T15:44:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_046",
+          "authorId": "agt_02",
+          "body": "Dry run finished in 14 minutes with no errors. Logs are attached to the PR.",
+          "createdAt": "2026-08-31T09:24:00.000Z"
+        },
+        {
+          "id": "cmt_047",
+          "authorId": "usr_03",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-09-07T09:29:00.000Z"
+        },
+        {
+          "id": "cmt_048",
+          "authorId": "agt_02",
+          "body": "Verified in production: the failing scenario from the description now passes.",
+          "createdAt": "2026-09-25T15:44:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0101",
+          "actorId": "usr_03",
+          "at": "2026-08-26T08:56:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0102",
+          "actorId": "usr_03",
+          "at": "2026-08-31T09:04:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0103",
+          "actorId": "usr_03",
+          "at": "2026-09-07T09:49:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0104",
+          "actorId": "agt_02",
+          "at": "2026-09-08T08:55:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0105",
+          "actorId": "usr_03",
+          "at": "2026-09-15T09:03:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0106",
+          "actorId": "agt_02",
+          "at": "2026-09-21T08:05:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_034",
+      "projectId": "prj_ops",
+      "number": 14,
+      "key": "OPS-14",
+      "title": "Rehearse the upgrade on a staging snapshot",
+      "description": "Restore last night's snapshot and time a full pg_upgrade run.\n\n**Acceptance criteria**\n- Change applied through Terraform, not the console\n- Alerting covers the new failure mode",
+      "status": "done",
+      "priority": "high",
+      "assigneeId": "agt_02",
+      "labels": [
+        "infra"
+      ],
+      "dueDate": null,
+      "estimate": 8,
+      "parentId": "iss_028",
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-26T10:33:00.000Z",
+      "updatedAt": "2026-09-24T15:29:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0095",
+          "actorId": "usr_03",
+          "at": "2026-08-26T10:33:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0096",
+          "actorId": "usr_03",
+          "at": "2026-08-31T10:40:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0097",
+          "actorId": "agt_02",
+          "at": "2026-09-07T08:05:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0098",
+          "actorId": "usr_03",
+          "at": "2026-09-07T09:24:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0099",
+          "actorId": "agt_02",
+          "at": "2026-09-14T10:09:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0100",
+          "actorId": "agt_02",
+          "at": "2026-09-24T15:29:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_035",
+      "projectId": "prj_mkt",
+      "number": 11,
+      "key": "MKT-11",
+      "title": "Q4 launch: Workflows",
+      "description": "Coordinated launch of Workflows across blog, site, email and Product Hunt.\n\n**Acceptance criteria**\n- Published and shared in #launches\n- Links carry UTM parameters",
+      "status": "todo",
+      "priority": "medium",
+      "assigneeId": "agt_01",
+      "labels": [
+        "launch"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-27T10:31:00.000Z",
+      "updatedAt": "2026-10-05T08:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_082",
+          "authorId": "agt_01",
+          "body": "Generated three headline variants and scored them against the messaging doc; the second fits best.",
+          "createdAt": "2026-09-02T10:33:00.000Z"
+        },
+        {
+          "id": "cmt_083",
+          "authorId": "agt_01",
+          "body": "Drafted a first version from the brief. Checked every link: two were broken, fixed in the draft.",
+          "createdAt": "2026-09-07T11:04:00.000Z"
+        },
+        {
+          "id": "cmt_084",
+          "authorId": "agt_01",
+          "body": "Collected five customer quotes from recent calls that fit this angle; linked in the brief.",
+          "createdAt": "2026-09-17T09:41:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0173",
+          "actorId": "usr_04",
+          "at": "2026-08-27T10:31:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0174",
+          "actorId": "usr_04",
+          "at": "2026-10-05T08:00:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        }
+      ]
+    },
+    {
+      "id": "iss_036",
+      "projectId": "prj_mkt",
+      "number": 12,
+      "key": "MKT-12",
+      "title": "Product Hunt launch kit",
+      "description": "Gallery images, maker comment, and a list of supporters to notify.\n\n**Acceptance criteria**\n- Published and shared in #launches\n- Final copy approved by Lena\n- Draft reviewed by product",
+      "status": "todo",
+      "priority": "medium",
+      "assigneeId": "usr_04",
+      "labels": [
+        "launch"
+      ],
+      "dueDate": "2026-10-18",
+      "estimate": null,
+      "parentId": "iss_035",
+      "creatorId": "agt_01",
+      "createdAt": "2026-08-27T11:31:00.000Z",
+      "updatedAt": "2026-10-02T10:55:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_086",
+          "authorId": "agt_01",
+          "body": "Drafted a first version from the brief. Checked every link: two were broken, fixed in the draft.",
+          "createdAt": "2026-08-31T14:46:00.000Z"
+        },
+        {
+          "id": "cmt_087",
+          "authorId": "agt_01",
+          "body": "Pulled the numbers for the brief: last quarter's comparable post drove 1,840 visits and 61 sign-ups.",
+          "createdAt": "2026-09-04T08:17:00.000Z"
+        },
+        {
+          "id": "cmt_088",
+          "authorId": "usr_04",
+          "body": "Design is on it this week, I'll keep this issue updated.",
+          "createdAt": "2026-09-23T09:36:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0182",
+          "actorId": "agt_01",
+          "at": "2026-08-27T11:31:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0183",
+          "actorId": "agt_01",
+          "at": "2026-08-31T13:07:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        },
+        {
+          "id": "act_0184",
+          "actorId": "usr_04",
+          "at": "2026-09-14T09:07:00.000Z",
+          "kind": "priority",
+          "from": "urgent",
+          "to": "medium"
+        },
+        {
+          "id": "act_0185",
+          "actorId": "usr_04",
+          "at": "2026-10-02T10:55:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_037",
+      "projectId": "prj_web",
+      "number": 11,
+      "key": "WEB-11",
+      "title": "Redesign the onboarding checklist",
+      "description": "New workspaces drop off before inviting a teammate. The checklist should lead with the two steps that predict retention.\n\n**Acceptance criteria**\n- Behind a feature flag until the review\n- Copy reviewed by design\n- Works at 380 px wide",
+      "status": "backlog",
+      "priority": "urgent",
+      "assigneeId": "usr_02",
+      "labels": [
+        "feature",
+        "design"
+      ],
+      "dueDate": null,
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-28T08:00:00.000Z",
+      "updatedAt": "2026-10-02T10:01:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_001",
+          "authorId": "usr_02",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-09-14T16:39:00.000Z"
+        },
+        {
+          "id": "cmt_002",
+          "authorId": "usr_02",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-09-17T08:25:00.000Z"
+        },
+        {
+          "id": "cmt_003",
+          "authorId": "usr_02",
+          "body": "I can pick this up after the release freeze.",
+          "createdAt": "2026-09-28T10:40:00.000Z"
+        },
+        {
+          "id": "cmt_004",
+          "authorId": "usr_02",
+          "body": "Moved the due date: this depends on the review of the parent issue.",
+          "createdAt": "2026-10-01T09:18:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0001",
+          "actorId": "usr_03",
+          "at": "2026-08-28T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0002",
+          "actorId": "usr_03",
+          "at": "2026-10-02T10:01:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_02"
+        }
+      ]
+    },
+    {
+      "id": "iss_038",
+      "projectId": "prj_web",
+      "number": 12,
+      "key": "WEB-12",
+      "title": "Track checklist completion events",
+      "description": "We need step-level events to see where people stall.\n\n**Acceptance criteria**\n- Owner agreed on scope\n- Stakeholders notified when it ships\n- Done criteria checked in review",
+      "status": "done",
+      "priority": "high",
+      "assigneeId": "usr_01",
+      "labels": [
+        "analytics"
+      ],
+      "dueDate": null,
+      "estimate": 1,
+      "parentId": "iss_037",
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-28T10:00:00.000Z",
+      "updatedAt": "2026-09-17T10:35:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_011",
+          "authorId": "usr_01",
+          "body": "I can pick this up after the release freeze.",
+          "createdAt": "2026-09-08T08:00:00.000Z"
+        },
+        {
+          "id": "cmt_012",
+          "authorId": "usr_01",
+          "body": "First pass is up as a draft PR. Still missing tests for the edge cases.",
+          "createdAt": "2026-09-11T08:42:00.000Z"
+        },
+        {
+          "id": "cmt_013",
+          "authorId": "usr_02",
+          "body": "Verified on production, closing.",
+          "createdAt": "2026-09-17T10:35:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0011",
+          "actorId": "usr_03",
+          "at": "2026-08-28T10:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0012",
+          "actorId": "usr_02",
+          "at": "2026-09-04T08:20:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0013",
+          "actorId": "usr_01",
+          "at": "2026-09-09T14:12:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0014",
+          "actorId": "usr_01",
+          "at": "2026-09-10T11:23:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0015",
+          "actorId": "usr_02",
+          "at": "2026-09-14T08:20:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_039",
+      "projectId": "prj_mkt",
+      "number": 13,
+      "key": "MKT-13",
+      "title": "Launch blog post",
+      "description": "Story-first post with two customer quotes and a short demo GIF.\n\n**Acceptance criteria**\n- Published and shared in #launches\n- Final copy approved by Lena",
+      "status": "done",
+      "priority": "medium",
+      "assigneeId": "usr_01",
+      "labels": [
+        "content"
+      ],
+      "dueDate": "2026-10-03",
+      "estimate": null,
+      "parentId": "iss_035",
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-28T10:55:00.000Z",
+      "updatedAt": "2026-09-28T10:37:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_085",
+          "authorId": "agt_01",
+          "body": "Published and scheduled the social posts for the next two weeks.",
+          "createdAt": "2026-09-28T10:37:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0175",
+          "actorId": "usr_04",
+          "at": "2026-08-28T10:55:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0176",
+          "actorId": "usr_04",
+          "at": "2026-08-31T14:34:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_01"
+        },
+        {
+          "id": "act_0177",
+          "actorId": "usr_04",
+          "at": "2026-09-10T09:32:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0178",
+          "actorId": "usr_04",
+          "at": "2026-09-14T11:23:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0179",
+          "actorId": "usr_01",
+          "at": "2026-09-21T08:07:00.000Z",
+          "kind": "due",
+          "from": "2026-09-28",
+          "to": "2026-10-03"
+        },
+        {
+          "id": "act_0180",
+          "actorId": "usr_01",
+          "at": "2026-09-21T09:42:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0181",
+          "actorId": "usr_04",
+          "at": "2026-09-21T11:22:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_040",
+      "projectId": "prj_mkt",
+      "number": 14,
+      "key": "MKT-14",
+      "title": "Pricing page update for the Workflows tier",
+      "description": "Add the new tier and the comparison rows it changes.\n\n**Acceptance criteria**\n- Copy approved by marketing\n- Tested on mobile Safari\n- Lighthouse score stays above 90",
+      "status": "in_review",
+      "priority": "low",
+      "assigneeId": "agt_01",
+      "labels": [
+        "website"
+      ],
+      "dueDate": "2026-10-03",
+      "estimate": 1,
+      "parentId": "iss_035",
+      "creatorId": "usr_04",
+      "createdAt": "2026-08-28T11:31:00.000Z",
+      "updatedAt": "2026-09-29T09:46:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_089",
+          "authorId": "agt_01",
+          "body": "Collected five customer quotes from recent calls that fit this angle; linked in the brief.",
+          "createdAt": "2026-08-28T13:47:00.000Z"
+        },
+        {
+          "id": "cmt_090",
+          "authorId": "usr_04",
+          "body": "Brief is in the shared drive; comments welcome before Thursday.",
+          "createdAt": "2026-09-01T13:14:00.000Z"
+        },
+        {
+          "id": "cmt_091",
+          "authorId": "agt_01",
+          "body": "Generated three headline variants and scored them against the messaging doc; the second fits best.",
+          "createdAt": "2026-09-11T10:52:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0186",
+          "actorId": "usr_04",
+          "at": "2026-08-28T11:31:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0187",
+          "actorId": "usr_04",
+          "at": "2026-09-07T10:01:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        },
+        {
+          "id": "act_0188",
+          "actorId": "agt_01",
+          "at": "2026-09-14T08:23:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0189",
+          "actorId": "agt_01",
+          "at": "2026-09-22T10:16:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0190",
+          "actorId": "usr_04",
+          "at": "2026-09-29T09:46:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        }
+      ]
+    },
+    {
+      "id": "iss_041",
+      "projectId": "prj_ops",
+      "number": 15,
+      "key": "OPS-15",
+      "title": "Deduplicate disk pressure alerts",
+      "description": "One full disk pages on-call eleven times. Group by volume and back off.\n\n**Acceptance criteria**\n- Works at 380 px wide\n- Docs page updated\n- Events added to the analytics plan",
+      "status": "backlog",
+      "priority": "none",
+      "assigneeId": null,
+      "labels": [
+        "improvement"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-08-31T08:00:00.000Z",
+      "updatedAt": "2026-09-30T17:46:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_064",
+          "authorId": "usr_03",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-09-18T10:04:00.000Z"
+        },
+        {
+          "id": "cmt_065",
+          "authorId": "agt_02",
+          "body": "Ran the acceptance checks on staging. Two of three pass; the layout still overflows at 380 px.",
+          "createdAt": "2026-09-21T10:57:00.000Z"
+        },
+        {
+          "id": "cmt_066",
+          "authorId": "agt_02",
+          "body": "Triage: no open duplicate found. Suggested priority from customer impact: 4 paying workspaces affected.",
+          "createdAt": "2026-09-30T17:46:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0144",
+          "actorId": "agt_02",
+          "at": "2026-08-31T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        }
+      ]
+    },
+    {
+      "id": "iss_042",
+      "projectId": "prj_web",
+      "number": 13,
+      "key": "WEB-13",
+      "title": "Avatar fallback broken in Safari 18",
+      "description": "Initials render offset by a few pixels and clip on Retina displays.\n\n**Acceptance criteria**\n- Root cause written up in the PR description\n- Fix verified on staging by someone other than the author",
+      "status": "todo",
+      "priority": "high",
+      "assigneeId": "agt_01",
+      "labels": [
+        "bug"
+      ],
+      "dueDate": "2026-10-29",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-31T08:00:00.000Z",
+      "updatedAt": "2026-09-28T15:08:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_034",
+          "authorId": "agt_01",
+          "body": "Ran the acceptance checks on staging. Two of three pass; the layout still overflows at 380 px.",
+          "createdAt": "2026-09-22T17:04:00.000Z"
+        },
+        {
+          "id": "cmt_035",
+          "authorId": "agt_01",
+          "body": "Dry run finished in 14 minutes with no errors. Logs are attached to the PR.",
+          "createdAt": "2026-09-28T15:08:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0072",
+          "actorId": "usr_02",
+          "at": "2026-08-31T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0073",
+          "actorId": "usr_02",
+          "at": "2026-09-07T09:24:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        },
+        {
+          "id": "act_0074",
+          "actorId": "agt_01",
+          "at": "2026-09-28T09:26:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_043",
+      "projectId": "prj_ops",
+      "number": 16,
+      "key": "OPS-16",
+      "title": "Terraform state drift in the networking module",
+      "description": "Plan shows security group changes nobody made in code.\n\n**Acceptance criteria**\n- Reproduced with a failing test before the fix\n- Fix verified on staging by someone other than the author\n- Root cause written up in the PR description",
+      "status": "backlog",
+      "priority": "high",
+      "assigneeId": null,
+      "labels": [
+        "bug",
+        "infra"
+      ],
+      "dueDate": "2026-09-29",
+      "estimate": 8,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-08-31T08:07:00.000Z",
+      "updatedAt": "2026-09-21T18:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_074",
+          "authorId": "usr_03",
+          "body": "First pass is up as a draft PR. Still missing tests for the edge cases.",
+          "createdAt": "2026-09-08T11:52:00.000Z"
+        },
+        {
+          "id": "cmt_075",
+          "authorId": "usr_03",
+          "body": "Moved the due date: this depends on the review of the parent issue.",
+          "createdAt": "2026-09-21T10:51:00.000Z"
+        },
+        {
+          "id": "cmt_076",
+          "authorId": "usr_03",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-09-21T18:00:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0161",
+          "actorId": "usr_03",
+          "at": "2026-08-31T08:07:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        }
+      ]
+    },
+    {
+      "id": "iss_044",
+      "projectId": "prj_web",
+      "number": 14,
+      "key": "WEB-14",
+      "title": "Empty states for new workspaces",
+      "description": "Boards, inbox and reports all render blank for a brand-new workspace.\n\n**Acceptance criteria**\n- Behind a feature flag until the review\n- Works at 380 px wide",
+      "status": "in_progress",
+      "priority": "none",
+      "assigneeId": "agt_01",
+      "labels": [
+        "design"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": "iss_037",
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-31T10:00:00.000Z",
+      "updatedAt": "2026-09-22T08:59:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_009",
+          "authorId": "agt_01",
+          "body": "Triage: reproduced on staging (build 2026.09.4). Linked three related support tickets, all from EU workspaces.",
+          "createdAt": "2026-09-10T12:18:00.000Z"
+        },
+        {
+          "id": "cmt_010",
+          "authorId": "agt_01",
+          "body": "Opened a draft PR with a fix and a regression test. CI is green; waiting on a human review.",
+          "createdAt": "2026-09-11T10:35:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0008",
+          "actorId": "usr_02",
+          "at": "2026-08-31T10:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0009",
+          "actorId": "usr_02",
+          "at": "2026-09-01T08:55:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        },
+        {
+          "id": "act_0010",
+          "actorId": "usr_02",
+          "at": "2026-09-22T08:59:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_045",
+      "projectId": "prj_web",
+      "number": 15,
+      "key": "WEB-15",
+      "title": "Focus order in the command palette",
+      "description": "Tab jumps from the input to the page behind the palette.\n\n**Acceptance criteria**\n- Docs page updated\n- Works at 380 px wide",
+      "status": "backlog",
+      "priority": "medium",
+      "assigneeId": null,
+      "labels": [
+        "accessibility",
+        "improvement"
+      ],
+      "dueDate": "2026-10-24",
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-31T10:18:00.000Z",
+      "updatedAt": "2026-09-28T08:27:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_038",
+          "authorId": "usr_02",
+          "body": "Let's keep the scope tight here and split anything extra into a follow-up.",
+          "createdAt": "2026-09-07T11:03:00.000Z"
+        },
+        {
+          "id": "cmt_039",
+          "authorId": "usr_02",
+          "body": "Blocked on access to the staging account, asked in #infra.",
+          "createdAt": "2026-09-18T11:51:00.000Z"
+        },
+        {
+          "id": "cmt_040",
+          "authorId": "usr_02",
+          "body": "Turned out smaller than estimated, should land this week.",
+          "createdAt": "2026-09-28T08:27:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0081",
+          "actorId": "usr_02",
+          "at": "2026-08-31T10:18:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0082",
+          "actorId": "usr_02",
+          "at": "2026-09-01T09:09:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "medium"
+        }
+      ]
+    },
+    {
+      "id": "iss_046",
+      "projectId": "prj_web",
+      "number": 16,
+      "key": "WEB-16",
+      "title": "Checklist progress API endpoint",
+      "description": "Return per-step completion for the current workspace so the client stops recomputing it.\n\n**Acceptance criteria**\n- Behind a feature flag until the review\n- Docs page updated\n- Copy reviewed by design",
+      "status": "in_progress",
+      "priority": "none",
+      "assigneeId": "usr_02",
+      "labels": [
+        "feature"
+      ],
+      "dueDate": "2026-10-17",
+      "estimate": 2,
+      "parentId": "iss_037",
+      "creatorId": "usr_02",
+      "createdAt": "2026-08-31T10:41:00.000Z",
+      "updatedAt": "2026-10-05T08:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_005",
+          "authorId": "usr_02",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-09-01T13:29:00.000Z"
+        },
+        {
+          "id": "cmt_006",
+          "authorId": "usr_02",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-09-04T16:59:00.000Z"
+        },
+        {
+          "id": "cmt_007",
+          "authorId": "usr_02",
+          "body": "Let's keep the scope tight here and split anything extra into a follow-up.",
+          "createdAt": "2026-09-07T08:41:00.000Z"
+        },
+        {
+          "id": "cmt_008",
+          "authorId": "usr_02",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-09-23T16:19:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0003",
+          "actorId": "usr_02",
+          "at": "2026-08-31T10:41:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0004",
+          "actorId": "usr_02",
+          "at": "2026-09-18T10:34:00.000Z",
+          "kind": "priority",
+          "from": "high",
+          "to": "none"
+        },
+        {
+          "id": "act_0005",
+          "actorId": "usr_02",
+          "at": "2026-09-25T08:49:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_02"
+        },
+        {
+          "id": "act_0006",
+          "actorId": "usr_02",
+          "at": "2026-09-29T09:30:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0007",
+          "actorId": "usr_02",
+          "at": "2026-10-05T08:00:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_047",
+      "projectId": "prj_ops",
+      "number": 17,
+      "key": "OPS-17",
+      "title": "Autoscale workers on queue depth",
+      "description": "Scale on pending jobs instead of CPU, which lags the real backlog by minutes.\n\n**Acceptance criteria**\n- Rollback tested once\n- Alerting covers the new failure mode",
+      "status": "todo",
+      "priority": "high",
+      "assigneeId": "agt_02",
+      "labels": [
+        "infra",
+        "feature"
+      ],
+      "dueDate": "2026-10-17",
+      "estimate": 3,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-09-04T10:54:00.000Z",
+      "updatedAt": "2026-09-29T10:36:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_063",
+          "authorId": "usr_03",
+          "body": "First pass is up as a draft PR. Still missing tests for the edge cases.",
+          "createdAt": "2026-09-21T08:33:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0140",
+          "actorId": "agt_01",
+          "at": "2026-09-04T10:54:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0141",
+          "actorId": "usr_03",
+          "at": "2026-09-15T08:01:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0142",
+          "actorId": "usr_03",
+          "at": "2026-09-22T09:08:00.000Z",
+          "kind": "priority",
+          "from": "low",
+          "to": "high"
+        },
+        {
+          "id": "act_0143",
+          "actorId": "usr_03",
+          "at": "2026-09-29T10:36:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_048",
+      "projectId": "prj_mkt",
+      "number": 15,
+      "key": "MKT-15",
+      "title": "Website SEO cleanup",
+      "description": "",
+      "status": "backlog",
+      "priority": "high",
+      "assigneeId": null,
+      "labels": [
+        "seo"
+      ],
+      "dueDate": "2026-10-28",
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_01",
+      "createdAt": "2026-09-07T08:00:00.000Z",
+      "updatedAt": "2026-09-25T11:44:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_092",
+          "authorId": "usr_04",
+          "body": "Can we get this into the launch timeline, or is it a nice-to-have?",
+          "createdAt": "2026-09-15T12:15:00.000Z"
+        },
+        {
+          "id": "cmt_093",
+          "authorId": "usr_04",
+          "body": "Design is on it this week, I'll keep this issue updated.",
+          "createdAt": "2026-09-16T09:21:00.000Z"
+        },
+        {
+          "id": "cmt_094",
+          "authorId": "usr_04",
+          "body": "Can we get this into the launch timeline, or is it a nice-to-have?",
+          "createdAt": "2026-09-18T11:51:00.000Z"
+        },
+        {
+          "id": "cmt_095",
+          "authorId": "usr_04",
+          "body": "Design is on it this week, I'll keep this issue updated.",
+          "createdAt": "2026-09-25T11:44:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0191",
+          "actorId": "usr_01",
+          "at": "2026-09-07T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0192",
+          "actorId": "usr_04",
+          "at": "2026-09-21T11:12:00.000Z",
+          "kind": "priority",
+          "from": "urgent",
+          "to": "high"
+        }
+      ]
+    },
+    {
+      "id": "iss_049",
+      "projectId": "prj_mkt",
+      "number": 16,
+      "key": "MKT-16",
+      "title": "Structured data for docs pages",
+      "description": "Add Article and BreadcrumbList markup to the docs template.\n\n**Acceptance criteria**\n- Links carry UTM parameters\n- Draft reviewed by product\n- Final copy approved by Lena",
+      "status": "todo",
+      "priority": "none",
+      "assigneeId": null,
+      "labels": [
+        "seo"
+      ],
+      "dueDate": "2026-10-24",
+      "estimate": 2,
+      "parentId": "iss_048",
+      "creatorId": "usr_04",
+      "createdAt": "2026-09-07T09:00:00.000Z",
+      "updatedAt": "2026-10-05T08:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_098",
+          "authorId": "usr_04",
+          "body": "Moved the due date to line up with the launch.",
+          "createdAt": "2026-09-09T10:27:00.000Z"
+        },
+        {
+          "id": "cmt_099",
+          "authorId": "usr_04",
+          "body": "Can we get this into the launch timeline, or is it a nice-to-have?",
+          "createdAt": "2026-09-14T09:58:00.000Z"
+        },
+        {
+          "id": "cmt_100",
+          "authorId": "usr_04",
+          "body": "Brief is in the shared drive; comments welcome before Thursday.",
+          "createdAt": "2026-09-25T16:20:00.000Z"
+        },
+        {
+          "id": "cmt_101",
+          "authorId": "usr_04",
+          "body": "Let's agree on the one message before anyone writes copy.",
+          "createdAt": "2026-10-05T08:00:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0199",
+          "actorId": "usr_04",
+          "at": "2026-09-07T09:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0200",
+          "actorId": "usr_04",
+          "at": "2026-09-18T08:50:00.000Z",
+          "kind": "due",
+          "from": "2026-10-14",
+          "to": "2026-10-24"
+        },
+        {
+          "id": "act_0201",
+          "actorId": "usr_04",
+          "at": "2026-09-21T09:55:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_050",
+      "projectId": "prj_mkt",
+      "number": 17,
+      "key": "MKT-17",
+      "title": "Fix duplicate meta descriptions",
+      "description": "",
+      "status": "done",
+      "priority": "high",
+      "assigneeId": null,
+      "labels": [
+        "seo"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": "iss_048",
+      "creatorId": "usr_04",
+      "createdAt": "2026-09-07T17:00:00.000Z",
+      "updatedAt": "2026-09-14T10:45:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_096",
+          "authorId": "usr_04",
+          "body": "First draft is ready for review, mostly the structure is open.",
+          "createdAt": "2026-09-09T10:57:00.000Z"
+        },
+        {
+          "id": "cmt_097",
+          "authorId": "usr_04",
+          "body": "Dropped after the launch plan changed, closing it out.",
+          "createdAt": "2026-09-14T10:45:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0193",
+          "actorId": "usr_04",
+          "at": "2026-09-07T17:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0194",
+          "actorId": "usr_04",
+          "at": "2026-09-09T09:18:00.000Z",
+          "kind": "priority",
+          "from": "none",
+          "to": "high"
+        },
+        {
+          "id": "act_0195",
+          "actorId": "usr_04",
+          "at": "2026-09-09T11:36:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0196",
+          "actorId": "usr_04",
+          "at": "2026-09-09T13:19:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0197",
+          "actorId": "usr_04",
+          "at": "2026-09-10T13:00:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0198",
+          "actorId": "usr_04",
+          "at": "2026-09-11T10:19:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_051",
+      "projectId": "prj_ops",
+      "number": 18,
+      "key": "OPS-18",
+      "title": "Pin base images and turn on vulnerability scanning",
+      "description": "Images float on :latest and nobody sees CVEs until a customer asks.\n\n**Acceptance criteria**\n- Evidence stored in the compliance folder\n- Reviewed by a second engineer\n- Secrets never appear in logs",
+      "status": "done",
+      "priority": "urgent",
+      "assigneeId": "agt_02",
+      "labels": [
+        "security"
+      ],
+      "dueDate": "2026-09-18",
+      "estimate": 2,
+      "parentId": null,
+      "creatorId": "agt_02",
+      "createdAt": "2026-09-08T08:48:00.000Z",
+      "updatedAt": "2026-09-14T11:46:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0148",
+          "actorId": "agt_02",
+          "at": "2026-09-08T08:48:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0149",
+          "actorId": "agt_02",
+          "at": "2026-09-08T14:39:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0150",
+          "actorId": "agt_02",
+          "at": "2026-09-09T09:17:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0151",
+          "actorId": "agt_02",
+          "at": "2026-09-14T09:46:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0152",
+          "actorId": "usr_03",
+          "at": "2026-09-14T10:15:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        },
+        {
+          "id": "act_0153",
+          "actorId": "usr_03",
+          "at": "2026-09-14T11:46:00.000Z",
+          "kind": "status",
+          "from": "in_review",
+          "to": "done"
+        }
+      ]
+    },
+    {
+      "id": "iss_052",
+      "projectId": "prj_ops",
+      "number": 19,
+      "key": "OPS-19",
+      "title": "Certificate renewal failed for the status page",
+      "description": "The ACME challenge fails since the DNS move; the current certificate expires in nine days.\n\n**Acceptance criteria**\n- Fix verified on staging by someone other than the author\n- Root cause written up in the PR description",
+      "status": "in_progress",
+      "priority": "high",
+      "assigneeId": "agt_02",
+      "labels": [
+        "bug",
+        "infra"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_01",
+      "createdAt": "2026-09-10T08:00:00.000Z",
+      "updatedAt": "2026-10-01T09:27:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_057",
+          "authorId": "usr_03",
+          "body": "Do we have a customer waiting on this, or can it wait for next cycle?",
+          "createdAt": "2026-09-22T08:40:00.000Z"
+        },
+        {
+          "id": "cmt_058",
+          "authorId": "agt_02",
+          "body": "Triage: no open duplicate found. Suggested priority from customer impact: 4 paying workspaces affected.",
+          "createdAt": "2026-09-28T08:11:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0126",
+          "actorId": "usr_01",
+          "at": "2026-09-10T08:00:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0127",
+          "actorId": "usr_01",
+          "at": "2026-09-16T08:14:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0128",
+          "actorId": "agt_02",
+          "at": "2026-09-28T08:59:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0129",
+          "actorId": "agt_02",
+          "at": "2026-10-01T09:27:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "iss_053",
+      "projectId": "prj_mkt",
+      "number": 18,
+      "key": "MKT-18",
+      "title": "UTM conventions for paid campaigns",
+      "description": "",
+      "status": "canceled",
+      "priority": "medium",
+      "assigneeId": "usr_04",
+      "labels": [
+        "analytics"
+      ],
+      "dueDate": null,
+      "estimate": 8,
+      "parentId": null,
+      "creatorId": "agt_01",
+      "createdAt": "2026-09-14T08:23:00.000Z",
+      "updatedAt": "2026-09-29T08:13:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_111",
+          "authorId": "usr_04",
+          "body": "Design is on it this week, I'll keep this issue updated.",
+          "createdAt": "2026-09-21T13:57:00.000Z"
+        },
+        {
+          "id": "cmt_112",
+          "authorId": "usr_04",
+          "body": "Live on the site, sharing in #marketing.",
+          "createdAt": "2026-09-29T08:13:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0222",
+          "actorId": "agt_01",
+          "at": "2026-09-14T08:23:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0223",
+          "actorId": "agt_01",
+          "at": "2026-09-21T08:30:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        },
+        {
+          "id": "act_0224",
+          "actorId": "usr_04",
+          "at": "2026-09-21T11:25:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0225",
+          "actorId": "usr_04",
+          "at": "2026-09-28T15:41:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "canceled"
+        }
+      ]
+    },
+    {
+      "id": "iss_054",
+      "projectId": "prj_web",
+      "number": 17,
+      "key": "WEB-17",
+      "title": "Keyboard shortcuts for issue navigation",
+      "description": "J/K to move, Enter to open, Esc to close. Power users keep asking for it.\n\n**Acceptance criteria**\n- Behind a feature flag until the review\n- Copy reviewed by design\n- Events added to the analytics plan",
+      "status": "in_review",
+      "priority": "urgent",
+      "assigneeId": "usr_02",
+      "labels": [
+        "feature"
+      ],
+      "dueDate": null,
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-09-14T08:30:00.000Z",
+      "updatedAt": "2026-09-21T11:07:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_022",
+          "authorId": "agt_01",
+          "body": "Collected the related errors from the last 30 days: 412 events across 37 workspaces, rising since Sep 18.",
+          "createdAt": "2026-09-15T08:34:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0033",
+          "actorId": "usr_02",
+          "at": "2026-09-14T08:30:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0034",
+          "actorId": "usr_02",
+          "at": "2026-09-18T11:22:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_02"
+        },
+        {
+          "id": "act_0035",
+          "actorId": "usr_02",
+          "at": "2026-09-21T10:03:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0036",
+          "actorId": "usr_02",
+          "at": "2026-09-21T11:07:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        }
+      ]
+    },
+    {
+      "id": "iss_055",
+      "projectId": "prj_web",
+      "number": 18,
+      "key": "WEB-18",
+      "title": "Virtualize the export preview table",
+      "description": "Previewing a 10k-row export freezes the tab for several seconds.\n\n**Acceptance criteria**\n- Works at 380 px wide\n- Copy reviewed by design",
+      "status": "todo",
+      "priority": "none",
+      "assigneeId": null,
+      "labels": [
+        "performance"
+      ],
+      "dueDate": "2026-10-25",
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-09-15T08:36:00.000Z",
+      "updatedAt": "2026-10-02T10:40:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_023",
+          "authorId": "usr_02",
+          "body": "Moved the due date: this depends on the review of the parent issue.",
+          "createdAt": "2026-09-15T11:26:00.000Z"
+        },
+        {
+          "id": "cmt_024",
+          "authorId": "usr_02",
+          "body": "Turned out smaller than estimated, should land this week.",
+          "createdAt": "2026-09-21T10:44:00.000Z"
+        },
+        {
+          "id": "cmt_025",
+          "authorId": "usr_02",
+          "body": "First pass is up as a draft PR. Still missing tests for the edge cases.",
+          "createdAt": "2026-09-30T17:39:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0044",
+          "actorId": "usr_02",
+          "at": "2026-09-15T08:36:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0045",
+          "actorId": "usr_02",
+          "at": "2026-10-02T10:40:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_056",
+      "projectId": "prj_mkt",
+      "number": 19,
+      "key": "MKT-19",
+      "title": "Booth materials for DevOpsDays",
+      "description": "Banner, one-pager and a demo loop for the screen.\n\n**Acceptance criteria**\n- Final copy approved by Lena\n- Draft reviewed by product\n- Published and shared in #launches",
+      "status": "todo",
+      "priority": "high",
+      "assigneeId": "agt_01",
+      "labels": [
+        "event",
+        "design"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-09-21T08:31:00.000Z",
+      "updatedAt": "2026-09-28T10:15:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_113",
+          "authorId": "usr_04",
+          "body": "Let's agree on the one message before anyone writes copy.",
+          "createdAt": "2026-09-25T14:25:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0226",
+          "actorId": "usr_04",
+          "at": "2026-09-21T08:31:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0227",
+          "actorId": "usr_04",
+          "at": "2026-09-28T10:15:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        }
+      ]
+    },
+    {
+      "id": "iss_057",
+      "projectId": "prj_mkt",
+      "number": 20,
+      "key": "MKT-20",
+      "title": "Review the G2 profile and screenshots",
+      "description": "Screenshots are from the old UI and the category is wrong.\n\n**Acceptance criteria**\n- Lighthouse score stays above 90\n- Tested on mobile Safari\n- Copy approved by marketing",
+      "status": "todo",
+      "priority": "high",
+      "assigneeId": "usr_04",
+      "labels": [
+        "website"
+      ],
+      "dueDate": null,
+      "estimate": null,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-09-21T10:10:00.000Z",
+      "updatedAt": "2026-09-24T15:27:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_123",
+          "authorId": "usr_04",
+          "body": "Can we get this into the launch timeline, or is it a nice-to-have?",
+          "createdAt": "2026-09-21T15:14:00.000Z"
+        },
+        {
+          "id": "cmt_124",
+          "authorId": "usr_04",
+          "body": "Sales asked for this twice last month, bumping it up.",
+          "createdAt": "2026-09-24T15:27:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0245",
+          "actorId": "usr_04",
+          "at": "2026-09-21T10:10:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0246",
+          "actorId": "usr_04",
+          "at": "2026-09-24T08:46:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        }
+      ]
+    },
+    {
+      "id": "iss_058",
+      "projectId": "prj_ops",
+      "number": 20,
+      "key": "OPS-20",
+      "title": "Rate limiting for the public webhook endpoint",
+      "description": "A misconfigured integration sent 2M requests in an hour last week.\n\n**Acceptance criteria**\n- Evidence stored in the compliance folder\n- Secrets never appear in logs",
+      "status": "todo",
+      "priority": "none",
+      "assigneeId": null,
+      "labels": [
+        "security",
+        "feature"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_01",
+      "createdAt": "2026-09-28T08:03:00.000Z",
+      "updatedAt": "2026-10-05T08:00:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_072",
+          "authorId": "usr_03",
+          "body": "Blocked on access to the staging account, asked in #infra.",
+          "createdAt": "2026-10-05T08:00:00.000Z"
+        },
+        {
+          "id": "cmt_073",
+          "authorId": "usr_03",
+          "body": "Blocked on access to the staging account, asked in #infra.",
+          "createdAt": "2026-10-05T08:00:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0159",
+          "actorId": "usr_01",
+          "at": "2026-09-28T08:03:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0160",
+          "actorId": "usr_03",
+          "at": "2026-10-05T08:00:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    },
+    {
+      "id": "iss_059",
+      "projectId": "prj_mkt",
+      "number": 21,
+      "key": "MKT-21",
+      "title": "Clean up HubSpot lifecycle stages",
+      "description": "Contacts sit in custom stages nobody maintains.\n\n**Acceptance criteria**\n- Owner agreed on scope\n- Done criteria checked in review\n- Stakeholders notified when it ships",
+      "status": "backlog",
+      "priority": "none",
+      "assigneeId": "usr_04",
+      "labels": [
+        "analytics"
+      ],
+      "dueDate": null,
+      "estimate": 1,
+      "parentId": null,
+      "creatorId": "usr_04",
+      "createdAt": "2026-09-28T08:06:00.000Z",
+      "updatedAt": "2026-10-05T08:00:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0231",
+          "actorId": "usr_04",
+          "at": "2026-09-28T08:06:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0232",
+          "actorId": "usr_04",
+          "at": "2026-10-05T08:00:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_04"
+        }
+      ]
+    },
+    {
+      "id": "iss_060",
+      "projectId": "prj_web",
+      "number": 19,
+      "key": "WEB-19",
+      "title": "Dark mode polish pass",
+      "description": "A sweep over the screens that still hardcode light colors.\n\n**Acceptance criteria**\n- Works at 380 px wide\n- Docs page updated\n- Events added to the analytics plan",
+      "status": "in_review",
+      "priority": "high",
+      "assigneeId": "usr_02",
+      "labels": [
+        "improvement",
+        "design"
+      ],
+      "dueDate": "2026-10-15",
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_02",
+      "createdAt": "2026-09-28T10:29:00.000Z",
+      "updatedAt": "2026-10-01T10:39:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_014",
+          "authorId": "usr_02",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-09-29T08:55:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0016",
+          "actorId": "usr_02",
+          "at": "2026-09-28T10:29:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0017",
+          "actorId": "usr_02",
+          "at": "2026-09-29T12:27:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_02"
+        },
+        {
+          "id": "act_0018",
+          "actorId": "usr_02",
+          "at": "2026-10-01T08:19:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        },
+        {
+          "id": "act_0019",
+          "actorId": "usr_02",
+          "at": "2026-10-01T09:35:00.000Z",
+          "kind": "status",
+          "from": "todo",
+          "to": "in_progress"
+        },
+        {
+          "id": "act_0020",
+          "actorId": "usr_02",
+          "at": "2026-10-01T10:39:00.000Z",
+          "kind": "status",
+          "from": "in_progress",
+          "to": "in_review"
+        }
+      ]
+    },
+    {
+      "id": "iss_061",
+      "projectId": "prj_web",
+      "number": 20,
+      "key": "WEB-20",
+      "title": "Theme-aware code block highlighting",
+      "description": "Code blocks keep the light syntax theme after switching to dark.\n\n**Acceptance criteria**\n- Works at 380 px wide\n- Events added to the analytics plan",
+      "status": "todo",
+      "priority": "medium",
+      "assigneeId": "agt_01",
+      "labels": [
+        "improvement"
+      ],
+      "dueDate": "2026-10-04",
+      "estimate": 8,
+      "parentId": "iss_060",
+      "creatorId": "agt_01",
+      "createdAt": "2026-09-28T11:29:00.000Z",
+      "updatedAt": "2026-10-01T09:02:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_017",
+          "authorId": "usr_02",
+          "body": "I can pick this up after the release freeze.",
+          "createdAt": "2026-09-29T14:28:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0023",
+          "actorId": "agt_01",
+          "at": "2026-09-28T11:29:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "todo"
+        },
+        {
+          "id": "act_0024",
+          "actorId": "usr_02",
+          "at": "2026-10-01T09:02:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_01"
+        }
+      ]
+    },
+    {
+      "id": "iss_062",
+      "projectId": "prj_web",
+      "number": 21,
+      "key": "WEB-21",
+      "title": "Fix low-contrast chart tooltips in dark mode",
+      "description": "Tooltip text sits at roughly 2:1 contrast on the dark card background.\n\n**Acceptance criteria**\n- Reproduced with a failing test before the fix\n- No new errors in Sentry for 48 hours after release\n- Fix verified on staging by someone other than the author",
+      "status": "backlog",
+      "priority": "high",
+      "assigneeId": "usr_02",
+      "labels": [
+        "bug",
+        "accessibility"
+      ],
+      "dueDate": "2026-10-06",
+      "estimate": 5,
+      "parentId": "iss_060",
+      "creatorId": "usr_01",
+      "createdAt": "2026-09-29T14:29:00.000Z",
+      "updatedAt": "2026-10-01T10:54:00.000Z",
+      "comments": [
+        {
+          "id": "cmt_015",
+          "authorId": "usr_02",
+          "body": "Let's keep the scope tight here and split anything extra into a follow-up.",
+          "createdAt": "2026-09-30T10:10:00.000Z"
+        },
+        {
+          "id": "cmt_016",
+          "authorId": "usr_02",
+          "body": "Adding context from the support thread: it started after the September release.",
+          "createdAt": "2026-10-01T10:51:00.000Z"
+        }
+      ],
+      "activity": [
+        {
+          "id": "act_0021",
+          "actorId": "usr_01",
+          "at": "2026-09-29T14:29:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0022",
+          "actorId": "usr_02",
+          "at": "2026-10-01T10:54:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "usr_02"
+        }
+      ]
+    },
+    {
+      "id": "iss_063",
+      "projectId": "prj_ops",
+      "number": 21,
+      "key": "OPS-21",
+      "title": "Move container builds to the shared runner pool",
+      "description": "Dedicated build VMs sit idle most of the day.\n\n**Acceptance criteria**\n- Alerting covers the new failure mode\n- Change applied through Terraform, not the console\n- Rollback tested once",
+      "status": "todo",
+      "priority": "medium",
+      "assigneeId": "agt_02",
+      "labels": [
+        "infra",
+        "tech-debt"
+      ],
+      "dueDate": null,
+      "estimate": 5,
+      "parentId": null,
+      "creatorId": "usr_03",
+      "createdAt": "2026-10-01T09:31:00.000Z",
+      "updatedAt": "2026-10-01T13:54:00.000Z",
+      "comments": [],
+      "activity": [
+        {
+          "id": "act_0145",
+          "actorId": "usr_03",
+          "at": "2026-10-01T09:31:00.000Z",
+          "kind": "created",
+          "from": null,
+          "to": "backlog"
+        },
+        {
+          "id": "act_0146",
+          "actorId": "usr_03",
+          "at": "2026-10-01T13:00:00.000Z",
+          "kind": "assignee",
+          "from": null,
+          "to": "agt_02"
+        },
+        {
+          "id": "act_0147",
+          "actorId": "agt_02",
+          "at": "2026-10-01T13:54:00.000Z",
+          "kind": "status",
+          "from": "backlog",
+          "to": "todo"
+        }
+      ]
+    }
+  ]
+}

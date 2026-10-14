@@ -49,6 +49,18 @@ def _requires_api_key(provider_config: ProviderConfig) -> bool:
     return bool(getattr(spec, "requires_api_key", True))
 
 
+def _visible_endpoint_url(provider_config: ProviderConfig) -> str | None:
+    """The address a tenant may see: their own, never the operator's.
+
+    A platform-managed configuration is readable from every workspace so its models
+    can be used, but its address is the deployment's internal topology (an
+    in-cluster gateway); a tenant needs its id and models, not where it runs.
+    """
+    if getattr(provider_config, "managed_by", None) == MANAGED_BY_PLATFORM:
+        return None
+    return provider_config.endpoint_url
+
+
 class ProviderConfigResponse(BaseModel):
     id: str
     provider_spec_id: str
@@ -95,7 +107,7 @@ class ProviderConfigResponse(BaseModel):
             id=str(provider_config.id),
             provider_spec_id=str(provider_config.provider_spec_id),
             name=provider_config.name,
-            endpoint_url=provider_config.endpoint_url,
+            endpoint_url=_visible_endpoint_url(provider_config),
             workspace_id=provider_config.workspace_id,
             created_by=provider_config.created_by,
             is_active=provider_config.is_active,
@@ -186,7 +198,7 @@ class ProviderConfigWithInstancesResponse(BaseModel):
             id=str(provider_config.id),
             provider_spec_id=str(provider_config.provider_spec_id),
             name=provider_config.name,
-            endpoint_url=provider_config.endpoint_url,
+            endpoint_url=_visible_endpoint_url(provider_config),
             user_id=str(provider_config_any.user_id)
             if getattr(provider_config_any, "user_id", None)
             else None,
@@ -284,6 +296,7 @@ class DiscoverPreviewModelResponse(BaseModel):
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
+    cached_input_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -438,6 +451,7 @@ async def discover_models_preview(
             max_output_tokens=model.max_output_tokens,
             input_cost_per_token=model.input_cost_per_token,
             output_cost_per_token=model.output_cost_per_token,
+            cached_input_cost_per_token=model.cached_input_cost_per_token,
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
@@ -457,6 +471,7 @@ async def discover_models_preview(
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
+                cached_input_cost_per_token=model.cached_input_cost_per_token,
                 supports_function_calling=model.supports_function_calling,
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,
@@ -559,6 +574,7 @@ class DiscoveredModelResponse(BaseModel):
     max_output_tokens: int | None = None
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
+    cached_input_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -649,6 +665,7 @@ async def discover_models(
             max_output_tokens=model.max_output_tokens,
             input_cost_per_token=model.input_cost_per_token,
             output_cost_per_token=model.output_cost_per_token,
+            cached_input_cost_per_token=model.cached_input_cost_per_token,
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
@@ -667,6 +684,7 @@ async def discover_models(
                 max_output_tokens=model.max_output_tokens,
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
+                cached_input_cost_per_token=model.cached_input_cost_per_token,
                 supports_function_calling=model.supports_function_calling,
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,

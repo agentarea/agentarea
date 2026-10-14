@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agentarea_mcp.domain.client_models import (
     Client,
     ClientMcpInstanceLink,
+    ClientOpenAPIConnectionLink,
     ClientPlatformToolset,
 )
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
@@ -112,6 +113,36 @@ class ClientService:
         self, client_ids: list[UUID]
     ) -> dict[str, dict[str, ClientMcpInstanceLink]]:
         return await self.repository.get_instance_links(client_ids)
+
+    async def add_openapi_connection(
+        self,
+        client_id: UUID | str,
+        connection_id: UUID | str,
+        namespace_prefix: str | None = None,
+        allowed_tools: list[str] | None = None,
+    ) -> None:
+        from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
+
+        await self.repository.add_openapi_connection(
+            await self._client_id(client_id),
+            await self._in_workspace(
+                OpenAPIConnectionRepository, connection_id, "OpenAPI connection"
+            ),
+            namespace_prefix,
+            allowed_tools,
+        )
+
+    async def remove_openapi_connection(
+        self, client_id: UUID | str, connection_id: UUID | str
+    ) -> None:
+        await self.repository.remove_openapi_connection(
+            await self._client_id(client_id), connection_id
+        )
+
+    async def openapi_links(
+        self, client_ids: list[UUID]
+    ) -> dict[str, list[ClientOpenAPIConnectionLink]]:
+        return await self.repository.get_openapi_links(client_ids)
 
     # The caller resolves ``toolset`` to a platform toolset's namespace: which
     # toolsets exist is known to the API that serves them, not to this library.

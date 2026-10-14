@@ -29,6 +29,7 @@ from agentarea_common.events.contract import (
     TOOL_CALL,
     canonical_type,
 )
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 
 from . import register_adapter
 from .exceptions import FatalError, RetryableError
@@ -192,7 +193,7 @@ def make_http_sender(
         auth = cfg.auth_fmt.format(token=token)
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
                 resp = await client.post(
                     url,
                     json=payload,
@@ -418,6 +419,84 @@ def make_a2a_webhook_adapter(secret_reader: SecretReader) -> _ComposedAdapter:
     )
 
 
+# ── Task webhook adapter ──────────────────────────────────────────
+
+
+def _task_webhook_format(event: dict[str, Any], presentation: str) -> str:
+    """Format a terminal task event as the task webhook body (terminal only)."""
+    from agentarea_common.utils.task_webhook import build_task_webhook_body
+
+    return build_task_webhook_body(event) or ""
+
+
+def make_task_webhook_sender(
+    secret_reader: SecretReader,
+) -> Callable[[dict[str, Any], str], Awaitable[None]]:
+    """Build the sender that POSTs a task webhook delivery to the API caller.
+
+    The URL is caller-supplied, so it goes through the pinned client on every
+    send. A signed webhook whose secret is not readable yet (the API
+    stores it right after starting the task) is retried rather than sent unsigned.
+    """
+
+    async def _send(channel_config: dict[str, Any], message: str) -> None:
+        import time
+
+        from agentarea_common.utils.task_webhook import (
+            DELIVERY_HEADER,
+            EVENT_HEADER,
+            SIGNATURE_HEADER,
+            sign,
+            webhook_secret_name,
+        )
+        from agentarea_common.utils.url_safety import (
+            OutboundPolicy,
+            UnsafeUrlError,
+            safe_async_client,
+        )
+
+        url = channel_config.get("url")
+        if not url or not message:
+            return
+
+        body = json.loads(message)
+        headers = {
+            "Content-Type": "application/json",
+            EVENT_HEADER: str(body.get("type") or channel_config.get("event_type") or ""),
+            DELIVERY_HEADER: str(body.get("event_id") or ""),
+        }
+        if channel_config.get("signed"):
+            task_id = str(channel_config.get("task_id") or "")
+            secret = await secret_reader.get_secret(webhook_secret_name(task_id))
+            if not secret:
+                raise RetryableError("task webhook secret is not readable yet")
+            headers[SIGNATURE_HEADER] = sign(secret, message, int(time.time()))
+
+        try:
+            # Set by an API key of the workspace, so the deployment's outbound
+            # policy applies, as it does when the task is created.
+            async with safe_async_client(policy=OutboundPolicy.from_env(), timeout=30.0) as client:
+                resp = await client.post(url, content=message, headers=headers)
+        except UnsafeUrlError as e:
+            raise FatalError(f"unsafe task webhook url: {e}") from e
+        except httpx.HTTPError as e:
+            raise RetryableError(f"task webhook network error: {e}") from e
+
+        if resp.status_code >= 500 or resp.status_code == 429:
+            raise RetryableError(f"task webhook returned {resp.status_code}")
+        if resp.status_code >= 400:
+            raise FatalError(f"task webhook returned {resp.status_code}")
+
+    return _send
+
+
+def make_task_webhook_adapter(secret_reader: SecretReader) -> _ComposedAdapter:
+    return _ComposedAdapter(
+        formatter=_task_webhook_format,
+        sender=make_task_webhook_sender(secret_reader),
+    )
+
+
 # ── Registration ──────────────────────────────────────────────────
 
 
@@ -483,7 +562,7 @@ def make_telegram_streaming_sender(
             text = "…\n" + text[-4093:]
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
                 if not msg_id:
                     payload: dict[str, Any] = {
                         "chat_id": chat_id,
@@ -574,3 +653,6 @@ def register_all_adapters(secret_reader: SecretReader, redis_url: str | None = N
 
     # A2A push notifications: client-supplied webhooks, delivered as A2A events.
     register_adapter("a2a_webhook", make_a2a_webhook_adapter(secret_reader))
+
+    # Task webhooks: the API caller's own URL, told each turn's end and cost.
+    register_adapter("task_webhook", make_task_webhook_adapter(secret_reader))

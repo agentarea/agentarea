@@ -21,7 +21,6 @@ class TriggerActivities:
     execute_trigger = "execute_trigger_activity"
     record_trigger_execution = "record_trigger_execution_activity"
     evaluate_trigger_conditions = "evaluate_trigger_conditions_activity"
-    create_task_from_trigger = "create_task_from_trigger_activity"
 
 
 # Import Pydantic models for trigger activities

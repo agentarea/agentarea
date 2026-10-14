@@ -782,6 +782,9 @@ class TriggerService:
             logger.warning(f"Trigger {trigger_id} not found for execution tracking update")
             return
 
+        if status == ExecutionStatus.SKIPPED:
+            return
+
         # Update execution tracking
         if status == ExecutionStatus.SUCCESS:
             trigger.record_execution_success()
@@ -1350,7 +1353,7 @@ class TriggerService:
         # switched on yet) is most of why they would ask.
         if not trigger.is_active and fired_by is None:
             logger.warning(f"Attempted to execute inactive trigger {trigger_id}")
-            execution = await self._record_execution_failure(
+            execution = await self._record_execution_skipped(
                 trigger_id, "Trigger is inactive", trigger_data
             )
             return TriggerFiring(
@@ -1396,7 +1399,7 @@ class TriggerService:
                 verdict = await self.evaluate_trigger_verdict(trigger, trigger_data)
                 if not verdict.met:
                     logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")
-                    execution = await self._record_execution_failure(
+                    execution = await self._record_execution_skipped(
                         trigger_id, "Trigger conditions not met", trigger_data, fired_by=fired_by
                     )
                     return TriggerFiring(
@@ -1546,6 +1549,23 @@ class TriggerService:
             status=ExecutionStatus.SUCCESS,
             execution_time_ms=execution_time_ms,
             task_id=task_id,
+            trigger_data=trigger_data or {},
+            fired_by=fired_by,
+        )
+
+    async def _record_execution_skipped(
+        self,
+        trigger_id: UUID,
+        reason: str,
+        trigger_data: dict[str, Any] | None = None,
+        fired_by: str | None = None,
+    ) -> TriggerExecution:
+        """Record a firing that was turned away without starting a task."""
+        return await self.record_execution(
+            trigger_id=trigger_id,
+            status=ExecutionStatus.SKIPPED,
+            execution_time_ms=0,
+            error_message=reason,
             trigger_data=trigger_data or {},
             fired_by=fired_by,
         )

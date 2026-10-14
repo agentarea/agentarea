@@ -39,9 +39,14 @@ export function EscalationArguments({
     );
   }
 
-  const { command, ...rest } = pending.escalation.tool_args;
-  const others =
-    typeof command === "string" ? rest : pending.escalation.tool_args;
+  return <ToolArguments args={pending.escalation.tool_args} />;
+}
+
+/** A call's arguments: a shell command verbatim, every other argument as JSON. */
+export function ToolArguments({ args }: { args: Record<string, unknown> }) {
+  const t = useTranslations("Approvals");
+  const { command, ...rest } = args;
+  const others = typeof command === "string" ? rest : args;
   return (
     <div className="space-y-1.5">
       {typeof command === "string" && (

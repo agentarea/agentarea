@@ -8,7 +8,6 @@ import type {
   AgentUpdate,
   AnalyzeRequest,
   TaskResponse as ApiTaskResponse,
-  CatalogConnectionRequest,
   ContinueTaskPayload,
   CreateInvitationBody,
   CreateWalletRequest,
@@ -23,6 +22,7 @@ import type {
   InvitationResponse,
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
+  ListToolCallApprovalsV1ToolCallApprovalsGetData,
   McpInstanceConsumer,
   McpServerCreate,
   McpServerInstanceCreate,
@@ -59,6 +59,7 @@ import type {
   SkillResponse,
   SkillUpdateRequest,
   TaskCreate,
+  ToolCallApprovalDecision,
   TriggerCreate,
   TriggerUpdate,
   UpdateWalletRequest,
@@ -168,28 +169,6 @@ export const getCatalogItem = async (itemId: string) => {
   return withStatus(result);
 };
 
-export const connectCatalogItem = async (
-  itemId: string,
-  body: CatalogConnectionRequest
-) => {
-  const result =
-    await sdk.connectCatalogItemV1ConnectionsCatalogItemIdConnectPost({
-      client: serverClient,
-      path: { item_id: itemId },
-      body,
-    });
-  return withStatus(result);
-};
-
-export const preflightCatalogConnection = async (itemId: string) => {
-  const result =
-    await sdk.preflightCatalogItemV1ConnectionsCatalogItemIdPreflightGet({
-      client: serverClient,
-      path: { item_id: itemId },
-    });
-  return withStatus(result);
-};
-
 export const analyzeBundle = async (body: AnalyzeRequest) => {
   const result = await sdk.analyzeBundleV1BundlesAnalyzePost({
     client: serverClient,
@@ -248,6 +227,15 @@ export const getAgentTaskById = async (agentId: string, taskId: string) => {
 export const cancelAgentTask = async (agentId: string, taskId: string) => {
   const { data, error } =
     await sdk.cancelAgentTaskV1AgentsAgentIdTasksTaskIdDelete({
+      client: serverClient,
+      path: { agent_id: agentId, task_id: taskId },
+    });
+  return { data, error };
+};
+
+export const retryAgentTask = async (agentId: string, taskId: string) => {
+  const { data, error } =
+    await sdk.retryAgentTaskV1AgentsAgentIdTasksTaskIdRetryPost({
       client: serverClient,
       path: { agent_id: agentId, task_id: taskId },
     });
@@ -381,6 +369,38 @@ export const resolveEscalation = async (
       }
     );
   return { data, error };
+};
+
+export const getToolCallApproval = async (approvalId: string) => {
+  const result =
+    await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
+      client: serverClient,
+      path: { approval_id: approvalId },
+    });
+  return withStatus(result);
+};
+
+export const listToolCallApprovals = async (
+  query?: ListToolCallApprovalsV1ToolCallApprovalsGetData["query"]
+) => {
+  const result = await sdk.listToolCallApprovalsV1ToolCallApprovalsGet({
+    client: serverClient,
+    query,
+  });
+  return withStatus(result);
+};
+
+export const decideToolCallApproval = async (
+  approvalId: string,
+  body: ToolCallApprovalDecision
+) => {
+  const result =
+    await sdk.decideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePost({
+      client: serverClient,
+      path: { approval_id: approvalId },
+      body,
+    });
+  return withStatus(result);
 };
 
 export const listPendingEscalations = async (
@@ -2224,6 +2244,8 @@ export const browseCatalog = async (params: {
   protocol?: "mcp" | "api";
   /** MCP connections only; mirrors CatalogHosting on the backend. */
   hosting?: "vendor" | "agentarea";
+  /** Connections only; mirrors CatalogPricing on the backend. */
+  pricing?: "paid" | "own_key" | "free";
   sort?: string;
   limit: number;
   offset: number;
@@ -2237,6 +2259,7 @@ export const browseCatalog = async (params: {
         category: params.category || undefined,
         protocol: params.protocol || undefined,
         hosting: params.hosting || undefined,
+        pricing: params.pricing || undefined,
         sort: params.sort || undefined,
         limit: params.limit,
         offset: params.offset,
@@ -2249,6 +2272,7 @@ export const browseCatalog = async (params: {
       categories: [],
       protocols: [],
       hostings: [],
+      pricings: [],
       error: error ?? "Failed to load catalog",
       status: response?.status,
     };
@@ -2259,6 +2283,7 @@ export const browseCatalog = async (params: {
     categories: data.categories,
     protocols: data.protocols,
     hostings: data.hostings ?? [],
+    pricings: data.pricings ?? [],
     error: null,
     status: response?.status,
   };

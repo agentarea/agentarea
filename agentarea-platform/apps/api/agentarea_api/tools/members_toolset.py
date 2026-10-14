@@ -12,6 +12,7 @@ need a signed-in user, as on the REST surface: an API key is refused.
 import json
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import (
     enforced_in_handler,
@@ -169,7 +170,7 @@ class MembersToolset(Toolset):
                     invitation_id=UUID(invitation_id),
                 )
             except InvitationNotFound:
-                return json.dumps({"error": "Invitation not found"})
+                raise ToolError("Invitation not found") from None
             if invitation.status == INVITATION_STATUS_REVOKED:
                 await AuditService(session, user_ctx).record(
                     "member.invitation_revoke",
@@ -196,7 +197,7 @@ class MembersToolset(Toolset):
                     actor_user_id=user_ctx.user_id,
                 )
             except MembershipRemovalRejected as exc:
-                return json.dumps({"error": str(exc)})
+                raise ToolError(str(exc)) from exc
             await AuditService(session, user_ctx).record(
                 "member.remove",
                 "member",

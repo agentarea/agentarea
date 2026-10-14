@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from urllib.parse import quote
 
+from .base_tool import ToolError
 from .decorator_tool import Toolset, tool_method
 from .file_toolset import InMemoryStorage, StorageClient, WorkspaceRepositoryClient
 from .tool_authz import unrestricted
@@ -59,10 +60,10 @@ class WorkspaceFilesToolset(Toolset):
 
     def _resolve_prefix(self, prefix: str = "") -> str:
         if prefix.startswith("/"):
-            raise ValueError(f"path escapes workspace scope: {prefix!r}")
+            raise ToolError(f"path escapes workspace scope: {prefix!r}")
         clean_prefix = prefix
         if ".." in clean_prefix.split("/") or "\\" in clean_prefix:
-            raise ValueError(f"path escapes workspace scope: {prefix!r}")
+            raise ToolError(f"path escapes workspace scope: {prefix!r}")
         if self.workspace_repository is not None:
             return clean_prefix
         if self.base_prefix and clean_prefix:
@@ -74,97 +75,86 @@ class WorkspaceFilesToolset(Toolset):
             return path[len(self.base_prefix) + 1 :]
         return path
 
+    async def _exists(self, resolved_path: str) -> bool:
+        if self.workspace_repository is not None:
+            if not self.task_id:
+                raise ValueError("task_id is required for canonical workspace operations")
+            return await self.workspace_repository.exists(
+                self.workspace_id, self.task_id, resolved_path
+            )
+        return await self.storage.exists(self.workspace_id, resolved_path)
+
     @tool_method(effect="read")
     @unrestricted("workspace files are member-level, as /v1/files serves them")
     async def list(self, prefix: str = "", max_items: int = 200) -> str:
         """List files in the current workspace's storage."""
-        try:
-            resolved_prefix = self._resolve_prefix(prefix)
-            if self.workspace_repository is not None:
-                if not self.task_id:
-                    raise ValueError("task_id is required for canonical workspace operations")
-                objects = await self.workspace_repository.list(
-                    self.workspace_id, self.task_id, prefix=resolved_prefix, max_items=max_items
-                )
-            else:
-                objects = await self.storage.list(self.workspace_id, prefix=resolved_prefix)
-            rows = []
-            for obj in objects[: max(0, max_items)]:
-                path = str(
-                    getattr(obj, "path", None) or (obj.get("path") if isinstance(obj, dict) else "")
-                )
-                rows.append(
-                    {
-                        "path": self._relative(path),
-                        "size": getattr(obj, "size", None)
-                        or (obj.get("size") if isinstance(obj, dict) else None),
-                        "content_type": getattr(obj, "content_type", None)
-                        or (obj.get("content_type") if isinstance(obj, dict) else None),
-                    }
-                )
-            return json.dumps(rows, default=str)
-        except Exception as exc:
-            return json.dumps({"error": str(exc)})
+        resolved_prefix = self._resolve_prefix(prefix)
+        if self.workspace_repository is not None:
+            if not self.task_id:
+                raise ValueError("task_id is required for canonical workspace operations")
+            objects = await self.workspace_repository.list(
+                self.workspace_id, self.task_id, prefix=resolved_prefix, max_items=max_items
+            )
+        else:
+            objects = await self.storage.list(self.workspace_id, prefix=resolved_prefix)
+        rows = []
+        for obj in objects[: max(0, max_items)]:
+            path = str(
+                getattr(obj, "path", None) or (obj.get("path") if isinstance(obj, dict) else "")
+            )
+            rows.append(
+                {
+                    "path": self._relative(path),
+                    "size": getattr(obj, "size", None)
+                    or (obj.get("size") if isinstance(obj, dict) else None),
+                    "content_type": getattr(obj, "content_type", None)
+                    or (obj.get("content_type") if isinstance(obj, dict) else None),
+                }
+            )
+        return json.dumps(rows, default=str)
 
     @tool_method(effect="read")
     @unrestricted("workspace files are member-level, as /v1/files serves them")
     async def get_url(self, path: str, expires_in: int = 3600) -> str:
-        """Return an AgentArea API download path for a workspace file."""
-        try:
-            resolved_path = self._resolve_prefix(path)
-            if self.workspace_repository is not None:
-                if not self.task_id:
-                    raise ValueError("task_id is required for canonical workspace operations")
-                exists = await self.workspace_repository.exists(
-                    self.workspace_id, self.task_id, resolved_path
-                )
-            else:
-                exists = await self.storage.exists(self.workspace_id, resolved_path)
-            if not exists:
-                return json.dumps({"error": "File not found", "path": path})
-            if not self.workspace_slug:
-                raise ValueError("workspace_slug is required to build a download path")
-            api_path = (
-                f"tasks/{self.task_id}/workspace/{resolved_path}"
-                if self.workspace_repository is not None
-                else resolved_path.lstrip("/")
-            )
-            encoded_path = quote(api_path, safe="/")
-            return json.dumps(
-                {
-                    "url": f"/v1/workspaces/{self.workspace_slug}/files/download/{encoded_path}",
-                    "path": path,
-                    "expires_in": expires_in,
-                }
-            )
-        except Exception as exc:
-            return json.dumps({"error": str(exc), "path": path})
+        """Return an AgentArea API download path for a workspace file.
+
+        A task's file is served by the task files endpoint
+        (``files/download/tasks/{task_id}/workspace/{path}``) once it is saved
+        to the task, e.g. as an artifact; without a task it is a library file.
+        """
+        resolved_path = self._resolve_prefix(path)
+        if not await self._exists(resolved_path):
+            raise ToolError(f"File not found: {path}")
+        if not self.workspace_slug:
+            raise ValueError("workspace_slug is required to build a download path")
+        api_path = (
+            f"tasks/{self.task_id}/workspace/{resolved_path}"
+            if self.task_id
+            else resolved_path.lstrip("/")
+        )
+        encoded_path = quote(api_path, safe="/")
+        return json.dumps(
+            {
+                "url": f"/v1/workspaces/{self.workspace_slug}/files/download/{encoded_path}",
+                "path": path,
+                "expires_in": expires_in,
+            }
+        )
 
     @tool_method(effect="destructive")
     @unrestricted("workspace files are member-level, as DELETE /v1/files allows")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
-        try:
-            resolved_path = self._resolve_prefix(path)
-            if self.workspace_repository is not None:
-                if not self.task_id:
-                    raise ValueError("task_id is required for canonical workspace operations")
-                exists = await self.workspace_repository.exists(
-                    self.workspace_id, self.task_id, resolved_path
-                )
-            else:
-                exists = await self.storage.exists(self.workspace_id, resolved_path)
-            if not exists:
-                return json.dumps({"deleted": False, "error": "File not found"})
-            if self.workspace_repository is not None:
-                await self.workspace_repository.delete(
-                    self.workspace_id,
-                    self.task_id,
-                    resolved_path,
-                    owner=self.lease_owner or None,
-                )
-            else:
-                await self.storage.delete(self.workspace_id, resolved_path)
-            return json.dumps({"deleted": True, "path": path})
-        except Exception as exc:
-            return json.dumps({"deleted": False, "error": str(exc), "path": path})
+        resolved_path = self._resolve_prefix(path)
+        if not await self._exists(resolved_path):
+            raise ToolError(f"File not found: {path}")
+        if self.workspace_repository is not None:
+            await self.workspace_repository.delete(
+                self.workspace_id,
+                self.task_id,
+                resolved_path,
+                owner=self.lease_owner or None,
+            )
+        else:
+            await self.storage.delete(self.workspace_id, resolved_path)
+        return json.dumps({"deleted": True, "path": path})

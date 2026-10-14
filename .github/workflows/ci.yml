@@ -12,6 +12,16 @@ on:
         required: false
         type: boolean
         default: false
+  # A push whose event GitHub never delivered builds nothing, and the next push builds
+  # only what that one changed (the paths filter compares against the previous commit).
+  # Dispatch on main with rebuild-images to build and push every image for its HEAD.
+  workflow_dispatch:
+    inputs:
+      rebuild-images:
+        description: 'Build and push every image for this ref'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -335,7 +345,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && (needs.changes.outputs.api == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
@@ -391,7 +402,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && (needs.changes.outputs.worker == 'true' || needs.changes.outputs.platform_libs == 'true')) ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, platform-lint, platform-test, platform-build]
     permissions:
       packages: write
@@ -415,7 +427,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.webapp == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, webapp-lint, webapp-build]
     permissions:
       packages: write
@@ -439,7 +452,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.operator == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check]
     permissions:
       packages: write
@@ -463,7 +477,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, mcp-manager-lint-test]
     permissions:
       packages: write
@@ -488,7 +503,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, mcp-manager-lint-test]
     permissions:
       packages: write
@@ -516,7 +532,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_manager == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, mcp-manager-lint-test]
     permissions:
       packages: write
@@ -544,7 +561,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.mcp_base == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check]
     permissions:
       packages: write
@@ -785,7 +803,8 @@ jobs:
     if: |
       (github.ref == 'refs/heads/main' && needs.changes.outputs.events == 'true') ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
-      inputs.skip-docker
+      inputs.skip-docker ||
+      inputs.rebuild-images
     needs: [changes, version-check, events-lint-test]
     permissions:
       packages: write

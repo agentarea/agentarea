@@ -1,7 +1,7 @@
 "use client";
 
-import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { ErrorFallback } from "@/components/ui/error-fallback";
 
 export default function NetworkError({

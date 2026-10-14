@@ -1,31 +1,28 @@
 /**
- * What the connection page may offer for authorizing a remote MCP server.
+ * What a Connect panel may offer for signing in to a connection — a remote MCP
+ * server or a catalog API, answered by one preflight
+ * (`GET /v1/workspaces/{workspace}/oauth/preflight`).
  *
- * The backend preflight (`GET /v1/mcp-oauth/preflight`) answers whether OAuth
- * can start at all and what is missing. Deriving the affordance from that
- * answer — instead of from "is this a URL-type instance" — is what keeps a
- * Connect button from being offered for a provider that has no dynamic client
- * registration and therefore cannot complete without the workspace's own
- * OAuth app.
+ * Deriving the affordance from that answer — instead of from "is this a
+ * URL-type instance" — is what keeps a Connect button from being offered for a
+ * provider that has neither the operator's OAuth app nor dynamic client
+ * registration and therefore cannot complete without the workspace's own app.
  */
 
-import type { CatalogConnectionPreflight } from "@/api/client";
+import type {
+  OAuthAuthorizeRequest,
+  OAuthPreflightResponse,
+} from "@/api/client";
 import type { CustomOAuthAppCredentials } from "@/lib/oauth-app";
 
 export type { CustomOAuthAppCredentials };
 
-export type MCPOAuthPreflight = {
-  instance_id: string | null;
-  server_id?: string | null;
-  status: "ready" | "oauth_app_required" | "unsupported";
-  connected: boolean;
-  detail: string;
-  issuer: string | null;
-  authorization_endpoint: string | null;
-  scopes: string[];
-  /** Callback the user's own OAuth app must allow, when the API names one. */
-  redirect_uri?: string | null;
-};
+export type OAuthPreflight = OAuthPreflightResponse;
+
+/** What is being signed in to: an MCP instance, or a catalog API to connect. */
+export type OAuthAuthorizeTarget =
+  | { instance_id: string }
+  | { catalog_item_id: string };
 
 export type OAuthConnectState =
   /** Not an authorizable connection — show nothing. */
@@ -33,39 +30,39 @@ export type OAuthConnectState =
   | { kind: "loading" }
   /** Cannot be authorized this way; `reason` says why. No action offered. */
   | { kind: "unsupported"; reason: string }
-  /** Connect can run on its own (the provider supports RFC 7591). */
-  | { kind: "ready"; connected: boolean }
-  /** Connect needs a client ID/secret first. */
+  /**
+   * Connect runs on its own, with the operator's `platform` app or a client
+   * the provider registers `dynamic`ally.
+   */
+  | {
+      kind: "ready";
+      connected: boolean;
+      credentialSource?: "platform" | "dynamic" | null;
+    }
+  /**
+   * Connect needs a client ID/secret first. `optional`: the person chose their
+   * own app over one that would have worked unattended.
+   */
   | {
       kind: "needs_oauth_app";
       connected: boolean;
       reason: string;
       issuer: string | null;
       redirectUri?: string;
+      optional?: boolean;
     };
-
-type CredentialFields<ReadyMode extends string> = {
-  credential_mode: ReadyMode | "custom";
-} & CustomOAuthAppCredentials;
-
-export type AuthorizeRequest = {
-  instance_id: string;
-  return_to?: string;
-} & CredentialFields<"auto">;
-
-/** A catalog template runs on the platform's OAuth app, or the user's own. */
-export type CatalogConnectRequest = {
-  return_to?: string;
-} & CredentialFields<"managed">;
 
 export function deriveOAuthConnectState({
   isUrlType,
   preflight,
   error,
+  useOwnApp = false,
 }: {
   isUrlType: boolean;
-  preflight: MCPOAuthPreflight | null;
+  preflight: OAuthPreflight | null;
   error?: string | null;
+  /** The person asked to connect with their own OAuth app instead. */
+  useOwnApp?: boolean;
 }): OAuthConnectState {
   if (!isUrlType) return { kind: "hidden" };
   if (error) return { kind: "unsupported", reason: error };
@@ -73,38 +70,52 @@ export function deriveOAuthConnectState({
 
   switch (preflight.status) {
     case "ready":
-      return { kind: "ready", connected: preflight.connected };
+      if (useOwnApp && canUseOwnApp(preflight)) {
+        return {
+          kind: "needs_oauth_app",
+          connected: preflight.connected,
+          reason: "",
+          issuer: preflight.issuer ?? null,
+          redirectUri: preflight.redirect_uri,
+          optional: true,
+        };
+      }
+      return {
+        kind: "ready",
+        connected: preflight.connected,
+        credentialSource: preflight.credential_source ?? null,
+      };
     case "oauth_app_required":
       return {
         kind: "needs_oauth_app",
         connected: preflight.connected,
-        reason: preflight.detail,
-        issuer: preflight.issuer,
-        redirectUri: preflight.redirect_uri ?? undefined,
+        reason: preflight.detail ?? "",
+        issuer: preflight.issuer ?? null,
+        redirectUri: preflight.redirect_uri,
       };
     case "unsupported":
-      return { kind: "unsupported", reason: preflight.detail };
+      return { kind: "unsupported", reason: preflight.detail ?? "" };
   }
 }
 
+/** A rejected registration supersedes discovery, including server-provided preflight. */
+export function preflightAfterAuthorizeError(
+  preflight: OAuthPreflight | null,
+  code: string | null | undefined,
+  detail: string
+): OAuthPreflight | null {
+  if (!preflight || code !== "oauth_app_required") return preflight;
+  return { ...preflight, status: "oauth_app_required", detail };
+}
+
 /**
- * A catalog template answers the same question as an MCP server: the platform
- * app is its "ready", the user's own app its "oauth_app_required". It never
- * names an existing connection, so it is never already connected.
+ * Whether a ready connection may instead use the person's own OAuth app: only
+ * over the operator's app, whose consent screen names AgentArea, not them.
  */
-export function catalogPreflightToMCP(
-  preflight: CatalogConnectionPreflight
-): MCPOAuthPreflight {
-  return {
-    instance_id: null,
-    status: preflight.status,
-    connected: false,
-    detail: preflight.detail,
-    issuer: null,
-    authorization_endpoint: null,
-    scopes: [],
-    redirect_uri: preflight.redirect_uri,
-  };
+export function canUseOwnApp(preflight: OAuthPreflight | null): boolean {
+  return (
+    preflight?.status === "ready" && preflight.credential_source === "platform"
+  );
 }
 
 /**
@@ -115,38 +126,23 @@ export function catalogPreflightToMCP(
  * being posted just to come back as a validation error.
  */
 export function buildAuthorizeRequest({
-  instanceId,
+  target,
   state,
   credentials,
   returnTo,
 }: {
-  instanceId: string;
+  target: OAuthAuthorizeTarget;
   state: OAuthConnectState;
   credentials?: CustomOAuthAppCredentials | null;
   returnTo?: string;
-}): AuthorizeRequest | null {
-  const fields = credentialFields(state, credentials, "auto");
+}): OAuthAuthorizeRequest | null {
+  const fields = credentialFields(state, credentials);
   if (!fields) return null;
   return {
-    instance_id: instanceId,
+    ...target,
     ...fields,
     ...(returnTo ? { return_to: returnTo } : {}),
   };
-}
-
-/** The catalog counterpart of `buildAuthorizeRequest`, under the same rule. */
-export function buildCatalogConnectRequest({
-  state,
-  credentials,
-  returnTo,
-}: {
-  state: OAuthConnectState;
-  credentials?: CustomOAuthAppCredentials | null;
-  returnTo?: string;
-}): CatalogConnectRequest | null {
-  const fields = credentialFields(state, credentials, "managed");
-  if (!fields) return null;
-  return { ...fields, ...(returnTo ? { return_to: returnTo } : {}) };
 }
 
 /**
@@ -160,15 +156,21 @@ export function canAuthorize({
   state: OAuthConnectState;
   credentials?: CustomOAuthAppCredentials | null;
 }): boolean {
-  return credentialFields(state, credentials, "auto") !== null;
+  return credentialFields(state, credentials) !== null;
 }
 
-function credentialFields<ReadyMode extends string>(
+function credentialFields(
   state: OAuthConnectState,
-  credentials: CustomOAuthAppCredentials | null | undefined,
-  readyMode: ReadyMode
-): CredentialFields<ReadyMode> | null {
-  if (state.kind === "ready") return { credential_mode: readyMode };
+  credentials: CustomOAuthAppCredentials | null | undefined
+): Pick<
+  OAuthAuthorizeRequest,
+  | "credential_mode"
+  | "client_id"
+  | "client_secret"
+  | "client_id_secret_id"
+  | "client_secret_secret_id"
+> | null {
+  if (state.kind === "ready") return { credential_mode: "auto" };
 
   if (state.kind !== "needs_oauth_app" || !credentials) return null;
 

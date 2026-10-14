@@ -8,7 +8,7 @@ and that runtime governance can translate into InterceptorContext.execution_stat
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, NamedTuple, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from agentarea_common.money import ZERO, Money, to_money
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -98,14 +98,46 @@ class PolicyScope(BaseModel):
     scope_id: str
 
 
+class ScopedSpendCap(BaseModel):
+    """A cap on part of the spend: one kind, client, connection or tool of a connection.
+
+    ``category`` counts only model (``llm``) or tool (``tools``) lines. ``period``
+    ``run`` sums the run's own lines; absent, the calendar month's. ``own_agent``
+    narrows it further to the calling agent's lines: the rule was bound to that
+    agent. ``currency`` is the cap's currency, the billing currency when absent; it
+    sums only lines in it. Absent fields are left out of the snapshot, so a cap
+    that sets none serializes as it did before they existed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    amount_usd: Money = Field(ge=ZERO)
+    own_agent: bool = False
+    client_id: str | None = None
+    connection_id: str | None = None
+    tool: str | None = None
+    currency: str | None = None
+    category: Literal["llm", "tools"] | None = None
+    period: Literal["run"] | None = None
+
+
 class BudgetPolicy(BaseModel):
-    """Budget-related ceilings."""
+    """Budget-related ceilings.
+
+    ``monthly_spend_cap_usd`` caps the whole workspace's spend in a calendar
+    month; ``agent_monthly_spend_cap_usd`` caps the spend of the run's agent
+    alone, summed over all its runs in the month. ``spend_caps`` are the caps
+    narrowed to model or tool spend, a client, a connection or one of its tools,
+    per month or per run; every one applies.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     monthly_spend_cap_usd: Money | None = Field(default=None, ge=ZERO)
+    agent_monthly_spend_cap_usd: Money | None = Field(default=None, ge=ZERO)
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
     service_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    spend_caps: list[ScopedSpendCap] | None = None
 
 
 class TokenPolicy(BaseModel):
@@ -168,6 +200,23 @@ class ApprovalPolicy(BaseModel):
         return value
 
 
+class AnswerCheckPolicy(BaseModel):
+    """Check an agent's final answer and have the model rewrite it once if it leaks.
+
+    Leaks: CJK characters, tool names and snake_case codes, stack traces, raw
+    JSON, and (for ``language: ru``) lowercase English words in a Russian answer.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    # The answer's language. "ru" adds the English-word check; "zh"/"ja"/"ko"
+    # turn the CJK check off.
+    language: str | None = Field(default=None, min_length=2, max_length=8)
+    # Replaces the default rewrite instruction (the system prompt of the call).
+    rewrite_instruction: str | None = Field(default=None, min_length=1, max_length=4000)
+
+
 class ContentSafetyPolicy(BaseModel):
     """Content-safety governance controls."""
 
@@ -175,6 +224,7 @@ class ContentSafetyPolicy(BaseModel):
 
     prompt_injection_detection_enabled: bool | None = None
     output_sanitizer_enabled: bool | None = None
+    answer_check: AnswerCheckPolicy | None = None
 
 
 class PolicyDocument(BaseModel):
@@ -351,12 +401,25 @@ class PolicyResolver:
     def _validate_budget(self, higher: BudgetPolicy | None, lower: BudgetPolicy | None) -> None:
         if not higher or not lower:
             return
-        for field in ("monthly_spend_cap_usd", "run_budget_usd", "service_budget_usd"):
+        for field in (
+            "monthly_spend_cap_usd",
+            "agent_monthly_spend_cap_usd",
+            "run_budget_usd",
+            "service_budget_usd",
+        ):
             higher_value = getattr(higher, field)
             lower_value = getattr(lower, field)
             if higher_value is not None and lower_value is not None:
                 if to_money(lower_value) > to_money(higher_value):
                     raise PolicyValidationError(f"{field} cannot loosen higher-scope ceiling")
+        if (
+            higher.monthly_spend_cap_usd is not None
+            and lower.agent_monthly_spend_cap_usd is not None
+            and to_money(lower.agent_monthly_spend_cap_usd) > to_money(higher.monthly_spend_cap_usd)
+        ):
+            raise PolicyValidationError(
+                "agent_monthly_spend_cap_usd cannot exceed the higher-scope monthly_spend_cap_usd"
+            )
 
     def _validate_tokens(self, higher: TokenPolicy | None, lower: TokenPolicy | None) -> None:
         if not higher or not lower:
@@ -424,8 +487,12 @@ class PolicyResolver:
             monthly_spend_cap_usd=_min_money(
                 higher.monthly_spend_cap_usd, lower.monthly_spend_cap_usd
             ),
+            agent_monthly_spend_cap_usd=_min_money(
+                higher.agent_monthly_spend_cap_usd, lower.agent_monthly_spend_cap_usd
+            ),
             run_budget_usd=_min_money(higher.run_budget_usd, lower.run_budget_usd),
             service_budget_usd=_min_money(higher.service_budget_usd, lower.service_budget_usd),
+            spend_caps=[*(higher.spend_caps or []), *(lower.spend_caps or [])] or None,
         )
 
     def _merge_tokens(
@@ -501,6 +568,8 @@ class PolicyResolver:
             or bool(lower.prompt_injection_detection_enabled),
             output_sanitizer_enabled=bool(higher.output_sanitizer_enabled)
             or bool(lower.output_sanitizer_enabled),
+            # Not a guard but a preference: the more specific layer's setting wins.
+            answer_check=lower.answer_check or higher.answer_check,
         )
 
 

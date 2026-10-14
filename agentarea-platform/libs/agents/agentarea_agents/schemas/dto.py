@@ -13,6 +13,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from agentarea_common.utils.types import NotNull
+from agentarea_governance.domain.policies import AnswerCheckPolicy
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from agentarea_agents.schemas.import_export import ToolConfig
@@ -68,6 +69,15 @@ class AgentCreate(BaseModel):
         default=None,
         description="Expose this agent over the A2UI protocol.",
     )
+    answer_check: AnswerCheckPolicy | None = Field(
+        default=None,
+        description=(
+            "Check the agent's final answer for leaks (other scripts, tool names, codes, "
+            "JSON, stack traces) and have the model rewrite it once before the person "
+            "sees it. Null leaves it off. A governance safety rule that sets "
+            "answer_check overrides this setting."
+        ),
+    )
     skill_ids: list[UUID] | None = Field(
         default=None,
         description="UUIDs of skills to attach to the agent.",
@@ -105,6 +115,7 @@ class AgentUpdate(BaseModel):
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
+    answer_check: AnswerCheckPolicy | None = None
     skill_ids: list[UUID] | None = None
     agent_type: Annotated[AgentTypeLiteral | None, NotNull] = None
 

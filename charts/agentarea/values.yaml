@@ -293,6 +293,15 @@ global:
       port: 8001
       path: "/health"
 
+  # Outbound HTTP from the backend and worker
+  http:
+    # -- PEM text of CA certificates to trust on outbound TLS in addition to the
+    # public roots, for hosts whose chain those roots leave out (the Russian
+    # Trusted Root CA, a corporate CA). Rendered into a ConfigMap, mounted into
+    # the backend and worker, and named by AGENTAREA_HTTP_EXTRA_CA_CERTS. Empty:
+    # public roots only.
+    extraCaCerts: ""
+
   # Security configuration
   security:
     # Pod security context
@@ -1206,10 +1215,7 @@ jobs:
 # A post-migration Job runs `agentarea-api reconcile`, which ensures each
 # registry exists and syncs it via the platform RegistryService (the same code
 # path the API and CLI use). Idempotent: re-runs on every install/upgrade.
-# Once the schema reaches the migration head it also grants authorization-graph
-# ownership of rows a migration inserted by SQL. Disable to bring your own
-# catalog or start empty, or to run `agentarea-api reconcile` from a hook of your
-# own; either way something must run it after each migration.
+# Disable to bring your own catalog or start empty.
 registryReconcile:
   enabled: true
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected

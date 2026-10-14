@@ -19,6 +19,10 @@ export const TextPart: React.FC<{ part: Part }> = ({ part }) => {
   const streaming = part.eventType === "llm.call.chunk" && data.is_final !== true;
   const thinking = typeof data.thinking === "string" ? data.thinking : "";
   const failed = part.eventType === "llm.call.failed";
+  const failure =
+    typeof data.error === "string" && data.error.trim()
+      ? data.error.trim()
+      : "LLM call failed";
 
   return (
     <div className="min-w-0 px-2">
@@ -29,7 +33,7 @@ export const TextPart: React.FC<{ part: Part }> = ({ part }) => {
         </details>
       )}
       {failed ? (
-        <StatusIndicator kind="failed">LLM call failed</StatusIndicator>
+        <StatusIndicator kind="failed">{failure}</StatusIndicator>
       ) : streaming && !content ? (
         <StatusIndicator kind="running">Thinking</StatusIndicator>
       ) : null}

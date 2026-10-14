@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/agentarea/mcp-manager/internal/mcpstorage"
 	"github.com/agentarea/mcp-manager/internal/models"
 	"github.com/agentarea/mcp-manager/internal/secrets"
 )
@@ -13,6 +14,7 @@ import (
 type DockerProvider struct {
 	secretResolver   secrets.SecretResolver
 	containerManager ContainerManagerInterface
+	storage          *mcpstorage.Issuer
 	logger           *slog.Logger
 }
 
@@ -23,10 +25,11 @@ type ContainerManagerInterface interface {
 }
 
 // NewDockerProvider creates a new Docker provider
-func NewDockerProvider(secretResolver secrets.SecretResolver, containerManager ContainerManagerInterface, logger *slog.Logger) *DockerProvider {
+func NewDockerProvider(secretResolver secrets.SecretResolver, containerManager ContainerManagerInterface, storage *mcpstorage.Issuer, logger *slog.Logger) *DockerProvider {
 	return &DockerProvider{
 		secretResolver:   secretResolver,
 		containerManager: containerManager,
+		storage:          storage,
 		logger:           logger,
 	}
 }
@@ -44,6 +47,14 @@ func (p *DockerProvider) CreateInstance(ctx context.Context, instance *models.MC
 			slog.String("error", err.Error()))
 		return err
 	}
+	storageEnvironment, err := p.storage.Environment(instance)
+	if err != nil {
+		p.logger.Error("Failed to issue MCP storage environment",
+			slog.String("instance_id", instance.InstanceID),
+			slog.String("error", err.Error()))
+		return err
+	}
+	resolvedSpec = withEnvironment(resolvedSpec, storageEnvironment)
 
 	// Use the container manager to create the container
 	// This ensures the container is properly tracked in the manager's internal map

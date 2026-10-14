@@ -46,19 +46,20 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 <Steps titleSize="h3">
   <Step title="Ask what the provider needs">
     ```bash
-    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/preflight?instance_id=$INSTANCE_ID" \
+    curl -s "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/oauth/preflight?instance_id=$INSTANCE_ID" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN"
     ```
 
     ```json
     {
-      "instance_id": "76216436-01e9-4ebc-a8d5-9023ed773cce",
       "status": "oauth_app_required",
+      "credential_source": null,
       "connected": false,
       "detail": "https://accounts.google.com does not support Dynamic Client Registration (RFC 7591), so AgentArea cannot register itself. Register an OAuth app with this provider and connect with its client ID and secret.",
       "issuer": "https://accounts.google.com",
       "authorization_endpoint": "https://accounts.google.com/o/oauth2/v2/auth",
-      "scopes": ["https://www.googleapis.com/auth/gmail.modify"]
+      "scopes": ["https://www.googleapis.com/auth/gmail.modify"],
+      "redirect_uri": "https://api.example.com/v1/oauth/callback"
     }
     ```
 
@@ -66,12 +67,14 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 
     | `status` | What it means | Next |
     |---|---|---|
-    | `ready` | The provider implements RFC 7591 | Authorize with no credentials |
-    | `oauth_app_required` | No dynamic registration; `detail` names the issuer | Register an app with the provider, then authorize with `credential_mode: custom` |
+    | `ready` | The operator configured an OAuth app for the provider (`credential_source: platform`), or the provider implements RFC 7591 (`credential_source: dynamic`) | Authorize with no credentials |
+    | `oauth_app_required` | Neither; `detail` names the issuer | Register an app with the provider, then authorize with `credential_mode: custom` |
     | `unsupported` | No OAuth discovery here; `detail` says what failed | Use [Pass secrets to an MCP server](/guides/mcp/pass-secrets), or nothing if the server needs no token |
 
     Pass `server_id` instead of `instance_id` to ask about a catalog spec before
-    any connection exists; `connected` is then always `false`.
+    any connection exists, or `catalog_item_id` to ask about a catalog API
+    connection; `connected` is then always `false`. The same endpoints serve both
+    kinds of connection.
 
     Every outcome is a 200 — the endpoint answers a question about capability
     rather than failing. It runs live discovery against the MCP URL on each call,
@@ -80,7 +83,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 
   <Step title="Start the flow">
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/authorize" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/oauth/authorize" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"instance_id\": \"$INSTANCE_ID\", \"return_to\": \"https://app.example.com\"}"
@@ -88,7 +91,8 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 
     ```json
     {
-      "authorize_url": "https://provider.example.com/oauth/authorize?response_type=code&client_id=...&code_challenge=...&code_challenge_method=S256&state=..."
+      "authorize_url": "https://provider.example.com/oauth/authorize?response_type=code&client_id=...&code_challenge=...&code_challenge_method=S256&state=...",
+      "connection_id": "76216436-01e9-4ebc-a8d5-9023ed773cce"
     }
     ```
 
@@ -96,7 +100,8 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     yourself.
 
     Behind that single call AgentArea discovers the authorization server from the MCP
-    URL, registers as a client via Dynamic Client Registration, generates a PKCE S256
+    URL, picks the OAuth client — the operator's app when one serves the provider,
+    else a client registered via Dynamic Client Registration — generates a PKCE S256
     pair, persists the client credentials on an auth config, and stores the flow state
     in Redis keyed by `state`. The state holds a reference to those credentials, never
     a copy of the client secret.
@@ -130,7 +135,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
 
   <Step title="Complete consent in the browser">
     Open the URL, approve the scopes. The provider redirects to
-    `GET /v1/mcp-oauth/callback` with `code` and `state`.
+    `GET /v1/oauth/callback` with `code` and `state`.
 
     The callback is public — it must be, because the provider redirects a browser to
     it — and it is protected by the `state` token rather than your API key. It
@@ -144,13 +149,14 @@ supply per connection. Ask the preflight endpoint rather than guessing.
   </Step>
 
   <Step title="Connect a provider without dynamic registration">
-    When preflight returned `oauth_app_required`, register an OAuth app with the
-    provider yourself, using your deployment's callback URL
-    (`$AGENTAREA_URL/v1/mcp-oauth/callback`) as its redirect URI. Then pass its
-    credentials with the authorize call:
+    When preflight returned `oauth_app_required` — or you would rather sign in
+    through your own app than the operator's — register an OAuth app with the
+    provider yourself, using the `redirect_uri` preflight returned
+    (`$AGENTAREA_URL/v1/oauth/callback`, the one callback for every connection).
+    Then pass its credentials with the authorize call:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/authorize" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/oauth/authorize" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"instance_id\": \"$INSTANCE_ID\", \"credential_mode\": \"custom\", \"client_id\": \"$CLIENT_ID\", \"client_secret\": \"$CLIENT_SECRET\"}"
@@ -164,7 +170,7 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     what to use when you rotate the app without re-authorizing every connection:
 
     ```bash
-    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/mcp-oauth/authorize" \
+    curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/oauth/authorize" \
       -H "Authorization: Bearer $AGENTAREA_TOKEN" \
       -H "Content-Type: application/json" \
       -d "{\"instance_id\": \"$INSTANCE_ID\", \"credential_mode\": \"custom\", \"client_id_secret_id\": \"$CLIENT_ID_SECRET_ID\", \"client_secret_secret_id\": \"$CLIENT_SECRET_SECRET_ID\"}"

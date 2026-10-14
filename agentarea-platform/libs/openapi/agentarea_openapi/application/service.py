@@ -8,9 +8,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+import httpx
 import yaml
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
+from agentarea_common.tool_cost import manual_connector
+from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
 from agentarea_openapi.application.url_validator import (
@@ -109,26 +112,32 @@ async def fetch_and_parse_spec(
     Shared by service._fetch_spec and the preview_spec endpoint.
 
     Raises:
-        ValueError: On validation failure, size limit, or fetch error.
-        httpx.HTTPStatusError: On non-2xx response.
+        ValueError: On validation failure, size limit, a non-2xx answer, or a
+            failed fetch, with the reason in the message.
     """
     validate_url(url, policy=policy)
 
     # The pinned client resolves, vets and pins every hop itself, and hands a
     # proxied request to the proxy by name. Pinning by hand here sent CONNECT to
     # the IP through HTTPS_PROXY, where TLS was then checked against the IP.
-    async with safe_async_client(
-        policy=policy, timeout=30, headers=headers or {}, follow_redirects=False
-    ) as client:
-        async with client.stream("GET", url) as resp:
-            resp.raise_for_status()
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
-                total += len(chunk)
-                if total > _SPEC_MAX_SIZE:
-                    raise ValueError("Spec response exceeds 5MB limit.")
-                chunks.append(chunk)
+    try:
+        async with safe_async_client(
+            policy=policy, timeout=30, headers=headers or {}, follow_redirects=False
+        ) as client:
+            async with client.stream("GET", url) as resp:
+                if not resp.is_success:
+                    raise ValueError(f"Spec URL {url} returned HTTP {resp.status_code}")
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in resp.aiter_bytes(chunk_size=64 * 1024):
+                    total += len(chunk)
+                    if total > _SPEC_MAX_SIZE:
+                        raise ValueError("Spec response exceeds 5MB limit.")
+                    chunks.append(chunk)
+    except UnsafeUrlError:
+        raise
+    except httpx.RequestError as exc:
+        raise ValueError(f"Could not fetch the spec from {url}: {exc}") from exc
 
     content = b"".join(chunks)
     text = content.decode(resp.encoding or "utf-8", errors="replace")
@@ -367,6 +376,16 @@ class OpenAPIConnectionService:
             if p.get("secret"):
                 await self._secret_manager.delete_secret(_query_param_key(conn.id, p["name"]))
 
+    async def _read_secret(self, conn: OpenAPIConnection, key: str) -> str | None:
+        """A connection's secret, from the platform workspace when the platform manages it.
+
+        Whatever workspace is calling, a platform-managed connection's credential is
+        the platform's, the only one that writes it, as for MCP instances.
+        """
+        if conn.managed_by == MANAGED_BY_PLATFORM:
+            return await platform_secret(key)
+        return await self._secret_manager.get_secret(key)
+
     async def resolve_query_params(self, conn: OpenAPIConnection) -> dict[str, str]:
         """Return the connection's configured query parameters with their secret values.
 
@@ -378,7 +397,7 @@ class OpenAPIConnectionService:
             if not p.get("secret"):
                 params[name] = p.get("value", "")
                 continue
-            value = await self._secret_manager.get_secret(_query_param_key(conn.id, name))
+            value = await self._read_secret(conn, _query_param_key(conn.id, name))
             if not value:
                 raise MissingQueryParamSecretError(
                     f"Connection {conn.id} has no stored value for query parameter '{name}'. "
@@ -412,7 +431,7 @@ class OpenAPIConnectionService:
         """
         base_url = conn.base_url
         for name in conn.url_variables or []:
-            value = await self._secret_manager.get_secret(_url_variable_key(conn.id, name))
+            value = await self._read_secret(conn, _url_variable_key(conn.id, name))
             if not value:
                 raise MissingUrlVariableSecretError(
                     f"Connection {conn.id} has no stored value for URL variable '{name}'. "
@@ -432,7 +451,7 @@ class OpenAPIConnectionService:
                         f"Connection {conn.id} has secret headers but no secret manager "
                         "is configured to resolve them."
                     )
-                value = await self._secret_manager.get_secret(_secret_key(conn.id, name))
+                value = await self._read_secret(conn, _secret_key(conn.id, name))
                 if not value:
                     # Dropping the header sends the request unauthenticated, and
                     # the 401 that comes back names the remote API rather than
@@ -486,6 +505,13 @@ class OpenAPIConnectionService:
                 connection_id,
                 exc_info=True,
             )
+
+    async def catalog_connector(self, conn: OpenAPIConnection) -> str:
+        """The connector id billing and caps know the connection by (wiki ADR-0038)."""
+        catalog_id = (
+            await self._repo.catalog_id(conn.registry_item_id) if conn.registry_item_id else None
+        )
+        return catalog_id or manual_connector(conn.id)
 
     async def get_connection(self, connection_id: UUID) -> OpenAPIConnection | None:
         return await self._repo.get_by_id(str(connection_id))
@@ -622,3 +648,18 @@ class OpenAPIConnectionService:
             policy=self._outbound_policy,
             headers=headers,
         )
+
+
+async def platform_secret(key: str) -> str | None:
+    """A secret of the platform workspace, read on behalf of any caller."""
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.config import get_database
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
+    from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+
+    platform = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID)
+    session = get_database().async_session_factory()
+    try:
+        return await get_real_secret_manager(session, platform).get_secret(key)
+    finally:
+        await session.close()

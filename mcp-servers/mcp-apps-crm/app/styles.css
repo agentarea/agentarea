@@ -1,0 +1,4 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../../mcp-apps-kit/theme.css";
+@source "../../mcp-apps-kit";

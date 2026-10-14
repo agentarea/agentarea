@@ -4,6 +4,7 @@ import builtins
 import json
 from urllib.parse import quote
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -13,7 +14,12 @@ from agentarea_common.artifacts import (
     DbArtifactEventRecorder,
     InvalidArtifactPathError,
 )
-from agentarea_common.artifacts.workspace_writes import MAX_UPLOADS_PER_PLAN, plan_uploads
+from agentarea_common.artifacts.workspace_writes import (
+    MAX_UPLOADS_PER_PLAN,
+    WorkspaceReadOnlyError,
+    ensure_not_read_only,
+    plan_uploads,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.config.app import get_app_settings
 from agentarea_common.workspaces.lookup import workspace_api_prefix
@@ -73,7 +79,7 @@ class FilesToolset(Toolset):
         async with platform_read_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService()
             if not await _exists(svc, user_ctx.workspace_id, path):
-                return json.dumps({"error": "File not found"})
+                raise ToolError("File not found")
             url = await _workspace_file_download_url(user_ctx, path)
             return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
@@ -92,9 +98,9 @@ class FilesToolset(Toolset):
         and keeps the URLs out of the conversation.
         """
         if not files:
-            return json.dumps({"error": "files must not be empty"})
+            raise ToolError("files must not be empty")
         if len(files) > MAX_UPLOADS_PER_PLAN:
-            return json.dumps({"error": f"at most {MAX_UPLOADS_PER_PLAN} files per call"})
+            raise ToolError(f"at most {MAX_UPLOADS_PER_PLAN} files per call")
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService(
                 recorder=DbArtifactEventRecorder(),
@@ -107,9 +113,13 @@ class FilesToolset(Toolset):
     @unrestricted("workspace files are member-level, as DELETE /v1/files allows")
     async def delete(self, path: str) -> str:
         """Delete a workspace file."""
+        try:
+            ensure_not_read_only(path)
+        except WorkspaceReadOnlyError as exc:
+            raise ToolError(str(exc)) from exc
         async with platform_context() as (_session, user_ctx, _repo, _broker, _secret):
             svc = ArtifactService()
             if not await _exists(svc, user_ctx.workspace_id, path):
-                return json.dumps({"deleted": False, "error": "File not found"})
+                raise ToolError("File not found")
             await svc.delete(user_ctx.workspace_id, path)
             return json.dumps({"deleted": True, "path": path})

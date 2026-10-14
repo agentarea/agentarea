@@ -34,3 +34,25 @@ async def test_workspace_files_toolset_runs_without_api_package_context():
 
     deleted = json.loads(await toolset.delete("report.html"))
     assert deleted == {"deleted": True, "path": "report.html"}
+
+
+@pytest.mark.asyncio
+async def test_a_task_file_links_to_the_task_files_endpoint_not_the_library():
+    # In the worker the storage is the task's sandbox; the library path would 404.
+    storage = InMemoryStorage()
+    await storage.put("workspace-1", "out/report final.html", b"<html>ok</html>", "text/html")
+    toolset = create_code_tool_instance(
+        "agentarea/workspace_files",
+        extra_kwargs={
+            "storage": storage,
+            "workspace_id": "workspace-1",
+            "workspace_slug": "acme",
+            "task_id": "task-9",
+        },
+    )
+
+    url = json.loads(await toolset.get_url("out/report final.html"))
+
+    assert url["url"] == (
+        "/v1/workspaces/acme/files/download/tasks/task-9/workspace/out/report%20final.html"
+    )

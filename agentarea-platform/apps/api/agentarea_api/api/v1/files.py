@@ -39,6 +39,8 @@ from agentarea_common.artifacts.workspace import DEFAULT_MAX_FILE_BYTES
 from agentarea_common.artifacts.workspace_writes import (
     MAX_UPLOADS_PER_PLAN,
     RESERVED_PREFIXES,
+    WorkspaceReadOnlyError,
+    ensure_not_read_only,
     is_reserved_path,
     plan_uploads,
     resolve_write_path,
@@ -214,8 +216,17 @@ def _task_workspace_path(file_path: str) -> tuple[str, str] | None:
 def _resolve_upload_path(path: str, filename: str) -> str:
     try:
         return resolve_write_path(path, filename)
+    except WorkspaceReadOnlyError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
     except WorkspaceValidationError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+def _ensure_not_read_only(path: str) -> None:
+    try:
+        ensure_not_read_only(path)
+    except WorkspaceReadOnlyError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
 
 
 async def _ensure_no_file_ancestors(service: ArtifactService, workspace_id: str, path: str) -> None:
@@ -474,6 +485,7 @@ async def delete_workspace_file(
             status_code=400,
             detail=f"{clean!r} is not a workspace library file",
         )
+    _ensure_not_read_only(clean)
     svc = ArtifactService(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),
@@ -509,6 +521,8 @@ async def restore_workspace_file(
     clean = file_path.lstrip("/")
     if not clean.startswith(TRASH_PREFIX):
         raise HTTPException(status_code=400, detail="Not an archived file")
+    # .trash/{timestamp}/{original path}: the restore would write the original.
+    _ensure_not_read_only("/".join(PurePosixPath(clean).parts[2:]))
     svc = ArtifactService(
         recorder=DbArtifactEventRecorder(),
         actor=ArtifactActor(user_id=user_context.user_id),

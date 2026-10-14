@@ -20,11 +20,12 @@ from ..constants import (
     ExecutionStatus,
 )
 from ..retry import bookkeeping_retry_policy
-from .budget import MONTHLY_CAP_FAILURE_REASON
+from .budget import LLM_RUN_CAP_FAILURE_REASON, MONTHLY_CAP_FAILURE_REASON
 from .continue_as_new import ContinueAsNewMixin
 from .limits import run_limit_reason
 from .llm_turn import LLMTurnMixin
 from .patches import LONG_RUN_LOOP_PATCH
+from .stopping import STOPPED_BEFORE_RUNNING, STOPPED_WHILE_RUNNING
 
 
 class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
@@ -140,7 +141,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
 
     async def _await_continuation(self, failure_reason: str, message: str) -> bool:
         """Idle durably until the user grants resources or the window expires."""
-        if failure_reason == MONTHLY_CAP_FAILURE_REASON:
+        if failure_reason in (MONTHLY_CAP_FAILURE_REASON, LLM_RUN_CAP_FAILURE_REASON):
             return False
         if (
             self._interaction_contract_enabled
@@ -296,6 +297,10 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         if self._monthly_cap_message:
             return False, MONTHLY_CAP_FAILURE_REASON, self._monthly_cap_message
 
+        llm_cap_message = self._llm_run_cap_message()
+        if llm_cap_message:
+            return False, LLM_RUN_CAP_FAILURE_REASON, llm_cap_message
+
         # Check maximum iterations
         if self.state.goal is None:
             raise ApplicationError(
@@ -346,39 +351,29 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             f"{self._budget.describe(self._budget.budget_limit)})"
         )
 
-    def _answer_unanswered_tool_calls(self, content: str) -> None:
-        """Give every tool call of the last model turn a result.
+    def _answer_stopped_tool_calls(self) -> None:
+        """Answer the calls a stop interrupted, then the ones it kept from running.
 
-        A turn that stops before its tool calls ran would otherwise leave the
-        conversation with calls no result answers, and providers reject that on
-        the next model call.
+        The stopped run's log stays a conversation a model accepts, so a later
+        message continues it.
         """
+        stopped = {call.tool_call.id for call in self._stopped_tool_calls}
         last_assistant = next(
-            (
-                index
-                for index in range(len(self.state.messages) - 1, -1, -1)
-                if self.state.messages[index].role == "assistant"
-            ),
+            (message for message in reversed(self.state.messages) if message.role == "assistant"),
             None,
         )
-        if last_assistant is None:
-            return
-        answered = {
-            message.tool_call_id
-            for message in self.state.messages[last_assistant + 1 :]
-            if message.role == "tool"
-        }
-        for tool_call in self.state.messages[last_assistant].tool_calls or []:
+        for tool_call in (last_assistant.tool_calls or []) if last_assistant else []:
             call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
-            if call_id and call_id not in answered:
+            if call_id in stopped:
                 self.state.messages.append(
                     Message(
                         role="tool",
-                        content=content,
+                        content=STOPPED_WHILE_RUNNING,
                         tool_call_id=call_id,
                         name=(tool_call.get("function") or {}).get("name"),
                     )
                 )
+        self._answer_unanswered_tool_calls(STOPPED_BEFORE_RUNNING)
 
     def _record_unsuccessful_termination(self, failure_reason: str | None, message: str) -> None:
         """Persist a stable failure code and a user-facing explanation."""

@@ -59,6 +59,15 @@ class BaseTool(ABC):
         }
 
 
+class ToolError(Exception):
+    """The tool ran and the work it was asked for failed; the message is for the model.
+
+    Raise it from a tool method instead of returning an error payload: the
+    wrapper records the call as failed (success=False) and an MCP client sees
+    ``isError``. A payload that merely mentions an error reads as a success.
+    """
+
+
 class ToolExecutionError(Exception):
     """Exception raised when tool execution fails."""
 

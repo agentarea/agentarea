@@ -20,8 +20,10 @@ from uuid import uuid4
 import agentarea_mcp.application.service as mcp_service
 import pytest
 from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
-from agentarea_api.api.v1 import _catalog_connections, client_mcp, mcp_oauth_connect
+from agentarea_agents_sdk.tools.base_tool import ToolError
+from agentarea_api.api.v1 import _catalog_connections, client_mcp
 from agentarea_api.api.v1._catalog_connections import CatalogConnection
+from agentarea_api.oauth_connect import pages as oauth_pages
 from agentarea_api.tools import connector_tools_toolset
 from agentarea_api.tools.connector_tools_toolset import ConnectorToolsToolset
 from agentarea_common.audit import AuditEventORM
@@ -69,6 +71,7 @@ def _connection(
         custom_query_params=[],
         registry_item_id=registry_item_id,
         auth_config_id=auth_config_id,
+        managed_by=None,
     )
 
 
@@ -94,7 +97,7 @@ def harness(monkeypatch):
     monkeypatch.setattr(connector_tools_toolset, "platform_context", _ctx)
     monkeypatch.setattr(connector_tools_toolset, "platform_read_context", _ctx)
     monkeypatch.setattr(
-        mcp_oauth_connect,
+        oauth_pages,
         "get_settings",
         lambda: SimpleNamespace(app=SimpleNamespace(APP_URL="https://app.example")),
     )
@@ -412,9 +415,9 @@ async def test_a_caller_without_use_is_refused_before_anything_runs(harness):
         status_code=403, detail="Permission denied"
     )
 
-    result = await _call(connector="A", tool="t")
+    with pytest.raises(ToolError, match="Permission denied"):
+        await ConnectorToolsToolset().call(connector="A", tool="t")
 
-    assert result == {"error": "Permission denied"}
     harness.dispatch.assert_not_awaited()
 
 
@@ -479,11 +482,13 @@ async def test_an_unknown_tool_suggests_close_names(harness):
         _instance("A", [_tool("list_campaigns"), _tool("list_leads"), _tool("send_email")])
     ]
 
-    result = await _call(connector="A", tool="list_campaign")
+    with pytest.raises(ToolError) as error:
+        await ConnectorToolsToolset().call(connector="A", tool="list_campaign")
 
-    assert "list_campaign" in result["error"]
-    assert result["suggestions"][0] == "list_campaigns"
-    assert "send_email" not in result["suggestions"]
+    payload = json.loads(str(error.value))
+    assert "list_campaign" in payload["error"]
+    assert payload["suggestions"][0] == "list_campaigns"
+    assert "send_email" not in payload["suggestions"]
     harness.dispatch.assert_not_awaited()
 
 
@@ -493,10 +498,12 @@ async def test_an_ambiguous_connector_name_lists_the_ids(harness):
     two = _instance("Mail", [_tool("t")])
     harness.instances = [one, two]
 
-    result = await _call(connector="Mail", tool="t")
+    with pytest.raises(ToolError) as error:
+        await ConnectorToolsToolset().call(connector="Mail", tool="t")
 
-    assert "ambiguous" in result["error"]
-    assert sorted(result["connector_ids"]) == sorted([str(one.id), str(two.id)])
+    payload = json.loads(str(error.value))
+    assert "ambiguous" in payload["error"]
+    assert sorted(payload["connector_ids"]) == sorted([str(one.id), str(two.id)])
     harness.dispatch.assert_not_awaited()
 
 
@@ -504,9 +511,9 @@ async def test_an_ambiguous_connector_name_lists_the_ids(harness):
 async def test_an_unknown_connector_is_an_error(harness):
     harness.instances = [_instance("A", [_tool("t")])]
 
-    result = await _call(connector="Nope", tool="t")
+    with pytest.raises(ToolError, match="Nope"):
+        await ConnectorToolsToolset().call(connector="Nope", tool="t")
 
-    assert "Nope" in result["error"]
     harness.dispatch.assert_not_awaited()
 
 
@@ -579,9 +586,9 @@ async def test_a_caller_without_use_on_an_openapi_connection_is_refused(harness)
         status_code=403, detail="Permission denied"
     )
 
-    result = await _call(connector="Api", tool="t")
+    with pytest.raises(ToolError, match="Permission denied"):
+        await ConnectorToolsToolset().call(connector="Api", tool="t")
 
-    assert result == {"error": "Permission denied"}
     harness.openapi_dispatch.assert_not_awaited()
 
 
@@ -607,9 +614,11 @@ async def test_an_openapi_delete_waits_for_confirmation(harness):
 async def test_an_unknown_openapi_tool_suggests_close_names(harness):
     harness.connections = [_connection("Api", [_tool("listAccounts"), _tool("getAccount")])]
 
-    result = await _call(connector="Api", tool="listAccount")
+    with pytest.raises(ToolError) as error:
+        await ConnectorToolsToolset().call(connector="Api", tool="listAccount")
 
-    assert result["suggestions"][0] == "listAccounts"
+    payload = json.loads(str(error.value))
+    assert payload["suggestions"][0] == "listAccounts"
     harness.openapi_dispatch.assert_not_awaited()
 
 
@@ -620,10 +629,12 @@ async def test_a_name_shared_by_an_mcp_and_an_openapi_connector_is_ambiguous(har
     harness.instances = [mcp]
     harness.connections = [api]
 
-    result = await _call(connector="Mail", tool="t")
+    with pytest.raises(ToolError) as error:
+        await ConnectorToolsToolset().call(connector="Mail", tool="t")
 
-    assert "ambiguous" in result["error"]
-    assert sorted(result["connector_ids"]) == sorted([str(mcp.id), str(api.id)])
+    payload = json.loads(str(error.value))
+    assert "ambiguous" in payload["error"]
+    assert sorted(payload["connector_ids"]) == sorted([str(mcp.id), str(api.id)])
     harness.dispatch.assert_not_awaited()
     harness.openapi_dispatch.assert_not_awaited()
 
@@ -741,7 +752,14 @@ def dispatch_env(monkeypatch):
         return CallToolResult(content=[TextContent(type="text", text=f"ran {tool_name}")])
 
     monkeypatch.setattr(MCPAggregatorProxy, "_call_member_tool_result", call_member)
-    instance = SimpleNamespace(id=uuid4(), name="DeepWiki", transport="url")
+    instance = SimpleNamespace(
+        id=uuid4(), name="DeepWiki", transport="url", managed_by=None, server_spec_id="spec"
+    )
+
+    async def no_catalog_entry(_user_ctx, _instance):
+        return None
+
+    monkeypatch.setattr(client_mcp, "_catalog_server_spec", no_catalog_entry)
     service = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)
     service._resolve_mcp_url_and_headers = AsyncMock(
@@ -792,23 +810,6 @@ async def test_dispatch_refuses_a_tool_the_policy_denies(dispatch_env):
     assert event.action == "tool.call.denied"
 
 
-@pytest.mark.asyncio
-async def test_dispatch_refuses_a_tool_held_for_approval_because_a_call_cannot_wait(dispatch_env):
-    env = dispatch_env
-    env.policy["approval"] = {"escalation_rules": ["ask_*"]}
-
-    result = await client_mcp.call_instance_tool(
-        AsyncMock(), CALLER, env.service, env.instance, "ask_question", {}
-    )
-
-    assert result.is_error is True
-    assert "cannot wait for approval" in result.content[0].text
-    assert env.upstream == []
-    [event] = env.events
-    assert event.action == "tool.call.denied"
-    assert event.event_metadata["decision"] == "require_approval"
-
-
 @pytest.fixture
 def openapi_env(dispatch_env, monkeypatch):
     """The real ``call_openapi_tool`` over the agents' OpenAPI tool, its HTTP call stubbed."""
@@ -834,6 +835,7 @@ def openapi_env(dispatch_env, monkeypatch):
     )
     service = MagicMock()
     service.get_connection = AsyncMock(return_value=connection)
+    service.catalog_connector = AsyncMock(return_value="com.google.analytics/admin/openapi")
     return SimpleNamespace(
         events=dispatch_env.events,
         policy=dispatch_env.policy,

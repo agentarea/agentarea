@@ -19,17 +19,52 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StringConstraints,
     field_validator,
 )
 
+from ..tool_context import CONTEXT_SECRET_MIN_LENGTH
 from .image_reference import validate_optional_image_reference, validate_spec_image
+
+
+def validate_spec_storage(json_spec: dict[str, Any]) -> dict[str, Any]:
+    """Refuse a ``storage`` key the MCP manager would reject when starting the app.
+
+    ``{"enabled": true}`` opts an MCP app into the manager's app storage; the
+    manager accepts no other value, so a typo fails here instead of at start.
+    """
+    storage = json_spec.get("storage")
+    if storage is None:
+        return json_spec
+    if (
+        not isinstance(storage, dict)
+        or set(storage) != {"enabled"}
+        or storage["enabled"] is not True
+    ):
+        raise ValueError('json_spec.storage must be exactly {"enabled": true}')
+    return json_spec
+
 
 # json_spec is read back in SQL (``json_spec->>'type'``); a NUL or unpaired
 # surrogate stored there broke every such query, so refuse it at the edge.
-JsonSpec = Annotated[dict[str, Any], AfterValidator(require_pg_text)]
+JsonSpec = Annotated[
+    dict[str, Any], AfterValidator(require_pg_text), AfterValidator(validate_spec_storage)
+]
 # A spec or instance json_spec whose ``image`` reaches ``docker run``.
 ContainerJsonSpec = Annotated[JsonSpec, AfterValidator(validate_spec_image)]
 ImageReference = Annotated[str | None, AfterValidator(validate_optional_image_reference)]
+
+# Write-only key that signs the per-call context sent to a URL instance
+# (``X-AgentArea-Context``). Stored in the secret manager, never returned.
+ContextSecret = (
+    Annotated[str, StringConstraints(min_length=CONTEXT_SECRET_MIN_LENGTH, max_length=512)] | None
+)
+CONTEXT_SIGNING_HELP = (
+    "URL instances only. Shared secret (at least 32 characters) AgentArea signs "
+    "each tool call's context token with, so the server can trust which task, "
+    "workspace and end user the call is for. Write-only: stored in the secret "
+    "manager; the instance's json_spec shows context_signing: true instead."
+)
 
 INSTANCE_TRANSPORT_FIELDS = frozenset(
     {"type", "endpoint_url", "image", "command", "args", "port", "package", "source"}
@@ -180,6 +215,10 @@ class MCPServerInstanceCreate(BaseModel):
         default=None,
         description="ID of an MCP auth config (OAuth/credentials) to attach.",
     )
+    context_secret: ContextSecret = Field(
+        default=None,
+        description=CONTEXT_SIGNING_HELP,
+    )
 
     @field_validator("name")
     @classmethod
@@ -198,6 +237,10 @@ class MCPServerInstanceUpdate(BaseModel):
     name: Annotated[str | None, NotNull] = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     json_spec: Annotated[JsonSpec | None, NotNull] = None
+    context_secret: ContextSecret = Field(
+        default=None,
+        description=f"{CONTEXT_SIGNING_HELP} Send null to remove it.",
+    )
 
     @field_validator("json_spec")
     @classmethod

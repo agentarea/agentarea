@@ -7,7 +7,7 @@ import { FocusCard, FocusHeader, FocusStep } from "@/components/FocusCard";
 import FormError from "@/components/FormError";
 import { Button } from "@/components/ui/button";
 import Link from "@/components/WorkspaceLink";
-import { getCatalogItem, preflightCatalogConnection } from "@/lib/api";
+import { getCatalogItem } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { existingConnectionsHref } from "@/lib/catalog-connections";
 import { firstIconSrc, openApiIdentity } from "@/lib/entity-identity";
@@ -22,8 +22,8 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { itemId } = await params;
   const t = await getTranslations("MCPServersPage.connectLink");
-  const preflight = (await preflightCatalogConnection(itemId)).data;
-  return { title: t("metaTitle", { name: preflight?.name ?? "" }) };
+  const item = (await getCatalogItem(itemId)).data;
+  return { title: t("metaTitle", { name: item?.name ?? "" }) };
 }
 
 /**
@@ -40,43 +40,42 @@ export default async function CatalogConnectLinkPage({
   const { another } = await searchParams;
   const t = await getTranslations("MCPServersPage");
 
-  const [preflightResult, itemResult, workspaces] = await Promise.all([
-    preflightCatalogConnection(itemId),
+  const [itemResult, workspaces] = await Promise.all([
     getCatalogItem(itemId),
     getWorkspaces(),
   ]);
   const current = workspaces.find((candidate) => candidate.slug === workspace);
   if (!current) notFound();
 
-  const preflight = preflightResult.data;
-  if (!preflight) {
+  const item = itemResult.data;
+  if (!item) {
     return (
       <FocusCard>
         <FormError>
-          {apiErrorMessage(preflightResult, t("catalogConnect.loadFailed"))}
+          {apiErrorMessage(itemResult, t("catalogConnect.loadFailed"))}
         </FormError>
       </FocusCard>
     );
   }
 
-  const spec = (itemResult.data?.spec ?? {}) as {
+  const spec = (item.spec ?? {}) as {
     base_url?: string;
     raw_spec?: Record<string, unknown>;
   };
   const identity = openApiIdentity({
     base_url: spec.base_url,
-    name: preflight.name,
+    name: item.name,
   });
   const icon = firstIconSrc(spec.raw_spec);
   if (icon) identity.sources = [icon, ...identity.sources];
-  const existing = preflight.existing_connections ?? [];
+  const existing = item.workspace_connections ?? [];
   const openHref = existingConnectionsHref(itemId, existing);
 
   return (
     <FocusCard>
       <FocusHeader
         identity={identity}
-        title={t("connectLink.title", { provider: preflight.name })}
+        title={t("connectLink.title", { provider: item.name })}
         subtitle={t("connectLink.workspace", { workspace: current.name })}
       />
       {openHref && another !== "1" ? (
@@ -106,9 +105,9 @@ export default async function CatalogConnectLinkPage({
             isUrlType
             bare
             returnPath={workspacePath(workspace, `/connect/catalog/${itemId}`)}
-            title={t("connectLink.signInTitle", { provider: preflight.name })}
+            title={t("connectLink.signInTitle", { provider: item.name })}
             actionLabel={t("connectLink.signInButton", {
-              provider: preflight.name,
+              provider: item.name,
             })}
           />
         </div>

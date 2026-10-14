@@ -10,7 +10,9 @@ BUDGET_WARNING_THRESHOLD: Final[float] = 0.8  # 80% of budget
 # Timeout configurations
 ACTIVITY_TIMEOUT: Final[timedelta] = timedelta(minutes=5)
 LLM_CALL_TIMEOUT: Final[timedelta] = timedelta(minutes=10)
-TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=35)
+# Covers the longest MCP tool call an instance may allow (agentarea_mcp.tool_timeout)
+# after a container instance's cold start; the call's own timeout is the real bound.
+TOOL_EXECUTION_TIMEOUT: Final[timedelta] = timedelta(minutes=40)
 EVENT_PUBLISH_TIMEOUT: Final[timedelta] = timedelta(seconds=30)
 # How long a run waits for its event store to come back before it gives up.
 EVENT_PUBLISH_WINDOW: Final[timedelta] = timedelta(hours=1)
@@ -74,6 +76,7 @@ class EventTypes:
     WORKFLOW_AWAITING_FOLLOW_UP: Final[str] = "task.awaiting_follow_up"
     WORKFLOW_AWAITING_CONTINUATION: Final[str] = "task.awaiting_continuation"
     WORKFLOW_CONTINUED: Final[str] = "task.continued"
+    WORKFLOW_RETRIED: Final[str] = "task.retried"
     VALIDATION_STARTED: Final[str] = "artifact.validation.started"
     VALIDATION_COMPLETED: Final[str] = "artifact.validation.completed"
 
@@ -93,6 +96,8 @@ class EventTypes:
     TOOL_CALL_STARTED: Final[str] = "tool.call"
     TOOL_CALL_COMPLETED: Final[str] = "tool.result"
     TOOL_CALL_FAILED: Final[str] = "tool.result"
+    # Recorded by the tool activity itself while a call runs (see tool_progress).
+    TOOL_PROGRESS: Final[str] = "tool.progress"
 
     # Timeline/system — not in the part taxonomy, kept bare.
     BUDGET_WARNING: Final[str] = "BudgetWarning"
@@ -103,6 +108,8 @@ class EventTypes:
     SERVICE_BUDGET_EXCEEDED: Final[str] = "ServiceBudgetExceeded"
 
     CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
+    # The final answer's check found leaks; data says which and whether it was rewritten.
+    ANSWER_CHECKED: Final[str] = "AnswerChecked"
     CONTEXT_WARNING: Final[str] = "ContextWarning"
 
     WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"

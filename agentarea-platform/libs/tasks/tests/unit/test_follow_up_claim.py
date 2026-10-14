@@ -141,9 +141,7 @@ async def test_a_follow_up_sends_the_persons_message_not_the_first_run_message()
     routed = await service._try_route_to_active_workflow(delivery, "c-1")
 
     assert routed is not None and routed.status == "routed"
-    assert executor.signals == [
-        (running.execution_id, "queue_message", {"message": "hello again"})
-    ]
+    assert executor.signals == [(running.execution_id, "queue_message", {"message": "hello again"})]
 
 
 async def test_a_follow_up_whose_text_is_known_routes_even_with_an_event_file():

@@ -312,6 +312,57 @@ class TestProtocolFacet:
         assert await item_repo.category_counts("mcp_servers", protocol="api") == [("analytics", 1)]
 
 
+class TestPricingFacet:
+    @pytest_asyncio.fixture
+    async def connections(self, db_session, item_repo):
+        rate = {"source": "rate", "rate": {"amount": "1", "currency": "RUB"}}
+        reg = await _registry(db_session, "conns", registry_type="mcp_servers")
+        await _item(
+            item_repo,
+            reg,
+            "1",
+            "Search",
+            spec={
+                "connection_type": "openapi",
+                "raw_spec": {
+                    "metadata": {
+                        "agentarea:payers": ["workspace", "platform"],
+                        "agentarea:cost": {"default": rate},
+                    }
+                },
+            },
+        )
+        await _item(
+            item_repo,
+            reg,
+            "2",
+            "Scraper",
+            spec={"raw_spec": {"metadata": {"agentarea:cost": {"default": rate}}}},
+        )
+        await _item(item_repo, reg, "3", "GitHub", spec={"connection_type": "url"})
+        return reg
+
+    async def test_paid_filter_keeps_connections_billed_through_agentarea(
+        self, item_repo, connections
+    ):
+        items, total = await item_repo.browse("mcp_servers", pricing="paid", limit=10)
+        assert ([i.name for i in items], total) == (["Search"], 1)
+
+    async def test_counts_ignore_the_active_pricing_and_follow_the_rest(
+        self, item_repo, connections
+    ):
+        assert await item_repo.pricing_counts("mcp_servers") == [
+            ("paid", 1),
+            ("own_key", 1),
+            ("free", 1),
+        ]
+        assert await item_repo.pricing_counts("mcp_servers", protocol="api") == [("paid", 1)]
+        assert await item_repo.category_counts("mcp_servers", pricing="free") == []
+
+    async def test_other_types_have_no_pricing_dimension(self, item_repo, connections):
+        assert await item_repo.pricing_counts("skills") == []
+
+
 class TestFiltering:
     @pytest_asyncio.fixture
     async def catalog(self, db_session, item_repo):

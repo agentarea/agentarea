@@ -1,22 +1,31 @@
 """Task repository implementation."""
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
-from typing import Any
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.events.contract import APPROVAL_REQUEST, APPROVAL_RESPONSE
-from sqlalchemy import Numeric, cast, func, literal, or_, select, tuple_, update
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from sqlalchemy import func, literal, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.base_service import TaskNotFoundError
+from ..domain.costs import CostCategory, CostEntry
 from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
+from .cost_repository import CostEntryRepository, SpendScope
 from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
+
+if TYPE_CHECKING:
+    from agentarea_governance.domain.policies import BudgetPolicy
+
+    from ..spend_gate import LlmCapReached
 
 
 class TaskRepository(WorkspaceScopedRepository[TaskORM]):
@@ -312,40 +321,63 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
-    async def sum_spend_since(self, since: datetime) -> float:
-        """Sum each task's own model spend for the workspace since a UTC time.
+    async def sum_spend_since(self, since: datetime, agent_id: UUID | None = None) -> Decimal:
+        """The workspace's spend since a UTC instant, in the billing currency.
 
-        Uses started_at (falling back to created_at when started_at is null)
-        as the activity timestamp. New task results persist ``own_cost`` so
-        delegated child spend is not counted once on the child and again in
-        the parent's transitive ``total_cost``. Historical results fall back
-        to ``total_cost``.
-        ``TaskORM.result`` is a plain JSON column, so we extract via the
-        ``->>`` operator (returns text) and cast to numeric.
+        Summed from the spend ledger, where each paid line is stored once on the
+        task that incurred it, so delegated child spend is never counted twice.
+        ``agent_id`` narrows the sum to one agent's lines.
         """
-        own_cost_expr = cast(TaskORM.result.op("->>")("own_cost"), Numeric)
-        total_cost_expr = cast(TaskORM.result.op("->>")("total_cost"), Numeric)
-        cost_expr = func.coalesce(own_cost_expr, total_cost_expr, 0)
-        activity_at = func.coalesce(TaskORM.started_at, TaskORM.created_at)
-        stmt = (
-            select(func.coalesce(func.sum(cost_expr), 0))
-            .where(self._get_workspace_filter())
-            .where(activity_at >= since)
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            since,
+            currency=get_customer_pricing().currency(),
+            agent_id=agent_id,
         )
-        result = await self.session.execute(stmt)
-        return float(result.scalar() or 0.0)
 
-    async def sum_spend_mtd(self) -> float:
-        """Sum total_cost for the current workspace from the first of this UTC month."""
-        now = datetime.now(UTC)
-        first_of_month = datetime(now.year, now.month, 1, tzinfo=UTC).replace(tzinfo=None)
-        return await self.sum_spend_since(first_of_month)
+    async def monthly_llm_cap_reached(
+        self, budget: "BudgetPolicy | None", agent_id: UUID | None = None
+    ) -> "LlmCapReached | None":
+        """The first monthly cap on LLM spend that this month's model lines reached."""
+        from ..spend_gate import monthly_llm_cap_reached
 
-    async def sum_spend_today(self) -> float:
-        """Sum total_cost for the current workspace from the start of today UTC."""
+        return await monthly_llm_cap_reached(
+            CostEntryRepository(self.session, self.user_context),
+            budget,
+            agent_id,
+            get_customer_pricing().currency(),
+        )
+
+    async def sum_task_llm_spend(self, task_id: UUID) -> Decimal:
+        """What a task's own model calls cost over all its runs, in the billing currency."""
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            datetime(1970, 1, 1, tzinfo=UTC),
+            currency=get_customer_pricing().currency(),
+            scope=SpendScope(task_id=task_id, category=CostCategory.MODEL),
+        )
+
+    async def record_costs(self, entries: Sequence[CostEntry]) -> None:
+        """Store paid lines in the spend ledger, once each."""
+        await CostEntryRepository(self.session, self.user_context).record(entries)
+
+    async def sum_spend_by_day(
+        self, since: datetime, agent_id: UUID | None = None
+    ) -> dict[date, Decimal]:
+        """The workspace's (or one agent's) spend per UTC day since a UTC instant."""
+        return await CostEntryRepository(self.session, self.user_context).sum_by_day(
+            since,
+            currency=get_customer_pricing().currency(),
+            agent_id=agent_id,
+        )
+
+    async def sum_spend_mtd(self, agent_id: UUID | None = None) -> Decimal:
+        """The workspace's (or one agent's) spend since the first of this UTC month."""
         now = datetime.now(UTC)
-        today_start = datetime(now.year, now.month, now.day, tzinfo=UTC).replace(tzinfo=None)
-        return await self.sum_spend_since(today_start)
+        return await self.sum_spend_since(datetime(now.year, now.month, 1, tzinfo=UTC), agent_id)
+
+    async def sum_spend_today(self) -> Decimal:
+        """The workspace's spend since the start of today UTC."""
+        now = datetime.now(UTC)
+        return await self.sum_spend_since(datetime(now.year, now.month, now.day, tzinfo=UTC))
 
     async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
         """Update task status atomically with optional additional fields."""
@@ -672,6 +704,7 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 "tool_calls": entry.tool_calls,
                 "tool_call_id": entry.tool_call_id,
                 "name": entry.name,
+                "attachments": entry.attachments,
                 "workspace_id": self.user_context.workspace_id,
                 "created_by": self.user_context.user_id,
             }
@@ -683,7 +716,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 constraint="uq_task_conversation_entries_seq",
                 set_={
                     column: statement.excluded[column]
-                    for column in ("kind", "role", "content", "tool_calls", "tool_call_id", "name")
+                    for column in (
+                        "kind",
+                        "role",
+                        "content",
+                        "tool_calls",
+                        "tool_call_id",
+                        "name",
+                        "attachments",
+                    )
                 },
                 where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
             )
@@ -716,6 +757,15 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
         tail = [by_seq[seq] for seq in sorted(by_seq) if seq >= tail_start and seq not in head_set]
         return head, tail
 
+    async def next_seq(self, task_id: UUID) -> int:
+        """The position after the task's last entry; 0 for an empty log."""
+        last = await self.session.scalar(
+            select(func.max(TaskConversationEntryORM.seq)).where(
+                TaskConversationEntryORM.task_id == task_id, self._get_workspace_filter()
+            )
+        )
+        return 0 if last is None else last + 1
+
     async def read_all(self, task_id: UUID) -> list[ConversationEntry]:
         """Every entry of the task's conversation, in log order."""
         result = await self.session.execute(
@@ -735,4 +785,5 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
             tool_calls=row.tool_calls,
             tool_call_id=row.tool_call_id,
             name=row.name,
+            attachments=row.attachments,
         )

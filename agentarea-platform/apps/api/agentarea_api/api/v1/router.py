@@ -35,14 +35,12 @@ from . import (
     audit,
     bundles,
     clients,
-    connection_oauth,
     dashboard,
     external_identities,
     files,
     governance,
     inbox,
     mcp_auth_configs,
-    mcp_oauth_connect,
     mcp_oauth_links,
     mcp_proxy,
     mcp_server_instances,
@@ -50,6 +48,7 @@ from . import (
     model_instances,
     model_specs,
     network,
+    oauth_connect,
     openapi_connections,
     policies,
     pricing,
@@ -62,6 +61,7 @@ from . import (
     skill_collections,
     skills,
     streams,
+    tool_call_approvals,
     triggers,
     wallet,
     workspace_config,
@@ -77,9 +77,8 @@ WORKSPACE_PREFIX = "/v1/workspaces/{workspace}"
 # ============================================================================
 public_v1_router = APIRouter(prefix="/v1", tags=["public"])
 
-# MCP OAuth callback (public — user is mid-redirect from external AS)
-public_v1_router.include_router(mcp_oauth_connect.public_router)
-public_v1_router.include_router(connection_oauth.public_router)
+# OAuth Connect callback (public — the user is mid-redirect from the provider)
+public_v1_router.include_router(oauth_connect.public_router)
 
 # A2A Agent Card discovery is public by protocol; execution RPC remains protected below.
 public_v1_router.include_router(agents_well_known.router, prefix="/agents/{agent_id}")
@@ -193,9 +192,8 @@ workspace_v1_router.include_router(mcp_auth_configs.router)
 # MCP OAuth Links management
 workspace_v1_router.include_router(mcp_oauth_links.router)
 
-# MCP OAuth Connect (client-side) - /authorize and /preflight; callbacks are public
-workspace_v1_router.include_router(mcp_oauth_connect.router)
-workspace_v1_router.include_router(connection_oauth.router)
+# OAuth Connect (client side) - /preflight and /authorize; the callback is public
+workspace_v1_router.include_router(oauth_connect.router)
 
 # MCP API Keys management
 workspace_v1_router.include_router(api_keys.router)
@@ -235,6 +233,9 @@ workspace_v1_router.include_router(policies.router)
 
 # Inbox
 workspace_v1_router.include_router(inbox.router)
+
+# Tool calls a client made that the policy holds for a person's approval
+workspace_v1_router.include_router(tool_call_approvals.router)
 
 # Workspace files (read-only listing of S3 objects under workspaces/{workspace_id}/)
 workspace_v1_router.include_router(files.router)

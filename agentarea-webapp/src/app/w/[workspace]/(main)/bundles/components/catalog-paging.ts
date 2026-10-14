@@ -20,6 +20,8 @@ export type CatalogPaging = {
   protocols: CategoryFacet[];
   /** MCP connections only: vendor-hosted vs run on AgentArea. */
   hostings?: CategoryFacet[];
+  /** Connections only: paid through AgentArea vs own key vs free. */
+  pricings?: CategoryFacet[];
   status: "idle" | "loading" | "appending";
   error: string | null;
   /** Set when the server returns an empty page despite claiming more exist. */
@@ -34,6 +36,7 @@ export type CatalogPagingAction =
       categories: CategoryFacet[];
       protocols: CategoryFacet[];
       hostings?: CategoryFacet[];
+      pricings?: CategoryFacet[];
       error?: string | null;
     }
   | { type: "reload" }
@@ -45,6 +48,7 @@ export type CatalogPagingAction =
       categories: CategoryFacet[];
       protocols: CategoryFacet[];
       hostings?: CategoryFacet[];
+      pricings?: CategoryFacet[];
     }
   | { type: "fail"; error: string };
 
@@ -76,7 +80,10 @@ export function canFetchMore(state: CatalogPaging): boolean {
   return hasMore(state) && state.status === "idle" && state.error === null;
 }
 
-function dedupe(existing: CatalogEntry[], incoming: CatalogEntry[]): CatalogEntry[] {
+function dedupe(
+  existing: CatalogEntry[],
+  incoming: CatalogEntry[]
+): CatalogEntry[] {
   const seen = new Set(existing.map((e) => e.id));
   return incoming.filter((e) => !seen.has(e.id));
 }
@@ -93,6 +100,7 @@ export function catalogPagingReducer(
         categories: action.categories,
         protocols: action.protocols,
         hostings: action.hostings ?? [],
+        pricings: action.pricings ?? [],
         status: "idle",
         error: action.error ?? null,
         drained: false,
@@ -101,7 +109,13 @@ export function catalogPagingReducer(
     case "reload":
       // Filters changed: the current page is meaningless, but the facets stay
       // on screen so the sidebar doesn't collapse and re-expand mid-switch.
-      return { ...state, entries: [], error: null, status: "loading", drained: false };
+      return {
+        ...state,
+        entries: [],
+        error: null,
+        status: "loading",
+        drained: false,
+      };
 
     case "appendStart":
       return { ...state, status: "appending" };
@@ -112,11 +126,13 @@ export function catalogPagingReducer(
       const fresh = dedupe(state.entries, action.entries);
       return {
         ...state,
-        entries: fresh.length > 0 ? [...state.entries, ...fresh] : state.entries,
+        entries:
+          fresh.length > 0 ? [...state.entries, ...fresh] : state.entries,
         total: action.total,
         categories: action.categories,
         protocols: action.protocols,
         hostings: action.hostings ?? [],
+        pricings: action.pricings ?? [],
         status: "idle",
         error: null,
         // A page that adds nothing while the total still claims more means the

@@ -90,6 +90,7 @@ func TestInstanceRoutesRejectMissingToken(t *testing.T) {
 		{http.MethodPost, "/dataplane/v1/instances"},
 		{http.MethodGet, "/dataplane/v1/instances/abc"},
 		{http.MethodDelete, "/dataplane/v1/instances/abc"},
+		{http.MethodGet, "/dataplane/v1/reservation"},
 	} {
 		if got := request(t, router, tc.method, tc.path, "", nil); got.Code != http.StatusUnauthorized {
 			t.Errorf("%s %s without a token: got %d, want 401", tc.method, tc.path, got.Code)
@@ -103,6 +104,31 @@ func TestInstanceRoutesRejectWrongToken(t *testing.T) {
 	got := request(t, router, http.MethodGet, "/dataplane/v1/instances", "wrong-token-wrong-token-wrong-to", nil)
 	if got.Code != http.StatusUnauthorized {
 		t.Fatalf("got %d, want 401", got.Code)
+	}
+}
+
+type reservingBackend struct {
+	fakeBackend
+}
+
+func (*reservingBackend) DefaultReservation(context.Context) (backends.Reservation, error) {
+	return backends.Reservation{CPUMillicores: 100, MemoryBytes: 128 << 20}, nil
+}
+
+// The data plane sets a new instance's requests and limits, so it is the one asked.
+func TestReservationReportsTheBackendsDefault(t *testing.T) {
+	router := newTestServer(&reservingBackend{})
+
+	got := request(t, router, http.MethodGet, "/dataplane/v1/reservation", testToken, nil)
+	if got.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200; body=%s", got.Code, got.Body.String())
+	}
+	var reservation backends.Reservation
+	if err := json.Unmarshal(got.Body.Bytes(), &reservation); err != nil {
+		t.Fatal(err)
+	}
+	if want := (backends.Reservation{CPUMillicores: 100, MemoryBytes: 128 << 20}); reservation != want {
+		t.Fatalf("got %+v, want %+v", reservation, want)
 	}
 }
 

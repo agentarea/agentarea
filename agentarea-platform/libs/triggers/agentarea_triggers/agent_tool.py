@@ -22,6 +22,7 @@ import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -167,7 +168,7 @@ class TriggersAgentToolset(Toolset):
         try:
             trigger = await service.get_trigger(UUID(trigger_id))
             if not trigger:
-                return json.dumps({"error": "Trigger not found"})
+                raise ToolError("Trigger not found")
             return json.dumps(_trigger_summary(trigger), default=str)
         finally:
             await session.close()
@@ -227,7 +228,7 @@ class TriggersAgentToolset(Toolset):
             return json.dumps(_trigger_summary(trigger), default=str)
         except Exception as exc:
             await session.rollback()
-            return json.dumps({"error": f"create_cron failed: {exc}"})
+            raise ToolError(f"create_cron failed: {exc}") from exc
         finally:
             await session.close()
 
@@ -283,7 +284,7 @@ class TriggersAgentToolset(Toolset):
             return json.dumps(_trigger_summary(trigger), default=str)
         except Exception as exc:
             await session.rollback()
-            return json.dumps({"error": f"create_webhook failed: {exc}"})
+            raise ToolError(f"create_webhook failed: {exc}") from exc
         finally:
             await session.close()
 
@@ -298,7 +299,7 @@ class TriggersAgentToolset(Toolset):
             return json.dumps({"enabled": ok})
         except Exception as exc:
             await session.rollback()
-            return json.dumps({"error": f"enable failed: {exc}"})
+            raise ToolError(f"enable failed: {exc}") from exc
         finally:
             await session.close()
 
@@ -313,7 +314,7 @@ class TriggersAgentToolset(Toolset):
             return json.dumps({"disabled": ok})
         except Exception as exc:
             await session.rollback()
-            return json.dumps({"error": f"disable failed: {exc}"})
+            raise ToolError(f"disable failed: {exc}") from exc
         finally:
             await session.close()
 
@@ -328,7 +329,7 @@ class TriggersAgentToolset(Toolset):
             return json.dumps({"deleted": ok})
         except Exception as exc:
             await session.rollback()
-            return json.dumps({"error": f"delete failed: {exc}"})
+            raise ToolError(f"delete failed: {exc}") from exc
         finally:
             await session.close()
 

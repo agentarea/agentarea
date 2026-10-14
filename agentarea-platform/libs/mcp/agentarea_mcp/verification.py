@@ -16,6 +16,7 @@ from typing import Literal
 
 import httpx
 from agentarea_common.config import get_database, get_settings
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from mcp import MCPError
 from sqlalchemy import select
 
@@ -55,6 +56,7 @@ class _RuntimeInstance:
         self.tools = instance.tools
         self.server_spec_id = instance.server_spec_id
         self.transport = instance.transport
+        self.managed_by = instance.managed_by
         self.json_spec = instance_transport_spec(server, instance)
 
     @property
@@ -371,10 +373,12 @@ async def verify(
             verdict_key = mcp_verdict_key(instance_id, runtime_instance.json_spec)
             verdict_store = shared_era_verdict_store()
             # A URL-type endpoint is the member's choice of address; the
-            # gateway URL of a container-backed one is the platform's.
+            # gateway URL of a container-backed one is the platform's, and so is
+            # a platform-managed connection's, which only the operator declares.
             client_factory = (
                 pinned_client_factory()
                 if instance_type == MCPTransport.URL
+                and runtime_instance.managed_by != MANAGED_BY_PLATFORM
                 else platform_client_factory
             )
         deadline = asyncio.get_event_loop().time() + _SAFETY_DEADLINE

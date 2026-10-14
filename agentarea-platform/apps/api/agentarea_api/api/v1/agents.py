@@ -33,6 +33,7 @@ from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.rebac import owner_relations
+from agentarea_governance.domain.policies import AnswerCheckPolicy
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.models import Trigger
@@ -74,6 +75,7 @@ class AgentResponse(BaseModel):
     tools: list[ToolConfig] | None = None
     planning: bool | None = None
     a2ui_enabled: bool | None = None
+    answer_check: AnswerCheckPolicy | None = None
     agent_type: str = "stateless"
     skills: list[dict] | None = None
     # Catalog provenance (ADR-003). ``is_catalog`` marks a read-only built-in
@@ -127,6 +129,9 @@ class AgentResponse(BaseModel):
             tools=tools,
             planning=cast(bool | None, agent.planning),
             a2ui_enabled=cast(bool | None, agent.a2ui_enabled),
+            answer_check=(
+                AnswerCheckPolicy.model_validate(agent.answer_check) if agent.answer_check else None
+            ),
             agent_type=str(agent.agent_type),
             skills=skills,
             is_catalog=bool(getattr(agent, "is_catalog", False)),

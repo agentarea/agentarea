@@ -6,14 +6,17 @@ services, in dependency order:
     setup values -> MCP instances -> skills -> agents -> cron automations
 
 The installer never re-implements domain logic (secret storage, scheduling,
-tool wiring) — it composes the services that already own it. It is idempotent
-by entity name: re-running after a partial failure reuses what already exists
-rather than creating duplicates.
+tool wiring) — it composes the services that already own it. Each service
+commits on its own, so an install is made all-or-nothing by compensation: every
+entity this install creates is recorded with how to delete it, and a failure
+deletes them again, newest first, before the error propagates. Entities that
+already existed are reused by name and never deleted.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
@@ -21,6 +24,7 @@ from agentarea_common.auth.authorization import assert_workspace_admin
 
 from agentarea_bundles.application.analyzer import (
     BundleAnalyzer,
+    context_secret_errors,
     mcp_is_unsupported,
     policy_as_rule,
     required_setup_errors,
@@ -48,6 +52,10 @@ class BundleInstallError(Exception):
     def __init__(self, message: str, issues: list[Any] | None = None) -> None:
         super().__init__(message)
         self.issues = issues or []
+
+
+class BundleValidationError(BundleInstallError):
+    """The bundle or its setup values are invalid; nothing was left installed."""
 
 
 def _transport_fields(json_spec: dict[str, Any], setup_values: dict[str, Any]) -> dict[str, Any]:
@@ -109,28 +117,44 @@ class BundleInstaller:
         self._governance_service = governance_service
         self._user_context = user_context
         self._secret_manager = secret_manager
+        # (what, delete) for each entity this install created, oldest first.
+        self._created: list[tuple[str, Callable[[], Awaitable[Any]]]] = []
 
     async def install(self, package: Bundle, setup_values: dict[str, Any]) -> InstallResult:
         # Refuse whatever analyze refuses, plus missing required setup, before
-        # touching anything: every step below commits on its own, so a bundle
-        # that fails partway leaves a partial install behind.
+        # touching anything, so the common refusals need no compensation.
         await self._refuse_blocking_issues(package, setup_values)
-        # Policies install last, but each step before them commits on its own, so
-        # a refusal there would leave a partial install behind. Ask up front.
+        # Policies install last; ask for admin up front rather than undo the rest.
         if package.policies:
             await assert_workspace_admin(self._user_context)
 
         result = InstallResult(bundle_name=package.name)
-
-        mcp_tool_names = await self._install_mcps(package, setup_values, result)
-        skill_ids = await self._install_skills(package, result)
-        agent_ids = await self._install_agents(
-            package, setup_values, mcp_tool_names, skill_ids, result
-        )
-        await self._install_channels(package, setup_values, agent_ids, result)
-        await self._install_automations(package, agent_ids, result)
-        await self._install_policies(package, agent_ids, result)
+        self._created = []
+        try:
+            mcp_tool_names = await self._install_mcps(package, setup_values, result)
+            skill_ids = await self._install_skills(package, result)
+            agent_ids = await self._install_agents(
+                package, setup_values, mcp_tool_names, skill_ids, result
+            )
+            await self._install_channels(package, setup_values, agent_ids, result)
+            await self._install_automations(package, agent_ids, result)
+            await self._install_policies(package, agent_ids, result)
+        except Exception:
+            await self._undo_created()
+            raise
         return result
+
+    def _track(self, what: str, delete: Callable[[], Awaitable[Any]]) -> None:
+        self._created.append((what, delete))
+
+    async def _undo_created(self) -> None:
+        """Delete what this install created, newest first; keep going past failures."""
+        while self._created:
+            what, delete = self._created.pop()
+            try:
+                await delete()
+            except Exception:
+                logger.exception("Failed to remove %s after a failed bundle install", what)
 
     async def _refuse_blocking_issues(self, package: Bundle, setup_values: dict[str, Any]) -> None:
         """Raise :class:`BundleInstallError` if analyze or setup blocks the bundle.
@@ -141,15 +165,20 @@ class BundleInstaller:
         preview = await BundleAnalyzer().analyze(package)
         block = [i for i in preview.issues if i.severity is IssueSeverity.BLOCK]
         if block:
-            raise BundleInstallError(
+            raise BundleValidationError(
                 f"package is not installable: {block[0].message}"
                 + (f" (and {len(block) - 1} more)" if len(block) > 1 else ""),
                 issues=block,
             )
         setup_block = required_setup_errors(package, setup_values)
         if setup_block:
-            raise BundleInstallError(
+            raise BundleValidationError(
                 "package is not installable: missing required setup", issues=setup_block
+            )
+        secret_block = context_secret_errors(package, setup_values)
+        if secret_block:
+            raise BundleValidationError(
+                f"package is not installable: {secret_block[0].message}", issues=secret_block
             )
 
     # -- MCP ----------------------------------------------------------------
@@ -158,6 +187,7 @@ class BundleInstaller:
         self, package: Bundle, setup_values: dict[str, Any], result: InstallResult
     ) -> dict[str, str]:
         """Returns {package mcp key -> instance name to use in agent tools}."""
+        from agentarea_mcp.application.validation_service import MCPValidationError
         from agentarea_mcp.schemas.dto import MCPServerCreate, MCPServerInstanceCreate
 
         tool_names: dict[str, str] = {}
@@ -205,6 +235,10 @@ class BundleInstaller:
                 spec_kwargs["remote_url"] = transport.get("endpoint_url")
 
             spec = await self._mcp_server_service.create_mcp_server(MCPServerCreate(**spec_kwargs))
+            self._track(
+                f"MCP server spec '{mcp.name}'",
+                lambda spec_id=spec.id: self._mcp_server_service.delete_mcp_server(spec_id),
+            )
 
             target = "headers" if transport["type"] == "url" else "environment"
             resolved = {
@@ -219,15 +253,32 @@ class BundleInstaller:
                 if values:
                     instance_json[field] = values
 
-            instance = await self._mcp_instance_service.create_instance(
-                MCPServerInstanceCreate(
-                    name=mcp.name,
-                    server_spec_id=spec.id,
-                    json_spec=instance_json,
-                )
+            context_secret = (
+                resolve_placeholders(mcp.context_secret, setup_values)
+                if mcp.context_secret
+                else None
             )
+            try:
+                instance = await self._mcp_instance_service.create_instance(
+                    MCPServerInstanceCreate(
+                        name=mcp.name,
+                        server_spec_id=spec.id,
+                        json_spec=instance_json,
+                        context_secret=context_secret,
+                    )
+                )
+            except MCPValidationError as exc:
+                raise BundleValidationError(
+                    f"MCP '{mcp.key}' was refused: {'; '.join(exc.errors)}"
+                ) from exc
             if instance is None:
                 raise BundleInstallError(f"failed to create MCP instance '{mcp.name}'")
+            self._track(
+                f"MCP instance '{mcp.name}'",
+                lambda instance_id=instance.id: self._mcp_instance_service.delete_instance(
+                    instance_id
+                ),
+            )
 
             tool_names[mcp.key] = mcp.name
             result.entities.append(
@@ -317,13 +368,22 @@ class BundleInstaller:
                         f"failed to import skill '{skill.name}' from {skill.source_url}: {exc}"
                     ) from exc
             else:
-                created = await self._skill_service.create_from_content(
-                    SkillCreateFromContent(
-                        content=skill.content or "",
-                        name=skill.name,
-                        description=None,
+                try:
+                    created = await self._skill_service.create_from_content(
+                        SkillCreateFromContent(
+                            content=skill.content or "",
+                            name=skill.name,
+                            description=None,
+                        )
                     )
-                )
+                except ValueError as exc:
+                    raise BundleValidationError(
+                        f"skill '{skill.key}' is not a valid SKILL.md: {exc}"
+                    ) from exc
+            self._track(
+                f"skill '{skill.name}'",
+                lambda skill_id=created.id: self._skill_service.delete(skill_id),
+            )
             skill_ids[skill.key] = created.id
             result.entities.append(
                 InstalledEntity(
@@ -386,6 +446,10 @@ class BundleInstaller:
                     tools=tools,
                     skill_ids=attached_skill_ids or None,
                 )
+            )
+            self._track(
+                f"agent '{agent.name}'",
+                lambda agent_id=created.id: self._agent_service.delete_agent(agent_id),
             )
             agent_ids[agent.key] = created.id
             result.entities.append(
@@ -469,11 +533,19 @@ class BundleInstaller:
                 workspace_id=self._user_context.workspace_id,
             )
             trigger = await self._trigger_service.create_trigger(domain)
+            self._track(
+                f"channel trigger '{trigger_name}'",
+                lambda trigger_id=trigger.id: self._trigger_service.delete_trigger(trigger_id),
+            )
 
             # Store credentials where the outbound delivery adapter looks them up.
             if credentials and self._secret_manager is not None:
                 secret_name = f"channel_cred:{channel.type}:{trigger.id}"
                 await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
+                self._track(
+                    f"channel credential of '{trigger_name}'",
+                    lambda name=secret_name, store=self._secret_manager: store.delete_secret(name),
+                )
 
             result.entities.append(
                 InstalledEntity(
@@ -538,6 +610,10 @@ class BundleInstaller:
                 workspace_id=self._user_context.workspace_id,
             )
             trigger = await self._trigger_service.create_trigger(domain)
+            self._track(
+                f"automation trigger '{trigger_name}'",
+                lambda trigger_id=trigger.id: self._trigger_service.delete_trigger(trigger_id),
+            )
             result.entities.append(
                 InstalledEntity(
                     kind=EntityKind.AUTOMATION,
@@ -623,6 +699,13 @@ class BundleInstaller:
                 continue
 
             created = await self._governance_service.create_rule(rule=rule)
+            if created.id:
+                self._track(
+                    f"policy '{policy.key}'",
+                    lambda rule_id=created.id: self._governance_service.delete_rule(
+                        rule_id=rule_id
+                    ),
+                )
             detail = f"{policy.effect} {policy.target} on {policy.subject}"
             if policy.message:
                 detail = f"{detail} — {policy.message}"

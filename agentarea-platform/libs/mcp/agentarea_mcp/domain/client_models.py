@@ -2,8 +2,8 @@
 
 A Client is a governable principal that is *not* runnable — it represents an
 external harness (codex, claude-code, …) that connects to a scoped set of MCP
-server instances, platform toolsets, and skills. Its tool set is exactly its
-own attachments.
+server instances, OpenAPI connections, platform toolsets, and skills. Its tool
+set is exactly its own attachments.
 """
 
 from __future__ import annotations
@@ -59,6 +59,28 @@ client_mcp_instances = sa.Table(
     sa.Column("allowed_tools", sa.JSON, nullable=True),
 )
 
+# The link alone, with no relationship: an OpenAPI connection is another library's
+# model, resolved by the repository's join where the client is read.
+client_openapi_connections = sa.Table(
+    "client_openapi_connections",
+    BaseModel.metadata,
+    sa.Column(
+        "client_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "openapi_connection_id",
+        PG_UUID(as_uuid=True),
+        ForeignKey("openapi_connections.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column("namespace_prefix", String(64), nullable=True),
+    # Operation names of the connection the client serves; NULL serves every one.
+    sa.Column("allowed_tools", sa.JSON, nullable=True),
+)
+
 # Platform toolsets (``agentarea/runs``, ...) are code, not rows, so the link
 # names one by namespace instead of by foreign key.
 client_platform_toolsets = sa.Table(
@@ -81,6 +103,17 @@ class ClientMcpInstanceLink:
 
     namespace_prefix: str | None
     # None serves every tool of the instance.
+    allowed_tools: list[str] | None
+
+
+@dataclass(frozen=True)
+class ClientOpenAPIConnectionLink:
+    """An OpenAPI connection a client carries, and how it serves it."""
+
+    connection_id: str
+    name: str
+    namespace_prefix: str | None
+    # None serves every operation of the connection.
     allowed_tools: list[str] | None
 
 

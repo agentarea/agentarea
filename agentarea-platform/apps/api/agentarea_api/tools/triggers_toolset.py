@@ -13,6 +13,7 @@ import json
 from typing import Any
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
@@ -123,7 +124,7 @@ class TriggersToolset(Toolset):
             service = await _build_trigger_service(repo_factory, broker, secret)
             trigger = await service.get_trigger(UUID(trigger_id))
             if not trigger:
-                return json.dumps({"error": "Trigger not found"})
+                raise ToolError("Trigger not found")
             return json.dumps(await _summary(service, trigger), default=str)
 
     @tool_method(effect="write")
@@ -244,7 +245,7 @@ class TriggersToolset(Toolset):
             try:
                 await require_stream_readable(UUID(stream_id), user_ctx.user_id)
             except HTTPException as exc:
-                return json.dumps({"error": exc.detail})
+                raise ToolError(exc.detail) from exc
             service = await _build_trigger_service(repo_factory, broker, secret)
             payload = TriggerCreate(
                 name=name,

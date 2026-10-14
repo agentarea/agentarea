@@ -3,6 +3,7 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 
 import httpx
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from ..domain.model_kind import ModelKind
@@ -64,6 +65,7 @@ class DiscoveredModel:
     max_output_tokens: int | None = None
     input_cost_per_token: Decimal | None = None
     output_cost_per_token: Decimal | None = None
+    cached_input_cost_per_token: Decimal | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -132,6 +134,9 @@ class ModelDiscoveryService:
                     ),
                     input_cost_per_token=_nonnegative_money_or_none(pricing.get("prompt")),
                     output_cost_per_token=_nonnegative_money_or_none(pricing.get("completion")),
+                    cached_input_cost_per_token=_nonnegative_money_or_none(
+                        pricing.get("input_cache_read")
+                    ),
                     description=m.get("description", ""),
                     kind=_kind_from_listing(m),
                 )
@@ -159,7 +164,9 @@ class ModelDiscoveryService:
                 policy = replace(policy, allow_private=True)
             client = safe_async_client(policy=policy, timeout=self._timeout)
         else:
-            client = httpx.AsyncClient(timeout=self._timeout, transport=self._transport)
+            client = httpx.AsyncClient(
+                timeout=self._timeout, transport=self._transport, verify=outbound_ssl_context()
+            )
 
         try:
             async with client:

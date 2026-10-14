@@ -1,12 +1,14 @@
 """Regression tests for GitHub skill import tool behavior."""
 
 import json
+import re
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
 import pytest
 from agentarea_agents.tools import skills_toolset
 from agentarea_agents.tools.skills_toolset import SkillsToolset
+from agentarea_agents_sdk.tools.base_tool import ToolError
 
 
 @pytest.mark.asyncio
@@ -101,12 +103,34 @@ async def test_import_from_github_rejects_large_import_all_selection(monkeypatch
 
     monkeypatch.setattr(skills_toolset, "_list_github_skill_candidates", fake_candidates)
 
-    result = json.loads(
+    with pytest.raises(ToolError, match=re.escape("Refusing to import")):
         await SkillsToolset()._import_github_packages(
             github_url="https://github.com/acme/repo",
             source_url="https://github.com/acme/repo",
             import_all=True,
         )
+
+
+@pytest.mark.asyncio
+async def test_candidates_read_frontmatter_with_the_parser_install_uses(monkeypatch):
+    files = {
+        "skills/one/SKILL.md": "---\nname: one\ndescription: Do X: then Y\n---\nbody",
+        "skills/two/SKILL.md": "---\nname: two\nnot a key value line\n---\nbody",
+    }
+
+    async def fake_fetch_text(url: str) -> str:
+        if "/git/trees/" in url:
+            return json.dumps({"tree": [{"type": "blob", "path": path} for path in files]})
+        return next(text for path, text in files.items() if url.endswith(path))
+
+    monkeypatch.setattr(skills_toolset, "_fetch_text", fake_fetch_text)
+
+    _repo, _branch, candidates = await skills_toolset._list_github_skill_candidates(
+        "https://github.com/o/r/tree/main/skills"
     )
 
-    assert result["error"].startswith("Refusing to import")
+    one, two = candidates
+    assert (one["name"], one["description"]) == ("one", "Do X: then Y")
+    assert "error" not in one
+    assert two["name"] is None
+    assert "line 3" in (two["error"] or "")

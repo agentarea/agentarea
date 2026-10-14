@@ -72,6 +72,7 @@ async def test_client_endpoint_binds_context_to_clients_workspace():
     client_repository.get_by_id = AsyncMock(return_value=client)
     client_repository.get_instance_links = AsyncMock(return_value={})
     client_repository.get_platform_toolsets = AsyncMock(return_value={})
+    client_repository.get_openapi_links = AsyncMock(return_value={})
     repository_class = MagicMock(return_value=client_repository)
     repository_class.locate_workspace = AsyncMock(return_value="client-workspace")
 

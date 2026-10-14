@@ -10,6 +10,7 @@ from agentarea_common.auth.tool_authorization import (
 from agentarea_governance.domain.policies import (
     ApprovalPolicy,
     BudgetPolicy,
+    AnswerCheckPolicy,
     ContentSafetyPolicy,
     ExecutionLimitsPolicy,
     PolicyDocument,
@@ -265,6 +266,19 @@ def test_content_safety_can_only_get_stricter():
                 ),
             ]
         )
+
+
+def test_the_more_specific_answer_check_wins():
+    workspace = PolicyDocument(
+        content_safety=ContentSafetyPolicy(answer_check=AnswerCheckPolicy(language="en"))
+    )
+    agent = PolicyDocument(
+        content_safety=ContentSafetyPolicy(answer_check=AnswerCheckPolicy(language="ru"))
+    )
+
+    assert PolicyResolver().resolve([workspace, agent]).content_safety.answer_check.language == "ru"
+    only_workspace = PolicyResolver().resolve([workspace, PolicyDocument()])
+    assert only_workspace.content_safety.answer_check.language == "en"
 
 
 def test_effective_policy_serializes_money_as_json_string():

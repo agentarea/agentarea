@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.code_tools_loader import (
     get_code_tool_class,
     get_code_tools_metadata,
@@ -107,18 +108,26 @@ async def test_credentials_in_an_event_never_reach_the_agent(env):
 
 async def test_a_stream_the_caller_may_not_read_is_refused_before_reading(env):
     env.permission.side_effect = HTTPException(status_code=403, detail="Permission denied")
-    page = await _read(stream="payments")
-    assert page == {"error": "Permission denied"}
+    with pytest.raises(ToolError, match=r"^Permission denied$"):
+        await StreamEventsToolset().read_stream(stream="payments")
     env.service.list_events.assert_not_called()
 
 
 async def test_an_unknown_stream_is_an_error_not_an_empty_page(env):
     env.service.find_stream.side_effect = StreamNotFoundError("nope")
-    assert "not found" in (await _read(stream="nope"))["error"]
+    with pytest.raises(ToolError, match="not found"):
+        await StreamEventsToolset().read_stream(stream="nope")
 
 
-@pytest.mark.parametrize(("kwargs", "says"), [({"limit": 0}, "limit"), ({"limit": 201}, "limit"), ({"after_sequence": -1}, "after_sequence")])
+@pytest.mark.parametrize(
+    ("kwargs", "says"),
+    [
+        ({"limit": 0}, "limit"),
+        ({"limit": 201}, "limit"),
+        ({"after_sequence": -1}, "after_sequence"),
+    ],
+)
 async def test_bounds_match_the_rest_events_list(env, kwargs, says):
-    page = await _read(stream="payments", **kwargs)
-    assert says in page["error"]
+    with pytest.raises(ToolError, match=says):
+        await StreamEventsToolset().read_stream(stream="payments", **kwargs)
     env.service.find_stream.assert_not_called()

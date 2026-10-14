@@ -8,7 +8,7 @@ related:
   - /concepts/governance/policy-engine
   - /concepts/governance/tool-authorization
   - /concepts/governance/audit
-last_updated: 2026-07-29
+last_updated: 2026-10-12
 ---
 
 AgentArea models resource access as ReBAC in OpenFGA. Agents, skills, MCP servers
@@ -36,8 +36,8 @@ resource, and revoking it must not leave orphans behind.
 
 ## The deployed model
 
-The model is `config/auth/openfga/model.fga`, schema 1.1, loaded into OpenFGA at
-startup. Seven types:
+The model is `agentarea-platform/libs/common/agentarea_common/rebac/openfga/model.fga`, an OpenFGA module (schema 1.2) that ships
+inside the platform image and is loaded into OpenFGA at startup. Seven types:
 
 ```text
 type User

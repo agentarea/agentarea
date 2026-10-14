@@ -12,8 +12,14 @@ This mirrors ``normalize()`` in the webapp
 must agree: the server orders by ``sort_key``, the client renders ``title``.
 """
 
+import logging
 import re
 from typing import Any, Literal, NamedTuple, get_args
+
+from agentarea_common.tool_cost import CostSourceKind, Payer, ToolCostError, connector_payers
+from agentarea_mcp.domain.metering import META_COST, META_PAYERS
+
+logger = logging.getLogger(__name__)
 
 FEATURED_TAG = "featured"
 _CATEGORY_TAG_PREFIX = "category:"
@@ -40,6 +46,19 @@ CatalogHosting = Literal["vendor", "agentarea"]
 CATALOG_HOSTINGS: tuple[CatalogHosting, ...] = get_args(CatalogHosting)
 _LOCAL_CONNECTION_TYPES = {"command", "docker"}
 
+# Whether using a connection costs money, as its catalog entry declares
+# (agentarea:payers / agentarea:cost, wiki ADR-0038): "paid" when the
+# platform's key may pay for a call that costs something -- the workspace is
+# billed through AgentArea --, "own_key" when such a call is billed by the
+# vendor to the workspace's own account, "free" otherwise.
+CatalogPricing = Literal["paid", "own_key", "free"]
+CATALOG_PRICINGS: tuple[CatalogPricing, ...] = get_args(CatalogPricing)
+_COSTLY_SOURCES = {
+    CostSourceKind.RATE.value,
+    CostSourceKind.REPORTED.value,
+    CostSourceKind.SETTLED.value,
+}
+
 
 class ItemFacets(NamedTuple):
     """Derived, persisted browse dimensions for one catalog item."""
@@ -49,6 +68,7 @@ class ItemFacets(NamedTuple):
     featured: bool
     protocol: CatalogProtocol | None
     hosting: CatalogHosting | None
+    pricing: CatalogPricing | None
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -264,13 +284,44 @@ def _hosting(registry_type: str, spec: dict[str, Any]) -> CatalogHosting | None:
     return None
 
 
+def catalog_metadata(spec: dict[str, Any] | None) -> dict[str, Any]:
+    """The curated metadata of a connections catalog entry."""
+    return _mapping(_mapping(_mapping(spec).get("raw_spec")).get("metadata"))
+
+
+def declared_costs(metadata: dict[str, Any]) -> list[Any]:
+    """Every cost declaration in ``agentarea:cost``: the default, then each tool's."""
+    cost = _mapping(metadata.get(META_COST))
+    return [cost.get("default"), *_mapping(cost.get("tools")).values()]
+
+
+def _pricing(registry_type: str, spec: dict[str, Any]) -> CatalogPricing | None:
+    if registry_type != PROTOCOL_REGISTRY_TYPE:
+        return None
+    metadata = catalog_metadata(spec)
+    costly = any(
+        _mapping(declaration).get("source") in _COSTLY_SOURCES
+        for declaration in declared_costs(metadata)
+    )
+    if not costly:
+        return "free"
+    try:
+        payers = connector_payers(metadata.get(META_PAYERS))
+    except ToolCostError:
+        logger.warning(
+            "Catalog entry %r declares malformed payers", spec.get("name"), exc_info=True
+        )
+        return None
+    return "paid" if Payer.PLATFORM in payers else "own_key"
+
+
 def derive_facets(
     registry_type: str,
     name: str,
     spec: dict[str, Any] | None,
     tags: list[Any] | None,
 ) -> ItemFacets:
-    """Category, sort key, featured flag, protocol and hosting for one catalog item."""
+    """Category, sort key, featured flag, protocol, hosting and pricing for one catalog item."""
     spec = _mapping(spec)
     tags = tags if isinstance(tags, list) else []
     return ItemFacets(
@@ -280,6 +331,7 @@ def derive_facets(
         featured=FEATURED_TAG in tags,
         protocol=_protocol(registry_type, spec),
         hosting=_hosting(registry_type, spec),
+        pricing=_pricing(registry_type, spec),
     )
 
 
@@ -295,4 +347,5 @@ def apply_facets(item: Any, registry_type: str) -> Any:
     item.featured = facets.featured
     item.protocol = facets.protocol
     item.hosting = facets.hosting
+    item.pricing = facets.pricing
     return item

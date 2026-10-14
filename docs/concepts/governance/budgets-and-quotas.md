@@ -8,7 +8,7 @@ related:
   - /concepts/governance/policy-engine
   - /concepts/governance/tool-authorization
   - /concepts/governance/audit
-last_updated: 2026-09-24
+last_updated: 2026-10-08
 ---
 
 An agent loop can spend money without bound. Each iteration makes an LLM call,
@@ -39,14 +39,17 @@ the real limit, and the other is decoration.
 
 | Ceiling | Scope | Enforced at |
 |---|---|---|
-| `monthly_spend_cap_usd` | workspace, calendar month | task creation |
+| `monthly_spend_cap_usd` | workspace, calendar month | task creation, run start and resume |
+| `agent_monthly_spend_cap_usd` | one agent, calendar month | task creation, run start and resume, after each paid call |
 | `run_budget_usd` | one task | the workflow loop and the per-call gate |
 | `service_budget_usd` | one task | the workflow loop and the pre-tool gate |
 | `max_tokens` | one task | the pre-LLM gate |
 | `max_tokens_per_call` | one call | nothing — see limits |
 
 They are written as `cap` rules. `target: spend` with `params.period` of `month`
-or `run` sets the two spend caps; `target: service` sets the service cap;
+or `run` sets the spend caps: a monthly rule bound to the workspace caps the
+workspace, the same rule bound to an agent caps that agent's own spend, and an
+agent cap above the workspace cap is refused; `target: service` sets the service cap;
 `target: tokens` sets both token values. A `cap` rule missing its amount is
 skipped and logged rather than treated as zero.
 
@@ -67,22 +70,29 @@ it bounds are made in USD.
 
 ## Where each is enforced
 
-### Monthly cap: admission
+### Monthly caps: the spend ledger
 
-When a task is created, `TaskService._enforce_budget_cap` resolves the effective
-policy, sums `total_cost` across the workspace's tasks from the first of the
-current UTC month, and raises `BudgetCapExceededError` if the total has reached
-the cap. No cap configured means no check.
+Month-to-date spend is summed from the spend ledger, `cost_entries`: one row per
+paid line — an LLM call, a compaction, a platform model a tool ran, a payment a
+tool made from the agent's wallet — with the task, the agent, what was bought and
+the evidence it was priced from. Rows are written from the run's persisted events
+as they are stored, so a running task's spend counts as it happens. Wallet
+payments are recorded in USD and count towards the caps only where USD is the
+billing currency.
 
-That rejection reaches a client as HTTP 402 in problem+json, with
-`code: budget_cap_exceeded` and the three numbers needed to explain it —
-`current_mtd_usd`, `cap_usd` and `workspace_id` — so a caller can distinguish a
-spend refusal from an authorization failure and show how far over the cap the
-workspace is.
+When a task is created or continued, `TaskService._enforce_budget_cap` compares
+the workspace's month-to-date spend with `monthly_spend_cap_usd` and the agent's
+own with `agent_monthly_spend_cap_usd`, and raises `BudgetCapExceededError` when
+either has been reached. No cap configured means no check. The rejection reaches
+a client as HTTP 402 in problem+json, with `code: budget_cap_exceeded`,
+`current_mtd_usd`, `cap_usd`, `workspace_id` and, for an agent cap, `agent_id`.
 
-This is admission control only. Crossing the monthly cap does not interrupt tasks
-already running, and the month-to-date figure comes from persisted task costs, so
-spend from a task still in flight is not fully counted until it finishes.
+A run reads both again when it starts and whenever it resumes. The agent cap is
+also checked after every paid call: once the agent's month-to-date spend plus
+what the run has spent since reaches the cap, further tool calls are denied and
+the run stops before its next model turn. The cap can be overshot by the call
+that crosses it, and by what other runs of the same agent spend between two of
+this run's checks.
 
 ### Run budget: two enforcement points, one number
 

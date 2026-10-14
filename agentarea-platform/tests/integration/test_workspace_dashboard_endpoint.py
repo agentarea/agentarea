@@ -23,7 +23,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel
 from agentarea_common.money import to_money
 from agentarea_governance.infrastructure.orm import PolicyRuleORM
-from agentarea_tasks.infrastructure.orm import TaskORM
+from agentarea_tasks.infrastructure.orm import CostEntryORM, TaskORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -64,6 +64,7 @@ async def engine():
     target_tables = [
         Agent.__table__,
         TaskORM.__table__,
+        CostEntryORM.__table__,
         PolicyRuleORM.__table__,
         TriggerORM.__table__,
     ]
@@ -466,6 +467,11 @@ async def _call_dashboard(
                 "agentarea_tasks.infrastructure.repository.TaskRepository.sum_spend_mtd",
                 new_callable=AsyncMock,
                 return_value=mtd_usd,
+            ),
+            patch(
+                "agentarea_tasks.infrastructure.repository.TaskRepository.sum_spend_by_day",
+                new_callable=AsyncMock,
+                return_value={},
             ),
             patch(
                 "agentarea_wallet.infrastructure.repository.WalletRepository.list_budget_exhausted",

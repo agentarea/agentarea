@@ -22,7 +22,5 @@ export function findFocusedNode(
   const id = focus.slice(separator + 1);
   if (!id) return null;
 
-  return (
-    nodes.find((node) => node.type === type && node.id === id) ?? null
-  );
+  return nodes.find((node) => node.type === type && node.id === id) ?? null;
 }
