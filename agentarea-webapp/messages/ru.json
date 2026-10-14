@@ -2124,8 +2124,6 @@
       "spendPerRun": "{cost} за запуск",
       "noCostedRuns": "Оплаченных запусков ещё не было",
       "cost": "Стоимость",
-      "firstPage": "Первая страница",
-      "noExecutionsOnPage": "На этой странице запусков нет",
       "signing": "Подпись запросов",
       "signingStatus": {
         "signed": "Подписан",

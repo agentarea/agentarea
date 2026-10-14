@@ -10,6 +10,10 @@ import {
   runTriggerNow,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import {
+  loadExecutionsPage,
+  type ExecutionsPage,
+} from "./executions/executionsPage";
 
 export async function enableTriggerAction(triggerId: string) {
   const result = await enableTrigger(triggerId);
@@ -88,4 +92,16 @@ export async function rotateSigningSecretAction(triggerId: string): Promise<
     };
   }
   return { success: true, signingSecret: secret, scheme };
+}
+
+/** The next page of runs for the executions list as it scrolls. */
+export async function fetchExecutionsPageAction(
+  triggerId: string,
+  page: number
+): Promise<ExecutionsPage | null> {
+  try {
+    return await loadExecutionsPage(triggerId, page);
+  } catch {
+    return null;
+  }
 }

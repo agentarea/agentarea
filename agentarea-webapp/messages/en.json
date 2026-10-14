@@ -2124,8 +2124,6 @@
       "spendPerRun": "{cost} per run",
       "noCostedRuns": "No costed runs yet",
       "cost": "Cost",
-      "firstPage": "First page",
-      "noExecutionsOnPage": "No runs on this page",
       "signing": "Request signing",
       "signingStatus": {
         "signed": "Signed",
