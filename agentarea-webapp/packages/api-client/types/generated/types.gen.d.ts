@@ -2106,6 +2106,10 @@ export type DashboardTask = {
  */
 export type DiscoverPreviewModelResponse = {
     /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
+    /**
      * Cached Input Cost Per Token
      */
     cached_input_cost_per_token?: string | null;
@@ -2201,6 +2205,10 @@ export type DiscoverPreviewResponse = {
  * DiscoveredModelResponse
  */
 export type DiscoveredModelResponse = {
+    /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
     /**
      * Cached Input Cost Per Token
      */
@@ -4031,6 +4039,10 @@ export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
  */
 export type ModelSpecCreate = {
     /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: number | string | null;
+    /**
      * Cached Input Cost Per Token
      */
     cached_input_cost_per_token?: number | string | null;
@@ -4080,6 +4092,10 @@ export type ModelSpecCreate = {
  * ModelSpecUpdate
  */
 export type ModelSpecUpdate = {
+    /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: number | string | null;
     /**
      * Cached Input Cost Per Token
      */
@@ -9338,6 +9354,10 @@ export type AgentareaApiApiV1AccessControlSyncResponse = {
  */
 export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
+    /**
      * Cached Input Cost Per Token
      */
     cached_input_cost_per_token?: string | null;
@@ -9419,6 +9439,10 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
+    /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
     /**
      * Cached Input Cost Per Token
      */

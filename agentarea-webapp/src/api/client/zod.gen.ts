@@ -1510,6 +1510,7 @@ export const zModelKind = z.enum([
  * DiscoverPreviewModelResponse
  */
 export const zDiscoverPreviewModelResponse = z.object({
+  cache_creation_input_cost_per_token: z.string().nullish(),
   cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   description: z.string().nullish(),
@@ -1530,6 +1531,7 @@ export const zDiscoverPreviewModelResponse = z.object({
  * DiscoveredModelResponse
  */
 export const zDiscoveredModelResponse = z.object({
+  cache_creation_input_cost_per_token: z.string().nullish(),
   cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   description: z.string().nullish(),
@@ -1583,6 +1585,9 @@ export const zModelInstanceBulkCreateResponse = z.object({
  * ModelSpecCreate
  */
 export const zModelSpecCreate = z.object({
+  cache_creation_input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   cached_input_cost_per_token: z
     .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
     .nullish(),
@@ -1607,6 +1612,9 @@ export const zModelSpecCreate = z.object({
  * ModelSpecUpdate
  */
 export const zModelSpecUpdate = z.object({
+  cache_creation_input_cost_per_token: z
+    .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
+    .nullish(),
   cached_input_cost_per_token: z
     .union([z.number(), z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/)])
     .nullish(),
@@ -4233,6 +4241,7 @@ export const zAgentareaApiApiV1AccessControlSyncResponse = z.object({
  * ModelSpecResponse
  */
 export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
+  cache_creation_input_cost_per_token: z.string().nullish(),
   cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   created_at: z.string().datetime(),
@@ -4259,6 +4268,7 @@ export const zAgentareaApiApiV1ModelSpecsModelSpecResponse = z.object({
  * ModelSpecResponse
  */
 export const zAgentareaApiApiV1ProviderSpecsModelSpecResponse = z.object({
+  cache_creation_input_cost_per_token: z.string().nullish(),
   cached_input_cost_per_token: z.string().nullish(),
   context_window: z.number().int().nullable(),
   created_at: z.string().datetime(),

@@ -3875,6 +3875,17 @@
       },
       "DiscoverPreviewModelResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -4058,6 +4069,17 @@
       },
       "DiscoveredModelResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -7241,6 +7263,27 @@
       },
       "ModelSpecCreate": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -7385,6 +7428,27 @@
       },
       "ModelSpecUpdate": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -16828,6 +16892,17 @@
       },
       "agentarea_api__api__v1__model_specs__ModelSpecResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -17015,6 +17090,17 @@
       },
       "agentarea_api__api__v1__provider_specs__ModelSpecResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
