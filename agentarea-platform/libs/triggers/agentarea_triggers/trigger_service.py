@@ -539,7 +539,6 @@ class TriggerService:
         agent_id: UUID | None = None,
         trigger_type: TriggerType | None = None,
         active_only: bool = False,
-        creator_scoped: bool = False,
         limit: int = 100,
     ) -> list[Trigger]:
         """List triggers with optional filtering.
@@ -548,7 +547,6 @@ class TriggerService:
             agent_id: Filter by agent ID
             trigger_type: Filter by trigger type
             active_only: Only return active triggers
-            creator_scoped: If True, only return triggers created by current user
             limit: Maximum number of triggers to return
 
         Returns:
@@ -563,23 +561,7 @@ class TriggerService:
         if active_only:
             filters["is_active"] = True
 
-        # Use the repository's list_all method with creator_scoped parameter
-        if hasattr(self.trigger_repository, "list_all"):
-            triggers = await self.trigger_repository.list_all(
-                creator_scoped=creator_scoped, limit=limit, **filters
-            )
-        else:
-            # Fallback for repositories that don't support workspace scoping
-            if agent_id:
-                triggers = await self.trigger_repository.list_by_agent(agent_id, limit)
-            elif trigger_type:
-                triggers = await self.trigger_repository.list_by_type(trigger_type, limit)
-            elif active_only:
-                triggers = await self.trigger_repository.list_active_triggers(limit)
-            else:
-                triggers = await self.trigger_repository.list()
-
-        return triggers
+        return await self.trigger_repository.list_triggers(limit=limit, **filters)
 
     # Lifecycle Management
 

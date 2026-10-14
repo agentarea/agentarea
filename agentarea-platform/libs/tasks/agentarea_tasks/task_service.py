@@ -728,36 +728,20 @@ class TaskService(BaseTaskService):
         """Cancel a task."""
         return await self.task_manager.cancel_task(task_id)
 
-    async def get_user_tasks(
-        self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> list[AgentTask]:
-        """Get tasks for a specific user."""
-        return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
-
     async def get_agent_tasks(
         self,
         agent_id: UUID,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         status: str | None = None,
     ) -> list[AgentTask]:
         """Get tasks for a specific agent, newest first, optionally of one status."""
-        # Get Task domain models from repository and convert to AgentTask
-        if hasattr(self.task_repository, "list_all"):
-            filters: dict[str, Any] = {"agent_id": agent_id}
-            if status is not None:
-                filters["status"] = status
-            # Get raw TaskORM objects from workspace repository
-            task_orms = await self.task_repository.list_all(
-                creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
-            )
-            # Convert TaskORM -> Task -> AgentTask
-            tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
-            return [self._task_to_agent_task(task) for task in tasks]
-        else:
-            # Fallback for repositories that don't support workspace scoping
-            return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
+        filters: dict[str, Any] = {"agent_id": agent_id}
+        if status is not None:
+            filters["status"] = status
+        task_orms = await self.task_repository.list_all(limit=limit, offset=offset, **filters)
+        tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
+        return [self._task_to_agent_task(task) for task in tasks]
 
     async def count_agent_tasks(self, agent_id: UUID) -> int:
         """Count the workspace's tasks for an agent, matching ``get_agent_tasks``."""
@@ -795,56 +779,30 @@ class TaskService(BaseTaskService):
         cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
         try:
-            if hasattr(self.task_repository, "list_all"):
-                # Use workspace-aware repository method
-                # Note: The base repository doesn't support created_after filtering yet,
-                # so we'll get all recent tasks and filter in memory for now
-                task_orms = await self.task_repository.list_all(
-                    limit=limit * 2,  # Get more to account for time filtering
-                    offset=0,
-                )
-                # Convert TaskORM -> Task -> AgentTask and filter by time
-                tasks = []
-                for task_orm in task_orms:
-                    task = self.task_repository._orm_to_domain(task_orm)
-                    agent_task = self._task_to_agent_task(task)
-
-                    # Filter by time and workspace
-                    if agent_task.created_at and agent_task.created_at >= cutoff_time:
-                        if workspace_id is None or agent_task.workspace_id == workspace_id:
-                            tasks.append(agent_task)
-
-                    if len(tasks) >= limit:
-                        break
-
-                # Sort by creation time (newest first)
-                tasks.sort(
-                    key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True
-                )
-                return tasks[:limit]
-            else:
-                # Fallback for repositories without workspace scoping
-                # Get all tasks and filter in memory (not ideal for production)
-                all_tasks = await self.list_tasks(
-                    limit=limit * 2
-                )  # Get more to account for filtering
+            # Use workspace-aware repository method
+            # Note: The base repository doesn't support created_after filtering yet,
+            # so we'll get all recent tasks and filter in memory for now
+            task_orms = await self.task_repository.list_all(
+                limit=limit * 2,  # Get more to account for time filtering
+                offset=0,
+            )
+            # Convert TaskORM -> Task -> AgentTask and filter by time
+            tasks = []
+            for task_orm in task_orms:
+                task = self.task_repository._orm_to_domain(task_orm)
+                agent_task = self._task_to_agent_task(task)
 
                 # Filter by time and workspace
-                filtered_tasks = []
-                for task in all_tasks:
-                    if task.created_at and task.created_at >= cutoff_time:
-                        if workspace_id is None or task.workspace_id == workspace_id:
-                            filtered_tasks.append(task)
+                if agent_task.created_at and agent_task.created_at >= cutoff_time:
+                    if workspace_id is None or agent_task.workspace_id == workspace_id:
+                        tasks.append(agent_task)
 
-                    if len(filtered_tasks) >= limit:
-                        break
+                if len(tasks) >= limit:
+                    break
 
-                # Sort by creation time (newest first)
-                filtered_tasks.sort(
-                    key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True
-                )
-                return filtered_tasks[:limit]
-
+            # Sort by creation time (newest first)
+            tasks.sort(key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True)
+            return tasks[:limit]
         except Exception as e:
             logger.exception(f"Failed to get recent tasks: {e}")
             # Return empty list on error to not break monitoring
@@ -884,7 +842,6 @@ class TaskService(BaseTaskService):
         self,
         agent_id: UUID,
         limit: int = 100,
-        creator_scoped: bool = False,
         offset: int = 0,
         status: str | None = None,
     ) -> list[AgentTask]:
@@ -893,45 +850,13 @@ class TaskService(BaseTaskService):
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
-            creator_scoped: If True, only return tasks created by current user
             offset: Number of tasks to skip, newest first
             status: Only tasks in this status
 
         Returns:
             List of tasks for the agent
         """
-        return await self.get_agent_tasks(
-            agent_id, limit=limit, offset=offset, creator_scoped=creator_scoped, status=status
-        )
-
-    async def list_agent_tasks_with_workflow_status(
-        self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False
-    ) -> list[AgentTask]:
-        """List tasks for an agent enriched with workflow status.
-
-        Args:
-            agent_id: The agent ID to get tasks for
-            limit: Maximum number of tasks to return
-            creator_scoped: If True, only return tasks created by current user
-
-        Returns:
-            List of tasks for the agent with current workflow status
-        """
-        tasks = await self.list_agent_tasks(agent_id, limit, creator_scoped=creator_scoped)
-
-        if not self.workflow_service:
-            logger.warning(
-                "Workflow service not available - returning tasks without workflow enrichment"
-            )
-            return tasks
-
-        # Enrich each task with workflow status
-        enriched_tasks = []
-        for task in tasks:
-            enriched_task = await self._enrich_task_with_workflow_status(task)
-            enriched_tasks.append(enriched_task)
-
-        return enriched_tasks
+        return await self.get_agent_tasks(agent_id, limit=limit, offset=offset, status=status)
 
     async def get_task_with_workflow_status(self, task_id: UUID) -> AgentTask | None:
         """Get a task enriched with workflow status.

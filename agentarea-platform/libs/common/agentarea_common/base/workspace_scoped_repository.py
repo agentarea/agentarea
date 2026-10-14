@@ -82,6 +82,21 @@ class WorkspaceScopedRepository[T]:
         workspace_col = model.workspace_id
         return workspace_col == self.user_context.workspace_id
 
+    def _field_filters(self, filters: dict[str, Any]) -> list[Any]:
+        """Equality conditions for ``filters``, one per model column.
+
+        Raises:
+            TypeError: If a key names no attribute of the model. Skipping it
+                returned every row the other conditions allowed, so a
+                misspelled or retired filter widened the read without a trace.
+        """
+        conditions = []
+        for field, value in filters.items():
+            if not hasattr(self.model_class, field):
+                raise TypeError(f"{self.model_class.__name__} has no field {field!r} to filter by")
+            conditions.append(getattr(self.model_class, field) == value)
+        return conditions
+
     def _get_creator_workspace_filter(self):
         """Get the creator and workspace filter for queries."""
         model = cast(Any, self.model_class)
@@ -175,10 +190,7 @@ class WorkspaceScopedRepository[T]:
             if ids is not None:
                 query = query.where(cast(Any, self.model_class).id.in_(as_record_ids(ids)))
 
-            # Apply additional filters
-            for field, value in filters.items():
-                if hasattr(self.model_class, field):
-                    query = query.where(getattr(self.model_class, field) == value)
+            query = query.where(*self._field_filters(filters))
 
             # Order by newest first
             if hasattr(self.model_class, "created_at"):
@@ -197,28 +209,18 @@ class WorkspaceScopedRepository[T]:
         except Exception:
             raise
 
-    async def count(self, creator_scoped: bool = False, **filters: Any) -> int:
+    async def count(self, **filters: Any) -> int:
         """Count records in the current workspace.
 
         Args:
-            creator_scoped: If True, only count records created by current user
             **filters: Additional field filters
 
         Returns:
             Number of records
         """
         query = select(func.count(cast(Any, self.model_class).id))
-
-        # Apply workspace/creator filtering
-        if creator_scoped:
-            query = query.where(self._get_creator_workspace_filter())
-        else:
-            query = query.where(self._get_workspace_filter())
-
-        # Apply additional filters
-        for field, value in filters.items():
-            if hasattr(self.model_class, field):
-                query = query.where(getattr(self.model_class, field) == value)
+        query = query.where(self._get_workspace_filter())
+        query = query.where(*self._field_filters(filters))
 
         result = await self.session.execute(query)
         return result.scalar() or 0
@@ -463,28 +465,25 @@ class WorkspaceScopedRepository[T]:
         record = await self.get_by_id(id, creator_scoped)
         return record is not None
 
-    async def find_by(self, creator_scoped: bool = False, **filters: Any) -> list[T]:
+    async def find_by(self, **filters: Any) -> list[T]:
         """Find records by field values within the current workspace.
 
         Args:
-            creator_scoped: Deprecated parameter, kept for compatibility but ignored
             **filters: Field filters
 
         Returns:
             List of matching records
         """
-        # Note: creator_scoped parameter ignored, kept for backward compatibility
         return await self.list_all(**filters)
 
-    async def find_one_by(self, creator_scoped: bool = False, **filters: Any) -> T | None:
+    async def find_one_by(self, **filters: Any) -> T | None:
         """Find one record by field values within the current workspace.
 
         Args:
-            creator_scoped: If True, only search records created by current user
             **filters: Field filters
 
         Returns:
             The first matching record or None
         """
-        records = await self.find_by(creator_scoped=creator_scoped, **filters)
+        records = await self.find_by(**filters)
         return records[0] if records else None

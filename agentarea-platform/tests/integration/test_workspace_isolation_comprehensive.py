@@ -36,13 +36,13 @@ class ComprehensiveTestRepository(WorkspaceScopedRepository[ComprehensiveTestMod
     def __init__(self, session, user_context):
         super().__init__(session, ComprehensiveTestModel, user_context)
 
-    async def find_active_by_category(self, category: str, creator_scoped: bool = False):
+    async def find_active_by_category(self, category: str):
         """Custom method to find active records by category."""
-        return await self.find_by(creator_scoped=creator_scoped, category=category, is_active=True)
+        return await self.find_by(category=category, is_active=True)
 
-    async def get_high_priority_count(self, creator_scoped: bool = False):
+    async def get_high_priority_count(self):
         """Custom method to count high priority records."""
-        return await self.count(creator_scoped=creator_scoped, priority=3)
+        return await self.count(priority=3)
 
 
 @pytest.fixture

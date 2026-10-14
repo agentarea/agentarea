@@ -569,14 +569,14 @@ class TestTriggerService:
         """Test listing all triggers."""
         # Setup mocks
         triggers = [sample_cron_trigger, sample_webhook_trigger]
-        mock_trigger_repository.list_all.return_value = triggers
+        mock_trigger_repository.list_triggers.return_value = triggers
 
         # Execute
         result = await trigger_service.list_triggers()
 
         # Verify
         assert result == triggers
-        mock_trigger_repository.list_all.assert_called_once_with(creator_scoped=False, limit=100)
+        mock_trigger_repository.list_triggers.assert_called_once_with(limit=100)
 
     @pytest.mark.asyncio
     async def test_list_triggers_by_agent(
@@ -585,15 +585,15 @@ class TestTriggerService:
         """Test listing triggers by agent ID."""
         # Setup mocks
         triggers = [sample_cron_trigger]
-        mock_trigger_repository.list_all.return_value = triggers
+        mock_trigger_repository.list_triggers.return_value = triggers
 
         # Execute
         result = await trigger_service.list_triggers(agent_id=sample_agent_id)
 
         # Verify
         assert result == triggers
-        mock_trigger_repository.list_all.assert_called_once_with(
-            creator_scoped=False, limit=100, agent_id=sample_agent_id
+        mock_trigger_repository.list_triggers.assert_called_once_with(
+            limit=100, agent_id=sample_agent_id
         )
 
     @pytest.mark.asyncio
@@ -603,15 +603,15 @@ class TestTriggerService:
         """Test listing triggers by type."""
         # Setup mocks
         triggers = [sample_cron_trigger]
-        mock_trigger_repository.list_all.return_value = triggers
+        mock_trigger_repository.list_triggers.return_value = triggers
 
         # Execute
         result = await trigger_service.list_triggers(trigger_type=TriggerType.CRON)
 
         # Verify
         assert result == triggers
-        mock_trigger_repository.list_all.assert_called_once_with(
-            creator_scoped=False, limit=100, trigger_type=TriggerType.CRON
+        mock_trigger_repository.list_triggers.assert_called_once_with(
+            limit=100, trigger_type=TriggerType.CRON
         )
 
     @pytest.mark.asyncio
@@ -621,15 +621,15 @@ class TestTriggerService:
         """Test listing only active triggers."""
         # Setup mocks
         triggers = [sample_cron_trigger]
-        mock_trigger_repository.list_all.return_value = triggers
+        mock_trigger_repository.list_triggers.return_value = triggers
 
         # Execute
         result = await trigger_service.list_triggers(active_only=True)
 
         # Verify
         assert result == triggers
-        mock_trigger_repository.list_all.assert_called_once_with(
-            creator_scoped=False, limit=100, is_active=True
+        mock_trigger_repository.list_triggers.assert_called_once_with(
+            limit=100, is_active=True
         )
 
     # Test Lifecycle Management

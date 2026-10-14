@@ -1260,17 +1260,12 @@ class MCPServerInstanceService:
                 return instance
         return None
 
-    async def list(
-        self,
-        server_spec_id: str | None = None,
-        status: str | None = None,
-        creator_scoped: bool = False,
-    ) -> list[MCPServerInstance]:
+    async def list(self, server_spec_id: str | None = None) -> list[MCPServerInstance]:
         filters: dict[str, Any] = {}
         if server_spec_id:
             filters["server_spec_id"] = server_spec_id
 
-        instances = await self.repository.list_all(creator_scoped=creator_scoped, **filters)
+        instances = await self.repository.list_all(**filters)
         return [instance for instance in instances if instance.server_spec_id]
 
     async def execute_tool(

@@ -185,37 +185,21 @@ class TestTriggerRepository:
         assert result.name == sample_trigger.name
 
     @pytest.mark.asyncio
-    async def test_list_by_agent(self, repository, mock_session, sample_trigger_orm):
-        """Test listing triggers by agent ID."""
-        # Setup
-        agent_id = uuid4()
+    async def test_list_triggers_filters_and_returns_domain_models(
+        self, repository, mock_session, sample_trigger_orm
+    ):
+        """The service hands these to REST and MCP, which read them as domain triggers."""
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_trigger_orm]
         mock_session.execute.return_value = mock_result
 
-        # Execute
-        result = await repository.list_by_agent(agent_id, limit=50)
+        result = await repository.list_triggers(limit=50, agent_id=sample_trigger_orm.agent_id)
 
-        # Verify
         assert len(result) == 1
+        assert isinstance(result[0], CronTrigger)
         assert result[0].id == sample_trigger_orm.id
-        mock_session.execute.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_list_by_type(self, repository, mock_session, sample_trigger_orm):
-        """Test listing triggers by type."""
-        # Setup
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [sample_trigger_orm]
-        mock_session.execute.return_value = mock_result
-
-        # Execute
-        result = await repository.list_by_type(TriggerType.CRON, limit=50)
-
-        # Verify
-        assert len(result) == 1
-        assert result[0].trigger_type == TriggerType.CRON
-        mock_session.execute.assert_called_once()
+        with pytest.raises(TypeError, match="no field 'creator_scoped'"):
+            await repository.list_triggers(creator_scoped=True)
 
     @pytest.mark.asyncio
     async def test_get_by_webhook_id(self, repository, mock_session):

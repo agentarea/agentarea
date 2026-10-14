@@ -157,7 +157,6 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         kind: str | None = None,
     ) -> list[ModelSpec]:
         """List model specs with filtering and relationships."""
@@ -169,7 +168,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         if kind is not None:
             filters["kind"] = kind
 
-        specs = await self.list_all(creator_scoped=creator_scoped, **filters)
+        specs = await self.list_all(**filters)
 
         # Load relationships for each tenant spec
         spec_ids = [spec.id for spec in specs]

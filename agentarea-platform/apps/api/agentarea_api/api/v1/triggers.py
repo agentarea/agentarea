@@ -103,10 +103,9 @@ def trigger_status(trigger: Any) -> TriggerStatus:
 
 
 def serves_a_webhook(trigger: Any) -> bool:
-    """Whether a trigger, as a domain model or a listed row, has webhook fields to show.
+    """Whether a trigger has webhook fields to show.
 
-    The list hands over ORM rows, which carry every column; a stream trigger has
-    no intake of its own, so its webhook columns describe nothing.
+    A stream trigger has no intake of its own, so webhook fields describe nothing.
     """
     trigger_type = getattr(trigger.trigger_type, "value", trigger.trigger_type)
     return hasattr(trigger, "webhook_id") and trigger_type != "stream"
@@ -733,7 +732,6 @@ async def list_triggers(
             agent_id=agent_id,
             trigger_type=domain_trigger_type,
             active_only=active_only,
-            creator_scoped=False,
             limit=limit,
         )
 

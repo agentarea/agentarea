@@ -66,12 +66,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return self._orm_to_domain(trigger_orm)
 
     async def list_triggers(
-        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+        self, limit: int = 100, offset: int = 0, **filters: Any
     ) -> list[Trigger]:
-        """List all triggers in workspace and convert to domain models."""
-        trigger_orms = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset
-        )
+        """List the workspace's triggers matching ``filters``, as domain models."""
+        trigger_orms = await self.list_all(limit=limit, offset=offset, **filters)
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
 
     async def create_trigger(self, entity: Trigger) -> Trigger:
@@ -243,45 +241,6 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         await self.session.flush()
 
         return await self.get_trigger(trigger_id)
-
-    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> list[Trigger]:
-        """List triggers for an agent."""
-        stmt = (
-            select(TriggerORM)
-            .where(TriggerORM.agent_id == agent_id)
-            .order_by(TriggerORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-
-    async def list_by_type(self, trigger_type: TriggerType, limit: int = 100) -> list[Trigger]:
-        """List triggers by type."""
-        stmt = (
-            select(TriggerORM)
-            .where(TriggerORM.trigger_type == trigger_type.value)
-            .order_by(TriggerORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-
-    async def list_active_triggers(self, limit: int = 100) -> list[Trigger]:
-        """List active triggers."""
-        stmt = (
-            select(TriggerORM)
-            .where(TriggerORM.is_active.is_(True))
-            .order_by(TriggerORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
 
     async def count_all(self) -> int:
         """Count all triggers visible in the current workspace."""
@@ -509,13 +468,9 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             return None
         return self._orm_to_domain(execution_orm)
 
-    async def list_executions(
-        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
-    ) -> list[TriggerExecution]:
+    async def list_executions(self, limit: int = 100, offset: int = 0) -> list[TriggerExecution]:
         """List all trigger executions in workspace and convert to domain models."""
-        execution_orms = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset
-        )
+        execution_orms = await self.list_all(limit=limit, offset=offset)
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
 
     async def create_execution(self, entity: TriggerExecution) -> TriggerExecution:

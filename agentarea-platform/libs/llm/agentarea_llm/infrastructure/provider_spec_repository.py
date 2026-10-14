@@ -70,7 +70,6 @@ class ProviderSpecRepository(BaseRepository[ProviderSpec]):  # Temporarily remov
         is_builtin: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
     ) -> list[ProviderSpec]:
         """List provider specs with filtering and relationships."""
         filters = {}

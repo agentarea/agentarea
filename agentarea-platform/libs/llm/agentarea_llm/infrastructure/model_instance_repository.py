@@ -100,7 +100,6 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
         is_public: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         kind: str | None = None,
     ) -> list[ModelInstance]:
         """List model instances with filtering and relationships."""
@@ -122,9 +121,7 @@ class ModelInstanceRepository(WorkspaceScopedRepository[ModelInstance]):
                 .where(ModelSpec.kind == kind, self._get_workspace_filter())
             )
             ids = {str(instance_id) for instance_id in of_kind.scalars()}
-        instances = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, ids=ids, **filters
-        )
+        instances = await self.list_all(limit=limit, offset=offset, ids=ids, **filters)
 
         # Load relationships for each instance
         instance_ids = [instance.id for instance in instances]

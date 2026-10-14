@@ -14,6 +14,7 @@ import pytest
 import pytest_asyncio
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_tasks.domain.models import TaskUpdate
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
@@ -119,6 +120,25 @@ async def test_created_by_and_search_narrow_in_sql(session):
 
 
 @pytest.mark.asyncio
+async def test_agent_id_and_created_by_narrow_before_paging(session):
+    """One agent's runs by one caller fill the page, however many others are newer."""
+    agent_id = uuid4()
+    session.add_all(
+        [
+            _row(0, "completed", agent_id=agent_id),
+            _row(1, "completed", agent_id=agent_id, created_by="user-2"),
+            _row(2, "completed", agent_id=agent_id),
+            *(_row(i, "completed") for i in range(3, 8)),
+        ]
+    )
+    await session.flush()
+
+    page = await _repo(session).list_page(limit=2, offset=0, created_by="user-1", agent_id=agent_id)
+
+    assert [task.description for task in page] == ["task 2", "task 0"]
+
+
+@pytest.mark.asyncio
 async def test_other_workspaces_stay_invisible(session):
     session.add(_row(0, "completed"))
     session.add(_row(1, "completed", workspace_id="ws-2"))
@@ -173,3 +193,43 @@ async def test_an_agents_status_filter_reaches_past_the_first_page(session):
     failed = await _service(session).list_agent_tasks(agent_id, limit=2, status="failed")
 
     assert [task.description for task in failed] == ["task 0"]
+
+
+@pytest.mark.asyncio
+async def test_agent_and_status_reads_skip_other_workspaces(session):
+    """Another tenant's run of the same agent id, or in the same status, is not ours."""
+    agent_id = uuid4()
+    session.add(_row(0, "failed", agent_id=agent_id))
+    session.add(_row(1, "failed", agent_id=agent_id, workspace_id="ws-2"))
+    await session.flush()
+    repo = _repo(session)
+
+    by_agent = await repo.get_by_agent_id(agent_id)
+    by_status = await repo.get_by_status("failed")
+
+    assert [task.description for task in by_agent] == ["task 0"]
+    assert [task.description for task in by_status] == ["task 0"]
+
+
+@pytest.mark.asyncio
+async def test_status_writes_skip_other_workspaces(session):
+    foreign = _row(0, "running", workspace_id="ws-2")
+    session.add(foreign)
+    await session.flush()
+    repo = _repo(session)
+
+    assert await repo.update_status(foreign.id, "cancelled") is None
+    assert await repo.update_by_id(foreign.id, TaskUpdate(status="cancelled")) is None
+    await session.refresh(foreign)
+    assert foreign.status == "running"
+
+
+@pytest.mark.asyncio
+async def test_a_users_tasks_are_the_ones_they_created(session):
+    session.add(_row(0, "completed"))
+    session.add(_row(1, "completed", created_by="user-2"))
+    await session.flush()
+
+    mine = await _service(session).list_tasks(user_id="user-2")
+
+    assert [task.description for task in mine] == ["task 1"]

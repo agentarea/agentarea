@@ -1353,7 +1353,6 @@ async def list_agent_tasks(
             limit=limit,
             offset=offset,
             status=status.lower() if status else None,
-            creator_scoped=False,
         )
 
         logger.info(f"Returning {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")

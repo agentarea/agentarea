@@ -93,18 +93,12 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         is_public: bool | None = None,
         tag: str | None = None,
         search: str | None = None,
-        creator_scoped: bool = False,
         include_system: bool = True,
         ids: set[str] | None = None,
         spec_ids: Collection[str] | None = None,
     ):
         """Build the base filtered query (without pagination) for list_servers."""
-        query = select(self.model_class)
-
-        if creator_scoped:
-            query = query.where(self._get_creator_workspace_filter())
-        else:
-            query = query.where(self._get_workspace_filter())
+        query = select(self.model_class).where(self._get_workspace_filter())
 
         if ids is not None:
             # What the authorization graph says this caller may read, applied in
@@ -152,7 +146,6 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         search: str | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         include_system: bool = True,
         ids: set[str] | None = None,
         spec_ids: Collection[str] | None = None,
@@ -177,7 +170,6 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             is_public=is_public,
             tag=tag,
             search=search,
-            creator_scoped=creator_scoped,
             include_system=include_system,
             ids=ids,
             spec_ids=spec_ids,
@@ -430,23 +422,8 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     async def list_by_server_spec(
         self,
         server_spec_id: str,
-        creator_scoped: bool = False,
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[MCPServerInstance]:
         """List instances by server spec ID within the current workspace."""
-        return await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, server_spec_id=server_spec_id
-        )
-
-    async def list_by_status(
-        self,
-        status: str,
-        creator_scoped: bool = False,
-        limit: int | None = None,
-        offset: int | None = None,
-    ) -> list[MCPServerInstance]:
-        """List instances by status within the current workspace."""
-        return await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, status=status
-        )
+        return await self.list_all(limit=limit, offset=offset, server_spec_id=server_spec_id)

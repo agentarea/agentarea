@@ -42,10 +42,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         return self._orm_to_domain(task_orm)
 
     async def list_tasks(
-        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+        self, limit: int = 100, offset: int = 0, created_by: str | None = None
     ) -> list[Task]:
-        """List all tasks in workspace and convert to domain models."""
-        task_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
+        """List the workspace's tasks, or only those ``created_by`` started."""
+        filters: dict[str, Any] = {} if created_by is None else {"created_by": created_by}
+        task_orms = await self.list_all(limit=limit, offset=offset, **filters)
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
     async def list_page(
@@ -57,18 +58,22 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         created_by: str | None = None,
         search: str | None = None,
         agent_ids: Sequence[UUID] = (),
+        agent_id: UUID | None = None,
     ) -> list[TaskORM]:
         """One page of the workspace's tasks, newest first, filtered in SQL.
 
         ``search`` matches the description case-insensitively, or any task of an
         agent in ``agent_ids`` — agent names live in another table, so the caller
-        passes the ids of the agents whose name matched.
+        passes the ids of the agents whose name matched. ``agent_id`` keeps only
+        that agent's tasks.
         """
         query = select(TaskORM).where(self._get_workspace_filter())
         if statuses:
             query = query.where(TaskORM.status.in_(statuses))
         if created_by:
             query = query.where(TaskORM.created_by == created_by)
+        if agent_id:
+            query = query.where(TaskORM.agent_id == agent_id)
         if search:
             matches = TaskORM.description.icontains(search, autoescape=True)
             if agent_ids:
@@ -216,24 +221,15 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         if not update_data:
             return await self.get_task(task_id)
 
-        stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
+        stmt = (
+            update(TaskORM)
+            .where(TaskORM.id == task_id, self._get_workspace_filter())
+            .values(**update_data)
+        )
         await self.session.execute(stmt)
         await self.session.flush()
 
         return await self.get_task(task_id)
-
-    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> list[Task]:
-        """List tasks for an agent."""
-        stmt = (
-            select(TaskORM)
-            .where(TaskORM.agent_id == agent_id)
-            .order_by(TaskORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        task_orms = result.scalars().all()
-
-        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
     async def get_by_agent_id(
         self, agent_id: UUID, limit: int = 100, offset: int = 0
@@ -241,6 +237,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         """Get tasks by agent ID with pagination."""
         stmt = (
             select(TaskORM)
+            .where(self._get_workspace_filter())
             .where(TaskORM.agent_id == agent_id)
             .order_by(TaskORM.created_at.desc())
             .limit(limit)
@@ -253,7 +250,12 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
     async def get_by_status(self, status: str) -> list[Task]:
         """Get tasks by status."""
-        stmt = select(TaskORM).where(TaskORM.status == status).order_by(TaskORM.created_at.desc())
+        stmt = (
+            select(TaskORM)
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status == status)
+            .order_by(TaskORM.created_at.desc())
+        )
         result = await self.session.execute(stmt)
         task_orms = result.scalars().all()
 
@@ -394,7 +396,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             else:
                 update_data[field] = value
 
-        stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
+        stmt = (
+            update(TaskORM)
+            .where(TaskORM.id == task_id, self._get_workspace_filter())
+            .values(**update_data)
+        )
         result = await self.session.execute(stmt)
 
         if type_cast(CursorResult[Any], result).rowcount == 0:
