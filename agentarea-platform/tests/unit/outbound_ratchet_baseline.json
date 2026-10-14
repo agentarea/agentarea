@@ -1,7 +1,6 @@
 {
   "http": {
     "apps/api/agentarea_api/api/v1/agents_tasks.py": 2,
-    "apps/api/agentarea_api/api/v1/mcp_proxy.py": 1,
     "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 1,
     "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/a2a_agent_tool.py": 1,
     "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/web_toolset.py": 1,

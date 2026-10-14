@@ -43,7 +43,8 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_read_db_session
-from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
+from agentarea_common.outbound import Destination, outbound_client
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
@@ -328,8 +329,8 @@ def _upstream_client(instance_type: MCPTransport, *, policy: OutboundPolicy) -> 
     """
     timeout = httpx.Timeout(connect=10, read=None, write=30, pool=10)
     if instance_type == MCPTransport.URL:
-        return safe_async_client(policy=policy, timeout=timeout)
-    return httpx.AsyncClient(timeout=timeout)
+        return outbound_client(Destination.MEMBER, policy=policy, timeout=timeout)
+    return outbound_client(Destination.INTERNAL, timeout=timeout)
 
 
 @binds_workspace
