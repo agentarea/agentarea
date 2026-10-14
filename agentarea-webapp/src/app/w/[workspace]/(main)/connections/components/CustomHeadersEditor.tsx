@@ -2,34 +2,11 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Lock, Plus, Trash2, Unlock } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CustomHeader } from "./CustomHeadersList";
-
-interface HeaderRow {
-  name: string;
-  value: string;
-}
-
-const SAFE_HEADERS = new Set([
-  "accept",
-  "accept-charset",
-  "accept-encoding",
-  "accept-language",
-  "cache-control",
-  "content-type",
-  "if-match",
-  "if-none-match",
-  "user-agent",
-  "x-correlation-id",
-  "x-request-id",
-]);
-
-function isSecretHeader(name: string) {
-  return !SAFE_HEADERS.has(name.toLowerCase().trim());
-}
+import { HeaderRows, type HeaderRow } from "./HeaderRows";
 
 export interface CustomHeadersEditorProps {
   initial: CustomHeader[];
@@ -52,12 +29,9 @@ export function CustomHeadersEditor({
   );
 
   const addRow = () => setRows([...rows, { name: "", value: "" }]);
-  const removeRow = (i: number) => setRows(rows.filter((_, idx) => idx !== i));
-  const updateRow = (i: number, field: keyof HeaderRow, val: string) => {
-    const next = [...rows];
-    next[i] = { ...next[i], [field]: val };
-    setRows(next);
-  };
+  const storedSecrets = new Set(
+    initial.filter((h) => h.secret).map((h) => h.name)
+  );
 
   const handleSave = () => {
     const cleaned = rows
@@ -80,34 +54,7 @@ export function CustomHeadersEditor({
         <p className="text-xs text-muted-foreground">{t("headersEditorHint")}</p>
       )}
 
-      {rows.map((h, i) => {
-        const secret = h.name.trim() ? isSecretHeader(h.name) : false;
-        return (
-          <div key={i} className="flex items-center gap-2">
-            <Input
-              placeholder={t("headerName")}
-              value={h.name}
-              onChange={(e) => updateRow(i, "name", e.target.value)}
-              className="flex-1"
-            />
-            <div className="relative flex-1">
-              <Input
-                placeholder={secret ? t("secretValuePlaceholder") : t("headerValue")}
-                value={h.value}
-                onChange={(e) => updateRow(i, "value", e.target.value)}
-                type={secret ? "password" : "text"}
-                className="pr-8"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                {secret ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-              </div>
-            </div>
-            <Button type="button" variant="ghost" size="xs" onClick={() => removeRow(i)}>
-              <Trash2 />
-            </Button>
-          </div>
-        );
-      })}
+      <HeaderRows rows={rows} onChange={setRows} keepSecretNames={storedSecrets} />
 
       <div className="flex gap-2 pt-1">
         <Button type="button" size="xs" onClick={handleSave} disabled={saving}>
