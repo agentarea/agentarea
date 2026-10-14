@@ -128,6 +128,7 @@ class AgentAreaWorker:
         self.container_monitor = None
         self.dispatch_stamps = None
         self.cost_settlement = None
+        self.installation_pulse = None
         self.worker_shutdown_event = asyncio.Event()
         self.health = WorkerHealth()
         # All interfaces: the kubelet probes the pod IP, not loopback.
@@ -159,6 +160,11 @@ class AgentAreaWorker:
             raise RuntimeError("Client not connected. Call connect() first.")
 
         settings = get_settings()
+
+        if settings.analytics.ENABLED:
+            from agentarea_common.analytics import NOTICE
+
+            logger.info(NOTICE)
 
         await self._check_database()
 
@@ -466,6 +472,16 @@ class AgentAreaWorker:
             await self.outbox_relay.start()
         if self.cost_settlement:
             await self.cost_settlement.start()
+
+        from agentarea_common.analytics import InstallationPulse, start_analytics
+        from agentarea_common.config.database import get_database
+
+        analytics = await start_analytics(get_database().async_session_factory)
+        if analytics is not None:
+            self.installation_pulse = InstallationPulse(
+                session_factory=get_database().async_session_factory, sender=analytics
+            )
+            await self.installation_pulse.start()
         if self.stream_runtime:
             await self.stream_runtime.start()
 
@@ -552,6 +568,12 @@ class AgentAreaWorker:
         if self.cost_settlement:
             await self.cost_settlement.stop()
             self.cost_settlement = None
+        if self.installation_pulse:
+            await self.installation_pulse.stop()
+            self.installation_pulse = None
+        from agentarea_common.analytics import stop_analytics
+
+        await stop_analytics()
         if self.delivery_autoclaimer:
             await self.delivery_autoclaimer.stop()
             self.delivery_autoclaimer = None

@@ -2578,3 +2578,8 @@ export const unlinkExternalIdentity = async (identityId: string) => {
     });
   return { data, error };
 };
+
+export const getAnalyticsConfig = async () => {
+  const result = await sdk.getAnalyticsV1AnalyticsGet({ client: serverClient });
+  return withStatus(result);
+};

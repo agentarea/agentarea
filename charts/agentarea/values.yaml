@@ -300,6 +300,14 @@ global:
       port: 8001
       path: "/health"
 
+  # Anonymous usage analytics (AGENTAREA_ANALYTICS_ENABLED)
+  analytics:
+    # -- Send AgentArea anonymous usage statistics from the backend and worker: a
+    # daily count of agents, runs and connectors, never names, prompts, output or
+    # secrets. Not OpenTelemetry. false sends nothing. Field list:
+    # https://docs.agentarea.ai/self-host/analytics
+    enabled: true
+
   # Outbound HTTP from the backend and worker
   http:
     # -- PEM text of CA certificates to trust on outbound TLS in addition to the

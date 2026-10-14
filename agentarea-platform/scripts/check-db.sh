@@ -137,10 +137,14 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   owned auth configs: an auth config a connect flow minted is deleted with its
 #     connection or instance by ON DELETE CASCADE, its credential and secret
 #     references first; a shared one survives, and the backfill names owners.
+#   installation: replicas creating the analytics installation row at once end
+#     up with one row, which only the single-row unique index decides.
+#     The daily pulse names other libraries' tables and columns by hand; only the
+#     migrated schema shows they exist. One replica sends it, by a real advisory lock.
 #   catalog migration rerun: the ADR-0044 revisions run by the real alembic
 #     environment, refused a lock and killed mid index swap, then rerun to head.
 #     Last: it downgrades and upgrades the shared database.
-PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL)
+PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL ANALYTICS_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
   libs/llm/tests/test_provider_secret_lifecycle_db.py
@@ -207,6 +211,8 @@ PY_SUITES=(
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
   apps/api/tests/test_owned_auth_configs_db.py
+  libs/common/tests/test_analytics_installation_db.py
+  libs/common/tests/test_analytics_pulse_db.py
   apps/api/tests/test_registry_migration_rerun_db.py
 )
 

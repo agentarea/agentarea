@@ -12,6 +12,7 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 // session helper comes from there. main still imported the package path; the
 // billing-URL fix below is main's and is kept.
 import { getServerSession } from "@/lib/ory";
+import { recordPageView } from "@/lib/analytics/page-views";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
 const sharedMetadata: Omit<Metadata, "metadataBase"> = {
@@ -72,7 +73,12 @@ async function getMetadataBase() {
   return new URL(`${protocol}://${host}`);
 }
 
+// The root layout's one function that runs for every page someone opens:
+// Next resolves the whole tree's metadata on a load and on each client
+// navigation, while layouts render only below the segment that changed. The
+// router's prefetches stop at the route tree and never resolve metadata.
 export async function generateMetadata(): Promise<Metadata> {
+  recordPageView(await headers());
   return {
     metadataBase: await getMetadataBase(),
     ...sharedMetadata,

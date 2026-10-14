@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/env";
 import {
-  hasLiveSession,
+  PAGE_VIEW_IDENTITY_HEADER,
+  PAGE_VIEW_PATH_HEADER,
+} from "@/lib/analytics/route-pattern";
+import {
+  getLiveSessionIdentityId,
   isProtectedRoute,
   loginRedirectPath,
 } from "@/lib/auth-session";
@@ -14,11 +18,22 @@ import oryConfig from "@/ory.config";
 /**
  * Scope a `/w/{slug}/...` request to its workspace. Pages, RSC fetches and
  * server actions (which post to the page URL) all read the header set here;
- * a client-supplied value is overwritten so the URL is the only source.
+ * a client-supplied value is overwritten so the URL is the only source. The
+ * page-view headers are overwritten the same way.
  */
-function scopeToWorkspace(request: NextRequest, slug: string) {
+function scopeToWorkspace(
+  request: NextRequest,
+  slug: string,
+  identityId: string | null
+) {
   const headers = new Headers(request.headers);
   headers.set(WORKSPACE_REFERENCE_HEADER, slug);
+  headers.set(PAGE_VIEW_PATH_HEADER, request.nextUrl.pathname);
+  if (identityId) {
+    headers.set(PAGE_VIEW_IDENTITY_HEADER, identityId);
+  } else {
+    headers.delete(PAGE_VIEW_IDENTITY_HEADER);
+  }
   return NextResponse.next({ request: { headers } });
 }
 
@@ -29,6 +44,8 @@ function scopeToWorkspace(request: NextRequest, slug: string) {
 function unscoped(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.delete(WORKSPACE_REFERENCE_HEADER);
+  headers.delete(PAGE_VIEW_PATH_HEADER);
+  headers.delete(PAGE_VIEW_IDENTITY_HEADER);
   return NextResponse.next({ request: { headers } });
 }
 
@@ -86,11 +103,12 @@ export const proxy = async (request: Request) => {
   if (pathname === "/app-sandbox") {
     return unscoped(nextReq);
   }
+  let identityId: string | null = null;
   if (isProtectedRoute(pathname)) {
-    const alive = await hasLiveSession(nextReq.headers.get("cookie"), {
+    identityId = await getLiveSessionIdentityId(nextReq.headers.get("cookie"), {
       orySdkUrl: env.ORY_SDK_URL,
     });
-    if (!alive) {
+    if (!identityId) {
       const loginUrl = new URL(
         loginRedirectPath(pathname, nextReq.nextUrl.search),
         nextReq.url
@@ -117,14 +135,14 @@ export const proxy = async (request: Request) => {
   const slug = workspaceSlugFromPath(pathname);
   if (slug) {
     if (settingsHop?.kind !== "to-kratos") {
-      return scopeToWorkspace(nextReq, slug);
+      return scopeToWorkspace(nextReq, slug, identityId);
     }
     // An RSC fetch cannot follow a redirect to Kratos' origin. A response
     // that is not an RSC payload makes the router load the URL as a page
     // instead, which then takes the redirect. Either way remember where the
     // trip started.
     const response = !isPageGet(nextReq)
-      ? scopeToWorkspace(nextReq, slug)
+      ? scopeToWorkspace(nextReq, slug, identityId)
       : isRouterFetch(nextReq)
         ? new NextResponse(null, { status: 204 })
         : NextResponse.redirect(settingsHop.location);
