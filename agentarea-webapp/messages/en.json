@@ -883,9 +883,8 @@
     },
     "instanceDetail": {
       "activity": {
-        "title": "Activity ({count})",
-        "loading": "Loading activity…",
-        "empty": "No changes recorded for this connection yet."
+        "empty": "No changes recorded for this connection yet.",
+        "unavailable": "The activity log isn't available right now."
       },
       "header": {
         "label": "Instance",
@@ -929,32 +928,16 @@
         "description": "Description",
         "status": "Status"
       },
-      "types": {
-        "docker": "Docker",
-        "externalUrl": "External URL",
-        "command": "Command"
-      },
-      "labels": {
-        "connectionUrl": "Connection URL",
-        "value": "Value"
-      },
       "serverSpec": {
         "title": "Server Spec"
       },
       "command": {
-        "title": "Command",
         "note": "Runs in a sandbox container via supergateway."
       },
-      "external": {
-        "title": "External Server",
-        "customHeaders": "Custom Headers"
-      },
       "container": {
-        "title": "Container",
         "port": "Port"
       },
       "tools": {
-        "title": "Available Tools ({count})",
         "count": "{count} tools",
         "columns": {
           "name": "Name",
@@ -984,32 +967,22 @@
         "noneDiscovered": "No tools discovered yet",
         "discovered": "Discovered {count, plural, one {# tool} other {# tools}}",
         "discoverFailed": "Couldn't discover tools",
-        "discoverUnverified": "Couldn't discover tools: the server did not pass verification"
+        "discoverUnverified": "Couldn't discover tools: the server did not pass verification",
+        "hint": "Tools the server reported, and which agents hold each of them."
       },
       "consumers": {
-        "title": "Used by ({count})",
-        "loading": "Loading consumers…",
         "empty": "No agents attach this MCP server yet.",
-        "columns": {
-          "agent": "Agent",
-          "tools": "Enabled tools"
-        },
         "allTools": "all tools",
-        "none": "none",
-        "confirmSuffix": " (confirm)",
-        "more": "+{count} more",
-        "collapse": "Show less"
+        "heading": "Used by",
+        "toolCount": "{count, plural, one {# tool} other {# tools}}"
       },
       "bundle": {
-        "members": "Sources"
+        "members": "Sources",
+        "memberSub": "Connection in this bundle"
       },
       "env": {
         "title": "Environment Variables",
-        "notSet": "not set",
-        "columns": {
-          "key": "Key",
-          "value": "Value"
-        }
+        "notSet": "not set"
       },
       "details": {
         "title": "Details",
@@ -1029,6 +1002,58 @@
         "verifyFailed": "Couldn't start verification",
         "saveConfigFailed": "Couldn't save the configuration",
         "consumersLoadFailed": "Couldn't load which agents use this connection"
+      },
+      "tabs": {
+        "label": "Connection sections",
+        "overview": "Overview",
+        "tools": "Tools",
+        "activity": "Activity"
+      },
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "meta": {
+        "github": "GitHub",
+        "repository": "Repository",
+        "website": "Website"
+      },
+      "stats": {
+        "tools": "Tools",
+        "toolsSub": "discovered on the server",
+        "agents": "Agents",
+        "agentsNone": "no agent uses it yet",
+        "agentsUnknown": "couldn't load",
+        "unrestricted": "{count, plural, one {# holds} other {# hold}} every tool",
+        "restricted": "each with chosen tools",
+        "lastCall": "Last call",
+        "callSucceeded": "Succeeded",
+        "callFailed": "Failed",
+        "verification": "Verification"
+      },
+      "verification": {
+        "succeeded": "Verified",
+        "in_progress": "Verifying",
+        "failed": "Failed",
+        "never_attempted": "Not verified"
+      },
+      "verify": {
+        "stuck": "Verification may be stuck. You can retry it.",
+        "verify": "Verify",
+        "failedTitle": "Verification failed",
+        "code": "Code: {code}",
+        "retry": "Retry verification"
+      },
+      "connection": {
+        "title": "Connection",
+        "connectUrl": "Connect URL",
+        "connectUrlHint": "MCP clients connect through this address.",
+        "endpoint": "Endpoint",
+        "headers": "Headers",
+        "noHeaders": "No custom headers",
+        "image": "Docker image",
+        "command": "Command"
+      },
+      "authorization": {
+        "title": "Authorization"
       }
     },
     "table": {

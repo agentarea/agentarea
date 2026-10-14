@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, ScrollText } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   fetchAuditLogs,
   type AuditEvent,
@@ -12,11 +12,13 @@ import {
   AuditActor,
 } from "@/app/w/[workspace]/(main)/settings/audit/AuditCells";
 import { AuditChangeList } from "@/app/w/[workspace]/(main)/settings/audit/AuditChangeList";
+import { EmptyRow, SectionCard } from "@/components/Overview/OverviewCard";
+import { RowSkeleton } from "@/components/Overview/OverviewSkeleton";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 
-// Audit trail scoped to a single MCP connection. Read-only — surfaces the
-// config-change history the audit store already records for this instance
-// (mcp_instance.create / update / delete), so a reviewer can answer
+// Audit trail scoped to a single MCP connection (the Activity tab). Read-only —
+// surfaces the config-change history the audit store already records for this
+// instance (mcp_instance.create / update / delete), so a reviewer can answer
 // "who changed this connection, and when" without leaving the page.
 export function InstanceActivitySection({
   instanceId,
@@ -50,39 +52,38 @@ export function InstanceActivitySection({
 
   if (events === null) {
     return (
-      <div className="rounded-lg border border-border/60 bg-background p-4 text-sm text-muted-foreground dark:bg-zinc-900/30">
-        {t("loading")}
-      </div>
+      <SectionCard>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <RowSkeleton key={i} titleClassName="h-3 w-48" subClassName="w-24" />
+        ))}
+      </SectionCard>
     );
   }
 
-  // Audit sink disabled or backend error — stay quiet rather than clutter the
-  // builder's happy path with an error card.
-  if (unavailable) return null;
+  // Audit sink disabled or backend error: on its own tab, say so rather than
+  // leave the page blank.
+  if (unavailable) {
+    return (
+      <SectionCard>
+        <EmptyRow text={t("unavailable")} />
+      </SectionCard>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <ScrollText className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium">
-          {t("title", { count: events.length })}
-        </h3>
-      </div>
-
+    <SectionCard>
       {events.length === 0 ? (
-        <div className="rounded-lg border border-border/60 bg-background p-4 text-sm text-muted-foreground dark:bg-zinc-900/30">
-          {t("empty")}
-        </div>
+        <EmptyRow text={t("empty")} />
       ) : (
-        <div className="overflow-hidden rounded-lg border">
+        <div>
           {events.map((event) => {
             const hasChanges = !!event.changes && event.changes.length > 0;
             const isExpanded = expandedId === event.id;
             return (
-              <div key={event.id} className="border-t first:border-t-0">
+              <div key={event.id} className="border-t border-border/60 first:border-t-0">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/40"
+                  className="flex w-full items-center gap-3 px-[15px] py-[11px] text-left text-[12.5px] hover:bg-muted/40"
                   onClick={() =>
                     hasChanges && setExpandedId(isExpanded ? null : event.id)
                   }
@@ -118,7 +119,7 @@ export function InstanceActivitySection({
                 {isExpanded && hasChanges && (
                   <AuditChangeList
                     changes={event.changes}
-                    className="space-y-1 border-t bg-muted/20 px-3 py-2 pl-10"
+                    className="space-y-1 border-t border-border/60 bg-muted/20 px-[15px] py-2 pl-11"
                   />
                 )}
               </div>
@@ -126,6 +127,6 @@ export function InstanceActivitySection({
           })}
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 }

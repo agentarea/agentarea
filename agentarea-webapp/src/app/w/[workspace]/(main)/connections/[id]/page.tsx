@@ -1,54 +1,21 @@
-import type { Metadata } from "next";
 import type { McpServerInstanceResponse } from "@/api/client/types.gen";
-import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock";
-import { getMCPInstanceConsumers, getMCPServer, getMCPServerInstance } from "@/lib/api";
-import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import { getMCPServer, getMCPServerInstance } from "@/lib/api";
 import { optionalApiData, requireApiData } from "@/lib/server-resource";
-import MCPInstanceHeaderControls from "./HeaderControls";
-import MCPInstanceDetail from "./MCPInstanceDetail";
+import { loadConsumers } from "./consumersData";
+import { getInstanceCached } from "./instanceData";
+import MCPInstanceOverview from "./MCPInstanceOverview";
 
 interface Props {
   params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id } = await params;
-  const instance = requireApiData(
-    await getMCPServerInstance(id),
-    "MCP instance"
-  );
-  return { title: instance?.name ?? "MCP Instance" };
-}
-
 export default async function MCPInstancePage({ params }: Props) {
   const { id } = await params;
-  const t = await getTranslations("MCPServersPage");
+  const instance = await getInstanceCached(id);
 
-  const instance = requireApiData(
-    await getMCPServerInstance(id),
-    "MCP instance"
-  );
-
-  const consumersPromise = getMCPInstanceConsumers(instance.id)
-    .then((result) =>
-      result.error || !result.data
-        ? {
-            consumers: null,
-            error: apiErrorMessage(
-              result,
-              t("instanceDetail.errors.consumersLoadFailed")
-            ),
-          }
-        : { consumers: result.data, error: null }
-    )
-    .catch((error) => ({
-      consumers: null,
-      error: `${t("instanceDetail.errors.consumersLoadFailed")}: ${formatApiError(error)}`,
-    }));
   const [serverSpecResult, consumerResult] = await Promise.all([
     instance.server_spec_id ? getMCPServer(instance.server_spec_id) : null,
-    consumersPromise,
+    loadConsumers(instance.id),
   ]);
   const serverSpec =
     serverSpecResult && instance.server_spec_id
@@ -57,7 +24,6 @@ export default async function MCPInstancePage({ params }: Props) {
           `MCP server ${instance.server_spec_id}`
         )
       : null;
-  const { consumers, error: consumersError } = consumerResult;
 
   // Resolve bundle member names
   const memberNames: Record<string, string> = {};
@@ -77,28 +43,12 @@ export default async function MCPInstancePage({ params }: Props) {
   }
 
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [
-          { label: t("title"), href: "/connections" },
-          { label: instance.name },
-        ],
-        controls: (
-          <MCPInstanceHeaderControls
-            instanceId={instance.id}
-            instanceName={instance.name}
-          />
-        ),
-      }}
-      className="p-0 overflow-hidden"
-    >
-      <MCPInstanceDetail
-        instance={instance}
-        serverSpec={serverSpec}
-        memberNames={memberNames}
-        consumers={consumers}
-        consumersError={consumersError}
-      />
-    </ContentBlock>
+    <MCPInstanceOverview
+      instance={instance}
+      serverSpec={serverSpec}
+      memberNames={memberNames}
+      consumers={consumerResult.consumers}
+      consumersError={consumerResult.error}
+    />
   );
 }

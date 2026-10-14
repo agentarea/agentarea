@@ -883,9 +883,8 @@
     },
     "instanceDetail": {
       "activity": {
-        "title": "Активность ({count})",
-        "loading": "Загрузка активности…",
-        "empty": "Для этого подключения пока нет записанных изменений."
+        "empty": "Для этого подключения пока нет записанных изменений.",
+        "unavailable": "Журнал активности сейчас недоступен."
       },
       "header": {
         "label": "Инстанс",
@@ -929,32 +928,16 @@
         "description": "Описание",
         "status": "Статус"
       },
-      "types": {
-        "docker": "Docker",
-        "externalUrl": "Внешний URL",
-        "command": "Команда"
-      },
-      "labels": {
-        "connectionUrl": "URL подключения",
-        "value": "Значение"
-      },
       "serverSpec": {
         "title": "Спецификация"
       },
       "command": {
-        "title": "Команда",
         "note": "Запускается в sandbox-контейнере через supergateway."
       },
-      "external": {
-        "title": "Внешний сервер",
-        "customHeaders": "Заголовки"
-      },
       "container": {
-        "title": "Контейнер",
         "port": "Порт"
       },
       "tools": {
-        "title": "Доступные инструменты ({count})",
         "count": "{count} инструментов",
         "columns": {
           "name": "Имя",
@@ -984,32 +967,22 @@
         "noneDiscovered": "Инструменты пока не найдены",
         "discovered": "{count, plural, one {Найден # инструмент} few {Найдено # инструмента} many {Найдено # инструментов} other {Найдено # инструмента}}",
         "discoverFailed": "Не удалось найти инструменты",
-        "discoverUnverified": "Не удалось найти инструменты: сервер не прошёл проверку"
+        "discoverUnverified": "Не удалось найти инструменты: сервер не прошёл проверку",
+        "hint": "Инструменты, которые сообщил сервер, и какие агенты держат каждый из них."
       },
       "consumers": {
-        "title": "Используют ({count})",
-        "loading": "Загрузка потребителей…",
         "empty": "Пока ни один агент не подключил этот MCP сервер.",
-        "columns": {
-          "agent": "Агент",
-          "tools": "Включённые инструменты"
-        },
         "allTools": "все инструменты",
-        "none": "нет",
-        "confirmSuffix": " (подтверждение)",
-        "more": "+{count} ещё",
-        "collapse": "Свернуть"
+        "heading": "Кто использует",
+        "toolCount": "{count, plural, one {# инструмент} few {# инструмента} many {# инструментов} other {# инструмента}}"
       },
       "bundle": {
-        "members": "Источники"
+        "members": "Источники",
+        "memberSub": "Подключение из набора"
       },
       "env": {
         "title": "Переменные окружения",
-        "notSet": "не задано",
-        "columns": {
-          "key": "Ключ",
-          "value": "Значение"
-        }
+        "notSet": "не задано"
       },
       "details": {
         "title": "Детали",
@@ -1029,6 +1002,58 @@
         "verifyFailed": "Не удалось запустить проверку",
         "saveConfigFailed": "Не удалось сохранить настройки",
         "consumersLoadFailed": "Не удалось загрузить агентов, которые используют это подключение"
+      },
+      "tabs": {
+        "label": "Разделы подключения",
+        "overview": "Обзор",
+        "tools": "Инструменты",
+        "activity": "Активность"
+      },
+      "showMore": "Показать больше",
+      "showLess": "Свернуть",
+      "meta": {
+        "github": "GitHub",
+        "repository": "Репозиторий",
+        "website": "Сайт"
+      },
+      "stats": {
+        "tools": "Инструменты",
+        "toolsSub": "найдено на сервере",
+        "agents": "Агенты",
+        "agentsNone": "пока никто не использует",
+        "agentsUnknown": "не удалось загрузить",
+        "unrestricted": "{count, plural, one {# держит} few {# держат} many {# держат} other {# держат}} все инструменты",
+        "restricted": "у каждого свой набор",
+        "lastCall": "Последний вызов",
+        "callSucceeded": "Успешно",
+        "callFailed": "С ошибкой",
+        "verification": "Проверка"
+      },
+      "verification": {
+        "succeeded": "Пройдена",
+        "in_progress": "Идёт",
+        "failed": "Не пройдена",
+        "never_attempted": "Не проводилась"
+      },
+      "verify": {
+        "stuck": "Проверка, похоже, зависла. Можно запустить её заново.",
+        "verify": "Проверить",
+        "failedTitle": "Проверка не пройдена",
+        "code": "Код: {code}",
+        "retry": "Проверить снова"
+      },
+      "connection": {
+        "title": "Подключение",
+        "connectUrl": "URL для подключения",
+        "connectUrlHint": "Через этот адрес подключаются MCP-клиенты.",
+        "endpoint": "Адрес сервера",
+        "headers": "Заголовки",
+        "noHeaders": "Своих заголовков нет",
+        "image": "Docker-образ",
+        "command": "Команда"
+      },
+      "authorization": {
+        "title": "Авторизация"
       }
     },
     "table": {
