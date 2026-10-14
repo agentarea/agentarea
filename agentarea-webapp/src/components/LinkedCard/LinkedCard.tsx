@@ -75,7 +75,8 @@ export default function LinkedCard({
           "border-primary/50 hover:border-primary/50 dark:border-primary/60 dark:hover:border-primary/60",
         className
       )}
-      onClick={onClick}
+      // Without a link the wrapper below is the button, so it takes the click.
+      onClick={href ? onClick : undefined}
     >
         <div className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none" 
            style={{
@@ -190,6 +191,9 @@ export default function LinkedCard({
       role="button"
       tabIndex={0}
       aria-pressed={selected}
+      // The click belongs to the element that is the button: one dispatched at
+      // it (assistive tech, tests) never reached a handler on the card inside.
+      onClick={onClick}
       onKeyDown={(e) => {
         if (!onClick) return;
         if (e.key === "Enter" || e.key === " ") {
