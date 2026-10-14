@@ -8,10 +8,11 @@ but the source of truth for ``create``/``update`` is the Pydantic DTO
 kwargs and DTO fields.
 """
 
+import builtins
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -20,13 +21,73 @@ from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_openapi.schemas.dto import (
     HeaderInput,
+    HeaderOutput,
     OpenAPIConnectionCreate,
     OpenAPIConnectionUpdate,
     QueryParamInput,
+    QueryParamOutput,
     UrlVariableInput,
 )
+from pydantic import BaseModel, Field
 
 from .base import platform_context, platform_read_context
+from .mcp_servers_toolset import LastDispatchOutput
+
+_CONNECTION_ID = (
+    "OpenAPI connection id, from `openapi_connections_list` or `openapi_connections_create`."
+)
+_AUTH_CONFIG_ID = (
+    "UUID of an MCP auth config whose OAuth2 tokens are minted and refreshed for the connection."
+)
+
+
+class OpenAPIConnectionOutput(BaseModel):
+    id: str = Field(description="Connection id.")
+    name: str = Field(description="Display name.")
+    description: str | None = Field(description="Human-readable summary.")
+    base_url: str = Field(
+        description="Base URL requests are sent to; may hold {name} placeholders."
+    )
+    spec_url: str | None = Field(description="URL the OpenAPI spec is fetched from.")
+    auth_config_id: str | None = Field(description="Attached OAuth2 auth config, if any.")
+    custom_headers: builtins.list[HeaderOutput] = Field(
+        description="Headers sent with every request; values are never returned."
+    )
+    custom_query_params: builtins.list[QueryParamOutput] = Field(
+        description="Query parameters sent with every request; values are never returned."
+    )
+    url_variables: builtins.list[str] = Field(
+        description="Names of the base_url placeholders; values are never returned."
+    )
+    tools_count: int = Field(description="Number of tools discovered from the spec.")
+    status: str = Field(description="Connection status; only 'active' connections are callable.")
+    last_dispatch: LastDispatchOutput | None = Field(
+        description="The last tool call made through the connection."
+    )
+
+
+class OpenAPIConnectionPage(BaseModel):
+    items: builtins.list[OpenAPIConnectionOutput] = Field(description="Connections on this page.")
+    total: int = Field(description="Connections matching the search across all pages.")
+
+
+class OpenAPIToolSummary(BaseModel):
+    name: str = Field(description="Tool name, callable with `tools_call`.")
+    description: str = Field(description="What the operation does.")
+
+
+class OpenAPIConnectionDetailOutput(OpenAPIConnectionOutput):
+    tools: builtins.list[OpenAPIToolSummary] = Field(description="Tools discovered from the spec.")
+
+
+class DiscoverToolsOutput(BaseModel):
+    connection_id: str = Field(description="Connection id.")
+    tools_discovered: int = Field(description="Number of tools now stored for the connection.")
+    tools: builtins.list[OpenAPIToolSummary] = Field(description="The discovered tools.")
+
+
+class DeleteOutput(BaseModel):
+    deleted: bool = Field(description="True if the connection was deleted; false if not found.")
 
 
 @contextmanager
@@ -93,19 +154,68 @@ def _build_service(repo_factory, secret_mgr):
 class OpenAPIConnectionsToolset(Toolset):
     """Manage OpenAPI REST API connections: create, list, get, update, discover_tools, delete."""
 
-    @tool_method(effect="write")
+    open_world = False
+
+    @tool_method(
+        display_name="Create OpenAPI connection",
+        effect="write",
+        open_world=True,
+        output=OpenAPIConnectionOutput,
+    )
     @unrestricted("any member may add a connection, as POST /v1/openapi-connections allows")
     async def create(
         self,
-        name: str,
-        base_url: str,
-        description: str | None = None,
-        spec_url: str | None = None,
-        spec_content_json: str = "",
-        auth_config_id: str | None = None,
-        custom_headers_json: str = "",
-        custom_query_params_json: str = "",
-        url_variables_json: str = "",
+        name: Annotated[
+            str, Field(description="Display name, 1-255 characters, unique per workspace.")
+        ],
+        base_url: Annotated[
+            str,
+            Field(
+                description="Base URL for API requests, e.g. 'https://api.example.com', at "
+                "most 500 characters. The path may hold {name} placeholders filled from "
+                "url_variables_json, e.g. 'https://api.telegram.org/bot{token}'."
+            ),
+        ],
+        description: Annotated[
+            str | None, Field(description="Optional human-readable summary.")
+        ] = None,
+        spec_url: Annotated[
+            str | None,
+            Field(
+                description="URL of an OpenAPI 3.x JSON or YAML spec, fetched and parsed now. "
+                "Give this or spec_content_json."
+            ),
+        ] = None,
+        spec_content_json: Annotated[
+            str,
+            Field(
+                description="The OpenAPI 3.x spec itself as a JSON object string; use instead "
+                "of spec_url when the spec host is unreachable from the platform."
+            ),
+        ] = "",
+        auth_config_id: Annotated[str | None, Field(description=_AUTH_CONFIG_ID)] = None,
+        custom_headers_json: Annotated[
+            str,
+            Field(
+                description='JSON array of {"name": "Authorization", "value": "Bearer ..."} '
+                "headers sent with every request; non-safe headers are stored encrypted."
+            ),
+        ] = "",
+        custom_query_params_json: Annotated[
+            str,
+            Field(
+                description='JSON array of {"name": "api_key", "value": "...", "secret": true} '
+                "query parameters sent with every request; secret (the default) values are "
+                "stored encrypted and never returned."
+            ),
+        ] = "",
+        url_variables_json: Annotated[
+            str,
+            Field(
+                description='JSON array of {"name": "token", "value": "..."}, one per {name} '
+                "placeholder in base_url; values are stored encrypted and never returned."
+            ),
+        ] = "",
     ) -> str:
         """Create a new OpenAPI connection.
 
@@ -177,9 +287,21 @@ class OpenAPIConnectionsToolset(Toolset):
                 conn = await service.create_connection(payload)
             return json.dumps(_serialize(conn), default=str)
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List OpenAPI connections", effect="read", output=OpenAPIConnectionPage
+    )
     @unrestricted("connections in the caller's workspace, as the REST listing returns them")
-    async def list(self, search: str = "", limit: int = 100, offset: int = 0) -> str:
+    async def list(
+        self,
+        search: Annotated[
+            str,
+            Field(
+                description="Case-insensitive text to match in names and descriptions; empty for all."
+            ),
+        ] = "",
+        limit: Annotated[int, Field(description="Page size.")] = 100,
+        offset: Annotated[int, Field(description="Connections to skip, for paging.")] = 0,
+    ) -> str:
         """List OpenAPI connections in the workspace."""
         async with platform_read_context() as (
             _session,
@@ -200,9 +322,13 @@ class OpenAPIConnectionsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="Get OpenAPI connection",
+        effect="read",
+        output=OpenAPIConnectionDetailOutput,
+    )
     @unrestricted("a connection in the caller's workspace, as the REST detail returns it")
-    async def get(self, connection_id: str) -> str:
+    async def get(self, connection_id: Annotated[str, Field(description=_CONNECTION_ID)]) -> str:
         """Get details of an OpenAPI connection, including discovered tools."""
         async with platform_read_context() as (
             _session,
@@ -222,21 +348,66 @@ class OpenAPIConnectionsToolset(Toolset):
             ]
             return json.dumps(payload, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Update OpenAPI connection",
+        effect="write",
+        idempotent=True,
+        output=OpenAPIConnectionOutput,
+    )
     @requires("edit", "openapi_connection", id_param="connection_id")
     async def update(
         self,
-        connection_id: str,
-        name: str | None = None,
-        description: str | None = None,
-        base_url: str | None = None,
-        spec_url: str | None = None,
-        spec_content_json: str = "",
-        auth_config_id: str | None = None,
-        custom_headers_json: str = "",
-        custom_query_params_json: str = "",
-        url_variables_json: str = "",
-        cost_json: str = "",
+        connection_id: Annotated[str, Field(description=_CONNECTION_ID)],
+        name: Annotated[
+            str | None, Field(description="New display name, 1-255 characters; omit to keep.")
+        ] = None,
+        description: Annotated[str | None, Field(description="New summary; omit to keep.")] = None,
+        base_url: Annotated[
+            str | None,
+            Field(description="New base URL, may hold {name} placeholders; omit to keep."),
+        ] = None,
+        spec_url: Annotated[
+            str | None, Field(description="New OpenAPI spec URL; omit to keep.")
+        ] = None,
+        spec_content_json: Annotated[
+            str,
+            Field(
+                description="Replacement OpenAPI 3.x spec as a JSON object string. Empty keeps it."
+            ),
+        ] = "",
+        auth_config_id: Annotated[
+            str | None,
+            Field(description=f"{_AUTH_CONFIG_ID} An empty string detaches it; omit to keep."),
+        ] = None,
+        custom_headers_json: Annotated[
+            str,
+            Field(
+                description='JSON array of {"name", "value"} replacing every header; [] clears '
+                "them. Empty keeps them."
+            ),
+        ] = "",
+        custom_query_params_json: Annotated[
+            str,
+            Field(
+                description='JSON array of {"name", "value", "secret"} replacing every query '
+                "parameter; [] clears them, an empty value keeps a stored secret. Empty keeps them."
+            ),
+        ] = "",
+        url_variables_json: Annotated[
+            str,
+            Field(
+                description='JSON array of {"name", "value"} replacing every URL variable; must '
+                "match the base_url placeholders. Empty keeps them."
+            ),
+        ] = "",
+        cost_json: Annotated[
+            str,
+            Field(
+                description='JSON object with the per-call cost, e.g. {"source": "rate", '
+                '"rate": {"amount": "0.01", "currency": "USD"}}; the JSON null restores '
+                "the connector's own. Empty keeps it."
+            ),
+        ] = "",
     ) -> str:
         """Update fields on an existing OpenAPI connection. Only fields explicitly
         set are written. ``custom_headers_json`` replaces the full header set;
@@ -297,9 +468,17 @@ class OpenAPIConnectionsToolset(Toolset):
                 raise ToolError("Connection not found")
             return json.dumps(_serialize(conn), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Discover OpenAPI tools",
+        effect="write",
+        idempotent=True,
+        open_world=True,
+        output=DiscoverToolsOutput,
+    )
     @requires("edit", "openapi_connection", id_param="connection_id")
-    async def discover_tools(self, connection_id: str) -> str:
+    async def discover_tools(
+        self, connection_id: Annotated[str, Field(description=_CONNECTION_ID)]
+    ) -> str:
         """Re-fetch the OpenAPI spec and refresh the discovered tools list."""
         async with platform_context() as (
             _session,
@@ -313,9 +492,14 @@ class OpenAPIConnectionsToolset(Toolset):
                 result = await service.discover_tools(UUID(connection_id))
             return json.dumps(result, default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete OpenAPI connection",
+        effect="destructive",
+        idempotent=True,
+        output=DeleteOutput,
+    )
     @requires("delete", "openapi_connection", id_param="connection_id")
-    async def delete(self, connection_id: str) -> str:
+    async def delete(self, connection_id: Annotated[str, Field(description=_CONNECTION_ID)]) -> str:
         """Delete an OpenAPI connection, its stored secrets and the OAuth auth config it connected with."""
         async with platform_context() as (
             _session,

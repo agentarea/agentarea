@@ -29,19 +29,44 @@ from .tool_definition import (
 class ToolMethodMetadata:
     """Per-method metadata stamped by ``@tool_method(...)``."""
 
-    __slots__ = ("description", "display_name", "effect", "requires_user_confirmation")
+    __slots__ = (
+        "description",
+        "display_name",
+        "documentation",
+        "effect",
+        "idempotent",
+        "open_world",
+        "output",
+        "requires_user_confirmation",
+        "title",
+    )
+
+    effect: ToolEffect | None
 
     def __init__(
         self,
         *,
         display_name: str = "",
+        title: str = "",
         description: str = "",
+        documentation: str = "",
         effect: ToolEffect | None = None,
+        idempotent: bool | None = None,
+        open_world: bool | None = None,
+        output: Any = None,
         requires_user_confirmation: bool = False,
     ) -> None:
         self.display_name = display_name
+        # The declared ``display_name``; empty when it fell back to the method name.
+        self.title = title
         self.description = description
+        # The whole docstring: what an MCP client is shown, where an agent's
+        # tool schema carries only ``description``.
+        self.documentation = documentation or description
         self.effect = effect
+        self.idempotent = idempotent
+        self.open_world = open_world
+        self.output = output
         self.requires_user_confirmation = requires_user_confirmation
 
 
@@ -61,6 +86,9 @@ def tool_method(
     display_name: str = "",
     description: str = "",
     effect: ToolEffect | None = None,
+    idempotent: bool | None = None,
+    open_world: bool | None = None,
+    output: Any = None,
     requires_user_confirmation: bool = False,
 ) -> Callable[[F], F]: ...
 
@@ -71,6 +99,9 @@ def tool_method(
     display_name: str = "",
     description: str = "",
     effect: ToolEffect | None = None,
+    idempotent: bool | None = None,
+    open_world: bool | None = None,
+    output: Any = None,
     requires_user_confirmation: bool = False,
 ) -> Callable[..., Any]:
     """Mark a method as a tool function.
@@ -83,6 +114,15 @@ def tool_method(
     ``destructive``, or ``privileged`` (changes someone's rights, limits, or
     reach). It is never inferred from the method name: platform toolsets must
     declare it, and their contract test fails when they don't.
+
+    The rest is what an MCP client is shown about the tool. ``display_name``
+    is its title ("Create agent"). ``output`` is the type its result
+    has — a pydantic model, ``list[Model]`` or a TypedDict — published as the
+    tool's output schema; the method may still return that value serialized
+    as JSON text. ``idempotent`` says a repeated call with the same arguments
+    changes nothing more; ``open_world`` says the call reaches systems outside
+    the platform (a remote MCP server, an upstream API, GitHub). Left unset, a
+    method takes ``open_world`` from its toolset.
 
     Usage:
         @tool_method(effect="read")
@@ -104,8 +144,13 @@ def tool_method(
         tagged._tool_description = resolved_desc
         tagged._tool_meta = ToolMethodMetadata(
             display_name=display_name or f.__name__.replace("_", " ").title(),
+            title=display_name,
             description=resolved_desc,
+            documentation=description or inspect.cleandoc(f.__doc__ or ""),
             effect=effect,
+            idempotent=idempotent,
+            open_world=open_world,
+            output=output,
             requires_user_confirmation=requires_user_confirmation,
         )
         return f
@@ -127,6 +172,11 @@ class Toolset:
     # workspaces, such tools take a required ``workspace`` argument; a toolset
     # that acts on none (e.g. listing workspaces) sets this to False.
     workspace_scoped: ClassVar[bool] = True
+
+    # Whether its tools reach systems outside the platform, unless a method
+    # says otherwise. None leaves it undeclared, which an MCP client reads as
+    # open.
+    open_world: ClassVar[bool | None] = None
 
     def __init__(self):
         """Initialize the tool and discover decorated methods."""

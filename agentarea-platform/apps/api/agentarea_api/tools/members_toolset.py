@@ -9,7 +9,10 @@ a member's tool surface. Inviting, revoking an invitation and removing a member
 need a signed-in user, as on the REST surface: an API key is refused.
 """
 
+import builtins
 import json
+from datetime import datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -33,10 +36,69 @@ from agentarea_common.workspaces import (
     WorkspaceMembershipService,
     WorkspaceRepository,
 )
-from agentarea_common.workspaces.invitation_email import deliver_invitation_for_workspace
+from agentarea_common.workspaces.invitation_email import (
+    InvitationEmailDelivery,
+    deliver_invitation_for_workspace,
+)
 from agentarea_common.workspaces.memberships import get_workspace_membership_graph
+from pydantic import BaseModel, Field
 
 from .base import platform_context, platform_read_context
+
+
+class MemberOutput(BaseModel):
+    user_id: str = Field(description="The member's user id.")
+    email: str | None = Field(description="The member's email; null when it could not be resolved.")
+    display_name: str | None = Field(
+        description="The member's display name; null when it could not be resolved."
+    )
+    joined_at: datetime | None = Field(
+        description="When the member joined; null for members granted before joins were recorded."
+    )
+    is_owner: bool = Field(description="Whether the member owns the workspace.")
+    is_you: bool = Field(description="Whether the member is the caller.")
+
+
+class InvitationOutput(BaseModel):
+    id: str = Field(description="Invitation id (UUID).")
+    email: str | None = Field(
+        description="Address the invitation is for; null for an open link anyone can accept."
+    )
+    invited_by: str = Field(description="User id of whoever created the invitation.")
+    status: str = Field(description="Invitation status, e.g. `pending` or `revoked`.")
+    expires_at: datetime = Field(description="When the invitation stops being accepted.")
+    created_at: datetime = Field(description="When the invitation was created.")
+
+
+class InvitationCreated(InvitationOutput):
+    token: str = Field(
+        description="Plaintext invitation token, returned only here; it cannot be read again."
+    )
+    email_delivery: InvitationEmailDelivery = Field(
+        description=(
+            "Whether the invitation email was sent: `sent`, `not_requested` (no email "
+            "given), `not_configured` (no mail set up) or `failed`; otherwise share the token by hand."
+        )
+    )
+
+
+class InvitationRevoked(BaseModel):
+    revoked: bool = Field(description="True once the invitation can no longer be accepted.")
+
+
+class MemberRemoved(BaseModel):
+    user_id: str = Field(description="User id of the removed member.")
+    removed: bool | None = Field(
+        default=None, description="True when the member's access is already gone."
+    )
+    status: Literal["revocation_pending"] | None = Field(
+        default=None,
+        description=(
+            "`revocation_pending` when the membership has ended but its access is "
+            "still being revoked."
+        ),
+    )
+    detail: str | None = Field(default=None, description="What a pending status means.")
 
 
 def _build_service(session) -> WorkspaceInvitationService:
@@ -93,7 +155,9 @@ def _invitation(invitation) -> dict:
 class MembersToolset(Toolset):
     """Manage who is in the workspace: members, invitations, revocation."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List members", effect="read", output=builtins.list[MemberOutput])
     @unrestricted("members of the caller's own workspace, which the MCP bearer fixes")
     async def list(self) -> str:
         """List members of the current workspace."""
@@ -113,10 +177,30 @@ class MembersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Invite member",
+        effect="privileged",
+        open_world=True,
+        output=InvitationCreated,
+    )
     @requires_user_session("invite members")
     @requires_workspace_admin()
-    async def invite(self, email: str | None = None, expires_in_days: int | None = None) -> str:
+    async def invite(
+        self,
+        email: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Address to invite and email the link to; omit for an open link "
+                    "anyone can accept."
+                )
+            ),
+        ] = None,
+        expires_in_days: Annotated[
+            int | None,
+            Field(description="Days until the invitation expires; omit for 7."),
+        ] = None,
+    ) -> str:
         """Create an invitation. The plaintext token is returned exactly once."""
         async with platform_context() as (session, user_ctx, _repo, _broker, _secret):
             service = _build_service(session)
@@ -145,7 +229,11 @@ class MembersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List invitations",
+        effect="read",
+        output=builtins.list[InvitationOutput],
+    )
     @requires_workspace_admin()
     async def list_invitations(self) -> str:
         """List pending invitations. Tokens are not returned."""
@@ -156,10 +244,21 @@ class MembersToolset(Toolset):
             )
             return json.dumps([_invitation(i) for i in invitations], default=str)
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Revoke invitation",
+        effect="privileged",
+        idempotent=True,
+        output=InvitationRevoked,
+    )
     @requires_user_session("revoke invitations")
     @requires_workspace_admin()
-    async def revoke_invitation(self, invitation_id: str) -> str:
+    async def revoke_invitation(
+        self,
+        invitation_id: Annotated[
+            str,
+            Field(description="Invitation id (UUID), from `members_list_invitations`."),
+        ],
+    ) -> str:
         """Revoke a pending invitation."""
         async with platform_context() as (session, user_ctx, _repo, _broker, _secret):
             service = _build_service(session)
@@ -180,10 +279,18 @@ class MembersToolset(Toolset):
                 )
             return json.dumps({"revoked": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Remove member",
+        effect="privileged",
+        idempotent=True,
+        output=MemberRemoved,
+    )
     @requires_user_session("remove members")
     @enforced_in_handler("owner-only, enforced by WorkspaceMembershipService.remove")
-    async def remove(self, user_id: str) -> str:
+    async def remove(
+        self,
+        user_id: Annotated[str, Field(description="User id of the member, from `members_list`.")],
+    ) -> str:
         """Remove a member from the workspace.
 
         The owner and the last remaining member cannot be removed, and only the

@@ -7,10 +7,10 @@ contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity
 between toolset kwargs and DTO fields.
 """
 
-from __future__ import annotations
-
+import builtins
 import json
-from typing import Any
+from datetime import datetime
+from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -18,12 +18,99 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_streams.domain.models import TriggerBinding
-from agentarea_triggers.schemas.dto import TriggerCreate
+from agentarea_triggers.domain.enums import ExecutionStatus
+from agentarea_triggers.schemas.dto import TriggerCreate, TriggerTypeLiteral
 from fastapi import HTTPException
+from pydantic import BaseModel, Field
 
 from ..api.v1._trigger_creation import public_webhook_url, require_stream_readable
-from ..api.v1.triggers import trigger_status
+from ..api.v1.triggers import TriggerStatus, trigger_status
 from .base import platform_context, platform_read_context
+
+TriggerId = Annotated[str, Field(description="Trigger id (UUID), from `triggers_list`.")]
+AgentId = Annotated[
+    str, Field(description="Id (UUID) of the agent the trigger runs, from `agents_list`.")
+]
+TriggerName = Annotated[str, Field(description="Trigger name; 1-255 characters.")]
+TriggerDescription = Annotated[
+    str, Field(description="What the trigger is for; up to 1000 characters.")
+]
+TaskParameters = Annotated[
+    dict[str, Any] | None,
+    Field(
+        description=(
+            'Merged into every task the trigger creates, as {"text": "<what the agent is '
+            'asked to do>", ...}; other keys are passed along.'
+        )
+    ),
+]
+Conditions = Annotated[
+    dict[str, Any] | None,
+    Field(
+        description=(
+            "Checked against the event before firing; null fires always. An LLM condition "
+            '{"type": "llm", "description": "...", "model_id": "<model instance id from '
+            '`models_list_instances`>"} names the model that evaluates it.'
+        )
+    ),
+]
+Enabled = Annotated[
+    bool, Field(description="Whether the trigger is active as soon as it is created.")
+]
+FailureThreshold = Annotated[
+    int,
+    Field(description="Consecutive failed runs, 1-100, after which the trigger disables itself."),
+]
+
+
+class TriggerSummaryOutput(BaseModel):
+    id: str = Field(description="Trigger id (UUID).")
+    name: str = Field(description="Trigger name.")
+    description: str = Field(description="What the trigger is for.")
+    agent_id: str = Field(description="Id (UUID) of the agent it runs.")
+    trigger_type: TriggerTypeLiteral = Field(description="cron, webhook, polling or stream.")
+    is_active: bool = Field(description="Whether it fires now.")
+    cron_expression: str | None = Field(default=None, description="Schedule of a cron trigger.")
+    webhook_id: str | None = Field(
+        default=None, description="Path segment of a webhook trigger's URL."
+    )
+    status: TriggerStatus = Field(
+        description="active, inactive, or needs_owner when it stopped for its owner's lost access."
+    )
+    needs_new_owner: bool = Field(description="True while status is needs_owner.")
+    stream_id: str | None = Field(
+        default=None, description="Id (UUID) of the stream it listens to or feeds."
+    )
+    event_filter: dict[str, Any] | None = Field(
+        default=None, description="Which of the stream's events fire it; {} fires on all."
+    )
+    webhook_url: str | None = Field(default=None, description="Public URL senders post to.")
+    last_event_at: datetime | None = Field(
+        default=None, description="When an event last reached it."
+    )
+
+
+class TriggerDeletedOutput(BaseModel):
+    deleted: bool = Field(description="False when no such trigger existed.")
+
+
+class TriggerEnabledOutput(BaseModel):
+    enabled: bool = Field(description="False when no such trigger existed.")
+
+
+class TriggerDisabledOutput(BaseModel):
+    disabled: bool = Field(description="False when no such trigger existed.")
+
+
+class TriggerExecutionOutput(BaseModel):
+    id: str = Field(description="Execution id (UUID).")
+    status: ExecutionStatus = Field(description="How the firing ended.")
+    executed_at: datetime | None = Field(default=None, description="When it fired.")
+    execution_time_ms: int = Field(description="How long the firing took, in milliseconds.")
+    error_message: str | None = Field(default=None, description="Why it failed, if it did.")
+    task_id: str | None = Field(
+        default=None, description="Id (UUID) of the task it started, for `runs_get`."
+    )
 
 
 async def _build_trigger_service(
@@ -93,15 +180,22 @@ async def _summary(service: Any, trigger: Any) -> dict[str, Any]:
     register=False,
 )
 class TriggersToolset(Toolset):
-    """Manage triggers: list, get, create cron/webhook, update, delete, enable/disable, history."""
+    """Manage triggers: list, get, create cron/webhook/stream, delete, enable/disable, history."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List triggers", effect="read", output=list[TriggerSummaryOutput])
     @unrestricted("triggers in the caller's workspace, as GET /v1/triggers lists them")
     async def list(
         self,
-        agent_id: str = "",
-        active_only: bool = False,
-        limit: int = 100,
+        agent_id: Annotated[
+            str,
+            Field(
+                description="Only this agent's triggers (UUID, from `agents_list`); empty for all."
+            ),
+        ] = "",
+        active_only: Annotated[bool, Field(description="Only triggers that fire now.")] = False,
+        limit: Annotated[int, Field(description="Most triggers to return.")] = 100,
     ) -> str:
         """List triggers, optionally filtered by agent or active state."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):
@@ -116,9 +210,9 @@ class TriggersToolset(Toolset):
                 [_trigger_summary(t, bindings.get(t.id)) for t in triggers], default=str
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get trigger", effect="read", output=TriggerSummaryOutput)
     @unrestricted("a trigger in the caller's workspace, as GET /v1/triggers/{id} returns it")
-    async def get(self, trigger_id: str) -> str:
+    async def get(self, trigger_id: TriggerId) -> str:
         """Get a trigger by ID."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
@@ -127,26 +221,30 @@ class TriggersToolset(Toolset):
                 raise ToolError("Trigger not found")
             return json.dumps(await _summary(service, trigger), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create cron trigger", effect="write", output=TriggerSummaryOutput)
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_cron(
         self,
-        name: str,
-        agent_id: str,
-        cron_expression: str,
-        description: str = "",
-        timezone: str = "UTC",
-        task_parameters: dict[str, Any] | None = None,
-        conditions: dict[str, Any] | None = None,
-        enabled: bool = True,
-        failure_threshold: int = 5,
+        name: TriggerName,
+        agent_id: AgentId,
+        cron_expression: Annotated[
+            str, Field(description="5- or 6-field cron expression, e.g. '0 9 * * 1-5'.")
+        ],
+        description: TriggerDescription = "",
+        timezone: Annotated[
+            str, Field(description="IANA timezone the expression is read in, e.g. 'Europe/Moscow'.")
+        ] = "UTC",
+        task_parameters: TaskParameters = None,
+        conditions: Conditions = None,
+        enabled: Enabled = True,
+        failure_threshold: FailureThreshold = 5,
     ) -> str:
         """Create a cron-based trigger that fires the given agent on a schedule.
 
         ``cron_expression`` is a 5- or 6-field expression evaluated in
         ``timezone`` (default UTC). This always repeats — cron cannot express a
         year, so a "one-shot" cron fires again next year. For a single run at a
-        given moment use ``runs.start`` with ``scheduled_at`` instead.
+        given moment use ``runs_start`` with ``scheduled_at`` instead.
 
         ``task_parameters`` are merged into every task created when the trigger
         fires, and must carry ``text`` -- what the agent is asked to do each time.
@@ -175,21 +273,40 @@ class TriggersToolset(Toolset):
             )
             return json.dumps(await _summary(service, trigger), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create webhook trigger", effect="write", output=TriggerSummaryOutput)
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_webhook(
         self,
-        name: str,
-        agent_id: str,
-        webhook_id: str = "",
-        description: str = "",
-        webhook_type: str = "generic",
-        allowed_methods: list[str] | None = None,
-        task_parameters: dict[str, Any] | None = None,
-        conditions: dict[str, Any] | None = None,
-        enabled: bool = True,
-        failure_threshold: int = 5,
-        event_types: list[str] | None = None,
+        name: TriggerName,
+        agent_id: AgentId,
+        webhook_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "Path segment of the URL, at least 16 of A-Z a-z 0-9 _ -; empty to "
+                    "have one generated."
+                )
+            ),
+        ] = "",
+        description: TriggerDescription = "",
+        webhook_type: Annotated[
+            str,
+            Field(
+                description="Channel the requests come from: 'generic', 'telegram', 'slack', 'github', ..."
+            ),
+        ] = "generic",
+        allowed_methods: Annotated[
+            builtins.list[str] | None,
+            Field(description="HTTP methods the URL accepts; null for POST only."),
+        ] = None,
+        task_parameters: TaskParameters = None,
+        conditions: Conditions = None,
+        enabled: Enabled = True,
+        failure_threshold: FailureThreshold = 5,
+        event_types: Annotated[
+            builtins.list[str] | None,
+            Field(description="Channel event kinds that fire it, e.g. ['push']; null for all."),
+        ] = None,
     ) -> str:
         """Create a webhook trigger. Inbound webhook URL becomes /webhooks/{webhook_id}.
 
@@ -221,19 +338,30 @@ class TriggersToolset(Toolset):
             )
             return json.dumps(await _summary(service, trigger), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create stream trigger", effect="write", output=TriggerSummaryOutput)
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_stream(
         self,
-        name: str,
-        agent_id: str,
-        stream_id: str,
-        description: str = "",
-        event_filter: dict[str, Any] | None = None,
-        task_parameters: dict[str, Any] | None = None,
-        conditions: dict[str, Any] | None = None,
-        enabled: bool = True,
-        failure_threshold: int = 5,
+        name: TriggerName,
+        agent_id: AgentId,
+        stream_id: Annotated[
+            str,
+            Field(description="Id (UUID) of the stream whose events fire it, from `streams_list`."),
+        ],
+        description: TriggerDescription = "",
+        event_filter: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    'Which events fire it: {"kinds": [<event kind>, ...], "fields": '
+                    "{<dotted path in the event data>: <value>}}; null or {} fires on all."
+                )
+            ),
+        ] = None,
+        task_parameters: TaskParameters = None,
+        conditions: Conditions = None,
+        enabled: Enabled = True,
+        failure_threshold: FailureThreshold = 5,
     ) -> str:
         """Create a trigger that fires the agent on events of an existing stream.
 
@@ -266,36 +394,60 @@ class TriggersToolset(Toolset):
             )
             return json.dumps(await _summary(service, trigger), default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete trigger",
+        effect="destructive",
+        idempotent=True,
+        output=TriggerDeletedOutput,
+    )
     @requires("delete", "trigger", id_param="trigger_id")
-    async def delete(self, trigger_id: str) -> str:
+    async def delete(self, trigger_id: TriggerId) -> str:
         """Delete a trigger and its schedule."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
             deleted = await service.delete_trigger(UUID(trigger_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Enable trigger",
+        effect="write",
+        idempotent=True,
+        output=TriggerEnabledOutput,
+    )
     @requires("edit", "trigger", id_param="trigger_id")
-    async def enable(self, trigger_id: str) -> str:
+    async def enable(self, trigger_id: TriggerId) -> str:
         """Enable a trigger (resumes its schedule for cron triggers)."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
             ok = await service.enable_trigger(UUID(trigger_id))
             return json.dumps({"enabled": ok})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Disable trigger",
+        effect="write",
+        idempotent=True,
+        output=TriggerDisabledOutput,
+    )
     @requires("edit", "trigger", id_param="trigger_id")
-    async def disable(self, trigger_id: str) -> str:
+    async def disable(self, trigger_id: TriggerId) -> str:
         """Disable a trigger (pauses its schedule for cron triggers)."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
             ok = await service.disable_trigger(UUID(trigger_id))
             return json.dumps({"disabled": ok})
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="Get trigger history",
+        effect="read",
+        output=builtins.list[TriggerExecutionOutput],
+    )
     @unrestricted("execution history, as GET /v1/triggers/{id}/executions serves it")
-    async def get_history(self, trigger_id: str, limit: int = 50, offset: int = 0) -> str:
+    async def get_history(
+        self,
+        trigger_id: TriggerId,
+        limit: Annotated[int, Field(description="Most executions to return, newest first.")] = 50,
+        offset: Annotated[int, Field(description="Executions to skip before the page starts.")] = 0,
+    ) -> str:
         """Get recent execution history for a trigger."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)

@@ -46,7 +46,7 @@ class FakeTaskService:
         return self.recorder.record("cancel_task", True)
 
     async def continue_execution(self, task_id, **kwargs):
-        return self.recorder.record("continue_execution", {"continued": True})
+        return self.recorder.record("continue_execution", {"accepted": True})
 
     async def queue_follow_up(self, task_id, message):
         return self.recorder.record("queue_follow_up", True)

@@ -7,7 +7,7 @@ enforces parity with the REST routes in ``api/v1/streams.py``.
 
 import builtins
 import json
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -23,7 +23,7 @@ from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamError
 from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
 from fastapi import HTTPException
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from ..api.v1._stream_sources import (
     create_webhook_source,
@@ -34,6 +34,9 @@ from ..api.v1._trigger_creation import get_channel_webhook_service
 from ..api.v1.streams import (
     StreamEventPage,
     StreamResponse,
+    StreamSourceResponse,
+    StreamSourceTypeResponse,
+    SubscriptionResponse,
     WebhookSourceCreated,
     _events_with_outcomes,
     _subscription,
@@ -41,6 +44,22 @@ from ..api.v1.streams import (
     source_types,
 )
 from .base import platform_context, platform_read_context
+
+StreamId = Annotated[
+    str, Field(description="Stream id (UUID), from `streams_list` or `streams_create`.")
+]
+
+
+class StreamDeletedOutput(BaseModel):
+    deleted: bool = Field(description="True once the stream and everything it held are gone.")
+
+
+class SourceDeletedOutput(BaseModel):
+    deleted: bool = Field(description="True once the webhook source is removed.")
+
+
+class ForwardDeletedOutput(BaseModel):
+    deleted: bool = Field(description="True once the forward is removed.")
 
 
 def _service(repo_factory: Any) -> StreamService:
@@ -76,9 +95,15 @@ def _check_range(name: str, value: int, low: int, high: int | None = None) -> No
 class StreamsToolset(Toolset):
     """Streams: list, get, create, delete; sources, subscriptions, forwards, events."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List streams", effect="read", output=builtins.list[StreamResponse])
     @enforced_in_handler("narrowed to the rows the graph says this caller may read")
-    async def list(self, limit: int = 100, offset: int = 0) -> str:
+    async def list(
+        self,
+        limit: Annotated[int, Field(description="Page size, 1-1000.")] = 100,
+        offset: Annotated[int, Field(description="Streams to skip before the page starts.")] = 0,
+    ) -> str:
         """List the workspace's streams. limit is 1-1000."""
         _check_range("limit", limit, 1, 1000)
         _check_range("offset", offset, 0, MAX_OFFSET)
@@ -90,9 +115,9 @@ class StreamsToolset(Toolset):
                 [StreamResponse.model_validate(r).model_dump(mode="json") for r in rows]
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get stream", effect="read", output=StreamResponse)
     @requires("read", "stream", id_param="stream_id")
-    async def get(self, stream_id: str) -> str:
+    async def get(self, stream_id: StreamId) -> str:
         """Get a stream."""
         async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
             try:
@@ -101,10 +126,20 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return StreamResponse.model_validate(row).model_dump_json()
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create stream", effect="write", output=StreamResponse)
     @unrestricted("any member may create a stream, as POST /v1/streams allows")
     async def create(
-        self, name: str, description: str = "", retention_days: int | None = None
+        self,
+        name: Annotated[
+            str, Field(description="Stream name, unique in the workspace; 1-255 characters.")
+        ],
+        description: Annotated[
+            str, Field(description="What the stream carries; up to 1000 characters.")
+        ] = "",
+        retention_days: Annotated[
+            int | None,
+            Field(description="Days events are kept, 1-365; null for the deployment's retention."),
+        ] = None,
     ) -> str:
         """Create a stream. retention_days defaults to the deployment's retention."""
         payload = StreamCreate(name=name, description=description, retention_days=retention_days)
@@ -119,14 +154,20 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return StreamResponse.model_validate(row).model_dump_json()
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete stream",
+        effect="destructive",
+        idempotent=True,
+        open_world=True,
+        output=StreamDeletedOutput,
+    )
     @requires("delete", "stream", id_param="stream_id")
-    async def delete(self, stream_id: str) -> str:
+    async def delete(self, stream_id: StreamId) -> str:
         """Delete a stream and its events, sources and subscriptions.
 
         Refused while a live webhook trigger's source feeds it or a trigger subscribes
         to it (delete the trigger first), or while a forward of any stream writes into
-        it (remove that forward with ``delete_forward`` first).
+        it (remove that forward with ``streams_delete_forward`` first).
         """
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
@@ -139,28 +180,56 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List stream source types",
+        effect="read",
+        output=builtins.list[StreamSourceTypeResponse],
+    )
     @unrestricted("platform catalogue data, as GET /v1/streams/source-types serves it")
     async def list_source_types(self) -> str:
         """Webhook types a source can be, with the credentials and settings each needs."""
         return json.dumps([t.model_dump(mode="json") for t in source_types()])
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List stream sources",
+        effect="read",
+        output=builtins.list[StreamSourceResponse],
+    )
     @requires("read", "stream", id_param="stream_id")
-    async def list_sources(self, stream_id: str) -> str:
+    async def list_sources(self, stream_id: StreamId) -> str:
         """List where a stream's events come from, with the public webhook URL."""
         async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
             rows = await _service(repo_factory).list_sources(UUID(stream_id))
             return json.dumps([source_response(r).model_dump(mode="json") for r in rows])
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Add webhook source to stream",
+        effect="write",
+        open_world=True,
+        output=WebhookSourceCreated,
+    )
     @requires("edit", "stream", id_param="stream_id")
     async def create_webhook_source(
         self,
-        stream_id: str,
-        webhook_type: str,
-        credentials: dict[str, Any] | None = None,
-        config: dict[str, str] | None = None,
+        stream_id: StreamId,
+        webhook_type: Annotated[
+            str,
+            Field(description="Source type, a `webhook_type` from `streams_list_source_types`."),
+        ],
+        credentials: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    "The type's `credentials` fields by key, each a string value or "
+                    '{"secret_id": "<uuid>"} of a workspace secret from `secrets_list`. '
+                    "Write-only."
+                )
+            ),
+        ] = None,
+        config: Annotated[
+            dict[str, str] | None,
+            Field(description="The type's `config` fields by key, as strings (e.g. shop_id)."),
+        ] = None,
     ) -> str:
         """Add a webhook source to a stream, with no trigger; returns its public URL.
 
@@ -192,9 +261,21 @@ class StreamsToolset(Toolset):
                 **source_response(row).model_dump(), signing_secret=issued
             ).model_dump_json()
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Remove webhook source",
+        effect="destructive",
+        idempotent=True,
+        open_world=True,
+        output=SourceDeletedOutput,
+    )
     @requires("edit", "stream", id_param="stream_id")
-    async def delete_webhook_source(self, stream_id: str, source_id: str) -> str:
+    async def delete_webhook_source(
+        self,
+        stream_id: StreamId,
+        source_id: Annotated[
+            str, Field(description="Source id (UUID), from `streams_list_sources`.")
+        ],
+    ) -> str:
         """Remove a webhook source; one a live trigger owns goes with its trigger instead."""
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
@@ -208,21 +289,46 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List stream subscriptions",
+        effect="read",
+        output=builtins.list[SubscriptionResponse],
+    )
     @requires("read", "stream", id_param="stream_id")
-    async def list_subscriptions(self, stream_id: str) -> str:
+    async def list_subscriptions(self, stream_id: StreamId) -> str:
         """List the triggers and forwards that receive a stream's events."""
         async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
             rows = await _service(repo_factory).list_subscriptions(UUID(stream_id))
             return json.dumps([_subscription(r).model_dump(mode="json") for r in rows])
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create stream forward", effect="write", output=SubscriptionResponse)
     @requires("edit", "stream", id_param="stream_id")
     async def create_forward(
         self,
-        stream_id: str,
-        output_stream_ids: builtins.list[str],
-        event_filter: dict[str, Any] | None = None,
+        stream_id: Annotated[
+            str,
+            Field(
+                description="Id (UUID) of the stream whose events are copied, from `streams_list`."
+            ),
+        ],
+        output_stream_ids: Annotated[
+            builtins.list[str],
+            Field(
+                description=(
+                    "Ids (UUID) of the streams events are copied into, from `streams_list`; "
+                    "at least one, never the input stream."
+                )
+            ),
+        ],
+        event_filter: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    'Which events are copied: {"kinds": [<event kind>, ...], "fields": '
+                    "{<dotted path in the event data>: <value>}}; null or {} copies all."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Copy every matching event of this stream into the output streams.
 
@@ -250,10 +356,24 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return _subscription(row).model_dump_json()
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete stream forward",
+        effect="destructive",
+        idempotent=True,
+        output=ForwardDeletedOutput,
+    )
     @requires("edit", "stream", id_param="stream_id")
-    async def delete_forward(self, stream_id: str, subscription_id: str) -> str:
-        """Remove a forward of this stream; ``subscription_id`` is from ``list_subscriptions``.
+    async def delete_forward(
+        self,
+        stream_id: StreamId,
+        subscription_id: Annotated[
+            str,
+            Field(
+                description="Forward's subscription id (UUID), from `streams_list_subscriptions`."
+            ),
+        ],
+    ) -> str:
+        """Remove a forward of this stream; ``subscription_id`` is from ``streams_list_subscriptions``.
 
         The caller must be able to edit every output stream, as to create it. A
         trigger's subscription is refused: it goes when the trigger is deleted.
@@ -271,9 +391,20 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
-    @tool_method(effect="read")
+    @tool_method(display_name="List stream events", effect="read", output=StreamEventPage)
     @requires("read", "stream", id_param="stream_id")
-    async def list_events(self, stream_id: str, after: int = 0, limit: int = 50) -> str:
+    async def list_events(
+        self,
+        stream_id: StreamId,
+        after: Annotated[
+            int,
+            Field(
+                description="Return events with a sequence above this; 0 starts at the oldest, "
+                "then pass the previous page's `next_after`."
+            ),
+        ] = 0,
+        limit: Annotated[int, Field(description="Page size, 1-200.")] = 50,
+    ) -> str:
         """Events after a sequence, oldest first, each with every subscription's outcome.
 
         Pass the returned ``next_after`` as ``after`` for the next page; null at the end.

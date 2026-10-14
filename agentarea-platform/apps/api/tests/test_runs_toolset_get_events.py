@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_api.tools import runs_toolset
-from agentarea_api.tools.runs_toolset import RunsToolset, _event_projection
+from agentarea_api.tools.runs_toolset import RunEventsPage, RunsToolset, _event_projection
 
 RUN_ID = uuid4()
 
@@ -128,6 +128,62 @@ def test_completed_model_call_carries_cost_and_token_usage():
     }
 
 
+def test_input_request_carries_the_id_and_questions_send_input_answers():
+    questions = [
+        {
+            "id": "env",
+            "question": "Which environment?",
+            "type": "select",
+            "required": True,
+            "options": ["staging", "prod"],
+        },
+        {
+            "id": "token",
+            "question": "API token",
+            "type": "secret",
+            "required": True,
+            "secret_name": "deploy_token",
+        },
+    ]
+    assert _event_projection(
+        "input.request",
+        {
+            "input_request_id": "req-1",
+            "tool_call_id": "call-1",
+            "iteration": 3,
+            "question": "Which environment?",
+            "questions": questions,
+            "allow_custom_response": False,
+            "input_mode": "form",
+        },
+    ) == {
+        "input_request_id": "req-1",
+        "tool_call_id": "call-1",
+        "question": "Which environment?",
+        "questions": questions,
+        "allow_custom_response": False,
+        "input_mode": "form",
+    }
+
+
+def test_input_response_names_the_answers_without_their_values():
+    assert _event_projection(
+        "input.response",
+        {
+            "input_request_id": "req-1",
+            "tool_call_id": "call-1",
+            "answer_keys": ["env"],
+            "secret_keys": ["token"],
+            "iteration": 3,
+        },
+    ) == {
+        "input_request_id": "req-1",
+        "tool_call_id": "call-1",
+        "answer_keys": ["env"],
+        "secret_keys": ["token"],
+    }
+
+
 def test_message_is_kept_and_unknown_types_carry_only_it():
     assert _event_projection("BudgetWarning", {"message": "80% used", "x": 1}) == {
         "message": "80% used"
@@ -158,6 +214,18 @@ async def test_get_events_returns_projections(monkeypatch):
             timestamp=datetime(2026, 10, 13, 0, 0, 1, tzinfo=UTC),
             data={"status": "failed", "success": False, "error": "boom"},
         ),
+        SimpleNamespace(
+            id=uuid4(),
+            event_type="input.request",
+            timestamp=datetime(2026, 10, 13, 0, 0, 2, tzinfo=UTC),
+            data={
+                "input_request_id": "req-1",
+                "question": "Proceed?",
+                "questions": [
+                    {"id": "answer", "question": "Proceed?", "type": "text", "required": True}
+                ],
+            },
+        ),
     ]
     repository = _FakeEventRepository(records)
 
@@ -169,8 +237,14 @@ async def test_get_events_returns_projections(monkeypatch):
 
     body = json.loads(await RunsToolset().get_events(str(RUN_ID)))
 
-    assert body["total"] == 2
-    assert [e["event_type"] for e in body["events"]] == ["llm.call.failed", "task.failed"]
+    assert body["total"] == 3
+    assert [e["event_type"] for e in body["events"]] == [
+        "llm.call.failed",
+        "task.failed",
+        "input.request",
+    ]
+    assert body["events"][2]["input_request_id"] == "req-1"
+    RunEventsPage.model_validate(body)
     assert body["events"][0]["error"] == "Provider rejected the request: bad tool schema"
     assert "message" not in body["events"][0]
     assert body["events"][1] | {"id": None, "timestamp": None} == {

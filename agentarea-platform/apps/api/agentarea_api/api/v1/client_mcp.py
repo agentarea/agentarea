@@ -40,7 +40,7 @@ from agentarea_agents_sdk.tools.mcp_tool_identity import (
     server_label,
 )
 from agentarea_agents_sdk.tools.openapi_tool import _slugify_name
-from agentarea_api.platform_mcp import client_platform_server
+from agentarea_api.platform_mcp import client_platform_server, server_identity
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
     ToolAuthorizationDecision,
@@ -1088,6 +1088,7 @@ def _answer(result: CallToolResult | ApprovalRequired) -> CallToolResult:
 client_mcp_server = Server(
     "AgentArea Client",
     instructions="Scoped tool bundle for a registered client (agent-proxy).",
+    **server_identity(),
     on_list_tools=_list_tools,
     on_call_tool=_call_tool,
 )

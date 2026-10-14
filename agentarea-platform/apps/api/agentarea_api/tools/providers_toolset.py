@@ -7,6 +7,7 @@ test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity.
 """
 
 import json
+from typing import Annotated
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -14,6 +15,7 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_llm.schemas.dto import ProviderConfigCreate, ProviderConfigUpdate
+from pydantic import BaseModel, Field
 
 from .base import platform_context
 
@@ -40,6 +42,31 @@ def _build_service(session, user_ctx, event_broker, secret_mgr):
     )
 
 
+_CONFIG_ID = "Provider configuration id (UUID), from `providers_list_configs`."
+
+
+class ProviderSpecOutput(BaseModel):
+    id: str = Field(description="Provider spec id (UUID); pass as provider_spec_id.")
+    name: str = Field(description="Provider name, e.g. OpenAI.")
+    key: str = Field(description="Stable provider key, e.g. openai.")
+
+
+class ProviderConfigSummaryOutput(BaseModel):
+    id: str = Field(description="Provider configuration id (UUID).")
+    name: str = Field(description="Label of the configuration.")
+    provider_spec_id: str = Field(description="Id of the provider spec it targets.")
+    is_active: bool = Field(description="Whether models can be called through it.")
+
+
+class ProviderConfigRefOutput(BaseModel):
+    id: str = Field(description="Provider configuration id (UUID).")
+    name: str = Field(description="Label of the configuration.")
+
+
+class ProviderConfigDeletedOutput(BaseModel):
+    deleted: bool = Field(description="False when no such configuration existed.")
+
+
 @toolset(
     namespace="agentarea/providers",
     display_name="LLM Providers",
@@ -50,7 +77,11 @@ def _build_service(session, user_ctx, event_broker, secret_mgr):
 class ProvidersToolset(Toolset):
     """Manage LLM providers: list specs, list/create/update/delete configurations."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(
+        display_name="List LLM provider specs", effect="read", output=list[ProviderSpecOutput]
+    )
     @unrestricted("the provider catalog is platform data every member reads")
     async def list_specs(self) -> str:
         """List available LLM provider specifications (e.g. OpenAI, Anthropic)."""
@@ -68,7 +99,11 @@ class ProvidersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List LLM provider configs",
+        effect="read",
+        output=list[ProviderConfigSummaryOutput],
+    )
     @unrestricted("configurations carry no key material and members need them to pick a model")
     async def list_configs(self) -> str:
         """List configured LLM provider connections."""
@@ -94,16 +129,42 @@ class ProvidersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Create LLM provider config",
+        effect="privileged",
+        output=ProviderConfigRefOutput,
+    )
     @requires_workspace_admin()
     async def create_config(
         self,
-        provider_spec_id: str,
-        name: str,
-        api_key: str,
-        endpoint_url: str = "",
-        description: str = "",
-        is_public: bool = False,
+        provider_spec_id: Annotated[
+            str, Field(description="Provider spec id (UUID), from `providers_list_specs`.")
+        ],
+        name: Annotated[str, Field(description="Label for the configuration, 1-255 characters.")],
+        api_key: Annotated[
+            str,
+            Field(
+                description="API key for the provider; stored encrypted and never returned. "
+                "Empty for a proxy that takes keyless traffic."
+            ),
+        ],
+        endpoint_url: Annotated[
+            str,
+            Field(
+                description="Custom base URL for a self-hosted or proxied provider; "
+                "empty for the provider's default."
+            ),
+        ] = "",
+        description: Annotated[
+            str, Field(description="What the configuration is for, at most 1000 characters.")
+        ] = "",
+        is_public: Annotated[
+            bool,
+            Field(
+                description="True makes it visible to every workspace member; "
+                "otherwise only to its creator."
+            ),
+        ] = False,
     ) -> str:
         """Create a new LLM provider configuration with API key."""
         payload = ProviderConfigCreate(
@@ -129,17 +190,44 @@ class ProvidersToolset(Toolset):
             )
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Update LLM provider config",
+        effect="privileged",
+        idempotent=True,
+        output=ProviderConfigRefOutput,
+    )
     @requires_workspace_admin()
     async def update_config(
         self,
-        config_id: str,
-        name: str | None = None,
-        api_key: str | None = None,
-        endpoint_url: str | None = None,
-        description: str | None = None,
-        is_active: bool | None = None,
-        is_public: bool | None = None,
+        config_id: Annotated[str, Field(description=_CONFIG_ID)],
+        name: Annotated[
+            str | None, Field(description="New label; omit to keep the current one.")
+        ] = None,
+        api_key: Annotated[
+            str | None,
+            Field(
+                description="New API key, replacing the stored one; empty string clears it "
+                "for a keyless endpoint; omit to keep it."
+            ),
+        ] = None,
+        endpoint_url: Annotated[
+            str | None,
+            Field(description="New base URL; empty string clears it; omit to keep it."),
+        ] = None,
+        description: Annotated[
+            str | None, Field(description="New description; omit to keep the current one.")
+        ] = None,
+        is_active: Annotated[
+            bool | None,
+            Field(description="Activate (true) or deactivate (false); omit to keep it."),
+        ] = None,
+        is_public: Annotated[
+            bool | None,
+            Field(
+                description="Visible to every member (true) or only its creator (false); "
+                "omit to keep it."
+            ),
+        ] = None,
     ) -> str:
         """Update an existing LLM provider configuration. Unset kwargs leave fields unchanged."""
         patch: dict[str, object] = {}
@@ -173,9 +261,14 @@ class ProvidersToolset(Toolset):
                 raise ToolError("Provider configuration not found")
             return json.dumps({"id": str(config.id), "name": config.name}, default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete LLM provider config",
+        effect="destructive",
+        idempotent=True,
+        output=ProviderConfigDeletedOutput,
+    )
     @requires_workspace_admin()
-    async def delete_config(self, config_id: str) -> str:
+    async def delete_config(self, config_id: Annotated[str, Field(description=_CONFIG_ID)]) -> str:
         """Delete a provider configuration."""
         async with platform_context() as (
             session,
