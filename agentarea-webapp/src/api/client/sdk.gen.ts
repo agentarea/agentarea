@@ -325,6 +325,8 @@ import type {
   GetAllToolsV1AgentsToolsGetData,
   GetAllToolsV1AgentsToolsGetErrors,
   GetAllToolsV1AgentsToolsGetResponses,
+  GetAnalyticsV1AnalyticsGetData,
+  GetAnalyticsV1AnalyticsGetResponses,
   GetApiKeyV1ApiKeysTokenIdGetData,
   GetApiKeyV1ApiKeysTokenIdGetErrors,
   GetApiKeyV1ApiKeysTokenIdGetResponses,
@@ -1529,6 +1531,32 @@ export const getAgentWellKnownV1AgentsAgentIdA2aWellKnownGet = <
       },
     ],
     url: "/v1/agents/{agent_id}/a2a/well-known",
+    ...options,
+  });
+
+/**
+ * Get Analytics
+ *
+ * Return whether analytics is on and, if so, where and as which installation to send.
+ */
+export const getAnalyticsV1AnalyticsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<GetAnalyticsV1AnalyticsGetData, ThrowOnError>
+): RequestResult<GetAnalyticsV1AnalyticsGetResponses, unknown, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetAnalyticsV1AnalyticsGetResponses,
+    unknown,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/analytics",
     ...options,
   });
 

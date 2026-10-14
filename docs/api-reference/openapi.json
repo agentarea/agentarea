@@ -1079,6 +1079,67 @@
         "title": "AgentUpdate",
         "type": "object"
       },
+      "AnalyticsResponse": {
+        "properties": {
+          "collector_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Key"
+          },
+          "collector_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector Url"
+          },
+          "edition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edition"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "install_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Id"
+          }
+        },
+        "required": [
+          "enabled",
+          "install_id",
+          "collector_url",
+          "collector_key",
+          "edition"
+        ],
+        "title": "AnalyticsResponse",
+        "type": "object"
+      },
       "AnalyzeRequest": {
         "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the\nserver fetches behind the SSRF guard). ``source_url`` is what a landing-page\ndeep-link (`/bundles/import?src=<url>`) uses for one-click installs.",
         "properties": {
@@ -18966,7 +19027,7 @@
   "info": {
     "description": "Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
     "title": "AgentArea API",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -19629,6 +19690,35 @@
         "tags": [
           "v1",
           "protected"
+        ]
+      }
+    },
+    "/v1/analytics": {
+      "get": {
+        "description": "Return whether analytics is on and, if so, where and as which installation to send.",
+        "operationId": "get_analytics_v1_analytics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Analytics",
+        "tags": [
+          "v1",
+          "protected",
+          "analytics"
         ]
       }
     },

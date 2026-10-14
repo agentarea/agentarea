@@ -15,6 +15,7 @@ AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF: "{{ .Values.worker.outageWait.backoff }}"
 AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE: "{{ .Values.worker.outageWait.deadline }}"
 AGENTAREA_TASK_SKILLS_WINDOW_SHARE: "{{ .Values.worker.skillsWindowShare }}"
 AGENTAREA_APP_URL: "{{ include "agentarea.frontendUrl" . }}"
+AGENTAREA_ANALYTICS_ENABLED: "{{ .Values.global.analytics.enabled }}"
 {{- end }}
 
 {{- define "agentarea.worker.envs" }}
@@ -73,4 +74,9 @@ AGENTAREA_APP_URL: "{{ include "agentarea.frontendUrl" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-worker
       key: AGENTAREA_APP_URL
+- name: AGENTAREA_ANALYTICS_ENABLED
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_ANALYTICS_ENABLED
 {{- end }}

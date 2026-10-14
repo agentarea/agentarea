@@ -10,10 +10,11 @@ import logging
 import secrets
 import urllib.parse
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
+from agentarea_common.analytics import count
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.exceptions import AppError
@@ -30,6 +31,7 @@ from agentarea_mcp.application.oauth_profile import (
     auto_credential_source,
     platform_app_for,
 )
+from agentarea_mcp.application.platform_oauth_app import platform_oauth_app
 from agentarea_mcp.infrastructure.auth_repository import MCPAuthConfigRepository
 from agentarea_secrets.catalog_service import SecretCatalogService
 from fastapi import HTTPException
@@ -72,6 +74,60 @@ class Preflight:
 class Authorization:
     authorize_url: str
     connection_id: UUID
+
+
+#: Public authorization servers analytics may name: the issuer hosts of the providers
+#: AgentArea's catalog connects to. Any other host, an internal one included, is
+#: never sent.
+PUBLIC_ISSUER_HOSTS = frozenset(
+    {
+        "accounts.google.com",
+        "api.notion.com",
+        "auth.atlassian.com",
+        "github.com",
+        "gitlab.com",
+        "linear.app",
+        "login.microsoftonline.com",
+        "login.salesforce.com",
+        "oauth.yandex.ru",
+        "slack.com",
+        "www.canva.com",
+        "www.figma.com",
+    }
+)
+
+#: The ``error`` codes of RFC 6749 §4.1.2.1 and §5.2; anything else a provider sends
+#: back is counted as ``other``.
+OAUTH_ERROR_CODES = frozenset(
+    {
+        "invalid_request",
+        "unauthorized_client",
+        "access_denied",
+        "unsupported_response_type",
+        "invalid_scope",
+        "server_error",
+        "temporarily_unavailable",
+        "invalid_client",
+        "invalid_grant",
+        "unsupported_grant_type",
+    }
+)
+
+
+def _provider_label(issuer: str | None) -> str:
+    """The issuer's host when it is a public provider served by a platform app, else ``custom``."""
+    if not issuer or platform_oauth_app(issuer) is None:
+        return "custom"
+    host = urllib.parse.urlsplit(issuer).hostname
+    return host if host in PUBLIC_ISSUER_HOSTS else "custom"
+
+
+def _auth_config_issuer(config: dict[str, Any]) -> str | None:
+    return config.get("platform_oauth_issuer") or config.get("issuer") or None
+
+
+def _oauth_error(error: str) -> str:
+    return error if error in OAUTH_ERROR_CODES else "other"
 
 
 def _oauth_app_required(detail: str, issuer: str | None) -> AppError:
@@ -121,6 +177,7 @@ class OAuthConnectService:
         try:
             profile = await target.profile()
         except NotAuthorizableError as exc:
+            count("oauth_connect", provider="unknown", outcome="failed:not_authorizable")
             raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
         secret_manager = get_real_secret_manager(
@@ -185,6 +242,7 @@ class OAuthConnectService:
             pkce=pkce,
             state=token,
         )
+        count("oauth_connect", provider=_provider_label(profile.issuer), outcome="started")
         return Authorization(authorize_url=authorize_url, connection_id=connection_id)
 
     async def _auto_client(
@@ -208,6 +266,11 @@ class OAuthConnectService:
                 )
             except (httpx.HTTPError, MCPOAuthDiscoveryError, KeyError, ValueError) as exc:
                 logger.info("DCR failed for %s: %s", profile.issuer, exc, exc_info=True)
+                count(
+                    "oauth_connect",
+                    provider=_provider_label(profile.issuer),
+                    outcome="failed:dcr_failed",
+                )
                 raise _oauth_app_required(
                     f"Dynamic client registration with {profile.issuer} failed "
                     f"({exc}). Connect with an OAuth app you registered with this provider.",
@@ -220,6 +283,11 @@ class OAuthConnectService:
                     {"client_secret": client.client_secret} if client.client_secret else {}
                 ),
             )
+        count(
+            "oauth_connect",
+            provider=_provider_label(profile.issuer),
+            outcome="failed:oauth_app_required",
+        )
         raise _oauth_app_required(target.oauth_app_required_detail(profile), profile.issuer)
 
 
@@ -243,6 +311,11 @@ async def receive(
     """
     flow = await oauth_state.pop(state) if state else None
     if flow is None:
+        count(
+            "oauth_connect",
+            provider="unknown",
+            outcome=f"failed:{_oauth_error(error) if error else 'invalid_state'}",
+        )
         if error:
             # Without a usable state neither the page nor the workspace is
             # known: the frontend root opens the user's own workspace.
@@ -255,6 +328,11 @@ async def receive(
         workspace_slug = await _workspace_slug(flow)
         if workspace_slug is None:
             return _workspace_gone(flow)
+        count(
+            "oauth_connect",
+            provider="unknown",
+            outcome=f"failed:{_oauth_error(error) if error else 'missing_code'}",
+        )
         return _with_query(
             landing_url(flow, workspace_slug),
             oauth="error",
@@ -275,6 +353,7 @@ async def finish(
     """
     returned = await oauth_state.pop_returned(token)
     if returned is None:
+        count("oauth_connect", provider="unknown", outcome="failed:invalid_state")
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth sign-in")
     flow, code = returned.flow, returned.code
     if flow.user_id != user_id or flow.workspace_id not in reachable_workspaces:
@@ -286,6 +365,7 @@ async def finish(
             flow.user_id,
             user_id,
         )
+        count("oauth_connect", provider="unknown", outcome="failed:other_user")
         raise HTTPException(status_code=403, detail="This sign-in was started by someone else")
 
     workspace_slug = await _workspace_slug(flow)
@@ -303,12 +383,15 @@ async def finish(
     )
     auth_config = await auth_service.get(UUID(flow.auth_config_id))
     if auth_config is None:
+        count("oauth_connect", provider="unknown", outcome="failed:connection_gone")
         raise HTTPException(status_code=400, detail="OAuth connection no longer exists")
+    provider = _provider_label(_auth_config_issuer(auth_config.config))
     try:
         await auth_service.complete_authorization(
             auth_config, code=code, redirect_uri=callback_uri(), code_verifier=flow.code_verifier
         )
     except OAuthCodeExchangeError as exc:
+        count("oauth_connect", provider=provider, outcome=f"failed:{exc.reason}")
         return _with_query(landing, oauth="error", reason=exc.reason)
 
     await attach_credential(flow, session, user_context, auth_config.id)
@@ -320,6 +403,7 @@ async def finish(
         auth_config.id,
     )
     after_connect(flow, user_context)
+    count("oauth_connect", provider=provider, outcome="succeeded")
     return _with_query(landing, oauth="success")
 
 
@@ -339,4 +423,5 @@ async def _workspace_slug(flow: oauth_state.OAuthState) -> str | None:
 
 
 def _workspace_gone(flow: oauth_state.OAuthState) -> str:
+    count("oauth_connect", provider="unknown", outcome="failed:workspace_gone")
     return _with_query(f"{frontend_base(flow.return_to)}/", oauth="error", reason="workspace_gone")

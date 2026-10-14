@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
 from agentarea_agents_sdk.skills import SkillContextGuard
+from agentarea_common.analytics import count_run_refused
 from agentarea_common.auth.context import UserContext
 from agentarea_common.model_charges import (
     ModelCallRefusedError,
@@ -81,6 +82,7 @@ def _model_call_failure(message: str, error: Exception) -> ApplicationError:
             non_retryable=True,
         )
     if isinstance(error, ModelCallRefusedError):
+        count_run_refused(error.code)
         return ApplicationError(
             f"billing: {error.reason}",
             {

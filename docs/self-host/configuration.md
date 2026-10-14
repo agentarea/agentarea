@@ -42,7 +42,7 @@ Every variable AgentArea reads is `AGENTAREA_<DOMAIN>_<KEY>`, at most 40
 characters, with at most three segments after the domain. The domain comes from
 a closed list: `DB` `S3` `AUTH` `AUTHZ` `SECRET` `MCP` `SANDBOX` `TEMPORAL`
 `WORKER` `TASK` `TRIGGER` `CHANNEL` `EVENT` `CORS` `LOG` `REDIS` `KAFKA` `TOOL` `K8S`
-`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND`. Domains are whole words; only
+`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND` `ANALYTICS`. Domains are whole words; only
 established acronyms are abbreviated. A handful of
 app-level names carry no domain — `AGENTAREA_ENV`, `AGENTAREA_API_URL`,
 `AGENTAREA_APP_URL`, `AGENTAREA_EDITION`.
@@ -155,6 +155,7 @@ Rendered only when `rustfs.enabled` is true.
 | `AGENTAREA_S3_PUBLIC_ENDPOINT` | `global.storage.publicEndpoint` | `""` |
 | `AGENTAREA_METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `AGENTAREA_METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
+| `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 | `AGENTAREA_AUTH_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
 | `AGENTAREA_AUTH_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
 | `AGENTAREA_AUTH_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
@@ -167,6 +168,10 @@ Rendered only when `rustfs.enabled` is true.
 `AGENTAREA_METRICS_ENABLED` serves Prometheus metrics on `AGENTAREA_METRICS_PORT`, never on the API
 port. The API serves `/health` on its normal port unconditionally; see
 [observability](/self-host/observability).
+
+`AGENTAREA_ANALYTICS_ENABLED` sends anonymous usage statistics to AgentArea from the
+backend and the worker; `false` sends nothing. It is not OpenTelemetry. The fields
+sent are listed in [usage analytics](/self-host/analytics).
 
 `AGENTAREA_API_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must
@@ -211,6 +216,7 @@ it, the worker to refresh tokens.
 | `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | `worker.outageWait.backoff` | `1m,5m,10m` |
 | `AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` | `worker.outageWait.deadline` | `24h` |
 | `AGENTAREA_TASK_SKILLS_WINDOW_SHARE` | `worker.skillsWindowShare` | `0.3` |
+| `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
 
 The three `OUTAGE` durations decide how a run rides out a service it cannot
 reach (see [waiting for a service](/concepts/execution/tasks#waiting-for-a-service)):

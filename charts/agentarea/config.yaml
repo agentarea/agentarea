@@ -89,6 +89,7 @@ groups:
       AGENTAREA_S3_PUBLIC_ENDPOINT: '{{ .Values.global.storage.publicEndpoint }}'
       AGENTAREA_METRICS_ENABLED: '{{ .Values.global.monitoring.prometheus.enabled }}'
       AGENTAREA_METRICS_PORT: '{{ .Values.global.monitoring.prometheus.port }}'
+      AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
       AGENTAREA_AUTH_ISSUER: '{{ .Values.kratos.jwt.issuer }}'
       AGENTAREA_AUTH_AUDIENCE: '{{ .Values.kratos.jwt.audience }}'
       AGENTAREA_AUTH_KRATOS_ADMIN_URL: '{{ include "agentarea.kratosAdminUrl" . }}'
@@ -180,6 +181,7 @@ groups:
       AGENTAREA_TASK_SKILLS_WINDOW_SHARE: '{{ .Values.worker.skillsWindowShare }}'
       # Links the worker sends out, e.g. a Telegram bot's "link your account" reply.
       AGENTAREA_APP_URL: '{{ include "agentarea.frontendUrl" . }}'
+      AGENTAREA_ANALYTICS_ENABLED: '{{ .Values.global.analytics.enabled }}'
 
   application:
     secrets:

@@ -6,6 +6,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 from .access_control import AccessControlSettings
+from .analytics import AnalyticsSettings
 from .app import AppSettings
 from .aws import AWSSettings
 from .broker import BrokerSettings, KafkaSettings, RedisSettings
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     access_control: AccessControlSettings = Field(default_factory=AccessControlSettings)
     openfga: OpenFGASettings = Field(default_factory=OpenFGASettings)
     streams: EventStreamSettings = Field(default_factory=EventStreamSettings)
+    analytics: AnalyticsSettings = Field(default_factory=AnalyticsSettings)
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -66,4 +68,5 @@ def get_settings() -> Settings:
         access_control=AccessControlSettings(),
         openfga=OpenFGASettings(),
         streams=EventStreamSettings(),
+        analytics=AnalyticsSettings(),
     )
