@@ -665,13 +665,17 @@ class LLMModel:
             ),
         )
 
-    async def _complete_through_pinned_client(self, request: LLMRequest) -> LLMResponse:
+    async def _complete_through_pinned_client(
+        self, request: LLMRequest, event_publisher: Any = None
+    ) -> LLMResponse:
         content: list[str] = []
         reasoning: list[str] = []
         tool_calls: list[dict[str, Any]] | None = None
         usage: LLMUsage | None = None
         cost = Decimal(0)
         async for chunk in self._stream_openai_compatible(request):
+            if event_publisher and chunk.content:
+                await event_publisher(chunk.content, len(content), False)
             content.append(chunk.content)
             reasoning.append(chunk.reasoning_content)
             if chunk.tool_calls:
@@ -679,6 +683,8 @@ class LLMModel:
             if chunk.usage is not None:
                 usage = chunk.usage
                 cost = chunk.cost
+        if event_publisher:
+            await event_publisher("", len(content), True)
         return LLMResponse(
             content="".join(content),
             role="assistant",
@@ -728,6 +734,9 @@ class LLMModel:
     ) -> LLMResponse:
         """Call LLM with streaming and emit chunk events."""
         try:
+            if self._pins_endpoint():
+                return await self._complete_through_pinned_client(request, event_publisher)
+
             # Build parameters for streaming
             params = self._build_litellm_params(request)
             params["stream"] = True

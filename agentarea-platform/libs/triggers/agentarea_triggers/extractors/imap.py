@@ -23,8 +23,12 @@ import email
 import imaplib
 import json
 import logging
+import socket
 from email.policy import default as default_policy
 from typing import Any
+
+from agentarea_common.outbound import member_address
+from agentarea_common.utils.outbound_tls import outbound_ssl_context
 
 from ..channels.email_message import (
     build_email_channel_origin,
@@ -40,10 +44,33 @@ IMAPS_PORT = 993
 IMAP_PORT = 143
 
 
-def _connect_imap(*, host: str, port: int, use_ssl: bool) -> Any:
+class _PinnedIMAP4(imaplib.IMAP4):
+    """Connects to the address ``host`` was vetted at, not to ``host`` resolved again."""
+
+    def __init__(self, host: str, port: int, address: str) -> None:
+        self._address = address
+        super().__init__(host, port)
+
+    def _create_socket(self, timeout: float | None) -> socket.socket:
+        return socket.create_connection((self._address, self.port), timeout)
+
+
+class _PinnedIMAP4SSL(imaplib.IMAP4_SSL):
+    """As ``_PinnedIMAP4``, with ``host`` kept as the TLS server name."""
+
+    def __init__(self, host: str, port: int, address: str) -> None:
+        self._address = address
+        super().__init__(host, port, ssl_context=outbound_ssl_context())
+
+    def _create_socket(self, timeout: float | None) -> socket.socket:
+        sock = socket.create_connection((self._address, self.port), timeout)
+        return self.ssl_context.wrap_socket(sock, server_hostname=self.host)
+
+
+def _connect_imap(*, host: str, port: int, use_ssl: bool, address: str) -> Any:
     if use_ssl:
-        return imaplib.IMAP4_SSL(host, port)
-    return imaplib.IMAP4(host, port)
+        return _PinnedIMAP4SSL(host, port, address)
+    return _PinnedIMAP4(host, port, address)
 
 
 def _default_secret_reader() -> Any:
@@ -100,11 +127,15 @@ class ImapExtractor:
     resolves_own_credentials = True
     reply_channel_type = "email"
 
-    def __init__(self, secret_reader: Any = None, connect: Any = None) -> None:
-        # Both parameters are test seams. At runtime the real reader is always
+    def __init__(
+        self, secret_reader: Any = None, connect: Any = None, address_for: Any = None
+    ) -> None:
+        # All three are test seams. At runtime the real reader is always
         # constructed, so there is never a None to check for at the use site.
         self._secret_reader = secret_reader or _default_secret_reader()
         self._connect = connect or _connect_imap
+        # The mailbox host is the member's: it is vetted before every poll.
+        self._address_for = address_for or member_address
 
     async def extract(
         self, config: dict[str, Any], state: dict[str, Any] | None
@@ -123,10 +154,12 @@ class ImapExtractor:
         port = int(config.get("port") or (IMAPS_PORT if use_ssl else IMAP_PORT))
         mailbox = config.get("mailbox") or DEFAULT_MAILBOX
         last_uid = (state or {}).get("last_uid")
+        address = await self._address_for(host, port)
 
         return await asyncio.to_thread(
             self._poll,
             host=host,
+            address=address,
             port=port,
             use_ssl=use_ssl,
             mailbox=mailbox,
@@ -158,6 +191,7 @@ class ImapExtractor:
         self,
         *,
         host: str,
+        address: str,
         port: int,
         use_ssl: bool,
         mailbox: str,
@@ -166,7 +200,7 @@ class ImapExtractor:
         last_uid: int | None,
         trigger_id: str,
     ) -> ExtractionResult:
-        client = self._connect(host=host, port=port, use_ssl=use_ssl)
+        client = self._connect(host=host, port=port, use_ssl=use_ssl, address=address)
         try:
             client.login(username, password)
             client.select(mailbox, readonly=True)

@@ -229,17 +229,15 @@ class TestX402PaymentClient:
         import httpx
         from agentarea_payment import x402_client
 
-        class FakeHttpxClient:
-            def __init__(self, client):
-                pass
+        from agentarea_common.utils.url_safety import SafeOutboundTransport
 
-            async def __aenter__(self):
-                return self
+        wrapped: list = []
 
-            async def __aexit__(self, *exc):
-                return None
+        class FakeTransport(httpx.AsyncBaseTransport):
+            def __init__(self, client, transport):
+                wrapped.append(transport)
 
-            async def request(self, **kwargs):
+            async def handle_async_request(self, request):
                 receipt = base64.b64encode(json.dumps({"txHash": "0xsettled"}).encode()).decode()
                 return httpx.Response(500, headers={"PAYMENT-RESPONSE": receipt}, content=b"boom")
 
@@ -252,7 +250,7 @@ class TestX402PaymentClient:
 
         modules = {
             "x402.http": SimpleNamespace(x402HTTPClient=FakeHTTPClient),
-            "x402.http.clients": SimpleNamespace(x402HttpxClient=FakeHttpxClient),
+            "x402.http.clients.httpx": SimpleNamespace(x402AsyncTransport=FakeTransport),
         }
         monkeypatch.setattr(x402_client, "import_module", modules.__getitem__)
         monkeypatch.setattr(x402_client.X402PaymentClient, "_get_client", lambda self: object())
@@ -286,6 +284,8 @@ class TestX402PaymentClient:
         assert result.tx_hash == "0xsettled"
         assert result.amount_usd == Decimal("0.25")
         assert result.response_status == 500
+        # The paid retry goes to the member's URL through the vetted, pinned transport.
+        assert [type(inner) for inner in wrapped] == [SafeOutboundTransport]
 
 
 class TestMPPPaymentClient:
@@ -346,3 +346,43 @@ class TestMPPPaymentClient:
         assert result.success is False
         assert result.tx_hash == "0xsettled"
         assert result.amount_usd == Decimal("0.25")
+
+
+class TestMPPClientTransport:
+    @pytest.mark.asyncio
+    async def test_the_paid_retry_sends_through_the_pinned_transport(self, monkeypatch):
+        from types import SimpleNamespace
+
+        import httpx
+        from agentarea_common.utils.url_safety import SafeOutboundTransport
+        from agentarea_payment import mpp_client
+
+        class FakePaymentTransport(httpx.AsyncBaseTransport):
+            def __init__(self, methods, inner):
+                self.methods = methods
+                self.inner = inner
+
+            async def handle_async_request(self, request):
+                return httpx.Response(200)
+
+        tempo = SimpleNamespace(
+            ChargeIntent=lambda **kwargs: kwargs,
+            TempoAccount=SimpleNamespace(from_key=lambda key: f"account:{key}"),
+            tempo=lambda **kwargs: kwargs,
+        )
+        modules = {
+            "mpp.client": SimpleNamespace(PaymentTransport=FakePaymentTransport),
+            "mpp.methods.tempo": tempo,
+        }
+        monkeypatch.setattr(mpp_client, "import_module", modules.__getitem__)
+
+        client = await mpp_client.MPPPaymentClient(
+            tempo_key="0xkey", session_budget_usd=Decimal("1")
+        )._get_client()
+
+        assert isinstance(client, httpx.AsyncClient)
+        assert isinstance(client._transport, FakePaymentTransport)
+        assert isinstance(client._transport.inner, SafeOutboundTransport)
+        [method] = client._transport.methods
+        assert method["account"] == "account:0xkey"
+        await client.aclose()

@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
+from collections.abc import Awaitable, Callable
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import TYPE_CHECKING, Any
 
 import aiosmtplib
+from agentarea_common.outbound import member_connection
+from agentarea_common.utils.url_safety import UnsafeUrlError
 
 from . import register_adapter
 from .exceptions import FatalError, RetryableError
@@ -17,6 +21,8 @@ if TYPE_CHECKING:
     from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 
 logger = logging.getLogger(__name__)
+
+Connect = Callable[[str, int], Awaitable[socket.socket]]
 
 
 class EmailAdapter:
@@ -30,8 +36,13 @@ class EmailAdapter:
     The secret store holds a JSON blob with these fields.
     """
 
-    def __init__(self, secret_manager: BaseSecretManager | None = None):
+    def __init__(
+        self, secret_manager: BaseSecretManager | None = None, connect: Connect = member_connection
+    ):
         self._secret_manager = secret_manager
+        # The SMTP host is the member's: the connection goes to the address it
+        # was vetted at (a test seam otherwise).
+        self._connect = connect
 
     def format(self, event: dict[str, Any], presentation: str) -> str:
         """Format a workflow event as HTML for email.
@@ -150,10 +161,17 @@ class EmailAdapter:
         msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(message, "html"))
 
-        smtp_kwargs: dict[str, Any] = {
-            "hostname": smtp_creds.get("smtp_host", "localhost"),
-            "port": smtp_creds.get("smtp_port", 25),
-        }
+        host = smtp_creds.get("smtp_host")
+        if not host:
+            raise FatalError("email channel: SMTP credentials have no smtp_host")
+        try:
+            sock = await self._connect(host, int(smtp_creds.get("smtp_port", 25)))
+        except UnsafeUrlError as exc:
+            raise FatalError(f"email channel: SMTP host refused: {exc}") from exc
+        except (ConnectionError, TimeoutError, OSError) as exc:
+            raise RetryableError(f"email channel: SMTP transport error: {exc}") from exc
+        # The connection is made; the name stays for STARTTLS/TLS verification.
+        smtp_kwargs: dict[str, Any] = {"hostname": host, "sock": sock}
         if smtp_creds.get("use_tls"):
             smtp_kwargs["use_tls"] = True
         username = smtp_creds.get("username")
@@ -178,6 +196,8 @@ class EmailAdapter:
         except aiosmtplib.SMTPException as exc:
             # Unknown SMTP failure: prefer over-retry per the consumer contract.
             raise RetryableError(f"email channel: SMTP error: {exc}") from exc
+        finally:
+            sock.close()
 
         logger.info("Email sent to %s: %s", reply_to, subject)
 

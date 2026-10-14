@@ -72,14 +72,27 @@ class FakeImap:
         self.logged_out = True
 
 
-def build(messages, *, creds='{"username": "u", "password": "p"}'):
+VETTED = "8.8.8.8"
+
+
+def build(messages, *, creds='{"username": "u", "password": "p"}', address_for=None):
     class Reader:
         async def get_secret(self, name):
             Reader.asked_for = name
             return creds
 
+    async def vetted(host, port):
+        return VETTED
+
     fake = FakeImap(messages)
-    extractor = ImapExtractor(secret_reader=Reader(), connect=lambda **kw: fake)
+
+    def connect(**kwargs):
+        fake.connected_with = kwargs
+        return fake
+
+    extractor = ImapExtractor(
+        secret_reader=Reader(), connect=connect, address_for=address_for or vetted
+    )
     return extractor, fake, Reader
 
 
@@ -227,3 +240,58 @@ class TestConfiguration:
 class TestRegistration:
     def test_registers_itself_under_imap(self):
         assert get_extractor("imap") is ImapExtractor
+
+
+class TestTheMailboxHost:
+    async def test_the_connection_goes_to_the_vetted_address_under_the_hosts_name(self):
+        extractor, fake, _ = build({})
+
+        await extractor.extract(CONFIG, {"last_uid": 4})
+
+        assert fake.connected_with == {
+            "host": "imap.example.com",
+            "port": 993,
+            "use_ssl": True,
+            "address": VETTED,
+        }
+
+    async def test_a_host_the_policy_refuses_is_never_connected_to(self):
+        from agentarea_common.utils.url_safety import UnsafeUrlError
+
+        async def refuse(host, port):
+            raise UnsafeUrlError("Host 'imap.example.com' resolves to non-public address 10.0.0.5")
+
+        extractor, fake, _ = build({}, address_for=refuse)
+
+        with pytest.raises(UnsafeUrlError):
+            await extractor.extract(CONFIG, {"last_uid": 4})
+        assert not hasattr(fake, "connected_with")
+
+
+def test_the_pinned_client_connects_to_the_address_not_the_name():
+    import socket
+    import threading
+
+    from agentarea_triggers.extractors.imap import _connect_imap
+
+    server = socket.create_server(("127.0.0.1", 0))
+    port = server.getsockname()[1]
+
+    def greet():
+        conn, _ = server.accept()
+        conn.sendall(b"* OK ready\r\n")
+        tag = conn.recv(1024).split()[0]
+        conn.sendall(b"* CAPABILITY IMAP4rev1\r\n" + tag + b" OK done\r\n")
+        conn.recv(1024)
+        conn.close()
+
+    threading.Thread(target=greet, daemon=True).start()
+    try:
+        client = _connect_imap(
+            host="imap.example.invalid", port=port, use_ssl=False, address="127.0.0.1"
+        )
+        assert client.host == "imap.example.invalid"
+        assert client.sock.getpeername() == ("127.0.0.1", port)
+        client.shutdown()
+    finally:
+        server.close()

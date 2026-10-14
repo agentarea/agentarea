@@ -2,7 +2,7 @@
 
 import json
 import logging
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -30,6 +30,10 @@ from agentarea_triggers.channels.telegram import (
     set_webhook,
 )
 
+
+
+async def _no_network(host, port):
+    return MagicMock()
 
 class TestTelegramAdapter:
     """Test Telegram outbound adapter."""
@@ -295,6 +299,53 @@ class TestEmailAdapter:
         )
 
     @pytest.mark.asyncio
+    async def test_send_connects_to_the_vetted_address_and_keeps_the_name_for_tls(self, creds):
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+        connected: list = []
+        sock = MagicMock()
+
+        async def connect(host, port):
+            connected.append((host, port))
+            return sock
+
+        adapter = EmailAdapter(secret_manager=sm, connect=connect)
+        with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
+            await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
+
+        assert connected == [("mailpit", 1025)]
+        kwargs = send.await_args.kwargs
+        assert (kwargs["hostname"], kwargs["sock"]) == ("mailpit", sock)
+        assert "port" not in kwargs
+
+    @pytest.mark.asyncio
+    async def test_send_to_a_refused_host_raises_fatal(self, creds):
+        from agentarea_common.utils.url_safety import UnsafeUrlError
+        from agentarea_triggers.channels.exceptions import FatalError
+
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=creds)
+
+        async def refuse(host, port):
+            raise UnsafeUrlError("Host 'mailpit' resolves to non-public address 10.0.0.5")
+
+        adapter = EmailAdapter(secret_manager=sm, connect=refuse)
+        with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
+            with pytest.raises(FatalError, match="refused"):
+                await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
+        send.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_without_an_smtp_host_raises_fatal(self):
+        from agentarea_triggers.channels.exceptions import FatalError
+
+        sm = AsyncMock()
+        sm.get_secret = AsyncMock(return_value=json.dumps({"from_address": "a@b.io"}))
+        adapter = EmailAdapter(secret_manager=sm, connect=_no_network)
+        with pytest.raises(FatalError, match="smtp_host"):
+            await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
+
+    @pytest.mark.asyncio
     async def test_send_no_reply_to_raises_fatal(self):
         from agentarea_triggers.channels.exceptions import FatalError
 
@@ -308,7 +359,7 @@ class TestEmailAdapter:
 
         sm = AsyncMock()
         sm.get_secret = AsyncMock(return_value=None)
-        adapter = EmailAdapter(secret_manager=sm)
+        adapter = EmailAdapter(secret_manager=sm, connect=_no_network)
         with pytest.raises(FatalError, match="credentials not found"):
             await adapter.send({"trigger_id": "t1", "reply_to": "u@x.io"}, "<p>hi</p>")
 
@@ -316,7 +367,7 @@ class TestEmailAdapter:
     async def test_send_success_invokes_smtp(self, creds):
         sm = AsyncMock()
         sm.get_secret = AsyncMock(return_value=creds)
-        adapter = EmailAdapter(secret_manager=sm)
+        adapter = EmailAdapter(secret_manager=sm, connect=_no_network)
         with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
             await adapter.send(
                 {"trigger_id": "t1", "reply_to": "u@x.io", "subject": "Hi"},
@@ -331,7 +382,7 @@ class TestEmailAdapter:
 
         sm = AsyncMock()
         sm.get_secret = AsyncMock(return_value=creds)
-        adapter = EmailAdapter(secret_manager=sm)
+        adapter = EmailAdapter(secret_manager=sm, connect=_no_network)
         with patch(
             "agentarea_triggers.channels.email.aiosmtplib.send",
             new=AsyncMock(side_effect=aiosmtplib.SMTPConnectError("refused")),
@@ -346,7 +397,7 @@ class TestEmailAdapter:
 
         sm = AsyncMock()
         sm.get_secret = AsyncMock(return_value=creds)
-        adapter = EmailAdapter(secret_manager=sm)
+        adapter = EmailAdapter(secret_manager=sm, connect=_no_network)
         with patch(
             "agentarea_triggers.channels.email.aiosmtplib.send",
             new=AsyncMock(side_effect=aiosmtplib.SMTPAuthenticationError(535, "bad creds")),
@@ -359,7 +410,7 @@ class TestEmailAdapter:
     async def _sent_message(self, creds, channel_config):
         sm = AsyncMock()
         sm.get_secret = AsyncMock(return_value=creds)
-        adapter = EmailAdapter(secret_manager=sm)
+        adapter = EmailAdapter(secret_manager=sm, connect=_no_network)
         with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
             await adapter.send(channel_config, "<p>hi</p>")
         return send.await_args.args[0], sm

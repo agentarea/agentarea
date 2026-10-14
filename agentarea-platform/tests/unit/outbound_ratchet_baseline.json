@@ -35,7 +35,6 @@
     "libs/llm/agentarea_llm/infrastructure/model_clients.py": 1
   },
   "mail": {
-    "libs/triggers/agentarea_triggers/channels/email.py": 1,
-    "libs/triggers/agentarea_triggers/extractors/imap.py": 2
+    "libs/triggers/agentarea_triggers/channels/email.py": 1
   }
 }
