@@ -1080,21 +1080,85 @@
       "description": "Tools for working with MCP servers"
     },
     "newServer": {
-      "title": "New MCP Server",
-      "description": "Connect an MCP server to your workspace",
-      "docker": {
-        "title": "New Docker-based Server",
-        "serverName": "Docker-based Server Name",
-        "serverNamePlaceholder": "File System MCP",
-        "serverNameRequired": "Server name is required",
-        "dockerImageUrl": "Docker Image URL",
-        "dockerImageUrlPlaceholder": "ghcr.io/anthropic/mcp-file-server:latest",
-        "dockerImageUrlRequired": "Docker image URL is required",
-        "version": "Version",
-        "versionPlaceholder": "1.0.0",
-        "versionRequired": "Version is required"
+      "title": "New MCP server",
+      "submit": "Add server",
+      "mode": {
+        "form": "Form",
+        "json": "JSON"
       },
-      "addFailed": "Couldn't add the server"
+      "type": {
+        "label": "Server type",
+        "placeholder": "Select server type",
+        "docker": "Docker image",
+        "command": "Command (npx / uvx)",
+        "external": "External URL"
+      },
+      "config": {
+        "label": "MCP config",
+        "hint": "Paste an MCP config: both the servers and mcpServers formats work. The fields are filled in from it.",
+        "invalid": "Invalid JSON"
+      },
+      "name": "Server name",
+      "namePlaceholder": "e.g. File System MCP",
+      "nameRequired": "Server name is required",
+      "description": "Description",
+      "descriptionPlaceholder": "What this MCP server does",
+      "descriptionRequired": "Description is required",
+      "dockerImageUrl": "Docker image URL",
+      "dockerImageUrlHint": "The full URL of a Docker image that implements the Model Context Protocol. The image should expose port 8999.",
+      "version": "Version",
+      "command": "Command",
+      "commandHint": "The command runs in a sandbox container and is served over HTTP.",
+      "args": "Arguments",
+      "argsHint": "Space-separated arguments passed to the command.",
+      "endpointUrl": "Endpoint URL",
+      "endpointUrlHint": "The URL where your MCP server is running.",
+      "tags": "Tags",
+      "tagsPlaceholder": "e.g. files, database, web",
+      "tagsHint": "Comma-separated.",
+      "env": {
+        "label": "Environment variables & secrets",
+        "add": "Add variable",
+        "keyPlaceholder": "KEY (e.g. TELEGRAM_API_ID)",
+        "valuePlaceholder": "Value",
+        "hint": "Values are saved on this server so it runs right away. Variables are stored as secrets by default; unlock a row to keep it as plain config you can read back later. Leave a value blank to just declare the field."
+      },
+      "headers": {
+        "label": "Headers",
+        "add": "Add header",
+        "hint": "Custom headers for authentication or configuration. Their values are stored as secrets."
+      },
+      "auth": {
+        "label": "Authentication",
+        "none": "No authentication",
+        "createNew": "+ Create new auth config",
+        "hint": "Pick an existing auth config or create a new one.",
+        "newTitle": "New auth config",
+        "configName": "Config name",
+        "configNamePlaceholder": "e.g. My API key",
+        "type": "Auth type",
+        "types": {
+          "api_key": "API key",
+          "bearer": "Bearer token",
+          "oauth2": "OAuth2"
+        },
+        "headerName": "Header name",
+        "headerValue": "Header value",
+        "headerValuePlaceholder": "Your API key",
+        "bearerToken": "Bearer token",
+        "bearerTokenPlaceholder": "Your bearer token",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "tokenUrl": "Token URL",
+        "authorizeUrl": "Authorize URL",
+        "scopes": "Scopes",
+        "save": "Save auth config"
+      },
+      "unexpectedError": "An unexpected error occurred.",
+      "addFailed": "Couldn't add the server",
+      "dockerImageUrlRequired": "Enter the Docker image URL",
+      "commandRequired": "Enter the command to run",
+      "endpointUrlRequired": "Enter the server's endpoint URL"
     },
     "authConfigs": {
       "loadFailed": "Couldn't load authentication configs",

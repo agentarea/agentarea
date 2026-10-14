@@ -30,7 +30,7 @@ import {
 } from "@/lib/server-actions";
 import { CredentialEncryptionNote } from "../components/CredentialFields";
 import { HeaderRows, type HeaderRow } from "../components/HeaderRows";
-import { QueryParamRows, type QueryParamRow } from "../components/QueryParamRows";
+import { SecretRows, type SecretRow } from "../components/SecretRows";
 import { ToolsTable } from "../components/ToolsTable";
 import {
   isAbsoluteBaseUrl,
@@ -57,7 +57,7 @@ export function AddOpenAPIForm() {
   const [specJson, setSpecJson] = useState("");
   const [description, setDescription] = useState("");
   const [headers, setHeaders] = useState<HeaderRow[]>([]);
-  const [queryParams, setQueryParams] = useState<QueryParamRow[]>([]);
+  const [queryParams, setQueryParams] = useState<SecretRow[]>([]);
   const [previewTools, setPreviewTools] = useState<PreviewTool[]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -451,7 +451,7 @@ export function AddOpenAPIForm() {
               {queryParams.length === 0 && (
                 <p className="note">{t("queryParamsHint")}</p>
               )}
-              <QueryParamRows rows={queryParams} onChange={setQueryParams} />
+              <SecretRows rows={queryParams} onChange={setQueryParams} />
             </div>
 
             <CredentialEncryptionNote />

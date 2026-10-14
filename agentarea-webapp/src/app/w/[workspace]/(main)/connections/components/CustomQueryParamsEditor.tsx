@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import type { CustomHeader } from "./CustomHeadersList";
-import { QueryParamRows, type QueryParamRow } from "./QueryParamRows";
+import { SecretRows, type SecretRow } from "./SecretRows";
 
 export function CustomQueryParamsEditor({
   initial,
@@ -16,12 +16,12 @@ export function CustomQueryParamsEditor({
 }: {
   initial: CustomHeader[];
   saving?: boolean;
-  onSave: (rows: QueryParamRow[]) => Promise<void> | void;
+  onSave: (rows: SecretRow[]) => Promise<void> | void;
   onCancel: () => void;
 }) {
   const t = useTranslations("OpenAPIConnection");
   // Secret values come back masked: a blank value keeps the stored one.
-  const [rows, setRows] = useState<QueryParamRow[]>(() =>
+  const [rows, setRows] = useState<SecretRow[]>(() =>
     initial.map((p) => ({
       name: p.name,
       value: p.secret ? "" : (p.value ?? ""),
@@ -56,7 +56,7 @@ export function CustomQueryParamsEditor({
         <p className="text-xs text-muted-foreground">{t("queryParamsEditorHint")}</p>
       )}
 
-      <QueryParamRows rows={rows} onChange={setRows} keepSecretNames={storedSecrets} />
+      <SecretRows rows={rows} onChange={setRows} keepSecretNames={storedSecrets} />
 
       <div className="flex gap-2 pt-1">
         <Button type="button" size="xs" onClick={handleSave} disabled={saving}>

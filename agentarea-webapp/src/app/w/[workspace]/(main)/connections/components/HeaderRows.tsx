@@ -33,11 +33,14 @@ export function HeaderRows({
   rows,
   onChange,
   keepSecretNames,
+  alwaysSecret = false,
 }: {
   rows: HeaderRow[];
   onChange: (rows: HeaderRow[]) => void;
   // Secret headers already stored: a blank value keeps the stored one.
   keepSecretNames?: ReadonlySet<string>;
+  /** Every value is stored as a secret, whatever the header's name. */
+  alwaysSecret?: boolean;
 }) {
   const t = useTranslations("OpenAPIConnection");
 
@@ -47,7 +50,8 @@ export function HeaderRows({
   return (
     <>
       {rows.map((row, i) => {
-        const secret = row.name.trim() ? isSecretHeader(row.name) : false;
+        const secret =
+          alwaysSecret || (row.name.trim() ? isSecretHeader(row.name) : false);
         return (
           <div key={i} className="flex items-center gap-2">
             <Input

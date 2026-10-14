@@ -4,26 +4,38 @@ import { useTranslations } from "next-intl";
 import { Lock, Trash2, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
-export interface QueryParamRow {
+/** A name / value pair whose value can be locked as a secret. */
+export interface SecretRow {
   name: string;
   value: string;
   secret: boolean;
 }
 
-export function QueryParamRows({
+/**
+ * Editable name / value rows with a lock toggle per row: query parameters,
+ * environment variables. Placeholders default to the query-parameter ones.
+ */
+export function SecretRows({
   rows,
   onChange,
   keepSecretNames,
+  namePlaceholder,
+  valuePlaceholder,
+  nameClassName,
 }: {
-  rows: QueryParamRow[];
-  onChange: (rows: QueryParamRow[]) => void;
-  // Secret params already stored: a blank value keeps the stored one.
+  rows: SecretRow[];
+  onChange: (rows: SecretRow[]) => void;
+  // Secrets already stored: a blank value keeps the stored one.
   keepSecretNames?: ReadonlySet<string>;
+  namePlaceholder?: string;
+  valuePlaceholder?: string;
+  nameClassName?: string;
 }) {
   const t = useTranslations("OpenAPIConnection");
 
-  const update = (i: number, patch: Partial<QueryParamRow>) =>
+  const update = (i: number, patch: Partial<SecretRow>) =>
     onChange(rows.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
 
   return (
@@ -31,17 +43,17 @@ export function QueryParamRows({
       {rows.map((row, i) => (
         <div key={i} className="flex items-center gap-2">
           <Input
-            placeholder={t("queryParamName")}
+            placeholder={namePlaceholder ?? t("queryParamName")}
             value={row.name}
             onChange={(e) => update(i, { name: e.target.value })}
-            className="flex-1"
+            className={cn("flex-1", nameClassName)}
           />
           <div className="relative flex-1">
             <Input
               placeholder={
                 row.secret && keepSecretNames?.has(row.name.trim())
                   ? t("secretValuePlaceholder")
-                  : t("queryParamValue")
+                  : (valuePlaceholder ?? t("queryParamValue"))
               }
               value={row.value}
               onChange={(e) => update(i, { value: e.target.value })}

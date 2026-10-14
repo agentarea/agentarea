@@ -27,7 +27,7 @@ import {
 import { CustomHeadersEditor } from "../../components/CustomHeadersEditor";
 import { CustomHeadersList } from "../../components/CustomHeadersList";
 import { CustomQueryParamsEditor } from "../../components/CustomQueryParamsEditor";
-import type { QueryParamRow } from "../../components/QueryParamRows";
+import type { SecretRow } from "../../components/SecretRows";
 import { OpenAPIConnectionMark } from "../../components/MCPCard";
 import { ToolsTable } from "../../components/ToolsTable";
 import { OpenAPIConnection } from "../../types";
@@ -138,7 +138,7 @@ export default function OpenAPIConnectionDetailPage() {
     }
   };
 
-  const handleSaveQueryParams = async (rows: QueryParamRow[]) => {
+  const handleSaveQueryParams = async (rows: SecretRow[]) => {
     setSavingQueryParams(true);
     setError(null);
     try {

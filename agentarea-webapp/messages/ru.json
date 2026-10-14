@@ -1080,21 +1080,85 @@
       "description": "Инструменты для работы с MCP серверами"
     },
     "newServer": {
-      "title": "Новый MCP сервер",
-      "description": "Подключите MCP сервер к вашему рабочему пространству",
-      "docker": {
-        "title": "Новый Docker-based сервер",
-        "serverName": "Имя Docker-based сервера",
-        "serverNamePlaceholder": "File System MCP",
-        "serverNameRequired": "Имя сервера является обязательным",
-        "dockerImageUrl": "URL-адрес Docker образа",
-        "dockerImageUrlPlaceholder": "ghcr.io/anthropic/mcp-file-server:latest",
-        "dockerImageUrlRequired": "URL-адрес Docker образа является обязательным",
-        "version": "Версия",
-        "versionPlaceholder": "1.0.0",
-        "versionRequired": "Версия является обязательной"
+      "title": "Новый MCP-сервер",
+      "submit": "Добавить сервер",
+      "mode": {
+        "form": "Форма",
+        "json": "JSON"
       },
-      "addFailed": "Не удалось добавить сервер"
+      "type": {
+        "label": "Тип сервера",
+        "placeholder": "Выберите тип сервера",
+        "docker": "Docker-образ",
+        "command": "Команда (npx / uvx)",
+        "external": "Внешний URL"
+      },
+      "config": {
+        "label": "Конфигурация MCP",
+        "hint": "Вставьте конфигурацию MCP: подходят оба формата, servers и mcpServers. Поля заполнятся из неё.",
+        "invalid": "Неверный JSON"
+      },
+      "name": "Название сервера",
+      "namePlaceholder": "например, File System MCP",
+      "nameRequired": "Введите название сервера",
+      "description": "Описание",
+      "descriptionPlaceholder": "Что делает этот MCP-сервер",
+      "descriptionRequired": "Введите описание",
+      "dockerImageUrl": "URL Docker-образа",
+      "dockerImageUrlHint": "Полный URL Docker-образа, реализующего Model Context Protocol. Образ должен открывать порт 8999.",
+      "version": "Версия",
+      "command": "Команда",
+      "commandHint": "Команда запускается в изолированном контейнере и отдаётся по HTTP.",
+      "args": "Аргументы",
+      "argsHint": "Аргументы команды через пробел.",
+      "endpointUrl": "URL сервера",
+      "endpointUrlHint": "Адрес, по которому работает ваш MCP-сервер.",
+      "tags": "Теги",
+      "tagsPlaceholder": "например, files, database, web",
+      "tagsHint": "Через запятую.",
+      "env": {
+        "label": "Переменные окружения и секреты",
+        "add": "Добавить переменную",
+        "keyPlaceholder": "KEY (например, TELEGRAM_API_ID)",
+        "valuePlaceholder": "Значение",
+        "hint": "Значения сохраняются на сервере, чтобы он сразу запустился. По умолчанию переменные хранятся как секреты; откройте замок, чтобы хранить значение открыто и видеть его потом. Оставьте значение пустым, чтобы только объявить поле."
+      },
+      "headers": {
+        "label": "Заголовки",
+        "add": "Добавить заголовок",
+        "hint": "Заголовки для аутентификации или настройки. Их значения хранятся как секреты."
+      },
+      "auth": {
+        "label": "Аутентификация",
+        "none": "Без аутентификации",
+        "createNew": "+ Новая конфигурация аутентификации",
+        "hint": "Выберите существующую конфигурацию аутентификации или создайте новую.",
+        "newTitle": "Новая конфигурация аутентификации",
+        "configName": "Название конфигурации",
+        "configNamePlaceholder": "например, Мой API-ключ",
+        "type": "Тип аутентификации",
+        "types": {
+          "api_key": "API-ключ",
+          "bearer": "Bearer-токен",
+          "oauth2": "OAuth2"
+        },
+        "headerName": "Имя заголовка",
+        "headerValue": "Значение заголовка",
+        "headerValuePlaceholder": "Ваш API-ключ",
+        "bearerToken": "Bearer-токен",
+        "bearerTokenPlaceholder": "Ваш bearer-токен",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "tokenUrl": "Token URL",
+        "authorizeUrl": "Authorize URL",
+        "scopes": "Scopes",
+        "save": "Сохранить конфигурацию"
+      },
+      "unexpectedError": "Произошла непредвиденная ошибка.",
+      "addFailed": "Не удалось добавить сервер",
+      "dockerImageUrlRequired": "Введите URL Docker-образа",
+      "commandRequired": "Введите команду для запуска",
+      "endpointUrlRequired": "Введите URL сервера"
     },
     "authConfigs": {
       "loadFailed": "Не удалось загрузить конфигурации аутентификации",
