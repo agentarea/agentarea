@@ -94,7 +94,7 @@ WHITELIST = {
     "OTEL_RESOURCE_ATTRIBUTES", "OTEL_TRACES_EXPORTER",
     # llm vendor sdks
     "OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
-    "OLLAMA_API_BASE", "LITELLM_CALLBACKS",
+    "OLLAMA_API_BASE", "LITELLM_CALLBACKS", "LITELLM_LOCAL_MODEL_COST_MAP",
     # vendored @ory SDK reads these from the environment itself
     "ORY_SDK_URL", "NEXT_PUBLIC_ORY_SDK_URL", "ORY_PROJECT_API_TOKEN",
     # Deliberately not NEXT_PUBLIC_: Next inlines those at build time, and one

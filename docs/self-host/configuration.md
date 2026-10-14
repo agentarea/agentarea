@@ -452,6 +452,21 @@ included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
 
+### LiteLLM price map (set in the images)
+
+Read by LiteLLM itself, in the backend and the worker.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `LITELLM_LOCAL_MODEL_COST_MAP` | none (set in the API and worker images) | `True` |
+
+Without it, LiteLLM downloads its model price map from GitHub every time it is
+imported: a request at every start, up to 5 s of delay when the network blocks
+it, and prices that change without a release. The images set it, so LiteLLM uses
+the map bundled in the version the image ships. The platform prices a call from
+the provider's reported cost or the model catalog first; this map is the last
+resort for a model the catalog has no price for.
+
 ### Spend currency (not in `config.yaml`)
 
 Read by `SpendSettings` in the backend and the worker.
