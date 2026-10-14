@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 import httpx
 from agentarea_common.config import get_settings
+from agentarea_common.outbound import Destination, outbound_client
 
 from agentarea_mcp.tool_timeout import tool_timeout_error
 
@@ -158,7 +159,9 @@ class MCPConfigurationValidator:
 
         try:
             # Make request to golang validation endpoint
-            async with httpx.AsyncClient(timeout=cls.MCP_MANAGER_TIMEOUT) as client:
+            async with outbound_client(
+                Destination.INTERNAL, timeout=cls.MCP_MANAGER_TIMEOUT
+            ) as client:
                 validation_url = urljoin(cls.MCP_MANAGER_BASE_URL, "/containers/validate")
 
                 validation_payload = {

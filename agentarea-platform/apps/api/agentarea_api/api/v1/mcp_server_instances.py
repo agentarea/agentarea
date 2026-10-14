@@ -331,6 +331,7 @@ async def check_mcp_server_instance_configuration(
 ):
     """Check if an MCP server instance configuration is valid via the Go manager."""
     import httpx
+    from agentarea_common.outbound import Destination, outbound_client
 
     try:
         settings = get_settings()
@@ -342,7 +343,7 @@ async def check_mcp_server_instance_configuration(
             "dry_run": True,
         }
 
-        async with httpx.AsyncClient() as client:
+        async with outbound_client(Destination.INTERNAL) as client:
             resp = await client.post(
                 f"{settings.mcp.MANAGER_URL}/containers/validate",
                 json=validation_request,
@@ -703,6 +704,7 @@ async def get_containers_health(
     import asyncio
 
     import httpx
+    from agentarea_common.outbound import Destination, outbound_client
 
     settings = get_settings()
     instances = await service.list()
@@ -749,7 +751,7 @@ async def get_containers_health(
         )
         return {**row, "healthy": False, "status": "error"}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=15.0) as client:
         rows = await asyncio.gather(*(read_one(client, instance) for instance in instances))
 
     return {

@@ -163,11 +163,8 @@ def _baseline() -> dict[str, dict[str, int]]:
 
 
 def test_the_scan_sees_the_code_it_guards() -> None:
-    """Guard against a scan that silently finds nothing."""
-    current = _current()
-    assert sum(current["http"].values()) > 30
-    assert sum(current["mail"].values()) > 0
-    assert sum(current["litellm"].values()) > 2
+    """Guard against a scan that silently reads nothing; the counts only go down."""
+    assert len(_production_modules()) > 300
 
 
 def test_every_way_of_naming_a_client_is_counted() -> None:

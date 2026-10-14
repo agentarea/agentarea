@@ -15,8 +15,6 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-import httpx
-
 from .file_toolset import StoredObject
 
 
@@ -141,7 +139,10 @@ class SandboxFileStore:
             return await self._http_client.request(
                 method, url, json=json, params=params, content=content, headers=headers
             )
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        # The tool only runs inside the platform, which provides agentarea_common.
+        from agentarea_common.outbound import Destination, outbound_client
+
+        async with outbound_client(Destination.INTERNAL, timeout=self._timeout_seconds) as client:
             return await client.request(
                 method, url, json=json, params=params, content=content, headers=headers
             )

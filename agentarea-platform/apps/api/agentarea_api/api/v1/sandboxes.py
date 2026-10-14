@@ -6,6 +6,7 @@ import httpx
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_settings
+from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.types import UtcDatetime
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -70,7 +71,7 @@ async def list_sandboxes(user_context: UserContextDep) -> SandboxListResponse:
         )
 
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with outbound_client(Destination.INTERNAL, timeout=10) as client:
             response = await client.get(
                 f"{settings.mcp.MANAGER_URL.rstrip('/')}/sandbox/sessions",
                 params={"workspace_id": str(user_context.workspace_id)},

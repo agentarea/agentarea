@@ -15,6 +15,7 @@ from uuid import uuid4
 import httpx
 import pytest
 from agentarea_api.api.v1 import mcp_server_instances as module
+from agentarea_common import outbound as outbound_module
 
 
 class _Response:
@@ -82,8 +83,8 @@ def _install(monkeypatch, answers, asked, requested_headers=None):
         ),
     )
     monkeypatch.setattr(
-        httpx,
-        "AsyncClient",
+        outbound_module,
+        "outbound_client",
         lambda *a, **k: _Client(answers, asked, requested_headers),
     )
 

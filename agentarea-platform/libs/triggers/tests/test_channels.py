@@ -77,7 +77,7 @@ class TestTelegramAdapter:
     @pytest.mark.asyncio
     async def test_send_calls_bot_api(self, adapter):
         channel_config = {"type": "telegram", "trigger_id": "test-trigger", "chat_id": "12345"}
-        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+        with patch("agentarea_triggers.channels.telegram.outbound_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_resp = AsyncMock()
             mock_resp.is_success = True
@@ -179,7 +179,7 @@ class TestComposedTelegramAdapter:
             request=httpx.Request("POST", "https://telegram.test/sendMessage"),
         )
 
-        with patch("agentarea_triggers.channels.adapters.httpx.AsyncClient") as mock_client_cls:
+        with patch("agentarea_triggers.channels.adapters.outbound_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post.side_effect = [bad_resp, ok_resp]
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -225,7 +225,7 @@ class TestComposedTelegramAdapter:
         with patch("redis.asyncio.from_url", return_value=fake_redis):
             sender = make_telegram_streaming_sender(secret_manager, "redis://x")
 
-        with patch("agentarea_triggers.channels.adapters.httpx.AsyncClient") as mock_cls:
+        with patch("agentarea_triggers.channels.adapters.outbound_client") as mock_cls:
             mock_client = AsyncMock()
             mock_client.post = AsyncMock(side_effect=_post)
             mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
@@ -488,7 +488,7 @@ class TestTelegramWebhookRegistration:
 
     @pytest.mark.asyncio
     async def test_set_webhook_calls_bot_api_with_url_and_secret(self):
-        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+        with patch("agentarea_triggers.channels.telegram.outbound_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_resp = AsyncMock()
             mock_resp.is_success = True
@@ -511,7 +511,7 @@ class TestTelegramWebhookRegistration:
 
     @pytest.mark.asyncio
     async def test_delete_webhook_calls_bot_api(self):
-        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+        with patch("agentarea_triggers.channels.telegram.outbound_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_resp = AsyncMock()
             mock_resp.is_success = True
@@ -528,7 +528,7 @@ class TestTelegramWebhookRegistration:
 
     @pytest.mark.asyncio
     async def test_set_webhook_is_best_effort_on_network_error(self):
-        with patch("agentarea_triggers.channels.telegram.httpx.AsyncClient") as mock_client_cls:
+        with patch("agentarea_triggers.channels.telegram.outbound_client") as mock_client_cls:
             mock_client = AsyncMock()
             mock_client.post.side_effect = httpx.ConnectTimeout("blocked")
             mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)

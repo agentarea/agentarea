@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 from agentarea_common.artifacts import WorkspaceValidationError, normalize_workspace_path
+from agentarea_common.outbound import Destination, outbound_client
 
 from ..models import (
     ArtifactValidationEvidence,
@@ -95,7 +96,7 @@ async def validate_published_artifacts(
     client = http_client
     owned = client is None
     if client is None:
-        client = httpx.AsyncClient(timeout=60)
+        client = outbound_client(Destination.INTERNAL, timeout=60)
     issues: list[ArtifactValidationIssue] = []
     evidence: list[ArtifactValidationEvidence] = []
     try:

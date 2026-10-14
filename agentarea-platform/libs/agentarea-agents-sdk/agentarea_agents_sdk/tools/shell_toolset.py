@@ -114,7 +114,10 @@ class ShellToolset(Toolset):
             client = self._http_client
             owned = False
             if client is None:
-                client = httpx.AsyncClient(timeout=30)
+                # The tool only runs inside the platform, which provides agentarea_common.
+                from agentarea_common.outbound import Destination, outbound_client
+
+                client = outbound_client(Destination.INTERNAL, timeout=30)
                 owned = True
             try:
                 headers = signer.headers("execution.create", body=body)

@@ -7,7 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from agentarea_common.utils.outbound_tls import outbound_ssl_context
+from agentarea_common.outbound import Destination, outbound_client
 
 from . import register_adapter, register_webhook_registrar
 
@@ -34,7 +34,7 @@ async def set_webhook(bot_token: str, url: str, secret_token: str | None = None)
     if secret_token:
         payload["secret_token"] = secret_token
     try:
-        async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
+        async with outbound_client(Destination.VENDOR, timeout=10.0) as client:
             resp = await client.post(api, json=payload)
             resp.raise_for_status()
         return True
@@ -47,7 +47,7 @@ async def delete_webhook(bot_token: str) -> bool:
     """Clear this bot's webhook. Best-effort, same contract as :func:`set_webhook`."""
     api = f"https://api.telegram.org/bot{bot_token}/deleteWebhook"
     try:
-        async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
+        async with outbound_client(Destination.VENDOR, timeout=10.0) as client:
             resp = await client.post(api, json={})
             resp.raise_for_status()
         return True
@@ -176,7 +176,7 @@ class TelegramAdapter:
 
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         try:
-            async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
+            async with outbound_client(Destination.VENDOR, timeout=10.0) as client:
                 resp = await client.post(url, json=payload)
                 if not resp.is_success:
                     # Retry without markdown if parse fails
