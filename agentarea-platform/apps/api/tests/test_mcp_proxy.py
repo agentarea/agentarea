@@ -399,8 +399,8 @@ async def test_the_upstream_receives_the_connections_stored_secret_header(monkey
 
     monkeypatch.setattr(
         mcp_proxy,
-        "safe_async_client",
-        lambda *, policy, **kwargs: httpx.AsyncClient(
+        "outbound_client",
+        lambda _destination, *, policy=None, **kwargs: httpx.AsyncClient(
             transport=httpx.MockTransport(upstream), **kwargs
         ),
     )
