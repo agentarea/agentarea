@@ -543,6 +543,7 @@ def make_tools_activities(
                             "backend": MediaGenerationService(
                                 models=await ctx.get_model_service(),
                                 jobs=await ctx.get_video_generation_jobs(),
+                                workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else None,
                                 image_model_id=settings.get("image_model_id"),
                                 video_model_id=settings.get("video_model_id"),
@@ -1033,6 +1034,9 @@ def make_tools_activities(
                     artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
                     service_cost=to_money(result.get("service_cost")),
                     model_cost=to_money(result.get("model_cost")),
+                    model_billing=result.get("model_billing")
+                    if isinstance(result.get("model_billing"), dict)
+                    else None,
                     cost_unknown=bool(result.get("cost_unknown")),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)

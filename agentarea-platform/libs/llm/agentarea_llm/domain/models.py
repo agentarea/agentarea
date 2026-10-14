@@ -213,6 +213,12 @@ class ModelSpec(BaseModel, WorkspaceScopedMixin):
     cache_creation_input_cost_per_token: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 12), nullable=True
     )
+    # What one generated image costs at most; a platform image call is held by it.
+    output_cost_per_image: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
+    # What a second of generated video costs; a platform video call is held by it.
+    output_cost_per_video_per_second: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 12), nullable=True
+    )
     supports_function_calling: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, default=False
     )
@@ -333,6 +339,10 @@ class VideoGenerationJob(BaseModel, WorkspaceScopedMixin):
     # that reports it: every retry of that call reports it again, no other call does.
     billed_cost: Mapped[Decimal | None] = mapped_column(Numeric(20, 12), nullable=True)
     billed_call_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Who pays the job (ModelFunding.stored()), held when it was submitted; and the
+    # billing of its line (ModelCharge.as_billing()) once a check reported it.
+    funding: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    billing: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 

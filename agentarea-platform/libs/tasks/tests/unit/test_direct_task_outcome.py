@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.money import to_money
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
@@ -13,6 +14,15 @@ from agentarea_governance.domain.policies import (
 )
 from agentarea_tasks.direct_task_manager import DirectTaskManager
 from agentarea_tasks.domain.models import AgentTask
+
+
+def _model(llm):
+    """The agent's model as ``_resolve_agent`` hands it over: priced, not yet connected."""
+    return SimpleNamespace(
+        input_cost_per_token=to_money("0.000001"),
+        output_cost_per_token=to_money("0.000002"),
+        connect=AsyncMock(return_value=llm),
+    )
 
 
 @pytest.mark.asyncio
@@ -38,7 +48,7 @@ async def test_iteration_limit_is_failed_in_direct_execution():
             )
         )
     )
-    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", False))
+    manager._resolve_agent = AsyncMock(return_value=(_model(llm), "", [], "model-1", None))
     task = AgentTask(
         title="Task",
         description="Task",
@@ -118,7 +128,7 @@ async def test_completion_does_not_consume_direct_tool_call_quota():
             ]
         )
     )
-    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", False))
+    manager._resolve_agent = AsyncMock(return_value=(_model(llm), "", [], "model-1", None))
     task = AgentTask(
         title="Task",
         description="Task",
@@ -206,8 +216,6 @@ def billing(monkeypatch):
 
 def _platform_llm(cost, tool_calls):
     return SimpleNamespace(
-        input_cost_per_token=to_money("0.000001"),
-        output_cost_per_token=to_money("0.000002"),
         complete=AsyncMock(
             return_value=SimpleNamespace(
                 content="",
@@ -253,10 +261,13 @@ async def test_direct_execution_holds_each_call_and_counts_billings_price(billin
     repository = AsyncMock()
     manager = DirectTaskManager(repository)
     completion = [
-        {"id": "call-completion", "function": {"name": "completion", "arguments": '{"result":"done"}'}}
+        {
+            "id": "call-completion",
+            "function": {"name": "completion", "arguments": '{"result":"done"}'},
+        }
     ]
-    llm = _platform_llm(0.01, completion)
-    manager._resolve_agent = AsyncMock(return_value=(llm, "", [], "model-1", True))
+    model = _model(_platform_llm(0.01, completion))
+    manager._resolve_agent = AsyncMock(return_value=(model, "", [], "model-1", MANAGED_BY_PLATFORM))
     task = _task("100.00")
 
     await manager._execute(task)
@@ -265,6 +276,8 @@ async def test_direct_execution_holds_each_call_and_counts_billings_price(billin
     assert task.result["total_cost"] == "1.425"
     [hold] = billing.authorizations
     assert (hold["kind"], hold["tool"]) == ("model", "model-1")
+    [funding] = model.connect.await_args.args
+    assert (funding.hold_id, funding.platform_funded) == ("hold-1", True)
     [line] = repository.record_costs.await_args.args[0]
     assert (line.amount, line.currency, line.agent_id) == (to_money("1.425"), "RUB", task.agent_id)
     assert (line.subject_id, line.payer.value, line.estimate) == ("model-1", "platform", True)
@@ -277,7 +290,7 @@ async def test_direct_run_budget_error_names_the_billing_currency(billing):
     repository = AsyncMock()
     manager = DirectTaskManager(repository)
     manager._resolve_agent = AsyncMock(
-        return_value=(_platform_llm(0.1, []), "", [], "model-1", True)
+        return_value=(_model(_platform_llm(0.1, [])), "", [], "model-1", MANAGED_BY_PLATFORM)
     )
     task = _task("1.00")
 

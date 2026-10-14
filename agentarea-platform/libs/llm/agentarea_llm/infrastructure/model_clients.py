@@ -69,17 +69,28 @@ class ModelCostUnavailableError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class ModelEndpoint:
-    """Everything a call needs about one model instance, credential resolved."""
+class ModelTarget:
+    """One model instance as a call is funded by: everything but the credential."""
 
     instance_id: str
     provider_type: str
     model_name: str
-    api_key: str | None
     endpoint_url: str | None
     managed_by: str | None
     input_cost_per_token: Decimal | None
     output_cost_per_token: Decimal | None
+    # The name of the config's secret, read into ``api_key`` only for a funded call.
+    api_key_reference: str | None = None
+    max_output_tokens: int | None = None
+    output_cost_per_image: Decimal | None = None
+    output_cost_per_video_per_second: Decimal | None = None
+
+
+@dataclass(frozen=True)
+class ModelEndpoint(ModelTarget):
+    """Everything a call needs about one model instance, credential resolved."""
+
+    api_key: str | None = None
 
     def api_url(self, path: str) -> str:
         url = profile_for(self.provider_type).resolve_api_url(self.endpoint_url, path)

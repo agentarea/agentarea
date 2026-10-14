@@ -10,8 +10,8 @@ from uuid import UUID, uuid4
 import litellm
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
 from agentarea_common.auth.context import UserContext
-from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.model_charges import (
+    ModelFunding,
     charge_model_call,
     estimate_vendor_cost,
     hold_model_call,
@@ -126,7 +126,7 @@ class LLMExecutionService:
 
             model_name = None
             endpoint_url = None
-            api_key = None
+            api_key_secret_name: str | None = None
             managed_by: str | None = None
             max_output_tokens = None
             input_cost_per_token = None
@@ -150,21 +150,6 @@ class LLMExecutionService:
                 )
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
-                if api_key_secret_name:
-                    try:
-                        api_key = await resolve_provider_api_key(
-                            reference=api_key_secret_name,
-                            managed_by=managed_by,
-                            user_context=user_context,
-                            secret_manager_factory=self._secret_manager_factory,
-                        )
-                    except Exception as decrypt_error:
-                        logger.warning(
-                            f"Failed to decrypt cached API key for model {request.model_id}, "
-                            f"falling back to DB lookup: {decrypt_error}",
-                            exc_info=True,
-                        )
-                        provider_type = None
 
             if provider_type is None:
                 async with self._model_service_scope(user_context) as model_service:
@@ -203,14 +188,7 @@ class LLMExecutionService:
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     supports_vision = getattr(model_instance.model_spec, "supports_vision", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
-                    if api_key_secret_name:
-                        api_key = await resolve_provider_api_key(
-                            reference=api_key_secret_name,
-                            managed_by=managed_by,
-                            user_context=user_context,
-                            secret_manager_factory=self._secret_manager_factory,
-                        )
-                    else:
+                    if not api_key_secret_name:
                         logger.warning(f"No API key found for model instance {model_instance.id}")
                 del model_instance, model_service
 
@@ -222,19 +200,6 @@ class LLMExecutionService:
                     "127.0.0.1", self._local_host
                 )
 
-            llm_model = LLMModel(
-                provider_type=str(provider_type),
-                model_name=str(model_name),
-                api_key=api_key,
-                endpoint_url=endpoint_url,
-                input_cost_per_token=to_optional_money(input_cost_per_token),
-                output_cost_per_token=to_optional_money(output_cost_per_token),
-                cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
-                cache_creation_input_cost_per_token=to_optional_money(
-                    cache_creation_input_cost_per_token
-                ),
-                endpoint_policy=endpoint_policy_for(managed_by),
-            )
             llm_request = LLMRequest(
                 messages=await _with_tool_images(
                     request,
@@ -250,13 +215,13 @@ class LLMExecutionService:
                 ),
             )
 
-            # On the platform's credentials billing holds what the call can cost at
-            # most: its prompt and every output token it may produce.
-            platform_funded = managed_by == MANAGED_BY_PLATFORM
-            hold = await hold_model_call(
+            # Every call is funded before its credential is read: on the platform's
+            # credentials billing holds what it can cost at most, its prompt and every
+            # output token it may produce.
+            funding = await hold_model_call(
                 workspace_id=str(user_context.workspace_id),
                 model_instance_id=str(model_uuid),
-                platform_funded=platform_funded,
+                managed_by=managed_by,
                 vendor_cost_estimate=estimate_vendor_cost(
                     llm_request.messages,
                     llm_request.max_tokens,
@@ -266,16 +231,40 @@ class LLMExecutionService:
                 idempotency_key=f"llm:{request.task_id or ''}:{uuid4().hex}",
             )
             try:
+                api_key = (
+                    await resolve_provider_api_key(
+                        reference=api_key_secret_name,
+                        managed_by=managed_by,
+                        funding=funding,
+                        user_context=user_context,
+                        secret_manager_factory=self._secret_manager_factory,
+                    )
+                    if api_key_secret_name
+                    else None
+                )
+                llm_model = LLMModel(
+                    provider_type=str(provider_type),
+                    model_name=str(model_name),
+                    api_key=api_key,
+                    endpoint_url=endpoint_url,
+                    input_cost_per_token=to_optional_money(input_cost_per_token),
+                    output_cost_per_token=to_optional_money(output_cost_per_token),
+                    cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
+                    cache_creation_input_cost_per_token=to_optional_money(
+                        cache_creation_input_cost_per_token
+                    ),
+                    endpoint_policy=endpoint_policy_for(managed_by),
+                )
                 return await self._call(
                     llm_model,
                     llm_request,
                     model_uuid=model_uuid,
                     managed_by=managed_by,
-                    hold=hold,
+                    funding=funding,
                     on_chunk=on_chunk,
                 )
             except BaseException:
-                await release_model_hold(hold, "the model call did not complete")
+                await release_model_hold(funding, "the model call did not complete")
                 raise
         except Exception as error:
             if on_error is not None:
@@ -292,7 +281,7 @@ class LLMExecutionService:
         *,
         model_uuid: UUID,
         managed_by: str | None,
-        hold: Any,
+        funding: ModelFunding,
         on_chunk: ChunkPublisher | None,
     ) -> LLMCallResult:
         """Make the call and write down what it cost, as billing says it."""
@@ -361,12 +350,7 @@ class LLMExecutionService:
         # What the provider charged (USD) becomes the line's amount as billing
         # says it. Events, task totals and budget enforcement carry it from here.
         provider_cost_usd = to_money(final_cost)
-        charge = await charge_model_call(
-            model_instance_id=str(model_uuid),
-            platform_funded=managed_by == MANAGED_BY_PLATFORM,
-            vendor_cost=provider_cost_usd,
-            hold=hold,
-        )
+        charge = await charge_model_call(funding=funding, vendor_cost=provider_cost_usd)
         usage = LLMUsage(
             prompt_tokens=final_usage.prompt_tokens,
             completion_tokens=final_usage.completion_tokens,

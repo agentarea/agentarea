@@ -258,3 +258,72 @@ def test_a_tool_whose_model_cost_is_unknown_is_an_estimate_line_marked_unknown()
     assert (line.category, line.source) == (CostCategory.MODEL, CostSource.TOOL_REPORTED)
     assert (line.amount, line.estimate) == (Decimal("0"), True)
     assert line.evidence["cost_unknown"] is True
+
+
+def _model_billing(**overrides):
+    return {
+        "amount": "2.85",
+        "currency": "RUB",
+        "vendor_cost": "0.02",
+        "vendor_currency": "USD",
+        "estimate": True,
+        "settle": "capture",
+        "hold_id": "hold-1",
+        "cost_unknown": False,
+        "payer": "platform",
+        "model_instance_id": "model-7",
+        **overrides,
+    }
+
+
+def test_a_model_a_tool_ran_on_the_platforms_key_is_the_models_line_with_its_hold():
+    """Settlement captures a model hold by its instance, so the line is the model's."""
+    event = _event(
+        "tool.result",
+        tool_name="generate_image",
+        tool_call_id="call-9",
+        server_instance_id="srv-1",
+        model_billing=_model_billing(),
+    )
+
+    [line] = _lines(event, currency="EUR")
+
+    assert (line.category, line.source) == (CostCategory.MODEL, CostSource.TOOL_REPORTED)
+    assert (line.subject_type, line.subject_id) == (CostSubjectType.MODEL_INSTANCE, "model-7")
+    assert (line.subject_name, line.call_ref) == ("generate_image", "call-9")
+    assert (line.amount, line.currency, line.estimate) == (Decimal("2.85"), "RUB", True)
+    assert (line.vendor_cost, line.vendor_currency) == (Decimal("0.02"), "USD")
+    assert line.payer == Payer.PLATFORM
+    assert (line.evidence["hold_id"], line.evidence["settle"]) == ("hold-1", "capture")
+    assert "cost_unknown" not in line.evidence
+
+
+def test_a_held_tool_model_of_unknown_cost_is_its_held_amount_to_capture():
+    event = _event(
+        "tool.result",
+        tool_name="generate_video",
+        tool_call_id="call-10",
+        model_billing=_model_billing(amount="19.00", vendor_cost="0.20", cost_unknown=True),
+    )
+
+    [line] = _lines(event)
+
+    assert (line.subject_type, line.subject_id) == (CostSubjectType.MODEL_INSTANCE, "model-7")
+    assert (line.amount, line.currency) == (Decimal("19.00"), "RUB")
+    assert line.vendor_cost == Decimal("0.20")
+    assert line.payer == Payer.PLATFORM
+    assert line.evidence["cost_unknown"] is True
+    assert (line.evidence["hold_id"], line.evidence["settle"]) == ("hold-1", "capture")
+
+
+def test_a_tool_model_on_the_customers_key_is_paid_by_the_workspace():
+    event = _event(
+        "tool.result",
+        tool_name="generate_image",
+        model_billing=_model_billing(payer="workspace", hold_id=None, settle=None, estimate=False),
+    )
+
+    [line] = _lines(event)
+
+    assert line.payer == Payer.WORKSPACE
+    assert "hold_id" not in line.evidence

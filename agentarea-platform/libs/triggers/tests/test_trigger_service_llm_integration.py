@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import (
     ConditionVerdict,
@@ -432,6 +433,8 @@ class TestTriggerServiceLLMIntegration:
             model_instance_service=AsyncMock(),
             secret_manager=MagicMock(),
             model_service=AsyncMock(),
+            user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
+            record_costs=AsyncMock(),
         )
 
         conditions = {
@@ -458,6 +461,8 @@ class TestTriggerServiceLLMIntegration:
             model_instance_service=AsyncMock(),
             secret_manager=MagicMock(),
             model_service=AsyncMock(),
+            user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
+            record_costs=AsyncMock(),
         )
 
         conditions = {

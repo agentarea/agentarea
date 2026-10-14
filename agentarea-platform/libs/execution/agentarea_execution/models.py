@@ -650,8 +650,11 @@ class MCPToolResult(BaseModel):
     # in the billing currency; it counts toward the run budget and task total the
     # way an LLM call's cost does.
     model_cost: Money = ZERO
-    # The tool ran a platform model and paid for it, but no cost was reported:
-    # nothing joins the budget, and the event and ledger say the cost is unknown.
+    # The rest of that model call's spend line (ModelCharge.as_billing(): currency,
+    # the hold to capture, who pays). None in older histories.
+    model_billing: dict[str, Any] | None = None
+    # The tool ran a model and paid for it, but no cost was reported: a held call
+    # comes to its held amount; otherwise the ledger records it at no amount.
     cost_unknown: bool = False
     # What the call's connector declares it cost, as the tool-call layer metered it
     # and wrote its ledger lines: ``cost`` in the billing currency (wallet payments

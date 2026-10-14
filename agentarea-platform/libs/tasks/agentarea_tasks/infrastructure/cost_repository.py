@@ -226,3 +226,16 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             *self._current_lines_since(since, currency, scope or SpendScope(agent_id=agent_id))
         )
         return Decimal(await self.session.scalar(stmt) or ZERO)
+
+
+async def record_cost_lines(user_context: UserContext, entries: Sequence[CostEntry]) -> int:
+    """Store lines for spend outside a run (a trigger's model call) in a committed session."""
+    from agentarea_common.config import get_database
+
+    session = get_database().async_session_factory()
+    try:
+        recorded = await CostEntryRepository(session, user_context).record(entries)
+        await session.commit()
+        return recorded
+    finally:
+        await session.close()

@@ -2,8 +2,8 @@
 
 Every paid line of a run is already on a persisted event: ``llm.call.completed``
 carries an inference call's priced cost, and ``tool.result`` carries what a tool
-paid an external service from the agent's wallet (``service_cost``) and what a
-platform model it ran cost (``model_cost``). They are mapped onto ledger rows here,
+paid an external service from the agent's wallet (``service_cost``) and the line of
+a model it ran (``model_billing``; ``model_cost`` alone on older events). They are mapped onto ledger rows here,
 in the activity that stores the events, so the ledger covers every path without the
 workflow doing IO. A line is keyed by its event's id and category, which makes a
 retried batch write nothing twice.
@@ -152,7 +152,53 @@ def cost_entries(
         "iteration": data.get("iteration"),
     }
     entries: list[CostEntry] = []
-    if to_money(data.get("model_cost")) > ZERO:
+    raw_model_billing = data.get("model_billing")
+    if isinstance(raw_model_billing, dict):
+        # A model the tool ran (image, video, decision): its line as billing said it,
+        # with the hold the settlement worker captures when the platform paid.
+        model_billing: dict[str, Any] = raw_model_billing
+        # The line is the model's, as an LLM call's is: settlement captures a model
+        # hold by its instance. The tool that ran it stays its name and call.
+        model_subject = {
+            **tool,
+            "subject_type": CostSubjectType.MODEL_INSTANCE,
+            "subject_id": model_billing.get("model_instance_id"),
+        }
+        if (
+            to_money(model_billing.get("amount")) > ZERO
+            or model_billing.get("hold_id")
+            or model_billing.get("cost_unknown")
+        ):
+            entries.append(
+                line(
+                    CostCategory.MODEL,
+                    model_billing.get("amount"),
+                    currency=str(model_billing.get("currency") or billing_currency),
+                    vendor_cost=model_billing.get("vendor_cost"),
+                    vendor_currency=model_billing.get("vendor_currency"),
+                    provider_cost_usd=(
+                        model_billing.get("vendor_cost")
+                        if model_billing.get("vendor_currency") == SERVICE_COST_CURRENCY
+                        and not model_billing.get("cost_unknown")
+                        else None
+                    ),
+                    estimate=bool(model_billing.get("estimate")),
+                    source=CostSource.TOOL_REPORTED,
+                    payer=(
+                        Payer.PLATFORM
+                        if model_billing.get("payer") == "platform"
+                        else Payer.WORKSPACE
+                    ),
+                    evidence={
+                        **tool_evidence,
+                        "hold_id": model_billing.get("hold_id"),
+                        "settle": model_billing.get("settle"),
+                        "cost_unknown": model_billing.get("cost_unknown") or None,
+                    },
+                    **model_subject,
+                )
+            )
+    elif to_money(data.get("model_cost")) > ZERO:
         entries.append(
             line(
                 CostCategory.MODEL,
@@ -163,9 +209,9 @@ def cost_entries(
                 **tool,
             )
         )
-    if data.get("cost_unknown"):
-        # A platform model the tool paid for without saying what it cost: the line
-        # records that it happened, at no amount, so no cap counts a guess.
+    elif data.get("cost_unknown"):
+        # An event from before tool results carried their line: a model the tool
+        # paid for without saying what it cost, recorded at no amount.
         entries.append(
             line(
                 CostCategory.MODEL,

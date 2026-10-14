@@ -9,12 +9,15 @@ Swap via AGENTAREA_TASK_EXECUTOR=direct. No other config needed.
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID, uuid4
 
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.model_charges import (
+    ModelFunding,
     charge_model_call,
     estimate_vendor_cost,
     hold_model_call,
@@ -33,6 +36,47 @@ from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _DirectModel:
+    """The agent's model, its credential not read until a call is funded."""
+
+    user_context: Any
+    provider_type: str
+    model_name: str
+    api_key_reference: str | None
+    managed_by: str | None
+    endpoint_url: str | None
+    input_cost_per_token: Decimal
+    output_cost_per_token: Decimal
+    cached_input_cost_per_token: Decimal | None
+    cache_creation_input_cost_per_token: Decimal | None
+
+    async def connect(self, funding: ModelFunding) -> Any:
+        from agentarea_agents_sdk.models.llm_model import LLMModel
+        from agentarea_common.config.secrets import get_secret_manager_settings
+        from agentarea_llm.application.provider_credentials import resolve_provider_api_key
+        from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+
+        api_key = await resolve_provider_api_key(
+            reference=self.api_key_reference,
+            managed_by=self.managed_by,
+            funding=funding,
+            user_context=self.user_context,
+            secret_manager_factory=SecretManagerFactory(get_secret_manager_settings()),
+        )
+        return LLMModel(
+            provider_type=self.provider_type,
+            model_name=self.model_name,
+            api_key=api_key,
+            endpoint_url=self.endpoint_url,
+            input_cost_per_token=self.input_cost_per_token,
+            output_cost_per_token=self.output_cost_per_token,
+            cached_input_cost_per_token=self.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=self.cache_creation_input_cost_per_token,
+            endpoint_policy=endpoint_policy_for(self.managed_by),
+        )
 
 
 class DirectTaskManager(BaseTaskManager):
@@ -95,12 +139,13 @@ class DirectTaskManager(BaseTaskManager):
 
             # Resolve agent config from DB — same chain as build_agent_config_activity
             (
-                llm,
+                model,
                 instruction,
                 skills_data,
                 model_instance_id,
-                platform_funded,
+                managed_by,
             ) = await self._resolve_agent(task)
+            platform_funded = managed_by == MANAGED_BY_PLATFORM
 
             # Run agent loop
             from agentarea_agents_sdk.models.llm_model import LLMRequest
@@ -157,23 +202,20 @@ class DirectTaskManager(BaseTaskManager):
             for iteration in range(1, max_iterations + 1):
                 logger.info(f"DirectTaskManager: iteration {iteration}")
 
-                hold = await hold_model_call(
+                funding = await hold_model_call(
                     workspace_id=task.workspace_id,
                     model_instance_id=model_instance_id,
-                    platform_funded=platform_funded,
-                    vendor_cost_estimate=(
-                        estimate_vendor_cost(
-                            messages,
-                            max_tokens_per_call,
-                            llm.input_cost_per_token,
-                            llm.output_cost_per_token,
-                        )
-                        if platform_funded
-                        else ZERO
+                    managed_by=managed_by,
+                    vendor_cost_estimate=estimate_vendor_cost(
+                        messages,
+                        max_tokens_per_call,
+                        model.input_cost_per_token,
+                        model.output_cost_per_token,
                     ),
                     idempotency_key=f"llm:{task.id}:{iteration}:{uuid4().hex}",
                 )
                 try:
+                    llm = await model.connect(funding)
                     response = await llm.complete(
                         LLMRequest(
                             messages=messages,
@@ -188,20 +230,17 @@ class DirectTaskManager(BaseTaskManager):
                             "enforced"
                         )
                 except BaseException:
-                    await release_model_hold(hold, "the model call did not complete")
+                    await release_model_hold(funding, "the model call did not complete")
                     raise
                 charge = await charge_model_call(
-                    model_instance_id=model_instance_id,
-                    platform_funded=platform_funded,
-                    vendor_cost=to_money(response.cost),
-                    hold=hold,
+                    funding=funding, vendor_cost=to_money(response.cost)
                 )
                 tokens_used += response.usage.total_tokens
                 if tokens_used > max_tokens_total:
                     raise RuntimeError(f"token budget exceeded: {tokens_used}/{max_tokens_total}")
                 call_cost = charge.amount
                 cost_used += call_cost
-                if call_cost > ZERO:
+                if call_cost > ZERO or charge.hold_id:
                     # No workflow events here, so the ledger line is written directly.
                     await self.task_repository.record_costs(
                         [
@@ -368,10 +407,9 @@ class DirectTaskManager(BaseTaskManager):
     async def _resolve_agent(self, task: AgentTask):
         """Resolve agent config from DB — same chain as build_agent_config_activity.
 
-        Returns (LLMModel, instruction, skills_data, model_instance_id, platform_funded);
-        the last two are what customer pricing needs to price each call.
+        Returns (model, instruction, skills_data, model_instance_id, managed_by); the
+        model reads its credential only for a call ``hold_model_call`` funded.
         """
-        from agentarea_agents_sdk.models.llm_model import LLMModel
         from agentarea_common.auth.context import UserContext
 
         # Get services via DI container
@@ -405,7 +443,7 @@ class DirectTaskManager(BaseTaskManager):
                     }
                 )
 
-        # Resolve model instance → provider config → API key
+        # Resolve model instance → provider config; the credential is read per call
         model_instance_service, _ = await cast(Any, container).get_model_instance_service(
             user_context
         )
@@ -415,30 +453,26 @@ class DirectTaskManager(BaseTaskManager):
 
         provider_type = model_instance.provider_config.provider_spec.provider_type
         model_name = model_instance.model_spec.model_name
-
-        # Get API key from secret manager
-        secret_manager = await cast(Any, container).get_secret_manager(task.workspace_id)
-        api_key_secret = model_instance.provider_config.api_key_secret_name
-        api_key = await secret_manager.get_secret(api_key_secret) if api_key_secret else ""
-
-        endpoint_url = (
-            model_instance.provider_config.endpoint_url or model_instance.model_spec.endpoint_url
-        )
-        input_cost_per_token = model_instance.model_spec.input_cost_per_token
-        output_cost_per_token = model_instance.model_spec.output_cost_per_token
-        if input_cost_per_token is None or output_cost_per_token is None:
+        if model_instance.model_spec.input_cost_per_token is None or (
+            model_instance.model_spec.output_cost_per_token is None
+        ):
             raise ValueError("model pricing is not configured; run budget cannot be enforced")
-
-        llm = LLMModel(
+        model = _DirectModel(
+            user_context=user_context,
             provider_type=provider_type,
             model_name=model_name,
-            api_key=api_key,
-            endpoint_url=endpoint_url,
-            input_cost_per_token=input_cost_per_token,
-            output_cost_per_token=output_cost_per_token,
+            api_key_reference=model_instance.provider_config.api_key,
+            managed_by=model_instance.provider_config.managed_by,
+            endpoint_url=(
+                model_instance.provider_config.endpoint_url
+                or model_instance.model_spec.endpoint_url
+            ),
+            input_cost_per_token=model_instance.model_spec.input_cost_per_token,
+            output_cost_per_token=model_instance.model_spec.output_cost_per_token,
             cached_input_cost_per_token=model_instance.model_spec.cached_input_cost_per_token,
-            cache_creation_input_cost_per_token=model_instance.model_spec.cache_creation_input_cost_per_token,
-            endpoint_policy=endpoint_policy_for(model_instance.provider_config.managed_by),
+            cache_creation_input_cost_per_token=(
+                model_instance.model_spec.cache_creation_input_cost_per_token
+            ),
         )
 
         logger.info(
@@ -446,8 +480,13 @@ class DirectTaskManager(BaseTaskManager):
         )
 
         await session.close()
-        platform_funded = model_instance.provider_config.managed_by == MANAGED_BY_PLATFORM
-        return llm, instruction, skills_data, str(model_instance.id), platform_funded
+        return (
+            model,
+            instruction,
+            skills_data,
+            str(model_instance.id),
+            model_instance.provider_config.managed_by,
+        )
 
     # --- BaseTaskManager interface ---
 

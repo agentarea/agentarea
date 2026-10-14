@@ -6,6 +6,7 @@ used across the AgentArea API endpoints.
 
 import logging
 from datetime import datetime
+from functools import partial
 from typing import Annotated, Final
 
 from agentarea_agents.application.agent_service import AgentService
@@ -422,6 +423,7 @@ async def get_trigger_service(
             from agentarea_common.config.secrets import get_secret_manager_settings
             from agentarea_llm.application.model_service import build_model_service
             from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+            from agentarea_tasks.infrastructure.cost_repository import record_cost_lines
 
             llm_condition_evaluator = LLMConditionEvaluator(
                 model_instance_service=model_instance_service,
@@ -431,6 +433,8 @@ async def get_trigger_service(
                     user_context=repository_factory.user_context,
                     secret_manager_factory=SecretManagerFactory(get_secret_manager_settings()),
                 ),
+                user_context=repository_factory.user_context,
+                record_costs=partial(record_cost_lines, repository_factory.user_context),
             )
         except Exception as e:
             logger.warning(f"LLM condition evaluator not available: {e}", exc_info=True)

@@ -185,6 +185,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                 {"model_cost": serialize_money(model_cost)} if model_cost > ZERO else {}
             )
             # Absent in older histories, like model_cost.
+            if result_dict.get("model_billing"):
+                priced_cost_fields["model_billing"] = result_dict["model_billing"]
             if result_dict.get("cost_unknown"):
                 priced_cost_fields["cost_unknown"] = True
             paid_call_fields: dict[str, Any] = {}

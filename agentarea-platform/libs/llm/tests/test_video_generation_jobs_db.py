@@ -124,6 +124,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             provider_job_id="gen-vid-2-abcdefghijklmnopqrst",
             prompt="waves",
             status="in_progress",
+            funding={"model_instance_id": str(video_instance), "platform_funded": True, "hold_id": "hold-1"},
         )
 
     def record(repo, call_ref):
@@ -132,6 +133,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             "media/x.mp4",
             cost_usd=Decimal("1.25"),
             billed_cost=Decimal("125"),
+            billing={"amount": "125", "currency": "RUB", "hold_id": "hold-1", "settle": "capture"},
             call_ref=call_ref,
         )
 
@@ -152,6 +154,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             Decimal("125"),
         )
         assert saved.billed_call_ref == "t:call-1"
+        assert saved.funding["hold_id"] == saved.billing["hold_id"] == "hold-1"
 
 
 async def test_instances_are_listed_by_their_model_kind(sessions, video_instance):

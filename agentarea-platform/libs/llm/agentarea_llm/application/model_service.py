@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from dataclasses import fields
 from typing import Any, Protocol
 from uuid import UUID
 
 import httpx
 from agentarea_common.auth.context import UserContext
+from agentarea_common.model_charges import ModelFunding
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.url_safety import endpoint_policy_for, safe_async_client
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
@@ -19,12 +21,14 @@ from agentarea_llm.infrastructure.model_clients import (
     DecisionModel,
     ImageModel,
     ModelEndpoint,
+    ModelTarget,
     VideoModel,
 )
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
-# (secret reference, managed_by) -> the credential, read from the workspace that owns it.
-ApiKeyResolver = Callable[[str | None, str | None], Awaitable[str | None]]
+# (secret reference, managed_by, funding) -> the credential, read from the workspace
+# that owns it; the platform's only for a funded call.
+ApiKeyResolver = Callable[[str | None, str | None, ModelFunding | None], Awaitable[str | None]]
 EndpointHttpClientFactory = Callable[[ModelEndpoint], httpx.AsyncClient]
 
 _HTTP_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
@@ -64,7 +68,11 @@ class ModelService:
         self._resolve_api_key = api_key_resolver
         self._http_client_factory = http_client_factory
 
-    async def resolve(self, instance_id: UUID | str, kind: ModelKind) -> ModelEndpoint:
+    async def describe(self, instance_id: UUID | str, kind: ModelKind) -> ModelTarget:
+        """The instance a call of ``kind`` would run on, without its credential.
+
+        A call is funded from this (``hold_model_call``), and only then connected.
+        """
         instance_uuid = instance_id if isinstance(instance_id, UUID) else UUID(str(instance_id))
         instance: ModelInstance | None = await self._instances.get_with_relations(instance_uuid)
         if instance is None:
@@ -82,26 +90,46 @@ class ModelService:
                 f"Model instance {instance_uuid} is a {actual} model; a {kind.value} model is required"
             )
         config = instance.provider_config
-        return ModelEndpoint(
+        spec = instance.model_spec
+        return ModelTarget(
             instance_id=str(instance_uuid),
             provider_type=config.provider_spec.provider_type,
-            model_name=instance.model_spec.model_name,
-            api_key=await self._resolve_api_key(config.api_key, config.managed_by),
+            model_name=spec.model_name,
             endpoint_url=config.endpoint_url,
             managed_by=config.managed_by,
-            input_cost_per_token=instance.model_spec.input_cost_per_token,
-            output_cost_per_token=instance.model_spec.output_cost_per_token,
+            api_key_reference=config.api_key,
+            input_cost_per_token=spec.input_cost_per_token,
+            output_cost_per_token=spec.output_cost_per_token,
+            max_output_tokens=getattr(spec, "max_output_tokens", None),
+            output_cost_per_image=getattr(spec, "output_cost_per_image", None),
+            output_cost_per_video_per_second=getattr(
+                spec, "output_cost_per_video_per_second", None
+            ),
         )
 
-    async def image_model(self, instance_id: UUID | str) -> ImageModel:
-        return ImageModel(await self.resolve(instance_id, ModelKind.IMAGE))
+    async def connect(self, target: ModelTarget, funding: ModelFunding) -> ModelEndpoint:
+        """The target with its credential, read for the call ``funding`` pays for."""
+        if funding.model_instance_id != target.instance_id:
+            raise ValueError(
+                f"funding for model {funding.model_instance_id} cannot pay a call on "
+                f"{target.instance_id}"
+            )
+        return ModelEndpoint(
+            **{field.name: getattr(target, field.name) for field in fields(ModelTarget)},
+            api_key=await self._resolve_api_key(
+                target.api_key_reference, target.managed_by, funding
+            ),
+        )
 
-    async def video_model(self, instance_id: UUID | str) -> VideoModel:
-        endpoint = await self.resolve(instance_id, ModelKind.VIDEO)
+    async def image_model(self, target: ModelTarget, funding: ModelFunding) -> ImageModel:
+        return ImageModel(await self.connect(target, funding))
+
+    async def video_model(self, target: ModelTarget, funding: ModelFunding) -> VideoModel:
+        endpoint = await self.connect(target, funding)
         return VideoModel(endpoint, http_client_factory=lambda: self._http_client_factory(endpoint))
 
-    async def decision_model(self, instance_id: UUID | str) -> DecisionModel:
-        endpoint = await self.resolve(instance_id, ModelKind.DECISION)
+    async def decision_model(self, target: ModelTarget, funding: ModelFunding) -> DecisionModel:
+        endpoint = await self.connect(target, funding)
         return DecisionModel(
             endpoint, http_client_factory=lambda: self._http_client_factory(endpoint)
         )
@@ -115,10 +143,13 @@ def build_model_service(
 ) -> ModelService:
     """A ModelService reading instances and credentials as ``user_context``'s workspace."""
 
-    async def resolve(reference: str | None, managed_by: str | None) -> str | None:
+    async def resolve(
+        reference: str | None, managed_by: str | None, funding: ModelFunding | None
+    ) -> str | None:
         return await resolve_provider_api_key(
             reference=reference,
             managed_by=managed_by,
+            funding=funding,
             user_context=user_context,
             secret_manager_factory=secret_manager_factory,
         )

@@ -11,6 +11,7 @@ from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.config import get_settings
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.money import Money
 from agentarea_common.utils.types import UtcDatetime
@@ -305,6 +306,14 @@ async def validate_model_instance(
         provider_config = await provider_service.get_provider_config(data.provider_config_id)
         if not provider_config:
             raise HTTPException(status_code=404, detail="Provider config not found")
+
+        if provider_config.managed_by == MANAGED_BY_PLATFORM:
+            # A test is a call with nobody to bill it to: the platform's models are
+            # run only by funded calls (wiki ADR-0038), and the platform tests them.
+            raise HTTPException(
+                status_code=403,
+                detail="Testing is not available for platform-supplied providers.",
+            )
 
         model_spec = await provider_service.get_model_spec(data.model_spec_id)
         if not model_spec:

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -25,6 +26,7 @@ class VideoGenerationJobRepository(WorkspaceScopedRepository[VideoGenerationJob]
         *,
         cost_usd: Decimal | None,
         billed_cost: Decimal | None,
+        billing: dict[str, Any] | None,
         call_ref: str,
     ) -> bool:
         """Record the finished video and which tool call bills it, once.
@@ -45,6 +47,7 @@ class VideoGenerationJobRepository(WorkspaceScopedRepository[VideoGenerationJob]
                 file_path=file_path,
                 cost_usd=cost_usd,
                 billed_cost=billed_cost,
+                billing=billing,
                 billed_call_ref=call_ref,
             )
         )

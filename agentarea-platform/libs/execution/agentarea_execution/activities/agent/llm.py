@@ -11,7 +11,6 @@ from uuid import UUID, uuid4
 from agentarea_agents_sdk import GoalProgressEvaluator, LLMModel, LLMRequest
 from agentarea_agents_sdk.skills import SkillContextGuard
 from agentarea_common.auth.context import UserContext
-from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.model_charges import (
     ModelCallRefusedError,
     charge_model_call,
@@ -291,7 +290,7 @@ def make_llm_activities(
             provider_type = None
             model_name = None
             endpoint_url = None
-            api_key = None
+            api_key_secret_name: str | None = None
             managed_by: str | None = None
             max_output_tokens = None
             input_cost_per_token = None
@@ -313,21 +312,6 @@ def make_llm_activities(
                 )
                 managed_by = cached.get("managed_by")
                 api_key_secret_name = cached.get("api_key_secret")
-                if api_key_secret_name:
-                    try:
-                        api_key = await llm_execution_service.resolve_provider_api_key(
-                            reference=api_key_secret_name,
-                            managed_by=managed_by,
-                            user_context=user_context,
-                            secret_manager_factory=dependencies.secret_manager_factory,
-                        )
-                    except Exception as decrypt_err:
-                        logger.warning(
-                            f"Failed to decrypt cached API key for model {request.model_id} "
-                            f"in compact_messages, falling back to DB lookup: {decrypt_err}",
-                            exc_info=True,
-                        )
-                        provider_type = None
 
             if provider_type is None:
                 async with ActivityContext(container, user_context) as ctx:
@@ -362,13 +346,6 @@ def make_llm_activities(
 
                     managed_by = getattr(model_instance.provider_config, "managed_by", None)
                     api_key_secret_name = getattr(model_instance.provider_config, "api_key", None)
-                    if api_key_secret_name:
-                        api_key = await llm_execution_service.resolve_provider_api_key(
-                            reference=api_key_secret_name,
-                            managed_by=managed_by,
-                            user_context=user_context,
-                            secret_manager_factory=dependencies.secret_manager_factory,
-                        )
 
             if input_cost_per_token is None or output_cost_per_token is None:
                 raise ValueError(
@@ -380,20 +357,6 @@ def make_llm_activities(
                 endpoint_url = endpoint_url.replace("localhost", local_host).replace(
                     "127.0.0.1", local_host
                 )
-
-            llm_model = LLMModel(
-                provider_type=provider_type,
-                model_name=str(model_name),
-                api_key=api_key,
-                endpoint_url=endpoint_url,
-                input_cost_per_token=to_optional_money(input_cost_per_token),
-                output_cost_per_token=to_optional_money(output_cost_per_token),
-                cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
-                cache_creation_input_cost_per_token=to_optional_money(
-                    cache_creation_input_cost_per_token
-                ),
-                endpoint_policy=endpoint_policy_for(managed_by),
-            )
 
             # Build compaction prompt
             conversation_text = ""
@@ -445,12 +408,11 @@ def make_llm_activities(
             final_usage = None
             final_cost = ZERO
             # Compaction spends against the same run budget as the loop's calls, and
-            # is held and priced by billing the same way.
-            platform_funded = managed_by == MANAGED_BY_PLATFORM
-            hold = await hold_model_call(
+            # is funded, held and priced by billing the same way.
+            funding = await hold_model_call(
                 workspace_id=str(user_context.workspace_id),
                 model_instance_id=str(model_uuid),
-                platform_funded=platform_funded,
+                managed_by=managed_by,
                 vendor_cost_estimate=estimate_vendor_cost(
                     summary_request.messages,
                     summary_request.max_tokens,
@@ -460,6 +422,30 @@ def make_llm_activities(
                 idempotency_key=f"llm:{window.task_id}:compaction:{uuid4().hex}",
             )
             try:
+                api_key = (
+                    await llm_execution_service.resolve_provider_api_key(
+                        reference=api_key_secret_name,
+                        managed_by=managed_by,
+                        funding=funding,
+                        user_context=user_context,
+                        secret_manager_factory=dependencies.secret_manager_factory,
+                    )
+                    if api_key_secret_name
+                    else None
+                )
+                llm_model = LLMModel(
+                    provider_type=provider_type,
+                    model_name=str(model_name),
+                    api_key=api_key,
+                    endpoint_url=endpoint_url,
+                    input_cost_per_token=to_optional_money(input_cost_per_token),
+                    output_cost_per_token=to_optional_money(output_cost_per_token),
+                    cached_input_cost_per_token=to_optional_money(cached_input_cost_per_token),
+                    cache_creation_input_cost_per_token=to_optional_money(
+                        cache_creation_input_cost_per_token
+                    ),
+                    endpoint_policy=endpoint_policy_for(managed_by),
+                )
                 async for chunk in llm_model.ainvoke_stream(summary_request):
                     if chunk.content:
                         complete_content += chunk.content
@@ -473,15 +459,10 @@ def make_llm_activities(
                         "compaction usage accounting unavailable; budget cannot be enforced"
                     )
             except BaseException:
-                await release_model_hold(hold, "the compaction call did not complete")
+                await release_model_hold(funding, "the compaction call did not complete")
                 raise
 
-            charge = await charge_model_call(
-                model_instance_id=str(model_uuid),
-                platform_funded=platform_funded,
-                vendor_cost=final_cost,
-                hold=hold,
-            )
+            charge = await charge_model_call(funding=funding, vendor_cost=final_cost)
             cost = charge.amount
 
             next_seq = end_seq

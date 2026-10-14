@@ -209,6 +209,9 @@ async def test_trailing_metadata_and_cumulative_tools_produce_one_final_result(
                 "estimate": False,
                 "settle": None,
                 "hold_id": None,
+                "cost_unknown": False,
+                "payer": "workspace",
+                "model_instance_id": MODEL_ID,
             },
         },
         "interrupted": False,
@@ -350,28 +353,6 @@ async def test_uncached_model_scope_closes_before_using_provider_config_endpoint
     assert config["model_name"] == "database-model"
 
 
-async def test_cached_secret_failure_falls_back_to_fresh_model_resolution(
-    provider, make_service, model_scope, secret_store, user_context
-):
-    request = _request()
-    reference = "stale-reference"
-    request.resolved_model["api_key_secret"] = reference
-    model_scope.record.provider_config.api_key = "fresh-reference"  # pragma: allowlist secret
-    secret_store.store.get_secret.side_effect = [RuntimeError("stale secret"), "fresh-key"]
-
-    result = await make_service(
-        model_service_scope=model_scope.scope, secret_manager_factory=secret_store.factory
-    ).execute(request, user_context=user_context)
-
-    assert result.content == "hello"
-    assert model_scope.contexts == [user_context]
-    api_key = provider.constructor.call_args.kwargs["api_key"]
-    assert api_key == "fresh-key"  # pragma: allowlist secret
-    assert provider.constructor.call_args.kwargs["model_name"] == "database-model"
-    assert "fresh-key" not in result.model_dump_json()
-    assert secret_store.session.close.await_count == 2
-
-
 async def test_missing_cached_secret_stays_keyless_without_database_fallback(
     provider, make_service, secret_store, user_context
 ):
@@ -504,6 +485,9 @@ async def test_cancellation_closes_iterator_and_next_call_has_no_partial_state(
                     "estimate": False,
                     "settle": None,
                     "hold_id": None,
+                    "cost_unknown": False,
+                    "payer": "workspace",
+                    "model_instance_id": MODEL_ID,
                 },
             },
             "interrupted": False,
@@ -677,6 +661,75 @@ async def test_billing_unable_to_price_keeps_the_hold_on_the_line(
 
     assert (result.cost, result.currency) == (to_money("19.00"), "RUB")
     assert result.usage.billing["settle"] == "capture"
+
+
+async def test_a_platform_credential_is_read_only_after_billing_holds_the_call(
+    billing, provider, make_service, secret_store, user_context
+):
+    order = []
+    authorize = billing.authorize
+
+    async def recorded_authorize(**request):
+        order.append("hold")
+        return await authorize(**request)
+
+    async def read_secret(name):
+        order.append("credential")
+        return "platform-key"
+
+    billing.authorize = recorded_authorize
+    secret_store.store.get_secret.side_effect = read_secret
+    request = _request()
+    request.resolved_model.update(managed_by="platform", api_key_secret="platform-openai")
+
+    result = await make_service(secret_manager_factory=secret_store.factory).execute(
+        request, user_context=user_context
+    )
+
+    assert order == ["hold", "credential"]
+    assert provider.constructor.call_args.kwargs["api_key"] == "platform-key"
+    assert result.usage.billing["payer"] == "platform"
+
+
+async def test_a_refused_hold_never_reads_the_platform_credential(
+    billing, provider, make_service, secret_store, user_context
+):
+    from agentarea_common.model_charges import ModelCallRefusedError
+
+    billing.allowed = False
+    request = _request()
+    request.resolved_model.update(managed_by="platform", api_key_secret="platform-openai")
+
+    with pytest.raises(ModelCallRefusedError, match="no_credits"):
+        await make_service(secret_manager_factory=secret_store.factory).execute(
+            request, user_context=user_context
+        )
+
+    secret_store.factory.create.assert_not_called()
+    secret_store.store.get_secret.assert_not_awaited()
+    provider.constructor.assert_not_called()
+
+
+async def test_a_credential_that_cannot_be_read_voids_the_hold_and_fails_the_call(
+    billing, provider, make_service, model_scope, secret_store, user_context
+):
+    """No second lookup: a held call whose key cannot be read does not run."""
+    original = RuntimeError("secret cannot be decrypted")
+    secret_store.store.get_secret.side_effect = original
+    request = _request()
+    request.resolved_model.update(managed_by="platform", api_key_secret="platform-openai")
+
+    with pytest.raises(RuntimeError) as raised:
+        await make_service(
+            model_service_scope=model_scope.scope, secret_manager_factory=secret_store.factory
+        ).execute(request, user_context=user_context)
+
+    assert raised.value is original
+    assert billing.voids == ["hold-1"]
+    assert model_scope.contexts == []
+    secret_store.store.get_secret.assert_awaited_once_with("platform-openai")
+    secret_store.session.close.assert_awaited_once()
+    provider.constructor.assert_not_called()
 
 
 @pytest.fixture

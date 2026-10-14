@@ -1,8 +1,9 @@
 """Image and video generation toolset.
 
 Generated media is written to the task's live workspace (the sandbox filesystem
-the shell and file tools see) and reported through ``artifact_paths``; its cost,
-already converted to the billing currency, comes back as ``model_cost``. The models are the workspace's
+the shell and file tools see) and reported through ``artifact_paths``; its cost
+comes back as ``model_cost`` with the rest of its spend line (currency, hold, payer)
+as ``model_billing``. The models are the workspace's
 model instances named in the toolset settings (``image_model_id``,
 ``video_model_id``); the platform resolves them into ``backend``.
 
@@ -37,8 +38,10 @@ class MediaFile(Protocol):
 
 
 class BilledFile(MediaFile, Protocol):
-    # None, with cost_unknown, when the provider was paid but reported no cost.
-    cost: Decimal | None
+    cost: Decimal
+    # The spend line the generation is: its currency, its hold, who pays, and
+    # cost_unknown when the provider was paid but reported no cost.
+    billing: dict[str, Any]
     cost_unknown: bool
 
 
@@ -54,6 +57,7 @@ class VideoJobCheck(Protocol):
     video: MediaFile | None
     cost_usd: Decimal | None
     cost: Decimal | None
+    billing: dict[str, Any] | None
     file_path: str | None
     cost_unknown: bool
 
@@ -73,7 +77,12 @@ class MediaBackend(Protocol):
     async def check_video(self, job_id: str) -> VideoJobCheck: ...
 
     async def record_video_saved(
-        self, job_id: str, file_path: str, cost_usd: Decimal | None, cost: Decimal | None
+        self,
+        job_id: str,
+        file_path: str,
+        cost_usd: Decimal | None,
+        cost: Decimal | None,
+        billing: dict[str, Any] | None,
     ) -> bool: ...
 
 
@@ -139,9 +148,11 @@ class MediaToolset(Toolset):
         ``size`` is an optional ``WIDTHxHEIGHT`` hint such as ``1024x1536``.
         """
         image = await self.backend.generate_image(prompt, size=size)
-        cost_fields: dict[str, Any] = (
-            {"cost_unknown": True} if image.cost_unknown else {"model_cost": str(image.cost)}
-        )
+        cost_fields: dict[str, Any] = {
+            "model_cost": str(image.cost),
+            "model_billing": image.billing,
+            **({"cost_unknown": True} if image.cost_unknown else {}),
+        }
         try:
             path = await self._save(f"image-{uuid.uuid4().hex[:12]}", image)
         except Exception as error:
@@ -197,6 +208,8 @@ class MediaToolset(Toolset):
             }
             if check.cost is not None:
                 saved["model_cost"] = str(check.cost)
+                if check.billing is not None:
+                    saved["model_billing"] = check.billing
             return saved
         if check.video is None:
             if check.error:
@@ -212,14 +225,21 @@ class MediaToolset(Toolset):
                 "result": json.dumps({"job_id": job_id, "status": check.status}),
             }
 
-        if not check.cost_unknown and (check.cost_usd is None or check.cost is None):
-            raise RuntimeError("the video model reported no cost")
+        if check.cost is None or check.billing is None:
+            raise RuntimeError("the finished video carries no spend line")
         path = await self._save(f"video-{job_id}", check.video)
-        billed = await self.backend.record_video_saved(job_id, path, check.cost_usd, check.cost)
-        cost_fields = (
-            {"cost_unknown": True}
-            if check.cost_unknown
-            else {"model_cost": str(check.cost) if billed else "0"}
+        billed = await self.backend.record_video_saved(
+            job_id, path, check.cost_usd, check.cost, check.billing
+        )
+        # Another call already reported this generation's line.
+        cost_fields: dict[str, Any] = (
+            {
+                "model_cost": str(check.cost),
+                "model_billing": check.billing,
+                **({"cost_unknown": True} if check.cost_unknown else {}),
+            }
+            if billed
+            else {}
         )
         return {
             "success": True,

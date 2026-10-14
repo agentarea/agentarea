@@ -13,6 +13,10 @@ It never prices a call itself:
 - On the customer's own credentials the amount is the vendor cost, converted by
   billing when the deployment currency is not USD; without billing it stays in USD,
   not covered by caps in another currency.
+
+Every model call starts with ``hold_model_call``, whatever its surface (a run, a
+trigger condition, a media tool): its ``ModelFunding`` is what the platform's
+credential is read with, so a call on the platform's key cannot run unheld.
 """
 
 import json
@@ -21,6 +25,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from .constants import MANAGED_BY_PLATFORM
 from .extensions import tool_billing
 from .money import Money, to_money
 
@@ -68,6 +73,69 @@ class ModelCallRefusedError(Exception):
 
 
 @dataclass(frozen=True)
+class ModelFunding:
+    """Who pays one model call, settled before its credential is read.
+
+    Only ``hold_model_call`` makes one (or ``restore`` brings back one it made, for
+    a call that finishes later, like a video job). ``hold_id`` is set when billing
+    holds the call on the platform's credentials; ``held_amount`` is then what the
+    line comes to if the call's actual cost is never known.
+    """
+
+    model_instance_id: str
+    platform_funded: bool
+    hold_id: str | None = None
+    held_amount: Money | None = None
+    held_currency: str | None = None
+    vendor_cost_estimate: Money | None = None
+
+    def stored(self) -> dict[str, Any]:
+        """What a row keeps to finish the call later with ``restore``."""
+        return {
+            "model_instance_id": self.model_instance_id,
+            "platform_funded": self.platform_funded,
+            "hold_id": self.hold_id,
+            "held_amount": None if self.held_amount is None else str(self.held_amount),
+            "held_currency": self.held_currency,
+            "vendor_cost_estimate": (
+                None if self.vendor_cost_estimate is None else str(self.vendor_cost_estimate)
+            ),
+        }
+
+    @classmethod
+    def restore(cls, stored: dict[str, Any]) -> "ModelFunding":
+        return cls(
+            model_instance_id=str(stored["model_instance_id"]),
+            platform_funded=bool(stored["platform_funded"]),
+            hold_id=stored.get("hold_id"),
+            held_amount=(
+                None if stored.get("held_amount") is None else to_money(stored["held_amount"])
+            ),
+            held_currency=stored.get("held_currency"),
+            vendor_cost_estimate=(
+                None
+                if stored.get("vendor_cost_estimate") is None
+                else to_money(stored["vendor_cost_estimate"])
+            ),
+        )
+
+
+class UnfundedPlatformCallError(RuntimeError):
+    """The platform's credential was asked for without a funding for the call."""
+
+
+def require_funding(funding: "ModelFunding | None", managed_by: str | None) -> None:
+    """Refuse the platform's credential to a call ``hold_model_call`` did not fund."""
+    if managed_by != MANAGED_BY_PLATFORM:
+        return
+    if funding is None or not funding.platform_funded:
+        raise UnfundedPlatformCallError(
+            "a call on the platform's credentials must be held by billing before its "
+            "credential is read"
+        )
+
+
+@dataclass(frozen=True)
 class ModelCharge:
     """A model call's spend line: its amount and how it is still to be settled."""
 
@@ -78,12 +146,21 @@ class ModelCharge:
     estimate: bool = False
     settle: str | None = None
     hold_id: str | None = None
+    # The provider was paid but said nothing of what for: on a hold the line is the
+    # held amount; otherwise it records the call at no amount.
+    cost_unknown: bool = False
+    platform_funded: bool = False
+    model_instance_id: str | None = None
 
     def evidence(self) -> dict[str, Any]:
         """What the ledger line keeps for its settlement: the hold and what is pending."""
         return {
             key: value
-            for key, value in {"hold_id": self.hold_id, "settle": self.settle}.items()
+            for key, value in {
+                "hold_id": self.hold_id,
+                "settle": self.settle,
+                "cost_unknown": self.cost_unknown or None,
+            }.items()
             if value is not None
         }
 
@@ -97,6 +174,9 @@ class ModelCharge:
             "estimate": self.estimate,
             "settle": self.settle,
             "hold_id": self.hold_id,
+            "cost_unknown": self.cost_unknown,
+            "payer": "platform" if self.platform_funded else "workspace",
+            "model_instance_id": self.model_instance_id,
         }
 
 
@@ -104,21 +184,32 @@ async def hold_model_call(
     *,
     workspace_id: str,
     model_instance_id: str,
-    platform_funded: bool,
-    vendor_cost_estimate: Decimal,
+    managed_by: str | None,
+    vendor_cost_estimate: Decimal | None,
     idempotency_key: str,
-) -> Any | None:
-    """Billing's hold for a call on the platform's credentials, or None when none is needed.
+) -> ModelFunding:
+    """Fund one model call before it runs: billing's hold when the platform pays.
 
+    ``vendor_cost_estimate`` is the most the call can cost in USD; None when the model
+    declares no price to estimate it by, which billing cannot hold against.
     Raises ``ModelCallRefusedError`` when billing refuses or cannot answer.
     """
+    platform_funded = managed_by == MANAGED_BY_PLATFORM
+    funding = ModelFunding(model_instance_id=model_instance_id, platform_funded=platform_funded)
     if not platform_funded:
-        return None
+        return funding
     billing, failure = tool_billing.usable_tool_billing()
     if failure is not None:
         raise ModelCallRefusedError("billing_unavailable", failure)
     if billing is None:
-        return None
+        return funding
+    if vendor_cost_estimate is None:
+        raise ModelCallRefusedError(
+            "model_unpriced",
+            f"model {model_instance_id} declares no price to hold a call on the "
+            "platform's credentials against",
+        )
+    estimate = to_money(vendor_cost_estimate)
     try:
         hold = await tool_billing.billing_call(
             "authorize",
@@ -126,7 +217,7 @@ async def hold_model_call(
                 workspace_id=workspace_id,
                 connector=MODEL_CONNECTOR,
                 tool=model_instance_id,
-                vendor_cost=vendor_cost_estimate,
+                vendor_cost=estimate,
                 vendor_currency=PROVIDER_CURRENCY,
                 quantity=Decimal(1),
                 unit="call",
@@ -141,35 +232,56 @@ async def hold_model_call(
         ) from error
     if not hold.allowed:
         raise ModelCallRefusedError(str(hold.code), str(hold.reason))
-    return hold
+    return ModelFunding(
+        model_instance_id=model_instance_id,
+        platform_funded=True,
+        hold_id=str(hold.hold_id),
+        held_amount=to_money(hold.amount),
+        held_currency=str(hold.currency),
+        vendor_cost_estimate=estimate,
+    )
 
 
-async def release_model_hold(hold: Any, why: str) -> None:
-    """Void a hold whose call did not run to an answer; a failure leaves it to its TTL."""
-    if hold is None:
+async def release_model_hold(funding: ModelFunding | None, why: str) -> None:
+    """Void the hold of a call that did not run to an answer; a failure leaves it to its TTL."""
+    if funding is None or funding.hold_id is None:
         return
     billing, _ = tool_billing.usable_tool_billing()
     if billing is None:
-        logger.error("Hold %s (%s) cannot be voided: billing is not usable", hold.hold_id, why)
+        logger.error("Hold %s (%s) cannot be voided: billing is not usable", funding.hold_id, why)
         return
     try:
-        await tool_billing.billing_call("void", billing.void(hold_id=str(hold.hold_id)))
+        await tool_billing.billing_call("void", billing.void(hold_id=funding.hold_id))
     except Exception:
         logger.error(
-            "Hold %s (%s) could not be voided; it expires", hold.hold_id, why, exc_info=True
+            "Hold %s (%s) could not be voided; it expires", funding.hold_id, why, exc_info=True
         )
 
 
-async def charge_model_call(
-    *,
-    model_instance_id: str,
-    platform_funded: bool,
-    vendor_cost: Decimal,
-    hold: Any | None,
-) -> ModelCharge:
-    """The line one finished model call writes, from its vendor cost in USD."""
-    vendor_cost = to_money(vendor_cost)
-    if hold is not None:
+async def charge_model_call(*, funding: ModelFunding, vendor_cost: Decimal | None) -> ModelCharge:
+    """The line one finished model call writes, from its vendor cost in USD.
+
+    ``vendor_cost`` is None when the provider was paid but reported no cost: a held
+    call then comes to its held amount, captured at the estimated vendor cost.
+    """
+    model_instance_id = funding.model_instance_id
+    if funding.hold_id is not None:
+        if vendor_cost is None:
+            logger.error(
+                "Model %s reported no cost; its line is the held amount", model_instance_id
+            )
+            return ModelCharge(
+                model_instance_id=model_instance_id,
+                amount=to_money(funding.held_amount),
+                currency=str(funding.held_currency),
+                vendor_cost=to_money(funding.vendor_cost_estimate),
+                estimate=True,
+                settle=SETTLE_CAPTURE,
+                hold_id=funding.hold_id,
+                cost_unknown=True,
+                platform_funded=True,
+            )
+        vendor_cost = to_money(vendor_cost)
         billing, _ = tool_billing.usable_tool_billing()
         line = tool_billing.QuoteLine(
             payer="platform",
@@ -199,48 +311,48 @@ async def charge_model_call(
         amount, currency = (
             (to_money(quoted), billing.currency())
             if quoted is not None and billing is not None
-            else (to_money(hold.amount), str(hold.currency))
+            else (to_money(funding.held_amount), str(funding.held_currency))
         )
         return ModelCharge(
+            model_instance_id=model_instance_id,
             amount=amount,
             currency=currency,
             vendor_cost=vendor_cost,
             estimate=True,
             settle=SETTLE_CAPTURE,
-            hold_id=str(hold.hold_id),
+            hold_id=funding.hold_id,
+            platform_funded=True,
         )
-    if platform_funded:
+    if vendor_cost is None:
+        # Nobody's money is held: the customer's own key, or the platform's key on a
+        # deployment without billing. The line records the call at no amount.
+        logger.error("Model %s reported no cost; its cost is unknown", model_instance_id)
+        return ModelCharge(
+            model_instance_id=model_instance_id,
+            amount=to_money(0),
+            currency=PROVIDER_CURRENCY,
+            vendor_cost=to_money(0),
+            estimate=True,
+            cost_unknown=True,
+            platform_funded=funding.platform_funded,
+        )
+    vendor_cost = to_money(vendor_cost)
+    if funding.platform_funded:
         billing, failure = tool_billing.usable_tool_billing()
         if failure is not None:
             raise ModelChargeUnavailableError(failure)
-        if billing is None:
-            # The platform's credentials and no billing (a self-hosted shared key):
-            # the vendor cost is what the deployment spends, in USD.
-            return ModelCharge(
-                amount=vendor_cost, currency=PROVIDER_CURRENCY, vendor_cost=vendor_cost
-            )
-        # A call billing held nothing for (a media model, whose cost is known only
-        # afterwards): billing prices it now, or the call fails as unaccounted.
-        line = tool_billing.QuoteLine(
-            payer="platform",
-            connector=MODEL_CONNECTOR,
-            tool=model_instance_id,
-            vendor_cost=vendor_cost,
-            vendor_currency=PROVIDER_CURRENCY,
-            kind=tool_billing.KIND_MODEL,
-        )
-        try:
-            [quote] = await tool_billing.billing_call("quote", billing.quote([line]))
-        except Exception as error:
+        if billing is not None:
             raise ModelChargeUnavailableError(
-                f"billing could not price the call: {error}"
-            ) from error
-        if quote.amount is None:
-            raise ModelChargeUnavailableError(
-                f"billing does not price model {model_instance_id} ({quote.code})"
+                f"model {model_instance_id} ran on the platform's credentials without a hold"
             )
+        # The platform's credentials and no billing (a self-hosted shared key):
+        # the vendor cost is what the deployment spends, in USD.
         return ModelCharge(
-            amount=to_money(quote.amount), currency=billing.currency(), vendor_cost=vendor_cost
+            model_instance_id=model_instance_id,
+            amount=vendor_cost,
+            currency=PROVIDER_CURRENCY,
+            vendor_cost=vendor_cost,
+            platform_funded=True,
         )
     converted = await tool_billing.convert_cost(
         payer="workspace",
@@ -251,6 +363,7 @@ async def charge_model_call(
         kind=tool_billing.KIND_MODEL,
     )
     return ModelCharge(
+        model_instance_id=model_instance_id,
         amount=to_money(converted.amount),
         currency=converted.currency,
         vendor_cost=vendor_cost,

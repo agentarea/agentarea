@@ -9,13 +9,14 @@ import json
 from decimal import Decimal
 
 import pytest
-from litellm.types.utils import Usage
+from litellm.types.utils import ModelResponse, Usage
 
 from agentarea_agents_sdk.models.llm_model import (
     LLMModel,
     LLMProviderHTTPError,
     LLMRequest,
     LLMUsage,
+    provider_reported_cost,
     usage_from_provider,
 )
 
@@ -243,3 +244,45 @@ async def test_a_rejected_call_raises_with_the_providers_status_and_words(monkey
 
     assert raised.value.status_code == 402
     assert raised.value.provider_message == "Insufficient credits"
+
+
+def test_the_cost_the_provider_reports_is_read_as_is():
+    assert provider_reported_cost({"prompt_tokens": 10, "cost": 0.0042}) == Decimal("0.0042")
+    assert provider_reported_cost(
+        Usage(prompt_tokens=10, completion_tokens=1, total_tokens=11, cost=0.5)
+    ) == Decimal("0.5")
+
+
+@pytest.mark.parametrize("cost", [None, True, "n/a", -1, float("nan")])
+def test_no_usable_reported_cost_is_none(cost):
+    assert provider_reported_cost({"prompt_tokens": 10, "cost": cost}) is None
+
+
+def test_a_reported_cost_wins_over_the_declared_prices():
+    """Declared prices are approximate (a provider may charge more at peak hours)."""
+    model = LLMModel(
+        provider_type="openai",
+        model_name="m",
+        input_cost_per_token=Decimal("1.5e-7"),
+        output_cost_per_token=Decimal("6e-7"),
+    )
+    response = model._parse_response(
+        ModelResponse(
+            id="x",
+            choices=[
+                {
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "hi"},
+                    "finish_reason": "stop",
+                }
+            ],
+            usage={
+                "prompt_tokens": 1000,
+                "completion_tokens": 100,
+                "total_tokens": 1100,
+                "cost": 0.00042,
+            },
+        )
+    )
+
+    assert response.cost == Decimal("0.00042")
