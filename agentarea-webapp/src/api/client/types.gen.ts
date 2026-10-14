@@ -1631,13 +1631,21 @@ export type CatalogItemUpdate = {
 /**
  * CatalogToolPrice
  *
- * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ * What one unit of a tool's calls costs; ``tool`` null is the connector's default.
+ *
+ * ``basis`` "price": billing's price on the platform's key, markup included.
+ * "vendor_cost": the vendor's own cost, with no markup. ``unavailable``: billing could
+ * not be asked for its price, so the vendor cost stands in.
  */
 export type CatalogToolPrice = {
   /**
    * Amount
    */
   amount: string;
+  /**
+   * Basis
+   */
+  basis: "price" | "vendor_cost";
   /**
    * Currency
    */
@@ -1646,6 +1654,10 @@ export type CatalogToolPrice = {
    * Tool
    */
   tool: string | null;
+  /**
+   * Unavailable
+   */
+  unavailable?: boolean;
   /**
    * Unit
    */
@@ -3547,6 +3559,12 @@ export type McpServerInstanceResponse = {
    */
   auth_config_id?: string | string | null;
   /**
+   * Cost
+   */
+  cost?: {
+    [key: string]: unknown;
+  } | null;
+  /**
    * Created At
    */
   created_at: string;
@@ -3613,6 +3631,14 @@ export type McpServerInstanceUpdate = {
    * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.
    */
   context_secret?: string | null;
+  /**
+   * Cost
+   *
+   * What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 §2.3). It wins over the connector's declaration. Send null to go back to the connector's.
+   */
+  cost?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Description
    */
@@ -4736,6 +4762,12 @@ export type OpenApiConnectionResponse = {
    */
   base_url: string;
   /**
+   * Cost
+   */
+  cost?: {
+    [key: string]: unknown;
+  } | null;
+  /**
    * Created At
    */
   created_at: string;
@@ -4761,6 +4793,10 @@ export type OpenApiConnectionResponse = {
   last_dispatch?: {
     [key: string]: unknown;
   } | null;
+  /**
+   * Managed By
+   */
+  managed_by?: string | null;
   /**
    * Name
    */
@@ -4803,6 +4839,14 @@ export type OpenApiConnectionUpdate = {
    * Base Url
    */
   base_url?: string | null;
+  /**
+   * Cost
+   *
+   * What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 §2.3). It wins over the connector's declaration. Send null to go back to the connector's.
+   */
+  cost?: {
+    [key: string]: unknown;
+  } | null;
   /**
    * Custom Headers
    *
@@ -7255,6 +7299,10 @@ export type SpendCard = {
    * Cap Usd
    */
   cap_usd: string | null;
+  /**
+   * Mtd Estimate Usd
+   */
+  mtd_estimate_usd?: string;
   /**
    * Mtd Usd
    */

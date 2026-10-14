@@ -479,12 +479,18 @@ export const zCatalogItemUpdate = z.object({
 /**
  * CatalogToolPrice
  *
- * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ * What one unit of a tool's calls costs; ``tool`` null is the connector's default.
+ *
+ * ``basis`` "price": billing's price on the platform's key, markup included.
+ * "vendor_cost": the vendor's own cost, with no markup. ``unavailable``: billing could
+ * not be asked for its price, so the vendor cost stands in.
  */
 export const zCatalogToolPrice = z.object({
   amount: z.string().regex(/^(?!^[-+.]*$)[+-]?0*\d*\.?\d*$/),
+  basis: z.enum(["price", "vendor_cost"]),
   currency: z.string(),
   tool: z.string().nullable(),
+  unavailable: z.boolean().optional().default(false),
   unit: z.string(),
 });
 
@@ -1259,6 +1265,7 @@ export const zMcpServerConnectionCreateRequest = z.object({
  */
 export const zMcpServerInstanceUpdate = z.object({
   context_secret: z.string().min(32).max(512).nullish(),
+  cost: z.record(z.unknown()).nullish(),
   description: z.string().nullish(),
   json_spec: z.record(z.unknown()).optional(),
   name: z.string().min(1).max(255).optional(),
@@ -1319,6 +1326,7 @@ export const zMcpTransport = z.enum(["url", "docker", "command", "bundle"]);
  */
 export const zMcpServerInstanceResponse = z.object({
   auth_config_id: z.union([z.string().uuid(), z.string()]).nullish(),
+  cost: z.record(z.unknown()).nullish(),
   created_at: z.string().datetime(),
   description: z.string().nullable(),
   id: z.string().uuid(),
@@ -2351,12 +2359,14 @@ export const zOpenApiConnectionResponse = z.object({
   auth_config_id: z.string().uuid().nullish(),
   available_tools: z.array(zOpenApiToolResponse),
   base_url: z.string(),
+  cost: z.record(z.unknown()).nullish(),
   created_at: z.string().datetime(),
   custom_headers: z.array(zHeaderOutput).nullish(),
   custom_query_params: z.array(zQueryParamOutput).nullish(),
   description: z.string().nullish(),
   id: z.string().uuid(),
   last_dispatch: z.record(z.unknown()).nullish(),
+  managed_by: z.string().nullish(),
   name: z.string(),
   registry_item_id: z.string().uuid().nullish(),
   spec_url: z.string().nullish(),
@@ -3066,6 +3076,7 @@ export const zSpecPreviewResponse = z.object({
  */
 export const zSpendCard = z.object({
   cap_usd: z.string().nullable(),
+  mtd_estimate_usd: z.string().optional().default("0"),
   mtd_usd: z.string(),
   not_covered: z.array(zCurrencySpend).optional(),
   pct_of_cap: z.number().nullable(),
@@ -3887,6 +3898,7 @@ export const zOpenApiConnectionCreate = z.object({
 export const zOpenApiConnectionUpdate = z.object({
   auth_config_id: z.string().uuid().nullish(),
   base_url: z.string().max(500).nullish(),
+  cost: z.record(z.unknown()).nullish(),
   custom_headers: z.array(zHeaderInput).nullish(),
   custom_query_params: z.array(zQueryParamInput).nullish(),
   description: z.string().nullish(),

@@ -2862,11 +2862,19 @@
         "type": "object"
       },
       "CatalogToolPrice": {
-        "description": "What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.",
+        "description": "What one unit of a tool's calls costs; ``tool`` null is the connector's default.\n\n``basis`` \"price\": billing's price on the platform's key, markup included.\n\"vendor_cost\": the vendor's own cost, with no markup. ``unavailable``: billing could\nnot be asked for its price, so the vendor cost stands in.",
         "properties": {
           "amount": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Amount",
+            "type": "string"
+          },
+          "basis": {
+            "enum": [
+              "price",
+              "vendor_cost"
+            ],
+            "title": "Basis",
             "type": "string"
           },
           "currency": {
@@ -2884,6 +2892,11 @@
             ],
             "title": "Tool"
           },
+          "unavailable": {
+            "default": false,
+            "title": "Unavailable",
+            "type": "boolean"
+          },
           "unit": {
             "title": "Unit",
             "type": "string"
@@ -2893,7 +2906,8 @@
           "tool",
           "amount",
           "currency",
-          "unit"
+          "unit",
+          "basis"
         ],
         "title": "CatalogToolPrice",
         "type": "object"
@@ -6054,6 +6068,18 @@
             ],
             "title": "Auth Config Id"
           },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -6171,6 +6197,19 @@
             ],
             "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.",
             "title": "Context Secret"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 \u00a72.3). It wins over the connector's declaration. Send null to go back to the connector's.",
+            "title": "Cost"
           },
           "description": {
             "anyOf": [
@@ -8263,6 +8302,18 @@
             "title": "Base Url",
             "type": "string"
           },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -8323,6 +8374,17 @@
               }
             ],
             "title": "Last Dispatch"
+          },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
           },
           "name": {
             "title": "Name",
@@ -8415,6 +8477,19 @@
               }
             ],
             "title": "Base Url"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 \u00a72.3). It wins over the connector's declaration. Send null to go back to the connector's.",
+            "title": "Cost"
           },
           "custom_headers": {
             "anyOf": [
@@ -12576,6 +12651,11 @@
               }
             ],
             "title": "Cap Usd"
+          },
+          "mtd_estimate_usd": {
+            "default": "0",
+            "title": "Mtd Estimate Usd",
+            "type": "string"
           },
           "mtd_usd": {
             "title": "Mtd Usd",
