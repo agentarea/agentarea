@@ -305,6 +305,9 @@ The following table lists configurable parameters of the chart and their default
 | eventService.readinessProbe.timeoutSeconds | int | `3` |  |
 | eventService.readinessProbe.failureThreshold | int | `3` |  |
 | eventService.extraEnv | list | `[]` |  |
+| platformNetworkPolicy.enabled | bool | `false` |  |
+| platformNetworkPolicy.blockedEgressCIDRs[0] | string | `"169.254.0.0/16"` |  |
+| platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
 | mcpManager.image.repository | string | `"agentarea/agentarea-mcp-manager"` |  |

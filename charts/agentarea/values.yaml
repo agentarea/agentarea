@@ -646,6 +646,23 @@ eventService:
   # Additional configuration
   extraEnv: []
 
+# Egress restriction for the backend, worker and event-service, which call
+# addresses workspace members set. Off by default: restricting these pods'
+# egress is the operator's job, here or in the cloud network. When enabled, pods
+# in the cluster stay reachable and every other destination is allowed except
+# blockedEgressCIDRs. The default blocks link-local, which holds the cloud
+# metadata endpoint (169.254.169.254). Private ranges are not blocked by default
+# because external dependencies (a managed database, an object store inside the
+# VPC) often live there: block them here and allow those dependencies through
+# extraEgress. With NodeLocal DNSCache (169.254.20.10), narrow the block to
+# 169.254.169.254/32. Requires a CNI that enforces NetworkPolicy.
+platformNetworkPolicy:
+  enabled: false
+  blockedEgressCIDRs:
+    - 169.254.0.0/16
+  # Extra raw NetworkPolicyEgressRule entries appended as-is.
+  extraEgress: []
+
 # MCP Manager Service
 mcpManager:
   enabled: true
