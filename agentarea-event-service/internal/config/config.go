@@ -18,10 +18,13 @@ type Config struct {
 	PollInterval          time.Duration
 	MaxPollers            int
 	Port                  string
+	OTelEnabled           bool
 }
 
+const otelEnabledEnv = "AGENTAREA_OTEL_ENABLED"
+
 // Load reads configuration from environment variables with sensible defaults.
-func Load() *Config {
+func Load() (*Config, error) {
 	workerID := os.Getenv("AGENTAREA_EVENT_WORKER_ID")
 	if workerID == "" {
 		if hostname, err := os.Hostname(); err == nil {
@@ -57,6 +60,15 @@ func Load() *Config {
 		}
 	}
 
+	otelEnabled := false
+	if v := os.Getenv(otelEnabledEnv); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("%s=%q is not a boolean: %w", otelEnabledEnv, v, err)
+		}
+		otelEnabled = parsed
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8002"
@@ -71,7 +83,8 @@ func Load() *Config {
 		PollInterval:          pollInterval,
 		MaxPollers:            maxPollers,
 		Port:                  port,
-	}
+		OTelEnabled:           otelEnabled,
+	}, nil
 }
 
 func databaseURL() string {

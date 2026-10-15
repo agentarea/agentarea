@@ -9,9 +9,12 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/agentarea/event-service/internal/channels"
 	"github.com/agentarea/event-service/internal/claim"
 	"github.com/agentarea/event-service/internal/submit"
+	"github.com/agentarea/event-service/internal/tracing"
 	"github.com/agentarea/event-service/internal/trigger"
 )
 
@@ -241,12 +244,24 @@ func (m *Manager) runPoller(ctx context.Context, t trigger.Trigger, poller chann
 		}
 	}
 
-	RunLoop(ctx, t.ID, func(ctx context.Context) error {
+	RunLoop(ctx, t.ID, func(ctx context.Context) (err error) {
+		ctx, span := tracing.Tracer().Start(ctx, "poll "+t.DataExtractor, trace.WithAttributes(
+			tracing.AttrSourceID.String(t.ID),
+			tracing.AttrSourceTransport.String(t.DataExtractor),
+		))
+		defer func() {
+			if err != nil {
+				tracing.RecordError(span, err)
+			}
+			span.End()
+		}()
+
 		slog.Info("polling", "trigger_id", t.ID, "offset", offset)
 		result, err := poller.Poll(ctx, offset)
 		if err != nil {
 			return err
 		}
+		span.SetAttributes(tracing.AttrItemsFetched.Int(len(result.Events)))
 
 		slog.Info("poll result", "trigger_id", t.ID, "events", len(result.Events), "new_offset", result.NewOffset)
 
@@ -286,6 +301,7 @@ func (m *Manager) runPoller(ctx context.Context, t trigger.Trigger, poller chann
 		state := map[string]any{"offset": offset}
 		if err := trigger.UpdateExtractorState(ctx, m.db, t.ID, state); err != nil {
 			slog.Warn("failed to persist extractor state", "trigger_id", t.ID, "error", err)
+			span.RecordError(err)
 		}
 
 		return nil

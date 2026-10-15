@@ -20,6 +20,7 @@ import (
 	"github.com/agentarea/event-service/internal/config"
 	"github.com/agentarea/event-service/internal/polling"
 	"github.com/agentarea/event-service/internal/submit"
+	"github.com/agentarea/event-service/internal/tracing"
 )
 
 const version = "0.1.1"
@@ -30,7 +31,11 @@ func main() {
 		Level: slog.LevelInfo,
 	})))
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("event-service starting",
 		"version", version,
@@ -40,6 +45,7 @@ func main() {
 		"poll_interval", cfg.PollInterval,
 		"max_pollers", cfg.MaxPollers,
 		"port", cfg.Port,
+		"otel_enabled", cfg.OTelEnabled,
 	)
 
 	if cfg.DatabaseURL == "" {
@@ -57,6 +63,19 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	shutdownTracing, err := tracing.Setup(ctx, cfg.OTelEnabled)
+	if err != nil {
+		slog.Error("failed to set up tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer flushCancel()
+		if err := shutdownTracing(flushCtx); err != nil {
+			slog.Error("tracing shutdown failed", "error", err)
+		}
+	}()
 
 	if err := db.PingContext(ctx); err != nil {
 		slog.Error("failed to ping database", "error", err)

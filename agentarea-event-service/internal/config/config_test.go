@@ -18,8 +18,9 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	t.Setenv("AGENTAREA_EVENT_STREAM", "events.inbound.test")
 	t.Setenv("AGENTAREA_EVENT_TELEGRAM_ENABLED", "true")
 	t.Setenv("PORT", "18002")
+	t.Setenv("AGENTAREA_OTEL_ENABLED", "true")
 
-	cfg := Load()
+	cfg := mustLoad(t)
 
 	if cfg.DatabaseURL != "host='localhost' port='5432' user='agentarea' password='test' dbname='agentarea' sslmode='disable'" { // pragma: allowlist secret
 		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)
@@ -45,6 +46,34 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	if cfg.Port != "18002" {
 		t.Fatalf("Port = %q", cfg.Port)
 	}
+	if !cfg.OTelEnabled {
+		t.Fatal("OTelEnabled = false")
+	}
+}
+
+func TestLoadLeavesTracingOffByDefault(t *testing.T) {
+	t.Setenv("AGENTAREA_OTEL_ENABLED", "")
+
+	if cfg := mustLoad(t); cfg.OTelEnabled {
+		t.Fatal("OTelEnabled = true without AGENTAREA_OTEL_ENABLED")
+	}
+}
+
+func TestLoadRejectsUnparsableOTelEnabled(t *testing.T) {
+	t.Setenv("AGENTAREA_OTEL_ENABLED", "yes please")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load accepted AGENTAREA_OTEL_ENABLED=\"yes please\"")
+	}
+}
+
+func mustLoad(t *testing.T) *Config {
+	t.Helper()
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	return cfg
 }
 
 func TestLoadBuildsEscapedDatabaseConnStringFromComponentEnvs(t *testing.T) {
@@ -55,7 +84,7 @@ func TestLoadBuildsEscapedDatabaseConnStringFromComponentEnvs(t *testing.T) {
 	t.Setenv("AGENTAREA_DB_PASSWORD", "p@ss/with:chars")
 	t.Setenv("AGENTAREA_DB_SSLMODE", "disable")
 
-	cfg := Load()
+	cfg := mustLoad(t)
 
 	if cfg.DatabaseURL != "host='agentarea-postgresql' port='5432' user='agentarea' password='p@ss/with:chars' dbname='agentarea' sslmode='disable'" {
 		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)
@@ -68,7 +97,7 @@ func TestLoadLeavesDatabaseUnsetWithoutCredentials(t *testing.T) {
 	t.Setenv("AGENTAREA_DB_USER", "")
 	t.Setenv("AGENTAREA_DB_PASSWORD", "")
 
-	if cfg := Load(); cfg.DatabaseURL != "" {
+	if cfg := mustLoad(t); cfg.DatabaseURL != "" {
 		t.Fatalf("DatabaseURL = %q, want empty so startup refuses to run", cfg.DatabaseURL)
 	}
 }
@@ -80,7 +109,7 @@ func TestLoadEscapesPostgresConnStringValues(t *testing.T) {
 	t.Setenv("AGENTAREA_DB_USER", "agent'area")
 	t.Setenv("AGENTAREA_DB_PASSWORD", `p\ass'word`)
 
-	cfg := Load()
+	cfg := mustLoad(t)
 
 	if cfg.DatabaseURL != `host='agentarea-postgresql' port='5432' user='agent\'area' password='p\\ass\'word' dbname='agentarea' sslmode='disable'` {
 		t.Fatalf("DatabaseURL = %q", cfg.DatabaseURL)

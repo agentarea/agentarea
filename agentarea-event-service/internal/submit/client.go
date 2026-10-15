@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/agentarea/event-service/internal/broker"
+	"github.com/agentarea/event-service/internal/tracing"
 )
 
 // Event is the normalized event payload to submit. It mirrors channels/telegram.Event
@@ -45,7 +49,25 @@ func NewStreamSubmitter(broker broker.Client, stream string) *StreamSubmitter {
 }
 
 // SubmitEvent appends a trigger event to the inbound stream.
-func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, event Event, channelOrigin map[string]any) error {
+func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, event Event, channelOrigin map[string]any) (err error) {
+	transport, _ := channelOrigin["type"].(string)
+	ctx, span := tracing.Tracer().Start(ctx, "submit "+s.stream,
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			tracing.AttrSourceID.String(triggerID),
+			tracing.AttrSourceTransport.String(transport),
+			attribute.String("messaging.system", "redis"),
+			attribute.String("messaging.destination.name", s.stream),
+			attribute.String("agentarea.event.type", event.Type),
+		),
+	)
+	defer func() {
+		if err != nil {
+			tracing.RecordError(span, err)
+		}
+		span.End()
+	}()
+
 	msg := InboundMessage{
 		TriggerID:     triggerID,
 		Event:         event,
@@ -66,7 +88,7 @@ func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, eve
 		return fmt.Errorf("marshal channel origin: %w", err)
 	}
 
-	_, err = s.broker.Submit(ctx, s.stream, map[string]string{
+	fields := map[string]string{
 		"trigger_id":      triggerID,
 		"event":           string(eventJSON),
 		"channel_origin":  string(originJSON),
@@ -74,8 +96,12 @@ func (s *StreamSubmitter) SubmitEvent(ctx context.Context, triggerID string, eve
 		"received_at":     time.Now().UTC().Format(time.RFC3339Nano),
 		"schema_version":  "1",
 		"inbound_message": string(data),
-	})
-	if err != nil {
+	}
+	if traceparent := tracing.Traceparent(ctx); traceparent != "" {
+		fields[tracing.TraceparentField] = traceparent
+	}
+
+	if _, err = s.broker.Submit(ctx, s.stream, fields); err != nil {
 		return fmt.Errorf("submit inbound stream: %w", err)
 	}
 
