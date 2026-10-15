@@ -2,8 +2,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { AlertTriangle, LayoutTemplate } from "lucide-react";
 import type { AgentPresetResponse } from "@/api/client/types.gen";
+import { ChoiceTile } from "@/components/ChoiceTile";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { cn } from "@/lib/utils";
 
 type PresetPickerProps = {
   /** `null` when the presets could not be loaded. */
@@ -39,32 +39,17 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
     <div className="space-y-2">
       <FormLabel icon={LayoutTemplate}>{t("title")}</FormLabel>
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {options.map((option) => {
-          const isSelected = option.id === selectedId;
-          return (
-            <button
-              key={option.id ?? "empty"}
-              type="button"
-              aria-pressed={isSelected}
-              onClick={() =>
-                onSelect(presets.find((p) => p.id === option.id) ?? null)
-              }
-              className={cn(
-                "rounded-md border px-3 py-2 text-left transition-colors",
-                isSelected
-                  ? "border-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-              )}
-            >
-              <p className="truncate text-sm font-medium">{option.name}</p>
-              {option.description && (
-                <p className="line-clamp-2 text-xs text-muted-foreground">
-                  {option.description}
-                </p>
-              )}
-            </button>
-          );
-        })}
+        {options.map((option) => (
+          <ChoiceTile
+            key={option.id ?? "empty"}
+            title={option.name}
+            description={option.description}
+            selected={option.id === selectedId}
+            onClick={() =>
+              onSelect(presets.find((p) => p.id === option.id) ?? null)
+            }
+          />
+        ))}
       </div>
       {!!selected?.unavailable_skills?.length && (
         <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">

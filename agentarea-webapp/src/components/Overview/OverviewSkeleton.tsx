@@ -1,3 +1,4 @@
+import { StatStrip } from "@/components/Overview/OverviewCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -66,5 +67,24 @@ export function RowSkeleton({
       </div>
       <Skeleton className="h-3 w-12" />
     </div>
+  );
+}
+
+/** The four-up `StatStrip` while its numbers load: label, value, bar, sub. */
+export function StatStripSkeleton() {
+  return (
+    <StatStrip>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="min-w-0 space-y-2.5 border-dashed px-4 py-[13px] [border-color:var(--board-line)] even:border-l [&:nth-child(n+3)]:border-t lg:border-l lg:first:border-l-0 lg:[&:nth-child(n+3)]:border-t-0"
+        >
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-[5px] w-full rounded-[2px]" />
+          <Skeleton className="h-2.5 w-28" />
+        </div>
+      ))}
+    </StatStrip>
   );
 }

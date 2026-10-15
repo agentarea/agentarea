@@ -4,28 +4,29 @@ import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
-import Link from "@/components/WorkspaceLink";
 import SearchInput from "@/components/SearchInput/SearchInput";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
-import { EntityAvatar } from "@/components/ui/entity-avatar";
-import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { MenuSectionLabel } from "@/components/ui/menu-row";
 import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
+import Link from "@/components/WorkspaceLink";
 import {
   useAttachableResources,
   type AttachableResources,
 } from "@/hooks/use-attachable-resources";
+import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
 import { skillDisplay } from "@/lib/skill-display";
+import {
+  PICKER_BARE_EMPTY_STATE,
+  PickerRow,
+  PickerRowsSkeleton,
+} from "./PickerRow";
 import type { TaskResourceRef } from "./TaskResourceAttach";
 
 type Tab = "skills" | "mcps";
@@ -42,13 +43,6 @@ type Row = {
   selected: boolean;
   toggle: () => void;
 };
-
-const SELECTED_TINT = "hsl(var(--primary))";
-
-/** The shared empty state without its card — the sheet is the card here. */
-const BARE_EMPTY_STATE =
-  "border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent";
-
 
 type TaskResourcePanelProps = {
   mcps: TaskResourceRef[];
@@ -161,7 +155,7 @@ export function TaskResourcePanelView({
     <div className="flex h-full flex-col justify-center">
       <EmptyState
         iconsType={iconsType}
-        className={BARE_EMPTY_STATE}
+        className={PICKER_BARE_EMPTY_STATE}
         {...props}
       />
     </div>
@@ -172,7 +166,7 @@ export function TaskResourcePanelView({
 
   let body: ReactNode;
   if (resources.loading) {
-    body = <RowsSkeleton />;
+    body = <PickerRowsSkeleton />;
   } else if (resources.failed.includes(tab)) {
     body = emptyState({
       title: t("loadFailed"),
@@ -210,59 +204,36 @@ export function TaskResourcePanelView({
           </MenuSectionLabel>
         </div>
         {visible.map((row) => (
-          <InteractiveListRow
+          <PickerRow
             key={row.id}
-            onClick={row.toggle}
-            pressed={row.selected}
-            showIndicator={false}
-            dividerClassName=""
-            className="px-5 py-2"
-            start={
-              <EntityAvatar
-                variant="soft"
-                size={32}
-                color={row.selected ? SELECTED_TINT : undefined}
-                iconScale={row.iconSrc ? 0.62 : 0.45}
-                icon={
-                  row.iconSrc ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={row.iconSrc}
-                      alt=""
-                      className="h-full w-full object-contain"
-                    />
-                  ) : (
-                    <Icon strokeWidth={1.85} />
-                  )
-                }
-                aria-hidden
-              />
+            selected={row.selected}
+            onToggle={row.toggle}
+            iconScale={row.iconSrc ? 0.62 : 0.45}
+            icon={
+              row.iconSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={row.iconSrc}
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <Icon strokeWidth={1.85} />
+              )
             }
-            end={
-              // The row is the control; the box only shows its state.
-              <Checkbox
-                checked={row.selected}
-                tabIndex={-1}
-                aria-hidden
-                className="pointer-events-none border-zinc-300 dark:border-zinc-600 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-              />
-            }
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium leading-5 text-foreground">
-                {row.title}
-              </p>
-              {row.subtitle || row.ref ? (
-                <p className="truncate text-xs leading-4 text-muted-foreground">
+            title={row.title}
+            subtitle={
+              row.subtitle || row.ref ? (
+                <>
                   {row.subtitle}
                   {row.subtitle && row.ref ? " · " : null}
                   {row.ref ? (
                     <span className="font-mono">{row.ref}</span>
                   ) : null}
-                </p>
-              ) : null}
-            </div>
-          </InteractiveListRow>
+                </>
+              ) : null
+            }
+          />
         ))}
       </>
     );
@@ -321,24 +292,5 @@ export function TaskResourcePanelView({
         <span className="note">{t("appliesInstantly")}</span>
       </div>
     </>
-  );
-}
-
-/** Stand-in for the list while it loads: the section label and six rows. */
-function RowsSkeleton() {
-  return (
-    <div aria-hidden className="px-5">
-      <Skeleton className="mb-2 mt-1.5 h-3 w-20" />
-      {Array.from({ length: 6 }).map((_, index) => (
-        <div key={index} className="flex items-center gap-3 py-2">
-          <Skeleton className="h-8 w-8 rounded-[9px]" />
-          <div className="flex-1 space-y-1.5">
-            <Skeleton className="h-3 w-2/5" />
-            <Skeleton className="h-2.5 w-3/5" />
-          </div>
-          <Skeleton className="h-4 w-4 rounded-sm" />
-        </div>
-      ))}
-    </div>
   );
 }

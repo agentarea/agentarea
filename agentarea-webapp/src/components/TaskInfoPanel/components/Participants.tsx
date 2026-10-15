@@ -1,13 +1,12 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { ArrowUpRight, GitFork, Zap } from "lucide-react";
+import { GitFork, Zap } from "lucide-react";
 import type { TaskProvenance } from "@/api/client/types.gen";
 import { AgentAvatar } from "@/components/AgentAvatar";
+import { InfoPanelRow } from "@/components/InfoPanel";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { EntityAvatar, nameInitials } from "@/components/ui/entity-avatar";
-import Link from "@/components/WorkspaceLink";
 import { deterministicHue } from "@/lib/avatar-hue";
-import { cn } from "@/lib/utils";
 import type { TaskRequester } from "../types";
 import Section from "./Section";
 
@@ -38,57 +37,17 @@ interface Participant {
   title?: string;
 }
 
-/**
- * One participant: tile, name, role. A row that leads somewhere is lit as a
- * whole on hover, as list rows inside a panel are, with the arrow saying it
- * opens another page — not an underlined name.
- */
 function ParticipantRow({ participant }: { participant: Participant }) {
-  const body = (
-    <>
-      {participant.avatar}
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[12px] font-medium text-foreground">
-            {participant.name}
-          </span>
-          {participant.badge}
-        </span>
-        <span className="block truncate text-[10px] text-muted-foreground">
-          {participant.role}
-        </span>
-      </span>
-    </>
-  );
-  const rowClassName = "-mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1";
-
-  if (!participant.href) {
-    return (
-      <div className={rowClassName} title={participant.title}>
-        {body}
-      </div>
-    );
-  }
-
   return (
-    <Link
+    <InfoPanelRow
+      avatar={participant.avatar}
+      name={participant.name}
+      badge={participant.badge}
+      sub={participant.role}
       href={participant.href}
+      newTab={participant.newTab}
       title={participant.title}
-      {...(participant.newTab
-        ? { target: "_blank", rel: "noopener noreferrer" }
-        : {})}
-      className={cn(
-        rowClassName,
-        "group/participant transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      )}
-    >
-      {body}
-      <ArrowUpRight
-        aria-hidden
-        strokeWidth={1.5}
-        className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/participant:opacity-100 group-focus-visible/participant:opacity-100"
-      />
-    </Link>
+    />
   );
 }
 

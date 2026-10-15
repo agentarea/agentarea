@@ -9,7 +9,8 @@ export default function InfoPanelHeader({
   className,
 }: {
   label: ReactNode;
-  title: ReactNode;
+  /** Optional: a panel that names no single thing shows its label only. */
+  title?: ReactNode;
   right?: ReactNode;
   className?: string;
 }) {
@@ -21,9 +22,11 @@ export default function InfoPanelHeader({
         <div className="text-xs font-normal uppercase tracking-wide text-muted-foreground">
           {label}
         </div>
-        <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
-          {title}
-        </h3>
+        {title && (
+          <h3 className="line-clamp-2 text-sm font-semibold text-foreground">
+            {title}
+          </h3>
+        )}
       </div>
       {right && <div className="shrink-0 whitespace-nowrap">{right}</div>}
     </div>

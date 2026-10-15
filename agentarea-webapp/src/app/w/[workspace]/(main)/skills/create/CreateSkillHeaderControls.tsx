@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "@/components/WorkspaceLink";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,9 +11,6 @@ export default function CreateSkillHeaderControls() {
 
   return (
     <div className="flex items-center gap-2 py-1">
-      <Button asChild size="xs" variant="outline">
-        <Link href="/skills">{t("cancel")}</Link>
-      </Button>
       <Button
         size="xs"
         type="submit"

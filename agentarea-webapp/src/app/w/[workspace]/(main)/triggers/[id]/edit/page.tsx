@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { getTrigger, listAgents } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
+import { listTriggerCatalogAction } from "../../create/actions";
 import { CreateTriggerForm } from "../../create/CreateTriggerForm";
 import { loadStreamOptions } from "../../create/streamOptions";
 
@@ -28,24 +29,27 @@ export default async function EditTriggerPage({ params }: Props) {
   const { id } = await params;
 
   const tCreate = await getTranslations("TriggersPage.create");
-  const [triggerResponse, agentsResponse, streams] = await Promise.all([
-    getTrigger(id),
-    listAgents(),
-    loadStreamOptions(tCreate("streamsLoadFailed")),
-  ]);
+  const [triggerResponse, agentsResponse, catalog, streams] = await Promise.all(
+    [
+      getTrigger(id),
+      listAgents(),
+      listTriggerCatalogAction().catch((error) => {
+        console.error("Failed to load trigger catalog:", error);
+        return null;
+      }),
+      loadStreamOptions(tCreate("streamsLoadFailed")),
+    ]
+  );
 
   const trigger = requireApiData<TriggerResponse>(triggerResponse, "trigger");
   const agents: AgentResponse[] = agentsResponse.data ?? [];
 
   return (
-    <div className="px-4 py-5">
-      <div className="mx-auto w-full max-w-5xl">
-        <CreateTriggerForm
-          agents={agents}
-          streams={streams}
-          initialData={trigger}
-        />
-      </div>
-    </div>
+    <CreateTriggerForm
+      agents={agents}
+      catalog={catalog}
+      streams={streams}
+      initialData={trigger}
+    />
   );
 }

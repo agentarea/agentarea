@@ -5,6 +5,27 @@
 @tailwind utilities;
 
 @layer utilities {
+  /* On a phone the controls inside keep the size they are drawn at; an
+     invisible ::after centred on each one gives the finger a 44px target.
+     Stretching the controls themselves to 44px made a header's text button
+     taller than the header around it. */
+  /* `.touch-target` does the same for the one control it is put on. */
+  @media (max-width: 767px) {
+    .touch-target,
+    .touch-targets :is(button, a) {
+      position: relative;
+    }
+    .touch-target::after,
+    .touch-targets :is(button, a)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
+  }
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;

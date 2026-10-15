@@ -1,8 +1,9 @@
-import { SectionCard, StatStrip } from "@/components/Overview/OverviewCard";
+import { SectionCard } from "@/components/Overview/OverviewCard";
 import {
   CardHeadSkeleton,
   OverviewHeroSkeleton,
   RowSkeleton,
+  StatStripSkeleton,
 } from "@/components/Overview/OverviewSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -18,20 +19,8 @@ export default function AgentOverviewSkeleton() {
     >
       <OverviewHeroSkeleton />
 
-      <div className="w-full px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
-        <StatStrip>
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="min-w-0 space-y-2.5 border-dashed px-4 py-[13px] [border-color:var(--board-line)] even:border-l [&:nth-child(n+3)]:border-t lg:border-l lg:first:border-l-0 lg:[&:nth-child(n+3)]:border-t-0"
-            >
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-6 w-24" />
-              <Skeleton className="h-[5px] w-full rounded-[2px]" />
-              <Skeleton className="h-2.5 w-28" />
-            </div>
-          ))}
-        </StatStrip>
+      <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
+        <StatStripSkeleton />
 
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
           <SectionCard>
