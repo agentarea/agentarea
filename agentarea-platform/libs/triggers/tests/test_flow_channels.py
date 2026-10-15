@@ -20,8 +20,9 @@ Flow under test (the live delivery path):
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from agentarea_common.broker import BrokerMessage
@@ -213,3 +214,82 @@ async def test_workflow_event_emitted_and_delivered() -> None:
         f"Expected 1 send call total (dedup should have dropped the duplicate), "
         f"got {mock_adapter.send.await_count}"
     )
+
+
+class _SecretReader:
+    def __init__(self, values: dict[str, str]) -> None:
+        self._values = values
+
+    async def get_secret(self, name: str, /) -> str | None:
+        return self._values.get(name)
+
+
+@pytest.mark.flow(MainFlow.CHANNELS)
+@pytest.mark.asyncio
+async def test_a_reply_to_an_email_task_is_sent_by_the_worker_registered_email_adapter(
+    monkeypatch,
+) -> None:
+    from agentarea_triggers import channels
+    from agentarea_triggers.channels.adapters import register_all_adapters
+    from agentarea_triggers.channels.email import EmailAdapter
+    from agentarea_triggers.channels.email_message import build_email_channel_origin
+
+    monkeypatch.setattr(channels, "_ADAPTERS", {})
+    trigger_id = str(uuid.uuid4())
+    reader = _SecretReader(
+        {
+            f"channel_cred:imap:{trigger_id}": json.dumps(
+                {"smtp_host": "smtp.example.com", "smtp_port": 587, "from_address": "a@x.io"}
+            )
+        }
+    )
+
+    register_all_adapters(reader)
+
+    adapter = channels.get_adapter("email")
+    assert isinstance(adapter, EmailAdapter)
+    connected: list[tuple[str, int]] = []
+
+    async def connect(host: str, port: int) -> MagicMock:
+        connected.append((host, port))
+        return MagicMock()
+
+    monkeypatch.setattr(adapter, "_connect", connect)
+
+    origin = build_email_channel_origin(
+        {"from": "user@example.com", "subject": "Report", "message_id": "<m1@example.com>"},
+        trigger_id=trigger_id,
+        credential_type="imap",
+    )
+    broker = _InMemoryBroker()
+    stream = f"test:flow:email:{uuid.uuid4().hex[:8]}"
+    consumer = ChannelDeliveryConsumer(
+        origin_guard=_origin_allowed,
+        broker=broker,
+        dedup=_InMemoryDedup(),
+        adapter_resolver=channels.get_adapter,
+        stream=stream,
+        group="flow-test-group",
+        dlq_stream=f"{stream}:dlq",
+        consumer_id="c-email",
+        block_ms=10,
+    )
+    event = {
+        "event_type": "task.completed",
+        "task_id": str(uuid.uuid4()),
+        "event_id": str(uuid.uuid4()),
+        "data": {"result": "All done"},
+    }
+
+    assert await emit_channel_delivery(
+        event=event, channel_origin=origin, broker=broker, stream=stream
+    )
+    with patch("agentarea_triggers.channels.email.aiosmtplib.send", new=AsyncMock()) as send:
+        await _run_consumer_once(consumer)
+
+    send.assert_awaited_once()
+    sent = send.await_args.args[0]
+    assert sent["To"] == "user@example.com"
+    assert sent["In-Reply-To"] == "<m1@example.com>"
+    assert connected == [("smtp.example.com", 587)]
+    assert broker.dlq_submits == []

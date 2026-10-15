@@ -116,7 +116,7 @@ class TestEmailAdapterSecretStore:
 
     @pytest.fixture
     def adapter(self, secret_manager):
-        return EmailAdapter(secret_manager=secret_manager)
+        return EmailAdapter(secret_reader=secret_manager)
 
     @pytest.mark.asyncio
     async def test_resolves_smtp_creds_from_secret_store(self, adapter, secret_manager):
@@ -149,19 +149,6 @@ class TestEmailAdapterSecretStore:
         channel_config = {"type": "email", "reply_to": "user@test.com"}
 
         with pytest.raises(FatalError, match="trigger_id"):
-            await adapter._resolve_smtp_credentials(channel_config)
-
-    @pytest.mark.asyncio
-    async def test_no_secret_manager_raises(self):
-        """Without a secret_manager the adapter fails loudly rather than returning None."""
-        adapter = EmailAdapter()
-        channel_config = {
-            "type": "email",
-            "trigger_id": str(uuid4()),
-            "reply_to": "user@test.com",
-        }
-
-        with pytest.raises(FatalError, match="secret_manager"):
             await adapter._resolve_smtp_credentials(channel_config)
 
 

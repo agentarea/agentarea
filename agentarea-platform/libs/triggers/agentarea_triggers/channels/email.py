@@ -18,7 +18,7 @@ from . import register_adapter
 from .exceptions import FatalError, RetryableError
 
 if TYPE_CHECKING:
-    from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+    from .secret_reader import SecretReader
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +36,8 @@ class EmailAdapter:
     The secret store holds a JSON blob with these fields.
     """
 
-    def __init__(
-        self, secret_manager: BaseSecretManager | None = None, connect: Connect = member_connection
-    ):
-        self._secret_manager = secret_manager
+    def __init__(self, secret_reader: SecretReader, connect: Connect = member_connection):
+        self._secret_reader = secret_reader
         # The SMTP host is the member's: the connection goes to the address it
         # was vetted at (a test seam otherwise).
         self._connect = connect
@@ -209,9 +207,6 @@ class EmailAdapter:
         Raises ``FatalError`` when credentials cannot be resolved — a
         misconfigured channel won't be fixed by redelivery.
         """
-        if not self._secret_manager:
-            raise FatalError("email channel: no secret_manager configured on EmailAdapter")
-
         trigger_id = channel_config.get("trigger_id")
         if not trigger_id:
             raise FatalError(
@@ -223,7 +218,7 @@ class EmailAdapter:
         # secret is named after the outbound channel.
         cred_type = channel_config.get("credential_type") or channel_config.get("type", "email")
         secret_name = f"channel_cred:{cred_type}:{trigger_id}"
-        raw = await self._secret_manager.get_secret(secret_name)
+        raw = await self._secret_reader.get_secret(secret_name)
         if not raw:
             raise FatalError(
                 f"email channel: credentials not found for trigger {trigger_id} "
@@ -267,10 +262,8 @@ def _html_to_plain(html: str) -> str:
     return text.strip()
 
 
-def create_email_adapter(
-    secret_manager: BaseSecretManager | None = None,
-) -> EmailAdapter:
+def create_email_adapter(secret_reader: SecretReader) -> EmailAdapter:
     """Create and register an email adapter."""
-    adapter = EmailAdapter(secret_manager=secret_manager)
+    adapter = EmailAdapter(secret_reader=secret_reader)
     register_adapter("email", adapter)
     return adapter

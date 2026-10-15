@@ -32,6 +32,7 @@ from agentarea_common.events.contract import (
 from agentarea_common.outbound import Destination, outbound_client
 
 from . import register_adapter
+from .email import create_email_adapter
 from .exceptions import FatalError, RetryableError
 
 if TYPE_CHECKING:
@@ -656,3 +657,6 @@ def register_all_adapters(secret_reader: SecretReader, redis_url: str | None = N
 
     # Task webhooks: the API caller's own URL, told each turn's end and cost.
     register_adapter("task_webhook", make_task_webhook_adapter(secret_reader))
+
+    # Email replies go over SMTP with the origin trigger's stored credentials.
+    create_email_adapter(secret_reader)
