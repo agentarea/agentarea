@@ -66,8 +66,8 @@ class TaskEventService:
         return await task_event_repository.get_events_for_task(task_id, limit, offset)
 
     async def get_events_by_type(
-        self, event_type: str, limit: int = 100, offset: int = 0
+        self, task_id: UUID, event_type: str, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
-        """Get events by type."""
+        """Get one task's events of a type, newest first."""
         task_event_repository = self.repository_factory.create_repository(TaskEventRepository)
-        return await task_event_repository.get_events_by_type(event_type, limit, offset)
+        return await task_event_repository.get_events_by_type(task_id, event_type, limit, offset)

@@ -50,6 +50,7 @@ def make_context_activities(
                     events = []
                     for event_type in request.event_types:
                         type_events = await task_event_service.get_events_by_type(
+                            task_id=request.task_id,
                             event_type=event_type,
                             limit=request.limit,
                         )

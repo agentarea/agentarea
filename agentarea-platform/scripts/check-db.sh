@@ -118,6 +118,7 @@ PY_SUITES=(
   libs/agents/tests/test_catalog_skill_list_db.py
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
+  libs/tasks/tests/test_task_event_recall_scoping_db.py
   libs/tasks/tests/test_task_conversation_db.py
   libs/tasks/tests/test_task_provenance_db.py
   libs/tasks/tests/test_cost_entries_db.py

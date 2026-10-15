@@ -200,15 +200,16 @@ class TestTaskEventRepositoryIntegration:
         await db_session.commit()
 
         # Retrieve events by type
-        llm_started_events = await task_event_repository.get_events_by_type("LLMCallStarted")
-        task_completed_events = await task_event_repository.get_events_by_type("TaskCompleted")
+        llm_started_events = await task_event_repository.get_events_by_type(
+            task_id_1, "LLMCallStarted"
+        )
+        task_completed_events = await task_event_repository.get_events_by_type(
+            task_id_1, "TaskCompleted"
+        )
 
-        # Verify filtering by type. Events created by earlier runs of this
-        # test persist in the shared "test-workspace" (each run commits for
-        # real, no cross-run cleanup), so use >= like the equivalent
-        # service-level test below rather than an exact count.
-        assert len(llm_started_events) >= 2
-        assert len(task_completed_events) >= 1
+        # task_id_2's LLMCallStarted stays out of task_id_1's read.
+        assert [event.data["model"] for event in llm_started_events] == ["gpt-4"]
+        assert len(task_completed_events) == 1
 
         assert all(event.event_type == "LLMCallStarted" for event in llm_started_events)
         assert all(event.event_type == "TaskCompleted" for event in task_completed_events)
@@ -300,9 +301,10 @@ class TestTaskEventServiceIntegration:
     @pytest.mark.asyncio
     async def test_get_events_by_type_end_to_end(self, task_event_service, db_session):
         """Test retrieving events by type end-to-end."""
+        task_id = uuid4()
         # Create events of different types
         await task_event_service.create_workflow_event(
-            task_id=uuid4(),
+            task_id=task_id,
             event_id=uuid4(),
             event_type="LLMCallStarted",
             timestamp=datetime.now(UTC),
@@ -322,7 +324,7 @@ class TestTaskEventServiceIntegration:
         )
 
         await task_event_service.create_workflow_event(
-            task_id=uuid4(),
+            task_id=task_id,
             event_id=uuid4(),
             event_type="TaskCompleted",
             timestamp=datetime.now(UTC),
@@ -334,12 +336,14 @@ class TestTaskEventServiceIntegration:
         await db_session.commit()
 
         # Retrieve events by type
-        llm_started_events = await task_event_service.get_events_by_type("LLMCallStarted")
-        task_completed_events = await task_event_service.get_events_by_type("TaskCompleted")
+        llm_started_events = await task_event_service.get_events_by_type(task_id, "LLMCallStarted")
+        task_completed_events = await task_event_service.get_events_by_type(
+            task_id, "TaskCompleted"
+        )
 
         # Verify filtering
-        assert len(llm_started_events) >= 2  # May have events from other tests
-        assert len(task_completed_events) >= 1
+        assert [event.data["model"] for event in llm_started_events] == ["gpt-4"]
+        assert len(task_completed_events) == 1
 
         # Verify all retrieved events have correct type
         for event in llm_started_events:

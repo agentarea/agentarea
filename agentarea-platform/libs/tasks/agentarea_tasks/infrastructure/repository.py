@@ -594,11 +594,12 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         return [self._orm_to_domain(orm) for orm in result.scalars().all()], total
 
     async def get_events_by_type(
-        self, event_type: str, limit: int = 100, offset: int = 0
+        self, task_id: UUID, event_type: str, limit: int = 100, offset: int = 0
     ) -> list[TaskEvent]:
-        """Get events by type."""
+        """Get one task's events of a type, newest first."""
         stmt = (
             select(TaskEventORM)
+            .where(TaskEventORM.task_id == task_id)
             .where(TaskEventORM.event_type == event_type)
             .where(TaskEventORM.workspace_id == self.user_context.workspace_id)
             .order_by(TaskEventORM.timestamp.desc())
