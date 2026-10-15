@@ -129,7 +129,10 @@ export default function TriggersList({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    // The header's 36px band is taller than its label: pulled up by the
+    // difference, the first label sits on the page's top padding, where an
+    // ungrouped table's edge would.
+    <div className="-mt-2.5 flex flex-col gap-1">
       {groups.map((group) => (
         <div key={group.key}>
           <button
