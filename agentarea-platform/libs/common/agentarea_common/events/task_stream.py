@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from agentarea_common.observability.propagation import current_traceparent
+
 from .adapters.redis_streams import encode, topic_for
 from .contract import TASK_STARTED, canonical_type
 from .ports import EventStream, IntegrationEvent
@@ -92,6 +94,7 @@ async def publish_task_event(
         source=_SOURCE,
         subject=task_id,
         time=datetime.fromisoformat(timestamp) if timestamp else datetime.now(UTC),
+        traceparent=current_traceparent(),
         data=data,
     )
     await broker.submit(

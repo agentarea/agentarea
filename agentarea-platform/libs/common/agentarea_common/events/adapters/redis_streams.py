@@ -28,6 +28,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from agentarea_common.broker.interface import BrokerClient, BrokerMessage
+from agentarea_common.observability.propagation import consumer_span, current_traceparent
 
 from ..ports import Handler, IntegrationEvent, Subscription
 
@@ -127,6 +128,10 @@ class RedisStreamsEventBus:
         self._min_idle_ms = min_idle_ms
 
     async def publish(self, event: IntegrationEvent) -> None:
+        if event.traceparent is None:
+            traceparent = current_traceparent()
+            if traceparent is not None:
+                event = event.model_copy(update={"traceparent": traceparent})
         await self._broker.submit(topic_for(event.type), encode(event))
 
     async def subscribe(self, *, topic: str, group: str, handler: Handler) -> Subscription:
@@ -177,7 +182,13 @@ class RedisStreamsEventBus:
             await self._broker.ack(stream, group, msg.id)
             return
         try:
-            await handler(event)
+            with consumer_span(
+                traceparent=event.traceparent,
+                destination=stream,
+                message_id=msg.id,
+                consumer_group=group,
+            ):
+                await handler(event)
         except Exception:
             # Do NOT ack — message stays pending and is redelivered via autoclaim.
             logger.exception("Handler failed for %s on %s; will redeliver", msg.id, stream)
