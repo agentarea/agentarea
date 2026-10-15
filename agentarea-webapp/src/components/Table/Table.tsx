@@ -1,5 +1,10 @@
+import { Fragment } from "react";
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from "lucide-react";
 import Link from "@/components/WorkspaceLink";
+import {
+  Collapsible,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import {
   TableBody,
   TableCell,
@@ -45,6 +50,13 @@ interface TableProps<T> {
    * the caller sorts, since only it knows how its values compare. */
   sort?: TableSort;
   onSortChange?: (sort: TableSort) => void;
+  /**
+   * Opt-in detail row under a row, spanning every column. The caller owns
+   * which rows are open (toggle it from `onRowClick`), so the table stays
+   * usable from a server component.
+   */
+  isExpanded?: (item: T) => boolean;
+  renderExpanded?: (item: T) => React.ReactNode;
 }
 
 export default function Table<T>({
@@ -57,6 +69,8 @@ export default function Table<T>({
   hideHeader = false,
   sort,
   onSortChange,
+  isExpanded,
+  renderExpanded,
 }: TableProps<T>) {
   return (
     <TableComponent className={className}>
@@ -135,10 +149,14 @@ export default function Table<T>({
             rowProps?.(item) ?? {};
           const href = rowHref?.(item);
           const hasRowLink = Boolean(href && columns.some((column) => column.rowLink));
+          const expanded = Boolean(renderExpanded && isExpanded?.(item));
           const rowClassName = cn(
             "group border-b border-zinc-100 transition-colors duration-200 dark:border-zinc-800",
             (href || onRowClick) &&
               "cursor-pointer hover:bg-primary/5 dark:hover:bg-primary/10",
+            // An open row and its details read as one block: no rule between
+            // them, and the details' background carried up into the row.
+            expanded && "border-b-transparent bg-muted/20",
             row.className as string | undefined,
             extraClassName
           );
@@ -179,17 +197,35 @@ export default function Table<T>({
               {cells}
             </TableRowNav>
           ) : (
-            <TableRow
-              key={row.id as React.Key}
-              // Built only when there is something to call. A closure handed
-              // over unconditionally is one a server component cannot pass at
-              // all, which is what used to make these rows dead on arrival.
-              onClick={onRowClick ? () => onRowClick(item) : undefined}
-              {...extraRowProps}
-              className={rowClassName}
-            >
-              {cells}
-            </TableRow>
+            <Fragment key={row.id as React.Key}>
+              <TableRow
+                // Built only when there is something to call. A closure handed
+                // over unconditionally is one a server component cannot pass at
+                // all, which is what used to make these rows dead on arrival.
+                onClick={onRowClick ? () => onRowClick(item) : undefined}
+                aria-expanded={renderExpanded ? expanded : undefined}
+                {...extraRowProps}
+                className={rowClassName}
+              >
+                {cells}
+              </TableRow>
+              {renderExpanded && (
+                // Always in the DOM, zero-height while closed: the collapsible
+                // animates the open and the close (Radix keeps the content
+                // mounted until the close finishes) and drops it afterwards.
+                <TableRow className="border-0 hover:bg-transparent">
+                  <TableCell colSpan={columns.length} className="p-0">
+                    <Collapsible open={expanded}>
+                      <CollapsibleContent className="aa-collapsible">
+                        <div className="border-b border-zinc-100 bg-muted/20 px-[20px] py-3 dark:border-zinc-800">
+                          {renderExpanded(item)}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </TableCell>
+                </TableRow>
+              )}
+            </Fragment>
           );
         })}
       </TableBody>

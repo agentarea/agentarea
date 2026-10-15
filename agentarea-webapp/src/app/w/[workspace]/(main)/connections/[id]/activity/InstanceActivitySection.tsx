@@ -12,7 +12,8 @@ import {
   AuditActor,
 } from "@/app/w/[workspace]/(main)/settings/audit/AuditCells";
 import { AuditChangeList } from "@/app/w/[workspace]/(main)/settings/audit/AuditChangeList";
-import { EmptyRow, SectionCard } from "@/components/Overview/OverviewCard";
+import EmptyState from "@/components/EmptyState";
+import { SectionCard } from "@/components/Overview/OverviewCard";
 import { RowSkeleton } from "@/components/Overview/OverviewSkeleton";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 
@@ -63,70 +64,75 @@ export function InstanceActivitySection({
   // Audit sink disabled or backend error: on its own tab, say so rather than
   // leave the page blank.
   if (unavailable) {
+    return <EmptyState title={t("unavailable")} iconsType="audit" />;
+  }
+
+  if (events.length === 0) {
     return (
-      <SectionCard>
-        <EmptyRow text={t("unavailable")} />
-      </SectionCard>
+      <EmptyState
+        title={t("empty")}
+        description={t("emptyDescription")}
+        iconsType="audit"
+      />
     );
   }
 
   return (
     <SectionCard>
-      {events.length === 0 ? (
-        <EmptyRow text={t("empty")} />
-      ) : (
-        <div>
-          {events.map((event) => {
-            const hasChanges = !!event.changes && event.changes.length > 0;
-            const isExpanded = expandedId === event.id;
-            return (
-              <div key={event.id} className="border-t border-border/60 first:border-t-0">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 px-[15px] py-[11px] text-left text-[12.5px] hover:bg-muted/40"
-                  onClick={() =>
-                    hasChanges && setExpandedId(isExpanded ? null : event.id)
-                  }
-                >
-                  <span className="w-4 shrink-0 text-muted-foreground">
-                    {hasChanges ? (
-                      isExpanded ? (
-                        <ChevronDown className="h-3.5 w-3.5" />
-                      ) : (
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      )
-                    ) : null}
+      <div>
+        {events.map((event) => {
+          const hasChanges = !!event.changes && event.changes.length > 0;
+          const isExpanded = expandedId === event.id;
+          return (
+            <div
+              key={event.id}
+              className="border-t border-border/60 first:border-t-0"
+            >
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 px-[15px] py-[11px] text-left text-[12.5px] hover:bg-muted/40"
+                onClick={() =>
+                  hasChanges && setExpandedId(isExpanded ? null : event.id)
+                }
+              >
+                <span className="w-4 shrink-0 text-muted-foreground">
+                  {hasChanges ? (
+                    isExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )
+                  ) : null}
+                </span>
+                <span className="w-44 shrink-0">
+                  <AuditAction action={event.action} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <AuditActor event={event} />
+                </span>
+                {event.source_ip && (
+                  <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">
+                    {event.source_ip}
                   </span>
-                  <span className="w-44 shrink-0">
-                    <AuditAction action={event.action} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <AuditActor event={event} />
-                  </span>
-                  {event.source_ip && (
-                    <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">
-                      {event.source_ip}
-                    </span>
-                  )}
-                  <span className="shrink-0">
-                    <TableDateDisplay
-                      dateString={event.created_at}
-                      oneRow
-                      relative
-                    />
-                  </span>
-                </button>
-                {isExpanded && hasChanges && (
-                  <AuditChangeList
-                    changes={event.changes}
-                    className="space-y-1 border-t border-border/60 bg-muted/20 px-[15px] py-2 pl-11"
-                  />
                 )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                <span className="shrink-0">
+                  <TableDateDisplay
+                    dateString={event.created_at}
+                    oneRow
+                    relative
+                  />
+                </span>
+              </button>
+              {isExpanded && hasChanges && (
+                <AuditChangeList
+                  changes={event.changes}
+                  className="space-y-1 border-t border-border/60 bg-muted/20 px-[15px] py-2 pl-11"
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </SectionCard>
   );
 }

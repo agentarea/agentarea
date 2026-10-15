@@ -6,6 +6,7 @@ import {
   groupToolsByName,
   groupToolsByPath,
   OTHER_GROUP_KEY,
+  titleAddsToName,
   toToolRows,
   type Tool,
   type ToolsTableConsumer,
@@ -165,14 +166,14 @@ describe("filterTools", () => {
 });
 
 describe("toToolRows", () => {
-  it("orders by description, falling back to the name", () => {
+  it("orders by name, whatever the description says", () => {
     const rows = toToolRows([
       { name: "zeta", description: "" },
       { name: "b_tool", description: "Alpha" },
-      { name: "a_tool", description: "beta" },
+      { name: "A_tool", description: "beta" },
     ]);
 
-    expect(rows.map((row) => row.name)).toEqual(["b_tool", "a_tool", "zeta"]);
+    expect(rows.map((row) => row.name)).toEqual(["A_tool", "b_tool", "zeta"]);
   });
 });
 
@@ -285,3 +286,23 @@ describe("groupToolsByPath", () => {
     ]);
   });
 });
+
+describe("titleAddsToName", () => {
+  it("is false for a title that only spells the name out", () => {
+    expect(titleAddsToName("create_issue", "Create issue")).toBe(false);
+    expect(titleAddsToName("search_issues", "Search issues")).toBe(false);
+    expect(titleAddsToName("delete_repo", "Delete repository")).toBe(false);
+    expect(titleAddsToName("listRepos", "List repositories")).toBe(false);
+  });
+
+  it("is true for a title with words of its own", () => {
+    expect(titleAddsToName("merge_pull", "Merge pull request")).toBe(true);
+    expect(titleAddsToName("get_me", "Who am I")).toBe(true);
+  });
+
+  it("is false without a title", () => {
+    expect(titleAddsToName("get_file", undefined)).toBe(false);
+    expect(titleAddsToName("get_file", "  ")).toBe(false);
+  });
+});
+

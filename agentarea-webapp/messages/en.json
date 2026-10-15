@@ -884,7 +884,8 @@
     "instanceDetail": {
       "activity": {
         "empty": "No changes recorded for this connection yet.",
-        "unavailable": "The activity log isn't available right now."
+        "unavailable": "The activity log isn't available right now.",
+        "emptyDescription": "Every change to this connection, by whom and when, is recorded here."
       },
       "header": {
         "label": "Instance",
@@ -942,16 +943,16 @@
         "columns": {
           "name": "Name",
           "description": "Description",
-          "equipped": "Equipped by"
+          "equipped": "Equipped by",
+          "hints": "Server hints",
+          "agents": "Agents"
         },
         "searchPlaceholder": "Search tools…",
-        "shown": "{shown} of {total}",
         "truncated": "Showing the first {shown} of {total} — refine the search to narrow it down.",
         "empty": "No tools match the current filter.",
         "otherGroup": "Other",
         "equippedBy": "Equipped by",
         "equippedNone": "No agent has this tool enabled.",
-        "grantedCount": "{count} granted",
         "equippedHint": "Agents that carry this tool in their configuration. Policy and approval rules are still evaluated when the tool is called.",
         "allToolsGrant": "all tools",
         "approval": "approval",
@@ -968,7 +969,16 @@
         "discovered": "Discovered {count, plural, one {# tool} other {# tools}}",
         "discoverFailed": "Couldn't discover tools",
         "discoverUnverified": "Couldn't discover tools: the server did not pass verification",
-        "hint": "Tools the server reported, and which agents hold each of them."
+        "hints": {
+          "readOnlyHint": "read-only",
+          "destructiveHint": "destructive",
+          "idempotentHint": "idempotent",
+          "openWorldHint": "open-world"
+        },
+        "facetsLabel": "Tool filter",
+        "noneDescription": "Once the server answers, its tools show up here. Discover them now, or wait for the first verification.",
+        "emptyDescription": "Nothing matches this filter and search.",
+        "showAll": "Show all tools"
       },
       "consumers": {
         "empty": "No agents attach this MCP server yet.",

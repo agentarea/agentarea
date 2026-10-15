@@ -208,6 +208,10 @@ const byDescription = (a: ToolRow, b: ToolRow) =>
     .toLowerCase()
     .localeCompare((b.description || b.name).toLowerCase());
 
+// MCP rows lead with the tool's name, so that is what they are ordered by.
+const byName = (a: ToolRow, b: ToolRow) =>
+  a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+
 export function toToolRows(tools: Tool[]): ToolRow[] {
   return tools
     .map((tool) => ({
@@ -217,7 +221,7 @@ export function toToolRows(tools: Tool[]): ToolRow[] {
       description: tool.description,
       annotations: tool.annotations,
     }))
-    .sort(byDescription);
+    .sort(byName);
 }
 
 // Verbs that big MCP servers put in front of the object they act on. Stripping
@@ -346,3 +350,28 @@ export function groupToolsByPath(
     .map(([key, rows]) => ({ key, rows: [...rows].sort(byDescription) }))
     .sort((a, b) => a.key.localeCompare(b.key));
 }
+
+const words = (text: string) =>
+  text
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2") // camelCase
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+
+/**
+ * Whether a tool's human title says more than its name. A title that only
+ * spells the name out word for word (`delete_repo` → "Delete repository",
+ * `search_issues` → "Search issues") repeats it; one with words of its own
+ * ("Merge pull request", "Who am I") is worth showing.
+ */
+export function titleAddsToName(name: string, title?: string | null): boolean {
+  if (!title?.trim()) return false;
+  const nameWords = words(name);
+  const titleWords = words(title);
+  if (nameWords.length !== titleWords.length) return true;
+  return titleWords.some((word, i) => {
+    const stem = nameWords[i].replace(/s$/, "");
+    return !word.startsWith(stem);
+  });
+}
+

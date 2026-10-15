@@ -1,5 +1,5 @@
 import ConnectionListSkeleton from "../ConnectionListSkeleton";
 
 export default function Loading() {
-  return <ConnectionListSkeleton />;
+  return <ConnectionListSkeleton toolbar />;
 }

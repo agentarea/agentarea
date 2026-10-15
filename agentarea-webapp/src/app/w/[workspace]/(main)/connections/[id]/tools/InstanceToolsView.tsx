@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { RefreshCw } from "lucide-react";
+import ContentBlock from "@/components/ContentBlock";
 import FormError from "@/components/FormError";
-import { EmptyRow, SectionCard } from "@/components/Overview/OverviewCard";
+import EmptyState from "@/components/EmptyState";
 import SectionLoadError from "@/components/SectionLoadError";
-import { Button } from "@/components/ui/button";
+import ToolbarRefreshButton from "@/components/ToolbarRefreshButton";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { MCPInstanceConsumer } from "@/lib/api";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { discoverMCPInstanceToolsAction as discoverMCPInstanceTools } from "@/lib/server-actions";
-import { ToolsTable } from "../../components/ToolsTable";
+import { ToolsTable, ToolsToolbar } from "../../components/ToolsTable";
+import { useToolFacets } from "../../useToolFacets";
 import type { MCPInstance } from "../../types";
 
 type Discovery =
@@ -37,8 +38,10 @@ export default function InstanceToolsView({
   const tools = (instance.tools ??
     instance.json_spec?.available_tools ??
     []) as Array<{ name: string; description: string }>;
+  const facets = useToolFacets(tools, consumers);
 
   const handleRefresh = async () => {
+    if (isRefreshing) return;
     setIsRefreshing(true);
     setDiscovery(null);
     try {
@@ -82,37 +85,39 @@ export default function InstanceToolsView({
   };
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-5">
+    <ContentBlock
+      subheader={
+        <ToolsToolbar
+          facets={facets}
+          controls={
+            <ToolbarRefreshButton
+              onRefresh={handleRefresh}
+              refreshing={isRefreshing}
+            />
+          }
+        />
+      }
+    >
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="note">
-            {discovery?.kind === "succeeded"
-              ? t("tools.discovered", { count: discovery.count })
-              : t("tools.hint")}
-          </p>
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={handleRefresh}
-            isLoading={isRefreshing}
-            disabled={isRefreshing}
-          >
-            {!isRefreshing && <RefreshCw />}
-            {tools.length > 0 ? t("tools.refresh") : t("tools.discover")}
-          </Button>
-        </div>
-
         {discovery?.kind === "failed" && <FormError>{discovery.message}</FormError>}
+        {discovery?.kind === "succeeded" && (
+          <p className="note" role="status">
+            {t("tools.discovered", { count: discovery.count })}
+          </p>
+        )}
         {consumersError && <SectionLoadError message={consumersError} />}
 
         {tools.length > 0 ? (
-          <ToolsTable tools={tools} consumers={consumers} />
+          <ToolsTable tools={tools} consumers={consumers} facets={facets} />
         ) : (
-          <SectionCard>
-            <EmptyRow text={t("tools.noneDiscovered")} />
-          </SectionCard>
+          <EmptyState
+            title={t("tools.noneDiscovered")}
+            description={t("tools.noneDescription")}
+            iconsType="mcp"
+            action={{ label: t("tools.discover"), onClick: handleRefresh }}
+          />
         )}
       </div>
-    </div>
+    </ContentBlock>
   );
 }
