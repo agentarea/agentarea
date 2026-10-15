@@ -607,11 +607,13 @@ class TaskService(BaseTaskService):
         """Start a stored task whose workflow never started, under the policy stored with it.
 
         A submission that fails after the row is written leaves the task
-        ``failed`` with no execution. A caller that still holds the work -- a
-        retried stream event -- starts that task instead of creating another.
-        Raises whatever the engine raises when it cannot start it this time either.
+        ``failed`` with no execution; a process that dies between writing the row
+        and starting the workflow leaves it ``pending``. A caller that still holds
+        the work -- a redelivered event, the reconciler -- starts that task
+        instead of creating another. Raises whatever the engine raises when it
+        cannot start it this time either.
         """
-        if task.status != "failed" or task.execution_id:
+        if task.status not in ("pending", "failed") or task.execution_id:
             raise ValueError(f"Task {task.id} has started before; refusing to start it again")
         snapshot = (task.metadata or {}).get(_GOVERNANCE_SNAPSHOT_METADATA_KEY)
         if not isinstance(snapshot, dict) or snapshot.get("effective_policy") is None:

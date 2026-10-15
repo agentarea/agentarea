@@ -1345,9 +1345,13 @@ class TriggerService:
         if task_id is not None and self.task_service:
             existing = await self.task_service.get_task(task_id)
             if existing is not None:
-                if raise_retryable and existing.status == "failed" and not existing.execution_id:
-                    # An earlier attempt stored the task but could not start it;
-                    # starting it now is the retry. A failure raises and is retried.
+                if not existing.execution_id and (
+                    existing.status == "pending"
+                    or (raise_retryable and existing.status == "failed")
+                ):
+                    # An earlier attempt stored the task but did not start it:
+                    # its start failed, or its process died before starting it.
+                    # Starting it now is the retry. A failure raises and is retried.
                     # The stored row keeps only the ask, so the message is composed
                     # again from the same event.
                     retried_input = compose_task_input(trigger, trigger_data, event)

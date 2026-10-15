@@ -74,6 +74,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     plain nullable columns the migrated schema must carry; a mocked session
 #     never catches a missing column.
 #   inbox counts: the inbox total narrows by agent in SQL exactly as its page does.
+#   undispatched tasks: the reconciler finds pending tasks with no execution in
+#     every workspace under the ENFORCE scope and starts each in its own.
 #   event streams: the journal is partitioned by day and deduplicated by a
 #     separate key table; a webhook id belongs to one source and a trigger
 #     subscription names its trigger -- rules only the migrated schema holds.
@@ -126,6 +128,7 @@ PY_SUITES=(
   libs/tasks/tests/test_spend_gate_db.py
   libs/tasks/tests/test_cost_settlement_db.py
   libs/tasks/tests/test_inbox_counts_db.py
+  libs/tasks/tests/test_undispatched_tasks_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
   apps/api/tests/test_task_event_feed_db.py
   libs/streams/tests/test_schema_db.py

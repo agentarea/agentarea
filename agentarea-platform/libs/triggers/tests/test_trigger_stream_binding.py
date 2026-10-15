@@ -167,10 +167,27 @@ async def test_fire_reuses_a_task_already_created_for_this_event():
     service.trigger_repository.get_trigger.return_value = trigger
     task_id = uuid4()
     service.task_service = AsyncMock()
-    service.task_service.get_task.return_value = SimpleNamespace(id=task_id)
+    service.task_service.get_task.return_value = SimpleNamespace(
+        id=task_id, status="running", execution_id=f"task-{task_id}"
+    )
     firing = await service.fire(trigger.id, {"text": "go"}, task_id=task_id)
     assert (firing.outcome, firing.task_id) == ("reacted", task_id)
     service.task_service.route_or_submit_task.assert_not_awaited()
+    service.task_service.restart_undispatched_task.assert_not_awaited()
+
+
+async def test_fire_starts_a_task_already_created_for_this_event_that_never_started():
+    service = _service()
+    trigger = _trigger(conditions={})
+    service.trigger_repository.get_trigger.return_value = trigger
+    task_id = uuid4()
+    service.task_service = AsyncMock()
+    stored = SimpleNamespace(id=task_id, status="pending", execution_id=None)
+    service.task_service.get_task.return_value = stored
+    firing = await service.fire(trigger.id, {"text": "go"}, task_id=task_id)
+    assert (firing.outcome, firing.task_id) == ("reacted", task_id)
+    service.task_service.route_or_submit_task.assert_not_awaited()
+    service.task_service.restart_undispatched_task.assert_awaited_once_with(stored)
 
 
 async def test_fire_creates_the_task_with_the_given_id_and_provenance():

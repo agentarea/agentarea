@@ -29,11 +29,18 @@ from agentarea_common.utils.outbound_tls import install_outbound_trust
 from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution import create_activities_for_worker
 from agentarea_execution.activities.heartbeat import CANCELLATION_DELIVERY_INTERVAL
+from agentarea_execution.activities.undispatched_task_activities import (
+    make_undispatched_task_activities,
+)
 from agentarea_execution.interfaces import ActivityDependencies
 
 # Import workflow and activity definitions from the execution library
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
+)
+from agentarea_execution.workflows.undispatched_task_reconciler_workflow import (
+    UndispatchedTaskReconcilerWorkflow,
+    ensure_undispatched_task_schedule,
 )
 from agentarea_mcp.activities import make_mcp_activities
 from temporalio.client import Client
@@ -172,6 +179,7 @@ class AgentAreaWorker:
 
         activities = create_activities_for_worker(dependencies)
         mcp_activities = make_mcp_activities(dependencies)
+        reconciler_activities = make_undispatched_task_activities(dependencies)
 
         # Initialize DI container for workflows
         initialize_di_container(settings.temporal)
@@ -277,7 +285,7 @@ class AgentAreaWorker:
         from agentarea_governance.factory import create_governance_pipeline
 
         governance_pipeline = create_governance_pipeline()
-        all_activities = activities + mcp_activities
+        all_activities = activities + mcp_activities + reconciler_activities
         validate_activity_mapping(all_activities)
 
         self.worker = Worker(
@@ -285,8 +293,9 @@ class AgentAreaWorker:
             task_queue=settings.temporal.QUEUE,
             workflows=[
                 AgentExecutionWorkflow,
+                UndispatchedTaskReconcilerWorkflow,
             ],
-            activities=activities + mcp_activities,
+            activities=all_activities,
             interceptors=[GovernanceWorkerInterceptor(governance_pipeline)],
             workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=settings.temporal.MAX_WORKFLOWS,
@@ -304,6 +313,8 @@ class AgentAreaWorker:
         from agentarea_execution.workflows.trigger_execution_workflow import (
             TriggerExecutionWorkflow,
         )
+
+        await ensure_undispatched_task_schedule(self.client, settings.temporal.QUEUE)
 
         trigger_activities = make_trigger_activities(dependencies)
         trigger_queue = getattr(settings, "triggers", None)

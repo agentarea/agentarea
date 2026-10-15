@@ -282,3 +282,31 @@ async def test_a_retry_whose_trigger_lost_its_instruction_does_not_run_the_stale
     assert "no task text" in (firing.reason or "")
     service.task_service.restart_undispatched_task.assert_not_awaited()
     assert stored.query == "Ship the order"
+
+
+@pytest.mark.parametrize("raise_retryable", [True, False])
+async def test_a_redelivery_starts_a_pending_task_the_first_attempt_never_started(raise_retryable):
+    """The first attempt died between storing the task and starting its workflow."""
+    trigger = _trigger()
+    service = _service(trigger)
+    task_id = uuid4()
+    stored = SimpleNamespace(id=task_id, status="pending", execution_id=None, result=None)
+    service.task_service.get_task.return_value = stored
+    firing = await service.fire(
+        trigger.id, {"text": "go"}, task_id=task_id, raise_retryable=raise_retryable
+    )
+    service.task_service.restart_undispatched_task.assert_awaited_once_with(stored)
+    service.task_service.route_or_submit_task.assert_not_awaited()
+    assert (firing.outcome, firing.task_id) == ("reacted", task_id)
+
+
+async def test_a_redelivery_never_starts_a_pending_task_that_has_an_execution():
+    trigger = _trigger()
+    service = _service(trigger)
+    task_id = uuid4()
+    service.task_service.get_task.return_value = SimpleNamespace(
+        id=task_id, status="pending", execution_id="task-1", result=None
+    )
+    firing = await service.fire(trigger.id, {"text": "go"}, task_id=task_id, raise_retryable=True)
+    service.task_service.restart_undispatched_task.assert_not_awaited()
+    assert firing.outcome == "reacted"

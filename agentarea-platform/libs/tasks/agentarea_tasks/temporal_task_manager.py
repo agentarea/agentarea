@@ -197,6 +197,7 @@ class TemporalTaskManager(BaseTaskManager):
                 task_queue=self.task_queue,
                 retry_attempts=1,
                 start_delay=start_delay,
+                start_once=True,
             )
 
             # Debug: Log args_dict to verify workspace_id is present

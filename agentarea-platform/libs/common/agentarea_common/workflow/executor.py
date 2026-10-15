@@ -50,6 +50,9 @@ class WorkflowConfig:
     # signal, and an execution already running receives only the signal.
     start_signal: str | None = None
     start_signal_args: list[Any] = field(default_factory=list)
+    # A first start: an earlier execution of the id, open or closed, means it
+    # already started, and it is never run a second time.
+    start_once: bool = False
 
 
 class WorkflowExecutor(ABC):
