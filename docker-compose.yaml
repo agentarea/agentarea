@@ -279,6 +279,8 @@ services:
     # containers on mcp-network must not be able to reach it.
     networks:
       - default
+    # A store for the event bus, not a cache: AOF on, nothing evicted.
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   agentarea-mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}

@@ -477,12 +477,15 @@ The following table lists configurable parameters of the chart and their default
 | valkey.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
 | valkey.auth.aclUsers.default.passwordKey | string | `"redis-password"` |  |
 | valkey.replica.enabled | bool | `false` |  |
-| valkey.dataStorage.enabled | bool | `false` |  |
-| valkey.dataStorage.requestedSize | string | `"1Gi"` |  |
-| valkey.resources.limits.cpu | string | `"250m"` |  |
-| valkey.resources.limits.memory | string | `"256Mi"` |  |
+| valkey.deploymentStrategy | string | `"Recreate"` |  |
+| valkey.dataStorage.enabled | bool | `true` |  |
+| valkey.dataStorage.requestedSize | string | `"4Gi"` |  |
+| valkey.dataStorage.className | string | `""` |  |
+| valkey.valkeyConfig | string | `"appendonly yes\nappendfsync everysec\nmaxmemory 768mb\nmaxmemory-policy noeviction\n"` |  |
+| valkey.resources.limits.cpu | string | `"500m"` |  |
+| valkey.resources.limits.memory | string | `"1Gi"` |  |
 | valkey.resources.requests.cpu | string | `"100m"` |  |
-| valkey.resources.requests.memory | string | `"128Mi"` |  |
+| valkey.resources.requests.memory | string | `"1Gi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
 | rustfs.image.tag | string | `"latest"` |  |

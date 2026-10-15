@@ -10,7 +10,7 @@ related:
   - /self-host/kubernetes
   - /self-host/docker-compose
   - /self-host/troubleshooting
-last_updated: 2026-09-24
+last_updated: 2026-10-15
 ---
 
 An AgentArea upgrade is a schema migration plus a set of image replacements. The
@@ -108,6 +108,47 @@ Check the Job explicitly.
     ```
   </Step>
 
+  <Step title="Existing cluster: move Valkey onto a volume">
+    Charts released before Valkey became a store ran it on an `emptyDir` with a
+    256 MiB limit and no AOF. The first upgrade to a chart with
+    `valkey.dataStorage.enabled: true` creates a PVC and recreates the Valkey pod
+    on it, with `appendonly yes`, `appendfsync everysec`, and
+    `maxmemory-policy noeviction`.
+
+    Everything Valkey held in memory is lost at that moment. Today that is
+    transient state only: live task-event tails, sandbox execution requests,
+    channel inbound streams, and caches. Task events that matter are already in
+    PostgreSQL, and the event bus is not on Redis yet. Make this upgrade before
+    the event bus moves onto Redis, when the loss is still a few unconsumed
+    stream entries rather than undelivered bus traffic.
+
+    Choose the StorageClass and size before you upgrade. An empty `className`
+    uses the cluster's default StorageClass; a node-local class such as
+    `local-path` pins Valkey to the node that holds its volume.
+
+    ```yaml
+    valkey:
+      dataStorage:
+        className: ""          # or the StorageClass name to use
+        requestedSize: "4Gi"
+    ```
+
+    See the Valkey step in [Deploy on Kubernetes](/self-host/kubernetes) for how
+    to size memory. After the upgrade, confirm AOF is on. The Deployment is
+    named `<release>-valkey`:
+
+    ```bash
+    REDIS_PASSWORD=$(kubectl get secret -n agentarea agentarea-redis-secret \
+      -o jsonpath='{.data.redis-password}' | base64 -d)
+    kubectl exec -n agentarea deploy/agentarea-valkey -- \
+      valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning CONFIG GET appendonly
+    ```
+
+    The reply is `appendonly` then `yes`. `CONFIG GET maxmemory-policy` returns
+    `noeviction`, and `kubectl get pvc -n agentarea` lists the Valkey claim as
+    `Bound`.
+  </Step>
+
   <Step title="Upgrade on Kubernetes">
     ```bash
     helm repo update
@@ -125,7 +166,7 @@ Check the Job explicitly.
     under a running deployment.
 
     `--wait` waits on the Deployments. It does not wait on the migration Job in a
-    way you should trust — verify it separately, in step 6.
+    way you should trust — verify it separately, in step 7.
   </Step>
 
   <Step title="Upgrade on Docker Compose">

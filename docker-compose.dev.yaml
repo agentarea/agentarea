@@ -310,7 +310,8 @@ services:
     # containers on mcp-network must not be able to reach it.
     networks:
       - default
-    command: ["valkey-server", "--save", "", "--appendonly", "no"] # Disable persistence for dev
+    # A store for the event bus, not a cache: AOF on, nothing evicted.
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   traefik:
     image: traefik:v3.3

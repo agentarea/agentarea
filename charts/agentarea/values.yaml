@@ -1177,16 +1177,30 @@ valkey:
         passwordKey: "redis-password"
   replica:
     enabled: false  # Standalone mode
+  # Valkey is a store, not a cache: the event bus runs on Redis Streams
+  # consumer groups, so data must survive a restart and must never be evicted.
+  # Size memory for 24-72 h of bus and tasks topics; history lives in Postgres.
+  # Recreate stops the old pod before the new one mounts the ReadWriteOnce volume.
+  deploymentStrategy: Recreate
   dataStorage:
-    enabled: false  # Disable for development, enable for production
-    requestedSize: "1Gi"
+    enabled: true
+    requestedSize: "4Gi"
+    # StorageClass for the Valkey PVC; empty uses the cluster default.
+    className: ""
+  # maxmemory stays below the container memory limit to leave room for the
+  # AOF rewrite fork, client buffers and allocator overhead.
+  valkeyConfig: |
+    appendonly yes
+    appendfsync everysec
+    maxmemory 768mb
+    maxmemory-policy noeviction
   resources:
     limits:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 500m
+      memory: 1Gi
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 1Gi
 
 # RustFS - S3-compatible object storage
 rustfs:
