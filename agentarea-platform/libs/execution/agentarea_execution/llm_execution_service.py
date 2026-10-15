@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 ModelServiceScope = Callable[[UserContext], AbstractAsyncContextManager[ModelInstanceService]]
 ErrorPublisher = Callable[[Exception, str | None], Awaitable[None]]
+SpendCapRefusal = Callable[[LLMCallRequest, UserContext], Awaitable[None]]
 
 
 class ChunkPublisher(Protocol):
@@ -98,9 +99,11 @@ class LLMExecutionService:
         model_service_scope: ModelServiceScope,
         secret_manager_factory: SecretManagerFactory,
         local_host: str,
+        refuse_at_spend_cap: SpendCapRefusal,
         stream: bool = True,
     ) -> None:
         self._model_service_scope = model_service_scope
+        self._refuse_at_spend_cap = refuse_at_spend_cap
         self._secret_manager_factory = secret_manager_factory
         self._local_host = local_host
         self._stream = stream
@@ -218,6 +221,7 @@ class LLMExecutionService:
             # Every call is funded before its credential is read: on the platform's
             # credentials billing holds what it can cost at most, its prompt and every
             # output token it may produce.
+            await self._refuse_at_spend_cap(request, user_context)
             funding = await hold_model_call(
                 workspace_id=str(user_context.workspace_id),
                 model_instance_id=str(model_uuid),

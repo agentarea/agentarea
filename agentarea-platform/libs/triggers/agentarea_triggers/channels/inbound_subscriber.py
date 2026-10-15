@@ -13,6 +13,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
+from agentarea_common.broker.dlq import DEAD_LETTER_REASON_FIELD
 
 if TYPE_CHECKING:
     from agentarea_common.events.broker import EventBroker
@@ -175,11 +176,13 @@ class InboundMessageStreamConsumer:
         return trigger_id, {"events": [event], "channel_origin": channel_origin}
 
     async def _dead_letter(self, msg: BrokerMessage, reason: str) -> None:
-        dlq_fields = {**msg.fields, "fatal_reason": reason[:500]}
+        dlq_fields = {**msg.fields, DEAD_LETTER_REASON_FIELD: reason[:500]}
         try:
             await self._broker.submit(self._dlq_stream, dlq_fields)
         except Exception:
             logger.exception("failed to write inbound DLQ for %s", msg.id)
+        # Nothing was done for it, so a replay from the DLQ must not dedup-skip.
+        await self._dedup.release(msg.fields.get("dedup_key") or msg.id)
         await self._broker.ack(self._stream, self._group, msg.id)
         logger.error("inbound channel event DLQ'd: %s (reason=%s)", msg.id, reason)
 

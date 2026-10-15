@@ -131,6 +131,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                 or {},
             )
 
+            started = workflow.now() if self._task_log_on() else None
+            started_at = started.isoformat() if started else None
             result_obj = await self._execute_governed_tool(
                 tool_call, tool_name, tool_args, mcp_request
             )
@@ -203,6 +205,15 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                 replay_fields["replayed"] = True
             if result_dict.get("attempt"):
                 replay_fields["attempt"] = result_dict["attempt"]
+            tool_meta = {
+                "exit_code": result_dict.get("exit_code"),
+                "duration": execution_time
+                if execution_time is not None or started is None
+                else (workflow.now() - started).total_seconds(),
+                "server": result_dict.get("server_name") or result_dict.get("server_instance_id"),
+                "started_at": started_at,
+                "artifact_paths": result_dict.get("artifact_paths") or [],
+            }
             if model_cost + paid_cost > ZERO:
                 if self.budget_tracker is None:
                     raise RuntimeError("Workflow budget tracker is not initialized")
@@ -221,6 +232,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                         content=f"Tool failed: {error_message}",
                         tool_call_id=tool_call.id,
                         name=tool_name,
+                        meta=tool_meta,
                     )
                 )
                 self._events.add_event(
@@ -263,6 +275,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                     tool_call_id=tool_call.id,
                     name=tool_name,
                     attachments=result_dict.get("images") or None,
+                    meta=tool_meta,
                 )
             )
 

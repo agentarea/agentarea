@@ -1,5 +1,6 @@
 """One iteration of the agent loop: the model call and its response."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -23,14 +24,16 @@ from ..constants import (
 )
 from .compaction import CompactionMixin
 from .errors import RUN_INPUT_EXCEEDS_CONTEXT_WINDOW, ErrorReportingMixin
-from .limits import run_limit_reason
+from .limits import run_limit_reason, spend_cap_reached
 from .patches import (
     ANSWER_CHECK_BEFORE_REPLY_PATCH,
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
     RUN_INPUT_IN_FIRST_MESSAGE_PATCH,
+    SPEND_CAP_REACHED_STOPS_RUN_PATCH,
     THINKING_ONLY_REPLY_PATCH,
+    TURN_ABORTED_EVENT_PATCH,
 )
 from .tool_dispatch import ToolDispatchMixin
 
@@ -99,7 +102,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
         iteration = self.state.current_iteration
 
         self._events.add_event(
-            EventTypes.ITERATION_STARTED,
+            EventTypes.TURN_STARTED,
             {
                 "iteration": iteration,
                 "budget_remaining": serialize_money(self._budget.get_remaining()),
@@ -114,11 +117,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             await self._check_budget_status()
 
             self._events.add_event(
-                EventTypes.ITERATION_COMPLETED,
+                EventTypes.TURN_COMPLETED,
                 {"iteration": iteration, "total_cost": serialize_money(self._budget.cost)},
             )
 
-            # Emit WorkflowCompleted after IterationCompleted for conversational agents.
+            # Emit task.completed after turn.completed for conversational agents.
             # Stateless runs publish the completion event from _finalize_execution.
             if self._awaiting_input:
                 self._events.add_event(
@@ -143,9 +146,21 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 )
                 self._completion_event_published = True
 
+        except asyncio.CancelledError:
+            self._abort_turn(iteration, "cancelled")
+            raise
         except Exception as e:
-            if self._is_cancellation(e) or run_limit_reason(e):
+            if self._is_cancellation(e):
+                self._abort_turn(iteration, "cancelled")
                 raise
+            if limit := run_limit_reason(e):
+                self._abort_turn(iteration, limit)
+                raise
+            cap_reached = spend_cap_reached(e)
+            if cap_reached is not None and workflow.patched(SPEND_CAP_REACHED_STOPS_RUN_PATCH):
+                self._monthly_cap_message = cap_reached
+                self._abort_turn(iteration, "spend_cap")
+                return
             error_details = self._extract_temporal_error_details(e)
             workflow.logger.error(
                 f"Iteration {iteration} failed: {error_details}",
@@ -165,15 +180,23 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self.state.failure_reason = failure_reason
                 self.state.error_message = message
                 self.state.blocked_reason = message
+                self._abort_turn(iteration, "blocked")
                 return
             if e is not self._reported_llm_failure:
                 self._events.add_event(
                     EventTypes.LLM_CALL_FAILED,
                     {"iteration": iteration, "error": error_details},
                 )
+            self._abort_turn(iteration, "failed")
             raise
 
         await self._publish_events_immediately()
+
+    def _abort_turn(self, iteration: int, reason: str) -> None:
+        if workflow.patched(TURN_ABORTED_EVENT_PATCH):
+            self._events.add_event(
+                EventTypes.TURN_ABORTED, {"iteration": iteration, "reason": reason}
+            )
 
     def _refuse_a_head_the_window_cannot_hold(self, system_prompt: str) -> None:
         """Fail the run when its pinned head alone overflows the model's window.
@@ -592,6 +615,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 "usage": usage_info,
                 "cost": cost_value,
                 "answer_checked": answer_checked,
+                # The model that answered, as the call was made.
+                "model": {
+                    "model_id": llm_request.model_id,
+                    "model_name": (llm_request.resolved_model or {}).get("model_name"),
+                },
             }
 
         except Exception as e:
@@ -727,8 +755,14 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     role=response.get("role", "assistant"),
                     content=effective_content,
                     tool_calls=tool_calls_raw,
+                    meta=response.get("model"),
                 )
             )
+            self._turn_call_ids = {
+                call["id"]
+                for call in tool_calls_raw or []
+                if isinstance(call, dict) and isinstance(call.get("id"), str)
+            }
         else:
             workflow.logger.warning(
                 f"Received empty LLM response in iteration {self.state.current_iteration}"

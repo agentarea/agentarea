@@ -13,13 +13,10 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
     CONTINUATION_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .budget import LLM_RUN_CAP_FAILURE_REASON, MONTHLY_CAP_FAILURE_REASON
 from .continue_as_new import ContinueAsNewMixin
 from .limits import run_limit_reason
@@ -157,18 +154,13 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         self._continuation_message = message
         self.state.status = ExecutionStatus.WAITING_FOR_CONTINUATION
 
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status=ExecutionStatus.WAITING_FOR_CONTINUATION,
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status=ExecutionStatus.WAITING_FOR_CONTINUATION,
+                workspace_id=self.state.workspace_id,
+            )
         )
         self._events.add_event(
             EventTypes.WORKFLOW_AWAITING_CONTINUATION,
@@ -210,18 +202,13 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             },
         )
         await self._publish_events_immediately()
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="running",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="running",
+                workspace_id=self.state.workspace_id,
+            )
         )
         self._continuation_failure_reason = None
         self._continuation_message = None
@@ -254,18 +241,13 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         self._awaiting_input = False
 
         # Update task status back to running
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="running",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="running",
+                workspace_id=self.state.workspace_id,
+            )
         )
 
     def _should_continue_execution(self) -> tuple[bool, str | None, str]:
@@ -358,11 +340,8 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         message continues it.
         """
         stopped = {call.tool_call.id for call in self._stopped_tool_calls}
-        last_assistant = next(
-            (message for message in reversed(self.state.messages) if message.role == "assistant"),
-            None,
-        )
-        for tool_call in (last_assistant.tool_calls or []) if last_assistant else []:
+        calls, _answered = self._last_turn_tool_calls()
+        for tool_call in calls:
             call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
             if call_id in stopped:
                 self.state.messages.append(

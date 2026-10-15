@@ -1,12 +1,12 @@
-"""Webhook intake into a stream: the parsed request becomes one journal event."""
+"""Webhook intake into a stream: the parsed request becomes one event on the stream's bus."""
 
 import logging
 from typing import Any
 from uuid import UUID, uuid4
 
 from agentarea_common.events.ports import IntegrationEvent
+from agentarea_streams.application.ingest import StreamIngest
 from agentarea_streams.domain import AppendResult, StreamError, WebhookSourceSpec
-from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.orm import StreamSourceORM
 
 from .event_scrub import journal_data
@@ -67,17 +67,17 @@ def spec_from_source(source: StreamSourceORM) -> WebhookSourceSpec:
     )
 
 
-class JournalAppendCallback(WebhookExecutionCallback):
-    """Records the verified, parsed request instead of running a trigger."""
+class StreamAppendCallback(WebhookExecutionCallback):
+    """Puts the verified, parsed request on the stream's bus instead of running a trigger."""
 
-    def __init__(self, *, journal: StreamJournal, spec: WebhookSourceSpec, source_id: UUID):
-        self.journal = journal
+    def __init__(self, *, ingest: StreamIngest, spec: WebhookSourceSpec, source_id: UUID):
+        self.ingest = ingest
         self.spec = spec
         self.source_id = source_id
         self.receipt: AppendResult | None = None
-        # The journal refused the event: the sender's problem, answered 4xx.
+        # The stream refused the event: the sender's problem, answered 4xx.
         self.refusal: StreamError | None = None
-        # The journal could not take the event: ours, answered 5xx so the sender retries.
+        # The bus could not take the event: ours, answered 5xx so the sender retries.
         self.failure: Exception | None = None
 
     async def execute_webhook_trigger(
@@ -90,7 +90,7 @@ class JournalAppendCallback(WebhookExecutionCallback):
             data=journal_data(request_data),
         )
         try:
-            self.receipt = await self.journal.append(
+            self.receipt = await self.ingest.append(
                 self.spec.stream_id,
                 event,
                 event_key=webhook_event_key(self.spec.webhook_type, request_data),

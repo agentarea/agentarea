@@ -630,3 +630,20 @@ async def test_a_litellm_decision_failure_does_not_echo_the_providers_body(litel
     with pytest.raises(ModelCallError) as failed:
         await model.evaluate("state", _QUESTIONS)
     assert "cluster.local" not in str(failed.value)
+
+
+async def test_a_litellm_decision_without_a_provider_cost_is_priced_from_the_spec(litellm_wire):
+    litellm_wire(_decision_handler({}, usage={"input_tokens": 100, "output_tokens": 2}))
+    model = DecisionModel(
+        _endpoint(
+            provider_type="typesafe",
+            model_name="jev",
+            input_cost_per_token=Decimal("0.000001"),
+            output_cost_per_token=Decimal("0.00001"),
+        ),
+        http_client_factory=_client_factory(_never_called),
+    )
+
+    result = await model.evaluate("state", _QUESTIONS)
+
+    assert result.cost_usd == Decimal("0.000120")

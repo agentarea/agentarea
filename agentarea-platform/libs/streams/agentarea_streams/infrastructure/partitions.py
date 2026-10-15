@@ -1,14 +1,13 @@
-"""Keep daily journal partitions ahead of today and drop or trim expired days.
+"""Keep daily partitions of the events read model ahead of today; drop expired days.
 
 Runs inside the worker. Infrastructure across every workspace, so it declares
 why it is unscoped. ``CREATE TABLE ... PARTITION OF`` has no SQLAlchemy
 construct and is the one statement written as text.
 
-Every step commits on its own: partition DDL takes an ACCESS EXCLUSIVE lock on
-``stream_events``, which would otherwise be held -- blocking every webhook
-append and dispatcher read -- until the deletes after it finish. DDL waits at
-most ``lock_timeout`` for that lock and is retried by the next pass; deletes go
-in bounded batches.
+A day older than ``AGENTAREA_EVENT_RETENTION`` is dropped whole. Every step
+commits on its own: partition DDL takes an ACCESS EXCLUSIVE lock on
+``stream_events``, blocking the events view's writes and every read. DDL waits
+at most ``lock_timeout`` for that lock and is retried by the next pass.
 """
 
 import asyncio
@@ -16,30 +15,14 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time, timedelta
-from typing import cast
+from datetime import UTC, date, datetime, timedelta
 
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config.streams import EventStreamSettings
-from sqlalchemy import (
-    DateTime,
-    Executable,
-    MetaData,
-    Table,
-    column,
-    delete,
-    func,
-    literal,
-    select,
-    table,
-    text,
-    tuple_,
-)
+from sqlalchemy import Executable, MetaData, Table, column, func, select, table, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.schema import DropTable
-
-from .orm import StreamEventKeyORM, StreamEventORM, StreamORM
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +50,6 @@ class PartitionReport:
     created: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
     deferred: list[str] = field(default_factory=list)
-    trimmed_events: int = 0
 
 
 class PartitionMaintainer:
@@ -78,20 +60,18 @@ class PartitionMaintainer:
         clock: Callable[[], datetime] = _utcnow,
         *,
         lock_timeout: timedelta = timedelta(seconds=5),
-        batch_size: int = 5000,
     ):
         self._session_factory = session_factory
         self._settings = settings
         self._clock = clock
         self._lock_timeout = lock_timeout
-        self._batch_size = batch_size
         self._task: asyncio.Task[None] | None = None
 
     async def run_once(self) -> PartitionReport:
         report = PartitionReport()
         now = self._clock()
         today = now.date()
-        with unscoped("journal partitions span every workspace"):
+        with unscoped("read-model partitions span every workspace"):
             async with self._session_factory() as pass_lock:
                 acquired = (
                     await pass_lock.execute(
@@ -100,7 +80,7 @@ class PartitionMaintainer:
                 ).scalar_one()
                 if not acquired:
                     logger.info(
-                        "Journal partition maintenance already running in another process; "
+                        "Event partition maintenance already running in another process; "
                         + "skipping this pass"
                     )
                     return report
@@ -108,8 +88,7 @@ class PartitionMaintainer:
                     if report.deferred:
                         break
                     await self._create(today + timedelta(days=offset), report)
-                keep_days = await self._keep_days()
-                horizon = today - timedelta(days=keep_days)
+                horizon = today - timedelta(days=self._settings.RETENTION.days)
                 for name, day in await self._partitions():
                     if report.deferred:
                         break
@@ -117,17 +96,12 @@ class PartitionMaintainer:
                         name, DropTable(Table(name, MetaData()), if_exists=True), report
                     ):
                         report.dropped.append(name)
-                cutoff = datetime.combine(horizon, time.min, tzinfo=UTC)
-                while await self._prune_key_batch(cutoff) == self._batch_size:
-                    pass
-                report.trimmed_events = await self._trim_short_streams(keep_days, now)
-        if report.created or report.dropped or report.deferred or report.trimmed_events:
+        if report.created or report.dropped or report.deferred:
             logger.info(
-                "Journal partitions: created %s, dropped %s, deferred %s, trimmed %d events",
+                "Event partitions: created %s, dropped %s, deferred %s",
                 report.created,
                 report.dropped,
                 report.deferred,
-                report.trimmed_events,
             )
         return report
 
@@ -161,7 +135,7 @@ class PartitionMaintainer:
                 # longer would queue every append behind this DDL; the next pass
                 # tries again, and partitions are kept days ahead of need.
                 logger.warning(
-                    "Journal partition %s deferred to the next pass: lock_timeout %s ran out "
+                    "Event partition %s deferred to the next pass: lock_timeout %s ran out "
                     + "waiting for stream_events",
                     name,
                     timeout,
@@ -170,11 +144,6 @@ class PartitionMaintainer:
                 report.deferred.append(name)
                 return False
         return True
-
-    async def _keep_days(self) -> int:
-        async with self._session_factory() as session:
-            longest = await session.execute(select(func.max(StreamORM.retention_days)))
-            return max(longest.scalar_one() or 0, self._settings.RETENTION.days)
 
     async def _partitions(self) -> list[tuple[str, date]]:
         inherits = table("pg_inherits", column("inhrelid"), column("inhparent"))
@@ -199,78 +168,6 @@ class PartitionMaintainer:
             found.append((name, datetime.strptime(match.group(1), "%Y%m%d").date()))
         return found
 
-    async def _prune_key_batch(self, cutoff: datetime) -> int:
-        keys = cast(Table, StreamEventKeyORM.__table__)
-        doomed = (
-            select(keys.c.stream_id, keys.c.event_key)
-            .where(keys.c.received_at < cutoff)
-            .limit(self._batch_size)
-        )
-        async with self._session_factory() as session:
-            pruned = await session.execute(
-                delete(keys)
-                .where(tuple_(keys.c.stream_id, keys.c.event_key).in_(doomed))
-                .returning(keys.c.stream_id)
-            )
-            count = len(pruned.all())
-            await session.commit()
-        return count
-
-    async def _trim_short_streams(self, keep_days: int, now: datetime) -> int:
-        """Delete a stream's rows past its own retention inside partitions kept for longer ones."""
-        async with self._session_factory() as session:
-            shortest = (
-                await session.execute(
-                    select(func.min(StreamORM.retention_days)).where(
-                        StreamORM.retention_days <= keep_days
-                    )
-                )
-            ).scalar_one()
-        if shortest is None:
-            return 0
-        trimmed = 0
-        while True:
-            batch = await self._trim_batch(keep_days, now, shortest)
-            trimmed += batch
-            if batch < self._batch_size:
-                return trimmed
-
-    async def _trim_batch(self, keep_days: int, now: datetime, shortest: int) -> int:
-        # Core on the tables: the ORM-enabled form of this DELETE returns no rows.
-        events, keys, streams = (
-            cast(Table, model.__table__) for model in (StreamEventORM, StreamEventKeyORM, StreamORM)
-        )
-        at = literal(now, DateTime(timezone=True))
-        expired = (
-            select(events.c.sequence, events.c.received_at)
-            .join(streams, streams.c.id == events.c.stream_id)
-            .where(
-                streams.c.retention_days <= keep_days,
-                # A constant bound, so partitions newer than the shortest retention are pruned.
-                events.c.received_at < now - timedelta(days=shortest),
-                events.c.received_at < at - func.make_interval(0, 0, 0, streams.c.retention_days),
-            )
-            .limit(self._batch_size)
-        )
-        async with self._session_factory() as session:
-            deleted = (
-                await session.execute(
-                    delete(events)
-                    .where(tuple_(events.c.sequence, events.c.received_at).in_(expired))
-                    .returning(events.c.stream_id, events.c.event_key)
-                )
-            ).all()
-            if deleted:
-                await session.execute(
-                    delete(keys).where(
-                        tuple_(keys.c.stream_id, keys.c.event_key).in_(
-                            [(row.stream_id, row.event_key) for row in deleted]
-                        )
-                    )
-                )
-            await session.commit()
-        return len(deleted)
-
     async def start(self, interval: timedelta = timedelta(hours=1)) -> None:
         try:
             await self.run_once()
@@ -278,7 +175,7 @@ class PartitionMaintainer:
             # The worker must not start without partitions ahead of today; log with
             # the traceback before re-raising so the failure is diagnosable even if
             # the caller's own startup logging does not carry this context.
-            logger.exception("Journal partition maintenance failed on startup")
+            logger.exception("Event partition maintenance failed on startup")
             raise
         self._task = asyncio.create_task(self._loop(interval), name="stream-partitions")
 
@@ -290,7 +187,7 @@ class PartitionMaintainer:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("Journal partition maintenance failed; retrying next interval")
+                logger.exception("Event partition maintenance failed; retrying next interval")
 
     async def stop(self) -> None:
         if self._task is not None:

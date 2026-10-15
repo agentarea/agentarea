@@ -516,14 +516,14 @@ export default function FullChat({
         setIsLoading(false);
       } else if (
         canonical === "input.request" ||
-        canonical === "approval.request" ||
+        canonical === "approval.requested" ||
         canonical === "task.awaiting_follow_up"
       ) {
         setTaskLifecycleStatus(eventStateRef.current.status);
         setIsLoading(false);
       } else if (
         canonical === "input.response" ||
-        canonical === "approval.response" ||
+        canonical === "approval.decided" ||
         canonical === "llm.call.started"
       ) {
         setTaskLifecycleStatus(eventStateRef.current.status);
@@ -534,9 +534,9 @@ export default function FullChat({
       } else if (canonical === "task.continued") {
         setTaskLifecycleStatus("running");
         setIsLoading(true);
-      } else if (rawType === "execution_paused") {
+      } else if (canonical === "execution.paused") {
         setTaskLifecycleStatus("paused");
-      } else if (rawType === "execution_resumed") {
+      } else if (canonical === "execution.resumed") {
         setTaskLifecycleStatus("running");
       }
     },

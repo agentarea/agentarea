@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventFacts } from "./taskEventDisplay";
+import { eventCategory, eventFacts, eventTypeKey } from "./taskEventDisplay";
 
 describe("eventFacts tokens", () => {
   it("reads the counts a completed model call nests under usage.usage", () => {
@@ -30,5 +30,20 @@ describe("eventFacts tokens", () => {
     });
 
     expect(facts).toContainEqual({ kind: "tokens", input: 10, output: 5, cached: null });
+  });
+});
+
+describe("event types", () => {
+  it("files each type under the category of its scope", () => {
+    expect(eventCategory("turn.aborted")).toBe("turn");
+    expect(eventCategory("model.changed")).toBe("llm");
+    expect(eventCategory("service.payment")).toBe("budget");
+    expect(eventCategory("command.received")).toBe("task");
+    expect(eventCategory("some.future")).toBe("other");
+  });
+
+  it("names a type of the vocabulary and leaves anything else raw", () => {
+    expect(eventTypeKey("turn.started")).toBe("turnStarted");
+    expect(eventTypeKey("IterationStarted")).toBeNull();
   });
 });

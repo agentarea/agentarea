@@ -40,3 +40,22 @@ ANSWER_CHECK_BEFORE_REPLY_PATCH = "answer-check-before-reply-v1"
 # when the provider reported usage, is recorded flagged cancelled, and otherwise
 # the call is recorded as cut off with its cost unknown.
 STOP_SETTLES_MODEL_CALL_PATCH = "stop-settles-model-call-v1"
+# A model call refused because a monthly cap on LLM spend was reached mid-run (the
+# turn or compaction) ends the run as the start-of-run cap check does; before, the
+# refusal failed the run as a model error.
+SPEND_CAP_REACHED_STOPS_RUN_PATCH = "spend-cap-reached-stops-run-v1"
+# Every turn.started is closed: a turn that ends early (failure, cancellation, a
+# limit, a spend cap or a block) records turn.aborted with why; before, such a
+# turn just had no closing event.
+TURN_ABORTED_EVENT_PATCH = "turn-aborted-event-v1"
+# A model call a stop cuts off before the provider replied ends as a cancelled
+# llm.call.completed with its cost unknown; before, it was reported as
+# llm.call.failed, so a cancelled run read as one that hit an error.
+STOPPED_MODEL_CALL_IS_NOT_A_FAILURE_PATCH = "stopped-model-call-is-not-a-failure-v1"
+# The run writes its task log through one record activity: the log rows, the
+# task status, then its events, after each model call and tool result. Model
+# calls and compaction read the window from the log (the system prompt, the
+# latest compaction and what follows) instead of cursors the run carried, and
+# write nothing; model changes and approvals are event rows. Before, the model
+# call wrote the conversation and the status had its own activity.
+TASK_LOG_RECORD_PATCH = "task-log-record-v1"

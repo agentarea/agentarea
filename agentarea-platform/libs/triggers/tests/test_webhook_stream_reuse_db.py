@@ -17,10 +17,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
-from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.di.container import get_container
-from agentarea_common.events.ports import IntegrationEvent
-from agentarea_streams.infrastructure.journal_repository import StreamJournal
 from agentarea_streams.infrastructure.repository import StreamSourceRepository
 from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import TriggerCreate
@@ -76,17 +73,11 @@ def _webhook(service: TriggerService, name: str, webhook_id: str) -> TriggerCrea
     )
 
 
-async def test_the_recreated_trigger_continues_its_stream_after_the_events_already_there():
+async def test_the_recreated_trigger_continues_its_stream():
     async with _service() as (service, session):
         webhook_id = f"wh{uuid4().hex}"
         first = await service.create_trigger(_webhook(service, "GitHub", webhook_id))
         stream_id = (await service.stream_service.trigger_bindings([first.id]))[first.id].stream_id
-        journal = StreamJournal(
-            session, service.repository_factory.user_context, EventStreamSettings()
-        )
-        before = await journal.append(
-            stream_id, IntegrationEvent(type="push", source="webhook:github"), event_key="d-1"
-        )
         await session.commit()
 
         assert await service.delete_trigger(first.id)
@@ -99,7 +90,7 @@ async def test_the_recreated_trigger_continues_its_stream_after_the_events_alrea
         assert binding.webhook_id == webhook_id
         subscription = await service.stream_service.trigger_subscription(again.id)
         assert subscription is not None
-        assert subscription.cursor_sequence == before.sequence
+        assert subscription.stream_id == stream_id
 
 
 async def test_a_left_stream_the_creator_may_not_write_to_is_refused_by_name():
@@ -117,9 +108,7 @@ async def test_a_stream_another_source_feeds_is_never_taken_over():
     async with _service() as (service, session):
         webhook_id = f"wh{uuid4().hex}"
         name = f"GitHub ({webhook_id})"
-        custom = await service.stream_service.create_stream(
-            name=name, description="", retention_days=7
-        )
+        custom = await service.stream_service.create_stream(name=name, description="")
         await StreamSourceRepository(
             session, service.repository_factory.user_context
         ).add_webhook_source(

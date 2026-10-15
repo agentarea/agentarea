@@ -11,11 +11,11 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.broker.interface import BrokerMessage
+from agentarea_common.broker.topics import domain_events_topic
 from agentarea_common.events.adapters.redis_streams import (
     RedisStreamsEventBus,
     decode,
     encode,
-    topic_for,
 )
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_common.events.task_stream import publish_task_event, task_stream_name
@@ -140,7 +140,9 @@ async def test_failed_handler_records_error_and_is_not_acked(exporter):
     async def handler(event: IntegrationEvent) -> None:
         raise RuntimeError("boom")
 
-    await bus._handle(topic_for(_TYPE), "g1", BrokerMessage(id="1-0", fields=fields), handler)
+    await bus._handle(
+        domain_events_topic(_TYPE), "g1", BrokerMessage(id="1-0", fields=fields), handler
+    )
 
     consumer = next(s for s in exporter.get_finished_spans() if s.kind == SpanKind.CONSUMER)
     assert consumer.status.status_code == trace.StatusCode.ERROR
@@ -154,11 +156,11 @@ async def test_task_stream_event_carries_active_traceparent(exporter):
     task_id = str(uuid4())
 
     with trace.get_tracer("test").start_as_current_span("activity") as span:
-        await publish_task_event(broker, task_id=task_id, event_type="TaskStarted", data={})
+        await publish_task_event(broker, task_id=task_id, event_type="task.started", data={})
         trace_id = span.get_span_context().trace_id
 
     stream, fields = broker.submitted[0]
-    assert stream == topic_for(task_stream_name(task_id))
+    assert stream == f"tasks.events.{task_id}" == task_stream_name(task_id)
     assert _traceparent_trace_id(decode(fields).traceparent or "") == trace_id
 
 

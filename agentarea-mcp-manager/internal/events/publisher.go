@@ -14,8 +14,9 @@ import (
 // Event bus contract (ADR-0018): events are XADDed to per-type Redis Streams
 // in CloudEvents binary content mode. Envelope attributes become `ce_*` fields
 // and the payload is a JSON string under `data`. The Python API consumes these
-// via RedisStreamsEventBus — keep these constants in sync with the Python
-// `topic_for(type)` mapping (`events:<type>`) and event-type strings.
+// via RedisStreamsEventStream — keep these constants in sync with the Python
+// `domain_events_topic(type)` (`domain.events.<type>`, under the namespace
+// AGENTAREA_EVENT_NAMESPACE) and event-type strings.
 const (
 	eventSource = "agentarea-mcp-manager"
 
@@ -29,7 +30,9 @@ const (
 	streamMaxLen = 1000
 )
 
-func streamFor(eventType string) string { return "events:" + eventType }
+func streamFor(namespace, eventType string) string {
+	return namespace + ".domain.events." + eventType
+}
 
 // StatusUpdateEvent represents a container status update event
 type StatusUpdateEvent struct {
@@ -53,11 +56,12 @@ type ErrorEvent struct {
 // EventPublisher handles publishing events to Redis
 type EventPublisher struct {
 	redisClient *redis.Client
+	namespace   string
 	logger      *slog.Logger
 }
 
 // NewEventPublisher creates a new event publisher
-func NewEventPublisher(redisURL string, logger *slog.Logger) *EventPublisher {
+func NewEventPublisher(redisURL, namespace string, logger *slog.Logger) *EventPublisher {
 	var opts *redis.Options
 	if parsed, err := redis.ParseURL(redisURL); err == nil {
 		opts = parsed
@@ -75,6 +79,7 @@ func NewEventPublisher(redisURL string, logger *slog.Logger) *EventPublisher {
 
 	return &EventPublisher{
 		redisClient: rdb,
+		namespace:   namespace,
 		logger:      logger,
 	}
 }
@@ -109,7 +114,7 @@ func (p *EventPublisher) publish(ctx context.Context, eventType, subject string,
 		return err
 	}
 	return p.redisClient.XAdd(ctx, &redis.XAddArgs{
-		Stream:       streamFor(eventType),
+		Stream:       streamFor(p.namespace, eventType),
 		MaxLenApprox: streamMaxLen,
 		Values:       fields,
 	}).Err()

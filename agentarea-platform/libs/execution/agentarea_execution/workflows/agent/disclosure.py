@@ -191,14 +191,13 @@ class ToolDisclosureMixin(ToolApprovalMixin):
             result = await self._skill_tool.execute(**args)
             result_text = result.get("result", "")
 
-        self.state.messages.append(
-            Message(
-                role="tool",
-                content=result_text,
-                tool_call_id=tool_call.id,
-                name="activate_skill",
-            )
+        skill_result = Message(
+            role="tool",
+            content=result_text,
+            tool_call_id=tool_call.id,
+            name="activate_skill",
         )
+        self.state.messages.append(skill_result)
 
         if skill_name and skill_name not in self.state.activated_skills:
             self.state.activated_skills.append(skill_name)
@@ -210,12 +209,8 @@ class ToolDisclosureMixin(ToolApprovalMixin):
         materialized = await self._materialize_skill_files(skill_name)
         if materialized:
             result_text = f"{result_text}\n\n{materialized}"
-            self.state.messages[-1] = Message(
-                role="tool",
-                content=result_text,
-                tool_call_id=tool_call.id,
-                name="activate_skill",
-            )
+            # A signal handled meanwhile may have added a row after the result.
+            skill_result.content = result_text
 
         self._events.add_event(
             EventTypes.TOOL_CALL_COMPLETED,

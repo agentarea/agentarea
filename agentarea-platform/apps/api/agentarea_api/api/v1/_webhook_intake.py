@@ -1,4 +1,4 @@
-"""Public webhook intake: find the source, verify and parse, record, answer 202."""
+"""Public webhook intake: find the source, verify and parse, publish to the stream, answer 202."""
 
 import logging
 from collections.abc import Callable
@@ -9,16 +9,16 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import Settings
 from agentarea_common.events.broker import EventBroker
+from agentarea_streams.application.ingest import StreamIngest
 from agentarea_streams.domain import (
     PayloadTooLargeError,
     StreamError,
     StreamQuotaExceededError,
 )
-from agentarea_streams.domain.ports import StreamWaker
-from agentarea_streams.infrastructure.journal_repository import StreamJournal
+from agentarea_streams.infrastructure.bus import StreamBus
 from agentarea_streams.infrastructure.repository import find_webhook_source
 from agentarea_triggers.channels.secret_reader import SecretReader
-from agentarea_triggers.webhook_intake import JournalAppendCallback, spec_from_source
+from agentarea_triggers.webhook_intake import StreamAppendCallback, spec_from_source
 from agentarea_triggers.webhook_manager import DefaultWebhookManager
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,14 +42,14 @@ class WebhookSourceIntake:
         lookup_session: AsyncSession,
         session_scope: Callable[[], AbstractAsyncContextManager[AsyncSession]],
         secret_reader_for: Callable[[AsyncSession, UserContext], SecretReader],
-        waker: StreamWaker,
+        bus: StreamBus,
         event_broker: EventBroker | None,
         settings: Settings,
     ):
         self._lookup_session = lookup_session
         self._session_scope = session_scope
         self._secret_reader_for = secret_reader_for
-        self._waker = waker
+        self._bus = bus
         self._event_broker = event_broker
         self._settings = settings
 
@@ -72,8 +72,8 @@ class WebhookSourceIntake:
         context = UserContext(user_id=spec.created_by, workspace_id=spec.workspace_id)
         with workspace_scope(context.workspace_id):
             async with self._session_scope() as session:
-                callback = JournalAppendCallback(
-                    journal=StreamJournal(session, context, self._settings.streams),
+                callback = StreamAppendCallback(
+                    ingest=StreamIngest(session, context, self._settings.streams, self._bus),
                     spec=spec,
                     source_id=source.id,
                 )
@@ -107,13 +107,11 @@ class WebhookSourceIntake:
         receipt = callback.receipt
         if receipt is None:
             return result
-        if receipt.appended:
-            await self._waker.wake(spec.stream_id)
         return {
             "status_code": 202,
             "body": {
                 "status": "accepted" if receipt.appended else "duplicate",
-                "sequence": receipt.sequence,
+                "event_id": str(receipt.event_id),
             },
         }
 

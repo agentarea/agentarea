@@ -13,12 +13,9 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import AgentExecutionResult, ConversationResumeSnapshot, UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .errors import ErrorReportingMixin
 from .patches import CONVERSATION_RESUME_SNAPSHOT_PATCH, RESUME_AFTER_STOP_OR_FAILURE_PATCH
@@ -116,34 +113,29 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             and workflow.patched(CONVERSATION_RESUME_SNAPSHOT_PATCH)
             else None
         )
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status=final_status,
-                    result=json.dumps(
-                        {
-                            "response": self.state.final_response,
-                            "validation_state": self.state.validation_state,
-                        }
-                    )
-                    if self.state.final_response
-                    else None,
-                    error_message=self.state.error_message
-                    or (self.state.blocked_reason if final_status == "blocked" else None),
-                    workspace_id=self.state.workspace_id,
-                    total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
-                    own_cost=self._own_cost,
-                    tokens_used=self.state.tokens_used,
-                    conversation=self._conversation_window(),
-                    conversation_pending=conversation_pending,
-                    conversation_resume=conversation_resume,
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status=final_status,
+                result=json.dumps(
+                    {
+                        "response": self.state.final_response,
+                        "validation_state": self.state.validation_state,
+                    }
                 )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+                if self.state.final_response
+                else None,
+                error_message=self.state.error_message
+                or (self.state.blocked_reason if final_status == "blocked" else None),
+                workspace_id=self.state.workspace_id,
+                total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
+                own_cost=self._own_cost,
+                tokens_used=self.state.tokens_used,
+                conversation=self._conversation_window(),
+                conversation_pending=conversation_pending,
+                conversation_resume=conversation_resume,
+            )
         )
         self._mark_conversation_written()
         if self._interaction_contract_enabled and not settling:
@@ -216,24 +208,19 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                     "Not executed: the run failed before this call ran."
                 )
                 conversation_resume = self._conversation_resume_snapshot(len(self.state.messages))
-            await workflow.execute_activity(
-                Activities.UPDATE_TASK_STATUS,
-                args=[
-                    UpdateTaskStatusRequest(
-                        user_context_data=self.state.user_context_data,
-                        task_id=self.state.task_id,
-                        status=status,
-                        error_message=self.state.blocked_reason or error_details,
-                        workspace_id=self.state.workspace_id,
-                        total_cost=self.budget_tracker.cost if self.budget_tracker else None,
-                        own_cost=self._own_cost if self.budget_tracker else None,
-                        tokens_used=self.state.tokens_used,
-                        conversation=self._conversation_window(),
-                        conversation_pending=self._conversation_payload(),
-                        conversation_resume=conversation_resume,
-                    )
-                ],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=bookkeeping_retry_policy(),
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status=status,
+                    error_message=self.state.blocked_reason or error_details,
+                    workspace_id=self.state.workspace_id,
+                    total_cost=self.budget_tracker.cost if self.budget_tracker else None,
+                    own_cost=self._own_cost if self.budget_tracker else None,
+                    tokens_used=self.state.tokens_used,
+                    conversation=self._conversation_window(),
+                    conversation_pending=self._conversation_payload(),
+                    conversation_resume=conversation_resume,
+                )
             )
             self._mark_conversation_written()

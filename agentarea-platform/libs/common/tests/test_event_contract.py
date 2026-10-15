@@ -15,11 +15,112 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 from agentarea_common.events.contract import (
+    EVENT_DESCRIPTIONS,
+    EVENT_TYPES,
+    VOCABULARY_VERSION,
     Part,
+    UnknownEventTypeError,
     canonical_type,
     derive_part,
     reduce_parts,
+    require_known_type,
 )
+
+
+class TestVocabulary:
+    def test_is_versioned(self):
+        assert isinstance(VOCABULARY_VERSION, int)
+        assert VOCABULARY_VERSION >= 1
+
+    def test_every_type_is_dotted_lowercase(self):
+        import re
+
+        for t in EVENT_TYPES:
+            assert re.fullmatch(r"[a-z0-9_]+(\.[a-z0-9_]+)+", t), t
+
+    def test_holds_the_timeline_types(self):
+        assert {
+            "turn.started",
+            "turn.completed",
+            "turn.aborted",
+            "budget.warning",
+            "budget.exceeded",
+            "budget.updated",
+            "service.payment",
+            "service.budget_warning",
+            "service.budget_exceeded",
+            "context.compacted",
+            "context.warning",
+            "answer.checked",
+            "model.changed",
+            "model.fallback",
+            "model.unavailable",
+            "runtime.discovered",
+            "command.received",
+            "command.rejected",
+            "delegation.started",
+            "delegation.completed",
+            "delegation.failed",
+            "execution.continued_as_new",
+            "execution.paused",
+            "execution.resumed",
+            "message.queued",
+            "message.removed",
+            "input.submitted",
+        } <= EVENT_TYPES
+
+    def test_holds_the_part_and_lifecycle_types(self):
+        assert {
+            "llm.call.started",
+            "llm.call.completed",
+            "llm.call.failed",
+            "llm.call.chunk",
+            "tool.call",
+            "tool.result",
+            "tool.progress",
+            "approval.requested",
+            "approval.decided",
+            "input.request",
+            "input.response",
+            "task.started",
+            "task.completed",
+            "task.failed",
+            "task.cancelled",
+            "execution.finished",
+        } <= EVENT_TYPES
+
+    def test_known_type_passes(self):
+        assert require_known_type("turn.started") == "turn.started"
+
+    @pytest.mark.parametrize(
+        "bare",
+        ["IterationStarted", "BudgetWarning", "WorkflowCommandReceived", "MessageQueued", ""],
+    )
+    def test_bare_or_unknown_type_is_rejected(self, bare):
+        with pytest.raises(UnknownEventTypeError):
+            require_known_type(bare)
+
+    def test_unknown_type_error_is_a_value_error(self):
+        assert issubclass(UnknownEventTypeError, ValueError)
+
+    def test_every_type_is_described(self):
+        assert set(EVENT_DESCRIPTIONS) == EVENT_TYPES
+        assert all(description.strip() for description in EVENT_DESCRIPTIONS.values())
+
+    def test_webapp_mirror_holds_the_same_list_and_version(self):
+        import re
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parents[4] / "agentarea-webapp/src/lib/events/contract.ts"
+        ).read_text()
+        block = re.search(r"export const EVENT_TYPES = \[(.*?)\] as const;", source, re.S)
+        version = re.search(r"export const VOCABULARY_VERSION = (\d+);", source)
+        assert block and version
+        mirrored = re.findall(r'"([^"]+)"', block.group(1))
+        assert len(mirrored) == len(set(mirrored))
+        assert set(mirrored) == EVENT_TYPES
+        assert int(version.group(1)) == VOCABULARY_VERSION
 
 
 class TestCanonicalType:
@@ -33,8 +134,8 @@ class TestCanonicalType:
             "tool.result",
             "input.request",
             "input.response",
-            "approval.request",
-            "approval.response",
+            "approval.requested",
+            "approval.decided",
             "artifact.created",
             "task.started",
             "task.completed",
@@ -49,10 +150,10 @@ class TestCanonicalType:
 
     def test_unknown_type_is_identity(self):
         # No alias table: anything not workflow.-prefixed is returned unchanged.
-        assert canonical_type("BudgetWarning") == "BudgetWarning"
-        assert canonical_type("IterationStarted") == "IterationStarted"
+        assert canonical_type("budget.warning") == "budget.warning"
+        assert canonical_type("turn.started") == "turn.started"
 
-    def test_idempotent(self):
+    def test_idempotent_for_known_inputs(self):
         for t in (
             "llm.call.chunk",
             "tool.result",
@@ -136,17 +237,17 @@ class TestDeriveForm:
 
     def test_approval_uses_escalation_id(self):
         part = derive_part(
-            "approval.request",
+            "approval.requested",
             {"escalation_id": "esc-1", "tool_name": "shell"},
         )
         assert part is not None
         assert part.kind == "form"
         assert part.part_id == "esc-1"
-        assert part.event_type == "approval.request"
+        assert part.event_type == "approval.requested"
 
     def test_approval_response_supersedes(self):
-        req = derive_part("approval.request", {"escalation_id": "esc-3"})
-        resp = derive_part("approval.response", {"escalation_id": "esc-3"})
+        req = derive_part("approval.requested", {"escalation_id": "esc-3"})
+        resp = derive_part("approval.decided", {"escalation_id": "esc-3"})
         assert req is not None
         assert resp is not None
         assert req.part_id == resp.part_id == "esc-3"

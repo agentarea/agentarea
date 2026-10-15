@@ -43,7 +43,7 @@ async def test_a_picked_secret_is_resolved_at_use_and_cannot_be_deleted_while_in
             catalog = SecretCatalogService(session, ctx, manager)
             secret = await catalog.create_user_secret("gh-hook", "the-value")
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            stream = await service.create_stream(name="github", description="", retention_days=7)
+            stream = await service.create_stream(name="github", description="")
             await session.commit()
 
             source, issued = await create_webhook_source(

@@ -32,7 +32,7 @@ type InboundMessage struct {
 	ChannelOrigin map[string]any `json:"channel_origin"`
 }
 
-const DefaultInboundStream = "agentarea.channel.inbound"
+const DefaultInboundStream = "channel.inbound"
 
 // StreamSubmitter appends inbound channel events to a durable broker stream.
 type StreamSubmitter struct {

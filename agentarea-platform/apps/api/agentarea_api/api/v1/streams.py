@@ -1,4 +1,4 @@
-"""Streams: named event journals, their sources, subscriptions, events and outcomes."""
+"""Streams: named event streams, their sources, subscriptions, events and reactions."""
 
 import logging
 from typing import Annotated, Any
@@ -16,8 +16,8 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     ForwardLoopError,
-    JournaledEvent,
     NotAForwardError,
+    RecordedEvent,
     SourceFedByTriggerError,
     StreamInUseError,
     StreamNameTakenError,
@@ -28,6 +28,7 @@ from agentarea_streams.domain import (
 from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
 from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.source_types import STREAM_SOURCE_TYPES, StreamSourceType
+from agentarea_triggers.infrastructure.reactions import ReactionRepository, verdict_of_status
 from agentarea_triggers.webhook_verification import hmac_signature_scheme
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from pydantic import BaseModel, Field
@@ -53,12 +54,18 @@ async def get_stream_service(repository_factory: RepositoryFactoryDep) -> Stream
 StreamServiceDep = Annotated[StreamService, Depends(get_stream_service)]
 
 
+async def get_reactions(repository_factory: RepositoryFactoryDep) -> ReactionRepository:
+    return repository_factory.create_repository(ReactionRepository)
+
+
+ReactionsDep = Annotated[ReactionRepository, Depends(get_reactions)]
+
+
 class StreamResponse(BaseModel):
     id: UUID
     name: str
     description: str
     kind: str
-    retention_days: int
     created_by: str
     created_at: UtcDatetime
 
@@ -146,11 +153,7 @@ class SubscriptionResponse(BaseModel):
     trigger_id: UUID | None
     filter: dict[str, Any]
     output_stream_ids: list[UUID]
-    cursor_sequence: int
     status: str
-    attempts: int
-    last_error: str | None
-    next_attempt_at: UtcDatetime | None
     created_at: UtcDatetime
 
 
@@ -158,12 +161,14 @@ class OutcomeResponse(BaseModel):
     subscription_id: UUID
     subscription_kind: str
     trigger_id: UUID | None
-    event_sequence: int
+    event_id: UUID
     verdict: str = Field(description="reacted, skipped or error")
     reason: str | None
     score: float | None
     task_id: UUID | None
-    derived_sequences: list[int]
+    derived_event_ids: list[UUID] = Field(
+        description="Events a forward wrote into its output streams, in output-stream order."
+    )
     created_at: UtcDatetime
 
 
@@ -204,36 +209,40 @@ def _subscription(row: Any) -> SubscriptionResponse:
         trigger_id=row.trigger_id,
         filter=row.filter or {},
         output_stream_ids=[UUID(str(s)) for s in row.output_stream_ids],
-        cursor_sequence=row.cursor_sequence,
         status=row.status,
-        attempts=row.attempts,
-        last_error=row.last_error,
-        next_attempt_at=row.next_attempt_at,
+        created_at=row.created_at,
+    )
+
+
+def outcome_response(row: Any, subscription: Any | None) -> OutcomeResponse:
+    """One reaction (a trigger_executions row) of a subscription to a stream event."""
+    return OutcomeResponse(
+        subscription_id=row.subscription_id,
+        subscription_kind=subscription.kind if subscription else "deleted",
+        trigger_id=subscription.trigger_id if subscription else row.trigger_id,
+        event_id=row.event_id,
+        verdict=row.verdict or verdict_of_status(row.status).value,
+        reason=row.reason,
+        score=row.score,
+        task_id=row.task_id,
+        derived_event_ids=[UUID(str(e)) for e in row.derived_event_ids or []],
         created_at=row.created_at,
     )
 
 
 async def _events_with_outcomes(
-    service: StreamService, stream_id: UUID, events: list[JournaledEvent]
+    service: StreamService,
+    reactions: ReactionRepository,
+    stream_id: UUID,
+    events: list[RecordedEvent],
 ) -> list[StreamEventResponse]:
     subscriptions = {row.id: row for row in await service.list_subscriptions(stream_id)}
-    outcomes = await service.outcomes_for(stream_id, [e.sequence for e in events])
-    by_event: dict[int, list[OutcomeResponse]] = {}
-    for outcome in outcomes:
-        sub = subscriptions.get(outcome.subscription_id)
-        by_event.setdefault(outcome.event_sequence, []).append(
-            OutcomeResponse(
-                subscription_id=outcome.subscription_id,
-                subscription_kind=sub.kind if sub else "deleted",
-                trigger_id=sub.trigger_id if sub else None,
-                event_sequence=outcome.event_sequence,
-                verdict=outcome.verdict,
-                reason=outcome.reason,
-                score=outcome.score,
-                task_id=outcome.task_id,
-                derived_sequences=list(outcome.derived_sequences or []),
-                created_at=outcome.created_at,
-            )
+    by_event: dict[UUID, list[OutcomeResponse]] = {}
+    for row in await reactions.list_for_events(stream_id, [e.id for e in events]):
+        if row.event_id is None or row.subscription_id is None:
+            continue
+        by_event.setdefault(row.event_id, []).append(
+            outcome_response(row, subscriptions.get(row.subscription_id))
         )
     return [
         StreamEventResponse(
@@ -249,7 +258,7 @@ async def _events_with_outcomes(
             causation_id=e.causation_id,
             depth=e.depth,
             data=e.data,
-            outcomes=by_event.get(e.sequence, []),
+            outcomes=by_event.get(e.id, []),
         )
         for e in events
     ]
@@ -281,9 +290,7 @@ async def list_streams(
 )
 async def create_stream(data: StreamCreate, service: StreamServiceDep):
     try:
-        return await service.create_stream(
-            name=data.name, description=data.description, retention_days=data.retention_days
-        )
+        return await service.create_stream(name=data.name, description=data.description)
     except StreamNameTakenError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
 
@@ -482,6 +489,7 @@ async def delete_forward(
 async def list_events(
     stream_id: UUID,
     service: StreamServiceDep,
+    reactions: ReactionsDep,
     after: int | None = Query(
         None, ge=0, le=MAX_BIGINT, description="Oldest first, after this sequence."
     ),
@@ -498,7 +506,7 @@ async def list_events(
         raise HTTPException(status_code=404, detail=str(error)) from error
     full = len(events) == limit
     return StreamEventPage(
-        events=await _events_with_outcomes(service, stream_id, events),
+        events=await _events_with_outcomes(service, reactions, stream_id, events),
         next_after=events[-1].sequence if after is not None and full else None,
         next_before=events[-1].sequence if after is None and full else None,
     )
@@ -512,6 +520,7 @@ async def list_events(
 async def get_event(
     stream_id: UUID,
     service: StreamServiceDep,
+    reactions: ReactionsDep,
     # Sequences start at 1 and live in a BIGINT: anything outside is a 422, not
     # an overflow in the database.
     sequence: int = Path(ge=1, le=MAX_BIGINT),
@@ -522,7 +531,7 @@ async def get_event(
         raise HTTPException(status_code=404, detail=str(error)) from error
     if not events or events[0].sequence != sequence:
         raise HTTPException(status_code=404, detail=f"Event {sequence} not found in stream")
-    (response,) = await _events_with_outcomes(service, stream_id, events)
+    (response,) = await _events_with_outcomes(service, reactions, stream_id, events)
     return response
 
 
@@ -535,6 +544,7 @@ async def list_outcomes(
     stream_id: UUID,
     subscription_id: UUID,
     service: StreamServiceDep,
+    reactions: ReactionsDep,
     limit: int = Query(50, ge=1, le=500),
 ):
     subscriptions = {row.id: row for row in await service.list_subscriptions(stream_id)}
@@ -542,17 +552,6 @@ async def list_outcomes(
     if sub is None:
         raise HTTPException(status_code=404, detail="Subscription not found in stream")
     return [
-        OutcomeResponse(
-            subscription_id=row.subscription_id,
-            subscription_kind=sub.kind,
-            trigger_id=sub.trigger_id,
-            event_sequence=row.event_sequence,
-            verdict=row.verdict,
-            reason=row.reason,
-            score=row.score,
-            task_id=row.task_id,
-            derived_sequences=list(row.derived_sequences or []),
-            created_at=row.created_at,
-        )
-        for row in await service.outcomes_of_subscription(subscription_id, limit)
+        outcome_response(row, sub)
+        for row in await reactions.list_for_subscription(subscription_id, limit)
     ]

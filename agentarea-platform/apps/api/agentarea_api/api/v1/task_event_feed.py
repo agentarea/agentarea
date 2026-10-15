@@ -139,8 +139,9 @@ async def open_task_event_feed(
                 last_event_id,
                 tid,
             )
-    redis_url = getattr(get_settings().broker, "REDIS_URL", "redis://localhost:6379")
-    broker = RedisStreamsBroker(redis_url)
+    settings = get_settings()
+    redis_url = getattr(settings.broker, "REDIS_URL", "redis://localhost:6379")
+    broker = RedisStreamsBroker(redis_url, namespace=settings.streams.NAMESPACE)
     stream = RedisStreamsEventStream(broker)
     try:
         async for env in iter_task_event_feed(

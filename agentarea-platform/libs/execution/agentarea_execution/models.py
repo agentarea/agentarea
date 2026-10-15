@@ -91,6 +91,8 @@ class ChangeModelPayload(BaseModel):
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
+    # Who asked for the change; recorded on the task log, not part of the model.
+    changed_by: str | None = None
 
 
 class BudgetUpdatePayload(BaseModel):
@@ -113,12 +115,13 @@ class ContinueExecutionPayload(BaseModel):
 class ConversationResumeSnapshot(BaseModel):
     """Where a completed task's conversation stands, so a later run can continue it.
 
-    The cursors are a ``ConversationWindow`` without the task; the counters are the
-    run's totals, which a resumed run carries on instead of starting from zero.
+    ``next_seq`` is where the log ends; the counters are the run's totals, which a
+    resumed run carries on instead of starting from zero. The window cursors
+    are only set by runs recorded before the window was read from the log.
     """
 
-    head_seqs: list[int]
-    tail_start: int = Field(ge=0)
+    head_seqs: list[int] = Field(default_factory=list)
+    tail_start: int = Field(default=0, ge=0)
     next_seq: int = Field(ge=0)
     current_iteration: int = Field(ge=1)
     tool_calls_used: int = Field(default=0, ge=0)
@@ -517,15 +520,16 @@ class ToolDiscoveryResult(BaseModel):
 class ConversationWindow(BaseModel):
     """Where a task's conversation lives in its log and which part the model sees.
 
-    The model sees the ``head_seqs`` entries in that order (system prompt,
-    carried skills, the latest summary), then every other entry from
-    ``tail_start`` on. ``next_seq`` is where the messages a request carries
-    that are not written yet go.
+    The model sees the log's system prompt, its latest compaction and every
+    message after it, up to ``next_seq``: where the messages a request carries
+    that are not written yet go. Runs recorded before that rule carry the window
+    as cursors: the ``head_seqs`` entries in that order, then every other entry
+    from ``tail_start`` on.
     """
 
     task_id: str
-    head_seqs: list[int]
-    tail_start: int
+    head_seqs: list[int] | None = None
+    tail_start: int | None = None
     next_seq: int
 
 
@@ -775,6 +779,49 @@ class UpdateTaskStatusRequest(BaseModel):
     conversation_resume: ConversationResumeSnapshot | None = None
 
 
+class LogRow(BaseModel):
+    """One row a run appends to its task's log, at the position and id the workflow gave it.
+
+    ``kind`` is ``message``, ``compaction`` or ``event``; an event's type is its
+    ``name`` and its details its ``meta``.
+    """
+
+    seq: int
+    event_id: str
+    kind: str = "message"
+    role: str
+    content: str = ""
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+    meta: dict[str, Any] | None = None
+    iteration: int | None = None
+
+
+class RecordRequest(BaseModel):
+    """What a run records at once: log rows, the task's status, then the events it publishes.
+
+    The rows, the status and the spend and audit lines the events stand for are
+    written in one transaction; the events are then stored and published.
+    """
+
+    task_id: str
+    workspace_id: str
+    user_id: str
+    execution_id: str | None = None
+    rows: list[LogRow] = Field(default_factory=list)
+    events_json: list[str] = Field(default_factory=list)
+    status: UpdateTaskStatusRequest | None = None
+
+
+class RecordResult(BaseModel):
+    """How many rows and events a record call carried."""
+
+    rows: int
+    events: int
+
+
 class UpdateTaskStatusResult(BaseModel):
     """Result of task status update."""
 
@@ -849,12 +896,16 @@ class CompactMessagesRequest(BaseModel):
 class CompactMessagesResult(BaseModel):
     """The conversation window after compaction.
 
-    ``original_message_count`` is 0 when nothing could be compacted; the
-    pending entries are written either way, so ``conversation`` is current.
+    ``original_message_count`` is 0 when nothing could be compacted. A window
+    read from the log (no cursors) is not written by the activity: the run
+    appends the compaction row, ``summary`` plus the ``skills`` loaded so far.
+    A cursor window has its pending entries and summary written, and
+    ``conversation`` is current.
     """
 
-    conversation: ConversationWindow
+    conversation: ConversationWindow | None = None
     summary: str
+    skills: list[str] = Field(default_factory=list)
     original_message_count: int
     estimated_tokens_saved: int
     # Estimated prompt tokens of the new window, so the run does not compact

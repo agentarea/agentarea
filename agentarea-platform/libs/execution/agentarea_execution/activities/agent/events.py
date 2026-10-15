@@ -10,6 +10,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.events.task_stream import publish_task_event
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from agentarea_tasks.domain.costs import CostEntry
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from temporalio import activity
 
@@ -60,6 +61,78 @@ async def load_task_parameters(
 _WEBHOOK_ROUTE_KEY = "__task_webhook_route"
 
 
+def ledger_lines(
+    events: list[dict[str, Any]], *, workspace_id: str, user_id: str
+) -> list[CostEntry]:
+    """The spend ledger lines a batch of workflow events stands for."""
+    billing_currency = get_customer_pricing().currency()
+    return [
+        entry
+        for event in events
+        for entry in cost_entries(
+            event,
+            workspace_id=workspace_id,
+            created_by=user_id,
+            billing_currency=billing_currency,
+        )
+    ]
+
+
+async def store_task_events(
+    ctx: Any, events: list[dict[str, Any]], *, workspace_id: str, user_id: str
+) -> list[Any]:
+    """Store each event in ``task_events`` once under the workflow's id; the stored rows."""
+    task_event_service = await ctx.get_task_event_service()
+    return [
+        await task_event_service.create_workflow_event(
+            task_id=UUID(event["data"]["task_id"]),
+            event_id=UUID(event["event_id"]),
+            event_type=event["event_type"],
+            data=event["data"],
+            timestamp=datetime.fromisoformat(event["timestamp"]),
+            workspace_id=workspace_id,
+            created_by=user_id,
+        )
+        for event in events
+    ]
+
+
+async def fan_out(
+    dependencies: ActivityDependencies,
+    container: "ActivityServiceContainer",
+    user_context: UserContext,
+    events: list[dict[str, Any]],
+    stored_events: list[Any],
+) -> None:
+    """Send each stored event to the live stream and to the task's channels."""
+    task_parameters: dict[str, dict[str, Any]] = {}
+
+    async def parameters_of(task_id: str) -> dict[str, Any]:
+        if task_id not in task_parameters:
+            task_parameters[task_id] = await load_task_parameters(container, user_context, task_id)
+        return task_parameters[task_id]
+
+    for event, stored in zip(events, stored_events, strict=True):
+        if dependencies.broker_client is not None:
+            await publish_task_event(
+                dependencies.broker_client,
+                task_id=str(stored.task_id),
+                event_type=stored.event_type,
+                data=stored.data,
+                event_id=str(stored.id),
+                timestamp=stored.timestamp.isoformat(),
+            )
+
+        if dependencies.broker_client and dependencies.channel_delivery_settings:
+            await _emit_channel_deliveries(
+                event,
+                str(stored.task_id),
+                parameters_of,
+                dependencies.broker_client,
+                dependencies.channel_delivery_settings.OUT_STREAM,
+            )
+
+
 def make_events_activities(
     dependencies: ActivityDependencies, container: "ActivityServiceContainer"
 ) -> list[Callable[..., Any]]:
@@ -81,31 +154,13 @@ def make_events_activities(
         built from it.
         """
         user_context = UserContext(user_id=request.user_id, workspace_id=request.workspace_id)
-        task_parameters: dict[str, dict[str, Any]] = {}
-
-        async def parameters_of(task_id: str) -> dict[str, Any]:
-            if task_id not in task_parameters:
-                task_parameters[task_id] = await load_task_parameters(
-                    container, user_context, task_id
-                )
-            return task_parameters[task_id]
 
         try:
             events = [json.loads(event_json) for event_json in request.events_json]
             async with ActivityContext(container, user_context) as ctx:
-                task_event_service = await ctx.get_task_event_service()
-                stored_events = [
-                    await task_event_service.create_workflow_event(
-                        task_id=UUID(event["data"]["task_id"]),
-                        event_id=UUID(event["event_id"]),
-                        event_type=event["event_type"],
-                        data=event["data"],
-                        timestamp=datetime.fromisoformat(event["timestamp"]),
-                        workspace_id=request.workspace_id,
-                        created_by=request.user_id,
-                    )
-                    for event in events
-                ]
+                stored_events = await store_task_events(
+                    ctx, events, workspace_id=request.workspace_id, user_id=request.user_id
+                )
                 audited = [
                     (UUID(event["event_id"]), entry)
                     for event in events
@@ -117,41 +172,15 @@ def make_events_activities(
                         await record_tool_audit(
                             audit, event_id, entry, requested_by=request.user_id
                         )
-                billing_currency = get_customer_pricing().currency()
-                costs = [
-                    entry
-                    for event in events
-                    for entry in cost_entries(
-                        event,
-                        workspace_id=request.workspace_id,
-                        created_by=request.user_id,
-                        billing_currency=billing_currency,
-                    )
-                ]
+                costs = ledger_lines(
+                    events, workspace_id=request.workspace_id, user_id=request.user_id
+                )
                 if costs:
                     session = container._database.async_session_factory()
                     ctx._sessions.append(session)
                     await CostEntryRepository(session, user_context).record(costs)
 
-            for event, stored in zip(events, stored_events, strict=True):
-                if dependencies.broker_client is not None:
-                    await publish_task_event(
-                        dependencies.broker_client,
-                        task_id=str(stored.task_id),
-                        event_type=stored.event_type,
-                        data=stored.data,
-                        event_id=str(stored.id),
-                        timestamp=stored.timestamp.isoformat(),
-                    )
-
-                if dependencies.broker_client and dependencies.channel_delivery_settings:
-                    await _emit_channel_deliveries(
-                        event,
-                        str(stored.task_id),
-                        parameters_of,
-                        dependencies.broker_client,
-                        dependencies.channel_delivery_settings.OUT_STREAM,
-                    )
+            await fan_out(dependencies, container, user_context, events, stored_events)
         except Exception:
             logger.error(
                 "Failed to publish %d workflow events for workspace %s",

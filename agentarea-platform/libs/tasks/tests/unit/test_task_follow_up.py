@@ -217,7 +217,8 @@ async def test_task_without_snapshot_is_rebuilt_from_its_log():
     assert [(entry.seq, entry.role, entry.content) for entry in log.written] == [
         (2, "assistant", "Here they are")
     ]
-    assert resume.snapshot.head_seqs == [0]
+    # The resumed run reads its window from the log; a rebuilt snapshot sets no cursors.
+    assert resume.snapshot.head_seqs == []
     assert resume.snapshot.next_seq == 3
 
 

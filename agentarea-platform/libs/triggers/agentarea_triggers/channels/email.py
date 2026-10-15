@@ -73,7 +73,7 @@ class EmailAdapter:
                 status="warning",
             )
 
-        if event_type == "approval.request":
+        if event_type == "approval.requested":
             question = data.get("question", "Approval needed")
             return _html_wrap(
                 subject="Action Required",
@@ -83,7 +83,7 @@ class EmailAdapter:
                 status="warning",
             )
 
-        if event_type == "approval.response":
+        if event_type == "approval.decided":
             approved = data.get("approved")
             comment = data.get("comment")
             if approved is True:

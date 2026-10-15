@@ -100,6 +100,18 @@ refuses it. Deploy with `log`, clear the warnings, then switch to `enforce`.
 | `AGENTAREA_REDIS_PORT` | `global.redis.port` | `6379` |
 | `AGENTAREA_REDIS_PASSWORD` | Secret `global.secrets.redis`, key `redis-password` | generated |
 | `AGENTAREA_REDIS_URL` | see precedence below | derived |
+| `AGENTAREA_EVENT_NAMESPACE` | `global.events.namespace` | `agentarea` |
+| `AGENTAREA_EVENT_PARTITIONS` | `global.events.partitions` | `16` |
+
+Every broker topic and broker key is `<namespace>.<domain>.<dataset>`, for
+example `agentarea.channel.inbound` or `agentarea.streams.events.3`.
+`AGENTAREA_EVENT_NAMESPACE` is that first segment (lowercase letters, digits
+and `-`); the broker adapters of every service put it in front, so two
+deployments sharing one Redis need different namespaces. Stream events travel
+on `AGENTAREA_EVENT_PARTITIONS` partitions of `streams.events`, each stream on
+one of them. The API and the worker must agree on it, and changing it moves
+streams to other partitions: let the `router` and `events-view` groups drain
+first.
 
 `AGENTAREA_REDIS_URL` is emitted by `templates/_redis-url.tpl`, not by the `redis` group,
 in this order:
@@ -349,31 +361,27 @@ Read by `SecretManagerSettings` in the platform. On Kubernetes, set these throug
 ### Event streams (not in `config.yaml`)
 
 Read by `EventStreamSettings` inside both the backend (webhook intake, the
-`/streams` routes) and the worker (the dispatcher and the partition
-maintainer). Not wired into any Helm group yet — set these through
-`backend.extraEnv` and `worker.extraEnv`, matching values on both, the same
-way as the secret manager settings just above.
+`/streams` routes) and the worker (the `router` and `events-view` consumer
+groups and the partition maintainer). Not wired into any Helm group yet — set
+these through `backend.extraEnv` and `worker.extraEnv`, matching values on
+both, the same way as the secret manager settings just above.
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `AGENTAREA_EVENT_WRITE_QUOTA` | integer | `600` | Events one workspace may append per rolling minute, counted across every stream it owns. Exceeding it answers a webhook `429`. |
-| `AGENTAREA_EVENT_RETENTION` | duration | `30d` | Age past which a whole daily journal partition is dropped; the floor under every stream's own `retention_days`. |
-| `AGENTAREA_EVENT_PARTITIONS_AHEAD` | integer | `7` | Daily journal partitions kept created ahead of today. |
-| `AGENTAREA_EVENT_DISPATCH_EVERY` | duration | `2s` | How often the dispatcher polls when no Redis wake signal arrives. |
-| `AGENTAREA_EVENT_DISPATCH_BATCH` | integer | `50` | Events one subscription is handed per lease. |
+| `AGENTAREA_EVENT_RETENTION` | duration | `7d` | How long the events read model (`stream_events`) keeps a day: an older daily partition is dropped whole. One setting for every stream. |
+| `AGENTAREA_EVENT_PARTITIONS_AHEAD` | integer | `7` | Daily read-model partitions kept created ahead of today. |
 | `AGENTAREA_EVENT_FORWARD_DEPTH` | integer | `8` | Longest causation chain a forward may extend. |
-| `AGENTAREA_EVENT_MAX_ATTEMPTS` | integer | `10` | Retries of one event before its outcome is recorded `error`. |
-| `AGENTAREA_EVENT_LEASE` | duration | `5m` | How long the dispatcher holds a subscription before another instance may take it over. |
+| `AGENTAREA_EVENT_MAX_ATTEMPTS` | integer | `10` | Deliveries of one bus event before the router records the reactions still missing as `error` and moves the event to `streams.events.router.dlq`. |
 
 These share the `EVENT` domain with `AGENTAREA_EVENT_POLL_INTERVAL` and
 `AGENTAREA_EVENT_MAX_POLLERS` just below, but are unrelated settings: those
-two configure the channel-inbound poller; the eight above configure the
-event-stream journal and its dispatcher. See [Event
-streams](/concepts/integration/event-streams).
+two configure the channel-inbound poller; the five above configure the event
+bus. See [Event streams](/concepts/integration/event-streams).
 
-The API and the worker wake the dispatcher over Redis, so both refuse to start
-unless `AGENTAREA_BROKER=redis` (the default, and what every chart and Compose
-file sets).
+Stream events travel on Redis Streams (the partitions of `streams.events`, see
+the Redis group above), so the API and the worker both refuse to start unless `AGENTAREA_BROKER=redis`
+(the default, and what every chart and Compose file sets).
 
 ### Event service (group `eventService` values, chart keys only)
 
@@ -382,7 +390,7 @@ file sets).
 | Port | `eventService.port` | `8002` |
 | Poll interval | `eventService.pollInterval` | `30s` |
 | Max pollers | `eventService.maxPollers` | `10` |
-| Inbound stream | `eventService.inboundStream` | `agentarea.channel.inbound` |
+| Inbound stream | `eventService.inboundStream` | `channel.inbound` (under the namespace) |
 | Telegram long-polling | `eventService.telegramPolling.enabled` | `false` |
 
 Telegram long-polling is a development fallback. Production Telegram ingress

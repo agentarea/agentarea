@@ -34,6 +34,7 @@ except ImportError:
 from agentarea_common.auth.test_utils import create_test_user_context
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
+from agentarea_streams.domain.keys import event_id_for
 from agentarea_tasks.task_service import TaskService
 
 from tests.integration.webhook_intake_harness import intake, journal  # noqa: F401
@@ -210,7 +211,11 @@ class TestWebhookHTTPIntegration:
         )
 
         assert response.status_code == 202
-        assert response.json() == {"status": "accepted", "sequence": 1}
+        [(stream_id, _, event_key)] = journal.events
+        assert response.json() == {
+            "status": "accepted",
+            "event_id": str(event_id_for(stream_id, event_key)),
+        }
 
         event = journal.data()
         assert event["method"] == "POST"
@@ -341,7 +346,7 @@ class TestWebhookHTTPIntegration:
         # GitHub redelivers with the same delivery id: recorded once.
         again = webhook_client.post(f"/webhooks/{webhook_id}", content=raw_body, headers=headers)
         assert again.status_code == 202
-        assert again.json() == {"status": "duplicate", "sequence": response.json()["sequence"]}
+        assert again.json() == {"status": "duplicate", "event_id": response.json()["event_id"]}
 
         [(_, event, event_key)] = journal.events
         assert event_key == "x-github-delivery:12345-67890"
@@ -558,7 +563,9 @@ class TestWebhookHTTPIntegration:
                 webhook_id=str(uuid4()),
                 webhook_type=WebhookType.TELEGRAM,
                 allowed_methods=["POST"],
-                validation_rules={"secret_token": "telegram-secret-token"},  # noqa: S106  # pragma: allowlist secret
+                validation_rules={
+                    "secret_token": "telegram-secret-token"
+                },  # pragma: allowlist secret
                 created_by="test_user",
                 workspace_id="webhook-test-workspace",
             )
@@ -694,7 +701,7 @@ class TestWebhookHTTPIntegration:
         for response in responses:
             assert response.status_code == 202
             assert response.json()["status"] == "accepted"
-        assert sorted(response.json()["sequence"] for response in responses) == [1, 2, 3, 4, 5]
+        assert len({response.json()["event_id"] for response in responses}) == 5
         assert all(key.startswith("recv:") for _, _, key in journal.events)
 
     async def test_webhook_with_query_parameters(

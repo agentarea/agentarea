@@ -254,7 +254,7 @@ export function TaskConversation({
   };
 
   const pendingApproval =
-    pendingForm?.eventType === "approval.request" &&
+    pendingForm?.eventType === "approval.requested" &&
     !isInteractionClosed(pendingForm)
       ? pendingForm
       : null;

@@ -34,6 +34,7 @@ from .domain.exceptions import SchedulingNotSupportedError
 from .domain.interfaces import BaseTaskManager
 from .domain.models import AgentTask
 from .infrastructure.repository import TaskRepository
+from .model_spend_caps import refuse_model_call_at_spend_cap
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,12 @@ class DirectTaskManager(BaseTaskManager):
             for iteration in range(1, max_iterations + 1):
                 logger.info(f"DirectTaskManager: iteration {iteration}")
 
+                await refuse_model_call_at_spend_cap(
+                    self.task_repository.session,
+                    self.task_repository.user_context,
+                    policy.budget,
+                    task.agent_id,
+                )
                 funding = await hold_model_call(
                     workspace_id=task.workspace_id,
                     model_instance_id=model_instance_id,

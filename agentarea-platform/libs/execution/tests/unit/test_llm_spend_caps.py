@@ -2,6 +2,7 @@
 
 import logging
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 from agentarea_execution.models import (
     AgentExecutionResume,
@@ -10,9 +11,10 @@ from agentarea_execution.models import (
 )
 from agentarea_execution.workflows.agent.budget import LLM_RUN_CAP_FAILURE_REASON
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.helpers import BudgetTracker
+from agentarea_execution.workflows.helpers import BudgetTracker, EventManager
 from agentarea_execution.workflows.models import AgentGoal
 from temporalio import workflow as temporal_workflow
+from temporalio.exceptions import ActivityError, ApplicationError, RetryState
 
 
 def _workflow(monkeypatch, *spend_caps: dict) -> AgentExecutionWorkflow:
@@ -113,3 +115,38 @@ def test_a_resumed_run_carries_the_tasks_llm_spend_on(monkeypatch):
     )
 
     assert workflow.state.llm_cost_used == Decimal("1.2")
+
+
+async def test_a_model_call_refused_at_a_monthly_cap_stops_the_run_as_the_start_check_does(
+    monkeypatch,
+):
+    """The turn's or compaction's call refused mid-run ends the run without a grant."""
+    workflow = _workflow(monkeypatch)
+    workflow.state.current_iteration = 2
+    workflow.event_manager = EventManager("task-1", "agent-1", "execution-1")
+    monkeypatch.setattr(workflow, "_publish_events_immediately", AsyncMock())
+    refusal = ApplicationError(
+        "Workspace monthly LLM spend cap reached (2 RUB/2 RUB)",
+        type="SpendCapReachedError",
+        non_retryable=True,
+    )
+
+    async def refused_call():
+        raise ActivityError(
+            "activity failed",
+            scheduled_event_id=1,
+            started_event_id=2,
+            identity="worker",
+            activity_type="compact_messages_activity",
+            activity_id="1",
+            retry_state=RetryState.NON_RETRYABLE_FAILURE,
+        ) from refusal
+
+    monkeypatch.setattr(workflow, "_execute_traditional_iteration", refused_call)
+
+    await workflow._execute_iteration()
+
+    should_continue, reason, message = workflow._should_continue_execution()
+    assert (should_continue, reason) == (False, "monthly_spend_cap_exceeded")
+    assert message == "Workspace monthly LLM spend cap reached (2 RUB/2 RUB)"
+    assert await workflow._await_continuation(reason, message) is False

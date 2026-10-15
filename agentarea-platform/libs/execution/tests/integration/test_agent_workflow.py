@@ -91,6 +91,7 @@ async def _run(
                     make_sequenced_llm_activity(responses),
                     execute_tool,
                     capture.make_activity(),
+                    capture.make_record_activity(),
                     mock_update_task_status,
                     mock_validate_artifacts,
                 ],

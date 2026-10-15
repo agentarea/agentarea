@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -115,6 +116,7 @@ def _service(video: _Video, jobs: _Jobs, **overrides) -> MediaGenerationService:
         "image_model_id": IMAGE_MODEL,
         "video_model_id": VIDEO_MODEL,
         "call_ref": "task-1:call-1",
+        "refuse_at_spend_cap": AsyncMock(),
     }
     return MediaGenerationService(
         models=_Models(video), jobs=jobs, **{**options, **overrides}
@@ -220,6 +222,7 @@ async def test_an_image_without_a_cost_is_delivered_with_its_cost_unknown():
         image_model_id=IMAGE_MODEL,
         video_model_id=VIDEO_MODEL,
         call_ref="task-1:call-1",
+        refuse_at_spend_cap=AsyncMock(),
     )
 
     image = await service.generate_image("a cat")

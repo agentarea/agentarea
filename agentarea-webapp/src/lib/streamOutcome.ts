@@ -61,29 +61,26 @@ export function matchesDisposition(
 }
 
 /**
- * Where a forwarded event came from, parsed from its own `source` and
- * `event_key` — both set deterministically by `ForwardHandler` (forward.py:
- * `source=f"stream:{event.stream_id}"`, `event_key=f"{event.stream_id}:{event.sequence}"`).
+ * Where a forwarded event came from: its `causation_id` is the source event's
+ * id and its `source` names the source stream, both set by `ForwardHandler`
+ * (forward.py: `source=f"stream:{event.stream_id}"`, `causation_id=str(event.id)`).
  * An event nothing forwarded (no `causation_id`) has no causing event to
  * resolve; `causation_id` is only ever set by that handler.
  */
 export function resolveForwardSource(event: {
   causation_id: string | null;
   source: string;
-  event_key: string;
-}): { streamId: string; sequence: number } | null {
+}): { streamId: string; eventId: string } | null {
   if (!event.causation_id) return null;
   const sourceMatch = /^stream:(.+)$/.exec(event.source);
   if (!sourceMatch) return null;
-  const sequenceMatch = /:(\d+)$/.exec(event.event_key);
-  if (!sequenceMatch) return null;
-  return { streamId: sourceMatch[1], sequence: Number(sequenceMatch[1]) };
+  return { streamId: sourceMatch[1], eventId: event.causation_id };
 }
 
 /**
  * A forward's output streams, in the order `ForwardHandler` appended derived
  * events (`for output in sorted(subscription.output_stream_ids)`) — so
- * `outcome.derived_sequences[i]` landed in this array's `i`-th stream.
+ * `outcome.derived_event_ids[i]` landed in this array's `i`-th stream.
  */
 export function sortedForwardTargets(
   outputStreamIds: readonly string[]

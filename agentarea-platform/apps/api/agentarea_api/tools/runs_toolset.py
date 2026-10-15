@@ -575,6 +575,7 @@ class RunsToolset(Toolset):
                     )
                 except HTTPException as exc:
                     raise ToolError(exc.detail) from exc
+                body["changed_by"] = user_ctx.user_id
             else:
                 raise ToolError(f"Unknown command: {payload.command}")
 

@@ -97,6 +97,8 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.ssl | bool | `false` |  |
 | global.redis.maxConnections | int | `50` |  |
 | global.redis.connectionTimeout | string | `"5s"` |  |
+| global.events.namespace | string | `"agentarea"` |  |
+| global.events.partitions | int | `16` |  |
 | global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
 | global.storage.publicEndpoint | string | `""` |  |
@@ -286,7 +288,7 @@ The following table lists configurable parameters of the chart and their default
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
-| eventService.inboundStream | string | `"agentarea.channel.inbound"` |  |
+| eventService.inboundStream | string | `"channel.inbound"` |  |
 | eventService.telegramPolling.enabled | bool | `false` |  |
 | eventService.resources | object | `{}` |  |
 | eventService.podAnnotations | object | `{}` |  |

@@ -122,7 +122,7 @@ export function findPendingForm(state: EventState): Part | null {
     state.parts.find(
       (part) =>
         (part.eventType === "input.request" ||
-          part.eventType === "approval.request") &&
+          part.eventType === "approval.requested") &&
         part.data.interactionClosed !== true &&
         !state.completedRuns.some((run) => run.partIds.includes(part.partId))
     ) ?? null
@@ -233,7 +233,7 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
         return {
           ...next,
           status:
-            pending.eventType === "approval.request"
+            pending.eventType === "approval.requested"
               ? "waiting_for_approval"
               : "waiting_for_input",
           executionStatus: "waiting",

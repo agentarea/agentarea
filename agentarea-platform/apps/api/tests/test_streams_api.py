@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_api.api.v1.streams import get_stream_service
+from agentarea_api.api.v1.streams import get_reactions, get_stream_service
 from agentarea_api.main import app
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -16,8 +16,8 @@ from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_streams.domain import (
     ForwardLoopError,
-    JournaledEvent,
     NotAForwardError,
+    RecordedEvent,
     StreamNameTakenError,
     StreamNotFoundError,
     SubscriptionNotFoundError,
@@ -33,7 +33,6 @@ def _stream(name="feed"):
         name=name,
         description="",
         kind="custom",
-        retention_days=30,
         workspace_id="ws",
         created_by="u",
         created_at=NOW,
@@ -54,13 +53,19 @@ def graph():
 
 
 @pytest.fixture
-def service():
+def reactions():
+    return AsyncMock()
+
+
+@pytest.fixture
+def service(reactions):
     svc = AsyncMock()
     app.dependency_overrides[get_stream_service] = lambda: svc
+    app.dependency_overrides[get_reactions] = lambda: reactions
     app.dependency_overrides[get_user_context] = lambda: UserContext(user_id="u", workspace_id="ws")
     app.dependency_overrides[get_db_session] = lambda: AsyncMock()
     yield svc
-    for dep in (get_stream_service, get_user_context, get_db_session):
+    for dep in (get_stream_service, get_reactions, get_user_context, get_db_session):
         app.dependency_overrides.pop(dep, None)
 
 
@@ -82,14 +87,16 @@ async def test_the_list_shows_only_streams_the_graph_allows(client, service, gra
 
 
 @pytest.mark.asyncio
-async def test_events_come_with_every_subscription_outcome(client, service, graph):
+async def test_events_come_with_every_subscription_outcome(client, service, reactions, graph):
     stream = _stream()
     sub_id, task_id = uuid4(), uuid4()
-    event = JournaledEvent(
+    event = RecordedEvent(
         type="push",
         source="webhook:github",
         data={"n": 1},
         stream_id=stream.id,
+        workspace_id="ws",
+        created_by="u",
         sequence=41,
         event_key="k",
         received_at=NOW,
@@ -103,23 +110,21 @@ async def test_events_come_with_every_subscription_outcome(client, service, grap
             trigger_id=uuid4(),
             filter={},
             output_stream_ids=[],
-            cursor_sequence=41,
             status="active",
-            attempts=0,
-            last_error=None,
-            next_attempt_at=None,
             created_at=NOW,
         )
     ]
-    service.outcomes_for.return_value = [
+    reactions.list_for_events.return_value = [
         SimpleNamespace(
             subscription_id=sub_id,
-            event_sequence=41,
+            trigger_id=None,
+            event_id=event.id,
+            status="success",
             verdict="reacted",
             reason="refund",
             score=0.8,
             task_id=task_id,
-            derived_sequences=[],
+            derived_event_ids=[],
             created_at=NOW,
         )
     ]
@@ -131,6 +136,8 @@ async def test_events_come_with_every_subscription_outcome(client, service, grap
     assert row["outcomes"][0]["verdict"] == "reacted"
     assert row["outcomes"][0]["task_id"] == str(task_id)
     assert row["outcomes"][0]["subscription_kind"] == "trigger"
+    assert row["outcomes"][0]["event_id"] == str(event.id)
+    assert reactions.list_for_events.await_args.args == (stream.id, [event.id])
     assert page["next_after"] is None
     one = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events?after=40&limit=1")
     assert one.json()["next_after"] == 41

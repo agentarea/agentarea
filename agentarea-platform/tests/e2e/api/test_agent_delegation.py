@@ -86,8 +86,8 @@ def test_coordinator_with_one_child_completes(
     # DELEGATION_TIMEOUT cancels it — WorkflowCompleted never fires.
     events = wait_for_workflow(alice_client, coord_id, task_id, timeout=90.0)
     types = [e["event_type"] for e in events]
-    assert "AgentDelegationStarted" in types, types
-    assert "AgentDelegationCompleted" in types, types
+    assert "delegation.started" in types, types
+    assert "delegation.completed" in types, types
     assert "WorkflowCompleted" in types, types
 
     # Release the coordinator's 30-min await window.

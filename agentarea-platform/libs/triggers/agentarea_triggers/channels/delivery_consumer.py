@@ -23,6 +23,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
+from agentarea_common.broker.dlq import DEAD_LETTER_REASON_FIELD
 
 from .exceptions import ChannelDeliveryError, FatalError, RetryableError
 
@@ -240,10 +241,12 @@ class ChannelDeliveryConsumer:
         logger.debug("delivered %s/%s (attempt %d)", channel_type, dedup_key, msg.delivery_count)
 
     async def _dead_letter(self, msg: BrokerMessage, reason: str) -> None:
-        dlq_fields = {**msg.fields, "fatal_reason": reason[:500]}
+        dlq_fields = {**msg.fields, DEAD_LETTER_REASON_FIELD: reason[:500]}
         try:
             await self._broker.submit(self._dlq_stream, dlq_fields)
         except Exception:
             logger.exception("failed to write to DLQ for %s", msg.id)
+        # Nothing was done for it, so a replay from the DLQ must not dedup-skip.
+        await self._dedup.release(msg.fields.get("dedup_key") or msg.id)
         await self._broker.ack(self._stream, self._group, msg.id)
         logger.error("channel delivery DLQ'd: %s (reason=%s)", msg.id, reason)

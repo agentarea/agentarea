@@ -10,6 +10,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import to_money
+from agentarea_tasks.infrastructure.task_log import TaskOutcome
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
@@ -28,6 +29,40 @@ if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
 
 logger = logging.getLogger(__name__)
+
+
+def task_outcome(request: UpdateTaskStatusRequest) -> TaskOutcome:
+    """What a status update sets on the task row.
+
+    The result arrives as JSON (or plain text, kept as the response) and gets the
+    run's cost and token totals; the error goes to the row's ``error``; a resume
+    snapshot goes into the metadata.
+    """
+    result: dict[str, Any] | None = None
+    if request.result:
+        try:
+            result = json.loads(request.result)
+        except (json.JSONDecodeError, TypeError):
+            result = {"response": request.result}
+    elif request.total_cost is not None or request.own_cost is not None:
+        result = {}
+    if result is not None:
+        if request.total_cost is not None:
+            result["total_cost"] = str(request.total_cost)
+        if request.own_cost is not None:
+            result["own_cost"] = str(request.own_cost)
+        if request.tokens_used is not None:
+            result["tokens_used"] = request.tokens_used
+    return TaskOutcome(
+        status=request.status,
+        result=result,
+        error=request.error_message or None,
+        metadata_patch=(
+            {"conversation_resume": request.conversation_resume.model_dump()}
+            if request.conversation_resume is not None
+            else None
+        ),
+    )
 
 
 def make_task_state_activities(
@@ -60,42 +95,19 @@ def make_task_state_activities(
                     pending_entries(request.conversation.next_seq, request.conversation_pending),
                 )
             try:
-                additional_fields = {}
-                if (
-                    request.result
-                ):  # Task model expects result as dict, but request carries it as JSON string
-                    result_dict: dict[str, Any]
-                    try:
-                        result_dict = json.loads(request.result)
-                    except (json.JSONDecodeError, TypeError):
-                        result_dict = {"response": request.result}
-                    if request.total_cost is not None:
-                        # Serialize Money (Decimal) to string for JSON compatibility
-                        result_dict["total_cost"] = str(request.total_cost)
-                    if request.own_cost is not None:
-                        result_dict["own_cost"] = str(request.own_cost)
-                    if request.tokens_used is not None:
-                        result_dict["tokens_used"] = request.tokens_used
-                    additional_fields["result"] = result_dict
-                elif request.total_cost is not None or request.own_cost is not None:
-                    # Serialize Money (Decimal) to string for JSON compatibility
-                    additional_fields["result"] = {}
-                    if request.total_cost is not None:
-                        additional_fields["result"]["total_cost"] = str(request.total_cost)
-                    if request.own_cost is not None:
-                        additional_fields["result"]["own_cost"] = str(request.own_cost)
-                    if request.tokens_used is not None:
-                        additional_fields["result"]["tokens_used"] = request.tokens_used
-                if request.error_message:
-                    # Tasks table stores this as `error`, not `error_message`.
-                    additional_fields["error"] = request.error_message
-                if request.conversation_resume is not None:
+                outcome = task_outcome(request)
+                additional_fields: dict[str, Any] = {}
+                if outcome.result is not None:
+                    additional_fields["result"] = outcome.result
+                if outcome.error is not None:
+                    additional_fields["error"] = outcome.error
+                if outcome.metadata_patch is not None:
                     task = await task_repo.get_task(_UUID(request.task_id))
                     if task is None:
                         return UpdateTaskStatusResult(success=False, error="Task not found")
                     additional_fields["metadata"] = {
                         **(task.metadata or {}),
-                        "conversation_resume": request.conversation_resume.model_dump(),
+                        **outcome.metadata_patch,
                     }
 
                 updated = await task_repo.update_status(

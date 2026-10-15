@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from temporalio import workflow
-from temporalio.exceptions import is_cancelled_exception
+from temporalio.exceptions import ApplicationError, is_cancelled_exception
 
 with workflow.unsafe.imports_passed_through():
     from agentarea_agents_sdk.skills import SkillActivationTool
@@ -17,16 +17,23 @@ with workflow.unsafe.imports_passed_through():
     from ..helpers import SEEN_URLS_LIMIT, BudgetTracker, EventManager, external_urls
     from ..models import AgentExecutionState, Message, PendingEscalation
 
-from ...models import ConversationWindow, WorkflowEventsRequest
+from ...models import (
+    ConversationWindow,
+    LogRow,
+    RecordRequest,
+    UpdateTaskStatusRequest,
+    WorkflowEventsRequest,
+)
 from ..constants import (
+    ACTIVITY_TIMEOUT,
     EVENT_PUBLISH_TIMEOUT,
     EVENT_PUBLISH_WINDOW,
     Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import make_retry_policy
-from .patches import CANCELLATION_PROPAGATES_PATCH
+from ..retry import bookkeeping_retry_policy, make_retry_policy
+from .patches import CANCELLATION_PROPAGATES_PATCH, TASK_LOG_RECORD_PATCH
 
 JsonDict = dict[str, Any]
 
@@ -85,6 +92,12 @@ class AgentWorkflowBase:
         # Tool and model calls still running when the run was stopped, settled after it.
         self._stopped_tool_calls: list[Any] = []
         self._stopped_model_call: Any = None
+        # Tool call ids of the model's latest turn, which may already be in the log.
+        self._turn_call_ids: set[str] = set()
+        # On the task log: the latest recorded model turn's tool calls and the ids
+        # a recorded result answers, since the recorded rows leave state.messages.
+        self._recorded_turn_calls: list[Any] = []
+        self._recorded_turn_answered: set[str] = set()
 
     @property
     def _questions_available(self) -> bool:
@@ -118,12 +131,10 @@ class AgentWorkflowBase:
         """
         return is_cancelled_exception(error) and workflow.patched(CANCELLATION_PROPAGATES_PATCH)
 
-    def _answer_unanswered_tool_calls(self, content: str) -> None:
-        """Give every tool call of the last model turn a result.
+    def _last_turn_tool_calls(self) -> tuple[list[Any], set[str]]:
+        """The last model turn's tool calls, and the ids a result already answers.
 
-        A turn that stops before its tool calls ran would otherwise leave the
-        conversation with calls no result answers, and providers reject that on
-        the next model call.
+        On the task log that turn and its results may be recorded already.
         """
         last_assistant = next(
             (
@@ -133,14 +144,28 @@ class AgentWorkflowBase:
             ),
             None,
         )
-        if last_assistant is None:
-            return
-        answered = {
-            message.tool_call_id
-            for message in self.state.messages[last_assistant + 1 :]
-            if message.role == "tool"
-        }
-        for tool_call in self.state.messages[last_assistant].tool_calls or []:
+        if last_assistant is not None:
+            calls = list(self.state.messages[last_assistant].tool_calls or [])
+            answered: set[str] = set()
+            after = self.state.messages[last_assistant + 1 :]
+        elif self._task_log_on():
+            calls = list(self._recorded_turn_calls)
+            answered = set(self._recorded_turn_answered)
+            after = self.state.messages
+        else:
+            return [], set()
+        answered |= {m.tool_call_id for m in after if m.role == "tool" and m.tool_call_id}
+        return calls, answered
+
+    def _answer_unanswered_tool_calls(self, content: str) -> None:
+        """Give every tool call of the last model turn a result.
+
+        A turn that stops before its tool calls ran would otherwise leave the
+        conversation with calls no result answers, and providers reject that on
+        the next model call.
+        """
+        calls, answered = self._last_turn_tool_calls()
+        for tool_call in calls:
             call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
             if call_id and call_id not in answered:
                 self.state.messages.append(
@@ -151,6 +176,25 @@ class AgentWorkflowBase:
                         name=(tool_call.get("function") or {}).get("name"),
                     )
                 )
+
+    def _task_log_on(self) -> bool:
+        """Whether this run writes its task log through the record activity."""
+        return workflow.patched(TASK_LOG_RECORD_PATCH)
+
+    def _call_in_history(self, call_id: str) -> bool:
+        """Whether a tool call of this id is in the conversation, written or pending."""
+        return call_id in self._turn_call_ids or any(
+            call.get("id") == call_id
+            for message in self.state.messages
+            for call in (message.tool_calls or [])
+            if isinstance(call, dict)
+        )
+
+    def _log_event(self, event_type: str, meta: dict[str, Any]) -> None:
+        """Add an event row to the task log, recorded with the next pending rows."""
+        self.state.messages.append(
+            Message(role="event", content="", kind="event", name=event_type, meta=meta)
+        )
 
     def _has_stopped_work(self) -> bool:
         """Whether a stop interrupted a call whose outcome the run has yet to record."""
@@ -184,14 +228,20 @@ class AgentWorkflowBase:
         payload: list[dict[str, Any]] = []
         for msg in self.state.messages:
             message: dict[str, Any] = {"role": msg.role, "content": msg.content}
-            for key in ("tool_call_id", "name", "tool_calls", "attachments"):
+            for key in ("tool_call_id", "name", "tool_calls", "attachments", "meta"):
                 value = getattr(msg, key)
                 if value is not None:
                     message[key] = value
+            if msg.kind != "message":
+                message["kind"] = msg.kind
             payload.append(message)
         return payload
 
     def _conversation_window(self) -> ConversationWindow:
+        if self._task_log_on():
+            return ConversationWindow(
+                task_id=self.state.task_id, next_seq=self.state.conversation_next_seq
+            )
         return ConversationWindow(
             task_id=self.state.task_id,
             head_seqs=list(self.state.context_head_seqs),
@@ -213,26 +263,115 @@ class AgentWorkflowBase:
         del self.state.seen_urls[:-SEEN_URLS_LIMIT]
 
     def _mark_conversation_written(self) -> None:
-        """Record that an activity wrote the pending entries to the log."""
+        """Record that an activity wrote the pending entries to the log.
+
+        A run on the task log writes them only through ``_record``.
+        """
+        if self._task_log_on():
+            return
         self._remember_external_urls()
         self.state.conversation_next_seq += len(self.state.messages)
         self.state.messages = []
 
     def _apply_conversation_window(self, window: ConversationWindow) -> None:
         """Adopt the window an activity left the log in; nothing is pending after it."""
+        if window.head_seqs is None or window.tail_start is None:
+            raise ApplicationError(
+                "a cursor window carries no head or tail",
+                type="InvalidCompactionResult",
+                non_retryable=True,
+            )
         self._remember_external_urls()
         self.state.messages = []
         self.state.context_head_seqs = list(window.head_seqs)
         self.state.context_tail_start = window.tail_start
         self.state.conversation_next_seq = window.next_seq
 
+    async def _record(self, status: UpdateTaskStatusRequest | None = None) -> None:
+        """Write the pending log rows and the task's status, then publish the pending events.
+
+        One record activity does all of it, in one transaction for the rows and
+        the status; a store outage holds the run here, retrying. Every row and
+        event carries an id the workflow assigned, so a retry writes nothing twice.
+        """
+        # A run refused before its event manager exists still records its status.
+        events = self.event_manager
+        pending_events = events.get_pending_events() if events else []
+        messages = list(self.state.messages)
+        if not pending_events and not messages and status is None:
+            return
+        if events:
+            events.clear_pending_events()
+        first_seq = self.state.conversation_next_seq
+        rows = [
+            LogRow(
+                seq=first_seq + offset,
+                event_id=str(workflow.uuid4()),
+                kind=message.kind,
+                role=message.role,
+                content=message.content,
+                tool_calls=message.tool_calls,
+                tool_call_id=message.tool_call_id,
+                name=message.name,
+                attachments=message.attachments,
+                meta=message.meta,
+                iteration=self.state.current_iteration,
+            )
+            for offset, message in enumerate(messages)
+        ]
+        await workflow.execute_activity(
+            Activities.RECORD,
+            args=[
+                RecordRequest(
+                    task_id=self.state.task_id,
+                    workspace_id=self.state.workspace_id,
+                    user_id=self.state.user_id,
+                    execution_id=self.state.execution_id,
+                    rows=rows,
+                    events_json=[json.dumps(event) for event in pending_events],
+                    status=status,
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            schedule_to_close_timeout=EVENT_PUBLISH_WINDOW,
+            retry_policy=make_retry_policy(0, maximum_interval=EVENT_PUBLISH_TIMEOUT),
+        )
+        for message in messages:
+            if message.role == "assistant":
+                self._recorded_turn_calls = list(message.tool_calls or [])
+                self._recorded_turn_answered = set()
+            elif message.role == "tool" and message.tool_call_id:
+                self._recorded_turn_answered.add(message.tool_call_id)
+        # A signal handled during the call may have added rows after these.
+        self._remember_external_urls()
+        del self.state.messages[: len(messages)]
+        self.state.conversation_next_seq = first_seq + len(messages)
+
+    async def _persist_task_status(self, request: UpdateTaskStatusRequest) -> None:
+        """Store the task's status: with the pending log rows on the task log, else alone."""
+        if self._task_log_on():
+            await self._record(
+                status=request.model_copy(update={"conversation": None, "conversation_pending": []})
+            )
+            return
+        await workflow.execute_activity(
+            Activities.UPDATE_TASK_STATUS,
+            args=[request],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=bookkeeping_retry_policy(),
+        )
+
     async def _publish_events_immediately(self) -> None:
         """Persist the pending events before the run moves on.
         The events are the task's durable record, so a store outage holds the run
         here, retrying, rather than failing it or dropping the events. The
         activity writes idempotently by event id, which makes a retry that
-        follows a write it never heard back from harmless.
+        follows a write it never heard back from harmless. On the task log the
+        pending rows are recorded with them.
         """
+        if self._task_log_on():
+            await self._record()
+            return
         pending_events = self._events.get_pending_events()
         if not pending_events:
             return

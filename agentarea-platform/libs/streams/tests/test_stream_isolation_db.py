@@ -1,4 +1,4 @@
-"""Stream repositories and the journal stay in their workspace with no tenant scope bound.
+"""Stream repositories and the events view stay in their workspace with no tenant scope bound.
 
 The tenant hook ships in ``log`` mode, which lets a query through unfiltered when
 no scope is bound; these run through a plain session to prove the explicit
@@ -8,6 +8,7 @@ workspace filters hold on their own. Set STREAMS_TEST_DATABASE_URL.
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
@@ -16,20 +17,22 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
+from agentarea_streams.application.ingest import StreamIngest
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     EventFilter,
+    StreamEvent,
     StreamKind,
     StreamNotFoundError,
     SubscriptionKind,
     TriggerSubscriptionNotFoundError,
 )
-from agentarea_streams.infrastructure.journal_repository import StreamJournal
+from agentarea_streams.domain.keys import event_id_for
+from agentarea_streams.infrastructure.event_repository import StreamEventRepository
 from agentarea_streams.infrastructure.repository import (
     StreamRepository,
     StreamSourceRepository,
     StreamSubscriptionRepository,
-    SubscriptionOutcomeRepository,
     find_webhook_source,
 )
 from sqlalchemy import text
@@ -59,6 +62,15 @@ def _event(n: int = 1) -> IntegrationEvent:
     return IntegrationEvent(type="github.push", source="webhook:test", data={"n": n})
 
 
+class _Bus:
+    async def publish(self, event):
+        return True
+
+
+def _ingest(session: AsyncSession, ctx: UserContext) -> StreamIngest:
+    return StreamIngest(session, ctx, EventStreamSettings(), _Bus())  # type: ignore[arg-type]
+
+
 @dataclass(frozen=True)
 class _Owned:
     stream_id: UUID
@@ -73,7 +85,7 @@ class _Owned:
 async def _owned_by(session: AsyncSession, ctx: UserContext) -> _Owned:
     with patch(GRANT, new=AsyncMock()):
         stream = await StreamRepository(session, ctx).add_stream(
-            name="shared-name", description="", kind=StreamKind.CUSTOM, retention_days=30
+            name="shared-name", description="", kind=StreamKind.CUSTOM
         )
     webhook_id, credential_key = f"wh{uuid4().hex}", uuid4()
     source = await StreamSourceRepository(session, ctx).add_webhook_source(
@@ -101,24 +113,20 @@ async def _owned_by(session: AsyncSession, ctx: UserContext) -> _Owned:
         trigger_id=trigger_id,
         filter=EventFilter(),
         output_stream_ids=[],
-        cursor_sequence=0,
     )
-    journal = StreamJournal(session, ctx, EventStreamSettings())
-    appended = await journal.append(stream.id, _event(), event_key="k")
-    await session.execute(
-        text(
-            "INSERT INTO subscription_outcomes (id, workspace_id, created_by, subscription_id, "
-            "stream_id, event_sequence, verdict, derived_sequences, created_at, updated_at) "
-            "VALUES (:id, :ws, 'u', :sub, :stream, :seq, 'skipped', '[]', now(), now())"
-        ),
-        {
-            "id": uuid4(),
-            "ws": ctx.workspace_id,
-            "sub": subscription.id,
-            "stream": stream.id,
-            "seq": appended.sequence,
-        },
+    view = StreamEventRepository(session, ctx)
+    await view.record(
+        StreamEvent(
+            **_event().model_dump(exclude={"id"}),
+            id=event_id_for(stream.id, "k"),
+            stream_id=stream.id,
+            workspace_id=ctx.workspace_id,
+            created_by=ctx.user_id,
+            event_key="k",
+            received_at=datetime.now(UTC),
+        )
     )
+    (recorded,) = await view.read_after(stream.id, 0, 10)
     await session.commit()
     return _Owned(
         stream_id=stream.id,
@@ -127,28 +135,29 @@ async def _owned_by(session: AsyncSession, ctx: UserContext) -> _Owned:
         credential_key=credential_key,
         trigger_id=trigger_id,
         subscription_id=subscription.id,
-        sequence=appended.sequence,
+        sequence=recorded.sequence,
     )
 
 
 async def test_another_workspace_cannot_append_to_or_read_a_stream(session: AsyncSession):
     owner, other = _ctx(), _ctx()
     owned = await _owned_by(session, owner)
-    journal = StreamJournal(session, other, EventStreamSettings())
+    view = StreamEventRepository(session, other)
 
     with pytest.raises(StreamNotFoundError):
-        await journal.append(owned.stream_id, _event(2), event_key="intruder")
+        await _ingest(session, other).append(owned.stream_id, _event(2), event_key="intruder")
     await session.rollback()
     with pytest.raises(StreamNotFoundError):
-        await journal.last_sequence(owned.stream_id)
-    assert await journal.read_after(owned.stream_id, 0, 10) == []
-    assert await journal.read_before(owned.stream_id, None, 10) == []
-    assert await journal.get(owned.stream_id, owned.sequence) is None
+        await view.last_received_at(owned.stream_id)
+    assert await view.read_after(owned.stream_id, 0, 10) == []
+    assert await view.read_before(owned.stream_id, None, 10) == []
+    assert await view.last_received_by_stream([owned.stream_id]) == {}
 
-    mine = StreamJournal(session, owner, EventStreamSettings())
+    mine = StreamEventRepository(session, owner)
     assert [e.data for e in await mine.read_after(owned.stream_id, 0, 10)] == [{"n": 1}]
-    assert (await mine.get(owned.stream_id, owned.sequence)) is not None
-    assert await mine.last_sequence(owned.stream_id) == owned.sequence
+    assert [e.sequence for e in await mine.read_before(owned.stream_id, None, 1)] == [
+        owned.sequence
+    ]
 
 
 async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSession):
@@ -156,7 +165,7 @@ async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSes
     owned = await _owned_by(session, owner)
     with patch(GRANT, new=AsyncMock()):
         own_stream = await StreamRepository(session, other).add_stream(
-            name="shared-name", description="", kind=StreamKind.CUSTOM, retention_days=30
+            name="shared-name", description="", kind=StreamKind.CUSTOM
         )
     await session.commit()
 
@@ -168,9 +177,7 @@ async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSes
     subscriptions = StreamSubscriptionRepository(session, other)
     assert await subscriptions.get_for_trigger(owned.trigger_id) is None
     assert await subscriptions.list_for_stream(owned.stream_id) == []
-    outcomes = SubscriptionOutcomeRepository(session, other)
-    assert await outcomes.list_for_events(owned.stream_id, [owned.sequence]) == []
-    assert await outcomes.list_for_subscription(owned.subscription_id, 10) == []
+    assert await subscriptions.get_active(owned.subscription_id) is None
 
     service = StreamService(RepositoryFactory(session, other), EventStreamSettings())
     assert [s.id for s in await service.list_streams(limit=100, offset=0, ids=None)] == [
@@ -220,18 +227,16 @@ async def test_a_webhook_source_update_must_land_on_one_source_of_this_workspace
     assert found.webhook_type == "github" and found.workspace_id == owner.workspace_id
 
 
-async def test_journal_edges(session: AsyncSession):
+async def test_ingest_and_view_edges(session: AsyncSession):
     ctx = _ctx()
     with patch(GRANT, new=AsyncMock()):
         stream = await StreamRepository(session, ctx).add_stream(
-            name="empty", description="", kind=StreamKind.CUSTOM, retention_days=30
+            name="empty", description="", kind=StreamKind.CUSTOM
         )
     await session.commit()
-    journal = StreamJournal(session, ctx, EventStreamSettings())
 
-    assert await journal.last_sequence(stream.id) == 0
-    assert await journal.get(stream.id, 1) is None
+    assert await StreamEventRepository(session, ctx).last_received_at(stream.id) is None
     with pytest.raises(ValueError, match="event_key"):
-        await journal.append(stream.id, _event(), event_key="  ")
+        await _ingest(session, ctx).append(stream.id, _event(), event_key="  ")
     with pytest.raises(StreamNotFoundError):
-        await journal.append(uuid4(), _event(), event_key="k")
+        await _ingest(session, ctx).append(uuid4(), _event(), event_key="k")

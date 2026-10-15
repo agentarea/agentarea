@@ -12,7 +12,11 @@ from agentarea_common.auth.tool_authorization import (
     any_name_matches,
     decide_tool_policy,
 )
-from agentarea_common.events.contract import canonical_type, ensure_terminal_message
+from agentarea_common.events.contract import (
+    canonical_type,
+    ensure_terminal_message,
+    require_known_type,
+)
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 from temporalio import workflow
 
@@ -417,16 +421,13 @@ class EventManager:
     def add_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Add an event to the workflow event log.
 
-        The ``EventTypes`` constants already hold canonical dotted names, so the
-        wire speaks one vocabulary. ``canonical_type`` is applied defensively
-        (it only strips a leading ``workflow.`` prefix; a no-op for canonical
-        inputs).
+        A type outside the closed vocabulary raises ``UnknownEventTypeError``.
 
         Terminal events (completed/failed/cancelled) get a user-facing
         ``message`` (and ``reason``) so a client attaching after completion
         renders the final state from catch-up alone. No-op for other types.
         """
-        event_type = canonical_type(event_type)
+        event_type = require_known_type(canonical_type(event_type))
         if event_type == "llm.call.completed":
             data = _sanitize_llm_completed_data(data)
         elif event_type == "tool.result":

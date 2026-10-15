@@ -1,11 +1,13 @@
 from uuid import UUID, uuid4
+from zlib import crc32
 
+from agentarea_common.broker.topics import stream_events_partition
 from agentarea_streams.domain.filters import EventFilter
 from agentarea_streams.domain.keys import (
     MAX_EVENT_BYTES,
+    derived_event_id,
     encoded_size,
     event_id_for,
-    forward_event_key,
     task_id_for,
 )
 
@@ -17,15 +19,23 @@ def test_the_same_key_always_names_the_same_event():
     assert isinstance(event_id_for(stream, "gh:1"), UUID)
 
 
-def test_forward_key_is_source_stream_and_sequence():
-    src = UUID("00000000-0000-0000-0000-000000000001")
-    assert forward_event_key(src, 42) == "00000000-0000-0000-0000-000000000001:42"
+def test_a_derived_event_is_named_by_its_processor_and_source_event():
+    processor, source = uuid4(), uuid4()
+    assert derived_event_id(processor, source) == derived_event_id(processor, source)
+    assert derived_event_id(processor, source) != derived_event_id(uuid4(), source)
+    assert derived_event_id(processor, source) != derived_event_id(processor, uuid4())
 
 
 def test_task_id_is_stable_per_subscription_and_event():
-    sub = uuid4()
-    assert task_id_for(sub, 7) == task_id_for(sub, 7)
-    assert task_id_for(sub, 7) != task_id_for(sub, 8)
+    sub, event, other = uuid4(), uuid4(), uuid4()
+    assert task_id_for(sub, event) == task_id_for(sub, event)
+    assert task_id_for(sub, event) != task_id_for(sub, other)
+
+
+def test_a_stream_is_carried_on_one_stable_partition():
+    stream = UUID("00000000-0000-0000-0000-000000000001")
+    assert stream_events_partition(stream, 16) == f"streams.events.{crc32(stream.bytes) % 16}"
+    assert stream_events_partition(stream, 1) == "streams.events.0"
 
 
 def test_size_is_measured_on_the_utf8_json():

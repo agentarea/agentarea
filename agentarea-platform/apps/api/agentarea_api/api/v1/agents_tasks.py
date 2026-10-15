@@ -19,7 +19,6 @@ from agentarea_agents.application.execution_service import (
 from agentarea_agents.application.temporal_workflow_service import (
     TemporalWorkflowService,
 )
-from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
     get_agent_service,
@@ -65,15 +64,14 @@ from agentarea_tasks.domain.exceptions import (
     SchedulingNotSupportedError,
 )
 from agentarea_tasks.domain.models import TaskProvenance
-from agentarea_tasks.domain.statuses import TaskStatus
-from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from agentarea_tasks.domain.statuses import ENDED_TASK_STATUSES, TaskStatus
+from agentarea_tasks.infrastructure.repository import TaskEventRepository, TaskRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-from sqlalchemy import text
 
 from ._task_authority import requires_task_authority
 
@@ -1813,13 +1811,10 @@ async def read_task_sandbox_file(
 
 
 class TaskSummary(BaseModel):
-    """Headline rollup for a single task, derived from the event log.
+    """Headline rollup for a single task: its run times, answer, error and spend.
 
-    Backed by the ``task_summary`` Postgres view. Stable contract — when
-    the view's implementation moves to a materialized view or projection
-    table, this shape stays the same. Per-tool breakdowns and per-artifact
-    lists are deliberately not here; they live in their own endpoints so
-    this stays small and additive.
+    Read from the task row and the spend ledger. ``cost_usd`` sums the task's
+    current ledger lines in the billing currency.
     """
 
     task_id: UUID
@@ -1829,14 +1824,6 @@ class TaskSummary(BaseModel):
     started_at: UtcDatetime | None = None
     ended_at: UtcDatetime | None = None
     duration_ms: float | None = None
-    iterations: int = 0
-    llm_calls: int = 0
-    llm_calls_failed: int = 0
-    tools_called: int = 0
-    tools_failed: int = 0
-    delegations_started: int = 0
-    delegations_completed: int = 0
-    delegations_failed: int = 0
     cost_usd: float = 0.0
     final_response: str | None = None
     last_error: str | None = None
@@ -1853,38 +1840,35 @@ async def get_task_summary(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    session: ReadDatabaseSessionDep,
+    repository_factory: ReadRepositoryFactoryDep,
 ) -> TaskSummary:
-    """Per-task rollup derived from the event log via the ``task_summary`` view.
+    """Per-task rollup from the task row and the spend ledger.
 
-    Workspace-scoped: the row must belong to the caller's workspace and
+    Workspace-scoped: the task must belong to the caller's workspace and
     the agent must match, or we return 404 (same shape as other task
     endpoints — no information leak).
     """
-    row = (
-        (
-            await session.execute(
-                text(
-                    "SELECT * FROM task_summary "
-                    "WHERE task_id = :task_id "
-                    "AND workspace_id = :workspace_id "
-                    "AND agent_id = :agent_id"
-                ),
-                {
-                    "task_id": str(task_id),
-                    "workspace_id": user_context.workspace_id,
-                    "agent_id": str(agent_id),
-                },
-            )
-        )
-        .mappings()
-        .first()
-    )
-
-    if not row:
+    tasks = repository_factory.create_repository(TaskRepository)
+    task = await tasks.get_task(task_id)
+    if task is None or task.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    return TaskSummary(**dict(row))
+    ended_at = task.completed_at if task.status in ENDED_TASK_STATUSES else None
+    response = task.result.get("response") if isinstance(task.result, dict) else None
+    return TaskSummary(
+        task_id=task.id,
+        agent_id=task.agent_id,
+        workspace_id=user_context.workspace_id,
+        status=task.status,
+        started_at=task.started_at,
+        ended_at=ended_at,
+        duration_ms=(ended_at - task.started_at).total_seconds() * 1000
+        if ended_at and task.started_at
+        else None,
+        cost_usd=float(await tasks.sum_task_spend(task.id)),
+        final_response=response if isinstance(response, str) else None,
+        last_error=task.error,
+    )
 
 
 @router.delete(
@@ -2348,7 +2332,7 @@ async def send_task_command(
                 )
             resolved = await _resolve_model_info(payload.model_instance_id, model_instance_service)
             delivered = await workflow_task_service.send_workflow_command(
-                execution_id, "change_model", resolved
+                execution_id, "change_model", {**resolved, "changed_by": user_context.user_id}
             )
 
         elif payload.command == "queue_message":

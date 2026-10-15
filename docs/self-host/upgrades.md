@@ -118,9 +118,10 @@ Check the Job explicitly.
     Everything Valkey held in memory is lost at that moment. Today that is
     transient state only: live task-event tails, sandbox execution requests,
     channel inbound streams, and caches. Task events that matter are already in
-    PostgreSQL, and the event bus is not on Redis yet. Make this upgrade before
-    the event bus moves onto Redis, when the loss is still a few unconsumed
-    stream entries rather than undelivered bus traffic.
+    PostgreSQL. Stream events run on Valkey from the release that moves the event
+    bus there (next step), so move Valkey onto a volume in an earlier upgrade, when
+    the loss is still a few unconsumed stream entries rather than undelivered
+    stream events.
 
     Choose the StorageClass and size before you upgrade. An empty `className`
     uses the cluster's default StorageClass; a node-local class such as
@@ -147,6 +148,38 @@ Check the Job explicitly.
     The reply is `appendonly` then `yes`. `CONFIG GET maxmemory-policy` returns
     `noeviction`, and `kubectl get pvc -n agentarea` lists the Valkey claim as
     `Bound`.
+  </Step>
+
+  <Step title="Existing cluster: stream events move onto Valkey">
+    Before this release, stream events were journaled in PostgreSQL and a worker
+    loop dispatched them to subscriptions. From it, intake publishes each event to
+    `<namespace>.streams.events.<partition>` in Valkey, and two worker consumer
+    groups, `router` and `events-view`, react to it and record it. The migration
+    drops the old per-subscription cursors, so an event received before the
+    upgrade and not yet dispatched is not reacted to after it. Upgrade when no
+    webhook or poller is sending, or accept that the last few seconds of events
+    get no reaction.
+
+    Every broker key now sits under one namespace, `AGENTAREA_EVENT_NAMESPACE`
+    (default `agentarea`), which replaces `AGENTAREA_KAFKA_PREFIX`:
+
+    | Before | After |
+    |---|---|
+    | `events:task.<id>` | `agentarea.tasks.events.<id>` |
+    | `events:<event type>` | `agentarea.domain.events.<event type>` |
+    | `agentarea.channel.inbound`, `agentarea.channel.outbound` | unchanged |
+
+    If you set `AGENTAREA_CHANNEL_IN_STREAM` or `AGENTAREA_CHANNEL_OUT_STREAM` with
+    an `agentarea.` prefix, drop the prefix: the namespace adds it. An open task
+    page loses its live tail at the switch and picks it up again on reload.
+
+    The API, worker, `agentarea-events` and `agentarea-mcp-manager` all publish
+    under the namespace. Roll them to the same release together; while versions
+    are mixed, old and new components write to different keys.
+
+    `AGENTAREA_EVENT_PARTITIONS` (default 16) maps each stream to one partition.
+    Choose it before the first start. Changing it later moves streams to other
+    partitions, so stop intake and let the `router` group drain first.
   </Step>
 
   <Step title="Upgrade on Kubernetes">

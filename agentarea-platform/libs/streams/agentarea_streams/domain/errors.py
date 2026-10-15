@@ -109,7 +109,3 @@ class NotAForwardError(StreamError):
 
 class ForwardLoopError(StreamError):
     """A forward that would write into its own input, or past the causation depth."""
-
-
-class LeaseLostError(StreamError):
-    """Another dispatcher took the subscription; this one must stop writing for it."""

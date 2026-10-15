@@ -133,3 +133,19 @@ async def test_inbound_stream_execution_failure_releases_dedup_without_ack():
     assert broker.acked == []
     assert broker.submitted == []
     assert dedup.release_calls == ["retry-me"]
+
+
+@pytest.mark.asyncio
+async def test_inbound_stream_dead_letter_releases_dedup_so_a_replay_runs():
+    broker = FakeBroker()
+    dedup = FakeDedup()
+    consumer = InboundConsumerHarness(broker, dedup)
+    msg = BrokerMessage(
+        id="1-0",
+        fields={"trigger_id": "trigger-1", "event": "{bad", "dedup_key": "bad"},
+    )
+
+    await consumer.handle(msg)
+
+    assert broker.submitted[0][0] == "inbound.dlq"
+    assert dedup.release_calls == ["bad"]

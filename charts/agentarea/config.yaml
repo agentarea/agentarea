@@ -22,6 +22,9 @@ groups:
     configVars:
       AGENTAREA_REDIS_HOST: '{{ include "agentarea.redis.host" . }}'
       AGENTAREA_REDIS_PORT: '{{ .Values.global.redis.port }}'
+      # Every service that talks to the broker names topics under this namespace.
+      AGENTAREA_EVENT_NAMESPACE: '{{ .Values.global.events.namespace }}'
+      AGENTAREA_EVENT_PARTITIONS: '{{ .Values.global.events.partitions }}'
     secrets:
       - name: AGENTAREA_REDIS_PASSWORD
         secretName: "{{ .Values.global.secrets.redis }}"

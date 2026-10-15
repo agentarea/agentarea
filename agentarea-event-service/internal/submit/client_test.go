@@ -23,7 +23,7 @@ func (f *fakeBroker) EnsureGroup(ctx context.Context, stream, group, start strin
 
 func TestStreamSubmitterWritesInboundStream(t *testing.T) {
 	b := &fakeBroker{}
-	s := NewStreamSubmitter(b, "agentarea.channel.inbound")
+	s := NewStreamSubmitter(b, "channel.inbound")
 
 	err := s.SubmitEvent(
 		context.Background(),
@@ -43,7 +43,7 @@ func TestStreamSubmitterWritesInboundStream(t *testing.T) {
 		t.Fatalf("SubmitEvent returned error: %v", err)
 	}
 
-	if b.stream != "agentarea.channel.inbound" {
+	if b.stream != "channel.inbound" {
 		t.Fatalf("stream = %q", b.stream)
 	}
 	if b.fields["trigger_id"] != "trigger-1" {

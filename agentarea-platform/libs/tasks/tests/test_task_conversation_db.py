@@ -67,7 +67,7 @@ async def test_the_window_is_the_head_in_order_then_the_tail_range(session):
         [
             _entry(0, "system", role="system"),
             *(_entry(seq, f"turn {seq}") for seq in range(1, 6)),
-            _entry(6, "summary of 1-3", kind="summary"),
+            _entry(6, "summary of 1-3", kind="compaction"),
             _entry(7, "after the bound"),
         ],
     )
@@ -76,7 +76,7 @@ async def test_the_window_is_the_head_in_order_then_the_tail_range(session):
 
     assert [entry.seq for entry in head] == [0, 6]
     assert [entry.seq for entry in tail] == [4, 5]
-    assert head[1].kind == "summary"
+    assert head[1].kind == "compaction"
 
 
 async def test_another_workspace_cannot_read_or_overwrite_the_log(session):

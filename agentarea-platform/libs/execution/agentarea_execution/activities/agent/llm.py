@@ -21,7 +21,14 @@ from agentarea_common.model_charges import (
 from agentarea_common.money import ZERO, to_money, to_optional_money
 from agentarea_common.utils.url_safety import endpoint_policy_for
 from agentarea_governance.domain.exceptions import GovernanceDeniedError
+from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.model_spend_caps import (
+    SpendCapReachedError,
+    caps_monthly_spend,
+    refuse_model_call_at_spend_cap,
+)
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -43,7 +50,11 @@ from ...models import (
     ResolvedModelInfo,
     ResolveModelRequest,
 )
-from ...workflows.context_manager import compactable_prefix, estimate_tokens_for_messages
+from ...workflows.context_manager import (
+    COMPACTION_SUMMARY_HEADER,
+    compactable_prefix,
+    estimate_tokens_for_messages,
+)
 from ...workflows.context_store import ContextStore
 from ..event_publisher import _is_non_retryable_error, create_event_publisher
 from ..heartbeat import auto_heartbeater
@@ -59,8 +70,16 @@ def _model_call_failure(message: str, error: Exception) -> ApplicationError:
     """The activity failure for a model call, carrying its classified cause.
 
     Billing refusing to hold the call is a gate verdict, read by the workflow as the
-    entitlement gate's is: the same code, never retried.
+    entitlement gate's is: the same code, never retried. A monthly LLM spend cap
+    reached refuses it the same way under its own type, which ends the run on the cap.
     """
+    if isinstance(error, SpendCapReachedError):
+        return ApplicationError(
+            error.reason,
+            {"code": error.code, "reason": error.reason},
+            type=SpendCapReachedError.__name__,
+            non_retryable=True,
+        )
     if isinstance(error, ModelCallRefusedError):
         return ApplicationError(
             f"billing: {error.reason}",
@@ -99,10 +118,38 @@ def make_llm_activities(
         async with ActivityContext(container, user_context) as ctx:
             yield await ctx.get_model_instance_service()
 
+    async def refuse_past_monthly_spend_cap(
+        user_context: UserContext,
+        effective_policy: dict[str, Any] | None,
+        agent_id: str | None,
+        task_id: str | None,
+    ) -> None:
+        """Refuse a run's model call once a monthly spend cap it falls under is reached.
+
+        Without ``agent_id`` (compaction) the call is for the agent of ``task_id``.
+        """
+        budget = effective_policy_from_json(effective_policy).budget
+        if not caps_monthly_spend(budget):
+            return
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            if agent_id is None and task_id is not None:
+                task = await TaskRepository(session, user_context).get_task(UUID(task_id))
+                if task is None:
+                    raise ValueError(f"task {task_id} not found")
+                agent_id = str(task.agent_id)
+            await refuse_model_call_at_spend_cap(
+                session, user_context, budget, UUID(agent_id) if agent_id else None
+            )
+
     llm_service = llm_execution_service.LLMExecutionService(
         model_service_scope=model_service_scope,
         secret_manager_factory=dependencies.secret_manager_factory,
         local_host=dependencies.settings.app.local_host,
+        refuse_at_spend_cap=lambda request, user_context: refuse_past_monthly_spend_cap(
+            user_context, request.effective_policy, request.agent_id, request.task_id
+        ),
     )
 
     @activity.defn
@@ -193,11 +240,17 @@ def make_llm_activities(
             user_context = create_user_context(request.user_context_data)
 
             if request.conversation is not None:
-                head, tail, _ = await conversation_log.sync_window(
-                    container, user_context, request.conversation, request.messages
-                )
+                if request.conversation.head_seqs is None:
+                    entries = await conversation_log.read_window(
+                        container, user_context, request.conversation, request.messages
+                    )
+                else:
+                    head, tail, _ = await conversation_log.sync_window(
+                        container, user_context, request.conversation, request.messages
+                    )
+                    entries = [*head, *tail]
                 request = request.model_copy(
-                    update={"messages": [entry.as_message() for entry in (*head, *tail)]}
+                    update={"messages": [entry.as_message() for entry in entries]}
                 )
             on_chunk = None
             if request.task_id and dependencies.broker_client is not None:
@@ -230,11 +283,13 @@ def make_llm_activities(
     async def compact_messages_activity(
         request: CompactMessagesRequest,
     ) -> CompactMessagesResult:
-        """Summarize the older part of a task's conversation in its log.
+        """Summarize a task's conversation for a compaction row.
 
-        Uses the same model as the agent. The summary replaces the summarized
-        entries in the window the model sees; activated skill content is carried
-        over verbatim, and the most recent entries stay as they are.
+        Uses the same model as the agent. A window read from the log is
+        summarized whole, the previous compaction folded in; the run appends the
+        row (summary plus the skills loaded so far), nothing is written here. A
+        cursor window (runs recorded before) keeps its most recent entries and
+        has its summary written by this activity.
         """
         try:
             model_uuid = UUID(request.model_id)
@@ -247,29 +302,57 @@ def make_llm_activities(
                 raise ValueError("Either workspace_id or user_context_data must be provided")
 
             window = request.conversation
-            head, tail, end_seq = await conversation_log.sync_window(
-                container, user_context, window, request.pending
-            )
-            count = compactable_prefix([entry.as_message() for entry in tail], request.keep_recent)
-            if count == 0:
-                return CompactMessagesResult(
-                    conversation=window.model_copy(update={"next_seq": end_seq}),
-                    summary="",
-                    original_message_count=0,
-                    estimated_tokens_saved=0,
-                    context_tokens=estimate_tokens_for_messages(
-                        [entry.as_message() for entry in (*head, *tail)]
-                    ),
+            from_log = window.head_seqs is None
+            head: list[ConversationEntry] = []
+            kept: list[ConversationEntry] = []
+            skills: list[ConversationEntry] = []
+            system: list[ConversationEntry] = []
+            carried_skills: list[str] = []
+            end_seq = window.next_seq
+            if from_log:
+                # The whole conversation is summarized; the run appends the row.
+                entries = await conversation_log.read_window(
+                    container, user_context, window, request.pending
                 )
-            removed, kept = tail[:count], tail[count:]
-            skills = [e for e in removed if SkillContextGuard.is_protected(e.as_message())]
-            messages_to_compact = [
-                entry.as_message()
-                for entry in (
-                    *(e for e in head if e.kind == "summary"),
-                    *(e for e in removed if e not in skills),
+                messages_to_compact, carried_skills, removed = conversation_log.compaction_input(
+                    entries
                 )
-            ]
+                if not removed:
+                    return CompactMessagesResult(
+                        summary="",
+                        original_message_count=0,
+                        estimated_tokens_saved=0,
+                        context_tokens=estimate_tokens_for_messages(
+                            [entry.as_message() for entry in entries]
+                        ),
+                    )
+                system = [e for e in entries if e.kind == "message" and e.role == "system"][:1]
+            else:
+                head, tail, end_seq = await conversation_log.sync_window(
+                    container, user_context, window, request.pending
+                )
+                count = compactable_prefix(
+                    [entry.as_message() for entry in tail], request.keep_recent
+                )
+                if count == 0:
+                    return CompactMessagesResult(
+                        conversation=window.model_copy(update={"next_seq": end_seq}),
+                        summary="",
+                        original_message_count=0,
+                        estimated_tokens_saved=0,
+                        context_tokens=estimate_tokens_for_messages(
+                            [entry.as_message() for entry in (*head, *tail)]
+                        ),
+                    )
+                removed, kept = tail[:count], tail[count:]
+                skills = [e for e in removed if SkillContextGuard.is_protected(e.as_message())]
+                messages_to_compact = [
+                    entry.as_message()
+                    for entry in (
+                        *(e for e in head if e.kind == "compaction"),
+                        *(e for e in removed if e not in skills),
+                    )
+                ]
 
             history_chunk_stored = False
             if request.history_chunk_index is not None:
@@ -358,32 +441,7 @@ def make_llm_activities(
                     "127.0.0.1", local_host
                 )
 
-            # Build compaction prompt
-            conversation_text = ""
-            for msg in messages_to_compact:
-                role = msg.get("role", "unknown")
-                content = msg.get("content", "")
-                if msg.get("tool_calls"):
-                    tool_names = [
-                        tc.get("function", {}).get("name", "?")
-                        for tc in msg["tool_calls"]
-                        if isinstance(tc, dict)
-                    ]
-                    content += f" [Called tools: {', '.join(tool_names)}]"
-                if msg.get("name"):
-                    role = f"tool({msg['name']})"
-                conversation_text += f"[{role}]: {content}\n"
-
-            compaction_prompt = (
-                "Summarize the following conversation history concisely. Preserve:\n"
-                "1. The original task/goal\n"
-                "2. Key decisions made and reasoning\n"
-                "3. Important tool results and data obtained\n"
-                "4. Current state of progress\n"
-                "5. Any errors encountered and how they were handled\n\n"
-                "Be concise but complete. Use bullet points for key facts.\n\n"
-                f"Conversation to summarize:\n{conversation_text}"
-            )
+            compaction_prompt = conversation_log.compaction_prompt(messages_to_compact)
 
             summary_request = LLMRequest(
                 messages=[
@@ -409,6 +467,9 @@ def make_llm_activities(
             final_cost = ZERO
             # Compaction spends against the same run budget as the loop's calls, and
             # is funded, held and priced by billing the same way.
+            await refuse_past_monthly_spend_cap(
+                user_context, request.effective_policy, None, window.task_id
+            )
             funding = await hold_model_call(
                 workspace_id=str(user_context.workspace_id),
                 model_instance_id=str(model_uuid),
@@ -464,6 +525,39 @@ def make_llm_activities(
 
             charge = await charge_model_call(funding=funding, vendor_cost=final_cost)
             cost = charge.amount
+            usage = LLMUsage(
+                prompt_tokens=final_usage.prompt_tokens,
+                completion_tokens=final_usage.completion_tokens,
+                total_tokens=final_usage.total_tokens,
+                cached_prompt_tokens=final_usage.cached_prompt_tokens,
+                cache_creation_tokens=final_usage.cache_creation_tokens,
+                billing=charge.as_billing(),
+            )
+            original_tokens = estimate_tokens_for_messages(
+                [entry.as_message() for entry in removed]
+            )
+            summary_tokens = len(complete_content) // 4
+
+            if from_log:
+                compaction = ConversationEntry(
+                    seq=window.next_seq,
+                    kind="compaction",
+                    role="user",
+                    content=f"{COMPACTION_SUMMARY_HEADER}\n{complete_content}",
+                    meta={"skills": carried_skills} if carried_skills else None,
+                )
+                return CompactMessagesResult(
+                    summary=complete_content,
+                    skills=carried_skills,
+                    original_message_count=len(removed),
+                    estimated_tokens_saved=max(0, original_tokens - summary_tokens),
+                    context_tokens=estimate_tokens_for_messages(
+                        [entry.as_message() for entry in (*system, compaction)]
+                    ),
+                    history_chunk_stored=history_chunk_stored,
+                    cost=cost,
+                    usage=usage,
+                )
 
             next_seq = end_seq
             carried: list[ConversationEntry] = []
@@ -472,24 +566,19 @@ def make_llm_activities(
                 next_seq += 1
             summary_entry = ConversationEntry(
                 seq=next_seq,
-                kind="summary",
+                kind="compaction",
                 role="user",
-                content=f"[Previous conversation summary]\n{complete_content}",
+                content=f"{COMPACTION_SUMMARY_HEADER}\n{complete_content}",
             )
             next_seq += 1
             await conversation_log.write_entries(
                 container, user_context, window.task_id, [*carried, summary_entry]
             )
             new_head = [
-                *(e for e in head if e.kind != "summary"),
+                *(e for e in head if e.kind != "compaction"),
                 *carried,
                 summary_entry,
             ]
-
-            original_tokens = estimate_tokens_for_messages(
-                [entry.as_message() for entry in removed]
-            )
-            summary_tokens = len(complete_content) // 4
 
             return CompactMessagesResult(
                 conversation=ConversationWindow(
@@ -506,14 +595,7 @@ def make_llm_activities(
                 ),
                 history_chunk_stored=history_chunk_stored,
                 cost=cost,
-                usage=LLMUsage(
-                    prompt_tokens=final_usage.prompt_tokens,
-                    completion_tokens=final_usage.completion_tokens,
-                    total_tokens=final_usage.total_tokens,
-                    cached_prompt_tokens=final_usage.cached_prompt_tokens,
-                    cache_creation_tokens=final_usage.cache_creation_tokens,
-                    billing=charge.as_billing(),
-                ),
+                usage=usage,
             )
 
         except Exception as e:

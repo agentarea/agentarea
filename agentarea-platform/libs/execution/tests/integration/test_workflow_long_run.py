@@ -21,6 +21,7 @@ import pytest
 from agentarea_common.money import to_money
 from agentarea_common.testing.temporal import temporal_download_dir
 from agentarea_common.workflow.sandbox import create_workflow_runner
+from agentarea_execution.activities.agent.conversation import compaction_input
 from agentarea_execution.activities.heartbeat import (
     CANCELLATION_DELIVERY_INTERVAL,
     auto_heartbeater,
@@ -37,8 +38,11 @@ from agentarea_execution.models import (
     LLMCallRequest,
     LLMCallResult,
     LLMUsage,
+    LogRow,
     MCPToolRequest,
     MCPToolResult,
+    RecordRequest,
+    RecordResult,
     ResolveModelRequest,
     ToolDiscoveryRequest,
     ToolProviderData,
@@ -47,10 +51,9 @@ from agentarea_execution.models import (
     WorkflowEventsResult,
 )
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.context_manager import (
-    compactable_prefix,
-    estimate_tokens_for_messages,
-)
+from agentarea_execution.workflows.context_manager import estimate_tokens_for_messages
+from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity
 from temporalio.client import Client, WorkflowFailureError, WorkflowHandle
 from temporalio.contrib.pydantic import pydantic_data_converter
@@ -118,21 +121,29 @@ class Scenario:
     # What each model call saw: the window's head and tail, as messages.
     contexts: list[list[dict[str, Any]]] = field(default_factory=list)
 
-    def write(self, window: ConversationWindow, pending: list[dict[str, Any]]) -> int:
-        for offset, message in enumerate(pending):
-            self.log[window.next_seq + offset] = message
-        return window.next_seq + len(pending)
+    def record(self, rows: list[LogRow]) -> None:
+        """Append rows as the record activity does: once per position."""
+        for row in rows:
+            self.log.setdefault(
+                row.seq, row.model_dump(exclude={"seq", "event_id", "iteration"}, exclude_none=True)
+            )
+            if row.kind == "compaction":
+                self.summaries.add(row.seq)
 
-    def window_messages(
-        self, window: ConversationWindow, end_seq: int
-    ) -> tuple[list[int], list[int]]:
-        head = list(window.head_seqs)
-        tail = [
-            seq
-            for seq in sorted(self.log)
-            if window.tail_start <= seq < end_seq and seq not in head
+    def window(
+        self, window: ConversationWindow, pending: list[dict[str, Any]]
+    ) -> list[ConversationEntry]:
+        """The model's window as the log reads it, then the pending entries."""
+        logged = [
+            ConversationEntry(seq=seq, **message)
+            for seq, message in sorted(self.log.items())
+            if seq < window.next_seq
         ]
-        return head, tail
+        unwritten = [
+            ConversationEntry(seq=window.next_seq + offset, **message)
+            for offset, message in enumerate(pending)
+        ]
+        return [*model_window(logged), *(entry for entry in unwritten if entry.kind != "event")]
 
     def published(self, event_type: str) -> list[dict[str, Any]]:
         return [
@@ -144,8 +155,8 @@ class Scenario:
     def user_messages_seen(self) -> set[str]:
         return {
             message.get("content") or ""
-            for request in self.llm_requests
-            for message in request.messages
+            for context in self.contexts
+            for message in context
             if message.get("role") == "user"
         }
 
@@ -211,6 +222,7 @@ def _activities(scenario: Scenario) -> list[Any]:
         }
 
     @activity.defn(name="call_llm_activity")
+    @auto_heartbeater
     async def call_llm(request: LLMCallRequest) -> LLMCallResult:
         iteration = request.iteration or 0
         scenario.llm_attempts[iteration] += 1
@@ -224,9 +236,10 @@ def _activities(scenario: Scenario) -> list[Any]:
         cost = cost or scenario.call_cost
         context = request.messages
         if request.conversation is not None:
-            end_seq = scenario.write(request.conversation, request.messages)
-            head, tail = scenario.window_messages(request.conversation, end_seq)
-            context = [scenario.log[seq] for seq in (*head, *tail)]
+            context = [
+                entry.as_message()
+                for entry in scenario.window(request.conversation, request.messages)
+            ]
         scenario.contexts.append(list(context))
         prompt_tokens = max(1, sum(len(m.get("content") or "") for m in context) // 4)
         usage = LLMUsage(
@@ -278,7 +291,7 @@ def _activities(scenario: Scenario) -> list[Any]:
         key = tuple(event["event_id"] for event in batch)
         scenario.publish_attempts[key] += 1
         if scenario.publish_failures_on_iteration is not None and any(
-            event["event_type"] == "IterationStarted"
+            event["event_type"] == "turn.started"
             and event["data"].get("iteration") == scenario.publish_failures_on_iteration
             for event in batch
         ):
@@ -287,7 +300,7 @@ def _activities(scenario: Scenario) -> list[Any]:
         if (
             scenario.hold_continue_as_new_publish
             and not scenario.continue_as_new_publishing.is_set()
-            and any(event["event_type"] == "WorkflowContinuedAsNew" for event in batch)
+            and any(event["event_type"] == "execution.continued_as_new" for event in batch)
         ):
             scenario.continue_as_new_publishing.set()
             await scenario.continue_as_new_released.wait()
@@ -299,51 +312,50 @@ def _activities(scenario: Scenario) -> list[Any]:
 
     @activity.defn(name="compact_messages_activity")
     async def compact(request: CompactMessagesRequest) -> CompactMessagesResult:
-        window = request.conversation
-        end_seq = scenario.write(window, request.pending)
-        head, tail = scenario.window_messages(window, end_seq)
-        count = compactable_prefix([scenario.log[seq] for seq in tail], request.keep_recent)
-        if count == 0:
+        entries = scenario.window(request.conversation, request.pending)
+        _, skills, replaced = compaction_input(entries)
+        if not replaced:
             return CompactMessagesResult(
-                conversation=window.model_copy(update={"next_seq": end_seq}),
                 summary="",
                 original_message_count=0,
                 estimated_tokens_saved=0,
                 context_tokens=estimate_tokens_for_messages(
-                    [scenario.log[seq] for seq in (*head, *tail)]
+                    [entry.as_message() for entry in entries]
                 ),
             )
         scenario.compactions += 1
-        summary_seq = end_seq
-        scenario.log[summary_seq] = {
-            "role": "user",
-            "content": f"[Previous conversation summary]\n{count} earlier entries.",
-        }
-        scenario.summaries.add(summary_seq)
-        # As the real activity does: the head keeps everything but an older summary.
-        new_head = [*(seq for seq in head if seq not in scenario.summaries), summary_seq]
-        kept = tail[count:]
+        summary = f"{len(replaced)} earlier entries."
+        system = [entry.as_message() for entry in entries if entry.role == "system"][:1]
         return CompactMessagesResult(
-            conversation=ConversationWindow(
-                task_id=window.task_id,
-                head_seqs=new_head,
-                tail_start=kept[0],
-                next_seq=summary_seq + 1,
-            ),
-            summary=f"{count} earlier entries.",
-            original_message_count=count,
+            summary=summary,
+            skills=skills,
+            original_message_count=len(replaced),
             estimated_tokens_saved=1000,
             context_tokens=estimate_tokens_for_messages(
-                [scenario.log[seq] for seq in (*new_head, *kept)]
+                [
+                    *system,
+                    {"role": "user", "content": f"[Previous conversation summary]\n{summary}"},
+                ]
             ),
             cost=scenario.compaction_cost,
             usage=LLMUsage(prompt_tokens=1000, completion_tokens=50, total_tokens=1050),
         )
 
+    @activity.defn(name="record_activity")
+    async def record(request: RecordRequest) -> RecordResult:
+        scenario.record(request.rows)
+        if request.events_json:
+            await publish_events(
+                WorkflowEventsRequest(
+                    events_json=request.events_json,
+                    workspace_id=request.workspace_id,
+                    user_id=request.user_id,
+                )
+            )
+        return RecordResult(rows=len(request.rows), events=len(request.events_json))
+
     @activity.defn(name="update_task_status_activity")
     async def update_status(request: UpdateTaskStatusRequest) -> bool:
-        if request.conversation is not None:
-            scenario.write(request.conversation, request.conversation_pending)
         return True
 
     @activity.defn(name="validate_artifacts_activity")
@@ -358,6 +370,7 @@ def _activities(scenario: Scenario) -> list[Any]:
         call_llm,
         execute_tool,
         publish_events,
+        record,
         compact,
         update_status,
         validate_artifacts,
@@ -457,10 +470,10 @@ def _assert_every_iteration_published_once(scenario: Scenario, iterations: int) 
         (event_type, iteration, per_iteration[(event_type, iteration)])
         for iteration in range(1, iterations + 1)
         for event_type in (
-            "IterationStarted",
+            "turn.started",
             "llm.call.started",
             "llm.call.completed",
-            "IterationCompleted",
+            "turn.completed",
         )
         if per_iteration[(event_type, iteration)] != 1
     ]
@@ -503,7 +516,7 @@ async def test_message_sent_while_continuing_as_new_reaches_the_model(long_run_e
 
         assert result.success is True
     assert "also check the edge cases" in scenario.user_messages_seen()
-    assert len(scenario.published("MessageQueued")) == 1
+    assert len(scenario.published("message.queued")) == 1
 
 
 @pytest.mark.asyncio
@@ -537,7 +550,7 @@ async def test_compaction_replaces_old_turns_with_a_summary(long_run_env):
 
     assert result.success is True
     assert scenario.compactions >= 1
-    assert scenario.published("ContextCompacted")
+    assert scenario.published("context.compacted")
 
 
 @pytest.mark.asyncio
@@ -566,21 +579,23 @@ async def test_compaction_that_crosses_the_budget_is_persisted_before_the_run_st
     [metered] = [e for e in completed if e["data"].get("purpose") == "compaction"]
     turns = [e for e in completed if e["data"].get("purpose") is None]
     last_turn = turns[-1]
-    started = [e for e in events if e["event_type"] == "IterationStarted"]
+    started = [e for e in events if e["event_type"] == "turn.started"]
 
     data = metered["data"]
     assert to_money(data["cost"]) == to_money("5")
-    assert data["usage"]["usage"] == {
-        "prompt_tokens": 1000,
-        "completion_tokens": 50,
-        "total_tokens": 1050,
-    }
+    # One usage shape on every path: the call's whole LLMUsage, billing included,
+    # which the spend ledger reads.
+    assert (
+        data["usage"]["usage"]
+        == LLMUsage(prompt_tokens=1000, completion_tokens=50, total_tokens=1050).model_dump()
+    )
+    assert data["usage"]["usage"].keys() == last_turn["data"]["usage"]["usage"].keys()
     assert data["model_id"] == "model-long-run"
     assert data["task_id"] == last_turn["data"]["task_id"]
     assert data["execution_id"] == last_turn["data"]["execution_id"]
     assert data["iteration"] == started[-1]["data"]["iteration"]
     assert to_money(data["total_cost"]) == to_money(last_turn["data"]["total_cost"]) + 5
-    assert scenario.published("ContextCompacted")
+    assert scenario.published("context.compacted")
     assert events.index(metered) < next(
         index for index, e in enumerate(events) if e["event_type"] == "task.failed"
     )
@@ -630,7 +645,7 @@ async def test_budget_warning_is_sent_once_across_continue_as_new(long_run_env):
 
         assert result.success is True
         assert await run.run_count(handle) >= 3
-    assert len(scenario.published("BudgetWarning")) == 1
+    assert len(scenario.published("budget.warning")) == 1
 
 
 @pytest.mark.asyncio
@@ -643,7 +658,7 @@ async def test_too_many_tool_calls_in_one_turn_are_handed_back_to_the_model(long
     assert result.success is True
     tool_replies = [
         message.get("content") or ""
-        for message in scenario.llm_requests[1].messages
+        for message in scenario.contexts[1]
         if message.get("role") == "tool"
     ]
     assert tool_replies
@@ -661,8 +676,8 @@ async def test_dynamic_tool_catalog_survives_continue_as_new(long_run_env):
         assert await run.run_count(handle) >= 3
     tool_replies = [
         message.get("content") or ""
-        for request in scenario.llm_requests
-        for message in request.messages
+        for context in scenario.contexts
+        for message in context
         if message.get("name") == "activate_tool_source"
     ]
     assert any("archive" in reply for reply in tool_replies)
@@ -686,6 +701,11 @@ async def test_cancelled_run_reports_cancelled_not_failed(long_run_env):
 
     assert scenario.published("task.failed") == []
     assert scenario.published("llm.call.failed") == []
+    [stopped] = scenario.published("llm.call.completed")
+    assert stopped["data"]["cancelled"] is True
+    assert stopped["data"]["cost_known"] is False
+    [aborted] = scenario.published("turn.aborted")
+    assert aborted["data"]["reason"] == "cancelled"
 
 
 @pytest.mark.asyncio
@@ -721,12 +741,15 @@ async def test_the_conversation_lives_in_the_log_not_in_payloads(long_run_env):
 
 
 @pytest.mark.asyncio
-async def test_the_run_input_is_one_pinned_user_message_through_compaction(long_run_env):
+async def test_the_run_input_is_the_first_user_message_until_a_compaction_folds_it_in(
+    long_run_env,
+):
     """A trigger's instruction and event are the first user message, never the system prompt.
 
-    The system prompt stays the agent's own, so it is the same from run to run;
-    the first user message sits in the window's head, so neither compaction nor
-    continue-as-new summarizes it away.
+    The system prompt stays the agent's own, so it is the same from run to run.
+    A compaction summarizes the whole conversation before it, the run input
+    included; the window is then the system prompt, the compaction and what
+    follows.
     """
     task_query = (
         "Reply naming the order id\n\n## What started this run\n"
@@ -750,9 +773,9 @@ async def test_the_run_input_is_one_pinned_user_message_through_compaction(long_
     assert sum((m.get("content") or "").count("A-1003-PAYLOAD") for m in first) == 1
 
     last = scenario.contexts[-1]
-    assert any("[Previous conversation summary]" in (m.get("content") or "") for m in last)
-    assert last[1]["content"] == task_query
-    assert sum((m.get("content") or "").count("A-1003-PAYLOAD") for m in last) == 1
+    assert last[0] == first[0]
+    assert last[1]["content"].startswith("[Previous conversation summary]")
+    assert sum((m.get("content") or "").count("A-1003-PAYLOAD") for m in last) == 0
 
 
 @pytest.mark.asyncio

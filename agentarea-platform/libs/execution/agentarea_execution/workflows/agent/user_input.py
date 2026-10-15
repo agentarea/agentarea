@@ -11,12 +11,9 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .approval import ToolApprovalMixin
 
 
@@ -86,18 +83,13 @@ class UserInputMixin(ToolApprovalMixin):
         self._pending_input_requests[input_request_id] = pending_request
 
         self.state.status = ExecutionStatus.WAITING_FOR_INPUT
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="waiting_for_input",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="waiting_for_input",
+                workspace_id=self.state.workspace_id,
+            )
         )
 
         self._events.add_event(
@@ -162,18 +154,13 @@ class UserInputMixin(ToolApprovalMixin):
         await self._publish_events_immediately()
 
         self.state.status = ExecutionStatus.EXECUTING
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="running",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="running",
+                workspace_id=self.state.workspace_id,
+            )
         )
 
         self.state.messages.append(

@@ -231,7 +231,7 @@ class ContinueAsNewMixin(CompactionMixin):
         # Published before the state is captured: a signal handled while this
         # publish is in flight changes the state, and it must ride along.
         self._events.add_event(
-            EventTypes.WORKFLOW_CONTINUED_AS_NEW,
+            EventTypes.CONTINUED_AS_NEW,
             {
                 "iteration": self.state.current_iteration,
                 "total_cost": serialize_money(self._budget.cost),

@@ -22,6 +22,7 @@ from agentarea_secrets.catalog_service import SecretCatalogService
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamError
 from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
+from agentarea_triggers.infrastructure.reactions import ReactionRepository
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
@@ -136,19 +137,13 @@ class StreamsToolset(Toolset):
         description: Annotated[
             str, Field(description="What the stream carries; up to 1000 characters.")
         ] = "",
-        retention_days: Annotated[
-            int | None,
-            Field(description="Days events are kept, 1-365; null for the deployment's retention."),
-        ] = None,
     ) -> str:
-        """Create a stream. retention_days defaults to the deployment's retention."""
-        payload = StreamCreate(name=name, description=description, retention_days=retention_days)
+        """Create a stream. Its events are kept for the deployment's retention."""
+        payload = StreamCreate(name=name, description=description)
         async with platform_context() as (_s, _u, repo_factory, _b, _sec):
             try:
                 row = await _service(repo_factory).create_stream(
-                    name=payload.name,
-                    description=payload.description,
-                    retention_days=payload.retention_days,
+                    name=payload.name, description=payload.description
                 )
             except StreamError as error:
                 raise ToolError(str(error)) from error
@@ -421,6 +416,11 @@ class StreamsToolset(Toolset):
             except StreamError as error:
                 raise ToolError(str(error)) from error
             return StreamEventPage(
-                events=await _events_with_outcomes(service, UUID(stream_id), events),
+                events=await _events_with_outcomes(
+                    service,
+                    repo_factory.create_repository(ReactionRepository),
+                    UUID(stream_id),
+                    events,
+                ),
                 next_after=events[-1].sequence if len(events) == limit else None,
             ).model_dump_json()

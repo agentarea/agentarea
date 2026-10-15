@@ -107,7 +107,7 @@ func main() {
 	}
 
 	// Build dependencies
-	streamBroker := broker.NewRedisStreams(redisClient)
+	streamBroker := broker.NewRedisStreams(redisClient, cfg.Namespace)
 	submitter := submit.NewStreamSubmitter(streamBroker, cfg.InboundStream)
 	claimer := claim.NewRedisClaimer(redisClient, cfg.WorkerID)
 

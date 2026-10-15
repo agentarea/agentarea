@@ -12,12 +12,6 @@ class StreamCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=255, description="Name, unique in the workspace.")
     description: str = Field(default="", max_length=1000)
-    retention_days: int | None = Field(
-        default=None,
-        ge=1,
-        le=365,
-        description="Days events are kept; omitted means the deployment's AGENTAREA_EVENT_RETENTION.",
-    )
 
 
 class SecretRef(BaseModel):

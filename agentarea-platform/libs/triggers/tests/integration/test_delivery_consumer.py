@@ -57,7 +57,7 @@ async def streams():
 
 @pytest_asyncio.fixture()
 async def broker(streams):
-    b = RedisStreamsBroker(AGENTAREA_REDIS_URL)
+    b = RedisStreamsBroker(AGENTAREA_REDIS_URL, namespace="test")
     try:
         await b.ensure_group(streams["stream"], streams["group"], start="0")
     except Exception as exc:
@@ -68,7 +68,7 @@ async def broker(streams):
 
 @pytest_asyncio.fixture()
 async def dedup(streams):
-    d = DedupCache(AGENTAREA_REDIS_URL, prefix=f"test-dedup-{streams['test_id']}", ttl_seconds=60)
+    d = DedupCache(AGENTAREA_REDIS_URL, namespace="test", prefix=f"test-dedup-{streams['test_id']}", ttl_seconds=60)
     yield d
     await d.aclose()
 
@@ -175,7 +175,7 @@ async def test_fatal_error_dead_letters_and_acks(broker, dedup, streams):
 
     client = redis.from_url(AGENTAREA_REDIS_URL, decode_responses=True)
     try:
-        assert await client.xlen(streams["dlq"]) >= 1
+        assert await client.xlen(f"test.{streams['dlq']}") >= 1
     finally:
         await client.aclose()
 
@@ -294,7 +294,7 @@ async def test_unknown_channel_type_releases_for_redelivery(broker, dedup, strea
 
     client = redis.from_url(AGENTAREA_REDIS_URL, decode_responses=True)
     try:
-        assert await client.xlen(streams["dlq"]) == 0
+        assert await client.xlen(f"test.{streams['dlq']}") == 0
     finally:
         await client.aclose()
 

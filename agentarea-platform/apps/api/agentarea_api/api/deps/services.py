@@ -424,6 +424,7 @@ async def get_trigger_service(
             from agentarea_llm.application.model_service import build_model_service
             from agentarea_secrets.secret_manager_factory import SecretManagerFactory
             from agentarea_tasks.infrastructure.cost_repository import record_cost_lines
+            from agentarea_tasks.model_spend_caps import refuse_workspace_model_call_at_spend_cap
 
             llm_condition_evaluator = LLMConditionEvaluator(
                 model_instance_service=model_instance_service,
@@ -435,6 +436,11 @@ async def get_trigger_service(
                 ),
                 user_context=repository_factory.user_context,
                 record_costs=partial(record_cost_lines, repository_factory.user_context),
+                refuse_at_spend_cap=partial(
+                    refuse_workspace_model_call_at_spend_cap,
+                    repository_factory.session,
+                    repository_factory.user_context,
+                ),
             )
         except Exception as e:
             logger.warning(f"LLM condition evaluator not available: {e}", exc_info=True)
@@ -485,7 +491,7 @@ async def get_public_webhook_manager(
     from agentarea_api.api.v1._webhook_intake import WebhookSourceIntake
     from agentarea_common.config.database import get_database
     from agentarea_common.di.container import resolve
-    from agentarea_streams.domain.ports import StreamWaker
+    from agentarea_streams.infrastructure.bus import StreamBus
 
     return WebhookSourceIntake(
         lookup_session=db_session,
@@ -493,7 +499,7 @@ async def get_public_webhook_manager(
         secret_reader_for=lambda session, context: get_real_secret_manager(
             session=session, user_context=context
         ),
-        waker=resolve(StreamWaker),
+        bus=resolve(StreamBus),
         event_broker=event_broker,
         settings=get_settings(),
     )

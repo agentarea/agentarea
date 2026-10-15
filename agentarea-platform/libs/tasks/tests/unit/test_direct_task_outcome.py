@@ -298,3 +298,61 @@ async def test_direct_run_budget_error_names_the_billing_currency(billing):
 
     error = repository.update_status.await_args.kwargs["error"]
     assert error == "run budget exceeded: 14.25 RUB/1.00 RUB"
+
+
+@pytest.mark.asyncio
+async def test_a_cap_reached_mid_run_stops_the_next_direct_model_call(monkeypatch):
+    from agentarea_tasks import direct_task_manager
+    from agentarea_tasks.model_spend_caps import SpendCapReachedError
+
+    reads: list = []
+
+    async def cap_reached_after_the_first_call(session, user_context, budget, agent_id):
+        reads.append(agent_id)
+        if len(reads) > 1:
+            raise SpendCapReachedError("Workspace monthly LLM spend cap reached (2 USD/2 USD)")
+
+    monkeypatch.setattr(
+        direct_task_manager, "refuse_model_call_at_spend_cap", cap_reached_after_the_first_call
+    )
+    manager = DirectTaskManager(AsyncMock())
+    llm = SimpleNamespace(
+        complete=AsyncMock(
+            return_value=SimpleNamespace(
+                content="",
+                cost=0,
+                usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1, total_tokens=2),
+                tool_calls=[
+                    {"id": "call-1", "function": {"name": "unknown", "arguments": "{}"}}
+                ],
+            )
+        )
+    )
+    manager._resolve_agent = AsyncMock(return_value=(_model(llm), "", [], "model-1", None))
+    agent_id = uuid4()
+    task = AgentTask(
+        title="Task",
+        description="Task",
+        query="Task",
+        user_id=str(uuid4()),
+        workspace_id=str(uuid4()),
+        agent_id=agent_id,
+        status="running",
+        created_at=datetime.now(UTC),
+        effective_policy=EffectivePolicy(
+            budget=BudgetPolicy(run_budget_usd=to_money("1.00")),
+            tokens=TokenPolicy(max_tokens=1000, max_tokens_per_call=100),
+            execution=ExecutionLimitsPolicy(
+                max_model_turns=10,
+                max_tool_calls_per_turn=10,
+                max_tool_calls_total=100,
+            ),
+        ).to_json_dict(),
+    )
+
+    await manager._execute(task)
+
+    assert reads == [agent_id, agent_id]
+    assert llm.complete.await_count == 1
+    assert task.status == "failed"
+    assert "monthly LLM spend cap reached" in (task.error_message or "")

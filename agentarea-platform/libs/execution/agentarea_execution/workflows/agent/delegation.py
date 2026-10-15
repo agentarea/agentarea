@@ -122,7 +122,7 @@ class DelegationMixin(ToolApprovalMixin):
         message = tool_args.get("message", "")
 
         self._events.add_event(
-            EventTypes.AGENT_DELEGATION_STARTED,
+            EventTypes.DELEGATION_STARTED,
             {
                 "tool_name": tool_name,
                 "tool_call_id": tool_call.id,
@@ -239,7 +239,7 @@ class DelegationMixin(ToolApprovalMixin):
             )
 
             self._events.add_event(
-                EventTypes.AGENT_DELEGATION_COMPLETED,
+                EventTypes.DELEGATION_COMPLETED,
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
@@ -297,7 +297,7 @@ class DelegationMixin(ToolApprovalMixin):
             )
 
             self._events.add_event(
-                EventTypes.AGENT_DELEGATION_FAILED,
+                EventTypes.DELEGATION_FAILED,
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,

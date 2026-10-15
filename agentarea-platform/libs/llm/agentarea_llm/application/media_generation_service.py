@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -99,6 +100,7 @@ class MediaGenerationService:
         image_model_id: str | None,
         video_model_id: str | None,
         call_ref: str,
+        refuse_at_spend_cap: Callable[[], Awaitable[None]],
     ) -> None:
         # The tool call this service acts for, the same on every retry of it; a
         # finished video is billed to exactly one call.
@@ -109,11 +111,14 @@ class MediaGenerationService:
         self._task_id = task_id
         self._image_model_id = image_model_id
         self._video_model_id = video_model_id
+        # Refuses a new generation once a monthly LLM spend cap the task falls under is reached.
+        self._refuse_at_spend_cap = refuse_at_spend_cap
 
     async def generate_image(self, prompt: str, *, size: str | None = None) -> BilledMedia:
         if not self._image_model_id:
             raise MediaModelNotConfiguredError("no image model is configured for agentarea/media")
         target = await self._models.describe(self._image_model_id, ModelKind.IMAGE)
+        await self._refuse_at_spend_cap()
         funding = await fund_model_call(
             target,
             workspace_id=self._workspace_id,
@@ -147,6 +152,7 @@ class MediaGenerationService:
         if not self._video_model_id:
             raise MediaModelNotConfiguredError("no video model is configured for agentarea/media")
         target = await self._models.describe(self._video_model_id, ModelKind.VIDEO)
+        await self._refuse_at_spend_cap()
         try:
             funding = await fund_model_call(
                 target,

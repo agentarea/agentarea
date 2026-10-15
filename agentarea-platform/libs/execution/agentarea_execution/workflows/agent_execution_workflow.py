@@ -51,7 +51,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
         # Add event for pause
         if self.event_manager:
             self.event_manager.add_event(
-                "execution_paused",
+                EventTypes.EXECUTION_PAUSED,
                 {
                     "reason": reason,
                     "iteration": self.state.current_iteration,
@@ -72,7 +72,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
         # Add event for resume
         if self.event_manager:
             self.event_manager.add_event(
-                "execution_resumed",
+                EventTypes.EXECUTION_RESUMED,
                 {
                     "reason": reason,
                     "iteration": self.state.current_iteration,
@@ -162,7 +162,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
             esc.comment = comment or None
             esc.deny_comment = comment if not approved else None
 
-            # The waiting approval flow emits the one approval.response.
+            # The waiting approval flow emits the one approval.decided.
             if not workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH):
                 event_type = (
                     EventTypes.HUMAN_APPROVAL_RECEIVED
@@ -217,7 +217,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
                 )
                 if self.event_manager:
                     self.event_manager.add_event(
-                        EventTypes.WORKFLOW_COMMAND_REJECTED,
+                        EventTypes.COMMAND_REJECTED,
                         {
                             "command": command,
                             "reason": reason,
@@ -227,7 +227,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
                 return
             if self.event_manager:
                 self.event_manager.add_event(
-                    EventTypes.WORKFLOW_COMMAND_RECEIVED,
+                    EventTypes.COMMAND_RECEIVED,
                     {
                         "command": command,
                         "iteration": self.state.current_iteration,
@@ -270,6 +270,9 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
     @workflow.run
     async def run(self, request: AgentExecutionRequest) -> AgentExecutionResult:
         """Main workflow execution method."""
+        # Whether the run writes its task log through the record activity is
+        # decided here, once, for the whole run.
+        self._task_log_on()
         try:
             # Initialize workflow
             await self._initialize_workflow(request)

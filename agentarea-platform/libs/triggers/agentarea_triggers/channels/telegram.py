@@ -111,11 +111,11 @@ class TelegramAdapter:
         if event_type == "task.cancelled":
             return "\u26d4 Task was cancelled."
 
-        if event_type == "approval.request":
+        if event_type == "approval.requested":
             question = data.get("question", "Approval needed")
             return f"\u2753 *Needs your input:*\n{_escape_md(str(question))}"
 
-        if event_type == "approval.response":
+        if event_type == "approval.decided":
             approved = data.get("approved")
             comment = data.get("comment")
             if approved is True:
@@ -132,9 +132,9 @@ class TelegramAdapter:
             if event_type == "tool.call":
                 tool = data.get("tool_name", "tool")
                 return f"\ud83d\udd27 Using _{_escape_md(tool)}_..."
-            if event_type in ("AgentDelegationStarted", "AgentDelegationCompleted"):
+            if event_type in ("delegation.started", "delegation.completed"):
                 agent = data.get("agent_name", "sub-agent")
-                action = "Delegating to" if "Started" in event_type else "Received from"
+                action = "Delegating to" if event_type == "delegation.started" else "Received from"
                 return f"\ud83e\udd16 {action} _{_escape_md(agent)}_"
 
         # Fallback for any unhandled event type in concise mode

@@ -142,6 +142,15 @@ global:
     maxConnections: 50
     connectionTimeout: 5s
 
+  # Broker topics: every topic and broker key is <namespace>.<domain>.<dataset>.
+  events:
+    # First segment of every topic and key; two deployments sharing one Redis
+    # need different namespaces.
+    namespace: "agentarea"
+    # Partitions of the stream-events topic. The API and the worker must agree,
+    # and changing it moves streams between partitions: drain the bus first.
+    partitions: 16
+
   # Storage configuration - S3/RustFS compatible
   storage:
     # Storage type (s3, rustfs, gcs)
@@ -611,7 +620,7 @@ eventService:
   # Polling configuration
   pollInterval: "30s"
   maxPollers: 10
-  inboundStream: "agentarea.channel.inbound"
+  inboundStream: "channel.inbound"
   telegramPolling:
     # Dev-only fallback for Telegram getUpdates. Production Telegram ingress
     # should use webhooks.

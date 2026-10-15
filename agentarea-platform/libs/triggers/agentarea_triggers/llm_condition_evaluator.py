@@ -40,6 +40,10 @@ from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 from agentarea_streams.domain import value_at
 from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
 from agentarea_tasks.infrastructure.cost_repository import record_cost_lines
+from agentarea_tasks.model_spend_caps import (
+    SpendCapReachedError,
+    refuse_workspace_model_call_at_spend_cap,
+)
 from pydantic import ValidationError
 
 from .domain.enums import ConditionType
@@ -49,9 +53,17 @@ logger = logging.getLogger(__name__)
 
 # Stores a trigger's spend lines; a run's lines come from its events instead.
 CostRecorder = Callable[[Sequence[CostEntry]], Awaitable[int]]
+# Raises SpendCapReachedError once a monthly LLM spend cap of the trigger's agent is reached.
+SpendCapRefusal = Callable[[UUID | None], Awaitable[None]]
 
 # The most a condition or extraction answer may run to.
 _CONDITION_MAX_TOKENS = 1000
+
+
+def _trigger_agent(trigger_context: dict[str, Any] | None) -> UUID | None:
+    """The agent a trigger fires for, whose own LLM spend caps its model calls fall under."""
+    agent_id = (trigger_context or {}).get("agent_id")
+    return UUID(str(agent_id)) if agent_id else None
 
 
 def _condition_type(condition: dict[str, Any]) -> ConditionType | None:
@@ -261,6 +273,9 @@ def build_condition_evaluator(
         ),
         user_context=user_context,
         record_costs=partial(record_cost_lines, user_context),
+        refuse_at_spend_cap=partial(
+            refuse_workspace_model_call_at_spend_cap, session, user_context
+        ),
     )
 
 
@@ -274,6 +289,7 @@ class LLMConditionEvaluator:
         model_service: ModelService,
         user_context: UserContext,
         record_costs: CostRecorder,
+        refuse_at_spend_cap: SpendCapRefusal,
     ):
         """Initialize the LLM condition evaluator.
 
@@ -283,12 +299,14 @@ class LLMConditionEvaluator:
             model_service: Resolves decision models, which answer a condition directly
             user_context: The trigger's workspace, which every model call is held for
             record_costs: Stores the spend line of each model call
+            refuse_at_spend_cap: Refuses a model call once a monthly LLM spend cap is reached
         """
         self.model_instance_service = model_instance_service
         self.secret_manager = secret_manager
         self.model_service = model_service
         self.user_context = user_context
         self.record_costs = record_costs
+        self.refuse_at_spend_cap = refuse_at_spend_cap
 
     async def _record(
         self,
@@ -538,6 +556,7 @@ class LLMConditionEvaluator:
             }
         }
         target = await self.model_service.describe(model_id, ModelKind.DECISION)
+        await self.refuse_at_spend_cap(_trigger_agent(trigger_context))
         funding = await fund_model_call(
             target,
             workspace_id=str(self.user_context.workspace_id),
@@ -831,6 +850,7 @@ class LLMConditionEvaluator:
                     f"{target.provider_type!r} but has no endpoint_url configured"
                 )
             messages = [{"role": "user", "content": prompt}]
+            await self.refuse_at_spend_cap(_trigger_agent(trigger_context))
             funding = await fund_model_call(
                 target,
                 workspace_id=str(self.user_context.workspace_id),
@@ -875,8 +895,8 @@ class LLMConditionEvaluator:
 
         except LLMConditionEvaluationError:
             raise
-        except ModelCallRefusedError as refused:
-            # Billing's own words, not the provider's: safe to repeat.
+        except (ModelCallRefusedError, SpendCapReachedError) as refused:
+            # Billing's or the spend cap's own words, not the provider's: safe to repeat.
             raise LLMConditionEvaluationError(f"model call refused: {refused}") from refused
         except Exception as e:
             logger.exception(f"LLM call failed: {e}")

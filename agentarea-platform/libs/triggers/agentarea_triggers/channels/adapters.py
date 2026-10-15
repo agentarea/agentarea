@@ -20,8 +20,11 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 from agentarea_common.events.contract import (
-    APPROVAL_REQUEST,
-    APPROVAL_RESPONSE,
+    APPROVAL_DECIDED,
+    APPROVAL_REQUESTED,
+    COMMAND_RECEIVED,
+    DELEGATION_COMPLETED,
+    DELEGATION_STARTED,
     TASK_CANCELLED,
     TASK_COMPLETED,
     TASK_FAILED,
@@ -128,10 +131,10 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
             return f"{e['cross']} {b0}Failed{b1} \u2014 {esc(str(d.get('error', 'Unknown error')))}"
         if et == TASK_CANCELLED:
             return f"{e['stop']} {esc('Task was cancelled.')}"
-        if et == APPROVAL_REQUEST:
+        if et == APPROVAL_REQUESTED:
             q = esc(str(d.get("question", "Approval needed")))
             return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
-        if et == APPROVAL_RESPONSE:
+        if et == APPROVAL_DECIDED:
             approved = d.get("approved")
             if approved is True:
                 return f"{e['check']} {esc('Approved, continuing...')}"
@@ -142,14 +145,14 @@ def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], st
             return f"{e['info']} {esc('Approval resolved.')}"
 
         if presentation == "concise":
-            if et == TASK_STARTED or raw_et == "WorkflowCommandReceived":
+            if et in (TASK_STARTED, COMMAND_RECEIVED):
                 return f"{e['hourglass']} {esc('Working on it...')}"
             if et == TOOL_CALL:
                 tool = d.get("tool_name", "tool")
                 return f"{e['wrench']} {esc('Using ')}{i0}{esc(tool)}{i1}{esc('...')}"
-            if raw_et in ("AgentDelegationStarted", "AgentDelegationCompleted"):
+            if et in (DELEGATION_STARTED, DELEGATION_COMPLETED):
                 agent = d.get("agent_name", "sub-agent")
-                action = "Delegating to" if "Started" in raw_et else "Received from"
+                action = "Delegating to" if et == DELEGATION_STARTED else "Received from"
                 return f"{e['robot']} {action} {i0}{esc(agent)}{i1}"
 
         return f"{e['info']} {esc(raw_et)}"

@@ -5,11 +5,10 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from typing import cast as type_cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from agentarea_common.events.contract import APPROVAL_REQUEST, APPROVAL_RESPONSE
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from sqlalchemy import func, literal, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -19,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..domain.base_service import TaskNotFoundError
 from ..domain.costs import CostCategory, CostEntry
 from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
+from ..domain.statuses import ENDED_TASK_STATUSES
 from .cost_repository import CostEntryRepository, SpendScope
 from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
 
@@ -357,6 +357,14 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             scope=SpendScope(task_id=task_id, category=CostCategory.MODEL),
         )
 
+    async def sum_task_spend(self, task_id: UUID) -> Decimal:
+        """What a task cost over all its runs, every line of it, in the billing currency."""
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            datetime(1970, 1, 1, tzinfo=UTC),
+            currency=get_customer_pricing().currency(),
+            scope=SpendScope(task_id=task_id),
+        )
+
     async def record_costs(self, entries: Sequence[CostEntry]) -> None:
         """Store paid lines in the spend ledger, once each."""
         await CostEntryRepository(self.session, self.user_context).record(entries)
@@ -382,8 +390,17 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         return await self.sum_spend_since(datetime(now.year, now.month, now.day, tzinfo=UTC))
 
     async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
-        """Update task status atomically with optional additional fields."""
-        update_data = {"status": status, "updated_at": datetime.utcnow()}
+        """Update task status atomically with optional additional fields.
+
+        Entering ``running`` stamps when the run first started; ending stamps when it
+        last ended.
+        """
+        now = datetime.now(UTC).replace(tzinfo=None)
+        update_data: dict[str, Any] = {"status": status, "updated_at": now}
+        if status == "running":
+            update_data["started_at"] = func.coalesce(TaskORM.started_at, now)
+        elif status in ENDED_TASK_STATUSES:
+            update_data["completed_at"] = now
 
         # Add any additional fields provided
         for field, value in additional_fields.items():
@@ -611,65 +628,6 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
 
         return [self._orm_to_domain(event_orm) for event_orm in event_orms]
 
-    async def unanswered_approval_requests(self, task_ids: Sequence[UUID]) -> dict[UUID, TaskEvent]:
-        """Each task's latest ``approval.request`` that no ``approval.response`` answered.
-
-        A response answers the request that carries the same ``escalation_id``.
-        """
-        if not task_ids:
-            return {}
-        result = await self.session.execute(
-            select(TaskEventORM)
-            .where(
-                TaskEventORM.task_id.in_(task_ids),
-                TaskEventORM.event_type.in_((APPROVAL_REQUEST, APPROVAL_RESPONSE)),
-                self._get_workspace_filter(),
-            )
-            .order_by(TaskEventORM.timestamp.asc(), TaskEventORM.id.asc())
-        )
-        events = [self._orm_to_domain(orm) for orm in result.scalars().all()]
-        answered = {
-            (event.task_id, event.data.get("escalation_id"))
-            for event in events
-            if event.event_type == APPROVAL_RESPONSE
-        }
-        unanswered: dict[UUID, TaskEvent] = {}
-        for event in events:
-            if (
-                event.event_type == APPROVAL_REQUEST
-                and (event.task_id, event.data.get("escalation_id")) not in answered
-            ):
-                unanswered[event.task_id] = event
-        return unanswered
-
-    async def approval_decisions(
-        self, *, limit: int, offset: int
-    ) -> tuple[list[tuple[TaskEvent, str | None]], int]:
-        """One newest-first page of the workspace's ``approval.response`` events.
-
-        Each decision comes with its task's description (None once the task is
-        gone), plus the total number of decisions.
-        """
-        conditions = [TaskEventORM.event_type == APPROVAL_RESPONSE, self._get_workspace_filter()]
-        total = (
-            await self.session.scalar(
-                select(func.count()).select_from(TaskEventORM).where(*conditions)
-            )
-        ) or 0
-        result = await self.session.execute(
-            select(TaskEventORM, TaskORM.description)
-            .outerjoin(
-                TaskORM,
-                (TaskORM.id == TaskEventORM.task_id)
-                & (TaskORM.workspace_id == self.user_context.workspace_id),
-            )
-            .where(*conditions)
-            .order_by(TaskEventORM.timestamp.desc(), TaskEventORM.id.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        return [(self._orm_to_domain(orm), description) for orm, description in result.all()], total
-
     def _orm_to_domain(self, event_orm: TaskEventORM) -> TaskEvent:
         """Convert ORM model to domain model."""
         return TaskEvent.model_validate(
@@ -705,6 +663,7 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
             {
                 "task_id": task_id,
                 "seq": entry.seq,
+                "event_id": entry.event_id or uuid4(),
                 "kind": entry.kind,
                 "role": entry.role,
                 "content": entry.content,
@@ -712,6 +671,8 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                 "tool_call_id": entry.tool_call_id,
                 "name": entry.name,
                 "attachments": entry.attachments,
+                "iteration": entry.iteration,
+                "meta": entry.meta,
                 "workspace_id": self.user_context.workspace_id,
                 "created_by": self.user_context.user_id,
             }
@@ -731,6 +692,8 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                         "tool_call_id",
                         "name",
                         "attachments",
+                        "iteration",
+                        "meta",
                     )
                 },
                 where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
@@ -784,13 +747,25 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
 
     @staticmethod
     def _orm_to_entry(row: TaskConversationEntryORM) -> ConversationEntry:
-        return ConversationEntry(
-            seq=row.seq,
-            kind=row.kind,
-            role=row.role,
-            content=row.content,
-            tool_calls=row.tool_calls,
-            tool_call_id=row.tool_call_id,
-            name=row.name,
-            attachments=row.attachments,
-        )
+        return entry_from_row(row)
+
+
+def entry_from_row(row: TaskConversationEntryORM) -> ConversationEntry:
+    """A stored log row as the domain entry; an offloaded body stays a reference."""
+    return ConversationEntry(
+        seq=row.seq,
+        kind=row.kind,
+        role=row.role,
+        content=row.content,
+        tool_calls=row.tool_calls,
+        tool_call_id=row.tool_call_id,
+        name=row.name,
+        attachments=row.attachments,
+        event_id=row.event_id,
+        execution_id=row.execution_id,
+        iteration=row.iteration,
+        meta=row.meta,
+        correlation_id=row.correlation_id,
+        causation_id=row.causation_id,
+        body_ref=row.body_ref,
+    )

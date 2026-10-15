@@ -22,6 +22,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
@@ -96,7 +97,7 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     call_index = len(_llm_calls)
     _llm_calls.append(
         {
-            "messages": request.messages,
+            "messages": _TASK_LOG.messages(request),
             "tools": request.tools,
             "model_id": request.model_id,
         }
@@ -128,7 +129,7 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     else:
         # Second call: complete the task, incorporating the tool result
         tool_result_in_messages = any(
-            msg.get("role") == "tool" for msg in request.messages
+            msg.get("role") == "tool" for msg in _TASK_LOG.messages(request)
         )
         final_text = (
             f"The weather in Berlin is: {_FAKE_TOOL_RESULT}"
@@ -181,6 +182,14 @@ async def _mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=_mock_publish_events,
+    update_status=_mock_update_task_status,
+    log=_TASK_LOG,
+)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -188,6 +197,7 @@ _ALL_ACTIVITIES = [
     _mock_call_llm,
     _mock_execute_mcp_tool,
     _mock_publish_events,
+    _RECORD,
     _mock_update_task_status,
     _mock_validate_artifacts,
 ]

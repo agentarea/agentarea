@@ -16,6 +16,7 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	t.Setenv("AGENTAREA_EVENT_POLL_INTERVAL", "17s")
 	t.Setenv("AGENTAREA_EVENT_MAX_POLLERS", "7")
 	t.Setenv("AGENTAREA_EVENT_STREAM", "events.inbound.test")
+	t.Setenv("AGENTAREA_EVENT_NAMESPACE", "staging")
 	t.Setenv("AGENTAREA_EVENT_TELEGRAM_ENABLED", "true")
 	t.Setenv("PORT", "18002")
 	t.Setenv("AGENTAREA_OTEL_ENABLED", "true")
@@ -36,6 +37,9 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	}
 	if cfg.MaxPollers != 7 {
 		t.Fatalf("MaxPollers = %d", cfg.MaxPollers)
+	}
+	if cfg.Namespace != "staging" {
+		t.Fatalf("Namespace = %q", cfg.Namespace)
 	}
 	if cfg.InboundStream != "events.inbound.test" {
 		t.Fatalf("InboundStream = %q", cfg.InboundStream)

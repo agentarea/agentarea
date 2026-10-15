@@ -68,21 +68,19 @@ describe("resolving a forwarded event's source", () => {
       resolveForwardSource({
         causation_id: null,
         source: "webhook:abc",
-        event_key: "webhook-id:abc",
       })
     ).toBeNull();
   });
 
-  it("parses the source stream and sequence ForwardHandler encoded", () => {
+  it("pairs the source stream with the causing event's id", () => {
     expect(
       resolveForwardSource({
         causation_id: "982eeeeb-0000-0000-0000-000000000000",
         source: "stream:b4ad852d-0000-0000-0000-000000000000",
-        event_key: "b4ad852d-0000-0000-0000-000000000000:5",
       })
     ).toEqual({
       streamId: "b4ad852d-0000-0000-0000-000000000000",
-      sequence: 5,
+      eventId: "982eeeeb-0000-0000-0000-000000000000",
     });
   });
 
@@ -91,7 +89,6 @@ describe("resolving a forwarded event's source", () => {
       resolveForwardSource({
         causation_id: "set",
         source: "webhook:abc",
-        event_key: "webhook-id:abc",
       })
     ).toBeNull();
   });

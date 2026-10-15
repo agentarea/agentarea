@@ -16,6 +16,7 @@ import contextlib
 import logging
 
 from agentarea_common.broker.redis_streams import RedisStreamsBroker
+from agentarea_common.broker.topics import domain_events_topic
 from agentarea_common.config import get_settings
 from agentarea_common.events.adapters.redis_streams import RedisStreamsEventStream
 
@@ -49,7 +50,9 @@ async def _consume_mcp_status(stream: RedisStreamsEventStream) -> None:
     """
     while True:
         try:
-            async for event in stream.read(stream=MCP_STATUS_CHANGED_TYPE, from_offset="$"):
+            async for event in stream.read(
+                stream=domain_events_topic(MCP_STATUS_CHANGED_TYPE), from_offset="$"
+            ):
                 try:
                     await handle_mcp_status_changed(event)
                 except Exception:
@@ -70,7 +73,7 @@ async def start_events_router() -> None:
         logger.warning("Events consumer already started; ignoring duplicate start")
         return
 
-    _broker = RedisStreamsBroker(_redis_url())
+    _broker = RedisStreamsBroker(_redis_url(), namespace=get_settings().streams.NAMESPACE)
     stream = RedisStreamsEventStream(_broker)
     _consumer_task = asyncio.create_task(_consume_mcp_status(stream))
     logger.info("MCP status consumer tailing %s", MCP_STATUS_CHANGED_TYPE)

@@ -38,6 +38,7 @@ def _evaluator() -> LLMConditionEvaluator:
         model_service=model_service,
         user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
         record_costs=AsyncMock(),
+        refuse_at_spend_cap=AsyncMock(),
     )
 
 

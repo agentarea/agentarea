@@ -24,14 +24,18 @@ type Client interface {
 }
 
 // RedisStreams implements Client on top of go-redis XADD + XGROUP CREATE.
+// Callers name streams logically; every Redis key is "<namespace>.<stream>".
 type RedisStreams struct {
 	client *redis.Client
+	prefix string
 }
 
-// NewRedisStreams wraps a go-redis client with broker semantics.
-func NewRedisStreams(client *redis.Client) *RedisStreams {
-	return &RedisStreams{client: client}
+// NewRedisStreams wraps a go-redis client with broker semantics under namespace.
+func NewRedisStreams(client *redis.Client, namespace string) *RedisStreams {
+	return &RedisStreams{client: client, prefix: namespace + "."}
 }
+
+func (r *RedisStreams) key(stream string) string { return r.prefix + stream }
 
 // Submit appends `fields` to `stream` and returns the broker-assigned id.
 // XADD with "*" lets Redis assign the timestamp-based id; dedup is the
@@ -42,7 +46,7 @@ func (r *RedisStreams) Submit(ctx context.Context, stream string, fields map[str
 		values[k] = v
 	}
 	id, err := r.client.XAdd(ctx, &redis.XAddArgs{
-		Stream: stream,
+		Stream: r.key(stream),
 		Values: values,
 	}).Result()
 	if err != nil {
@@ -57,7 +61,7 @@ func (r *RedisStreams) EnsureGroup(ctx context.Context, stream, group, start str
 	if start == "" {
 		start = "$"
 	}
-	err := r.client.XGroupCreateMkStream(ctx, stream, group, start).Err()
+	err := r.client.XGroupCreateMkStream(ctx, r.key(stream), group, start).Err()
 	if err == nil {
 		return nil
 	}

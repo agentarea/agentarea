@@ -8,7 +8,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, desc, func, literal_column, null, select, update
+from sqlalchemy import ColumnElement, and_, desc, func, literal_column, null, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,9 @@ from ..domain.models import (
     WebhookTrigger,
 )
 from .orm import TriggerExecutionORM, TriggerORM
+
+# A trigger's firing; a forward's reaction to a stream event has no trigger.
+_A_FIRING = TriggerExecutionORM.trigger_id.is_not(None)
 
 
 def _value(value: Any) -> Any:
@@ -548,7 +551,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         """List executions by status."""
         stmt = (
             select(TriggerExecutionORM)
-            .where(TriggerExecutionORM.status == status.value)
+            .where(TriggerExecutionORM.status == status.value, _A_FIRING)
             .order_by(desc(TriggerExecutionORM.executed_at))
             .limit(limit)
         )
@@ -610,7 +613,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         stmt = select(TriggerExecutionORM)
 
         # Apply filters
-        conditions = []
+        conditions: list[ColumnElement[bool]] = [_A_FIRING]
         if trigger_id:
             conditions.append(TriggerExecutionORM.trigger_id == trigger_id)
         if status:
@@ -641,7 +644,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         stmt = select(func.count(TriggerExecutionORM.id))
 
         # Apply filters
-        conditions = []
+        conditions: list[ColumnElement[bool]] = [_A_FIRING]
         if trigger_id:
             conditions.append(TriggerExecutionORM.trigger_id == trigger_id)
         if status:
@@ -834,6 +837,10 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
 
     def _orm_to_domain(self, execution_orm: TriggerExecutionORM) -> TriggerExecution:
         """Convert ORM model to domain model."""
+        if execution_orm.trigger_id is None:
+            raise ValueError(
+                f"trigger execution {execution_orm.id} is a forward's reaction, not a firing"
+            )
         return TriggerExecution(
             id=cast(UUID, execution_orm.id),
             trigger_id=execution_orm.trigger_id,

@@ -13,12 +13,13 @@ def event_id_for(stream_id: UUID, event_key: str) -> UUID:
     return uuid5(STREAM_EVENT_NAMESPACE, f"{stream_id}:{event_key}")
 
 
-def forward_event_key(source_stream_id: UUID, sequence: int) -> str:
-    return f"{source_stream_id}:{sequence}"
+def derived_event_id(processor_id: UUID, source_event_id: UUID) -> UUID:
+    """What a processor writes for one source event; a retry names the same event."""
+    return uuid5(processor_id, str(source_event_id))
 
 
-def task_id_for(subscription_id: UUID, sequence: int) -> UUID:
-    return uuid5(_TASK_NAMESPACE, f"{subscription_id}:{sequence}")
+def task_id_for(subscription_id: UUID, event_id: UUID) -> UUID:
+    return uuid5(_TASK_NAMESPACE, f"{subscription_id}:{event_id}")
 
 
 def encoded_size(data: dict[str, Any]) -> int:

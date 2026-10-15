@@ -102,7 +102,7 @@ def create_activity_dependencies() -> ActivityDependencies:
     # lossy pub/sub bridge.
     from agentarea_common.broker import RedisStreamsBroker
 
-    broker_client = RedisStreamsBroker(_redis_url(settings))
+    broker_client = RedisStreamsBroker(_redis_url(settings), namespace=settings.streams.NAMESPACE)
 
     return ActivityDependencies(
         settings=settings,
@@ -383,11 +383,13 @@ class AgentAreaWorker:
         self._broker = dependencies.broker_client
         self._dedup = DedupCache(
             redis_url,
+            namespace=settings.streams.NAMESPACE,
             prefix="channel-delivery",
             ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
         self._inbound_dedup = DedupCache(
             redis_url,
+            namespace=settings.streams.NAMESPACE,
             prefix="channel-inbound",
             ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
@@ -404,6 +406,7 @@ class AgentAreaWorker:
             ).may_run,
             secret_reader=LazySecretReader(dependencies.secret_manager_factory),
             redis_url=redis_url,
+            namespace=settings.streams.NAMESPACE,
             app_url=settings.app.APP_URL,
         )
         self.inbound_subscriber = InboundMessageStreamConsumer(

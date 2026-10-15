@@ -512,5 +512,51 @@ async def _reconcile(
         sys.exit(1)
 
 
+@cli.command("dlq-replay")
+@click.argument("dlq")
+@click.option("--start", default="-", help="First message id to replay, inclusive ('-': oldest).")
+@click.option("--end", default="+", help="Last message id to replay, inclusive ('+': newest).")
+def dlq_replay(dlq: str, start: str, end: str):
+    """Move dead letters from DLQ back to the stream (or partition) each came from.
+
+    Each message is moved once: running it again, or alongside another
+    operator, replays nothing twice.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_dlq_replay(dlq, start, end))
+
+
+async def _dlq_replay(dlq: str, start: str, end: str) -> None:
+    # The broker and channel settings alone: the full application Settings
+    # also demands Temporal configuration, which an operator's shell has no use for.
+    from agentarea_common.broker import RedisStreamsBroker
+    from agentarea_common.broker.dlq import replay_dead_letters
+    from agentarea_common.broker.routes import configured_routes, routes_for_dlq
+    from agentarea_common.config import BrokerSettings, EventStreamSettings, RedisSettings
+    from agentarea_common.config.channels import ChannelDeliverySettings
+
+    broker_type = BrokerSettings().BROKER
+    if broker_type != "redis":
+        raise click.UsageError(f"dlq-replay needs AGENTAREA_BROKER=redis (current: {broker_type})")
+    streams = EventStreamSettings()
+    try:
+        routes = routes_for_dlq(configured_routes(ChannelDeliverySettings(), streams), dlq)
+    except LookupError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    broker = RedisStreamsBroker(RedisSettings().REDIS_URL, namespace=streams.NAMESPACE)
+    try:
+        result = await replay_dead_letters(
+            broker,
+            dlq_stream=dlq,
+            targets=[route.stream for route in routes],
+            start=start,
+            end=end,
+        )
+    finally:
+        await broker.aclose()
+    click.echo(f"Replayed {result.moved} dead letters from {dlq}; {result.skipped} left in place")
+
+
 if __name__ == "__main__":
     cli()

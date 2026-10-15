@@ -22,12 +22,9 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .patches import (
     APPROVAL_RESPONSE_ONCE_PATCH,
@@ -130,20 +127,27 @@ class ToolApprovalMixin(BudgetMixin):
         )
         self._pending_escalations[escalation_id] = escalation
         self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
+        if self._task_log_on():
+            self._log_event(
+                EventTypes.APPROVAL_REQUESTED,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_call_id": tool_call.id,
+                    "tool_name": tool_name,
+                    "arguments": tool_args,
+                    "approvers": escalation.approvers,
+                    "reason": reason,
+                },
+            )
 
         # Persist approval status to DB so inbox can query it
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="waiting_for_approval",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="waiting_for_approval",
+                workspace_id=self.state.workspace_id,
+            )
         )
 
         self._events.add_event(
@@ -165,6 +169,18 @@ class ToolApprovalMixin(BudgetMixin):
         await workflow.wait_condition(lambda: escalation.resolved)
 
         approved = escalation.approved
+        if self._task_log_on():
+            self._log_event(
+                EventTypes.APPROVAL_DECIDED,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_call_id": tool_call.id,
+                    "tool_name": tool_name,
+                    "approved": bool(approved),
+                    "decided_by": escalation.approved_by,
+                    "comment": escalation.comment,
+                },
+            )
         if approved:
             await self._check_monthly_spend_cap()
         one_response = workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH)
@@ -233,18 +249,13 @@ class ToolApprovalMixin(BudgetMixin):
         del self._pending_escalations[escalation_id]
         if not self._pending_escalations:
             self.state.status = ExecutionStatus.EXECUTING
-            await workflow.execute_activity(
-                Activities.UPDATE_TASK_STATUS,
-                args=[
-                    UpdateTaskStatusRequest(
-                        user_context_data=self.state.user_context_data,
-                        task_id=self.state.task_id,
-                        status="running",
-                        workspace_id=self.state.workspace_id,
-                    )
-                ],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=bookkeeping_retry_policy(),
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
             )
         if approved and self._monthly_cap_message:
             await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)

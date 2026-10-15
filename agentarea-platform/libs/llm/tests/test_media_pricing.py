@@ -8,6 +8,7 @@ on the customer's own it converts the cost.
 
 from decimal import Decimal
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,6 +23,7 @@ from agentarea_llm.infrastructure.model_clients import (
     SubmittedVideo,
     VideoStatus,
 )
+from agentarea_tasks.model_spend_caps import SpendCapReachedError
 
 INSTANCE = str(uuid4())
 
@@ -155,7 +157,9 @@ class _Jobs:
         return row
 
 
-def _media(models: _Models, jobs: _Jobs | None = None) -> MediaGenerationService:
+def _media(
+    models: _Models, jobs: _Jobs | None = None, refuse_at_spend_cap: AsyncMock | None = None
+) -> MediaGenerationService:
     return MediaGenerationService(
         models=models,  # type: ignore[arg-type]
         jobs=jobs or _Jobs(),  # type: ignore[arg-type]
@@ -164,6 +168,7 @@ def _media(models: _Models, jobs: _Jobs | None = None) -> MediaGenerationService
         image_model_id=INSTANCE,
         video_model_id=INSTANCE,
         call_ref="t:call-1",
+        refuse_at_spend_cap=refuse_at_spend_cap or AsyncMock(),
     )
 
 
@@ -197,6 +202,23 @@ async def test_an_image_on_our_key_is_held_before_the_provider_and_carries_billi
         INSTANCE,
         Decimal("0.04"),
     )
+
+
+async def test_media_past_a_monthly_llm_cap_is_refused_before_it_is_held(pricing, events):
+    models = _Models(
+        events, managed_by=MANAGED_BY_PLATFORM, output_cost_per_image=Decimal("0.05")
+    )
+    refuse = AsyncMock(side_effect=SpendCapReachedError("Workspace monthly LLM spend cap reached"))
+    media = _media(models, refuse_at_spend_cap=refuse)
+
+    with pytest.raises(SpendCapReachedError):
+        await media.generate_image("a cat")
+    with pytest.raises(SpendCapReachedError):
+        await media.submit_video("waves", duration=5)
+
+    assert refuse.await_count == 2
+    assert events == []
+    assert pricing.authorizations == []
 
 
 async def test_an_image_on_our_key_without_a_price_is_refused_before_the_provider(

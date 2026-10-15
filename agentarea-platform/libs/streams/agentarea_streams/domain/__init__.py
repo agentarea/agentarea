@@ -1,7 +1,6 @@
 from .enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus, Verdict
 from .errors import (
     ForwardLoopError,
-    LeaseLostError,
     NotAForwardError,
     PayloadTooLargeError,
     SourceFedByTriggerError,
@@ -18,7 +17,8 @@ from .filters import EventFilter, value_at
 from .models import (
     AppendResult,
     HandlerResult,
-    JournaledEvent,
+    RecordedEvent,
+    StreamEvent,
     SubscriptionView,
     TriggerBinding,
     WebhookSourceSpec,
@@ -29,13 +29,13 @@ __all__ = [
     "EventFilter",
     "ForwardLoopError",
     "HandlerResult",
-    "JournaledEvent",
-    "LeaseLostError",
     "NotAForwardError",
     "PayloadTooLargeError",
+    "RecordedEvent",
     "SourceFedByTriggerError",
     "SourceKind",
     "StreamError",
+    "StreamEvent",
     "StreamInUseError",
     "StreamKind",
     "StreamNameTakenError",

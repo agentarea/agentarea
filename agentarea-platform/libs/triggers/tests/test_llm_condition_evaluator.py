@@ -75,6 +75,7 @@ def llm_evaluator(mock_model_instance_service, mock_secret_manager, model_servic
         model_service=model_service,
         user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
         record_costs=AsyncMock(),
+        refuse_at_spend_cap=AsyncMock(),
     )
 
 

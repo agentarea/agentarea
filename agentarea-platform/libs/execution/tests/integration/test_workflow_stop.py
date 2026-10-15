@@ -30,6 +30,8 @@ from agentarea_execution.models import (
     ArtifactValidationResult,
     LLMCallRequest,
     MCPToolRequest,
+    RecordRequest,
+    RecordResult,
     ResolveModelRequest,
     ToolDiscoveryRequest,
     UpdateTaskStatusRequest,
@@ -39,6 +41,7 @@ from agentarea_execution.models import (
 from agentarea_execution.workflows.agent.stopping import STOPPED_WHILE_RUNNING
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity
 from temporalio.client import WorkflowFailureError, WorkflowHandle
 from temporalio.common import WorkflowIDReusePolicy
@@ -161,18 +164,12 @@ async def _resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 
 @activity.defn(name="call_llm_activity")
 async def _call_llm(request: LLMCallRequest) -> dict[str, Any]:
-    """Write the pending entries and answer from the window the log holds, as the real one."""
+    """Answer from the window the log holds, then the pending entries, as the real one."""
     window = request.conversation
     assert window is not None
-    _write(window.next_seq, request.messages)
-    end_seq = window.next_seq + len(request.messages)
-    head = [_log[seq] for seq in window.head_seqs]
-    tail = [
-        _log[seq]
-        for seq in sorted(_log)
-        if window.tail_start <= seq < end_seq and seq not in window.head_seqs
-    ]
-    _model_windows.append([entry.as_message() for entry in (*head, *tail)])
+    logged = [entry for seq, entry in sorted(_log.items()) if seq < window.next_seq]
+    unwritten = pending_entries(window.next_seq, request.messages)
+    _model_windows.append([entry.as_message() for entry in (*model_window(logged), *unwritten)])
     turn = _llm_script.pop(0)()
     return await turn if inspect.isawaitable(turn) else turn
 
@@ -242,6 +239,26 @@ async def _validate_artifacts(_request: ArtifactValidationRequest) -> ArtifactVa
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+@activity.defn(name="record_activity")
+async def _record(request: RecordRequest) -> RecordResult:
+    for row in request.rows:
+        _log.setdefault(
+            row.seq,
+            ConversationEntry(**row.model_dump(exclude={"event_id"}), event_id=row.event_id),
+        )
+    if request.status is not None:
+        await _update_task_status(request.status)
+    if request.events_json:
+        await _publish_events(
+            WorkflowEventsRequest(
+                events_json=request.events_json,
+                workspace_id=request.workspace_id,
+                user_id=request.user_id,
+            )
+        )
+    return RecordResult(rows=len(request.rows), events=len(request.events_json))
+
+
 _ACTIVITIES = [
     _build_config,
     _discover_tools,
@@ -249,6 +266,7 @@ _ACTIVITIES = [
     _call_llm,
     _build_report,
     _publish_events,
+    _record,
     _update_task_status,
     _validate_artifacts,
 ]
@@ -504,7 +522,9 @@ async def test_retry_reruns_the_failed_turn_on_the_same_conversation():
     assert retried_window == failed_window
     assert [m["role"] for m in retried_window] == ["system", "user"]
     retry_events = [
-        event for event in _published[published_before_retry:] if event["event_type"] == "task.retried"
+        event
+        for event in _published[published_before_retry:]
+        if event["event_type"] == "task.retried"
     ]
     assert len(retry_events) == 1
     assert [e.role for e in _log.values()].count("user") == 1
@@ -525,11 +545,12 @@ async def test_a_model_call_cut_off_by_the_stop_is_recorded_with_its_cost_unknow
                 history = await handle.fetch_history()
 
     assert _model_runs == ["started", "told to stop"]
-    [cut_off] = [e["data"] for e in _published if e["event_type"] == "llm.call.failed"]
+    assert [e for e in _published if e["event_type"] == "llm.call.failed"] == []
+    [cut_off] = [e["data"] for e in _published if e["event_type"] == "llm.call.completed"]
     assert cut_off["cancelled"] is True
     assert cut_off["cost_known"] is False
     assert cut_off["cost"] is None
-    _assert_stop_shown_first_and_execution_ended_last("llm.call.failed")
+    _assert_stop_shown_first_and_execution_ended_last("llm.call.completed")
     assert len(_status_requests) == 1
     assert _tool_runs == []
     await _replay(history)

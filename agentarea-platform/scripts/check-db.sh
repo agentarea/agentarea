@@ -63,29 +63,36 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     under the workflow's id (the primary key decides); the SSE catch-up reads
 #     keyset batches ordered by (timestamp, id) and resumes after a given event;
 #     a conversation entry rewritten at its position replaces the first write.
+#   task log: one append writes the rows, the task's outcome, its spend and audit
+#     lines in the caller's transaction, once per event id (the unique key
+#     decides); the window is one query over the migrated ordering; a retried
+#     record call writes nothing twice.
 #   spend ledger: a retried event batch stores each paid line once (the
 #     (event, category) unique key decides), sums skip superseded lines and
 #     other currencies, and the backfill turns stored paid events into lines.
 #     The tool-call spend gate's caps reach only their scope's lines (agent,
 #     client, connection, tool), a query on the migrated table.
+#     A model call is refused at the workspace's or its agent's monthly cap from
+#     the same sums, the workspace's lines or the agent's alone.
 #     The settlement worker claims only lines marked for settlement that no line
 #     supersedes, through the partial index, and finalises each once.
 #   task provenance: a task's origin, correlation, causation and parent id are
 #     plain nullable columns the migrated schema must carry; a mocked session
 #     never catches a missing column.
 #   inbox counts: the inbox total narrows by agent in SQL exactly as its page does.
+#   task summary: a task's spend is the sum of its current ledger lines in the
+#     billing currency, and a status update stamps when the run started and ended.
 #   undispatched tasks: the reconciler finds pending tasks with no execution in
 #     every workspace under the ENFORCE scope and starts each in its own.
-#   event streams: the journal is partitioned by day and deduplicated by a
-#     separate key table; a webhook id belongs to one source and a trigger
-#     subscription names its trigger -- rules only the migrated schema holds.
-#     Partition maintenance creates and drops real daily partitions and trims
-#     a short-retention stream's rows, which a mocked session cannot exercise.
-#     The webhook backfill runs its own SQL against real trigger rows, JSON
-#     nulls included, and must keep every webhook_id through a roundtrip.
-#     The dispatcher leases subscriptions with FOR UPDATE SKIP LOCKED and commits
-#     each outcome with its cursor move under the lease; only real row locks and
-#     transactions show two dispatchers never serving one subscription twice.
+#   event streams: the events read model is partitioned by day and holds an
+#     event once per (event id, received_at); a webhook id belongs to one source
+#     and a trigger subscription names its trigger -- rules only the migrated
+#     schema holds. Partition maintenance creates and drops real daily
+#     partitions, which a mocked session cannot exercise. Ingest checks the
+#     stream and the quota against the read model before publishing. The router
+#     re-reads each subscription before acting, and a reaction is one
+#     trigger_executions row per (subscription, event): a unique key, an
+#     upsert and a nullable trigger only the migrated schema holds.
 #     Enabling a trigger stopped for a new owner clears the stamp in the row.
 #     A re-created webhook trigger takes over the stream its predecessor left,
 #     whose name the per-workspace unique constraint would otherwise refuse.
@@ -122,25 +129,28 @@ PY_SUITES=(
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_event_recall_scoping_db.py
   libs/tasks/tests/test_task_conversation_db.py
+  libs/tasks/tests/test_task_log_db.py
   libs/tasks/tests/test_task_provenance_db.py
   libs/tasks/tests/test_cost_entries_db.py
   libs/tasks/tests/test_cost_entries_backfill_db.py
   libs/tasks/tests/test_spend_gate_db.py
+  libs/tasks/tests/test_model_spend_caps_db.py
   libs/tasks/tests/test_cost_settlement_db.py
   libs/tasks/tests/test_inbox_counts_db.py
   libs/tasks/tests/test_undispatched_tasks_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
+  libs/execution/tests/unit/test_record_activity_db.py
   apps/api/tests/test_task_event_feed_db.py
+  apps/api/tests/test_task_summary_db.py
   libs/streams/tests/test_schema_db.py
-  libs/streams/tests/test_journal_db.py
+  libs/streams/tests/test_ingest_and_view_db.py
   libs/streams/tests/test_stream_isolation_db.py
   libs/streams/tests/test_stream_service_db.py
-  libs/streams/tests/test_pg_journal_db.py
   libs/streams/tests/test_partitions_db.py
-  libs/streams/tests/test_backfill_db.py
-  libs/streams/tests/test_dispatcher_db.py
+  libs/streams/tests/test_router_db.py
   apps/api/tests/test_webhook_source_intake_db.py
   apps/api/tests/test_stream_sources_db.py
+  libs/triggers/tests/test_reactions_db.py
   libs/triggers/tests/test_routed_follow_up_once_db.py
   libs/triggers/tests/test_needs_owner_db.py
   libs/triggers/tests/test_webhook_stream_reuse_db.py

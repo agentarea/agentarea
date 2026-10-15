@@ -535,10 +535,18 @@ def make_tools_activities(
                         # shell sees them. The models are the
                         # instances the settings name, resolved as this workspace.
                         from agentarea_agents_sdk.tools.sandbox_file_store import SandboxFileStore
+                        from agentarea_governance.domain.policies import (
+                            effective_policy_from_json,
+                        )
                         from agentarea_llm.application.media_generation_service import (
                             MediaGenerationService,
                         )
+                        from agentarea_tasks.model_spend_caps import (
+                            refuse_model_call_at_spend_cap,
+                        )
 
+                        cap_session = container._database.async_session_factory()
+                        ctx._sessions.append(cap_session)
                         extra_kwargs = {
                             "backend": MediaGenerationService(
                                 models=await ctx.get_model_service(),
@@ -548,6 +556,13 @@ def make_tools_activities(
                                 image_model_id=settings.get("image_model_id"),
                                 video_model_id=settings.get("video_model_id"),
                                 call_ref=_payment_call_ref(request),
+                                refuse_at_spend_cap=functools.partial(
+                                    refuse_model_call_at_spend_cap,
+                                    cap_session,
+                                    user_context,
+                                    effective_policy_from_json(request.effective_policy).budget,
+                                    request.agent_id,
+                                ),
                             ),
                             "storage": SandboxFileStore(
                                 mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,

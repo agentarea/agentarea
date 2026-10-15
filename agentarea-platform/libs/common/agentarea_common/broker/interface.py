@@ -33,6 +33,25 @@ class BrokerMessage:
     id: str  # broker-assigned ID (e.g. "1700000000000-0" for Redis Streams)
     fields: dict[str, str]
     delivery_count: int = 1
+    # The stream it was read from; set by reads that span several streams.
+    stream: str = ""
+
+
+@dataclass(frozen=True)
+class GroupInfo:
+    """A consumer group's position on its stream."""
+
+    lag: int  # entries in the stream not yet delivered to the group
+    consumers: int
+    last_delivered_id: str
+
+
+@dataclass(frozen=True)
+class PendingSummary:
+    """Messages delivered to a group and not yet acknowledged."""
+
+    count: int
+    oldest_idle_ms: int | None  # longest time since delivery; None when nothing is pending
 
 
 class BrokerClient(Protocol):
@@ -69,6 +88,20 @@ class BrokerClient(Protocol):
     ) -> list[BrokerMessage]:
         """Claim up to `count` un-ACKed messages for this consumer. Blocks
         up to `block_ms` if the stream is empty. Returns [] on timeout.
+        """
+        raise NotImplementedError
+
+    async def consume_many(
+        self,
+        streams: list[str],
+        group: str,
+        consumer: str,
+        count: int = 10,
+        block_ms: int = 5000,
+    ) -> list[BrokerMessage]:
+        """``consume`` over several streams in one call, each message naming its stream.
+
+        Every stream must already have ``group``.
         """
         raise NotImplementedError
 
@@ -109,5 +142,37 @@ class BrokerClient(Protocol):
         stream (catch-up). Returns ``(next_cursor, messages)``; pass
         `next_cursor` back to continue. On block timeout returns
         ``(last_id, [])`` unchanged.
+        """
+        raise NotImplementedError
+
+    async def group_info(self, stream: str, group: str) -> GroupInfo | None:
+        """The group's lag and consumers, or None when the stream or group does not exist."""
+        raise NotImplementedError
+
+    async def pending_summary(self, stream: str, group: str) -> PendingSummary:
+        """How many messages the group holds un-ACKed and the longest one has waited."""
+        raise NotImplementedError
+
+    async def length(self, stream: str) -> int:
+        """Entries currently kept in `stream`; 0 when it does not exist."""
+        raise NotImplementedError
+
+    async def read_range(
+        self, stream: str, start: str = "-", end: str = "+", count: int = 100
+    ) -> list[BrokerMessage]:
+        """Up to `count` entries with ids in [`start`, `end`], oldest first.
+
+        ``"-"`` and ``"+"`` are the stream's ends; a ``"("`` prefix makes a bound
+        exclusive. No group, no ACK.
+        """
+        raise NotImplementedError
+
+    async def move(
+        self, source: str, message_id: str, target: str, fields: dict[str, str]
+    ) -> str | None:
+        """Append `fields` to `target` and remove `message_id` from `source`, atomically.
+
+        Returns the new id, or None when `message_id` is no longer in `source`
+        (already moved), in which case nothing is appended.
         """
         raise NotImplementedError

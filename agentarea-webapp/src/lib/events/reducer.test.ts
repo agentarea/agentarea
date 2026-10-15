@@ -299,7 +299,7 @@ describe("business status and execution lifecycle", () => {
         eventType: "input.request",
         data: { input_request_id: "input", question: "Which project?" },
       },
-      { eventType: "approval.request", data: { escalation_id: "approval" } },
+      { eventType: "approval.requested", data: { escalation_id: "approval" } },
     ]);
     expect(state.status).toBe("waiting_for_input");
     expect(state.executionStatus).toBe("waiting");
@@ -315,7 +315,7 @@ describe("business status and execution lifecycle", () => {
     });
     expect(state.status).toBe("waiting_for_approval");
     state = applyEvent(state, {
-      eventType: "approval.response",
+      eventType: "approval.decided",
       data: { escalation_id: "approval", approved: true },
     });
     expect(state.status).toBe("running");

@@ -4,7 +4,8 @@ Producers attach a stable dedup key as a stream field (e.g. `telegram:42:7`
 for inbound, the workflow-derived `message_id` for outbound). Before doing
 the side-effecting work, the consumer calls `claim(key)`. If `False`, the
 message is a duplicate (broker redelivered, producer retried, etc.) and the
-consumer just ACKs without re-running the side effect.
+consumer just ACKs without re-running the side effect. The Redis key is
+``<namespace>.dedup.<prefix>:<key>``.
 
 Broker-native primitive (Redis SET with NX + EX). Swapping the broker to
 Kafka would swap this for a Kafka-state-store-backed equivalent.
@@ -20,11 +21,14 @@ class DedupCache:
         self,
         redis_url: str,
         *,
-        prefix: str = "dedup",
+        namespace: str,
+        prefix: str,
         ttl_seconds: int = 86400,
     ) -> None:
+        if not namespace:
+            raise ValueError("DedupCache needs a namespace (AGENTAREA_EVENT_NAMESPACE)")
         self._redis_url = redis_url
-        self._prefix = prefix
+        self._prefix = f"{namespace}.dedup.{prefix}"
         self._ttl = ttl_seconds
         self._client: redis.Redis | None = None
 

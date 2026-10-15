@@ -178,7 +178,7 @@ function EventBody({
                 o.verdict
               );
               // Only a forward's own targets, in append order — a derived
-              // sequence pairs with the target stream at the same index.
+              // event pairs with the target stream at the same index.
               const targets = forwardTargets.get(o.subscription_id) ?? [];
               return (
                 <li
@@ -244,26 +244,27 @@ function EventBody({
                         {t("task")}
                       </WorkspaceLink>
                     )}
-                    {o.derived_sequences.length > 0 && (
-                      <span className="flex items-center gap-1 tabular-nums">
+                    {o.derived_event_ids.length > 0 && (
+                      <span className="flex items-center gap-1">
                         {t("derived")}:{" "}
-                        {o.derived_sequences.map((sequence, index) => {
+                        {o.derived_event_ids.map((eventId, index) => {
                           const targetId = targets[index];
                           return (
-                            <span key={sequence}>
+                            <span
+                              key={eventId}
+                              className="font-mono"
+                              title={eventId}
+                            >
                               {index > 0 && ", "}
                               {targetId ? (
                                 <WorkspaceLink
-                                  href={feedHref(targetId, {
-                                    outcome: "all",
-                                    event: sequence,
-                                  })}
+                                  href={feedHref(targetId, { outcome: "all" })}
                                   className="text-primary hover:underline"
                                 >
-                                  {sequence}
+                                  {eventId.slice(0, 8)}
                                 </WorkspaceLink>
                               ) : (
-                                sequence
+                                eventId.slice(0, 8)
                               )}
                             </span>
                           );
@@ -282,15 +283,13 @@ function EventBody({
           {t("causedBy")}:{" "}
           {causedBy ? (
             <WorkspaceLink
-              href={feedHref(causedBy.streamId, {
-                outcome: "all",
-                event: causedBy.sequence,
-              })}
+              href={feedHref(causedBy.streamId, { outcome: "all" })}
               className="text-primary hover:underline"
+              title={causedBy.eventId}
             >
-              {streamNames.get(causedBy.streamId)
-                ? `${streamNames.get(causedBy.streamId)} · ${t("title", { sequence: causedBy.sequence })}`
-                : t("title", { sequence: causedBy.sequence })}
+              {streamNames.get(causedBy.streamId) ?? causedBy.streamId}
+              {" · "}
+              <span className="font-mono">{causedBy.eventId.slice(0, 8)}</span>
             </WorkspaceLink>
           ) : (
             <span className="break-all font-mono">{event.causation_id}</span>

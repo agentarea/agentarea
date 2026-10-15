@@ -3,9 +3,11 @@
  * words, and the few facts in its data worth seeing without opening it.
  */
 
+import { isTaskEventType, type TaskEventType } from "@/lib/events/contract";
+
 export type EventCategory =
   | "task"
-  | "iteration"
+  | "turn"
   | "llm"
   | "tool"
   | "input"
@@ -17,39 +19,37 @@ export type EventCategory =
   | "runtime"
   | "other";
 
-/** Checked in order against the lower-cased type; the first match wins. */
-const CATEGORY_PREFIXES: readonly [string, EventCategory][] = [
-  ["llm.", "llm"],
-  ["tool.", "tool"],
-  ["input.", "input"],
-  ["approval.", "approval"],
-  ["humanapproval", "approval"],
-  ["artifact.", "artifact"],
-  ["a2ui.", "ui"],
-  ["task.", "task"],
-  ["execution.", "task"],
-  ["workflow", "task"],
-  ["iteration", "iteration"],
-  ["budget", "budget"],
-  ["context", "context"],
-  ["runtime", "runtime"],
-];
+/** Category of each scope, the part of the type before its first dot. */
+const CATEGORY_BY_SCOPE: Readonly<Record<string, EventCategory>> = {
+  task: "task",
+  execution: "task",
+  command: "task",
+  delegation: "task",
+  turn: "turn",
+  llm: "llm",
+  model: "llm",
+  answer: "llm",
+  tool: "tool",
+  input: "input",
+  message: "input",
+  approval: "approval",
+  artifact: "artifact",
+  a2ui: "ui",
+  budget: "budget",
+  service: "budget",
+  context: "context",
+  runtime: "runtime",
+};
 
 export function eventCategory(type: string): EventCategory {
-  const lower = type.toLowerCase();
-  return (
-    CATEGORY_PREFIXES.find(([prefix]) => lower.startsWith(prefix))?.[1] ??
-    "other"
-  );
+  return CATEGORY_BY_SCOPE[type.split(".", 1)[0]] ?? "other";
 }
 
 /**
- * Catalog key (under `TaskEventsPage.types`) of the name a known type reads
- * as. The backend vocabulary is fixed (agentarea_common/events/contract.py
- * plus the workflow's own CamelCase events); a type missing here keeps its
- * raw name.
+ * Catalog key (under `TaskEventsPage.types`) of the name each type of the
+ * closed vocabulary (lib/events/contract.ts) reads as.
  */
-const TYPE_KEYS: Readonly<Record<string, string>> = {
+const TYPE_KEYS: Readonly<Record<TaskEventType, string>> = {
   "task.started": "taskStarted",
   "task.completed": "taskCompleted",
   "task.failed": "taskFailed",
@@ -57,43 +57,58 @@ const TYPE_KEYS: Readonly<Record<string, string>> = {
   "task.awaiting_follow_up": "taskAwaitingFollowUp",
   "task.awaiting_continuation": "taskAwaitingContinuation",
   "task.continued": "taskContinued",
+  "task.retried": "taskRetried",
   "execution.finished": "executionFinished",
+  "execution.continued_as_new": "executionContinuedAsNew",
+  "execution.paused": "executionPaused",
+  "execution.resumed": "executionResumed",
+  "turn.started": "turnStarted",
+  "turn.completed": "turnCompleted",
+  "turn.aborted": "turnAborted",
   "llm.call.started": "llmCallStarted",
   "llm.call.completed": "llmCallCompleted",
   "llm.call.failed": "llmCallFailed",
   "llm.call.chunk": "llmCallChunk",
   "tool.call": "toolCall",
   "tool.result": "toolResult",
+  "tool.progress": "toolProgress",
   "input.request": "inputRequest",
+  "input.submitted": "inputSubmitted",
   "input.response": "inputResponse",
-  "approval.request": "approvalRequest",
-  "approval.response": "approvalResponse",
-  HumanApprovalRequested: "approvalRequest",
+  "approval.requested": "approvalRequest",
+  "approval.decided": "approvalResponse",
+  "message.queued": "messageQueued",
+  "message.removed": "messageRemoved",
+  "command.received": "commandReceived",
+  "command.rejected": "commandRejected",
+  "budget.warning": "budgetWarning",
+  "budget.exceeded": "budgetExceeded",
+  "budget.updated": "budgetUpdated",
+  "service.payment": "servicePayment",
+  "service.budget_warning": "serviceBudgetWarning",
+  "service.budget_exceeded": "serviceBudgetExceeded",
+  "context.warning": "contextWarning",
+  "context.compacted": "contextCompacted",
+  "answer.checked": "answerChecked",
+  "model.changed": "modelChanged",
+  "model.fallback": "modelFallback",
+  "model.unavailable": "modelUnavailable",
+  "runtime.discovered": "runtimeDiscovered",
+  "delegation.started": "delegationStarted",
+  "delegation.completed": "delegationCompleted",
+  "delegation.failed": "delegationFailed",
+  "artifact.validation.started": "artifactValidationStarted",
+  "artifact.validation.completed": "artifactValidationCompleted",
   "artifact.created": "artifactCreated",
   "artifact.updated": "artifactUpdated",
   "a2ui.create": "uiCreated",
   "a2ui.update.components": "uiUpdated",
   "a2ui.update.data": "uiUpdated",
   "a2ui.delete": "uiDeleted",
-  IterationStarted: "iterationStarted",
-  IterationCompleted: "iterationCompleted",
-  BudgetWarning: "budgetWarning",
-  BudgetExceeded: "budgetExceeded",
-  ContextCompacted: "contextCompacted",
-  ContextWindowExceeded: "contextWindowExceeded",
-  RuntimeDiscovered: "runtimeDiscovered",
-  RuntimeError: "runtimeError",
-  WorkflowStarted: "workflowStarted",
-  WorkflowCompleted: "workflowCompleted",
-  WorkflowFailed: "workflowFailed",
-  WorkflowCancelled: "workflowCancelled",
-  WorkflowContinuedAsNew: "workflowContinuedAsNew",
-  WorkflowCommandReceived: "commandReceived",
-  WorkflowCommandRejected: "commandRejected",
 };
 
 export function eventTypeKey(type: string): string | null {
-  return TYPE_KEYS[type] ?? null;
+  return isTaskEventType(type) ? TYPE_KEYS[type] : null;
 }
 
 /**

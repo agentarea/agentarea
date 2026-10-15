@@ -105,6 +105,8 @@ type LoggingConfig struct {
 // RedisConfig holds Redis configuration for event handling
 type RedisConfig struct {
 	URL string `json:"url"`
+	// EventNamespace is the first segment of every event topic: <namespace>.<domain>.<dataset>.
+	EventNamespace string `json:"event_namespace"`
 }
 
 // PackageImageConfig controls the manager's package-to-image import flow.
@@ -158,7 +160,8 @@ func Load() *Config {
 			Format: getEnv("AGENTAREA_LOG_FORMAT", "json"),
 		},
 		Redis: RedisConfig{
-			URL: getEnv("AGENTAREA_REDIS_URL", "redis://localhost:6379"),
+			URL:            getEnv("AGENTAREA_REDIS_URL", "redis://localhost:6379"),
+			EventNamespace: getEnv("AGENTAREA_EVENT_NAMESPACE", "agentarea"),
 		},
 		CoreAPIURL:  getEnv("AGENTAREA_API_URL", "http://localhost:8000"),
 		Kubernetes:  loadKubernetesConfig(),

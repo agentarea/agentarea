@@ -47,7 +47,7 @@ class CapturingTelegramAdapter:
 def _make_event(event_id: str, task_id: str, result: str) -> dict:
     """Workflow event as seen by emit_channel_delivery inside the activity."""
     return {
-        "event_type": "WorkflowCompleted",
+        "event_type": "task.completed",
         "task_id": task_id,
         "event_id": event_id,
         "data": {"result": result},
@@ -71,8 +71,8 @@ async def pipeline():
     group = "delivery"
     dlq = f"e2e:outbound:dlq:{test_id}"
 
-    broker = RedisStreamsBroker(AGENTAREA_REDIS_URL)
-    dedup = DedupCache(AGENTAREA_REDIS_URL, prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
+    broker = RedisStreamsBroker(AGENTAREA_REDIS_URL, namespace="test")
+    dedup = DedupCache(AGENTAREA_REDIS_URL, namespace="test", prefix=f"e2e-dedup-{test_id}", ttl_seconds=60)
     try:
         await broker.ensure_group(stream, group, start="0")
     except Exception as exc:

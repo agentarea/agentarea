@@ -189,3 +189,25 @@ async def test_an_inbound_event_whose_firing_failed_is_fired_again_once_reclaime
 
     assert consumer.executed == ["trg-1"]
     assert broker.pending == {}
+
+
+async def test_a_dead_lettered_delivery_delivers_when_replayed():
+    from agentarea_triggers.channels.exceptions import FatalError
+
+    broker = _PendingListBroker()
+    dedup = _Dedup()
+    _task_webhook_delivery(broker)
+    adapter = MagicMock()
+    adapter.send = AsyncMock(side_effect=[FatalError("endpoint gone"), None])
+    worker = _delivery_consumer(broker, dedup, adapters={"task_webhook": adapter})
+    for message in await broker.consume(STREAM, GROUP, "w"):
+        await worker.handle(message)
+    assert len(broker.dead_letters) == 1
+
+    broker.add({k: v for k, v in broker.dead_letters[0].items() if k != "fatal_reason"})
+    for message in await broker.consume(STREAM, GROUP, "w"):
+        await worker.handle(message)
+
+    assert adapter.send.await_count == 2
+    assert broker.pending == {}
+    assert len(broker.dead_letters) == 1

@@ -43,7 +43,7 @@ TypeScript.
 llm.call.started      llm.call.chunk      llm.call.completed   llm.call.failed
 tool.call             tool.result
 input.request         input.response
-approval.request      approval.response
+approval.requested    approval.decided
 artifact.created      artifact.updated
 a2ui.create           a2ui.update.components
 a2ui.update.data      a2ui.delete
@@ -51,10 +51,13 @@ task.started          task.completed      task.failed          task.cancelled
 task.awaiting_continuation                task.continued
 ```
 
-Timeline and diagnostic events keep bare names and are deliberately outside the
-taxonomy: `IterationStarted`, `IterationCompleted`, `BudgetWarning`,
-`ContextCompacted`, `AgentDelegationStarted`, `ModelChanged`,
-`WorkflowContinuedAsNew`, and others. They carry no part and derive nothing.
+Timeline and diagnostic events are dotted too and derive no part: `turn.started`,
+`turn.completed`, `turn.aborted`, `budget.warning`, `context.compacted`,
+`delegation.started`, `model.changed`, `command.received`,
+`execution.continued_as_new`, and others. The whole list is closed and
+versioned (`EVENT_TYPES` and `VOCABULARY_VERSION` in
+`agentarea_common/events/contract.py`, one line per type); creating an event
+of any other type raises.
 
 `tool.progress` is dotted but derives no part either, so it never replaces the
 tool card of the same `tool_call_id`. The tool activity records it itself while

@@ -19,7 +19,7 @@ class ChannelDeliverySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AGENTAREA_CHANNEL_", extra="ignore")
 
     IN_STREAM: str = Field(
-        default="agentarea.channel.inbound",
+        default="channel.inbound",
         description="Broker stream that carries normalized inbound channel events.",
     )
 
@@ -29,12 +29,12 @@ class ChannelDeliverySettings(BaseSettings):
     )
 
     IN_DLQ: str = Field(
-        default="agentarea.channel.inbound.dlq",
+        default="channel.inbound.dlq",
         description="Stream that catches inbound events that exhausted retries or are malformed.",
     )
 
     OUT_STREAM: str = Field(
-        default="agentarea.channel.outbound",
+        default="channel.outbound",
         description="Broker stream that carries pending outbound channel jobs.",
     )
 
@@ -44,7 +44,7 @@ class ChannelDeliverySettings(BaseSettings):
     )
 
     OUT_DLQ: str = Field(
-        default="agentarea.channel.outbound.dlq",
+        default="channel.outbound.dlq",
         description="Stream that catches messages that exhausted retries or hit a fatal error.",
     )
 

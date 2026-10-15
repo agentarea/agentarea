@@ -231,7 +231,7 @@ checked when the run completes.
 |---|---|
 | `llm.call.completed` of the turn | `content` = the checked answer |
 | `llm.call.completed` with `purpose: "answer_check"` | The rewrite call: its cost and usage, and `content` = the checked answer. Same `execution_id`/`iteration` as the turn, so it supersedes the same reply part |
-| `AnswerChecked` | `{iteration, leaks: [{kind, sample}], rewritten, changes}`: what was found and the model's `<changes>`, for audit; never shown as the answer |
+| `answer.checked` | `{iteration, leaks: [{kind, sample}], rewritten, changes}`: what was found and the model's `<changes>`, for audit; never shown as the answer |
 | `task.completed` `result`, the task's `result.response` | The checked answer |
 
 The rewrite is metered like any model call and counts against the run's budget.

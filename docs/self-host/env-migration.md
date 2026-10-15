@@ -65,6 +65,7 @@ configured. Delete them; there is no replacement.
 | `DATABASE_URL` | A second way to name the database next to `AGENTAREA_DB_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` / `_SSLMODE`, and the Go services disagreed on which one won. Every service now reads only the parts. |
 | `API_HOST`, `API_PORT`, `API_AUTH_ENABLED`, `API_AUTH_HEADER_NAME`, `API_AUTH_HEADER_VALUE`, `HEALTH_CHECK_ENABLED`, `HEALTH_CHECK_PORT` | Set by the Helm chart; nothing has read them. The API listens on `PORT` and serves `/health` there. |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Only `AGENTAREA_REDIS_URL` is read. The Helm chart still assembles it from host, port and password internally. |
+| `AGENTAREA_EVENT_DISPATCH_EVERY`, `AGENTAREA_EVENT_DISPATCH_BATCH`, `AGENTAREA_EVENT_LEASE` | The Postgres stream dispatcher they tuned is gone; stream events are consumed by broker consumer groups, which hold positions and redelivery themselves. |
 
 ## Renamed
 
@@ -316,6 +317,18 @@ configured. Delete them; there is no replacement.
 | `CHANNEL_DELIVERY_CONSUMER_BLOCK_MS` | `AGENTAREA_CHANNEL_BLOCK` |
 | `CHANNEL_DELIVERY_CONSUMER_BATCH_SIZE` | `AGENTAREA_CHANNEL_BATCH_SIZE` |
 | `CHANNEL_DELIVERY_MAX_DELIVERY_ATTEMPTS` | `AGENTAREA_CHANNEL_MAX_ATTEMPTS` |
+
+### Event bus
+
+`AGENTAREA_KAFKA_PREFIX` named a topic prefix for a Kafka backend that never
+shipped. Its successor applies to every broker: the namespace in front of every
+topic and broker key. The stream names in `AGENTAREA_CHANNEL_IN_STREAM`,
+`AGENTAREA_CHANNEL_OUT_STREAM`, their `_DLQ`s and `AGENTAREA_EVENT_STREAM` lose
+their `agentarea.` prefix: the namespace adds it.
+
+| Was | Is |
+|---|---|
+| `AGENTAREA_KAFKA_PREFIX` | `AGENTAREA_EVENT_NAMESPACE` |
 
 ### Event service
 

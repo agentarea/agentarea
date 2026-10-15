@@ -79,7 +79,7 @@ func TestBuildEventFieldsOmitsEmptySubject(t *testing.T) {
 }
 
 func TestStreamFor(t *testing.T) {
-	if got := streamFor(statusChangedType); got != "events:"+statusChangedType {
+	if got := streamFor("agentarea", statusChangedType); got != "agentarea.domain.events."+statusChangedType {
 		t.Errorf("streamFor = %v", got)
 	}
 }

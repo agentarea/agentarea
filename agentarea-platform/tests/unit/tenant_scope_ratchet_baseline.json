@@ -1,7 +1,6 @@
 {
   "text": {
     "apps/api/agentarea_api/api/v1/_secret_owners.py": 1,
-    "apps/api/agentarea_api/api/v1/agents_tasks.py": 1,
     "apps/api/agentarea_api/cli.py": 2,
     "apps/worker/agentarea_worker/cli.py": 1,
     "apps/worker/agentarea_worker/main.py": 1,
@@ -23,7 +22,6 @@
     "apps/api/agentarea_api/api/v1/_secret_owners.py": 1,
     "apps/api/agentarea_api/api/v1/access_control.py": 6,
     "apps/api/agentarea_api/api/v1/agent_overview.py": 4,
-    "apps/api/agentarea_api/api/v1/agents_tasks.py": 1,
     "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
     "apps/api/agentarea_api/api/v1/dashboard.py": 6,
     "apps/api/agentarea_api/api/v1/files.py": 1,
@@ -39,8 +37,11 @@
     "libs/mcp/agentarea_mcp/dispatch_stamps.py": 1,
     "libs/secrets/agentarea_secrets/catalog_service.py": 13,
     "libs/secrets/agentarea_secrets/database_secret_manager.py": 5,
-    "libs/streams/agentarea_streams/infrastructure/cross_workspace_leases.py": 2,
-    "libs/streams/agentarea_streams/infrastructure/partitions.py": 9
+    "libs/streams/agentarea_streams/application/ingest.py": 1,
+    "libs/streams/agentarea_streams/infrastructure/partitions.py": 4,
+    "libs/tasks/agentarea_tasks/infrastructure/task_log.py": 3,
+    "libs/tasks/agentarea_tasks/undispatched_tasks.py": 1,
+    "libs/triggers/agentarea_triggers/infrastructure/reactions.py": 7
   },
   "unscoped": {
     "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
@@ -52,10 +53,10 @@
     "libs/mcp/agentarea_mcp/container_monitor.py": 1,
     "libs/mcp/agentarea_mcp/dispatch_stamps.py": 1,
     "libs/mcp/agentarea_mcp/infrastructure/client_repository.py": 1,
-    "libs/streams/agentarea_streams/application/dispatcher.py": 2,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 1,
     "libs/streams/agentarea_streams/infrastructure/repository.py": 1,
     "libs/tasks/agentarea_tasks/cost_settlement.py": 1,
+    "libs/tasks/agentarea_tasks/undispatched_tasks.py": 1,
     "libs/triggers/agentarea_triggers/channels/inbound_subscriber.py": 1,
     "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1,
     "libs/triggers/agentarea_triggers/channels/origin_guard.py": 1,

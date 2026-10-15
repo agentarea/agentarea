@@ -19,6 +19,7 @@ from agentarea_common.model_charges import ModelCallRefusedError
 from agentarea_common.tool_cost import Payer
 from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_tasks.domain.costs import CostCategory, CostSubjectType
+from agentarea_tasks.model_spend_caps import SpendCapReachedError
 from agentarea_triggers.llm_condition_evaluator import (
     LLMConditionEvaluationError,
     LLMConditionEvaluator,
@@ -135,13 +136,19 @@ class _Ledger:
         return len(lines)
 
 
-def _evaluator(kind: str, models: _Models, ledger: _Ledger | None = None) -> LLMConditionEvaluator:
+def _evaluator(
+    kind: str,
+    models: _Models,
+    ledger: _Ledger | None = None,
+    refuse_at_spend_cap: AsyncMock | None = None,
+) -> LLMConditionEvaluator:
     return LLMConditionEvaluator(
         model_instance_service=_instances(kind),
         secret_manager=MagicMock(),
         model_service=models,
         user_context=UserContext(user_id="user-1", workspace_id=WORKSPACE),
         record_costs=ledger or _Ledger(),
+        refuse_at_spend_cap=refuse_at_spend_cap or AsyncMock(),
     )
 
 
@@ -282,6 +289,34 @@ async def test_a_refused_hold_never_reaches_the_provider():
     assert refused.value.__cause__.code == "no_credits"
     chat.assert_not_called()
     assert models.funded == []
+    assert ledger.lines == []
+
+
+@pytest.mark.parametrize("kind", ["chat", "decision"])
+async def test_a_condition_past_a_monthly_llm_cap_never_reaches_the_model(kind):
+    billing = _install(Billing())
+    models = _Models(managed_by="platform")
+    ledger = _Ledger()
+    agent_id = uuid4()
+    refuse = AsyncMock(
+        side_effect=SpendCapReachedError("Workspace monthly LLM spend cap reached (2 RUB/2 RUB)")
+    )
+
+    with (
+        patch("agentarea_agents_sdk.models.llm_model.acompletion") as chat,
+        pytest.raises(LLMConditionEvaluationError) as refused,
+    ):
+        await _evaluator(kind, models, ledger, refuse).evaluate_condition(
+            CONDITION, EVENT, {"trigger_id": "trigger-1", "agent_id": str(agent_id)}
+        )
+
+    assert isinstance(refused.value.__cause__, SpendCapReachedError)
+    assert "spend_cap_reached" in str(refused.value)
+    refuse.assert_awaited_once_with(agent_id)
+    chat.assert_not_called()
+    assert billing.authorizations == []
+    assert models.funded == []
+    assert models.asked == []
     assert ledger.lines == []
 
 

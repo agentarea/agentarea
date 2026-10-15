@@ -102,7 +102,7 @@ class _Broker:
         self.submits: list[tuple[str, dict]] = []
 
     async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
-        if self._fail_stream and stream.startswith("events:task."):
+        if self._fail_stream and stream.startswith("tasks.events."):
             raise ConnectionError("redis down")
         self.submits.append((stream, dict(fields)))
         self._log.append(("xadd", stream, fields.get("ce_id")))
@@ -166,7 +166,7 @@ async def test_event_is_stored_with_the_workflow_identity_before_it_is_streamed(
     assert log == [
         ("db", event["event_id"]),
         ("commit",),
-        ("xadd", f"events:task.{task_id}", event["event_id"]),
+        ("xadd", f"tasks.events.{task_id}", event["event_id"]),
     ]
     streamed = decode(broker.submits[0][1])
     assert streamed.time == datetime.fromisoformat(event["timestamp"])
@@ -306,7 +306,7 @@ async def test_tool_call_outcomes_reach_the_audit_trail_without_argument_values(
     gated = _tool_event(
         task_id,
         agent_id,
-        "approval.request",
+        "approval.requested",
         tool_name="deploy",
         escalation_id="esc-1",
         arguments={"env": "prod"},
@@ -315,7 +315,7 @@ async def test_tool_call_outcomes_reach_the_audit_trail_without_argument_values(
     decided = _tool_event(
         task_id,
         agent_id,
-        "approval.response",
+        "approval.decided",
         tool_name="deploy",
         escalation_id="esc-1",
         approved=False,
@@ -363,7 +363,7 @@ async def test_a_retried_batch_does_not_audit_a_tool_call_twice():
 
 
 async def test_a_decision_less_approval_response_is_not_a_second_decision():
-    """Pre-patch denials emitted a second approval.response carrying no decision."""
+    """Pre-patch denials emitted a second approval.decided carrying no decision."""
     log: list = []
     audit = _Audit()
     publish, _ = _activity(
@@ -373,7 +373,7 @@ async def test_a_decision_less_approval_response_is_not_a_second_decision():
     await publish(
         _request(
             _tool_event(
-                str(uuid4()), str(uuid4()), "approval.response", tool_name="x", comment="no"
+                str(uuid4()), str(uuid4()), "approval.decided", tool_name="x", comment="no"
             )
         )
     )

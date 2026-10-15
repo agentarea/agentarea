@@ -3,8 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from agentarea_common.events.adapters.redis_streams import topic_for
-from agentarea_common.events.contract import ensure_terminal_message
+from agentarea_common.events.contract import UnknownEventTypeError, ensure_terminal_message
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_common.events.task_stream import (
     TASK_STREAM_MAXLEN,
@@ -57,7 +56,7 @@ async def _snapshot_of(*envs):
 
 
 def test_task_stream_name():
-    assert task_stream_name("abc") == "task.abc"
+    assert task_stream_name("abc") == "tasks.events.abc"
 
 
 @pytest.mark.asyncio
@@ -204,11 +203,11 @@ async def test_publish_task_event_uses_bounded_stream():
     await publish_task_event(
         _Broker(),
         task_id=_TASK,
-        event_type="TaskCompleted",
+        event_type="task.completed",
         data={"result": "ok"},
         event_id=_uid(1),
     )
-    assert captured["stream"] == topic_for(task_stream_name(_TASK))
+    assert captured["stream"] == f"tasks.events.{_TASK}" == task_stream_name(_TASK)
     assert captured["maxlen"] == TASK_STREAM_MAXLEN
     # A finished task's stream must not outlive its readers.
     assert captured["ttl_seconds"] == TASK_STREAM_TTL_SECONDS
@@ -216,9 +215,21 @@ async def test_publish_task_event_uses_bounded_stream():
     from agentarea_common.events.adapters.redis_streams import decode
 
     restored = decode(captured["fields"])
-    assert restored.type == "TaskCompleted"
+    assert restored.type == "task.completed"
     assert restored.subject == _TASK
     assert restored.data == {"result": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_publish_task_event_rejects_a_type_outside_the_vocabulary():
+    class _Broker:
+        async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
+            raise AssertionError("an unknown type must not reach the stream")
+
+    with pytest.raises(UnknownEventTypeError):
+        await publish_task_event(
+            _Broker(), task_id=_TASK, event_type="IterationStarted", data={}, event_id=_uid(1)
+        )
 
 
 @pytest.mark.asyncio
@@ -385,7 +396,7 @@ async def test_publish_task_event_raises_broker_errors():
     # The caller decides: the workflow-event activity retries the whole batch,
     # the chunk publisher drops a best-effort snapshot.
     with pytest.raises(RuntimeError, match="redis down"):
-        await publish_task_event(_BadBroker(), task_id=_TASK, event_type="Step", data={})
+        await publish_task_event(_BadBroker(), task_id=_TASK, event_type="tool.call", data={})
 
 
 _T0 = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)

@@ -42,6 +42,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent.approval import ToolApprovalMixin
 from agentarea_execution.workflows.agent.patches import TOOL_CONFIG_ALIASES_PATCH
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
@@ -185,7 +186,7 @@ def _reply(tool_name: str, arguments: dict[str, Any], call_id: str) -> dict[str,
 async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     """Follow ``_llm_script`` for the parent run; a delegated child just completes."""
     global _llm_calls
-    if any(_CHILD_QUERY in str(m.get("content")) for m in request.messages):
+    if any(_CHILD_QUERY in str(m.get("content")) for m in _TASK_LOG.messages(request)):
         return _reply("completion", {"result": "child done", "artifacts": []}, "child_done")
     with _llm_lock:
         _llm_calls += 1
@@ -264,6 +265,14 @@ async def _mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=_mock_publish_events,
+    update_status=_mock_update_status,
+    log=_TASK_LOG,
+)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -273,6 +282,7 @@ _ALL_ACTIVITIES = [
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
     _mock_validate_artifacts,
 ]
@@ -384,9 +394,19 @@ async def test_approved_tool_runs_after_the_designated_approver_signs_off():
     assert [r.tool_name for r in _tool_requests] == [_GATED_TOOL]
     assert _tool_requests[0].policy_approval_granted is True
     assert _executed_tools == [_GATED_TOOL]
-    responses = _events("approval.response")
+    responses = _events("approval.decided")
     assert len(responses) == 1
     assert responses[0]["data"]["approved"] is True
+    events = [row for row in _TASK_LOG.entries(str(result.task_id)) if row.kind == "event"]
+    assert [row.name for row in events] == ["approval.requested", "approval.decided"]
+    requested, decided = (row.meta or {} for row in events)
+    assert requested["tool_name"] == _GATED_TOOL
+    assert any(_APPROVER in approver for approver in requested["approvers"])
+    assert (decided["approved"], decided["decided_by"], decided["comment"]) == (
+        True,
+        _APPROVER,
+        "ship it",
+    )
 
 
 @pytest.mark.asyncio
@@ -397,7 +417,7 @@ async def test_approval_rule_on_agent_config_name_escalates_before_delegation():
     async def drive(handle):
         escalation = await _pending_escalation(handle)
         assert escalation["tool_name"] == _DELEGATE_TOOL
-        assert _events("AgentDelegationStarted") == []
+        assert _events("delegation.started") == []
         await handle.signal(
             AgentExecutionWorkflow.resolve_escalation,
             args=[escalation["escalation_id"], True, "approved", _APPROVER],
@@ -406,7 +426,7 @@ async def test_approval_rule_on_agent_config_name_escalates_before_delegation():
     result = await _run(_request(policy), drive)
 
     assert result.success is True
-    assert len(_events("AgentDelegationCompleted")) == 1
+    assert len(_events("delegation.completed")) == 1
 
 
 @pytest.mark.asyncio
@@ -627,6 +647,6 @@ async def test_agent_tool_runs_the_target_agent_as_a_child_workflow():
     result = await _run(_request(_policy()))
 
     assert result.success is True
-    completed = _events("AgentDelegationCompleted")
+    completed = _events("delegation.completed")
     assert len(completed) == 1
     assert completed[0]["data"]["success"] is True

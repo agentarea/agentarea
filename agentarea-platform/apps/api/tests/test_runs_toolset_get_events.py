@@ -185,10 +185,10 @@ def test_input_response_names_the_answers_without_their_values():
 
 
 def test_message_is_kept_and_unknown_types_carry_only_it():
-    assert _event_projection("BudgetWarning", {"message": "80% used", "x": 1}) == {
+    assert _event_projection("budget.warning", {"message": "80% used", "x": 1}) == {
         "message": "80% used"
     }
-    assert _event_projection("iteration.started", {"iteration": 1}) == {}
+    assert _event_projection("turn.started", {"iteration": 1}) == {}
 
 
 class _FakeEventRepository:

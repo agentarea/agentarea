@@ -13,6 +13,7 @@ type Config struct {
 	DatabaseURL           string
 	RedisURL              string
 	WorkerID              string
+	Namespace             string
 	InboundStream         string
 	EnableTelegramPolling bool
 	PollInterval          time.Duration
@@ -48,9 +49,14 @@ func Load() (*Config, error) {
 		}
 	}
 
+	namespace := os.Getenv("AGENTAREA_EVENT_NAMESPACE")
+	if namespace == "" {
+		namespace = "agentarea"
+	}
+
 	inboundStream := os.Getenv("AGENTAREA_EVENT_STREAM")
 	if inboundStream == "" {
-		inboundStream = "agentarea.channel.inbound"
+		inboundStream = "channel.inbound"
 	}
 
 	enableTelegramPolling := false
@@ -78,6 +84,7 @@ func Load() (*Config, error) {
 		DatabaseURL:           databaseURL(),
 		RedisURL:              os.Getenv("AGENTAREA_REDIS_URL"),
 		WorkerID:              workerID,
+		Namespace:             namespace,
 		InboundStream:         inboundStream,
 		EnableTelegramPolling: enableTelegramPolling,
 		PollInterval:          pollInterval,

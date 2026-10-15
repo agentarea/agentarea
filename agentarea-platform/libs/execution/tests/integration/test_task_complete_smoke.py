@@ -22,6 +22,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
@@ -72,7 +73,7 @@ async def mock_resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 async def mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     """Mock LLM that captures the request and calls completion."""
     captured_llm_requests.append({
-        "messages": request.messages,
+        "messages": _TASK_LOG.messages(request),
         "tools": request.tools,
         "model_id": request.model_id,
     })
@@ -85,7 +86,7 @@ async def mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
         elif "name" in tool:
             tool_names.append(tool["name"])
 
-    print(f"[MOCK LLM] Received {len(request.messages)} messages, {len(request.tools or [])} tools")
+    print(f"[MOCK LLM] Received {len(_TASK_LOG.messages(request))} messages, {len(request.tools or [])} tools")
     print(f"[MOCK LLM] Tool names: {tool_names}")
     print(f"[MOCK LLM] completion present: {'completion' in tool_names}")
 
@@ -147,6 +148,14 @@ async def mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=mock_publish_events,
+    update_status=mock_update_task_status,
+    log=_TASK_LOG,
+)
+
+
 ALL_ACTIVITIES = [
     mock_build_config,
     mock_discover_tools,
@@ -154,6 +163,7 @@ ALL_ACTIVITIES = [
     mock_call_llm,
     mock_execute_mcp_tool,
     mock_publish_events,
+    _RECORD,
     mock_update_task_status,
     mock_validate_artifacts,
 ]

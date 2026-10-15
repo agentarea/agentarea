@@ -106,6 +106,7 @@ def make_service():
                     create=Mock(side_effect=AssertionError("keyless calls must not read secrets"))
                 ),
                 "local_host": "127.0.0.1",
+                "refuse_at_spend_cap": AsyncMock(),
                 **overrides,
             }
         )
@@ -639,6 +640,23 @@ async def test_no_credits_refuses_the_call_before_the_provider_is_asked(
     provider.ainvoke_stream.assert_not_called()
 
 
+async def test_a_call_past_a_monthly_llm_cap_is_refused_before_it_is_held(
+    billing, provider, make_service, user_context
+):
+    from agentarea_tasks.model_spend_caps import SpendCapReachedError
+
+    refuse = AsyncMock(side_effect=SpendCapReachedError("Workspace monthly LLM spend cap reached"))
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
+
+    with pytest.raises(SpendCapReachedError):
+        await make_service(refuse_at_spend_cap=refuse).execute(request, user_context=user_context)
+
+    refuse.assert_awaited_once_with(request, user_context)
+    assert billing.authorizations == []
+    provider.ainvoke_stream.assert_not_called()
+
+
 async def test_a_failed_platform_call_voids_its_hold(billing, provider, make_service, user_context):
     provider.ainvoke_stream.side_effect = RuntimeError("provider down")
     request = _request()
@@ -841,7 +859,7 @@ async def test_compaction_is_held_and_priced_like_the_loop_calls(
     assert result.original_message_count == 4
     assert result.conversation.head_seqs == [0, 7]
     assert result.conversation.tail_start == 5
-    assert [entry.kind for entry in written] == ["summary"]
+    assert [entry.kind for entry in written] == ["compaction"]
     [hold] = billing.authorizations
     assert (hold["kind"], hold["tool"]) == ("model", MODEL_ID)
 
@@ -867,3 +885,132 @@ async def test_a_stop_after_the_provider_reported_usage_returns_what_was_billed(
     assert result.content == "partial"
     assert result.cost == to_money("0.5")
     assert result.usage is not None and result.usage.total_tokens == 15
+
+
+LLM_CAP = {"amount_usd": "2", "category": "llm", "own_agent": True}
+CAPPED_AGENT = uuid4()
+
+
+@pytest.fixture
+def llm_cap_reached(monkeypatch, activity_boundary):
+    """Every monthly LLM cap read reports the cap reached; the reads are recorded."""
+    from agentarea_execution.activities import dependencies
+    from agentarea_execution.activities.agent import llm as llm_activities
+    from agentarea_tasks.model_spend_caps import SpendCapReachedError
+
+    container = dependencies.ActivityServiceContainer.return_value
+    container._database.async_session_factory.return_value = AsyncMock()
+    reads: list = []
+
+    class _Tasks:
+        def __init__(self, session, user_context):
+            pass
+
+        async def get_task(self, task_id):
+            return SimpleNamespace(id=task_id, agent_id=CAPPED_AGENT)
+
+    async def refuse(session, user_context, budget, agent_id):
+        reads.append(([cap.amount_usd for cap in budget.spend_caps or []], agent_id))
+        raise SpendCapReachedError("Agent monthly LLM spend cap reached (2 RUB/2 RUB)")
+
+    monkeypatch.setattr(llm_activities, "TaskRepository", _Tasks)
+    monkeypatch.setattr(llm_activities, "refuse_model_call_at_spend_cap", refuse)
+    return reads
+
+
+def _assert_refused_at_the_cap(raised) -> None:
+    assert raised.value.type == "SpendCapReachedError"
+    assert raised.value.non_retryable is True
+    assert raised.value.message == "Agent monthly LLM spend cap reached (2 RUB/2 RUB)"
+
+
+async def test_a_turn_past_a_monthly_llm_cap_is_refused_as_a_spend_cap_stop(
+    billing, provider, activity_boundary, llm_cap_reached
+):
+    request = _request(
+        task_id=str(uuid4()),
+        agent_id=str(CAPPED_AGENT),
+        effective_policy={
+            "tokens": {"max_tokens_per_call": 1000},
+            "budget": {"spend_caps": [LLM_CAP]},
+        },
+    )
+    request.resolved_model["managed_by"] = "platform"
+
+    with pytest.raises(ApplicationError) as raised:
+        await ActivityEnvironment().run(activity_boundary.call, request)
+
+    _assert_refused_at_the_cap(raised)
+    assert llm_cap_reached == [([to_money("2")], CAPPED_AGENT)]
+    assert billing.authorizations == []
+    provider.ainvoke_stream.assert_not_called()
+
+
+async def test_a_turn_under_only_a_workspace_monthly_cap_reads_it_before_the_call(
+    billing, provider, activity_boundary, llm_cap_reached
+):
+    request = _request(
+        task_id=str(uuid4()),
+        agent_id=str(CAPPED_AGENT),
+        effective_policy={
+            "tokens": {"max_tokens_per_call": 1000},
+            "budget": {"monthly_spend_cap_usd": "10"},
+        },
+    )
+    request.resolved_model["managed_by"] = "platform"
+
+    with pytest.raises(ApplicationError) as raised:
+        await ActivityEnvironment().run(activity_boundary.call, request)
+
+    _assert_refused_at_the_cap(raised)
+    assert llm_cap_reached == [([], CAPPED_AGENT)]
+    provider.ainvoke_stream.assert_not_called()
+
+
+async def test_a_compaction_past_a_monthly_llm_cap_is_refused_as_a_spend_cap_stop(
+    monkeypatch, billing, provider, activity_boundary, llm_cap_reached
+):
+    """Compaction is a model call of the run: the cap the run's agent reached refuses it."""
+    from agentarea_execution.activities import agent_execution_activities as activities
+    from agentarea_execution.activities.agent import llm as llm_activities
+    from agentarea_execution.models import CompactMessagesRequest, ConversationWindow
+    from agentarea_tasks.domain.models import ConversationEntry
+
+    log = [ConversationEntry(seq=0, role="system", content="system")] + [
+        ConversationEntry(seq=seq, role="user", content=f"turn {seq}") for seq in range(1, 7)
+    ]
+
+    async def sync_window(container, user_context, window, pending):
+        return log[:1], log[1:], len(log)
+
+    monkeypatch.setattr(llm_activities.conversation_log, "sync_window", sync_window)
+    monkeypatch.setattr(llm_activities, "LLMModel", provider.constructor)
+    functions = {
+        fn.__name__: fn for fn in activities.make_agent_activities(activity_boundary.dependencies)
+    }
+    request = _request()
+    request.resolved_model["managed_by"] = "platform"
+
+    with pytest.raises(ApplicationError) as raised:
+        await ActivityEnvironment().run(
+            functions["compact_messages_activity"],
+            CompactMessagesRequest(
+                conversation=ConversationWindow(
+                    task_id=str(uuid4()), head_seqs=[0], tail_start=1, next_seq=7
+                ),
+                keep_recent=2,
+                model_id=MODEL_ID,
+                workspace_id="test-workspace",
+                user_context_data=request.user_context_data,
+                resolved_model=request.resolved_model,
+                effective_policy={
+                    "tokens": {"max_tokens_per_call": 1000},
+                    "budget": {"spend_caps": [LLM_CAP]},
+                },
+            ),
+        )
+
+    _assert_refused_at_the_cap(raised)
+    assert llm_cap_reached == [([to_money("2")], CAPPED_AGENT)]
+    assert billing.authorizations == []
+    provider.constructor.assert_not_called()

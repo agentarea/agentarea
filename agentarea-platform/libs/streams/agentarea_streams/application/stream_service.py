@@ -9,6 +9,8 @@ from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.di.container import resolve
+from agentarea_common.events.base_events import DomainEvent
+from agentarea_common.events.outbox_publisher import OutboxPublisher
 
 from ..domain.enums import StreamKind, SubscriptionKind
 from ..domain.errors import (
@@ -22,20 +24,15 @@ from ..domain.errors import (
     SubscriptionNotFoundError,
     TriggerSubscriptionNotFoundError,
 )
+from ..domain.events import SUBSCRIPTIONS_CHANGED
 from ..domain.filters import EventFilter
-from ..domain.models import JournaledEvent, TriggerBinding
-from ..infrastructure.journal_repository import StreamJournal
-from ..infrastructure.orm import (
-    StreamORM,
-    StreamSourceORM,
-    StreamSubscriptionORM,
-    SubscriptionOutcomeORM,
-)
+from ..domain.models import RecordedEvent, TriggerBinding
+from ..infrastructure.event_repository import StreamEventRepository
+from ..infrastructure.orm import StreamORM, StreamSourceORM, StreamSubscriptionORM
 from ..infrastructure.repository import (
     StreamRepository,
     StreamSourceRepository,
     StreamSubscriptionRepository,
-    SubscriptionOutcomeRepository,
 )
 
 
@@ -75,19 +72,23 @@ class StreamService:
     def _subscriptions(self) -> StreamSubscriptionRepository:
         return self.repository_factory.create_repository(StreamSubscriptionRepository)
 
-    def _journal(self) -> StreamJournal:
-        return StreamJournal(self._session, self.repository_factory.user_context, self.settings)
+    def _events(self) -> StreamEventRepository:
+        return StreamEventRepository(self._session, self.repository_factory.user_context)
 
-    async def create_stream(
-        self, *, name: str, description: str, retention_days: int | None
-    ) -> StreamORM:
+    async def _subscriptions_changed(self, stream_id: UUID) -> None:
+        """Tell the router, after commit, to reload this stream's subscriptions."""
+        await OutboxPublisher(self._session, self.repository_factory.user_context).publish(
+            DomainEvent(
+                event_type=SUBSCRIPTIONS_CHANGED,
+                stream_id=str(stream_id),
+                aggregate_id=str(stream_id),
+                aggregate_type="stream",
+            )
+        )
+
+    async def create_stream(self, *, name: str, description: str) -> StreamORM:
         return await self._streams().add_stream(
-            name=name,
-            description=description,
-            kind=StreamKind.CUSTOM,
-            retention_days=(
-                retention_days if retention_days is not None else self.settings.RETENTION.days
-            ),
+            name=name, description=description, kind=StreamKind.CUSTOM
         )
 
     async def get_stream(self, stream_id: UUID) -> StreamORM:
@@ -138,6 +139,7 @@ class StreamService:
         await self.ensure_deletable(stream_id)
         if not await self._streams().delete_in_workspace(stream_id):
             raise StreamNotFoundError(stream_id)
+        await self._subscriptions_changed(stream_id)
 
     async def add_webhook_source(
         self, *, stream_id: UUID, webhook_type: str, validation_rules: dict[str, Any]
@@ -197,19 +199,15 @@ class StreamService:
 
         A stream a deleted trigger with the same name and webhook left behind is
         taken over, so the webhook's history continues; the new subscription
-        starts after the events already there.
+        reacts only to events that arrive from now on.
         """
         stream = await self.reusable_webhook_stream(trigger_name, webhook_id)
-        cursor = 0
         if stream is None:
             stream = await self._streams().add_stream(
                 name=webhook_stream_name(trigger_name, webhook_id),
                 description=f"Webhook {webhook_type}",
                 kind=StreamKind.CUSTOM,
-                retention_days=self.settings.RETENTION.days,
             )
-        else:
-            cursor = await self._journal().last_sequence(stream.id)
         source = await self._sources().add_webhook_source(
             stream_id=stream.id,
             webhook_id=webhook_id,
@@ -225,8 +223,8 @@ class StreamService:
             trigger_id=trigger_id,
             filter=EventFilter.from_trigger_event_types(event_types),
             output_stream_ids=[],
-            cursor_sequence=cursor,
         )
+        await self._subscriptions_changed(stream.id)
         return stream, source, subscription
 
     async def reusable_webhook_stream(self, trigger_name: str, webhook_id: str) -> StreamORM | None:
@@ -260,18 +258,22 @@ class StreamService:
         self, *, stream_id: UUID, trigger_id: UUID, event_filter: EventFilter
     ) -> StreamSubscriptionORM:
         await self.get_stream(stream_id)
-        return await self._subscriptions().add_subscription(
+        subscription = await self._subscriptions().add_subscription(
             stream_id=stream_id,
             kind=SubscriptionKind.TRIGGER,
             trigger_id=trigger_id,
             filter=event_filter,
             output_stream_ids=[],
-            cursor_sequence=await self._journal().last_sequence(stream_id),
         )
+        await self._subscriptions_changed(stream_id)
+        return subscription
 
     async def update_trigger_filter(self, trigger_id: UUID, event_filter: EventFilter) -> None:
         if not await self._subscriptions().update_filter_for_trigger(trigger_id, event_filter):
             raise TriggerSubscriptionNotFoundError(trigger_id)
+        subscription = await self._subscriptions().get_for_trigger(trigger_id)
+        if subscription is not None:
+            await self._subscriptions_changed(subscription.stream_id)
 
     async def sync_trigger_webhook_source(self, trigger_id: UUID, **fields: Any) -> None:
         sources = await self._sources().find_by_credential_key(trigger_id)
@@ -296,14 +298,15 @@ class StreamService:
         for output in output_stream_ids:
             if output not in found:
                 raise StreamNotFoundError(output)
-        return await self._subscriptions().add_subscription(
+        forward = await self._subscriptions().add_subscription(
             stream_id=stream_id,
             kind=SubscriptionKind.FORWARD,
             trigger_id=None,
             filter=event_filter,
             output_stream_ids=output_stream_ids,
-            cursor_sequence=await self._journal().last_sequence(stream_id),
         )
+        await self._subscriptions_changed(stream_id)
+        return forward
 
     async def get_forward(self, stream_id: UUID, subscription_id: UUID) -> StreamSubscriptionORM:
         """A forward of the stream; a trigger's subscription is refused, it goes with its trigger."""
@@ -321,10 +324,11 @@ class StreamService:
         return [o for o in outputs if o in found]
 
     async def delete_forward(self, stream_id: UUID, subscription_id: UUID) -> None:
-        """Remove a forward; its outcomes go with it, the events it copied stay."""
+        """Remove a forward; its reactions go with it, the events it copied stay."""
         forward = await self.get_forward(stream_id, subscription_id)
         if not await self._subscriptions().delete_in_workspace(forward.id):
             raise SubscriptionNotFoundError(subscription_id)
+        await self._subscriptions_changed(stream_id)
 
     async def trigger_subscription(self, trigger_id: UUID) -> StreamSubscriptionORM | None:
         return await self._subscriptions().get_for_trigger(trigger_id)
@@ -335,7 +339,7 @@ class StreamService:
 
     async def last_received_at(self, stream_id: UUID) -> datetime | None:
         await self.get_stream(stream_id)
-        return await self._journal().last_received_at(stream_id)
+        return await self._events().last_received_at(stream_id)
 
     async def trigger_bindings(self, trigger_ids: list[UUID]) -> dict[UUID, TriggerBinding]:
         """Stream, filter, webhook id and last event of each trigger, in three queries."""
@@ -343,7 +347,7 @@ class StreamService:
             return {}
         subscriptions = await self._subscriptions().list_for_triggers(trigger_ids)
         sources = await self._sources().find_by_credential_keys(trigger_ids)
-        last_by_stream = await self._journal().last_received_by_stream(
+        last_by_stream = await self._events().last_received_by_stream(
             list({s.stream_id for s in subscriptions})
         )
         webhook_by_trigger = {s.credential_key: s.webhook_id for s in sources}
@@ -366,21 +370,16 @@ class StreamService:
 
     async def list_events(
         self, stream_id: UUID, *, after: int | None, before: int | None, limit: int
-    ) -> list[JournaledEvent]:
+    ) -> list[RecordedEvent]:
         """Oldest first after ``after``; otherwise newest first before ``before``."""
         await self.get_stream(stream_id)
         if after is not None:
-            return await self._journal().read_after(stream_id, after, limit)
-        return await self._journal().read_before(stream_id, before, limit)
+            return await self._events().read_after(stream_id, after, limit)
+        return await self._events().read_before(stream_id, before, limit)
 
-    async def outcomes_for(
-        self, stream_id: UUID, sequences: list[int]
-    ) -> list[SubscriptionOutcomeORM]:
-        repo = self.repository_factory.create_repository(SubscriptionOutcomeRepository)
-        return await repo.list_for_events(stream_id, sequences)
-
-    async def outcomes_of_subscription(
-        self, subscription_id: UUID, limit: int
-    ) -> list[SubscriptionOutcomeORM]:
-        repo = self.repository_factory.create_repository(SubscriptionOutcomeRepository)
-        return await repo.list_for_subscription(subscription_id, limit)
+    async def list_events_since(
+        self, stream_id: UUID, *, since: datetime, after: int, limit: int
+    ) -> list[RecordedEvent]:
+        """Oldest first: received at or after ``since``, past position ``after``."""
+        await self.get_stream(stream_id)
+        return await self._events().read_since(stream_id, since, after, limit)

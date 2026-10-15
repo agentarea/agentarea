@@ -16,13 +16,13 @@ from agentarea_common.workspaces.memberships import (
     is_workspace_owner,
 )
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
-from agentarea_streams.domain import HandlerResult, JournaledEvent, SubscriptionView, Verdict
+from agentarea_streams.domain import HandlerResult, StreamEvent, SubscriptionView, Verdict
 from agentarea_streams.domain.keys import task_id_for
-from agentarea_streams.infrastructure.repository import SubscriptionOutcomeRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .channels.sender_admission import Refused, TelegramSenderAdmission, is_telegram_trigger
 from .event_context import TriggerEvent
+from .infrastructure.reactions import CausedExecutionRepository, ReactionRepository, StreamCause
 from .llm_condition_evaluator import build_condition_evaluator
 from .trigger_service import TriggerService
 
@@ -36,49 +36,44 @@ def _utcnow() -> datetime:
 
 
 class SubscriptionFollowUpClaim:
-    """The outcome row of one (subscription, event), written before a routed follow-up.
+    """The reaction row of one (subscription, event), written before a routed follow-up.
 
     A follow-up routed into a running workflow stores no task, so the
-    deterministic task id cannot recognise it on redelivery. The subscription's
-    outcome for the event is unique per (subscription, sequence) and is what the
-    dispatcher records afterwards anyway (it inserts with ON CONFLICT DO
-    NOTHING), so committing it before the signal is the durable mark that the
+    deterministic task id cannot recognise it on redelivery. The reaction is
+    unique per (subscription, event) and is what the router records afterwards
+    anyway, so committing it before the signal is the durable mark that the
     message went out. A crash between that commit and the signal loses the
     follow-up rather than doubling it.
     """
 
-    def __init__(
-        self, session: AsyncSession, subscription: SubscriptionView, event: JournaledEvent
-    ):
+    def __init__(self, session: AsyncSession, subscription: SubscriptionView, event: StreamEvent):
         self._session = session
-        self._subscription = subscription
-        self._event = event
-        self._outcomes = SubscriptionOutcomeRepository(
+        self._cause = StreamCause.of(subscription, event)
+        self._reactions = ReactionRepository(
             session,
             UserContext(user_id=subscription.created_by, workspace_id=subscription.workspace_id),
         )
 
     async def delivered_to(self) -> UUID | None:
         """The task an earlier attempt routed this event's follow-up into, if any."""
-        return await self._outcomes.reacted_task(self._subscription.id, self._event.sequence)
+        return await self._reactions.reacted_task(self._cause.subscription_id, self._cause.event_id)
 
     async def claim(self, task_id: UUID) -> bool:
-        inserted = await self._outcomes.record_once(
-            subscription_id=self._subscription.id,
-            stream_id=self._subscription.stream_id,
-            event_sequence=self._event.sequence,
-            verdict=Verdict.REACTED,
-            reason=f"follow-up queued into running task {task_id}",
-            score=None,
-            task_id=task_id,
-            derived_sequences=[],
+        _, inserted = await self._reactions.insert_once(
+            self._cause,
+            {
+                "status": "success",
+                "verdict": Verdict.REACTED.value,
+                "reason": f"follow-up queued into running task {task_id}",
+                "task_id": task_id,
+            },
             now=_utcnow(),
         )
         await self._session.commit()
         return inserted
 
     async def release(self) -> None:
-        await self._outcomes.delete_for_event(self._subscription.id, self._event.sequence)
+        await self._reactions.delete_for_event(self._cause.subscription_id, self._cause.event_id)
         await self._session.commit()
 
 
@@ -112,7 +107,7 @@ class TriggerSubscriptionHandler:
         trigger_service_factory: Callable[[AsyncSession, UserContext], TriggerService]
         | None = None,
         follow_up_claim_factory: Callable[
-            [AsyncSession, SubscriptionView, JournaledEvent], SubscriptionFollowUpClaim
+            [AsyncSession, SubscriptionView, StreamEvent], SubscriptionFollowUpClaim
         ] = SubscriptionFollowUpClaim,
         sender_admission: TelegramSenderAdmission | None = None,
     ):
@@ -153,8 +148,16 @@ class TriggerSubscriptionHandler:
             ),
         )
 
+    def _service(
+        self, session: AsyncSession, context: UserContext, cause: StreamCause
+    ) -> TriggerService:
+        """A trigger service whose every execution row is this subscription's reaction."""
+        service = self._trigger_service_factory(session, context)
+        service.trigger_execution_repository = CausedExecutionRepository(session, context, cause)
+        return service
+
     async def handle(
-        self, subscription: SubscriptionView, event: JournaledEvent, session: AsyncSession
+        self, subscription: SubscriptionView, event: StreamEvent, session: AsyncSession
     ) -> HandlerResult:
         from agentarea_tasks.domain.models import TaskProvenance
 
@@ -163,7 +166,8 @@ class TriggerSubscriptionHandler:
         context = UserContext(
             user_id=subscription.created_by, workspace_id=subscription.workspace_id
         )
-        service = self._trigger_service_factory(session, context)
+        cause = StreamCause.of(subscription, event)
+        service = self._service(session, context, cause)
         trigger = await service.get_trigger(subscription.trigger_id)
         if trigger is None:
             return HandlerResult(verdict=Verdict.ERROR, reason="trigger no longer exists")
@@ -215,19 +219,19 @@ class TriggerSubscriptionHandler:
             )
         stream = await service.stream_service.get_stream(event.stream_id)
         if caller is not None:
-            service = self._trigger_service_factory(
-                session, UserContext(user_id=caller, workspace_id=subscription.workspace_id)
+            service = self._service(
+                session, UserContext(user_id=caller, workspace_id=subscription.workspace_id), cause
             )
         firing = await service.fire(
             trigger.id,
             event.data,
-            event=TriggerEvent.from_journaled(event, stream_name=stream.name),
-            task_id=task_id_for(subscription.id, event.sequence),
+            event=TriggerEvent.from_stream_event(event, stream_name=stream.name),
+            task_id=task_id_for(subscription.id, event.id),
             provenance=TaskProvenance(
                 origin_type="trigger",
                 origin_id=str(trigger.id),
-                correlation_id=event.correlation_id or str(event.id),
-                causation_id=str(event.id),
+                correlation_id=cause.correlation_id,
+                causation_id=cause.causation_id,
             ),
             follow_up_claim=follow_up_claim,
             raise_retryable=True,

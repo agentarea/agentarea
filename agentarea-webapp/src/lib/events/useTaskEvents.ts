@@ -4,11 +4,7 @@ import { useSSE } from "@/hooks/useSSE";
 import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, type ApiResultLike } from "@/lib/api-errors";
 import { withWorkspaceQuery } from "@/lib/workspaces";
-import type {
-  DisplayEvent,
-  EventLevel,
-  WorkflowEventType,
-} from "@/types/events";
+import type { DisplayEvent, EventLevel } from "@/types/events";
 import { canonicalType, EventInput, Part, TERMINAL_TYPES } from "./contract";
 import { loadAllTaskEventPages, TaskEventsHistoryError } from "./history";
 import {
@@ -105,7 +101,7 @@ function toDisplayRow(
     `${canonical}-${index}`;
   return {
     id,
-    type: canonical as WorkflowEventType,
+    type: canonical,
     timestamp,
     title: canonical,
     description: rowDescription(canonical, data),

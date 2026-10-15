@@ -1,4 +1,4 @@
-"""Stream tables. stream_events is range-partitioned by day on received_at."""
+"""Stream tables. stream_events, the events read model, is range-partitioned by day."""
 
 from datetime import datetime
 from typing import Any
@@ -10,7 +10,6 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
-    Float,
     ForeignKey,
     Index,
     Integer,
@@ -44,7 +43,6 @@ class StreamORM(BaseModel, WorkspaceScopedMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
-    retention_days: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
@@ -79,6 +77,9 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     __table_args__ = (
         Index("ix_stream_events_stream_sequence", "stream_id", "sequence"),
         Index("ix_stream_events_workspace_received", "workspace_id", "received_at"),
+        # A partitioned table's unique key carries the partition key; a redelivery
+        # carries the received_at it was published with.
+        Index("uq_stream_events_event", "event_id", "received_at", unique=True),
         {"postgresql_partition_by": "RANGE (received_at)"},
     )
 
@@ -109,30 +110,12 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
-class StreamEventKeyORM(JournalBase):
-    """First insert decides novelty; a partitioned table cannot hold this unique key."""
-
-    __tablename__ = "stream_event_keys"
-    __table_args__ = (
-        Index("ix_stream_event_keys_received_at", "received_at"),
-        Index("ix_stream_event_keys_stream_sequence", "stream_id", "sequence"),
-    )
-
-    stream_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("streams.id", ondelete="CASCADE"), primary_key=True
-    )
-    event_key: Mapped[str] = mapped_column(Text, primary_key=True)
-    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
 class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):
     __tablename__ = "stream_subscriptions"
     __table_args__ = (
         CheckConstraint(
             "kind <> 'trigger' OR trigger_id IS NOT NULL", name="ck_stream_subscriptions_trigger"
         ),
-        Index("ix_stream_subscriptions_due", "status", "next_attempt_at"),
     )
 
     stream_id: Mapped[UUID] = mapped_column(
@@ -149,33 +132,4 @@ class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):
     )
     filter: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     output_stream_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    cursor_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
-    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    leased_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    lease_owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-
-class SubscriptionOutcomeORM(BaseModel, WorkspaceScopedMixin):
-    __tablename__ = "subscription_outcomes"
-    __table_args__ = (
-        UniqueConstraint(
-            "subscription_id", "event_sequence", name="uq_subscription_outcomes_event"
-        ),
-        Index("ix_subscription_outcomes_stream_event", "stream_id", "event_sequence"),
-    )
-
-    subscription_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("stream_subscriptions.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    stream_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
-    event_sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    verdict: Mapped[str] = mapped_column(String(16), nullable=False)
-    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    score: Mapped[float | None] = mapped_column(Float, nullable=True)
-    task_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True, index=True)
-    derived_sequences: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)

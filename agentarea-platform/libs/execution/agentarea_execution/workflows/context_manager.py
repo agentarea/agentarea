@@ -14,6 +14,9 @@ from .constants import (
     TOKENS_PER_MESSAGE_OVERHEAD,
 )
 
+# The first line of a compaction row; the summary follows it.
+COMPACTION_SUMMARY_HEADER = "[Previous conversation summary]"
+
 
 def estimate_tokens(text: str) -> int:
     """Estimate token count for a string.

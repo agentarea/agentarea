@@ -31,6 +31,7 @@ services:
       # MCP settings
       - AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:80
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_SANDBOX_FILE_SECRET=${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
@@ -370,6 +371,7 @@ services:
       PORT: 80
       AGENTAREA_MCP_NETWORK: agentarea_mcp-network
       AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_EVENT_NAMESPACE: agentarea
       AGENTAREA_API_URL: http://agentarea-backend:8000
       AGENTAREA_MCP_RUNTIME: docker
       # Where MCP servers and agent sandboxes run.
@@ -585,6 +587,7 @@ services:
 
       # Redis
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       # Links the worker sends out (the Telegram account-link reply)
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
       # PEM file of CA certificates trusted on outbound TLS on top of the public
@@ -671,6 +674,7 @@ services:
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_SSLMODE=disable
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_EVENT_POLL_INTERVAL=30s
       - AGENTAREA_EVENT_MAX_POLLERS=10
     volumes:

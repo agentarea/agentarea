@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from agentarea_streams.domain import AppendResult, StreamQuotaExceededError, WebhookSourceSpec
 from agentarea_triggers.webhook_intake import (
-    JournalAppendCallback,
+    StreamAppendCallback,
     journal_data,
     webhook_event_key,
     webhook_event_kind,
@@ -70,23 +70,26 @@ def _spec() -> WebhookSourceSpec:
     )
 
 
+EVENT_ID = uuid4()
+
+
 async def test_the_callback_appends_and_keeps_the_receipt():
     journal = AsyncMock()
-    journal.append.return_value = AppendResult(sequence=5, appended=True)
+    journal.append.return_value = AppendResult(event_id=EVENT_ID, appended=True)
     spec = _spec()
-    callback = JournalAppendCallback(journal=journal, spec=spec, source_id=uuid4())
+    callback = StreamAppendCallback(ingest=journal, spec=spec, source_id=uuid4())
     await callback.execute_webhook_trigger("wh", {"headers": {"webhook-id": "m"}, "text": "x"})
     event = journal.append.await_args.args[1]
     assert journal.append.await_args.kwargs["event_key"] == "webhook-id:m"
     assert event.type == "webhook.generic"
     assert event.subject == "wh"
-    assert callback.receipt == AppendResult(sequence=5, appended=True)
+    assert callback.receipt == AppendResult(event_id=EVENT_ID, appended=True)
 
 
 async def test_the_callback_remembers_a_refusal_and_reraises():
     journal = AsyncMock()
     journal.append.side_effect = StreamQuotaExceededError("w", 1)
-    callback = JournalAppendCallback(journal=journal, spec=_spec(), source_id=uuid4())
+    callback = StreamAppendCallback(ingest=journal, spec=_spec(), source_id=uuid4())
     with pytest.raises(StreamQuotaExceededError):
         await callback.execute_webhook_trigger("wh", {"headers": {}})
     assert isinstance(callback.refusal, StreamQuotaExceededError)
@@ -96,7 +99,7 @@ async def test_the_callback_remembers_a_refusal_and_reraises():
 async def test_the_callback_remembers_a_storage_failure_apart_from_a_refusal():
     journal = AsyncMock()
     journal.append.side_effect = ConnectionResetError("db went away")
-    callback = JournalAppendCallback(journal=journal, spec=_spec(), source_id=uuid4())
+    callback = StreamAppendCallback(ingest=journal, spec=_spec(), source_id=uuid4())
     with pytest.raises(ConnectionResetError):
         await callback.execute_webhook_trigger("wh", {"headers": {}})
     assert isinstance(callback.failure, ConnectionResetError)

@@ -222,7 +222,7 @@ describe("activity view", () => {
     const form: Part = {
       partId: "f",
       kind: "form",
-      eventType: "approval.request",
+      eventType: "approval.requested",
       data: {},
     };
     const artifact: Part = {

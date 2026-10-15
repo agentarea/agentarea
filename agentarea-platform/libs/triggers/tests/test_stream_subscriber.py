@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from agentarea_streams.domain import (
     EventFilter,
-    JournaledEvent,
+    StreamEvent,
     SubscriptionKind,
     SubscriptionView,
     Verdict,
@@ -15,6 +15,7 @@ from agentarea_streams.domain import (
 from agentarea_streams.domain.keys import task_id_for
 from agentarea_triggers.channels.sender_admission import Admitted, Refused
 from agentarea_triggers.domain.models import ConditionVerdict, TriggerFiring, WebhookTrigger
+from agentarea_triggers.infrastructure.reactions import CausedExecutionRepository
 from agentarea_triggers.stream_subscriber import (
     ConfigurerAuthority,
     SubscriptionFollowUpClaim,
@@ -36,12 +37,13 @@ def _sub(trigger_id):
 
 
 def _event():
-    return JournaledEvent(
+    return StreamEvent(
         type="push",
         source="webhook:github",
         data={"text": "go"},
         stream_id=uuid4(),
-        sequence=12,
+        workspace_id="w",
+        created_by="u",
         event_key="k",
         received_at=datetime.now(UTC),
     )
@@ -144,16 +146,14 @@ async def test_a_reaction_records_the_task_and_the_verdict_score():
     result = await _handler(service).handle(sub, event, AsyncMock())
     assert (result.verdict, result.task_id, result.score) == (Verdict.REACTED, task, 0.7)
     kwargs = service.fire.await_args.kwargs
-    assert kwargs["task_id"] == task_id_for(sub.id, event.sequence)
+    assert kwargs["task_id"] == task_id_for(sub.id, event.id)
     assert kwargs["provenance"].causation_id == str(event.id)
     assert kwargs["provenance"].origin_id == str(trigger.id)
     told = kwargs["event"]
-    assert (told.stream_name, told.kind, told.key, told.sequence) == (
-        "orders",
-        "push",
-        "k",
-        event.sequence,
-    )
+    assert (told.stream_name, told.kind, told.key) == ("orders", "push", "k")
+    recorder = service.trigger_execution_repository
+    assert isinstance(recorder, CausedExecutionRepository)
+    assert (recorder._cause.subscription_id, recorder._cause.event_id) == (sub.id, event.id)
     assert told.data == service.fire.await_args.args[1] == event.data
 
 

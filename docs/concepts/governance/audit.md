@@ -75,7 +75,7 @@ forwarding failure is logged and does not fail the write.
 
 Everything a run does is published as events: `llm.call.started` and
 `llm.call.completed`, `tool.call` and `tool.result`, delegations, budget warnings,
-`approval.request` and `approval.response`, and the terminal states. Events are
+`approval.requested` and `approval.decided`, and the terminal states. Events are
 published to Redis for live streaming and persisted for history, which is what
 lets a client attach after a task finishes and still render the outcome.
 

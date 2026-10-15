@@ -42,7 +42,7 @@ container = get_container()
 
 
 async def initialize_services():
-    """Initialize real services; returns the stream waker the lifespan closes on shutdown."""
+    """Initialize real services; returns the stream bus resources the lifespan closes."""
     try:
         # Discover extensions and wire DI
         from agentarea_common.auth.authorization import AuthorizationService
@@ -148,7 +148,7 @@ async def initialize_services():
 
         from agentarea_streams.infrastructure.di_container import setup_streams_di
 
-        stream_waker = setup_streams_di(settings)
+        stream_bus = setup_streams_di(settings)
 
         # Secret manager is created per-request with session and user_context
         # Not registered as singleton during startup
@@ -159,7 +159,7 @@ async def initialize_services():
             "Real services initialized successfully - Event Broker: %s",
             type(event_broker).__name__,
         )
-        return stream_waker
+        return stream_bus
     except Exception as e:
         logger.exception("Service initialization failed: %s", e)
         raise e
@@ -223,8 +223,13 @@ async def app_lifespan(app: FastAPI):
     metrics = MetricsSettings()
     metrics_server = start_metrics_server(metrics.PORT) if metrics.ENABLED else None
 
+    from agentarea_common.config import get_settings
+    from agentarea_common.observability.broker_metrics import start_broker_health_metrics
+
+    broker_metrics = start_broker_health_metrics(get_settings()) if metrics.ENABLED else None
+
     get_container()
-    stream_waker = await initialize_services()
+    stream_bus = await initialize_services()
 
     from agentarea_api.api.events.events_router import start_events_router
 
@@ -246,13 +251,15 @@ async def app_lifespan(app: FastAPI):
         if metrics_server is not None:
             metrics_server.shutdown()
             metrics_server.server_close()
+        if broker_metrics is not None:
+            await broker_metrics.aclose()
 
         # Always stop the events router — Redis subscribers hold connections
         # open and block uvicorn reload if not cancelled
         from agentarea_api.api.events.events_router import stop_events_router
 
         await stop_events_router()
-        await stream_waker.aclose()
+        await stream_bus.aclose()
 
         if is_reload_mode:
             logger.info("Application shutting down (reload mode - skipping full cleanup)")

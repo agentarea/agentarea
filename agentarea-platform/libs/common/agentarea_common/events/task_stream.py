@@ -27,10 +27,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from agentarea_common.broker.topics import task_events_topic
 from agentarea_common.observability.propagation import current_traceparent
 
-from .adapters.redis_streams import encode, topic_for
-from .contract import TASK_STARTED, canonical_type
+from .adapters.redis_streams import encode
+from .contract import TASK_STARTED, canonical_type, require_known_type
 from .ports import EventStream, IntegrationEvent
 
 logger = logging.getLogger(__name__)
@@ -46,10 +47,8 @@ _SOURCE = "agentarea-worker"
 
 
 def task_stream_name(task_id: str) -> str:
-    """Logical stream name for a task's event feed (``EventStream`` applies
-    ``topic_for`` to get the physical Redis stream).
-    """
-    return f"task.{task_id}"
+    """Logical stream name for a task's event feed; the broker adds the namespace."""
+    return task_events_topic(task_id)
 
 
 @dataclass(frozen=True)
@@ -90,7 +89,7 @@ async def publish_task_event(
     """
     event = IntegrationEvent(
         id=UUID(event_id) if event_id else uuid4(),
-        type=event_type,
+        type=require_known_type(event_type),
         source=_SOURCE,
         subject=task_id,
         time=datetime.fromisoformat(timestamp) if timestamp else datetime.now(UTC),
@@ -98,7 +97,7 @@ async def publish_task_event(
         data=data,
     )
     await broker.submit(
-        topic_for(task_stream_name(task_id)),
+        task_stream_name(task_id),
         encode(event),
         maxlen=TASK_STREAM_MAXLEN,
         ttl_seconds=TASK_STREAM_TTL_SECONDS,

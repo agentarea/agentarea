@@ -8,19 +8,69 @@ from pydantic import BaseModel, Field
 from .enums import SubscriptionKind, Verdict
 from .filters import EventFilter
 
+_STREAM_ATTRIBUTES = {
+    "stream_id": "streamid",
+    "workspace_id": "workspaceid",
+    "created_by": "createdby",
+    "event_key": "eventkey",
+    "received_at": "receivedat",
+    "depth": "depth",
+    "source_id": "sourceid",
+}
 
-class JournaledEvent(IntegrationEvent):
-    """An IntegrationEvent as the journal stored it, with its cursor position."""
+
+class StreamEvent(IntegrationEvent):
+    """An event of one stream, as the bus carries it on its ``streams.events`` partition.
+
+    ``id`` is deterministic (``uuid5(stream, event_key)``, or the processor's
+    derived id), so every repeat of the event names the same one. The stream
+    attributes travel as CloudEvents extensions.
+    """
 
     stream_id: UUID
-    sequence: int
+    workspace_id: str
+    created_by: str
     event_key: str
     received_at: datetime
     depth: int = 0
+    source_id: UUID | None = None
+
+    def to_bus(self) -> IntegrationEvent:
+        extensions = dict(self.extensions)
+        for field, name in _STREAM_ATTRIBUTES.items():
+            value = getattr(self, field)
+            if value is None:
+                continue
+            extensions[name] = value.isoformat() if isinstance(value, datetime) else str(value)
+        return IntegrationEvent(
+            **self.model_dump(exclude={*_STREAM_ATTRIBUTES, "extensions"}),
+            extensions=extensions,
+        )
+
+    @classmethod
+    def from_bus(cls, event: IntegrationEvent) -> "StreamEvent":
+        missing = [
+            n
+            for f, n in _STREAM_ATTRIBUTES.items()
+            if f != "source_id" and n not in event.extensions
+        ]
+        if missing:
+            raise ValueError(f"event {event.id} is not a stream event: no {', '.join(missing)}")
+        own = {f: event.extensions.get(n) for f, n in _STREAM_ATTRIBUTES.items()}
+        rest = {k: v for k, v in event.extensions.items() if k not in _STREAM_ATTRIBUTES.values()}
+        return cls.model_validate(
+            {**event.model_dump(exclude={"extensions"}), **own, "extensions": rest}
+        )
+
+
+class RecordedEvent(StreamEvent):
+    """A stream event as the events read model holds it, with its position there."""
+
+    sequence: int
 
 
 class AppendResult(BaseModel):
-    sequence: int
+    event_id: UUID
     appended: bool
 
 
@@ -29,7 +79,7 @@ class HandlerResult(BaseModel):
     reason: str | None = None
     score: float | None = None
     task_id: UUID | None = None
-    derived_sequences: list[int] = Field(default_factory=list)
+    derived_event_ids: list[UUID] = Field(default_factory=list)
 
 
 class SubscriptionView(BaseModel):

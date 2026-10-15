@@ -283,13 +283,21 @@ class TelegramSenderAdmission:
 
 
 def build_telegram_sender_admission(
-    *, may_run: MayRun, secret_reader: SecretReader, redis_url: str, app_url: str
+    *,
+    may_run: MayRun,
+    secret_reader: SecretReader,
+    redis_url: str,
+    namespace: str,
+    app_url: str,
 ) -> TelegramSenderAdmission:
     return TelegramSenderAdmission(
         may_run=may_run,
         link_codes=LinkCodes(redis_url),
         notices=DedupCache(
-            redis_url, prefix="telegram-sender-notice", ttl_seconds=NOTICE_INTERVAL_SECONDS
+            redis_url,
+            namespace=namespace,
+            prefix="telegram-sender-notice",
+            ttl_seconds=NOTICE_INTERVAL_SECONDS,
         ),
         secret_reader=secret_reader,
         app_url=app_url,

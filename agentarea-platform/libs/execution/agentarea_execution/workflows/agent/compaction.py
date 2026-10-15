@@ -6,7 +6,9 @@ from temporalio.exceptions import ApplicationError
 with workflow.unsafe.imports_passed_through():
     from agentarea_common.money import serialize_money
 
+    from ..context_manager import COMPACTION_SUMMARY_HEADER
     from ..context_strategy import ContextStrategy, allows_history_preservation
+    from ..models import Message
 
 from ...models import CompactMessagesRequest, CompactMessagesResult
 from ..constants import HEARTBEAT_TIMEOUT, LLM_CALL_TIMEOUT, Activities, EventTypes
@@ -62,10 +64,28 @@ class CompactionMixin(BudgetMixin):
             heartbeat_timeout=HEARTBEAT_TIMEOUT,
             retry_policy=model_call_retry_policy(),
         )
-        self._apply_conversation_window(result.conversation)
+        from_log = self._task_log_on()
+        if not from_log:
+            if result.conversation is None:
+                raise ApplicationError(
+                    "compaction of a cursor window returned no window",
+                    type="InvalidCompactionResult",
+                    non_retryable=True,
+                )
+            self._apply_conversation_window(result.conversation)
         if result.original_message_count == 0:
             workflow.logger.warning("No safe compaction boundary found, skipping")
             return False
+        if from_log:
+            # Recorded with the pending rows below, after everything it summarizes.
+            self.state.messages.append(
+                Message(
+                    role="user",
+                    kind="compaction",
+                    content=f"{COMPACTION_SUMMARY_HEADER}\n{result.summary}",
+                    meta={"skills": result.skills} if result.skills else None,
+                )
+            )
 
         if result.cost is None or result.usage is None:
             raise ApplicationError(
@@ -95,7 +115,7 @@ class CompactionMixin(BudgetMixin):
         # The summary is a paid model call. It is persisted as llm.call.completed,
         # the one event every spend consumer (usage metering, task summaries)
         # reads; purpose keeps it out of the transcript's assistant turn. Same
-        # publish batch as ContextCompacted, so no new workflow command.
+        # publish batch as context.compacted, so no new workflow command.
         self._events.add_event(
             EventTypes.LLM_CALL_COMPLETED,
             {

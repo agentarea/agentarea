@@ -60,7 +60,7 @@ class TestTelegramAdapter:
         assert "Failed" in msg
 
     def test_format_human_approval(self, adapter):
-        event = {"event_type": "approval.request", "data": {"question": "Proceed?"}}
+        event = {"event_type": "approval.requested", "data": {"question": "Proceed?"}}
         msg = adapter.format(event, "concise")
         assert "input" in msg.lower() or "Proceed" in msg
 
@@ -140,21 +140,61 @@ class TestComposedTelegramAdapter:
         assert "Working on it\\.\\.\\." in msg
 
     def test_command_received_seeds_working_frame_in_concise(self):
-        """Per-turn WorkflowCommandReceived renders the same '⏳ Working on it...'
-        frame as WorkflowStarted. On persistent conversational channels the
-        workflow lives across turns (WorkflowStarted fires once ever), so this
+        """Per-turn command.received renders the same '⏳ Working on it...'
+        frame as task.started. On persistent conversational channels the
+        workflow lives across turns (task.started fires once ever), so this
         is what seeds the live message before the result edits it in place.
         """
         formatter = make_formatter(TELEGRAM_MD)
 
-        msg = formatter({"event_type": "WorkflowCommandReceived", "data": {}}, "concise")
+        msg = formatter({"event_type": "command.received", "data": {}}, "concise")
 
         assert "Working on it\\.\\.\\." in msg
 
     def test_command_received_visible_in_concise(self):
         from agentarea_execution.workflows.visibility import PresentationMode, is_visible
 
-        assert is_visible("WorkflowCommandReceived", PresentationMode.CONCISE)
+        assert is_visible("command.received", PresentationMode.CONCISE)
+
+    @pytest.mark.parametrize(
+        ("event_type", "action"),
+        [("delegation.started", "Delegating to"), ("delegation.completed", "Received from")],
+    )
+    def test_delegation_renders_in_concise(self, event_type, action):
+        formatter = make_formatter(TELEGRAM_MD)
+
+        msg = formatter({"event_type": event_type, "data": {"agent_name": "scout"}}, "concise")
+
+        assert action in msg and "scout" in msg
+
+    @pytest.mark.parametrize(
+        ("event_type", "action"),
+        [("delegation.started", "Delegating to"), ("delegation.completed", "Received from")],
+    )
+    def test_telegram_adapter_renders_delegation_in_concise(self, event_type, action):
+        adapter = TelegramAdapter(secret_manager=MagicMock())
+
+        msg = adapter.format({"event_type": event_type, "data": {"agent_name": "scout"}}, "concise")
+
+        assert action in msg and "scout" in msg
+
+    @pytest.mark.parametrize(
+        "event_type",
+        ["command.received", "delegation.started", "delegation.completed"],
+    )
+    def test_status_events_are_concise(self, event_type):
+        from agentarea_execution.workflows.visibility import PresentationMode, is_visible
+
+        assert is_visible(event_type, PresentationMode.CONCISE)
+
+    @pytest.mark.parametrize(
+        "event_type", ["turn.completed", "context.compacted", "budget.warning", "budget.exceeded"]
+    )
+    def test_internal_events_are_verbose_only(self, event_type):
+        from agentarea_execution.workflows.visibility import PresentationMode, is_visible
+
+        assert is_visible(event_type, PresentationMode.VERBOSE)
+        assert not is_visible(event_type, PresentationMode.CONCISE)
 
     def test_strip_markdown_for_plain_text_fallback(self):
         assert _strip_markdown(r"\*Done\* with value\_1") == "Done with value1"
@@ -271,7 +311,7 @@ class TestEmailAdapter:
         assert "Failed" in html
 
     def test_format_human_approval(self, adapter):
-        event = {"event_type": "approval.request", "data": {"question": "Approve deploy?"}}
+        event = {"event_type": "approval.requested", "data": {"question": "Approve deploy?"}}
         html = adapter.format(event, "summary")
         assert "Approve deploy?" in html
 
@@ -543,7 +583,7 @@ def _approval_response(approved: bool | None, comment: str | None = None) -> dic
     data: dict = {"escalation_id": "esc-1", "tool_name": "shell", "comment": comment}
     if approved is not None:
         data["approved"] = approved
-    return {"event_type": "approval.response", "data": data}
+    return {"event_type": "approval.decided", "data": data}
 
 
 _FORMATTERS = {

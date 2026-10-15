@@ -27,6 +27,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
@@ -123,6 +124,9 @@ async def validate_artifacts(request: ArtifactValidationRequest) -> ArtifactVali
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_RECORD = make_record_activity(publish=publish_events, update_status=update_task_status)
+
+
 @pytest.mark.asyncio
 async def test_a_held_model_call_reaches_its_event_with_the_charge_and_the_hold():
     published.clear()
@@ -140,6 +144,7 @@ async def test_a_held_model_call_reaches_its_event_with_the_charge_and_the_hold(
                     resolve_model,
                     call_llm,
                     publish_events,
+                    _RECORD,
                     update_task_status,
                     validate_artifacts,
                 ],

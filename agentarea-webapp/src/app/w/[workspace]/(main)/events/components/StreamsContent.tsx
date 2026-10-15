@@ -74,13 +74,6 @@ export default async function StreamsContent({
           ),
         },
         {
-          header: t("streams.retention"),
-          accessor: "retention_days",
-          cellClassName: "tabular-nums",
-          render: (days: unknown) =>
-            t("streams.retentionDays", { count: Number(days) }),
-        },
-        {
           header: t("streams.created"),
           accessor: "created_at",
           render: (value: unknown) => formatDate(String(value), locale),
@@ -98,7 +91,7 @@ export default async function StreamsContent({
             </div>
           )}
           <div className="mt-auto text-xs tabular-nums text-muted-foreground">
-            {t("streams.retentionDays", { count: stream.retention_days })}
+            {formatDate(stream.created_at, locale)}
           </div>
         </div>
       )}

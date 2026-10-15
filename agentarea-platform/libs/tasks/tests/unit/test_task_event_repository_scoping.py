@@ -58,7 +58,7 @@ class TestListForTaskIsWorkspaceScoped:
         session = _capturing_session()
         repo = TaskEventRepository(session, UserContext(user_id="alice", workspace_id="alice-ws"))
 
-        await repo.list_for_task(uuid4(), event_type="LLMCallCompleted")
+        await repo.list_for_task(uuid4(), event_type="llm.call.completed")
 
         sql = _sql(session.execute.await_args.args[0])
         assert "task_events.workspace_id" in sql

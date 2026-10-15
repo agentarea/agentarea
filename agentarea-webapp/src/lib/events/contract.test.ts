@@ -2,12 +2,54 @@ import { describe, it, expect } from "vitest";
 import {
   canonicalType,
   derivePart,
+  EVENT_TYPES,
+  isTaskEventType,
   reduceParts,
+  VOCABULARY_VERSION,
   LLM_COMPLETED,
   TOOL_CALL,
   TOOL_RESULT,
   ARTIFACT_CREATED,
 } from "./contract";
+
+describe("vocabulary", () => {
+  it("is versioned", () => {
+    expect(VOCABULARY_VERSION).toBeGreaterThanOrEqual(1);
+  });
+
+  it("holds only dotted lowercase types, each once", () => {
+    for (const type of EVENT_TYPES) {
+      expect(type).toMatch(/^[a-z0-9_]+(\.[a-z0-9_]+)+$/);
+    }
+    expect(new Set(EVENT_TYPES).size).toBe(EVENT_TYPES.length);
+  });
+
+  it("knows the turn and timeline types", () => {
+    for (const type of [
+      "turn.started",
+      "turn.completed",
+      "turn.aborted",
+      "budget.warning",
+      "context.compacted",
+      "command.received",
+      "delegation.started",
+      "execution.continued_as_new",
+    ]) {
+      expect(isTaskEventType(type)).toBe(true);
+    }
+  });
+
+  it("does not know the bare names", () => {
+    for (const type of [
+      "IterationStarted",
+      "BudgetWarning",
+      "WorkflowCommandReceived",
+      "execution_paused",
+    ]) {
+      expect(isTaskEventType(type)).toBe(false);
+    }
+  });
+});
 
 describe("canonicalType", () => {
   it("passes canonical dotted types through unchanged", () => {
@@ -16,7 +58,7 @@ describe("canonicalType", () => {
     expect(canonicalType("tool.call")).toBe(TOOL_CALL);
     expect(canonicalType("tool.result")).toBe(TOOL_RESULT);
     expect(canonicalType("input.request")).toBe("input.request");
-    expect(canonicalType("approval.response")).toBe("approval.response");
+    expect(canonicalType("approval.decided")).toBe("approval.decided");
     expect(canonicalType("task.completed")).toBe("task.completed");
     expect(canonicalType("task.cancelled")).toBe("task.cancelled");
   });
@@ -26,9 +68,9 @@ describe("canonicalType", () => {
     expect(canonicalType("workflow.llm.call.chunk")).toBe("llm.call.chunk");
   });
 
-  it("returns unknown types unchanged (no alias table)", () => {
-    expect(canonicalType("BudgetWarning")).toBe("BudgetWarning");
-    expect(canonicalType("IterationStarted")).toBe("IterationStarted");
+  it("returns other types unchanged (no alias table)", () => {
+    expect(canonicalType("budget.warning")).toBe("budget.warning");
+    expect(canonicalType("turn.started")).toBe("turn.started");
   });
 
   it("is idempotent", () => {
@@ -80,10 +122,10 @@ describe("derivePart", () => {
 
   it("keys an approval form by escalation_id, falling back to request_id", () => {
     expect(
-      derivePart("approval.request", { escalation_id: "esc-1" })?.partId
+      derivePart("approval.requested", { escalation_id: "esc-1" })?.partId
     ).toBe("esc-1");
     expect(
-      derivePart("approval.request", { request_id: "rq-2" })?.partId
+      derivePart("approval.requested", { request_id: "rq-2" })?.partId
     ).toBe("rq-2");
   });
 
