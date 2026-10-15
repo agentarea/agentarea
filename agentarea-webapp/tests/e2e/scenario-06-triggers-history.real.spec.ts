@@ -44,9 +44,10 @@ test.describe("Scenario 06 MP - create cron and webhook triggers", () => {
 
     await gotoCommitted(page, "/triggers/create");
 
-    // The trigger type is a grid of tiles from the catalog; a tile's name
-    // carries its description too, so match on the leading title.
-    await page.getByRole("button", { name: /^Cron/ }).click();
+    // The trigger type is picked like a model: a combobox over the catalog,
+    // whose rows carry a description too, so match on the leading title.
+    await page.getByRole("combobox", { name: /Trigger Type/ }).click();
+    await page.getByRole("option", { name: /^Cron/ }).click();
 
     // Gate on the CronScheduler having rendered before touching fields.
     await expect(

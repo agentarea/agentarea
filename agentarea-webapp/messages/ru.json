@@ -2055,7 +2055,10 @@
         "runsMonthly": "Запуск {day}-го числа каждого месяца в {time}",
         "runsCustom": "Своё cron-выражение"
       },
-      "changeType": "Изменить"
+      "typeKinds": "Виды",
+      "typeItems": "Типы",
+      "typeSearch": "Поиск по типам триггеров",
+      "typeNotFound": "Типы не найдены"
     },
     "detail": {
       "overview": "Обзор",
@@ -3610,5 +3613,14 @@
   "ToolPart": {
     "blockedByPolicy": "Заблокировано политикой",
     "rejectedByApprover": "Отклонено согласующим"
+  },
+  "ModelSelector": {
+    "placeholder": "Выберите модель",
+    "configurations": "Конфигурации",
+    "models": "Модели",
+    "search": "Поиск по конфигурациям и моделям",
+    "noModels": "Модели не найдены",
+    "defaultConfiguration": "Конфигурация по умолчанию",
+    "unknownProvider": "Неизвестный провайдер"
   }
 }

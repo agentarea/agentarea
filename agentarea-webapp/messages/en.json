@@ -2055,7 +2055,10 @@
         "runsMonthly": "Runs on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} of every month at {time}",
         "runsCustom": "Custom cron expression"
       },
-      "changeType": "Change"
+      "typeKinds": "Kinds",
+      "typeItems": "Types",
+      "typeSearch": "Search trigger types",
+      "typeNotFound": "No types found"
     },
     "detail": {
       "overview": "Overview",
@@ -3610,5 +3613,14 @@
   "ToolPart": {
     "blockedByPolicy": "Blocked by policy",
     "rejectedByApprover": "Rejected by approver"
+  },
+  "ModelSelector": {
+    "placeholder": "Select a model",
+    "configurations": "Configurations",
+    "models": "Models",
+    "search": "Search configurations and models",
+    "noModels": "No models found",
+    "defaultConfiguration": "Default configuration",
+    "unknownProvider": "Unknown provider"
   }
 }

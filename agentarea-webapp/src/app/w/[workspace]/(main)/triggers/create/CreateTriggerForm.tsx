@@ -20,13 +20,16 @@ import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { FilePickerPanel } from "@/components/ResourcePicker/FilePickerPanel";
 import { SecretSelect } from "@/components/SecretSelect";
 import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import Divider from "@/components/ui/divider";
+import {
+  GroupedSelect,
+  type GroupedSelectGroup,
+} from "@/components/ui/grouped-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -46,6 +49,7 @@ import {
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
+import { LANE_ICON } from "../components/TriggersTypeFilter";
 import { SigningSecretIssuedDialog } from "../components/WebhookSigning";
 import {
   createTriggerAction,
@@ -87,15 +91,19 @@ const INLINE_ERROR_FIELDS = new Set([
   "failure_threshold",
   "allowed_methods",
 ]);
-const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
-  "schedule",
-  "messaging",
-  "event",
-];
 
 type SelectableResource = TaskParameterRef;
 
-const TYPE_GRID = "grid gap-2 sm:grid-cols-2 xl:grid-cols-3";
+/** The picker's groups, in the trigger list's lane order and names. */
+const TYPE_KINDS = [
+  { kind: "schedule", label: "schedules", lane: "schedule" },
+  { kind: "messaging", label: "channels", lane: "channel" },
+  { kind: "event", label: "events", lane: "event" },
+] as const satisfies readonly {
+  kind: TriggerCatalogEntry["kind"];
+  label: string;
+  lane: string;
+}[];
 
 function resolveInitialId(
   catalog: TriggerCatalogEntry[],
@@ -155,8 +163,6 @@ export function CreateTriggerForm({
   const [credentialSecrets, setCredentialSecrets] = useState<
     Record<string, string>
   >({});
-  // Picking a type collapses the grid to the one picked; "Change" reopens it.
-  const [changingType, setChangingType] = useState(false);
   const [runSettingsOpen, setRunSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -296,15 +302,42 @@ export function CreateTriggerForm({
     }
   }, [state, router, initialData]);
 
-  // Kind is only a grouping header inside the type picker.
-  const kindLabels: Record<TriggerCatalogEntry["kind"], string> = {
-    schedule: tFilter("schedules"),
-    messaging: tFilter("channels"),
-    event: tFilter("events"),
-  };
-  const showTypePicker = !isEditing && (!selected || changingType);
-  const kinds = new Set(catalog.map((e) => e.kind));
-  const orderedKinds = KIND_ORDER.filter((k) => kinds.has(k));
+  // The catalog grows a type per integration, so the types are picked like
+  // models are: kinds on the left, that kind's types on the right, a search
+  // over both. The kinds and their icons are the trigger list's lanes.
+  const typeGroups: GroupedSelectGroup[] = TYPE_KINDS.filter(({ kind }) =>
+    catalog.some((entry) => entry.kind === kind)
+  ).map(({ kind, label, lane }) => {
+    const Icon = LANE_ICON[lane] ?? ENTITY_ICONS.trigger;
+    return {
+      id: kind,
+      label: tFilter(label),
+      icon: <Icon className="h-4 w-4 text-muted-foreground" />,
+      items: catalog
+        .filter((entry) => entry.kind === kind)
+        .map((entry) => ({
+          id: entry.id,
+          label: entry.name,
+          description: entry.description,
+          searchText: entry.id,
+          // The catalog owns the artwork, as on the trigger cards: drawing it
+          // from a map here is how channels the map never heard of ended up
+          // as dots.
+          icon: entry.icon_url ? (
+            <span className="avatar-plate grid h-5 w-5 flex-shrink-0 place-items-center rounded-[5px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={entry.icon_url}
+                alt=""
+                className="h-[13px] w-[13px] object-contain"
+              />
+            </span>
+          ) : undefined,
+        })),
+    };
+  });
+  // The type's own fields wait for a type; an edit always has one.
+  const hasType = isEditing || !!selected;
 
   // A new trigger cannot be saved without a type or an agent; both are
   // checked here, before the post, rather than left to the server's 422.
@@ -321,6 +354,9 @@ export function CreateTriggerForm({
       document
         .getElementById("trigger-type-field")
         ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      document
+        .getElementById("trigger_type_select")
+        ?.focus({ preventScroll: true });
     }
     if (!selected || !selectedAgentId) event.preventDefault();
   };
@@ -506,22 +542,13 @@ export function CreateTriggerForm({
             <Divider />
 
             <div id="trigger-type-field" className="scroll-mt-5 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <FormLabel icon={ENTITY_ICONS.trigger} required={!isEditing}>
-                  {t("triggerType")}
-                </FormLabel>
-                {!isEditing && selected && !changingType && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    className="text-muted-foreground"
-                    onClick={() => setChangingType(true)}
-                  >
-                    {t("changeType")}
-                  </Button>
-                )}
-              </div>
+              <FormLabel
+                htmlFor="trigger_type_select"
+                icon={ENTITY_ICONS.trigger}
+                required={!isEditing}
+              >
+                {t("triggerType")}
+              </FormLabel>
               {(typeMissing || state.errors?.trigger_type) && (
                 <p role="alert" className="form-error">
                   {state.errors?.trigger_type?.[0] ?? t("selectType")}
@@ -532,90 +559,34 @@ export function CreateTriggerForm({
                   {t("catalogLoadFailed")}
                 </p>
               )}
-              {showTypePicker ? (
-                <div
-                  role="group"
-                  aria-label={t("triggerType")}
-                  className="space-y-3"
-                >
-                  {orderedKinds.map((kind) => (
-                    <div key={kind} className="space-y-1.5">
-                      <p className="note">{kindLabels[kind]}</p>
-                      <div className={TYPE_GRID}>
-                        {catalog
-                          .filter((entry) => entry.kind === kind)
-                          .map((entry) => (
-                            <LinkedCard
-                              key={entry.id}
-                              compact
-                              hideHoverLink
-                              // The catalog owns the artwork, as on the
-                              // trigger cards: drawing it from a map here is
-                              // how channels the map never heard of ended up
-                              // as dots.
-                              icon={entry.icon_url ?? ENTITY_ICONS.trigger}
-                              title={entry.name}
-                              subtitle={
-                                <span
-                                  className="truncate text-xs"
-                                  title={entry.description}
-                                >
-                                  {entry.description}
-                                </span>
-                              }
-                              selected={entry.id === selectedId}
-                              onClick={() => {
-                                setSelectedId(entry.id);
-                                if (!nameEdited)
-                                  setName(
-                                    t("suggestedName", { type: entry.name })
-                                  );
-                                setChangingType(false);
-                                setTypeMissing(false);
-                              }}
-                            />
-                          ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {/* The chosen card keeps the group it was picked from. */}
-                  {selected && (
-                    <p className="note">{kindLabels[selected.kind]}</p>
-                  )}
-                  <div className={TYPE_GRID}>
-                    {/* Same grid as the picker: the chosen card keeps its
-                      cell's width. */}
-                    <LinkedCard
-                      compact
-                      hideHoverLink
-                      icon={selected?.icon_url ?? ENTITY_ICONS.trigger}
-                      title={selected?.name ?? initialData?.trigger_type ?? ""}
-                      subtitle={
-                        selected?.description && (
-                          <span className="truncate text-xs">
-                            {selected.description}
-                          </span>
-                        )
-                      }
-                      // An edit cannot change the type: shown, not offered.
-                      onClick={
-                        isEditing ? undefined : () => setChangingType(true)
-                      }
-                      className={
-                        isEditing
-                          ? "cursor-default hover:translate-y-0 hover:shadow-none active:scale-100"
-                          : undefined
-                      }
-                    />
-                  </div>
-                </div>
-              )}
+              <GroupedSelect
+                id="trigger_type_select"
+                groups={typeGroups}
+                value={selectedId}
+                onValueChange={(id) => {
+                  const entry = catalog.find((item) => item.id === id);
+                  if (!entry) return;
+                  setSelectedId(entry.id);
+                  if (!nameEdited)
+                    setName(t("suggestedName", { type: entry.name }));
+                  setTypeMissing(false);
+                }}
+                placeholder={
+                  isEditing ? initialData.trigger_type : t("selectType")
+                }
+                groupsTitle={t("typeKinds")}
+                itemsTitle={t("typeItems")}
+                searchPlaceholder={t("typeSearch")}
+                noResults={t("typeNotFound")}
+                emptyMessage={t("catalogLoadFailed")}
+                showGroupInValue={false}
+                // An edit cannot change the type: shown, not offered.
+                disabled={isEditing || catalogFailed}
+                invalid={typeMissing || !!state.errors?.trigger_type}
+              />
             </div>
 
-            {!showTypePicker && triggerType === "stream" && (
+            {hasType && triggerType === "stream" && (
               <div className="space-y-2 md:max-w-sm">
                 <FormLabel
                   htmlFor="stream_id"
@@ -657,7 +628,7 @@ export function CreateTriggerForm({
               </div>
             )}
 
-            {!showTypePicker && triggerType === "cron" && (
+            {hasType && triggerType === "cron" && (
               <>
                 <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
                   <FormLabel icon={CalendarClock} required>
@@ -700,7 +671,7 @@ export function CreateTriggerForm({
               </>
             )}
 
-            {!showTypePicker && credentialFields.length > 0 && (
+            {hasType && credentialFields.length > 0 && (
               <div className="space-y-2">
                 <div className="grid gap-5 sm:grid-cols-2">
                   {credentialFields.map((field) => (
@@ -764,7 +735,7 @@ export function CreateTriggerForm({
               </div>
             )}
 
-            {!showTypePicker && showEvents && (
+            {hasType && showEvents && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <FormLabel icon={Webhook}>{t("eventTypes")}</FormLabel>

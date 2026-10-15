@@ -145,12 +145,15 @@ describe("channel credentials on the trigger form", () => {
       }
     );
 
-    const option = await screen.findByRole("button", { name: /Telegram/ });
+    // Picked like a model: the type is a combobox over the catalog.
+    await user.click(
+      await screen.findByRole("combobox", { name: /Trigger Type/ })
+    );
+    const option = await screen.findByRole("option", { name: /Telegram/ });
     // The catalog's own artwork, not a lucide stand-in picked by id.
-    // next/image may route it through its loader, so match the source in it.
-    expect(
-      decodeURIComponent(option.querySelector("img")?.getAttribute("src") ?? "")
-    ).toContain("http://api.test/static/icons/channels/telegram.svg");
+    expect(option.querySelector("img")?.getAttribute("src")).toBe(
+      "http://api.test/static/icons/channels/telegram.svg"
+    );
     await user.click(option);
 
     expect(
