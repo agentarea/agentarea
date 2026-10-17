@@ -95,6 +95,25 @@ async def advanced_example():
 asyncio.run(advanced_example())
 ```
 
+## Web search
+
+When the `agentarea/web` toolset is enabled, `search_web` uses
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) by
+default. It sends search queries to `https://search.parallel.ai/mcp` and returns
+titles, source URLs and excerpts in the conversation. Anonymous search uses Fast
+mode and needs no account or API key; free usage has service limits.
+
+Set `AGENTAREA_TOOL_SEARCH_URL` to keep using your own SearXNG-compatible endpoint.
+An explicitly configured endpoint always wins, including when it fails; failures
+do not switch providers. SDK callers can pass `search_base_url` to `WebToolset`.
+Disable search with `WebToolset(search_web=False)`, or remove/deny the web search
+tool in the agent's configuration or policies. Existing tool selection and
+approval rules still apply. Page fetching keeps its existing safe HTTP client and
+seen-link checks; it does not use Parallel.
+
+SDK callers can supply a stable `search_session_id` for a conversation. The
+platform uses the task ID so related searches share the same session.
+
 ## Testing
 
 Run the test suite with pytest:

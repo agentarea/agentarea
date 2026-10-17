@@ -54,7 +54,7 @@ class AppSettings(BaseAppSettings):
     A2A_AGENT_URL: str = "http://{agent_id}.a2a.localhost:8000"
 
     # Optional SearXNG-compatible endpoint used by agentarea/web.search_web.
-    # When unset, search attempts fail explicitly; URL fetching remains usable.
+    # When unset, enabled web search uses free, keyless Parallel Search MCP.
     TOOL_SEARCH_URL: str | None = None
 
     # Comma-separated browser origins allowed to make credentialed CORS requests.

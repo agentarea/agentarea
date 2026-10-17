@@ -1,6 +1,7 @@
 """Web toolset: search the public web and read pages into the conversation.
 
-``search_web`` asks the deployment's SearXNG-compatible search service.
+``search_web`` uses Parallel Search MCP without credentials unless the deployment
+configures a SearXNG-compatible search service.
 ``fetch_webpage`` reads one page and returns its text inline, the way hosted
 fetch tools (Anthropic ``web_fetch``, Gemini ``url_context``) do: nothing is
 written to storage or to the sandbox. Downloading a file is a different
@@ -14,14 +15,19 @@ fails closed.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import re
 from collections.abc import Callable
 from html.parser import HTMLParser
 from typing import Any, ClassVar
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
+import httpx2
+from mcp import Client
+from mcp.client.streamable_http import streamable_http_client
 
 from .decorator_tool import Toolset, tool_method
 from .tool_authz import unrestricted
@@ -40,6 +46,8 @@ _INLINE_TEXT_CHAR_LIMIT: int = 50_000
 _MAX_FETCH_BYTES: int = 5 * 1024 * 1024  # raw page ceiling; the inline text is far smaller
 _MAX_REDIRECTS: int = 5
 _USER_AGENT: str = "Mozilla/5.0 (compatible; AgentArea/1.0; +https://agentarea.ai)"
+_PARALLEL_MCP_URL: str = "https://search.parallel.ai/mcp"
+logger = logging.getLogger(__name__)
 
 FetchClientFactory = Callable[..., httpx.AsyncClient]
 
@@ -134,12 +142,14 @@ class WebToolset(Toolset):
         fetch_webpage: bool = True,
         search_base_url: str | None = None,
         http_client_factory: FetchClientFactory | None = None,
+        search_session_id: str | None = None,
     ) -> None:
         super().__init__()
         self._search_enabled = search_web
         self._fetch_enabled = fetch_webpage
         self.search_base_url = search_base_url.rstrip("/") if search_base_url else None
         self._http_client_factory = http_client_factory
+        self._search_session_id = search_session_id
 
     @tool_method(effect="read")
     @unrestricted("the public web; reads and writes no workspace state")
@@ -148,18 +158,15 @@ class WebToolset(Toolset):
         query: str,
         max_results: int = 8,
     ) -> str:
-        """Search the public web through the deployment's configured search service."""
+        """Search with configured SearXNG, or keyless Parallel when unconfigured."""
         if not self._search_enabled:
             return "Error: search_web is disabled for this toolset instance"
-        if self.search_base_url is None:
-            return (
-                "Error: web search is not configured; set AGENTAREA_TOOL_SEARCH_URL "
-                "to a SearXNG-compatible endpoint"
-            )
         if not query or not query.strip():
             return "Error: query must be non-empty"
         if isinstance(max_results, bool) or not 1 <= max_results <= 20:
             return "Error: max_results must be between 1 and 20"
+        if self.search_base_url is None:
+            return await self._search_parallel(query.strip(), max_results)
 
         from agentarea_common.utils.outbound_tls import outbound_ssl_context
 
@@ -203,6 +210,67 @@ class WebToolset(Toolset):
             {"query": query.strip(), "results": results},
             ensure_ascii=False,
         )
+
+    async def _search_parallel(self, query: str, max_results: int) -> str:
+        from agentarea_common.utils.outbound_tls import outbound_ssl_context
+
+        arguments: dict[str, Any] = {"objective": query, "search_queries": [query]}
+        if self._search_session_id:
+            arguments["session_id"] = self._search_session_id
+        try:
+            # Bound the complete MCP exchange, including handshake and cleanup.
+            async with asyncio.timeout(_DEFAULT_TIMEOUT_SECONDS):
+                async with (
+                    httpx2.AsyncClient(
+                        headers={"User-Agent": _USER_AGENT},
+                        timeout=_DEFAULT_TIMEOUT_SECONDS,
+                        verify=outbound_ssl_context(),
+                    ) as http_client,
+                    Client(
+                        streamable_http_client(_PARALLEL_MCP_URL, http_client=http_client),
+                        mode="legacy",
+                        read_timeout_seconds=_DEFAULT_TIMEOUT_SECONDS,
+                    ) as client,
+                ):
+                    response = await client.call_tool("web_search", arguments)
+            if response.is_error:
+                detail = "\n".join(block.text for block in response.content if block.type == "text")
+                raise ValueError(detail or "Parallel search failed")
+            payload = response.structured_content
+            if payload is None:
+                payload = json.loads(
+                    "\n".join(block.text for block in response.content if block.type == "text")
+                )
+            if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+                raise ValueError("Parallel search returned an invalid response")
+            results = []
+            for item in payload["results"]:
+                if not isinstance(item, dict) or not isinstance(item.get("url"), str):
+                    continue
+                url = item["url"]
+                title = item.get("title") or url
+                if not isinstance(title, str):
+                    raise ValueError("Parallel search returned an invalid title")
+                parsed = urlsplit(url)
+                if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                    continue
+                excerpts = item.get("excerpts", [])
+                if not isinstance(excerpts, list) or any(not isinstance(e, str) for e in excerpts):
+                    raise ValueError("Parallel search returned invalid excerpts")
+                results.append(
+                    {
+                        "title": title,
+                        "url": url,
+                        "snippet": "\n".join(excerpts),
+                        "engine": "parallel",
+                    }
+                )
+                if len(results) == max_results:
+                    break
+            return json.dumps({"query": query, "results": results}, ensure_ascii=False)
+        except Exception as exc:
+            logger.warning("Parallel web search failed: %s", exc, exc_info=True)
+            return f"Error searching the web with Parallel: {str(exc) or type(exc).__name__}"
 
     @tool_method(effect="read")
     @unrestricted("the public web; reads and writes no workspace state")

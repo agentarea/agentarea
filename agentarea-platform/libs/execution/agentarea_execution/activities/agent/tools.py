@@ -521,6 +521,7 @@ def make_tools_activities(
 
                         extra_kwargs = {
                             "search_base_url": dependencies.settings.app.TOOL_SEARCH_URL,
+                            "search_session_id": str(request.task_id) if request.task_id else None,
                             "http_client_factory": functools.partial(
                                 safe_async_client, policy=OutboundPolicy()
                             ),
