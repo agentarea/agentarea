@@ -114,6 +114,7 @@ source = { editable = "libs/agentarea-agents-sdk" }
 dependencies = [
     { name = "a2a-sdk" },
     { name = "httpx" },
+    { name = "httpx2" },
     { name = "litellm" },
     { name = "mcp" },
     { name = "pydantic" },
@@ -131,6 +132,7 @@ dev = [
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=1.1.5" },
     { name = "httpx", specifier = ">=0.25.0" },
+    { name = "httpx2", specifier = ">=2.5.0" },
     { name = "litellm", specifier = ">=1.83.11" },
     { name = "mcp", specifier = ">=2.2.0,<3" },
     { name = "pydantic", specifier = ">=2.4.2" },
