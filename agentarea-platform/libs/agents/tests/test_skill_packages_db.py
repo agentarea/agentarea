@@ -12,9 +12,11 @@ already-migrated database (``make check-db`` does).
 
 from __future__ import annotations
 
+import io
 import json
 import os
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -25,14 +27,17 @@ from agentarea_agents.application.skill_packages import (
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillRepository
 from agentarea_agents.infrastructure.github_skill_importer import GitHubFolder
-from agentarea_agents.infrastructure.skill_storage_service import package_digest
+from agentarea_agents.infrastructure.skill_storage_service import (
+    SkillStorageService,
+    package_digest,
+)
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
+from botocore.exceptions import ClientError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from .fake_s3 import fake_storage
 
 TEST_DATABASE_URL = os.getenv("CATALOG_TEST_DATABASE_URL", "")
 pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="CATALOG_TEST_DATABASE_URL not set")
@@ -62,6 +67,47 @@ async def session():
 @pytest.fixture
 def workspace() -> str:
     return f"ws-{uuid4()}"
+
+
+class MemoryS3:
+    """The S3 calls the storage service makes, in memory.
+
+    Inline rather than imported from ``fake_s3``: check-db collects suites of
+    several ``tests`` packages in one run, where a relative import does not
+    resolve.
+    """
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def put_object(self, *, Bucket, Key, Body, ContentType=""):  # noqa: N803
+        self.objects[Key] = bytes(Body)
+
+    def get_object(self, *, Bucket, Key):  # noqa: N803
+        if Key not in self.objects:
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+    def get_paginator(self, _name):
+        return self
+
+    def paginate(self, *, Bucket, Prefix):  # noqa: N803
+        yield {
+            "Contents": [
+                {"Key": k, "Size": len(v)} for k, v in self.objects.items() if k.startswith(Prefix)
+            ]
+        }
+
+    def under(self, prefix: str) -> dict[str, bytes]:
+        return {k[len(prefix) :]: v for k, v in self.objects.items() if k.startswith(prefix)}
+
+
+def fake_storage() -> tuple[SkillStorageService, MemoryS3]:
+    s3 = MemoryS3()
+    storage = SkillStorageService()
+    storage._client = s3
+    storage._settings = SimpleNamespace(ARTIFACTS_BUCKET="test-bucket")
+    return storage, s3
 
 
 class TreeGitHub:
