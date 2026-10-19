@@ -234,7 +234,20 @@ async def test_the_backfill_labels_the_community_shards(session):
     # The backfill matches production names, so these rows never commit.
     try:
         await session.execute(text(migration.BACKFILL_REGISTRIES))
-        await session.execute(text(migration.BACKFILL_ITEM_TRUST))
+        for registry in (await session.execute(text(migration.TRUST_REGISTRIES))).mappings():
+            await session.execute(text(migration.BACKFILL_ITEM_TRUST), dict(registry))
+        # Each registry's statement can be served from an index, never a scan
+        # of the whole table under the migration's ACCESS EXCLUSIVE lock.
+        await session.execute(text("SET LOCAL enable_seqscan = off"))
+        community = (
+            await session.execute(text(migration.TRUST_REGISTRIES))
+        ).mappings().first()
+        plan = (
+            await session.execute(
+                text(f"EXPLAIN (FORMAT JSON) {migration.BACKFILL_ITEM_TRUST}"), dict(community)
+            )
+        ).scalar_one()
+        assert "Seq Scan" not in str(plan)
         rows = (
             await session.execute(
                 text(

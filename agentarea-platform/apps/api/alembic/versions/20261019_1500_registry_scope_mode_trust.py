@@ -43,10 +43,18 @@ BACKFILL_REGISTRIES = (
     "UPDATE registries SET mode = 'upstream', trust = 'community' "
     "WHERE scope = 'platform' AND name LIKE 'system-skills-community-%'"
 )
+# Items take the server default, official; only the other registries' items
+# change. One statement per registry, each served by an index on the item's
+# registry (for an active one, the partial browse indexes over live rows), so
+# the 1.2 GB table is not scanned whole under ACCESS EXCLUSIVE.
+TRUST_REGISTRIES = (
+    "SELECT id AS registry_id, trust, registry_type, is_active AS active "
+    "FROM registries WHERE trust <> 'official'"
+)
 BACKFILL_ITEM_TRUST = (
-    "UPDATE registry_items ri SET registry_trust = r.trust FROM registries r "
-    "WHERE r.id = ri.registry_id AND ri.in_source "
-    "AND ri.registry_trust IS DISTINCT FROM r.trust"
+    "UPDATE registry_items SET registry_trust = :trust "
+    "WHERE registry_id = :registry_id AND registry_type = :registry_type AND in_source "
+    "AND (registry_active OR NOT :active) AND registry_trust IS DISTINCT FROM :trust"
 )
 LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'"
 
@@ -121,7 +129,9 @@ def upgrade() -> None:
         "registry_items",
         sa.Column("registry_trust", sa.String(16), nullable=False, server_default="official"),
     )
-    op.execute(BACKFILL_ITEM_TRUST)
+    bind = op.get_bind()
+    for registry in bind.execute(sa.text(TRUST_REGISTRIES)).mappings().all():
+        bind.execute(sa.text(BACKFILL_ITEM_TRUST), dict(registry))
 
 
 def downgrade() -> None:
