@@ -56,3 +56,45 @@ describe("a spend cap on one kind of spend", () => {
     expect(matrix.subjects[0].dimensions.budget.value).toBe("$2/run·tools");
   });
 });
+
+describe("a catalog install rule", () => {
+  const install = (effect: "allow" | "deny", target: string): Policy =>
+    ({
+      id: "p1",
+      subject_type: "workspace",
+      subject_id: "w1",
+      target,
+      effect,
+      params: {},
+      enabled: true,
+      priority: 0,
+      condition: null,
+    }) as Policy;
+
+  it("reads as the registries it admits or refuses", () => {
+    expect(
+      policyToRule(install("deny", "registry_trust:community"))
+    ).toMatchObject({
+      category: "Catalog installs",
+      label: "Deny installs",
+      value: "from community registries",
+    });
+    expect(
+      policyToRule(
+        install("allow", "registry:0b6f8c1e-2a4d-4f7e-9a51-6d2c3b4a5e6f")
+      )
+    ).toMatchObject({
+      label: "Allow installs",
+      value: "from registry 0b6f8c1e-2a4d-4f7e-9a51-6d2c3b4a5e6f",
+    });
+  });
+
+  it("is not a tool rule nor custom in the matrix", () => {
+    const matrix = policiesToMatrix(
+      [install("deny", "registry_trust:community")],
+      []
+    );
+    expect(matrix.customCount).toBe(0);
+    expect(matrix.subjects[0].dimensions.tools.value).toBeNull();
+  });
+});

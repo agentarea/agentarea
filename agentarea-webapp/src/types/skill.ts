@@ -14,6 +14,7 @@ export interface Skill {
   is_catalog?: boolean | null;
   registry_item_id?: string | null;
   update_available?: boolean | null;
+  customized?: boolean | null;
 }
 
 export interface PaginatedSkills {

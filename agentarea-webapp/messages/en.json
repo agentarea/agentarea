@@ -361,7 +361,8 @@
     "workspace": "Workspace",
     "apiKeys": "API Keys",
     "auditLog": "Audit Log",
-    "workspaceSettings": "Workspace settings"
+    "workspaceSettings": "Workspace settings",
+    "registries": "Registries"
   },
   "LlmBrowsePage": {
     "title": "LLM Models",
@@ -1579,6 +1580,28 @@
       "loadOptionsFailed": "Couldn't load the skills to choose from",
       "addFailed": "Couldn't add the child skill",
       "removeFailed": "Couldn't remove the child skill"
+    },
+    "update": {
+      "available": "Update available",
+      "customized": "Customized",
+      "customizedHint": "Edited in this workspace. Updating it replaces the edit with the registry's version.",
+      "update": "Update",
+      "updateAll": "Update all",
+      "failed": "Couldn't update the skill",
+      "allFailed": "Couldn't update the skills",
+      "discardTitle": "Discard your changes?",
+      "discardDescription": "{name} was edited in this workspace. Updating it to the registry's version discards that edit.",
+      "discardAndUpdate": "Discard my changes and update",
+      "resultsTitle": "Update results",
+      "dismiss": "Dismiss",
+      "nothingToUpdate": "Nothing needed an update.",
+      "customizedSkipped": "Edited here, so left as it is. Open it to update.",
+      "results": {
+        "updated": "Updated",
+        "up_to_date": "Up to date",
+        "customized": "Customized",
+        "failed": "Failed"
+      }
     }
   },
   "TaskArtifactsPage": {
@@ -3175,7 +3198,8 @@
         "cap": "Budget",
         "approval": "Approval",
         "deny": "Deny",
-        "safety": "Safety"
+        "safety": "Safety",
+        "install": "Installs"
       },
       "scope": {
         "policyDescription": "This policy applies to {scope}. Tool access grants are managed in the <accessView>Access view</accessView>.",
@@ -3262,7 +3286,9 @@
         "toolRequired": "Add a tool.",
         "safetyCheckRequired": "Enable at least one safety check.",
         "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
-        "ruleInvalid": "Rule {number} ({effect}): {error}"
+        "ruleInvalid": "Rule {number} ({effect}): {error}",
+        "installTargetRequired": "Pick at least one registry or trust level.",
+        "installWorkspaceOnly": "Install rules apply to the whole workspace, not to agents. Switch the scope to all agents."
       },
       "summary": {
         "agentScopePending": "agent scope pending",
@@ -3279,6 +3305,17 @@
         "rules": "Rules",
         "pending": "pending",
         "compiledOutput": "Compiled output"
+      },
+      "install": {
+        "effect": "Rule",
+        "deny": "Deny installs from",
+        "allow": "Allow installs only from",
+        "semantics": "A deny always wins. Once any allow rule exists, the catalog installs only from what an allow names.",
+        "trustLevels": "Trust levels",
+        "registries": "Registries",
+        "noRegistries": "No skill or agent registries are visible to this workspace.",
+        "workspaceOnly": "Applies to every install in this workspace.",
+        "manageRegistries": "Manage registries"
       }
     }
   },
@@ -3560,5 +3597,105 @@
   "ToolPart": {
     "blockedByPolicy": "Blocked by policy",
     "rejectedByApprover": "Rejected by approver"
+  },
+  "Registries": {
+    "trust": {
+      "official": "Official",
+      "verified": "Verified",
+      "community": "Community",
+      "private": "Private"
+    },
+    "title": "Registries",
+    "description": "Sources the catalog lists skills and agents from, besides the platform's own. Installs from them are pinned and governed by policy.",
+    "add": "Add registry",
+    "loadFailed": "Couldn't load the registries",
+    "adminOnly": "Only a workspace admin can add, change, sync or remove registries.",
+    "syncDone": "{name} synced: {total} items, {added} new.",
+    "retired": "{name} is retired: {count, plural, one {# installed item still uses it and keeps working} other {# installed items still use it and keep working}}. It is gone from the catalog.",
+    "table": {
+      "name": "Name",
+      "source": "Source",
+      "type": "Type",
+      "trust": "Trust",
+      "items": "Items",
+      "sync": "Last sync"
+    },
+    "sync": {
+      "off": "Off",
+      "failed": "Sync failed",
+      "synced": "Synced",
+      "never": "Never synced"
+    },
+    "actions": {
+      "sync": "Sync now",
+      "edit": "Edit",
+      "delete": "Remove"
+    },
+    "delete": {
+      "title": "Remove registry?",
+      "description": "{name} leaves the catalog. Skills already installed from it keep working; if any are, the registry is retired instead of deleted."
+    },
+    "empty": {
+      "title": "No registries yet",
+      "description": "Add your own source of skills or agents. The catalog then lists them next to the platform's.",
+      "hintGithub": "A GitHub repository whose folders are skills: owner/repo, with an optional branch and folder.",
+      "hintIndex": "An index URL in the platform format, e.g. a file in your own bucket.",
+      "hintPolicy": "Decide which registries members may install from in Policies."
+    },
+    "errors": {
+      "invalid": "Check the highlighted fields.",
+      "createFailed": "Couldn't add the registry",
+      "updateFailed": "Couldn't save the registry",
+      "deleteFailed": "Couldn't remove the registry",
+      "syncFailed": "Couldn't sync the registry"
+    },
+    "form": {
+      "createTitle": "Add registry",
+      "editTitle": "Edit registry",
+      "description": "A source the catalog reads skills or agents from.",
+      "create": "Add registry",
+      "save": "Save",
+      "createFailed": "Couldn't add the registry",
+      "updateFailed": "Couldn't save the registry",
+      "name": "Name",
+      "namePlaceholder": "acme-skills",
+      "nameRequired": "Name the registry",
+      "descriptionLabel": "Description",
+      "sourceType": "Source",
+      "sourceTypes": {
+        "github": "GitHub repository",
+        "url": "Index URL"
+      },
+      "repository": "Repository",
+      "repositoryPlaceholder": "owner/repo",
+      "indexUrl": "Index URL",
+      "indexUrlPlaceholder": "https://example.com/registry/skills.json",
+      "sourceRequired": "Say where the registry reads from",
+      "ref": "Branch, tag or commit",
+      "refPlaceholder": "Default branch",
+      "path": "Folder",
+      "pathPlaceholder": "Repository root",
+      "registryType": "Lists",
+      "registryTypes": {
+        "skills": "Skills",
+        "agents": "Agents"
+      },
+      "trust": "Trust",
+      "credentials": "Credentials",
+      "credentialsHint": "A workspace secret holding the token a private source is read with. The registry keeps a reference, never a copy.",
+      "credentialsNone": "None (public source)",
+      "credentialsLoading": "Loading secrets…",
+      "credentialsSearch": "Search secrets…",
+      "credentialsEmpty": "No secrets found.",
+      "credentialsCreate": "Create a secret",
+      "credentialsClear": "Clear",
+      "active": "Active: listed in the catalog and synced"
+    }
+  },
+  "CatalogFetchErrors": {
+    "removedUpstream": "Removed upstream",
+    "moved": "Moved or changed upstream",
+    "rateLimited": "Rate limited, try again later",
+    "refusedByPolicy": "Refused by policy"
   }
 }

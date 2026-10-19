@@ -397,3 +397,51 @@ export function getBillingStatusPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+/** An installed catalog skill whose registry has a newer version (ADR-0044). */
+export function getSkillUpdateStatusPresentation(skill: {
+  update_available?: boolean | null;
+}): StatusPresentation | null {
+  return skill.update_available
+    ? {
+        label: "Update available",
+        labelKey: "updateAvailable",
+        kind: "attention",
+      }
+    : null;
+}
+
+/** What updating one installed skill did, as POST /skills/update-all reports it. */
+export function getSkillUpdateResultPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "updated":
+      return { label: "Updated", labelKey: "updated", kind: "done" };
+    case "up_to_date":
+      return { label: "Up to date", labelKey: "upToDate", kind: "active" };
+    case "customized":
+      return { label: "Customized", labelKey: "customized", kind: "attention" };
+    case "failed":
+      return { label: "Failed", labelKey: "failed", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+/** Whether a registry's index is current: off, last sync failed, synced, never. */
+export function getRegistrySyncStatusPresentation(registry: {
+  is_active: boolean;
+  last_synced_at?: string | null;
+  last_sync_error?: string | null;
+}): StatusPresentation {
+  if (!registry.is_active)
+    return { label: "Off", labelKey: "off", kind: "off" };
+  if (registry.last_sync_error) {
+    return { label: "Sync failed", labelKey: "failed", kind: "failed" };
+  }
+  if (registry.last_synced_at) {
+    return { label: "Synced", labelKey: "synced", kind: "done" };
+  }
+  return { label: "Never synced", labelKey: "never", kind: "draft" };
+}

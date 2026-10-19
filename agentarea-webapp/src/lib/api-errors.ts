@@ -100,3 +100,29 @@ export function apiErrorDetail(result: ApiResultLike, label: string) {
     ? detail
     : apiErrorMessage(result, label);
 }
+
+/**
+ * Why installing or updating a catalog item was refused, read from the status
+ * the API answered (ADR-0044): the source dropped it, its folder no longer
+ * matches the pinned tree, GitHub throttled the fetch, or a policy rule said
+ * no. Anything else is an ordinary failure.
+ */
+export type CatalogFetchFailure =
+  | "removedUpstream"
+  | "moved"
+  | "rateLimited"
+  | "refusedByPolicy";
+
+const CATALOG_FETCH_FAILURES: Partial<Record<number, CatalogFetchFailure>> = {
+  403: "refusedByPolicy",
+  409: "moved",
+  410: "removedUpstream",
+  429: "rateLimited",
+};
+
+export function catalogFetchFailure(
+  result: ApiResultLike
+): CatalogFetchFailure | null {
+  const status = getApiStatus(result);
+  return (status && CATALOG_FETCH_FAILURES[status]) || null;
+}

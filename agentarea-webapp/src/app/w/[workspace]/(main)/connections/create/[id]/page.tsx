@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import { getMCPServer } from "@/lib/api";
+import { apiErrorDetail } from "@/lib/api-errors";
 import CreateMCPInstanceClient from "./CreateMCPInstanceClient";
 import type { MCPServer } from "../../types";
 import MCPCreateHeaderControls from "./HeaderControls";
@@ -21,11 +22,11 @@ export default async function CreateMCPInstancePage({
   const { data: mcpServerData, error: serverError } = await getMCPServer(id);
   const mcpServer = mcpServerData as MCPServer | null;
 
-  const serverErr = serverError as { detail?: Array<{ msg?: string }> | string; message?: string } | null;
-  const serverErrorText = serverErr
-    ? (Array.isArray(serverErr.detail) ? serverErr.detail[0]?.msg : serverErr.detail) ||
-      serverErr.message ||
-      t("createInstance.errors.loadServersFailed")
+  const serverErrorText = serverError
+    ? apiErrorDetail(
+        { error: serverError },
+        t("createInstance.errors.loadServersFailed")
+      )
     : t("createInstance.errors.specNotFound");
 
   return (

@@ -2,13 +2,14 @@
 
 import { useId } from "react";
 import { useTranslations } from "next-intl";
+import { ArrowUpRight, Copy, Star } from "lucide-react";
+import { SkillTile } from "@/components/SkillTile";
 import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { ArrowUpRight, Copy, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
-import { SkillTile } from "@/components/SkillTile";
 import { scopeMeta } from "./skillsMeta";
+import SkillUpdateMarkers from "./SkillUpdateMarkers";
 
 interface SkillsCardProps {
   skill: Skill;
@@ -64,6 +65,7 @@ export default function SkillsCard({
           <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
           {scope.label}
         </span>
+        <SkillUpdateMarkers skill={skill} />
       </div>
 
       {/* Hidden actions become available on hover, keyboard focus, and touch. */}
