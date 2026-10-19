@@ -53,6 +53,10 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
     import agentarea_registry.infrastructure.repository as registry_repository
     from agentarea_api import cli
 
+    @asynccontextmanager
+    async def _always_held(_db, _key):
+        yield True
+
     live = SimpleNamespace(id=uuid4(), name="system-openapi-connections", is_active=True)
     calls: list[tuple] = []
 
@@ -79,7 +83,7 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
         def __init__(self, *_args, **_kwargs) -> None:
             pass
 
-        async def retire_registry(self, registry_id):
+        async def retire_registry(self, registry_id, replacements=()):
             calls.append(("retire", registry_id))
             return 0
 
@@ -92,6 +96,7 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
     monkeypatch.setattr(cli, "Database", _Database)
+    monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
     monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
     monkeypatch.setattr(registry_service, "RegistryService", _RegistryService)

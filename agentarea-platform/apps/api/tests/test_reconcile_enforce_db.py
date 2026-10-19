@@ -210,6 +210,36 @@ async def test_a_retired_registrys_installs_move_to_the_registry_replacing_it(
         assert moved_to == f"{PREFIX}folded"
 
 
+async def test_a_registry_another_reconcile_is_syncing_is_skipped(
+    engine, monkeypatch, tmp_path, capsys
+):
+    # The ArgoCD Sync hook and the hourly CronJob can run at once; the second
+    # to reach a registry leaves it to the first.
+    _enforced_reconcile(engine, monkeypatch, {PLATFORM_URL: {"skills": [{"name": "a"}]}})
+    manifest = tmp_path / "registries.json"
+    manifest.write_text(
+        json.dumps([{"name": f"{PREFIX}busy", "type": "skills", "source_url": PLATFORM_URL}])
+    )
+    async with engine.connect() as holder:
+        holder = await holder.execution_options(isolation_level="AUTOCOMMIT")
+        await holder.execute(
+            text("SELECT pg_advisory_lock(hashtextextended(:k, 0))"),
+            {"k": f"registry-sync:platform:{PREFIX}busy"},
+        )
+        await cli._reconcile(None, (), str(manifest))
+        await holder.execute(
+            text("SELECT pg_advisory_unlock(hashtextextended(:k, 0))"),
+            {"k": f"registry-sync:platform:{PREFIX}busy"},
+        )
+
+    assert "another reconcile is syncing it" in capsys.readouterr().out
+    async with engine.connect() as conn:
+        created = await conn.execute(
+            text("SELECT count(*) FROM registries WHERE name = :n"), {"n": f"{PREFIX}busy"}
+        )
+        assert created.scalar_one() == 0
+
+
 def _enforced_reconcile(engine, monkeypatch, payloads) -> None:
     async def untrusted(_self, url):
         return payloads[url]
@@ -219,6 +249,7 @@ def _enforced_reconcile(engine, monkeypatch, payloads) -> None:
 
     class EnforcedDatabase:
         def __init__(self, *_args) -> None:
+            self.engine = engine
             self.async_session_factory = async_sessionmaker(
                 engine,
                 class_=AsyncSession,

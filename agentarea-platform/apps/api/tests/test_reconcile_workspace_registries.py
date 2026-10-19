@@ -17,6 +17,11 @@ import agentarea_registry.infrastructure.repository as registry_repository
 from agentarea_api import cli
 
 
+@asynccontextmanager
+async def _always_held(_db, _key):
+    yield True
+
+
 async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch, capsys):
     acme = SimpleNamespace(id=uuid4(), name="skills", workspace_id="acme")
     globex = SimpleNamespace(id=uuid4(), name="broken", workspace_id="globex")
@@ -59,6 +64,7 @@ async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch, 
         return object()
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "Database", _Database)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
     monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
@@ -69,7 +75,7 @@ async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch, 
     assert synced == [(acme.id, "acme", True)]
     out = capsys.readouterr().out
     assert "Workspace registries: 1 synced, 1 failed" in out
-    assert "Reconcile complete: 0 succeeded, 0 failed (out of 0)" in out
+    assert "Reconcile complete: 0 succeeded, 0 failed, 0 skipped (out of 0)" in out
 
 
 async def test_a_failed_platform_source_still_fails_the_run(monkeypatch):
@@ -112,6 +118,7 @@ async def test_a_failed_platform_source_still_fails_the_run(monkeypatch):
         return object()
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "Database", _Database)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
     monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
