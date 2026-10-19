@@ -20,6 +20,7 @@ move-bodies-to-packages`` does the same for every row up front.
 from __future__ import annotations
 
 import logging
+import time
 from collections import OrderedDict
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
@@ -51,9 +52,26 @@ logger = logging.getLogger(__name__)
 SKILL_MANIFEST = "SKILL.md"
 CATALOG_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
+# Per process, shared by every tenant's reads, so bounded. A tree SHA names its
+# content for good; a pointer without one (the index has no tree SHA yet) is
+# read at the branch head, and that answer is reused for a while so previews
+# do not spend the GitHub budget every tenant shares.
+GITHUB_CACHE_MAX_ENTRIES = 4096
+GITHUB_HEAD_TTL_SECONDS = 3600.0
+
 _catalog_files: OrderedDict[str, dict[str, bytes]] = OrderedDict()
 _catalog_bytes = 0
-_github_trees: dict[tuple[str | None, str], str] = {}
+_github_trees: OrderedDict[tuple[str | None, str], str] = OrderedDict()
+_github_heads: OrderedDict[
+    tuple[str | None, str, str, str | None], tuple[float, CatalogPackage]
+] = OrderedDict()
+
+
+def _remember(cache: OrderedDict, key: Any, value: Any) -> None:
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > GITHUB_CACHE_MAX_ENTRIES:
+        cache.popitem(last=False)
 
 
 def _cache_get(s3_path: str) -> dict[str, bytes] | None:
@@ -80,6 +98,7 @@ def clear_package_cache() -> None:
     global _catalog_bytes
     _catalog_files.clear()
     _github_trees.clear()
+    _github_heads.clear()
     _catalog_bytes = 0
 
 
@@ -236,12 +255,17 @@ class SkillPackages:
     ) -> CatalogPackage:
         repo, path = str(source["repo"]), str(source.get("path") or "").strip("/")
         tree_sha = source.get("tree_sha")
+        head_key = (workspace_id, repo, path, source.get("ref"))
+        if not tree_sha:
+            cached = _github_heads.get(head_key)
+            if cached is not None and cached[0] > time.monotonic():
+                return cached[1]
         if tree_sha:
             s3_path = _github_trees.get(
                 (workspace_id, tree_sha)
             ) or await self._storage.get_github_tree_package(tree_sha, workspace_id=workspace_id)
             if s3_path:
-                _github_trees[(workspace_id, tree_sha)] = s3_path
+                _remember(_github_trees, (workspace_id, tree_sha), s3_path)
                 ref = source.get("ref")
                 return CatalogPackage(s3_path, _github_url(repo, path, ref) if ref else None)
         folder = await self._github.download_folder(
@@ -251,7 +275,12 @@ class SkillPackages:
         await self._storage.put_github_tree_package(
             folder.tree_sha, s3_path, workspace_id=workspace_id
         )
-        _github_trees[(workspace_id, folder.tree_sha)] = s3_path
+        _remember(_github_trees, (workspace_id, folder.tree_sha), s3_path)
+        package = CatalogPackage(s3_path, _github_url(repo, path, folder.commit))
+        if not tree_sha:
+            _remember(
+                _github_heads, head_key, (time.monotonic() + GITHUB_HEAD_TTL_SECONDS, package)
+            )
         logger.info(
             "Fetched skill %s/%s at %s (tree %s) into %s",
             repo,
@@ -260,7 +289,7 @@ class SkillPackages:
             folder.tree_sha,
             s3_path,
         )
-        return CatalogPackage(s3_path, _github_url(repo, path, folder.commit))
+        return package
 
     async def _store_checked(self, files: dict[str, bytes], workspace_id: str | None) -> str:
         self._parser.parse_content(self._main_file(None, files))

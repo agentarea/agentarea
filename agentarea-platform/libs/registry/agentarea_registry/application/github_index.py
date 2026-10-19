@@ -24,6 +24,10 @@ def is_github_repo(value: str) -> bool:
     return bool(GITHUB_REPO_PATTERN.fullmatch(value)) and value.split("/")[1] not in {".", ".."}
 
 
+class GitHubIndexTooLargeError(ValueError):
+    """The repository holds more skill folders than this registry may index."""
+
+
 class GitHubTreeTruncatedError(ValueError):
     """GitHub returned part of the tree; an index built from it would drop skills."""
 
@@ -37,7 +41,9 @@ class GitHubSource(Protocol):
         """Every entry under ``tree_sha`` recursively, and whether GitHub truncated it."""
         ...
 
-    async def blob(self, repo: str, sha: str) -> bytes: ...
+    async def raw(self, repo: str, commit: str, path: str) -> bytes:
+        """The start of a file at ``commit``, read outside the rate-limited REST API."""
+        ...
 
 
 def skill_frontmatter(content: str) -> dict[str, Any]:
@@ -53,9 +59,19 @@ def skill_frontmatter(content: str) -> dict[str, Any]:
 
 
 async def build_github_skill_index(
-    source: GitHubSource, *, repo: str, commit: str, root_tree: str, path: str | None
+    source: GitHubSource,
+    *,
+    repo: str,
+    commit: str,
+    root_tree: str,
+    path: str | None,
+    max_skills: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Catalog items for every skill folder of ``repo`` at ``commit`` under ``path``."""
+    """Catalog items for every skill folder of ``repo`` at ``commit`` under ``path``.
+
+    ``max_skills`` refuses a repository with more folders than that, before any
+    of them is read.
+    """
     entries, truncated = await source.tree(repo, root_tree)
     if truncated:
         raise GitHubTreeTruncatedError(
@@ -63,15 +79,28 @@ async def build_github_skill_index(
         )
     prefix = (path or "").strip("/")
     trees = {e["path"]: e["sha"] for e in entries if e.get("type") == "tree"}
+    skill_files = [
+        entry
+        for entry in sorted(entries, key=lambda e: e["path"])
+        if entry.get("type") == "blob"
+        and posixpath.basename(entry["path"]) == SKILL_FILE
+        and (
+            not prefix
+            or posixpath.dirname(entry["path"]) == prefix
+            or posixpath.dirname(entry["path"]).startswith(f"{prefix}/")
+        )
+    ]
+    if max_skills is not None and len(skill_files) > max_skills:
+        raise GitHubIndexTooLargeError(
+            f"{repo} holds more than {max_skills} skills; set a path to a smaller folder"
+        )
     items: list[dict[str, Any]] = []
-    for entry in sorted(entries, key=lambda e: e["path"]):
-        if entry.get("type") != "blob" or posixpath.basename(entry["path"]) != SKILL_FILE:
-            continue
+    for entry in skill_files:
         folder = posixpath.dirname(entry["path"])
-        if prefix and folder != prefix and not folder.startswith(f"{prefix}/"):
-            continue
         tree_sha = trees[folder] if folder else root_tree
-        meta = skill_frontmatter((await source.blob(repo, entry["sha"])).decode("utf-8", "replace"))
+        meta = skill_frontmatter(
+            (await source.raw(repo, commit, entry["path"])).decode("utf-8", "replace")
+        )
         name = meta.get("name") if isinstance(meta.get("name"), str) and meta["name"] else None
         name = name or posixpath.basename(folder) or repo.rsplit("/", 1)[-1]
         description = meta.get("description")

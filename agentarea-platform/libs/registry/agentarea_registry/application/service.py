@@ -46,6 +46,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
 from agentarea_registry.application.github_index import (
+    GitHubIndexTooLargeError,
     GitHubSource,
     GitHubTreeTruncatedError,
     build_github_skill_index,
@@ -83,6 +84,9 @@ MAX_SOURCE_BYTES = 5 * 1024 * 1024
 SOURCE_DEADLINE_SECONDS = 60.0
 MAX_SOURCE_ITEMS = 2000
 MAX_SOURCE_REDIRECTS = 5
+# Skill folders one workspace's GitHub repository may hold: a mirror sync reads
+# each from GitHub, whose budget every tenant shares.
+MAX_WORKSPACE_GITHUB_SKILLS = 200
 # A whole sync of one workspace registry, so one cannot hold up the next.
 WORKSPACE_SYNC_DEADLINE_SECONDS = 300.0
 
@@ -153,7 +157,7 @@ def sync_error_message(error: BaseException) -> str:
     The text of a fetch or parse error can quote what the source returned, or
     where it was fetched from, and a workspace's source is a URL a member chose.
     """
-    if isinstance(error, (RegistrySyncError, GitHubTreeTruncatedError)):
+    if isinstance(error, (RegistrySyncError, GitHubTreeTruncatedError, GitHubIndexTooLargeError)):
         return str(error)
     if isinstance(error, GitHubApiError):
         if error.status_code is None:
@@ -897,6 +901,7 @@ class RegistryService:
                 commit=head,
                 root_tree=root_tree,
                 path=registry.source_path,
+                max_skills=MAX_WORKSPACE_GITHUB_SKILLS if registry.scope == "workspace" else None,
             )
             for position, entry in enumerate(parsed_items):
                 entry.setdefault("recommendation_rank", position)
@@ -1075,9 +1080,7 @@ class RegistryService:
             "deleted": deleted,
         }
 
-    async def retire_registry(
-        self, registry_id: UUID, replacements: Collection[UUID] = ()
-    ) -> int:
+    async def retire_registry(self, registry_id: UUID, replacements: Collection[UUID] = ()) -> int:
         """Retire a registry no source feeds any more: everything in it is out of
         source, and what nothing uses is deleted. Returns how many items were.
 

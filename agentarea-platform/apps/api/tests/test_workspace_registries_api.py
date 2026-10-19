@@ -270,3 +270,27 @@ async def test_a_failed_sync_answers_a_classification_not_the_source(client, cal
     assert "hunter2" not in response.text
     assert response.json()["detail"] == "Sync failed: the source is not a valid JSON or YAML index"
     assert listed[0]["last_sync_error"] == "the source is not a valid JSON or YAML index"
+
+
+async def test_sync_now_is_limited_per_workspace(client, caller, monkeypatch):
+    from fastapi import HTTPException
+
+    asked: list[tuple] = []
+
+    async def limiter(*, scope, identity, limit):
+        asked.append((scope, identity, limit))
+        if len(asked) > 1:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+    async def synced(self, registry_id, force=False):
+        return {"new_specs": 0, "updates_flagged": 0, "unchanged": 0, "total": 0, "skipped": 0}
+
+    monkeypatch.setattr(workspace_registries, "enforce_rate_limit", limiter)
+    monkeypatch.setattr(RegistryService, "sync_registry", synced)
+    created = (await _create(client, caller)).json()
+
+    first = await client.post(_path(ADMIN, f"/{created['id']}/sync"))
+    second = await client.post(_path(ADMIN, f"/{created['id']}/sync"))
+
+    assert (first.status_code, second.status_code) == (200, 429)
+    assert asked[0] == ("workspace-registry-sync", "acme", 1)

@@ -257,3 +257,38 @@ async def test_the_mirror_stops_asking_github_once_it_is_rate_limited():
             await mirror(spec)
     assert await mirror({"content": "# Inline"})
     assert github.calls == ["a"]
+
+
+async def test_previews_of_an_unpinned_pointer_ask_github_once_within_the_ttl(monkeypatch):
+    # The live community index has no tree SHAs: every preview of an
+    # uninstalled item cost two API calls of a budget all tenants share.
+    from agentarea_agents.application import skill_packages
+
+    clock = [1000.0]
+    monkeypatch.setattr(skill_packages.time, "monotonic", lambda: clock[0])
+    github = StubGitHub({"SKILL.md": b"---\nname: pdf\n---\n# PDF"})
+    packages, _, _ = _packages(github=github)
+    spec = {"source": {"type": "github", "repo": "o/r", "path": "pdf"}}
+
+    for _ in range(3):
+        assert (await packages.read_skill_md(_projection(spec))).endswith("# PDF")
+    assert len(github.calls) == 1
+
+    clock[0] += skill_packages.GITHUB_HEAD_TTL_SECONDS + 1
+    await packages.read_skill_md(_projection(spec))
+    assert len(github.calls) == 2
+
+
+async def test_the_github_package_caches_are_bounded(monkeypatch):
+    from agentarea_agents.application import skill_packages
+
+    monkeypatch.setattr(skill_packages, "GITHUB_CACHE_MAX_ENTRIES", 2)
+    packages, _, _ = _packages(github=StubGitHub({"SKILL.md": b"---\nname: p\n---\n# P"}))
+
+    for folder in ("a", "b", "c"):
+        await packages.store_catalog_item(
+            {"source": {"type": "github", "repo": "o/r", "path": folder}}
+        )
+
+    assert len(skill_packages._github_heads) == 2
+    assert len(skill_packages._github_trees) <= 2

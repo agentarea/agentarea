@@ -10,6 +10,7 @@ from typing import Literal
 from uuid import UUID
 
 from agentarea_api.api.deps.services import SecretCatalogServiceDep, get_registry_service
+from agentarea_api.api.rate_limit import enforce_rate_limit
 from agentarea_api.api.v1.registries import RegistryResponse, SyncResponse
 from agentarea_api.registry_credentials import REGISTRY_SECRET_CONSUMER, REGISTRY_SECRET_FIELD
 from agentarea_common.auth.dependencies import UserContextDep
@@ -251,6 +252,11 @@ async def sync_workspace_registry(
     service: RegistryService = Depends(get_registry_service),
 ):
     await _own_registry(service, registry_id, user_context.workspace_id)
+    # A sync reads the source in the request and, for GitHub, spends a budget
+    # every tenant shares; the hourly reconcile does the rest.
+    await enforce_rate_limit(
+        scope="workspace-registry-sync", identity=user_context.workspace_id, limit=1
+    )
     try:
         return SyncResponse(**await service.sync_registry(registry_id, force=force))
     except RegistryNotFoundError as e:

@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from agentarea_registry.application.github_index import (
+    GitHubIndexTooLargeError,
     GitHubTreeTruncatedError,
     build_github_skill_index,
 )
@@ -31,7 +32,7 @@ def _skill_md(name: str, description: str) -> bytes:
 
 
 class StubGitHub:
-    """The three GitHub reads a sync makes, over an in-memory repository."""
+    """The GitHub reads a sync makes, over an in-memory repository."""
 
     def __init__(self, files: dict[str, bytes], *, truncated: bool = False):
         self.commit = COMMIT
@@ -55,9 +56,9 @@ class StubGitHub:
         entries.extend({"path": d, "type": "tree", "sha": f"tree:{d}"} for d in sorted(dirs))
         return entries, self.truncated
 
-    async def blob(self, repo: str, sha: str) -> bytes:
-        self.calls.append(("blob", repo, sha))
-        return self.files[sha.removeprefix("blob:")]
+    async def raw(self, repo: str, commit: str, path: str) -> bytes:
+        self.calls.append(("raw", repo, commit, path))
+        return self.files[path]
 
 
 REPO_FILES = {
@@ -233,3 +234,28 @@ async def test_a_public_repository_is_read_without_a_token(db_session, registry)
     await _service(db_session, StubGitHub(REPO_FILES), tokens).sync_registry(registry.id)
 
     assert tokens == [None]
+
+
+async def test_skill_bodies_are_read_raw_not_through_the_rate_limited_api():
+    # 60 API calls an hour per egress IP, shared by every tenant: the index
+    # spends two (head and tree), however many skills the repository holds.
+    github = StubGitHub(REPO_FILES)
+
+    await build_github_skill_index(
+        github, repo="acme/skills", commit=COMMIT, root_tree=ROOT_TREE, path=None
+    )
+
+    assert [c[0] for c in github.calls] == ["tree", "raw", "raw", "raw"]
+    assert ("raw", "acme/skills", COMMIT, "skills/pdf/SKILL.md") in github.calls
+
+
+async def test_a_repository_with_more_skills_than_the_cap_is_refused():
+    with pytest.raises(GitHubIndexTooLargeError, match="more than 2 skills"):
+        await build_github_skill_index(
+            StubGitHub(REPO_FILES),
+            repo="acme/skills",
+            commit=COMMIT,
+            root_tree=ROOT_TREE,
+            path=None,
+            max_skills=2,
+        )
