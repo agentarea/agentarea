@@ -27,6 +27,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +43,7 @@ from agentarea_agents.infrastructure.skill_repository import (
     list_pre_package_skills,
 )
 from agentarea_agents.infrastructure.skill_storage_service import (
+    SKILLS_PREFIX,
     SkillStorageService,
     catalog_area,
     is_catalog_package,
@@ -91,6 +93,24 @@ def _cache_put(s3_path: str, files: dict[str, bytes]) -> None:
     while _catalog_bytes > CATALOG_CACHE_MAX_BYTES:
         _, evicted = _catalog_files.popitem(last=False)
         _catalog_bytes -= sum(len(data) for data in evicted.values())
+
+
+def legacy_catalog_s3_path(spec: dict[str, Any] | None, workspace_id: str | None) -> str | None:
+    """A catalog item's legacy ``spec.s3_path``, if it lies where its registry stores.
+
+    A workspace registry's item reads only that workspace's area; a platform
+    item the shared catalog area or the platform workspace's. Anything else,
+    another tenant's prefix above all, is ``None``.
+    """
+    path = str((spec or {}).get("s3_path") or "")
+    if not path or ".." in path.split("/") or "\\" in path:
+        return None
+    areas = (
+        (f"{SKILLS_PREFIX}/{workspace_id}/",)
+        if workspace_id is not None
+        else (f"{catalog_area(None)}/", f"{SKILLS_PREFIX}/{PLATFORM_WORKSPACE_ID}/")
+    )
+    return path if path.startswith(areas) else None
 
 
 def clear_package_cache() -> None:
@@ -244,7 +264,12 @@ class SkillPackages:
                 await self._store_checked(files, workspace_id), spec.get("source_url")
             )
         if spec.get("s3_path"):
-            files = await self._storage.read_package(spec["s3_path"])
+            legacy = legacy_catalog_s3_path(spec, workspace_id)
+            if legacy is None:
+                raise ValueError(
+                    f"Catalog skill's package {spec['s3_path']!r} is outside its registry's store"
+                )
+            files = await self._storage.read_package(legacy)
             return CatalogPackage(
                 await self._store_checked(files, workspace_id), spec.get("source_url")
             )

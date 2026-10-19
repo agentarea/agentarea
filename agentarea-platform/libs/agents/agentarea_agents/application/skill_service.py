@@ -21,7 +21,11 @@ from agentarea_governance.application.catalog_install import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agentarea_agents.application.skill_packages import SKILL_MANIFEST, SkillPackages
+from agentarea_agents.application.skill_packages import (
+    SKILL_MANIFEST,
+    SkillPackages,
+    legacy_catalog_s3_path,
+)
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType
 from agentarea_agents.infrastructure.catalog_skill_repository import (
@@ -136,7 +140,7 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
         description=item.description if item.description is not None else spec.get("description"),
         source_type=spec.get("source_type") or SkillSourceType.CONTENT.value,
         source_url=spec.get("source_url"),
-        s3_path=spec.get("s3_path"),
+        s3_path=legacy_catalog_s3_path(spec, item.registry_workspace_id),
         network_scope=spec.get("network_scope") or "private",
         registry_item_id=item.id,
         created_at=item.created_at,

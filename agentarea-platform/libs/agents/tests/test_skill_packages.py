@@ -1,6 +1,7 @@
 """Every skill body is read from its package (ADR-0044)."""
 
 import logging
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
@@ -292,3 +293,32 @@ async def test_the_github_package_caches_are_bounded(monkeypatch):
 
     assert len(skill_packages._github_heads) == 2
     assert len(skill_packages._github_trees) <= 2
+
+
+@pytest.mark.parametrize(
+    ("s3_path", "workspace_id"),
+    [("skills/ws-2/secret-skill/", None), ("skills/ws-2/secret-skill/", "ws-1"), ("../x/", None)],
+)
+async def test_a_legacy_package_outside_the_items_area_is_refused(s3_path, workspace_id):
+    # Nothing an index publishes sets spec.s3_path today; a later parser
+    # change must still not let an item read another tenant's prefix.
+    from agentarea_agents.application.skill_service import _project_catalog_skill
+    from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillItem
+
+    packages, _, _ = _packages()
+    item = CatalogSkillItem(
+        id=str(uuid4()),
+        name="x",
+        description=None,
+        version=None,
+        spec={"s3_path": s3_path},
+        installed_entity_id=None,
+        installed_version=None,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+        registry_workspace_id=workspace_id,
+    )
+
+    assert _project_catalog_skill(item).s3_path is None
+    with pytest.raises(ValueError, match="outside"):
+        await packages.store_catalog_item({"s3_path": s3_path}, workspace_id=workspace_id)
