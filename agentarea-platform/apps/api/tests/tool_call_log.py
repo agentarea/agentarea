@@ -9,7 +9,7 @@ from agentarea_tasks.domain.feed import FeedBodies
 from agentarea_tasks.domain.models import ConversationEntry
 
 BEARER = "sk-live-4f9a2c77QpZ"
-PASSWORD = "hunter2-correct-horse"
+PASSWORD = "hunter2-correct-horse"  # pragma: allowlist secret
 COMMAND = f"curl -H 'Authorization: Bearer {BEARER}' https://api.example.com/items"
 MASKED_COMMAND = "curl -H 'Authorization: Bearer [redacted]' https://api.example.com/items"
 OUTPUT = "items: 3\nfirst: alpha\n" * 40

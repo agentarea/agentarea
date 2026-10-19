@@ -24,8 +24,8 @@ BEARER = "sk-live-4f9a2c77QpZ"
         ("mysql -u root -phunter2 db", "hunter2", "mysql -u root -p[redacted] db"),
         ("sshpass -p hunter2 ssh host", "hunter2", "ssh host"),
         ("PGPASSWORD=hunter2 psql -h db", "hunter2", "psql -h db"),
-        ('{"password": "hunter2", "user": "ann"}', "hunter2", '"user": "ann"'),
-        ("git clone https://ann:hunter2@git.example/repo", "hunter2", "git.example/repo"),
+        ('{"password": "hunter2", "user": "ann"}', "hunter2", '"user": "ann"'),  # pragma: allowlist secret
+        ("git clone https://ann:hunter2@git.example/repo", "hunter2", "git.example/repo"),  # pragma: allowlist secret
         ("curl -u ann:hunter2 https://x.example", "hunter2", "-u ann:"),
     ],
 )
@@ -44,9 +44,9 @@ def test_the_whole_command_and_result_are_kept_with_secrets_masked():
     revealed = reveal_tool_value(
         {
             "command": f"curl -H 'Authorization: Bearer {BEARER}' https://api.example.com",
-            "password": "hunter2",
+            "password": "hunter2",  # pragma: allowlist secret
             "timeout": 30,
-            "nested": [{"api_key": "k-1", "path": "/srv"}],
+            "nested": [{"api_key": "k-1", "path": "/srv"}],  # pragma: allowlist secret
         }
     )
     assert revealed == {

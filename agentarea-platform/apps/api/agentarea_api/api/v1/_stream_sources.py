@@ -10,7 +10,6 @@ Shared by the REST routes and the streams toolset.
 import base64
 import binascii
 import json
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
@@ -41,8 +40,6 @@ from agentarea_streams.infrastructure.orm import StreamSourceORM
 from agentarea_streams.schemas import SecretRef, SourceCreate
 from fastapi import HTTPException
 from pydantic import ValidationError
-
-logger = logging.getLogger(__name__)
 
 SECRET_CONSUMER = "stream_source"  # noqa: S105 - a consumer type, not a credential
 
@@ -245,7 +242,6 @@ async def create_source(
     )
     for secret_id, field in references:
         await secret_catalog.add_reference(secret_id, SECRET_CONSUMER, str(source.id), field)
-    logger.info("Created source %s on stream %s", source.id, stream_id)
     return source, issued
 
 

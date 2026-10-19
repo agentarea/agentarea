@@ -41,7 +41,7 @@ async def _verify(body, fetched, calls=None):
         headers={},
         raw_body=json.dumps(body).encode(),
         body=body,
-        credentials={"secret_key": "live_x"},
+        credentials={"secret_key": "live_x"},  # pragma: allowlist secret
         config={"shop_id": "42"},
         lookup=_fetching(fetched, calls),
     )

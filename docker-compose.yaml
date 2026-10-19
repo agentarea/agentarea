@@ -501,6 +501,7 @@ services:
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       - AGENTAREA_SANDBOX_CLEANUP_SECRET=${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so

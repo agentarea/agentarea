@@ -11,7 +11,7 @@ from agentarea_execution.activities.agent.record import make_record_activities
 from agentarea_execution.models import LogRow, RecordRequest
 
 BEARER = "sk-live-4f9a2c"
-PASSWORD = "hunter2-correct-horse"
+PASSWORD = "hunter2-correct-horse"  # pragma: allowlist secret
 
 
 class _Log:

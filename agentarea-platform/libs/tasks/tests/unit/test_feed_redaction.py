@@ -8,7 +8,7 @@ from agentarea_tasks.domain.feed import FeedBodies, feed_event
 from agentarea_tasks.domain.models import ConversationEntry
 
 BEARER = "sk-live-4f9a2c"
-PASSWORD = "hunter2-correct-horse"
+PASSWORD = "hunter2-correct-horse"  # pragma: allowlist secret
 
 
 def _entries() -> list[ConversationEntry]:
