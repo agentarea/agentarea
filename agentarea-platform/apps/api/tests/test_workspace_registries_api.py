@@ -294,3 +294,24 @@ async def test_sync_now_is_limited_per_workspace(client, caller, monkeypatch):
 
     assert (first.status_code, second.status_code) == (200, 429)
     assert asked[0] == ("workspace-registry-sync", "acme", 1)
+
+
+async def test_syncing_a_managed_registry_is_the_callers_error_not_the_sources(
+    client, caller, session
+):
+    managed = Registry(
+        name="managed-skills",
+        registry_type="skills",
+        source_type="managed",
+        source_url="managed://catalog",
+    )
+    session.add(managed)
+    await session.commit()
+    caller["context"] = UserContext(
+        user_id="platform", workspace_id="platform", admin_workspaces=["platform"]
+    )
+
+    response = await client.post(f"/v1/workspaces/platform/registries/{managed.id}/sync")
+
+    assert response.status_code == 400
+    assert "catalog item API" in response.json()["detail"]

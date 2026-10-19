@@ -150,6 +150,10 @@ class RegistrySourceError(RegistrySyncError):
     """The source could not be read, or what it holds is not an index."""
 
 
+class RegistrySyncRefusedError(ValueError):
+    """The request asks for a sync this registry does not have: the caller's error."""
+
+
 class RegistryConfigurationError(RegistrySyncError, ValueError):
     """The registry asks for something this sync was not given."""
 
@@ -855,7 +859,9 @@ class RegistryService:
         if not registry:
             raise RegistryNotFoundError(f"Registry {registry_id} not found")
         if registry.source_type == "managed":
-            raise ValueError("Managed registry items are changed through the catalog item API")
+            raise RegistrySyncRefusedError(
+                "Managed registry items are changed through the catalog item API"
+            )
 
         deadline = WORKSPACE_SYNC_DEADLINE_SECONDS if registry.scope == "workspace" else None
         try:
