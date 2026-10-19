@@ -6897,6 +6897,22 @@ export type SkillResponse = {
      */
     registry_item_id?: string | null;
     /**
+     * Registry Name
+     */
+    registry_name?: string | null;
+    /**
+     * Registry Scope
+     */
+    registry_scope?: 'platform' | 'workspace' | null;
+    /**
+     * Registry Trust
+     */
+    registry_trust?: 'official' | 'verified' | 'community' | 'private' | null;
+    /**
+     * Removed Upstream
+     */
+    removed_upstream?: boolean;
+    /**
      * Slug
      */
     slug: string;
@@ -9334,6 +9350,12 @@ export type WorkspaceRegistryCreate = {
      */
     description?: string | null;
     /**
+     * Mode
+     *
+     * 'mirror' stores every skill's content when the registry syncs, so an install needs no network; 'upstream' fetches it on first install. A source read with credentials is mirrored.
+     */
+    mode?: 'mirror' | 'upstream';
+    /**
      * Name
      */
     name: string;
@@ -9399,6 +9421,10 @@ export type WorkspaceRegistryUpdate = {
      * Is Active
      */
     is_active?: boolean | null;
+    /**
+     * Mode
+     */
+    mode?: 'mirror' | 'upstream' | null;
     /**
      * Name
      */

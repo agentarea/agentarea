@@ -834,7 +834,8 @@ export const updateAgentV1AgentsAgentIdPatch = <ThrowOnError extends boolean = f
  * Add a built-in catalog agent to the workspace (copy-on-write fork).
  *
  * Resolves a catalog agent by UUID or slug and materializes a tenant copy.
- * Idempotent: returns the existing workspace copy if already installed.
+ * Idempotent: returns the existing workspace copy if already installed. A
+ * policy rule refusing the item's registry answers 403.
  */
 export const installAgentV1AgentsAgentIdInstallPost = <ThrowOnError extends boolean = false>(options: Options<InstallAgentV1AgentsAgentIdInstallPostData, ThrowOnError>): RequestResult<InstallAgentV1AgentsAgentIdInstallPostResponses, InstallAgentV1AgentsAgentIdInstallPostErrors, ThrowOnError> => (options.client ?? client).post<InstallAgentV1AgentsAgentIdInstallPostResponses, InstallAgentV1AgentsAgentIdInstallPostErrors, ThrowOnError>({
     security: [{
@@ -4382,6 +4383,8 @@ export const flattenSkillMembersV1SkillsSkillIdFlattenGet = <ThrowOnError extend
  * Install Skill
  *
  * Add a built-in catalog skill to the workspace: fetch its package and pin it.
+ *
+ * A policy rule refusing the item's registry answers 403.
  */
 export const installSkillV1SkillsSkillIdInstallPost = <ThrowOnError extends boolean = false>(options: Options<InstallSkillV1SkillsSkillIdInstallPostData, ThrowOnError>): RequestResult<InstallSkillV1SkillsSkillIdInstallPostResponses, InstallSkillV1SkillsSkillIdInstallPostErrors, ThrowOnError> => (options.client ?? client).post<InstallSkillV1SkillsSkillIdInstallPostResponses, InstallSkillV1SkillsSkillIdInstallPostErrors, ThrowOnError>({
     security: [{

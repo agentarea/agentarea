@@ -2987,6 +2987,12 @@ export const zSkillResponse = z.object({
   name: z.string(),
   network_scope: z.string(),
   registry_item_id: z.string().nullish(),
+  registry_name: z.string().nullish(),
+  registry_scope: z.enum(["platform", "workspace"]).nullish(),
+  registry_trust: z
+    .enum(["official", "verified", "community", "private"])
+    .nullish(),
+  removed_upstream: z.boolean().optional().default(false),
   slug: z.string(),
   source_type: z.string(),
   source_url: z.string().nullable(),
@@ -4184,6 +4190,7 @@ export const zWorkspaceFileListResponse = z.object({
 export const zWorkspaceRegistryCreate = z.object({
   credentials_secret_id: z.string().uuid().nullish(),
   description: z.string().nullish(),
+  mode: z.enum(["mirror", "upstream"]).optional().default("mirror"),
   name: z.string().min(1).max(255),
   registry_type: z.enum(["skills", "agents"]).optional().default("skills"),
   source_path: z.string().nullish(),
@@ -4208,6 +4215,7 @@ export const zWorkspaceRegistryUpdate = z.object({
   credentials_secret_id: z.string().uuid().nullish(),
   description: z.string().nullish(),
   is_active: z.boolean().nullish(),
+  mode: z.enum(["mirror", "upstream"]).nullish(),
   name: z.string().min(1).max(255).nullish(),
   source_path: z.string().nullish(),
   source_ref: z.string().max(255).nullish(),

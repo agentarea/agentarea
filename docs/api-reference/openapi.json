@@ -12523,6 +12523,54 @@
             ],
             "title": "Registry Item Id"
           },
+          "registry_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Name"
+          },
+          "registry_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "workspace"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Scope"
+          },
+          "registry_trust": {
+            "anyOf": [
+              {
+                "enum": [
+                  "official",
+                  "verified",
+                  "community",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Trust"
+          },
+          "removed_upstream": {
+            "default": false,
+            "title": "Removed Upstream",
+            "type": "boolean"
+          },
           "slug": {
             "title": "Slug",
             "type": "string"
@@ -16914,6 +16962,16 @@
             ],
             "title": "Description"
           },
+          "mode": {
+            "default": "mirror",
+            "description": "'mirror' stores every skill's content when the registry syncs, so an install needs no network; 'upstream' fetches it on first install. A source read with credentials is mirrored.",
+            "enum": [
+              "mirror",
+              "upstream"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "maxLength": 255,
             "minLength": 1,
@@ -17045,6 +17103,21 @@
               }
             ],
             "title": "Is Active"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mirror",
+                  "upstream"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
           },
           "name": {
             "anyOf": [
@@ -19896,7 +19969,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}/install": {
       "post": {
-        "description": "Add a built-in catalog agent to the workspace (copy-on-write fork).\n\nResolves a catalog agent by UUID or slug and materializes a tenant copy.\nIdempotent: returns the existing workspace copy if already installed.",
+        "description": "Add a built-in catalog agent to the workspace (copy-on-write fork).\n\nResolves a catalog agent by UUID or slug and materializes a tenant copy.\nIdempotent: returns the existing workspace copy if already installed. A\npolicy rule refusing the item's registry answers 403.",
         "operationId": "install_agent_v1_agents__agent_id__install_post",
         "parameters": [
           {
@@ -34940,7 +35013,7 @@
     },
     "/v1/workspaces/{workspace}/skills/{skill_id}/install": {
       "post": {
-        "description": "Add a built-in catalog skill to the workspace: fetch its package and pin it.",
+        "description": "Add a built-in catalog skill to the workspace: fetch its package and pin it.\n\nA policy rule refusing the item's registry answers 403.",
         "operationId": "install_skill_v1_skills__skill_id__install_post",
         "parameters": [
           {
