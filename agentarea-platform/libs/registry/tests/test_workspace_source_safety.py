@@ -308,14 +308,19 @@ async def test_parsing_a_large_index_leaves_the_event_loop_free(db_session, monk
     stop = asyncio.Event()
     ticking = asyncio.create_task(ticker(stop))
     await asyncio.sleep(0)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
     await _service(db_session, _serving(body, **{"content-type": "text/yaml"}))._fetch_untrusted(
         INDEX
     )
+    elapsed = loop.time() - started
     stop.set()
     await ticking
 
-    assert len(gaps) > 3
-    assert max(gaps) < 0.25
+    # On the loop the parse is one gap as long as the whole fetch; off it the
+    # ticker keeps running, however loaded the machine is.
+    assert len(gaps) >= 5
+    assert max(gaps) < elapsed / 2
 
 
 async def test_a_yaml_index_over_its_own_cap_is_refused(db_session, monkeypatch):
