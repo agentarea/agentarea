@@ -12274,6 +12274,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "customized": {
+            "default": false,
+            "title": "Customized",
+            "type": "boolean"
+          },
           "description": {
             "anyOf": [
               {
@@ -12361,6 +12366,23 @@
         "title": "SkillResponse",
         "type": "object"
       },
+      "SkillUpdateAllResponse": {
+        "description": "One result per installed skill that had an update.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SkillUpdateResultResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "SkillUpdateAllResponse",
+        "type": "object"
+      },
       "SkillUpdateRequest": {
         "description": "Request to update a skill.",
         "properties": {
@@ -12405,6 +12427,57 @@
           }
         },
         "title": "SkillUpdateRequest",
+        "type": "object"
+      },
+      "SkillUpdateResultResponse": {
+        "description": "What updating one installed skill did.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skill_id": {
+            "title": "Skill Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "updated",
+              "up_to_date",
+              "customized",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_id",
+          "name",
+          "status"
+        ],
+        "title": "SkillUpdateResultResponse",
         "type": "object"
       },
       "SkippedItem": {
@@ -33779,6 +33852,60 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/skills/update-all": {
+      "post": {
+        "description": "Update every installed catalog skill that has an update and was not edited here.",
+        "operationId": "update_all_skills_v1_skills_update_all_post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillUpdateAllResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update All Skills",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/skills/upload": {
       "post": {
         "description": "Upload a skill package as a ZIP file.",
@@ -34362,7 +34489,7 @@
     },
     "/v1/workspaces/{workspace}/skills/{skill_id}/install": {
       "post": {
-        "description": "Add a built-in catalog skill to the workspace.",
+        "description": "Add a built-in catalog skill to the workspace: fetch its package and pin it.",
         "operationId": "install_skill_v1_skills__skill_id__install_post",
         "parameters": [
           {
@@ -34629,6 +34756,82 @@
           }
         ],
         "summary": "Remove Skill Member",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/skills/{skill_id}/update": {
+      "post": {
+        "description": "Move an installed catalog skill to its catalog item's current version.",
+        "operationId": "update_installed_skill_v1_skills__skill_id__update_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Update a skill edited in this workspace, discarding the edit",
+            "in": "query",
+            "name": "discard_changes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Update a skill edited in this workspace, discarding the edit",
+              "title": "Discard Changes",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Installed Skill",
         "tags": [
           "v1",
           "protected",

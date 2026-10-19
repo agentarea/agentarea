@@ -832,6 +832,9 @@ import type {
   UpdateAgentV1AgentsAgentIdPatchData,
   UpdateAgentV1AgentsAgentIdPatchErrors,
   UpdateAgentV1AgentsAgentIdPatchResponses,
+  UpdateAllSkillsV1SkillsUpdateAllPostData,
+  UpdateAllSkillsV1SkillsUpdateAllPostErrors,
+  UpdateAllSkillsV1SkillsUpdateAllPostResponses,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostData,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostErrors,
   UpdateAllSpecsV1RegistriesRegistryIdUpdateAllPostResponses,
@@ -847,6 +850,9 @@ import type {
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchData,
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchErrors,
   UpdateConnectionV1OpenapiConnectionsConnectionIdPatchResponses,
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostData,
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors,
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses,
   UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostData,
   UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostErrors,
   UpdateItemSpecV1RegistriesCatalogItemsItemIdUpdatePostResponses,
@@ -9174,6 +9180,36 @@ export const createSkillV1SkillsPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Update All Skills
+ *
+ * Update every installed catalog skill that has an update and was not edited here.
+ */
+export const updateAllSkillsV1SkillsUpdateAllPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<UpdateAllSkillsV1SkillsUpdateAllPostData, ThrowOnError>
+): RequestResult<
+  UpdateAllSkillsV1SkillsUpdateAllPostResponses,
+  UpdateAllSkillsV1SkillsUpdateAllPostErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).post<
+    UpdateAllSkillsV1SkillsUpdateAllPostResponses,
+    UpdateAllSkillsV1SkillsUpdateAllPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/skills/update-all",
+    ...options,
+  });
+
+/**
  * Upload Skill
  *
  * Upload a skill package as a ZIP file.
@@ -9431,7 +9467,7 @@ export const flattenSkillMembersV1SkillsSkillIdFlattenGet = <
 /**
  * Install Skill
  *
- * Add a built-in catalog skill to the workspace.
+ * Add a built-in catalog skill to the workspace: fetch its package and pin it.
  */
 export const installSkillV1SkillsSkillIdInstallPost = <
   ThrowOnError extends boolean = false,
@@ -9552,6 +9588,39 @@ export const removeSkillMemberV1SkillsSkillIdMembersChildSkillIdDelete = <
       },
     ],
     url: "/v1/workspaces/{workspace}/skills/{skill_id}/members/{child_skill_id}",
+    ...options,
+  });
+
+/**
+ * Update Installed Skill
+ *
+ * Move an installed catalog skill to its catalog item's current version.
+ */
+export const updateInstalledSkillV1SkillsSkillIdUpdatePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateInstalledSkillV1SkillsSkillIdUpdatePostData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses,
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses,
+    UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/skills/{skill_id}/update",
     ...options,
   });
 

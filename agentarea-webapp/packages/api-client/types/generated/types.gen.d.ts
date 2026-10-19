@@ -6793,6 +6793,10 @@ export type SkillResponse = {
      */
     created_at: string;
     /**
+     * Customized
+     */
+    customized?: boolean;
+    /**
      * Description
      */
     description: string | null;
@@ -6842,6 +6846,17 @@ export type SkillResponse = {
     workspace_id: string;
 };
 /**
+ * SkillUpdateAllResponse
+ *
+ * One result per installed skill that had an update.
+ */
+export type SkillUpdateAllResponse = {
+    /**
+     * Results
+     */
+    results: Array<SkillUpdateResultResponse>;
+};
+/**
  * SkillUpdateRequest
  *
  * Request to update a skill.
@@ -6865,6 +6880,30 @@ export type SkillUpdateRequest = {
      * New name
      */
     name?: string | null;
+};
+/**
+ * SkillUpdateResultResponse
+ *
+ * What updating one installed skill did.
+ */
+export type SkillUpdateResultResponse = {
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    skill?: SkillResponse | null;
+    /**
+     * Skill Id
+     */
+    skill_id: string;
+    /**
+     * Status
+     */
+    status: 'updated' | 'up_to_date' | 'customized' | 'failed';
 };
 /**
  * SkippedItem
@@ -15783,6 +15822,26 @@ export type CreateSkillV1SkillsPostResponses = {
     200: SkillResponse;
 };
 export type CreateSkillV1SkillsPostResponse = CreateSkillV1SkillsPostResponses[keyof CreateSkillV1SkillsPostResponses];
+export type UpdateAllSkillsV1SkillsUpdateAllPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/workspaces/{workspace}/skills/update-all';
+};
+export type UpdateAllSkillsV1SkillsUpdateAllPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateAllSkillsV1SkillsUpdateAllPostError = UpdateAllSkillsV1SkillsUpdateAllPostErrors[keyof UpdateAllSkillsV1SkillsUpdateAllPostErrors];
+export type UpdateAllSkillsV1SkillsUpdateAllPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillUpdateAllResponse;
+};
+export type UpdateAllSkillsV1SkillsUpdateAllPostResponse = UpdateAllSkillsV1SkillsUpdateAllPostResponses[keyof UpdateAllSkillsV1SkillsUpdateAllPostResponses];
 export type UploadSkillV1SkillsUploadPostData = {
     body: BodyUploadSkillV1SkillsUploadPost;
     path?: never;
@@ -16106,6 +16165,38 @@ export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses =
      */
     200: unknown;
 };
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostData = {
+    body?: never;
+    path: {
+        /**
+         * Skill Id
+         */
+        skill_id: string;
+    };
+    query?: {
+        /**
+         * Discard Changes
+         *
+         * Update a skill edited in this workspace, discarding the edit
+         */
+        discard_changes?: boolean;
+    };
+    url: '/v1/workspaces/{workspace}/skills/{skill_id}/update';
+};
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostError = UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors[keyof UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors];
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+};
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponse = UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses[keyof UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses];
 export type ListStreamsV1StreamsGetData = {
     body?: never;
     path?: never;

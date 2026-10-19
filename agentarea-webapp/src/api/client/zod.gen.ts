@@ -2960,6 +2960,7 @@ export const zCollectionDetailResponse = z.object({
  */
 export const zSkillResponse = z.object({
   created_at: z.string(),
+  customized: z.boolean().optional().default(false),
   description: z.string().nullable(),
   id: z.string(),
   is_catalog: z.boolean().optional().default(false),
@@ -2994,6 +2995,28 @@ export const zSkillUpdateRequest = z.object({
   content: z.string().nullish(),
   description: z.string().max(1000).nullish(),
   name: z.string().min(1).max(255).nullish(),
+});
+
+/**
+ * SkillUpdateResultResponse
+ *
+ * What updating one installed skill did.
+ */
+export const zSkillUpdateResultResponse = z.object({
+  error: z.string().nullish(),
+  name: z.string(),
+  skill: zSkillResponse.nullish(),
+  skill_id: z.string(),
+  status: z.enum(["updated", "up_to_date", "customized", "failed"]),
+});
+
+/**
+ * SkillUpdateAllResponse
+ *
+ * One result per installed skill that had an update.
+ */
+export const zSkillUpdateAllResponse = z.object({
+  results: z.array(zSkillUpdateResultResponse),
 });
 
 /**
@@ -6594,6 +6617,12 @@ export const zCreateSkillV1SkillsPostBody = zSkillCreateRequest;
  */
 export const zCreateSkillV1SkillsPostResponse = zSkillResponse;
 
+/**
+ * Successful Response
+ */
+export const zUpdateAllSkillsV1SkillsUpdateAllPostResponse =
+  zSkillUpdateAllResponse;
+
 export const zUploadSkillV1SkillsUploadPostBody =
   zBodyUploadSkillV1SkillsUploadPost;
 
@@ -6716,6 +6745,20 @@ export const zRemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeletePath =
     skill_id: z.string().uuid(),
     child_skill_id: z.string().uuid(),
   });
+
+export const zUpdateInstalledSkillV1SkillsSkillIdUpdatePostPath = z.object({
+  skill_id: z.string().uuid(),
+});
+
+export const zUpdateInstalledSkillV1SkillsSkillIdUpdatePostQuery = z.object({
+  discard_changes: z.boolean().optional().default(false),
+});
+
+/**
+ * Successful Response
+ */
+export const zUpdateInstalledSkillV1SkillsSkillIdUpdatePostResponse =
+  zSkillResponse;
 
 export const zListStreamsV1StreamsGetQuery = z.object({
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
