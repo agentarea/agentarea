@@ -3,7 +3,8 @@
 ``yaml.safe_load`` builds no objects, but anchors, aliases and merge keys
 still let a few hundred bytes expand exponentially in time and memory. Here
 aliases and merge keys are refused outright, and composing stops at a node
-budget; the text is refused above a byte budget before it is scanned.
+and a nesting budget; the text is refused above a byte budget before it is
+scanned.
 """
 
 from typing import Any
@@ -11,6 +12,9 @@ from typing import Any
 import yaml
 
 DEFAULT_MAX_BYTES = 1024 * 1024
+# The composer recurses a few frames per level; past this the error would be
+# a RecursionError that no caller classifies.
+DEFAULT_MAX_DEPTH = 64
 _MERGE_TAG = "tag:yaml.org,2002:merge"
 
 
@@ -19,10 +23,12 @@ class UntrustedYamlError(yaml.YAMLError):
 
 
 class _BoundedLoader(yaml.SafeLoader):
-    def __init__(self, stream: str, max_nodes: int):
+    def __init__(self, stream: str, max_nodes: int, max_depth: int):
         super().__init__(stream)
         self._max_nodes = max_nodes
+        self._max_depth = max_depth
         self._nodes = 0
+        self._depth = 0
 
     def compose_node(self, parent: Any, index: Any) -> Any:
         if self.check_event(yaml.AliasEvent):
@@ -30,7 +36,13 @@ class _BoundedLoader(yaml.SafeLoader):
         self._nodes += 1
         if self._nodes > self._max_nodes:
             raise UntrustedYamlError(f"YAML holds at most {self._max_nodes} nodes here")
-        return super().compose_node(parent, index)
+        self._depth += 1
+        if self._depth > self._max_depth:
+            raise UntrustedYamlError(f"YAML is nested deeper than {self._max_depth} levels")
+        try:
+            return super().compose_node(parent, index)
+        finally:
+            self._depth -= 1
 
     def flatten_mapping(self, node: Any) -> None:
         if any(key.tag == _MERGE_TAG for key, _value in node.value):
@@ -38,7 +50,13 @@ class _BoundedLoader(yaml.SafeLoader):
         super().flatten_mapping(node)
 
 
-def load_untrusted_yaml(text: str, *, max_nodes: int, max_bytes: int = DEFAULT_MAX_BYTES) -> Any:
+def load_untrusted_yaml(
+    text: str,
+    *,
+    max_nodes: int,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+    max_depth: int = DEFAULT_MAX_DEPTH,
+) -> Any:
     """The single document in ``text``; ``UntrustedYamlError`` past a bound.
 
     CPU-bound in proportion to the budgets: a caller on an event loop with a
@@ -46,7 +64,7 @@ def load_untrusted_yaml(text: str, *, max_nodes: int, max_bytes: int = DEFAULT_M
     """
     if len(text.encode("utf-8")) > max_bytes:
         raise UntrustedYamlError(f"YAML is larger than {max_bytes} bytes")
-    loader = _BoundedLoader(text, max_nodes)
+    loader = _BoundedLoader(text, max_nodes, max_depth)
     try:
         return loader.get_single_data()
     finally:

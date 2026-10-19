@@ -61,3 +61,29 @@ def test_a_refusal_is_a_yaml_error():
     import yaml
 
     assert issubclass(UntrustedYamlError, yaml.YAMLError)
+
+
+@pytest.mark.parametrize(
+    "nested",
+    [
+        "d: " + "[" * 400 + "]" * 400,
+        "d: " + "{a: " * 400 + "1" + "}" * 400,
+        "\n".join(f"{'  ' * i}k{i}:" for i in range(400)) + " 1",
+    ],
+    ids=["flow-sequence", "flow-mapping", "block-mapping"],
+)
+def test_deep_nesting_is_refused_as_untrusted_yaml(nested):
+    # The composer recurses a few frames per level: 400 levels of brackets,
+    # about 800 bytes, escaped as a RecursionError.
+    started = time.monotonic()
+
+    with pytest.raises(UntrustedYamlError, match="nested deeper than 64"):
+        load_untrusted_yaml(nested, max_nodes=100_000)
+
+    assert time.monotonic() - started < 0.5
+
+
+def test_nesting_within_the_depth_loads():
+    assert load_untrusted_yaml("d: " + "[" * 10 + "]" * 10, max_nodes=2000) == {
+        "d": [[[[[[[[[[]]]]]]]]]]
+    }
