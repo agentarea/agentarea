@@ -15,6 +15,7 @@ import pytest_asyncio
 from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.domain.models import Agent
 from agentarea_api.api.deps.services import get_agent_service
+from agentarea_api.api.v1._catalog_install import get_catalog_install_policy
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.testing.flows import MainFlow
@@ -83,9 +84,12 @@ def override_dependencies(mock_agent_service, mock_user_context):
 
     app.dependency_overrides[get_agent_service] = _override_agent_service
     app.dependency_overrides[get_user_context] = _override_user_context
+    # The install policy has its own tests (test_catalog_install_policy_api.py).
+    app.dependency_overrides[get_catalog_install_policy] = lambda: AsyncMock()
     yield
     app.dependency_overrides.pop(get_agent_service, None)
     app.dependency_overrides.pop(get_user_context, None)
+    app.dependency_overrides.pop(get_catalog_install_policy, None)
 
 
 @pytest.fixture

@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from agentarea_agents.application.skill_service import SkillFileInfo, SkillService
+from agentarea_api.api.v1._catalog_install import get_catalog_install_policy
 from agentarea_api.api.v1.skills import get_skill_service
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
@@ -68,9 +69,12 @@ def override_dependencies(mock_skill_service, mock_user_context):
 
     app.dependency_overrides[get_skill_service] = _override_skill_service
     app.dependency_overrides[get_user_context] = _override_user_context
+    # The install policy has its own tests (test_catalog_install_policy_api.py).
+    app.dependency_overrides[get_catalog_install_policy] = lambda: AsyncMock()
     yield
     app.dependency_overrides.pop(get_skill_service, None)
     app.dependency_overrides.pop(get_user_context, None)
+    app.dependency_overrides.pop(get_catalog_install_policy, None)
 
 
 @pytest.mark.flow(MainFlow.SKILLS)

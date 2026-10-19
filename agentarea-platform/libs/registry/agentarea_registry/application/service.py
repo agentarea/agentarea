@@ -425,6 +425,9 @@ class RegistryService:
                 mode=fields.get("mode", current.mode),
                 trust=fields.get("trust", current.trust),
             )
+        if {"source_url", "source_ref", "source_path"} & fields.keys():
+            # Another source: what the last sync applied says nothing about it.
+            fields["source_etag"] = None
         if "recommendation_priority" in fields:
             fields["recommendation_priority"] = validated_registry_priority(
                 fields["recommendation_priority"]
@@ -538,6 +541,9 @@ class RegistryService:
             limit=limit,
             offset=offset,
         )
+
+    async def count_items(self, registry_id: UUID) -> int:
+        return await self.item_repo.count_by_registry(registry_id)
 
     async def get_item(self, item_id: UUID) -> RegistryItem | None:
         """The item, unless it belongs to another workspace's registry."""

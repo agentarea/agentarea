@@ -28,6 +28,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from ._access_control_grants import grant_resource_owner
+from ._catalog_install import CatalogInstallPolicyDep
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -342,8 +343,10 @@ async def get_skill(
 async def install_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
+    install_policy: CatalogInstallPolicyDep,
 ):
     """Add a built-in catalog skill to the workspace."""
+    await install_policy.require_allowed(skill_id)
     skill = await skill_service.install_catalog_skill(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
