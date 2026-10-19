@@ -5,6 +5,9 @@
 // PolicyDocument / EffectivePolicy survive only for the workspace baseline,
 // which still comes from POST /v1/governance/effective-policy/preview.
 
+import type { RegistryResponse } from "@/api/client/types.gen";
+import { zRegistryResponse } from "@/api/client/zod.gen";
+
 export type Money = string | number;
 
 export interface BudgetPolicy {
@@ -111,6 +114,43 @@ export type CapTarget = (typeof CAP_TARGETS)[number];
 
 export function isCapTarget(target: string): target is CapTarget {
   return (CAP_TARGETS as readonly string[]).includes(target);
+}
+
+// --- catalog install targets (ADR-0044) ----------------------------------
+
+// Allow/deny rules on these decide which registries a workspace (or a user)
+// may install catalog items from: `registry:<id>` names one registry,
+// `registry_trust:<level>` every registry of a trust level.
+export type RegistryTrustLevel = RegistryResponse["trust"];
+
+export const REGISTRY_TRUST_LEVELS: readonly RegistryTrustLevel[] =
+  zRegistryResponse.shape.trust.options;
+
+export type InstallTarget =
+  | { kind: "registry"; registryId: string }
+  | { kind: "registry_trust"; trust: RegistryTrustLevel };
+
+export function registryTarget(registryId: string): string {
+  return `registry:${registryId}`;
+}
+
+export function registryTrustTarget(trust: RegistryTrustLevel): string {
+  return `registry_trust:${trust}`;
+}
+
+export function parseInstallTarget(target: string): InstallTarget | null {
+  const [kind, value] = target.split(":", 2);
+  if (!value) return null;
+  if (kind === "registry") return { kind, registryId: value };
+  if (kind === "registry_trust") {
+    const trust = REGISTRY_TRUST_LEVELS.find((level) => level === value);
+    return trust ? { kind, trust } : null;
+  }
+  return null;
+}
+
+export function isInstallTarget(target: string): boolean {
+  return parseInstallTarget(target) !== null;
 }
 
 // --- decomposed UI rule (drawer list / baseline) --------------------------

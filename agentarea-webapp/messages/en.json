@@ -3198,7 +3198,8 @@
         "cap": "Budget",
         "approval": "Approval",
         "deny": "Deny",
-        "safety": "Safety"
+        "safety": "Safety",
+        "install": "Installs"
       },
       "scope": {
         "policyDescription": "This policy applies to {scope}. Tool access grants are managed in the <accessView>Access view</accessView>.",
@@ -3285,7 +3286,9 @@
         "toolRequired": "Add a tool.",
         "safetyCheckRequired": "Enable at least one safety check.",
         "approverUnsupported": "Only workspace members can approve; remove role and group approvers.",
-        "ruleInvalid": "Rule {number} ({effect}): {error}"
+        "ruleInvalid": "Rule {number} ({effect}): {error}",
+        "installTargetRequired": "Pick at least one registry or trust level.",
+        "installWorkspaceOnly": "Install rules apply to the whole workspace, not to agents. Switch the scope to all agents."
       },
       "summary": {
         "agentScopePending": "agent scope pending",
@@ -3302,6 +3305,17 @@
         "rules": "Rules",
         "pending": "pending",
         "compiledOutput": "Compiled output"
+      },
+      "install": {
+        "effect": "Rule",
+        "deny": "Deny installs from",
+        "allow": "Allow installs only from",
+        "semantics": "A deny always wins. Once any allow rule exists, the catalog installs only from what an allow names.",
+        "trustLevels": "Trust levels",
+        "registries": "Registries",
+        "noRegistries": "No skill or agent registries are visible to this workspace.",
+        "workspaceOnly": "Applies to every install in this workspace.",
+        "manageRegistries": "Manage registries"
       }
     }
   },
