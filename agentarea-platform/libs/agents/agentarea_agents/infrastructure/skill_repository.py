@@ -37,11 +37,15 @@ async def list_pre_package_skills(session: AsyncSession) -> list[tuple[UUID, str
 
 
 async def list_catalog_installs(session: AsyncSession) -> list[tuple[UUID, str]]:
-    """``(id, workspace_id)`` of every skill installed from a catalog item."""
+    """``(id, workspace_id)`` of every skill installed from a catalog item.
+
+    The platform workspace's rows are stub copies the reconcile deletes, not
+    installs: repinning them would fetch every one from GitHub.
+    """
     with unscoped("repinning catalog installs made before packages spans every workspace"):
         result = await session.execute(
             select(Skill.id, Skill.workspace_id)
-            .where(Skill.registry_item_id.is_not(None))
+            .where(Skill.registry_item_id.is_not(None), Skill.workspace_id != PLATFORM_WORKSPACE_ID)
             .order_by(Skill.workspace_id, Skill.id)
         )
         return [(row.id, row.workspace_id) for row in result.all()]
