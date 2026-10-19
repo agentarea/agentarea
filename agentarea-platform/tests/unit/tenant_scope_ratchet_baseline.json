@@ -53,6 +53,7 @@
     "libs/mcp/agentarea_mcp/container_monitor.py": 1,
     "libs/mcp/agentarea_mcp/dispatch_stamps.py": 1,
     "libs/mcp/agentarea_mcp/infrastructure/client_repository.py": 1,
+    "libs/registry/agentarea_registry/infrastructure/repository.py": 1,
     "libs/streams/agentarea_streams/application/dispatcher.py": 2,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 1,
     "libs/streams/agentarea_streams/infrastructure/repository.py": 1,

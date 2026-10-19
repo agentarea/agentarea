@@ -13,6 +13,7 @@ from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import unscoped
 from sqlalchemy import (
     String,
     case,
@@ -356,13 +357,16 @@ class RegistryItemRepository:
             *(exists().where(ref.c.registry_item_id == RegistryItem.id) for ref in uuid_refs),
             exists().where(agents.c.registry_item_id == cast(RegistryItem.id, String)),
         )
-        result = await self.session.execute(
-            delete(RegistryItem).where(
-                RegistryItem.registry_id == registry_id,
-                RegistryItem.in_source.is_(False),
-                ~referenced,
+        # Core tables, not ORM entities: under a workspace scope an entity's
+        # EXISTS would see only that workspace and delete what others use.
+        with unscoped("an item is referenced from any workspace; the check must see all of them"):
+            result = await self.session.execute(
+                delete(RegistryItem).where(
+                    RegistryItem.registry_id == registry_id,
+                    RegistryItem.in_source.is_(False),
+                    ~referenced,
+                )
             )
-        )
         await self.session.commit()
         return type_cast(CursorResult[Any], result).rowcount
 

@@ -183,3 +183,60 @@ async def test_retiring_a_registry_deletes_what_nothing_uses(session: AsyncSessi
         )
     ).all()
     assert dict(left) == {"used": False}
+
+
+@pytest.fixture
+async def enforced(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
+    from agentarea_common.base.tenant_scope import tenant_scoped_session_class
+    from agentarea_common.config.database import TenantScopeMode
+
+    maker = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        sync_session_class=tenant_scoped_session_class(TenantScopeMode.ENFORCE),
+    )
+    async with maker() as s:
+        yield s
+
+
+async def test_the_reference_check_sees_every_workspace_under_an_enforced_scope(
+    session: AsyncSession, enforced: AsyncSession
+):
+    # RU runs AGENTAREA_DB_TENANT_SCOPE=enforce and every sync binds a workspace.
+    # The DELETE names other modules' scoped tables; it must run, and it must
+    # still see a fork made in a workspace other than the one bound.
+    from agentarea_common.base.tenant_scope import workspace_scope
+    from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+
+    reg = Registry(
+        name=f"{PREFIX}enforced",
+        registry_type="skills",
+        source_type="url",
+        source_url="https://example.test/skills.json",
+    )
+    session.add(reg)
+    await session.commit()
+    repo = RegistryItemRepository(session)
+    forked = await repo.create(registry_id=reg.id, external_id="forked", name="forked")
+    await repo.create(registry_id=reg.id, external_id="gone", name="gone")
+    await session.execute(
+        text(
+            "INSERT INTO skills (id, workspace_id, created_by, name, slug, registry_item_id) "
+            "VALUES (:id, :w, 'u', 'forked', :slug, :item)"
+        ),
+        {"id": uuid.uuid4(), "w": WORKSPACE, "slug": f"forked-{uuid.uuid4().hex[:8]}", "item": forked.id},
+    )
+    await session.commit()
+
+    with workspace_scope(PLATFORM_WORKSPACE_ID):
+        scoped = RegistryItemRepository(enforced)
+        assert await scoped.mark_in_source(reg.id, set()) == 2
+        assert await scoped.delete_unreferenced_out_of_source(reg.id) == 1
+
+    left = (
+        await session.execute(
+            text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": reg.id}
+        )
+    ).scalars().all()
+    assert left == ["forked"]
