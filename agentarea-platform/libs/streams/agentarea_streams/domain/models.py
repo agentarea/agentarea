@@ -127,6 +127,16 @@ class HandlerResult(BaseModel):
     score: float | None = None
     task_id: UUID | None = None
     derived_event_ids: list[UUID] = Field(default_factory=list)
+    #: The workflow holding the event, for a ``batched`` reaction.
+    workflow_id: str | None = None
+
+
+class ReactionTally(BaseModel):
+    """The reactions recorded to one event: all of them, then the skipped and the failed."""
+
+    reacted: int = 0
+    skipped: int = 0
+    errors: int = 0
 
 
 class SubscriptionView(BaseModel):
@@ -140,6 +150,10 @@ class SubscriptionView(BaseModel):
     trigger_id: UUID | None
     filter: EventFilter
     output_stream_ids: list[UUID]
+    #: When it started taking events: one received earlier is never delivered to it.
+    started_at: datetime
+    #: A processor's code.
+    code: str | None = None
 
 
 class TriggerBinding(BaseModel):

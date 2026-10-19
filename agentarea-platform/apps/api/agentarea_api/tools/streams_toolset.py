@@ -7,6 +7,7 @@ enforces parity with the REST routes in ``api/v1/streams.py``.
 
 import builtins
 import json
+from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -22,8 +23,16 @@ from agentarea_secrets.catalog_service import SecretCatalogService
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamError
 from agentarea_streams.domain.enums import SourceKind
+from agentarea_streams.domain.feed import FeedFilter
+from agentarea_streams.domain.processing import ProcessingStatus
 from agentarea_streams.domain.source_types import EventOverrides
-from agentarea_streams.schemas import ForwardCreate, SourceCreate, StreamCreate
+from agentarea_streams.schemas import (
+    ForwardCreate,
+    ProcessorCreate,
+    ProcessorUpdate,
+    SourceCreate,
+    StreamCreate,
+)
 from agentarea_triggers.infrastructure.reactions import ReactionRepository
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
@@ -44,6 +53,7 @@ from ..api.v1.streams import (
     _subscription,
     source_response,
     source_types,
+    workspace_events,
 )
 from .base import platform_context, platform_read_context
 
@@ -62,6 +72,15 @@ class SourceDeletedOutput(BaseModel):
 
 class ForwardDeletedOutput(BaseModel):
     deleted: bool = Field(description="True once the forward is removed.")
+
+
+class ProcessorDeletedOutput(BaseModel):
+    deleted: bool = Field(description="True once the processor is removed.")
+
+
+SubscriptionId = Annotated[
+    str, Field(description="Processor's subscription id (UUID), from `streams_list_subscriptions`.")
+]
 
 
 def _service(repo_factory: Any) -> StreamService:
@@ -313,7 +332,7 @@ class StreamsToolset(Toolset):
     )
     @requires("read", "stream", id_param="stream_id")
     async def list_subscriptions(self, stream_id: StreamId) -> str:
-        """List the triggers and forwards that receive a stream's events."""
+        """List the triggers, forwards and processors that receive a stream's events."""
         async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
             rows = await _service(repo_factory).list_subscriptions(UUID(stream_id))
             return json.dumps([_subscription(r).model_dump(mode="json") for r in rows])
@@ -408,41 +427,250 @@ class StreamsToolset(Toolset):
                 raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})
 
-    @tool_method(display_name="List stream events", effect="read", output=StreamEventPage)
-    @requires("read", "stream", id_param="stream_id")
-    async def list_events(
+    @tool_method(
+        display_name="Create stream processor", effect="write", output=SubscriptionResponse
+    )
+    @requires("edit", "stream", id_param="stream_id")
+    async def create_processor(
+        self,
+        stream_id: Annotated[
+            str,
+            Field(description="Id (UUID) of the stream whose events the code reads."),
+        ],
+        output_stream_ids: Annotated[
+            builtins.list[str],
+            Field(
+                description=(
+                    "Ids (UUID) of the streams the code may write to, from `streams_list`; "
+                    "at least one, never the input stream."
+                )
+            ),
+        ],
+        code: Annotated[str, Field(description=ProcessorCreate.model_fields["code"].description)],
+        event_filter: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    'Which events the code runs on: {"kinds": [...], "fields": {...}}; '
+                    "null runs it on every event."
+                )
+            ),
+        ] = None,
+    ) -> str:
+        """Run Python you write over every event of this stream; it writes new events.
+
+        ``code`` defines ``def process(event: dict) -> list[dict] | None``. ``event``
+        has ``id, kind, key, data, source_type, session_key, sender, subject, time,
+        correlation_id, depth, stream_id, attachments``; ``data`` is what the source
+        delivered (a webhook's JSON body is ``data["body"]``), so read a recent event
+        with ``streams_list_events`` first. Return a list of
+        ``{"stream": <output id or name>, "kind": str, "data": dict, "key": str?}``,
+        or None to drop the event; a single dict is an error. It runs in the sandbox, one call per event, with
+        a 10 s limit and no secrets; an exception is recorded as the event's error.
+        Example: events of kind ``order.*`` with amount over 100 into ``big-orders``::
+
+            def process(event):
+                order = event["data"]["body"]
+                if event["kind"].startswith("order.") and order.get("amount", 0) > 100:
+                    return [{"stream": "big-orders", "kind": event["kind"], "data": order}]
+                return None
+
+        The caller must be able to edit every output stream.
+        """
+        try:
+            payload = ProcessorCreate(
+                output_stream_ids=[UUID(s) for s in output_stream_ids],
+                code=code,
+                event_filter=EventFilter.model_validate(event_filter or {}),
+            )
+        except (ValidationError, ValueError) as error:
+            raise ToolError(str(error)) from error
+        async with platform_context() as (_s, user_ctx, repo_factory, _b, _sec):
+            try:
+                for output in payload.output_stream_ids:
+                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                row = await _service(repo_factory).create_processor(
+                    stream_id=UUID(stream_id),
+                    output_stream_ids=payload.output_stream_ids,
+                    code=payload.code,
+                    event_filter=payload.event_filter,
+                )
+            except HTTPException as exc:
+                raise ToolError(exc.detail) from exc
+            except StreamError as error:
+                raise ToolError(str(error)) from error
+            return _subscription(row).model_dump_json()
+
+    @tool_method(
+        display_name="Update stream processor", effect="write", output=SubscriptionResponse
+    )
+    @requires("edit", "stream", id_param="stream_id")
+    async def update_processor(
         self,
         stream_id: StreamId,
+        subscription_id: SubscriptionId,
+        code: Annotated[
+            str | None, Field(description="New code, as for `streams_create_processor`.")
+        ] = None,
+        output_stream_ids: Annotated[
+            builtins.list[str] | None,
+            Field(description="New output stream ids (UUID); null keeps them."),
+        ] = None,
+        event_filter: Annotated[
+            dict[str, Any] | None, Field(description="New event filter; null keeps it.")
+        ] = None,
+    ) -> str:
+        """Change a processor's code, outputs or filter; the next event runs the change.
+
+        The caller must be able to edit every output stream it has and is given.
+        """
+        try:
+            payload = ProcessorUpdate(
+                code=code,
+                output_stream_ids=(
+                    [UUID(s) for s in output_stream_ids] if output_stream_ids is not None else None
+                ),
+                event_filter=(
+                    EventFilter.model_validate(event_filter) if event_filter is not None else None
+                ),
+            )
+        except (ValidationError, ValueError) as error:
+            raise ToolError(str(error)) from error
+        async with platform_context() as (_s, user_ctx, repo_factory, _b, _sec):
+            service = _service(repo_factory)
+            try:
+                processor = await service.get_processor(UUID(stream_id), UUID(subscription_id))
+                outputs = {
+                    *await service.existing_outputs(processor),
+                    *(payload.output_stream_ids or []),
+                }
+                for output in sorted(outputs, key=str):
+                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                row = await service.update_processor(
+                    UUID(stream_id),
+                    UUID(subscription_id),
+                    code=payload.code,
+                    output_stream_ids=payload.output_stream_ids,
+                    event_filter=payload.event_filter,
+                )
+            except HTTPException as exc:
+                raise ToolError(exc.detail) from exc
+            except StreamError as error:
+                raise ToolError(str(error)) from error
+            return _subscription(row).model_dump_json()
+
+    @tool_method(
+        display_name="Delete stream processor",
+        effect="destructive",
+        idempotent=True,
+        output=ProcessorDeletedOutput,
+    )
+    @requires("edit", "stream", id_param="stream_id")
+    async def delete_processor(self, stream_id: StreamId, subscription_id: SubscriptionId) -> str:
+        """Remove a processor of this stream; the events it wrote stay.
+
+        The caller must be able to edit every output stream, as to create it.
+        """
+        async with platform_context() as (_s, user_ctx, repo_factory, _b, _sec):
+            service = _service(repo_factory)
+            try:
+                processor = await service.get_processor(UUID(stream_id), UUID(subscription_id))
+                for output in await service.existing_outputs(processor):
+                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                await service.delete_processor(UUID(stream_id), UUID(subscription_id))
+            except HTTPException as exc:
+                raise ToolError(exc.detail) from exc
+            except StreamError as error:
+                raise ToolError(str(error)) from error
+            return json.dumps({"deleted": True})
+
+    @tool_method(display_name="List stream events", effect="read", output=StreamEventPage)
+    @enforced_in_handler(
+        "read on the stream named; without one, narrowed to the streams the caller may read"
+    )
+    async def list_events(
+        self,
+        stream_id: Annotated[
+            str | None,
+            Field(
+                description="Stream id (UUID), from `streams_list`. Leave it out for every "
+                "stream of the workspace you may read."
+            ),
+        ] = None,
         after: Annotated[
             int,
             Field(
-                description="Return events with a sequence above this; 0 starts at the oldest, "
-                "then pass the previous page's `next_after`."
+                description="With stream_id and no other filter: events with a sequence above "
+                "this, oldest first; 0 starts at the oldest, then pass `next_after`."
             ),
         ] = 0,
+        before: Annotated[
+            int | None,
+            Field(description="Workspace feed: events older than this sequence (`next_before`)."),
+        ] = None,
+        source_type: Annotated[
+            str | None, Field(description="Source type slug, from `streams_list_source_types`.")
+        ] = None,
+        kind: Annotated[
+            str | None,
+            Field(description="Event kind, or a prefix ending in `.*` (e.g. `order.*`)."),
+        ] = None,
+        sender: Annotated[str | None, Field(description="Who sent it.")] = None,
+        session_key: Annotated[
+            str | None, Field(description="Every event of one session (`session_key`).")
+        ] = None,
+        result: Annotated[
+            ProcessingStatus | None,
+            Field(
+                description="What the platform did with it: queued, processing, handled, "
+                "error, no_handlers or skipped."
+            ),
+        ] = None,
+        since: Annotated[datetime | None, Field(description="Received at or after.")] = None,
+        until: Annotated[datetime | None, Field(description="Received before.")] = None,
         limit: Annotated[int, Field(description="Page size, 1-200.")] = 50,
     ) -> str:
-        """Events after a sequence, oldest first, each with every subscription's outcome.
+        """Events, each with every subscription's outcome.
 
-        Pass the returned ``next_after`` as ``after`` for the next page; null at the end.
-        limit is 1-200.
+        With ``stream_id`` alone: that stream's events after a sequence, oldest
+        first; pass ``next_after`` as ``after`` for the next page. Otherwise the
+        workspace feed: every event of the streams you may read (``stream_id``
+        narrows it), newest first, filtered, each with ``processing``; pass
+        ``next_before`` as ``before`` for older events. limit is 1-200.
         """
         _check_range("limit", limit, 1, 200)
         _check_range("after", after, 0)
-        async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
+        filters = FeedFilter(
+            stream_id=UUID(stream_id) if stream_id else None,
+            source_type=source_type,
+            kind=kind,
+            sender=sender,
+            session_key=session_key,
+            result=result,
+            since=since,
+            until=until,
+        )
+        async with platform_read_context() as (_s, user_ctx, repo_factory, _b, _sec):
             service = _service(repo_factory)
-            try:
-                events = await service.list_events(
-                    UUID(stream_id), after=after, before=None, limit=limit
+            reactions = repo_factory.create_repository(ReactionRepository)
+            stream_only = filters == FeedFilter(stream_id=filters.stream_id) and before is None
+            if filters.stream_id is None or not stream_only:
+                if before is not None:
+                    _check_range("before", before, 1)
+                page = await workspace_events(
+                    service, reactions, user_ctx, filters, before=before, limit=limit
                 )
+                return page.model_dump_json()
+            try:
+                await require_permission("read", "stream", str(filters.stream_id), user_ctx.user_id)
+                events = await service.list_events(
+                    filters.stream_id, after=after, before=None, limit=limit
+                )
+            except HTTPException as exc:
+                raise ToolError(exc.detail) from exc
             except StreamError as error:
                 raise ToolError(str(error)) from error
             return StreamEventPage(
-                events=await _events_with_outcomes(
-                    service,
-                    repo_factory.create_repository(ReactionRepository),
-                    UUID(stream_id),
-                    events,
-                ),
+                events=await _events_with_outcomes(service, reactions, filters.stream_id, events),
                 next_after=events[-1].sequence if len(events) == limit else None,
             ).model_dump_json()

@@ -88,8 +88,12 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     event once per (event id, received_at); a webhook id belongs to one source
 #     and a trigger subscription names its trigger -- rules only the migrated
 #     schema holds. Partition maintenance creates and drops real daily
-#     partitions, which a mocked session cannot exercise. Ingest checks the
-#     stream and the quota against the read model before publishing. The router
+#     partitions, which a mocked session cannot exercise, and archives an
+#     expired day before dropping it. Two inserts into one
+#     stream commit in sequence order, so a reader paging by sequence never
+#     skips the one that committed late: real locks between real transactions.
+#     Ingest checks the stream and the quota against the read model before
+#     publishing. The router
 #     re-reads each subscription before acting, and a reaction is one
 #     trigger_executions row per (subscription, event): a unique key, an
 #     upsert and a nullable trigger only the migrated schema holds.
@@ -99,6 +103,10 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
 #     The phase-4 migration leaves a JSON-null webhook_config an object, not
 #     the array jsonb's null || {} makes.
+#     The workspace feed filters by what the platform did with an event in SQL
+#     over the router's routing and tally columns, and agrees with the status
+#     the API reports; the event-routing migration routes recorded events to
+#     the subscriptions that reacted.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
@@ -146,7 +154,11 @@ PY_SUITES=(
   libs/streams/tests/test_stream_isolation_db.py
   libs/streams/tests/test_stream_service_db.py
   libs/streams/tests/test_partitions_db.py
+  libs/streams/tests/test_sequence_readers_db.py
+  libs/streams/tests/test_partition_archive_db.py
   libs/streams/tests/test_router_db.py
+  libs/streams/tests/test_event_feed_db.py
+  apps/api/tests/test_event_routing_migration_db.py
   apps/api/tests/test_webhook_source_intake_db.py
   apps/api/tests/test_stream_sources_db.py
   apps/api/tests/test_phase4_sources_migration_db.py
@@ -154,6 +166,8 @@ PY_SUITES=(
   libs/triggers/tests/test_routed_follow_up_once_db.py
   libs/triggers/tests/test_needs_owner_db.py
   libs/triggers/tests/test_trigger_event_context_db.py
+  libs/triggers/tests/test_platform_stream_db.py
+  libs/triggers/tests/test_trigger_batch_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py

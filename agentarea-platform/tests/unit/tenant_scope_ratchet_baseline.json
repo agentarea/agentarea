@@ -59,7 +59,7 @@
     "libs/mcp/agentarea_mcp/infrastructure/client_repository.py": 1,
     "libs/streams/agentarea_streams/application/poll_intake.py": 1,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 1,
-    "libs/streams/agentarea_streams/infrastructure/repository.py": 1,
+    "libs/streams/agentarea_streams/infrastructure/repository.py": 2,
     "libs/tasks/agentarea_tasks/cost_settlement.py": 1,
     "libs/tasks/agentarea_tasks/undispatched_tasks.py": 1,
     "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1

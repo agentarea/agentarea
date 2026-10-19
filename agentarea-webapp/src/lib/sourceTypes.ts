@@ -10,6 +10,9 @@ export type SourceType = SourceTypeResponse;
 /** The `generic_webhook` entry's slug: a provider the catalog has no entry for. */
 export const GENERIC_WEBHOOK = "generic_webhook";
 
+/** The `mcp_events` entry's slug: events a connected MCP server lists, configured from that listing. */
+export const MCP_EVENTS = "mcp_events";
+
 /** How long a session's task waits for its next event, as the API spells it. */
 export const SESSION_IDLE_TIMEOUTS = ["5m", "15m", "30m", "1h", "4h", "24h"];
 export const DEFAULT_SESSION_IDLE_TIMEOUT = "30m";

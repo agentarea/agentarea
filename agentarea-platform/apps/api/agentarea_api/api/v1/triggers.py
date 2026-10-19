@@ -35,7 +35,12 @@ from agentarea_streams.domain import TriggerSubscriptionNotFoundError
 from agentarea_streams.domain.models import TriggerBinding
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_triggers.domain.enums import TriggerType
-from agentarea_triggers.domain.models import CronTrigger, StreamTrigger, TriggerSession
+from agentarea_triggers.domain.models import (
+    CronTrigger,
+    StreamTrigger,
+    TriggerBatchWindow,
+    TriggerSession,
+)
 from agentarea_triggers.infrastructure.orm import TriggerExecutionORM
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerUpdate
 from agentarea_triggers.trigger_service import (
@@ -106,6 +111,10 @@ class TriggerResponse(BaseModel):
         default=None,
         description="What the next event of the same session does; null takes the defaults.",
     )
+    batch: TriggerBatchWindow | None = Field(
+        default=None,
+        description="The batch window it fires per; null fires on every event.",
+    )
     last_event_at: UtcDatetime | None = Field(
         default=None, description="When the trigger's stream last recorded an event."
     )
@@ -152,6 +161,7 @@ class TriggerResponse(BaseModel):
             )
         if isinstance(trigger, StreamTrigger):
             response_data["session"] = trigger.session
+            response_data["batch"] = trigger.batch
 
         response_data["needs_new_owner_at"] = getattr(trigger, "needs_new_owner_at", None)
         response_data["status"] = trigger_status(trigger)

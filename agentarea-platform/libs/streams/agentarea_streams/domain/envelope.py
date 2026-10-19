@@ -33,6 +33,10 @@ class EventFields:
     session_key: str | None
     sender: str | None
     occurred_at: datetime | None
+    #: As the producer named them, unchecked: ``carried_depth`` and ``chain_id`` read them.
+    depth: str | None = None
+    correlation_id: str | None = None
+    causation_id: str | None = None
 
 
 def without_credentials(
@@ -76,7 +80,32 @@ def read_event(
         session_key=f"{source_id}:{session}" if session is not None else None,
         sender=render_first(templates.sender, context),
         occurred_at=provider_time(render_first(templates.occurred_at, context)),
+        depth=render_first(templates.depth, context),
+        correlation_id=render_first(templates.correlation_id, context),
+        causation_id=render_first(templates.causation_id, context),
     )
+
+
+_COUNT = re.compile(r"[0-9]+")
+
+
+def carried_depth(value: str, limit: int) -> int | None:
+    """The depth of an event whose producer's event had depth ``value``; None if not a count.
+
+    One more than the producer's, capped at one over ``limit``, where every
+    forward, processor and trigger refuses it.
+    """
+    if not _COUNT.fullmatch(value):
+        return None
+    return min(int(value), limit) + 1
+
+
+def chain_id(value: str) -> str | None:
+    """A carried correlation or causation id, when it is a UUID; None otherwise."""
+    try:
+        return str(UUID(value))
+    except ValueError:
+        return None
 
 
 def provider_time(value: str | None) -> datetime | None:

@@ -67,6 +67,7 @@ async def delivery():
         trigger_id=trigger_id,
         filter=EventFilter(),
         output_stream_ids=[],
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     event = StreamEvent(
         type="message",

@@ -31,11 +31,21 @@ class EventStreamSettings(BaseSettings):
         default=timedelta(days=7),
         description="Age past which whole daily partitions of the events read model are dropped.",
     )
+    ARCHIVE: bool = Field(
+        default=False,
+        description=(
+            "Write each expired day to the object store (AGENTAREA_S3_BUCKET) as gzipped JSONL, "
+            + "one object per workspace, before its partition is dropped; a day that cannot be "
+            + "archived is kept."
+        ),
+    )
     PARTITIONS_AHEAD: int = Field(
         default=7, ge=1, description="Daily read-model partitions kept created ahead of today."
     )
     FORWARD_DEPTH: int = Field(
-        default=8, ge=1, description="Longest causation chain a forward may extend."
+        default=8,
+        ge=1,
+        description="Longest causation chain a forward or a trigger firing may extend.",
     )
     MAX_ATTEMPTS: int = Field(
         default=10,

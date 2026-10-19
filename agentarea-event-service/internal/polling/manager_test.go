@@ -20,11 +20,21 @@ type fakeSources struct {
 	polled     map[string]string
 	failed     map[string]string
 	registered map[string]string
+	subscribed []subscribed
+	retryIn    map[string]time.Duration
 	pollErr    error
 }
 
+type subscribed struct {
+	id, url, subscriptionID, cursor string
+	refreshBefore                   *time.Time
+}
+
 func newFakeSources(list ...source.Source) *fakeSources {
-	return &fakeSources{list: list, polled: map[string]string{}, failed: map[string]string{}, registered: map[string]string{}}
+	return &fakeSources{
+		list: list, polled: map[string]string{}, failed: map[string]string{}, registered: map[string]string{},
+		retryIn: map[string]time.Duration{},
+	}
 }
 
 func (f *fakeSources) Load(context.Context) ([]source.Source, error) {
@@ -47,6 +57,22 @@ func (f *fakeSources) Failed(_ context.Context, id, reason string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.failed[id] = reason
+	return nil
+}
+
+func (f *fakeSources) SubscribeFailed(_ context.Context, id, reason string, retryIn time.Duration) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failed[id] = reason
+	f.retryIn[id] = retryIn
+	return nil
+}
+
+func (f *fakeSources) Subscribed(_ context.Context, id, url, subscriptionID string, refreshBefore *time.Time, cursor string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.registered[id] = url
+	f.subscribed = append(f.subscribed, subscribed{id: id, url: url, subscriptionID: subscriptionID, refreshBefore: refreshBefore, cursor: cursor})
 	return nil
 }
 
@@ -117,13 +143,15 @@ func (noSecrets) Get(context.Context, string, string) (string, error) {
 }
 
 type fixedTransport struct {
-	result transport.Result
-	err    error
-	seen   []string
+	result    transport.Result
+	err       error
+	seen      []string
+	instances []string
 }
 
 func (f *fixedTransport) Fetch(_ context.Context, fetch transport.Fetch) (transport.Result, error) {
 	f.seen = append(f.seen, fetch.Values.Cursor)
+	f.instances = append(f.instances, fetch.MCPInstanceID)
 	return f.result, f.err
 }
 
@@ -154,7 +182,7 @@ func TestAPollPublishesTheGapThenItemsInOrderThenStoresTheCursor(t *testing.T) {
 	tr := &fixedTransport{result: transport.Result{Items: []any{"a", "b"}, Cursor: "c2", Gap: "renumbered"}}
 	m := newManager(src, pub, &fakeCaller{}, tr)
 
-	next, err := m.pollOnce(context.Background(), pollSource(), tr, "c0")
+	next, _, err := m.pollOnce(context.Background(), pollSource(), tr, "c0")
 	if err != nil {
 		t.Fatalf("pollOnce: %v", err)
 	}
@@ -172,7 +200,7 @@ func TestAFailedPublishDoesNotMoveTheCursor(t *testing.T) {
 	tr := &fixedTransport{result: transport.Result{Items: []any{"a", "b"}, Cursor: "c2"}}
 	m := newManager(src, pub, &fakeCaller{}, tr)
 
-	next, err := m.pollOnce(context.Background(), pollSource(), tr, "c0")
+	next, _, err := m.pollOnce(context.Background(), pollSource(), tr, "c0")
 	if err == nil {
 		t.Fatal("a failed publish reported success")
 	}
@@ -189,7 +217,7 @@ func TestNothingNewKeepsTheStoredCursor(t *testing.T) {
 	tr := &fixedTransport{}
 	m := newManager(src, &fakePublisher{}, &fakeCaller{}, tr)
 
-	next, err := m.pollOnce(context.Background(), pollSource(), tr, "c0")
+	next, _, err := m.pollOnce(context.Background(), pollSource(), tr, "c0")
 	if err != nil || next != "c0" {
 		t.Fatalf("next = %q, err = %v", next, err)
 	}

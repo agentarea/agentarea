@@ -119,6 +119,30 @@ func setRequired(t *testing.T) {
 	t.Setenv("AGENTAREA_SECRET_BACKEND", "")
 	t.Setenv("AGENTAREA_HTTP_ALLOW_PRIVATE", "")
 	t.Setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "")
+	t.Setenv("AGENTAREA_MCP_MANAGER_URL", "http://mcp-manager:80/")
+	t.Setenv("AGENTAREA_MCP_GATEWAY_SECRET", strings.Repeat("g", 32))
+}
+
+func TestLoadReadsTheMCPGateway(t *testing.T) {
+	setRequired(t)
+	cfg := mustLoad(t)
+	if cfg.MCPManagerURL != "http://mcp-manager:80" || cfg.MCPGatewaySecret != strings.Repeat("g", 32) {
+		t.Fatalf("gateway = %q / %d bytes", cfg.MCPManagerURL, len(cfg.MCPGatewaySecret))
+	}
+}
+
+func TestLoadRefusesToStartWithoutTheMCPGateway(t *testing.T) {
+	for name, env := range map[string][2]string{
+		"no manager url": {"AGENTAREA_MCP_MANAGER_URL", ""},
+		"no secret":      {"AGENTAREA_MCP_GATEWAY_SECRET", ""},
+		"short secret":   {"AGENTAREA_MCP_GATEWAY_SECRET", "short"},
+	} {
+		setRequired(t)
+		t.Setenv(env[0], env[1])
+		if _, err := Load(); err == nil || !strings.Contains(err.Error(), env[0]) {
+			t.Fatalf("%s: err = %v", name, err)
+		}
+	}
 }
 
 func mustLoad(t *testing.T) *Config {

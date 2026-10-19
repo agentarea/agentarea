@@ -11,7 +11,10 @@ interface Props {
 
 export default async function StreamEventByIdPage({ params }: Props) {
   const { workspace, eventId } = await params;
-  const event = requireApiData(await getStreamEventById(eventId), "stream event");
+  const event = requireApiData(
+    await getStreamEventById(eventId),
+    "stream event"
+  );
   redirect(
     workspacePath(
       workspace,

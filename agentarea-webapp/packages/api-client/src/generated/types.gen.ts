@@ -2739,6 +2739,103 @@ export type FailedTaskBlocker = {
 };
 
 /**
+ * FeedEventResponse
+ *
+ * An event's envelope without its body, and what the platform did with it.
+ */
+export type FeedEventResponse = {
+    /**
+     * Attachments
+     *
+     * How many files the event carries.
+     */
+    attachments: number;
+    /**
+     * Causation Id
+     */
+    causation_id: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string | null;
+    /**
+     * Depth
+     */
+    depth: number;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    processing: Processing;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Sender
+     */
+    sender: string | null;
+    /**
+     * Sequence
+     */
+    sequence: number;
+    /**
+     * Session Key
+     */
+    session_key: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string | null;
+    /**
+     * Source Type
+     */
+    source_type: string | null;
+    /**
+     * Stream Id
+     */
+    stream_id: string;
+    /**
+     * V
+     */
+    v?: number;
+};
+
+/**
+ * FeedFacetsResponse
+ */
+export type FeedFacetsResponse = {
+    /**
+     * Source Types
+     *
+     * Events per source type under the other filters.
+     */
+    source_types: {
+        [key: string]: number;
+    };
+    /**
+     * Streams
+     *
+     * Events per stream under the other filters.
+     */
+    streams: {
+        [key: string]: number;
+    };
+};
+
+/**
  * ForwardCreate
  */
 export type ForwardCreate = {
@@ -2893,6 +2990,52 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * HandlerResponse
+ *
+ * One subscription's reaction to an event, named for the person reading it.
+ */
+export type HandlerResponse = {
+    /**
+     * Derived Event Ids
+     */
+    derived_event_ids: Array<string>;
+    /**
+     * Kind
+     *
+     * trigger, forward, or deleted
+     */
+    kind: string;
+    /**
+     * Name
+     *
+     * The trigger's name, or the streams a forward writes to.
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Subscription Id
+     */
+    subscription_id: string;
+    /**
+     * Task Id
+     */
+    task_id: string | null;
+    /**
+     * Task Status
+     */
+    task_status: string | null;
+    /**
+     * Verdict
+     *
+     * reacted, skipped, error, or batched while it waits in an open batch
+     */
+    verdict: string;
 };
 
 /**
@@ -3616,6 +3759,12 @@ export type McpServerInstanceResponse = {
      * Description
      */
     description: string | null;
+    /**
+     * Events
+     */
+    events?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Id
      */
@@ -5046,7 +5195,7 @@ export type OutcomeResponse = {
     /**
      * Verdict
      *
-     * reacted, skipped or error
+     * reacted, skipped, error, or batched while it waits in an open batch
      */
     verdict: string;
 };
@@ -5581,6 +5730,100 @@ export type PrincipalResponse = {
  * What kind of thing an id refers to.
  */
 export type PrincipalType = 'user' | 'agent' | 'platform';
+
+/**
+ * Processing
+ */
+export type Processing = {
+    /**
+     * Errors
+     */
+    errors: number;
+    /**
+     * Reacted
+     *
+     * Subscriptions whose reaction is recorded.
+     */
+    reacted: number;
+    /**
+     * Skipped
+     */
+    skipped: number;
+    status: ProcessingStatus;
+    /**
+     * Subscribers
+     *
+     * Subscriptions the router matched; null until it routed the event.
+     */
+    subscribers: number | null;
+    /**
+     * Tasks
+     */
+    tasks?: Array<ProcessingTask>;
+};
+
+/**
+ * ProcessingStatus
+ */
+export type ProcessingStatus = 'queued' | 'processing' | 'handled' | 'error' | 'no_handlers' | 'skipped';
+
+/**
+ * ProcessingTask
+ */
+export type ProcessingTask = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
+ * ProcessorCreate
+ */
+export type ProcessorCreate = {
+    /**
+     * Code
+     *
+     * Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.
+     */
+    code: string;
+    /**
+     * Which events the code runs on; empty runs it on every event.
+     */
+    event_filter?: EventFilter;
+    /**
+     * Output Stream Ids
+     *
+     * Streams the code may write to; never the input.
+     */
+    output_stream_ids: Array<string>;
+};
+
+/**
+ * ProcessorUpdate
+ */
+export type ProcessorUpdate = {
+    /**
+     * Code
+     *
+     * Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.
+     */
+    code?: string | null;
+    /**
+     * New filter; null keeps it.
+     */
+    event_filter?: EventFilter | null;
+    /**
+     * Output Stream Ids
+     *
+     * New output streams; null keeps them.
+     */
+    output_stream_ids?: Array<string> | null;
+};
 
 /**
  * ProjectAgentRef
@@ -7387,6 +7630,10 @@ export type SourceCreated = {
  */
 export type SourceField = {
     /**
+     * Format
+     */
+    format?: 'token' | 'whsec';
+    /**
      * Issued
      */
     issued?: boolean;
@@ -7411,7 +7658,7 @@ export type SourceField = {
 /**
  * SourceKind
  */
-export type SourceKind = 'webhook' | 'poll';
+export type SourceKind = 'webhook' | 'poll' | 'platform';
 
 /**
  * SourceTypeResponse
@@ -7436,7 +7683,7 @@ export type SourceTypeResponse = {
     /**
      * Delivery
      *
-     * webhook, poll or both
+     * webhook, poll or both; platform for the platform stream, which no member adds
      */
     delivery: string;
     /**
@@ -7607,6 +7854,106 @@ export type StreamCreate = {
 };
 
 /**
+ * StreamEventDetailResponse
+ */
+export type StreamEventDetailResponse = {
+    /**
+     * Attachments
+     */
+    attachments: Array<EventAttachmentResponse>;
+    /**
+     * Body Url
+     *
+     * Download link for data.body_ref; null without one.
+     */
+    body_url: string | null;
+    /**
+     * Causation Id
+     */
+    causation_id: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string | null;
+    /**
+     * Data
+     *
+     * {headers, body, body_ref}: the request as sent.
+     */
+    data: {
+        [key: string]: unknown;
+    };
+    /**
+     * Depth
+     */
+    depth: number;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Handlers
+     *
+     * One per subscription that reacted so far; the rest are still to come.
+     */
+    handlers: Array<HandlerResponse>;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Outcomes
+     *
+     * One per subscription that took the event; empty means nobody listened.
+     */
+    outcomes: Array<OutcomeResponse>;
+    /**
+     * What the platform did with it; on the workspace feed.
+     */
+    processing?: Processing | null;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Sender
+     */
+    sender: string | null;
+    /**
+     * Sequence
+     */
+    sequence: number;
+    /**
+     * Session Key
+     */
+    session_key: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string | null;
+    /**
+     * Source Type
+     */
+    source_type: string | null;
+    /**
+     * Stream Id
+     */
+    stream_id: string;
+    /**
+     * V
+     */
+    v?: number;
+};
+
+/**
  * StreamEventPage
  */
 export type StreamEventPage = {
@@ -7686,6 +8033,10 @@ export type StreamEventResponse = {
      * One per subscription that took the event; empty means nobody listened.
      */
     outcomes: Array<OutcomeResponse>;
+    /**
+     * What the platform did with it; on the workspace feed.
+     */
+    processing?: Processing | null;
     /**
      * Received At
      */
@@ -7830,6 +8181,12 @@ export type SubjectSetBody = {
  * SubscriptionResponse
  */
 export type SubscriptionResponse = {
+    /**
+     * Code
+     *
+     * A processor's Python (def process(event)); null otherwise.
+     */
+    code?: string | null;
     /**
      * Created At
      */
@@ -8098,6 +8455,10 @@ export type TaskProvenance = {
      * Correlation Id
      */
     correlation_id?: string | null;
+    /**
+     * Depth
+     */
+    depth?: number;
     /**
      * Origin Id
      */
@@ -8628,6 +8989,30 @@ export type ToolsPolicy = {
 };
 
 /**
+ * TriggerBatchWindow
+ *
+ * A stream trigger that fires once for the events of a batch (ADR-0040 §4).
+ *
+ * The batch opens with its first event and fires when ``window`` has passed or
+ * ``max_events`` have joined, whichever comes first. Either may be left out;
+ * a batch never holds more than the deployment's cap.
+ */
+export type TriggerBatchWindow = {
+    /**
+     * Max Events
+     *
+     * Fire as soon as this many events have joined.
+     */
+    max_events?: number | null;
+    /**
+     * Window
+     *
+     * How long a batch stays open after its first event, e.g. '1h'.
+     */
+    window?: string | null;
+};
+
+/**
  * TriggerCreate
  *
  * Payload for creating a trigger on an existing agent.
@@ -8639,6 +9024,10 @@ export type TriggerCreate = {
      * UUID of the agent to invoke when the trigger fires.
      */
     agent_id: string;
+    /**
+     * Fire once for a batch of events instead of once per event: {"window": "1h", "max_events": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event.
+     */
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      *
@@ -8803,6 +9192,10 @@ export type TriggerResponse = {
      * Agent Id
      */
     agent_id: string;
+    /**
+     * The batch window it fires per; null fires on every event.
+     */
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      */
@@ -8974,6 +9367,10 @@ export type TriggerSession = {
  */
 export type TriggerSpec = {
     /**
+     * Fire once for a batch of events instead of once per event: {"window": "1h", "max_events": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event.
+     */
+    batch?: TriggerBatchWindow | null;
+    /**
      * Conditions
      *
      * Optional conditions evaluated against event data before firing. An LLM condition ({"type": "llm", "description": ...}) must name the chat or decision model instance that evaluates it in "model_id"; each sub-condition of a combined condition names its own.
@@ -9102,6 +9499,10 @@ export type TriggerUpdate = {
      * Agent Id
      */
     agent_id?: string | null;
+    /**
+     * Sent as null, the trigger fires on every event again.
+     */
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      */
@@ -9459,6 +9860,26 @@ export type WorkspaceDirectoryResponse = {
      * Path
      */
     path: string;
+};
+
+/**
+ * WorkspaceEventPage
+ */
+export type WorkspaceEventPage = {
+    /**
+     * Events
+     */
+    events: Array<FeedEventResponse>;
+    /**
+     * On the first page only (no ?before=).
+     */
+    facets?: FeedFacetsResponse | null;
+    /**
+     * Next Before
+     *
+     * Pass as ?before= for older events; null at the start.
+     */
+    next_before?: number | null;
 };
 
 /**
@@ -17715,6 +18136,146 @@ export type CreateStreamV1StreamsPostResponses = {
 
 export type CreateStreamV1StreamsPostResponse = CreateStreamV1StreamsPostResponses[keyof CreateStreamV1StreamsPostResponses];
 
+export type ListWorkspaceEventsV1StreamsEventsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Before
+         *
+         * Newest first, before this sequence.
+         */
+        before?: number | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Stream Id
+         */
+        stream_id?: string | null;
+        /**
+         * Source Type
+         */
+        source_type?: string | null;
+        /**
+         * Kind
+         *
+         * An event kind, or a prefix ending in .* (order.*).
+         */
+        kind?: string | null;
+        /**
+         * Sender
+         */
+        sender?: string | null;
+        /**
+         * Session Key
+         */
+        session_key?: string | null;
+        /**
+         * Result
+         *
+         * What the platform did with it.
+         */
+        result?: ProcessingStatus | null;
+        /**
+         * Since
+         *
+         * Received at or after.
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * Received before.
+         */
+        until?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/streams/events';
+};
+
+export type ListWorkspaceEventsV1StreamsEventsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ListWorkspaceEventsV1StreamsEventsGetError = ListWorkspaceEventsV1StreamsEventsGetErrors[keyof ListWorkspaceEventsV1StreamsEventsGetErrors];
+
+export type ListWorkspaceEventsV1StreamsEventsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkspaceEventPage;
+};
+
+export type ListWorkspaceEventsV1StreamsEventsGetResponse = ListWorkspaceEventsV1StreamsEventsGetResponses[keyof ListWorkspaceEventsV1StreamsEventsGetResponses];
+
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Stream Id
+         */
+        stream_id?: string | null;
+        /**
+         * Source Type
+         */
+        source_type?: string | null;
+        /**
+         * Kind
+         *
+         * An event kind, or a prefix ending in .* (order.*).
+         */
+        kind?: string | null;
+        /**
+         * Sender
+         */
+        sender?: string | null;
+        /**
+         * Session Key
+         */
+        session_key?: string | null;
+        /**
+         * Result
+         *
+         * What the platform did with it.
+         */
+        result?: ProcessingStatus | null;
+        /**
+         * Since
+         *
+         * Received at or after.
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * Received before.
+         */
+        until?: string | null;
+    };
+    url: '/v1/workspaces/{workspace}/streams/events/live';
+};
+
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetError = StreamWorkspaceEventsV1StreamsEventsLiveGetErrors[keyof StreamWorkspaceEventsV1StreamsEventsLiveGetErrors];
+
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+
 export type GetEventByIdV1StreamsEventsEventIdGetData = {
     body?: never;
     path: {
@@ -17740,7 +18301,7 @@ export type GetEventByIdV1StreamsEventsEventIdGetResponses = {
     /**
      * Successful Response
      */
-    200: StreamEventResponse;
+    200: StreamEventDetailResponse;
 };
 
 export type GetEventByIdV1StreamsEventsEventIdGetResponse = GetEventByIdV1StreamsEventsEventIdGetResponses[keyof GetEventByIdV1StreamsEventsEventIdGetResponses];
@@ -17908,7 +18469,7 @@ export type GetEventV1StreamsStreamIdEventsSequenceGetResponses = {
     /**
      * Successful Response
      */
-    200: StreamEventResponse;
+    200: StreamEventDetailResponse;
 };
 
 export type GetEventV1StreamsStreamIdEventsSequenceGetResponse = GetEventV1StreamsStreamIdEventsSequenceGetResponses[keyof GetEventV1StreamsStreamIdEventsSequenceGetResponses];
@@ -17942,6 +18503,104 @@ export type CreateForwardV1StreamsStreamIdForwardsPostResponses = {
 };
 
 export type CreateForwardV1StreamsStreamIdForwardsPostResponse = CreateForwardV1StreamsStreamIdForwardsPostResponses[keyof CreateForwardV1StreamsStreamIdForwardsPostResponses];
+
+export type CreateProcessorV1StreamsStreamIdProcessorsPostData = {
+    body: ProcessorCreate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/processors';
+};
+
+export type CreateProcessorV1StreamsStreamIdProcessorsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CreateProcessorV1StreamsStreamIdProcessorsPostError = CreateProcessorV1StreamsStreamIdProcessorsPostErrors[keyof CreateProcessorV1StreamsStreamIdProcessorsPostErrors];
+
+export type CreateProcessorV1StreamsStreamIdProcessorsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubscriptionResponse;
+};
+
+export type CreateProcessorV1StreamsStreamIdProcessorsPostResponse = CreateProcessorV1StreamsStreamIdProcessorsPostResponses[keyof CreateProcessorV1StreamsStreamIdProcessorsPostResponses];
+
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}';
+};
+
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteError = DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors[keyof DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors];
+
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponse = DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses[keyof DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses];
+
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchData = {
+    body: ProcessorUpdate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}';
+};
+
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchError = UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors[keyof UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors];
+
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubscriptionResponse;
+};
+
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponse = UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses[keyof UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses];
 
 export type ListSourcesV1StreamsStreamIdSourcesGetData = {
     body?: never;

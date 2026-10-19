@@ -13,8 +13,14 @@ from agentarea_streams.domain import (
     Verdict,
 )
 from agentarea_streams.domain.keys import task_id_for
+from agentarea_triggers.batches import batch_workflow_id
 from agentarea_triggers.channels.sender_admission import Admitted, Refused
-from agentarea_triggers.domain.models import ConditionVerdict, StreamTrigger, TriggerFiring
+from agentarea_triggers.domain.models import (
+    ConditionVerdict,
+    StreamTrigger,
+    TriggerBatchWindow,
+    TriggerFiring,
+)
 from agentarea_triggers.infrastructure.reactions import CausedExecutionRepository
 from agentarea_triggers.stream_subscriber import (
     ConfigurerAuthority,
@@ -33,6 +39,7 @@ def _sub(trigger_id):
         trigger_id=trigger_id,
         filter=EventFilter(),
         output_stream_ids=[],
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
 
@@ -73,7 +80,17 @@ class _Claim:
         return self._delivered_to
 
 
-def _handler(service, may_run=True, claim=None, sender_admission=None, contexts=None):
+class _Batches:
+    def __init__(self):
+        self.added: list = []
+
+    async def add(self, spec, event_id, *, workflow_id):
+        self.added.append((spec, event_id, workflow_id))
+
+
+def _handler(
+    service, may_run=True, claim=None, sender_admission=None, contexts=None, batches=None
+):
     authority = MagicMock()
     authority.may_run = AsyncMock(return_value=may_run)
     claim = claim or _Claim()
@@ -88,9 +105,12 @@ def _handler(service, may_run=True, claim=None, sender_admission=None, contexts=
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
         authority=authority,
+        max_depth=8,
         trigger_service_factory=factory,
         follow_up_claim_factory=lambda _s, _sub, _e: cast(SubscriptionFollowUpClaim, claim),
         sender_admission=sender_admission,
+        batches=batches or _Batches(),
+        batch_cap=100,
     )
 
 
@@ -295,3 +315,89 @@ async def test_a_body_moved_to_files_is_fired_with_the_body_as_sent():
     told = service.fire.await_args.kwargs["event"]
     assert told.data == service.fire.await_args.args[1]
     assert told.data["body"] == body
+
+
+async def test_a_windowed_trigger_hands_the_event_to_its_open_batch_instead_of_firing():
+    trigger = _trigger(batch=TriggerBatchWindow(window="60s", max_events=3))
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock()
+    batches = _Batches()
+    sub, event = _sub(trigger.id), _event()
+    result = await _handler(service, batches=batches).handle(sub, event, AsyncMock())
+    service.fire.assert_not_awaited()
+    ((spec, event_id, workflow_id),) = batches.added
+    assert workflow_id == batch_workflow_id(trigger.id, None)
+    assert event_id == event.id
+    assert (spec.trigger_id, spec.subscription_id) == (trigger.id, sub.id)
+    assert (spec.window_seconds, spec.max_events, spec.caller) == (60.0, 3, None)
+    assert (spec.workspace_id, spec.configured_by) == ("w", "u")
+    assert result.verdict == Verdict.BATCHED
+    assert result.workflow_id == workflow_id
+    assert result.task_id is None
+
+
+async def test_a_batch_without_a_count_fires_at_the_cap():
+    trigger = _trigger(batch=TriggerBatchWindow(window="1h"))
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    batches = _Batches()
+    await _handler(service, batches=batches).handle(_sub(trigger.id), _event(), AsyncMock())
+    assert batches.added[0][0].max_events == 100
+
+
+async def test_each_event_meets_the_conditions_before_it_joins_a_batch():
+    trigger = _trigger(batch=TriggerBatchWindow(max_events=3), conditions={"type": "rule"})
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.evaluate_trigger_verdict = AsyncMock(
+        return_value=ConditionVerdict(verdict="not_met", reason="a small order")
+    )
+    batches = _Batches()
+    result = await _handler(service, batches=batches).handle(
+        _sub(trigger.id), _event(), AsyncMock()
+    )
+    assert (result.verdict, result.reason) == (Verdict.SKIPPED, "a small order")
+    assert batches.added == []
+
+
+async def test_the_depth_limit_applies_to_each_event_before_its_batch():
+    trigger = _trigger(batch=TriggerBatchWindow(max_events=3))
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    batches = _Batches()
+    event = _event()
+    event.depth = 8
+    result = await _handler(service, batches=batches).handle(_sub(trigger.id), event, AsyncMock())
+    assert result.verdict == Verdict.SKIPPED
+    assert batches.added == []
+
+
+async def test_an_admitted_sender_gets_a_batch_of_their_own():
+    trigger = _trigger(batch=TriggerBatchWindow(max_events=3))
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    batches = _Batches()
+    handler = _handler(
+        service, sender_admission=_Admission(Admitted("alice")), batches=batches
+    )
+    with _telegram_door():
+        result = await handler.handle(_sub(trigger.id), _event(), AsyncMock())
+    ((spec, _, workflow_id),) = batches.added
+    assert spec.caller == "alice"
+    assert workflow_id == batch_workflow_id(trigger.id, "alice")
+    assert result.workflow_id == workflow_id
+
+
+async def test_a_refused_sender_never_joins_a_batch():
+    trigger = _trigger(batch=TriggerBatchWindow(max_events=3))
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    batches = _Batches()
+    handler = _handler(
+        service, sender_admission=_Admission(Refused("not linked")), batches=batches
+    )
+    with _telegram_door():
+        result = await handler.handle(_sub(trigger.id), _event(), AsyncMock())
+    assert result.verdict == Verdict.SKIPPED
+    assert batches.added == []

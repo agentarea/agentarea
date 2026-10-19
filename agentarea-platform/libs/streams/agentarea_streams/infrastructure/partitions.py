@@ -4,18 +4,23 @@ Runs inside the worker. Infrastructure across every workspace, so it declares
 why it is unscoped. ``CREATE TABLE ... PARTITION OF`` has no SQLAlchemy
 construct and is the one statement written as text.
 
-A day older than ``AGENTAREA_EVENT_RETENTION`` is dropped whole. Every step
-commits on its own: partition DDL takes an ACCESS EXCLUSIVE lock on
+A day older than ``AGENTAREA_EVENT_RETENTION`` is dropped whole. With
+``AGENTAREA_EVENT_ARCHIVE`` on, its events are first written to the object
+store, one gzipped JSONL object per workspace; a day the store does not take is
+kept, and the next pass tries again. Every step commits on its own: partition DDL takes an ACCESS EXCLUSIVE lock on
 ``stream_events``, blocking the events view's writes and every read. DDL waits
 at most ``lock_timeout`` for that lock and is retried by the next pass.
 """
 
 import asyncio
+import gzip
 import logging
 import re
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from urllib.parse import quote
 
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config.streams import EventStreamSettings
@@ -23,6 +28,11 @@ from sqlalchemy import Executable, MetaData, Table, column, func, select, table,
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.schema import DropTable
+
+from ..domain.feed import RoutedEvent
+from .event_archive import EventArchive
+from .event_repository import to_routed
+from .orm import StreamEventORM
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +46,10 @@ _ADVISORY_LOCK_KEY = 798_021_335_641
 
 _LOCK_NOT_AVAILABLE = "55P03"
 
+#: An archive object is kept in memory up to this size, then spills to a temporary file.
+_SPOOL_IN_MEMORY = 8 * 1024 * 1024
+_ARCHIVE_BATCH = 500
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -45,11 +59,42 @@ def partition_name(day: date) -> str:
     return f"stream_events_p{day:%Y%m%d}"
 
 
+def archive_key(workspace_id: str, day: date) -> str:
+    return f"event-archive/{quote(workspace_id, safe='')}/{day:%Y-%m-%d}.jsonl.gz"
+
+
 @dataclass
 class PartitionReport:
     created: list[str] = field(default_factory=list)
     dropped: list[str] = field(default_factory=list)
     deferred: list[str] = field(default_factory=list)
+    #: Object keys written to the archive.
+    archived: list[str] = field(default_factory=list)
+    #: Expired days not dropped because archiving them failed.
+    kept: list[str] = field(default_factory=list)
+
+
+class _Spool:
+    """One workspace's events of a day, gzipped JSONL, until it is stored."""
+
+    def __init__(self, workspace_id: str):
+        self.workspace_id = workspace_id
+        self._file = tempfile.SpooledTemporaryFile(max_size=_SPOOL_IN_MEMORY)
+        self._gzip = gzip.GzipFile(fileobj=self._file, mode="wb")
+
+    def write(self, event: RoutedEvent) -> None:
+        self._gzip.write(event.model_dump_json().encode("utf-8") + b"\n")
+
+    async def store(self, archive: EventArchive, day: date) -> str:
+        key = archive_key(self.workspace_id, day)
+        self._gzip.close()
+        self._file.seek(0)
+        await archive.put(key, self._file)
+        return key
+
+    def close(self) -> None:
+        self._gzip.close()
+        self._file.close()
 
 
 class PartitionMaintainer:
@@ -59,10 +104,14 @@ class PartitionMaintainer:
         settings: EventStreamSettings,
         clock: Callable[[], datetime] = _utcnow,
         *,
+        archive: EventArchive | None = None,
         lock_timeout: timedelta = timedelta(seconds=5),
     ):
+        if settings.ARCHIVE and archive is None:
+            raise ValueError("AGENTAREA_EVENT_ARCHIVE is on, but no event archive was given")
         self._session_factory = session_factory
         self._settings = settings
+        self._archive = archive
         self._clock = clock
         self._lock_timeout = lock_timeout
         self._task: asyncio.Task[None] | None = None
@@ -92,18 +141,69 @@ class PartitionMaintainer:
                 for name, day in await self._partitions():
                     if report.deferred:
                         break
-                    if day < horizon and await self._ddl(
+                    if day >= horizon or not await self._archived(name, day, report):
+                        continue
+                    if await self._ddl(
                         name, DropTable(Table(name, MetaData()), if_exists=True), report
                     ):
                         report.dropped.append(name)
-        if report.created or report.dropped or report.deferred:
+        if report.created or report.dropped or report.deferred or report.kept:
             logger.info(
-                "Event partitions: created %s, dropped %s, deferred %s",
+                "Event partitions: created %s, dropped %s, deferred %s, kept %s",
                 report.created,
                 report.dropped,
                 report.deferred,
+                report.kept,
             )
         return report
+
+    async def _archived(self, name: str, day: date, report: PartitionReport) -> bool:
+        """True when the day may be dropped: archived, or archiving is off."""
+        archive = self._archive if self._settings.ARCHIVE else None
+        if archive is None:
+            return True
+        try:
+            keys = await self._write_archive(archive, day)
+        except Exception:
+            logger.error(
+                "Event partition %s kept: archiving it to the object store failed; "
+                + "the next pass tries again",
+                name,
+                exc_info=True,
+            )
+            report.kept.append(name)
+            return False
+        report.archived.extend(keys)
+        return True
+
+    async def _write_archive(self, archive: EventArchive, day: date) -> list[str]:
+        start = datetime.combine(day, time.min, UTC)
+        keys: list[str] = []
+        spool: _Spool | None = None
+        try:
+            async with self._session_factory() as session:
+                rows = await session.stream_scalars(
+                    select(StreamEventORM)
+                    .where(
+                        StreamEventORM.received_at >= start,
+                        StreamEventORM.received_at < start + timedelta(days=1),
+                    )
+                    .order_by(StreamEventORM.workspace_id, StreamEventORM.sequence)
+                    .execution_options(yield_per=_ARCHIVE_BATCH)
+                )
+                async for row in rows:
+                    if spool is None or spool.workspace_id != row.workspace_id:
+                        if spool is not None:
+                            keys.append(await spool.store(archive, day))
+                            spool.close()
+                        spool = _Spool(row.workspace_id)
+                    spool.write(to_routed(row))
+            if spool is not None:
+                keys.append(await spool.store(archive, day))
+        finally:
+            if spool is not None:
+                spool.close()
+        return keys
 
     async def _create(self, day: date, report: PartitionReport) -> None:
         name = partition_name(day)

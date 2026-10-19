@@ -118,6 +118,9 @@ import type {
   CreatePolicyRuleV1PoliciesPostData,
   CreatePolicyRuleV1PoliciesPostErrors,
   CreatePolicyRuleV1PoliciesPostResponses,
+  CreateProcessorV1StreamsStreamIdProcessorsPostData,
+  CreateProcessorV1StreamsStreamIdProcessorsPostErrors,
+  CreateProcessorV1StreamsStreamIdProcessorsPostResponses,
   CreateProjectV1ProjectsPostData,
   CreateProjectV1ProjectsPostErrors,
   CreateProjectV1ProjectsPostResponses,
@@ -196,6 +199,9 @@ import type {
   DeletePolicyRuleV1PoliciesRuleIdDeleteData,
   DeletePolicyRuleV1PoliciesRuleIdDeleteErrors,
   DeletePolicyRuleV1PoliciesRuleIdDeleteResponses,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteData,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses,
   DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteData,
   DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteErrors,
   DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteResponses,
@@ -637,6 +643,9 @@ import type {
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
+  ListWorkspaceEventsV1StreamsEventsGetData,
+  ListWorkspaceEventsV1StreamsEventsGetErrors,
+  ListWorkspaceEventsV1StreamsEventsGetResponses,
   ListWorkspaceFilesV1FilesGetData,
   ListWorkspaceFilesV1FilesGetErrors,
   ListWorkspaceFilesV1FilesGetResponses,
@@ -787,6 +796,9 @@ import type {
   StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetData,
   StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetErrors,
   StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetResponses,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetData,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetErrors,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetResponses,
   StreamWorkspaceFileV1FilesDownloadFilePathGetData,
   StreamWorkspaceFileV1FilesDownloadFilePathGetErrors,
   StreamWorkspaceFileV1FilesDownloadFilePathGetResponses,
@@ -841,6 +853,9 @@ import type {
   UpdatePolicyRuleV1PoliciesRuleIdPatchData,
   UpdatePolicyRuleV1PoliciesRuleIdPatchErrors,
   UpdatePolicyRuleV1PoliciesRuleIdPatchResponses,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchData,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses,
   UpdateProjectV1ProjectsProjectIdPatchData,
   UpdateProjectV1ProjectsProjectIdPatchErrors,
   UpdateProjectV1ProjectsProjectIdPatchResponses,
@@ -9591,6 +9606,74 @@ export const createStreamV1StreamsPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Workspace Events
+ *
+ * Every event of the workspace's streams the caller may read, newest first.
+ *
+ * Each carries what the platform did with it (``processing``); bodies are
+ * left out, the event's own endpoint has them.
+ */
+export const listWorkspaceEventsV1StreamsEventsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListWorkspaceEventsV1StreamsEventsGetData, ThrowOnError>
+): RequestResult<
+  ListWorkspaceEventsV1StreamsEventsGetResponses,
+  ListWorkspaceEventsV1StreamsEventsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListWorkspaceEventsV1StreamsEventsGetResponses,
+    ListWorkspaceEventsV1StreamsEventsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/events",
+    ...options,
+  });
+
+/**
+ * Stream Workspace Events
+ *
+ * SSE: ``event.recorded`` (a feed item) as an event arrives, ``event.processing``
+ * ({event_id, processing}) as the platform acts on it. The filters are the feed's;
+ * ``result`` is not applied here, since an event's result changes as it is handled.
+ */
+export const streamWorkspaceEventsV1StreamsEventsLiveGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    StreamWorkspaceEventsV1StreamsEventsLiveGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  StreamWorkspaceEventsV1StreamsEventsLiveGetResponses,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    StreamWorkspaceEventsV1StreamsEventsLiveGetResponses,
+    StreamWorkspaceEventsV1StreamsEventsLiveGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/events/live",
+    ...options,
+  });
+
+/**
  * Get Event By Id
  *
  * One event by its id, whichever stream holds it: what a forward or a cause points at.
@@ -9793,6 +9876,118 @@ export const createForwardV1StreamsStreamIdForwardsPost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/streams/{stream_id}/forwards",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Create Processor
+ *
+ * Run code over every matching event of the stream; it writes into the output streams.
+ *
+ * The caller must be able to edit every output stream. The code runs in the
+ * sandbox, one call per event, and gets no secrets.
+ */
+export const createProcessorV1StreamsStreamIdProcessorsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateProcessorV1StreamsStreamIdProcessorsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateProcessorV1StreamsStreamIdProcessorsPostResponses,
+  CreateProcessorV1StreamsStreamIdProcessorsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateProcessorV1StreamsStreamIdProcessorsPostResponses,
+    CreateProcessorV1StreamsStreamIdProcessorsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/processors",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Processor
+ *
+ * Remove a processor; the events it wrote stay. The caller must be able to edit its outputs.
+ */
+export const deleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses,
+    DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}",
+    ...options,
+  });
+
+/**
+ * Update Processor
+ *
+ * Change a processor's code, outputs or filter; the next event runs the change.
+ *
+ * The caller must be able to edit every output stream it has and is given.
+ */
+export const updateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses,
+    UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}",
     ...options,
     headers: {
       "Content-Type": "application/json",

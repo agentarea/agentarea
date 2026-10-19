@@ -60,9 +60,6 @@ class _PendingListBroker:
     async def ack(self, stream: str, group: str, message_id: str) -> None:
         self.pending.pop(message_id, None)
 
-    async def prune_consumers(self, stream: str, group: str, *, idle_ms: int) -> int:
-        return 0
-
     async def submit(self, stream: str, fields: dict[str, str], *, retention) -> str:
         self.dead_letters.append(dict(fields))
         return "dlq-1"

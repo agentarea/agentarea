@@ -4859,6 +4859,176 @@
         "title": "FailedTaskBlocker",
         "type": "object"
       },
+      "FeedEventResponse": {
+        "description": "An event's envelope without its body, and what the platform did with it.",
+        "properties": {
+          "attachments": {
+            "description": "How many files the event carries.",
+            "title": "Attachments",
+            "type": "integer"
+          },
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/Processing"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "v": {
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "stream_id",
+          "source_id",
+          "source_type",
+          "kind",
+          "key",
+          "session_key",
+          "sender",
+          "received_at",
+          "occurred_at",
+          "depth",
+          "correlation_id",
+          "causation_id",
+          "attachments",
+          "processing"
+        ],
+        "title": "FeedEventResponse",
+        "type": "object"
+      },
+      "FeedFacetsResponse": {
+        "properties": {
+          "source_types": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Events per source type under the other filters.",
+            "title": "Source Types",
+            "type": "object"
+          },
+          "streams": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Events per stream under the other filters.",
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Streams",
+            "type": "object"
+          }
+        },
+        "required": [
+          "streams",
+          "source_types"
+        ],
+        "title": "FeedFacetsResponse",
+        "type": "object"
+      },
       "ForwardCreate": {
         "additionalProperties": false,
         "properties": {
@@ -5101,6 +5271,85 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HandlerResponse": {
+        "description": "One subscription's reaction to an event, named for the person reading it.",
+        "properties": {
+          "derived_event_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Derived Event Ids",
+            "type": "array"
+          },
+          "kind": {
+            "description": "trigger, forward, or deleted",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "description": "The trigger's name, or the streams a forward writes to.",
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "subscription_id": {
+            "format": "uuid",
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "task_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Status"
+          },
+          "verdict": {
+            "description": "reacted, skipped, error, or batched while it waits in an open batch",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id",
+          "kind",
+          "name",
+          "verdict",
+          "reason",
+          "task_id",
+          "task_status",
+          "derived_event_ids"
+        ],
+        "title": "HandlerResponse",
         "type": "object"
       },
       "HeaderInput": {
@@ -6244,6 +6493,18 @@
               }
             ],
             "title": "Description"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
           },
           "id": {
             "format": "uuid",
@@ -8966,7 +9227,7 @@
             "title": "Trigger Id"
           },
           "verdict": {
-            "description": "reacted, skipped or error",
+            "description": "reacted, skipped, error, or batched while it waits in an open batch",
             "title": "Verdict",
             "type": "string"
           }
@@ -9916,6 +10177,164 @@
         ],
         "title": "PrincipalType",
         "type": "string"
+      },
+      "Processing": {
+        "properties": {
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "reacted": {
+            "description": "Subscriptions whose reaction is recorded.",
+            "title": "Reacted",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProcessingStatus"
+          },
+          "subscribers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Subscriptions the router matched; null until it routed the event.",
+            "title": "Subscribers"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessingTask"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "subscribers",
+          "reacted",
+          "skipped",
+          "errors"
+        ],
+        "title": "Processing",
+        "type": "object"
+      },
+      "ProcessingStatus": {
+        "enum": [
+          "queued",
+          "processing",
+          "handled",
+          "error",
+          "no_handlers",
+          "skipped"
+        ],
+        "title": "ProcessingStatus",
+        "type": "string"
+      },
+      "ProcessingTask": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "ProcessingTask",
+        "type": "object"
+      },
+      "ProcessorCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.",
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "event_filter": {
+            "$ref": "#/components/schemas/EventFilter",
+            "description": "Which events the code runs on; empty runs it on every event."
+          },
+          "output_stream_ids": {
+            "description": "Streams the code may write to; never the input.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Output Stream Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "output_stream_ids",
+          "code"
+        ],
+        "title": "ProcessorCreate",
+        "type": "object"
+      },
+      "ProcessorUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.",
+            "title": "Code"
+          },
+          "event_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventFilter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New filter; null keeps it."
+          },
+          "output_stream_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New output streams; null keeps them.",
+            "title": "Output Stream Ids"
+          }
+        },
+        "title": "ProcessorUpdate",
+        "type": "object"
       },
       "ProjectAgentRef": {
         "properties": {
@@ -12909,6 +13328,15 @@
         "additionalProperties": false,
         "description": "A credential or setting a member fills in for a source of this type.",
         "properties": {
+          "format": {
+            "default": "token",
+            "enum": [
+              "token",
+              "whsec"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
           "issued": {
             "default": false,
             "title": "Issued",
@@ -12943,7 +13371,8 @@
       "SourceKind": {
         "enum": [
           "webhook",
-          "poll"
+          "poll",
+          "platform"
         ],
         "title": "SourceKind",
         "type": "string"
@@ -12971,7 +13400,7 @@
             "type": "array"
           },
           "delivery": {
-            "description": "webhook, poll or both",
+            "description": "webhook, poll or both; platform for the platform stream, which no member adds",
             "title": "Delivery",
             "type": "string"
           },
@@ -13339,6 +13768,193 @@
         "title": "StreamCreate",
         "type": "object"
       },
+      "StreamEventDetailResponse": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/EventAttachmentResponse"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "body_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Download link for data.body_ref; null without one.",
+            "title": "Body Url"
+          },
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "data": {
+            "additionalProperties": true,
+            "description": "{headers, body, body_ref}: the request as sent.",
+            "title": "Data",
+            "type": "object"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "handlers": {
+            "description": "One per subscription that reacted so far; the rest are still to come.",
+            "items": {
+              "$ref": "#/components/schemas/HandlerResponse"
+            },
+            "title": "Handlers",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "outcomes": {
+            "description": "One per subscription that took the event; empty means nobody listened.",
+            "items": {
+              "$ref": "#/components/schemas/OutcomeResponse"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Processing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the platform did with it; on the workspace feed."
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "v": {
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "stream_id",
+          "source_id",
+          "source_type",
+          "kind",
+          "key",
+          "session_key",
+          "sender",
+          "received_at",
+          "occurred_at",
+          "depth",
+          "correlation_id",
+          "causation_id",
+          "data",
+          "body_url",
+          "attachments",
+          "outcomes",
+          "handlers"
+        ],
+        "title": "StreamEventDetailResponse",
+        "type": "object"
+      },
       "StreamEventPage": {
         "properties": {
           "events": {
@@ -13458,6 +14074,17 @@
             },
             "title": "Outcomes",
             "type": "array"
+          },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Processing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the platform did with it; on the workspace feed."
           },
           "received_at": {
             "format": "date-time",
@@ -13718,6 +14345,18 @@
       },
       "SubscriptionResponse": {
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A processor's Python (def process(event)); null otherwise.",
+            "title": "Code"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -14207,6 +14846,11 @@
               }
             ],
             "title": "Correlation Id"
+          },
+          "depth": {
+            "default": 0,
+            "title": "Depth",
+            "type": "integer"
           },
           "origin_id": {
             "anyOf": [
@@ -15217,6 +15861,40 @@
         "title": "ToolsPolicy",
         "type": "object"
       },
+      "TriggerBatchWindow": {
+        "additionalProperties": false,
+        "description": "A stream trigger that fires once for the events of a batch (ADR-0040 \u00a74).\n\nThe batch opens with its first event and fires when ``window`` has passed or\n``max_events`` have joined, whichever comes first. Either may be left out;\na batch never holds more than the deployment's cap.",
+        "properties": {
+          "max_events": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fire as soon as this many events have joined.",
+            "title": "Max Events"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "pattern": "^[1-9][0-9]*[smhd]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long a batch stays open after its first event, e.g. '1h'.",
+            "title": "Window"
+          }
+        },
+        "title": "TriggerBatchWindow",
+        "type": "object"
+      },
       "TriggerCreate": {
         "additionalProperties": false,
         "description": "Payload for creating a trigger on an existing agent.",
@@ -15226,6 +15904,17 @@
             "format": "uuid",
             "title": "Agent Id",
             "type": "string"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerBatchWindow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fire once for a batch of events instead of once per event: {\"window\": \"1h\", \"max_events\": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event."
           },
           "conditions": {
             "additionalProperties": true,
@@ -15474,6 +16163,17 @@
             "format": "uuid",
             "title": "Agent Id",
             "type": "string"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerBatchWindow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The batch window it fires per; null fires on every event."
           },
           "conditions": {
             "additionalProperties": true,
@@ -15759,6 +16459,17 @@
         "additionalProperties": false,
         "description": "Everything about a trigger except the agent it fires.\n\nA trigger fires an agent \u2014 on a cron schedule (``trigger_type='cron'``) or on\nthe events of a stream (``trigger_type='stream'``). A webhook or a polled\nprovider is a source of a stream (``streams_create_source``) with a stream\ntrigger on it. Creating an agent takes a list of these, because the agent\ndoes not exist yet when they are written.",
         "properties": {
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerBatchWindow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fire once for a batch of events instead of once per event: {\"window\": \"1h\", \"max_events\": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event."
+          },
           "conditions": {
             "additionalProperties": true,
             "description": "Optional conditions evaluated against event data before firing. An LLM condition ({\"type\": \"llm\", \"description\": ...}) must name the chat or decision model instance that evaluates it in \"model_id\"; each sub-condition of a combined condition names its own.",
@@ -15949,6 +16660,17 @@
               }
             ],
             "title": "Agent Id"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerBatchWindow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sent as null, the trigger fires on every event again."
           },
           "conditions": {
             "anyOf": [
@@ -16621,6 +17343,45 @@
           "path"
         ],
         "title": "WorkspaceDirectoryResponse",
+        "type": "object"
+      },
+      "WorkspaceEventPage": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/FeedEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "facets": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedFacetsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On the first page only (no ?before=)."
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?before= for older events; null at the start.",
+            "title": "Next Before"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "WorkspaceEventPage",
         "type": "object"
       },
       "WorkspaceFileDownloadResponse": {
@@ -34901,6 +35662,431 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/streams/events": {
+      "get": {
+        "description": "Every event of the workspace's streams the caller may read, newest first.\n\nEach carries what the platform did with it (``processing``); bodies are\nleft out, the event's own endpoint has them.",
+        "operationId": "list_workspace_events_v1_streams_events_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Newest first, before this sequence.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9223372036854775807,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Newest first, before this sequence.",
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stream Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "description": "An event kind, or a prefix ending in .* (order.*).",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An event kind, or a prefix ending in .* (order.*).",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sender",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sender"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Key"
+            }
+          },
+          {
+            "description": "What the platform did with it.",
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProcessingStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "What the platform did with it.",
+              "title": "Result"
+            }
+          },
+          {
+            "description": "Received at or after.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received at or after.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Received before.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received before.",
+              "title": "Until"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceEventPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Workspace Events",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/events/live": {
+      "get": {
+        "description": "SSE: ``event.recorded`` (a feed item) as an event arrives, ``event.processing``\n({event_id, processing}) as the platform acts on it. The filters are the feed's;\n``result`` is not applied here, since an event's result changes as it is handled.",
+        "operationId": "stream_workspace_events_v1_streams_events_live_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stream Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "description": "An event kind, or a prefix ending in .* (order.*).",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An event kind, or a prefix ending in .* (order.*).",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sender",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sender"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Key"
+            }
+          },
+          {
+            "description": "What the platform did with it.",
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProcessingStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "What the platform did with it.",
+              "title": "Result"
+            }
+          },
+          {
+            "description": "Received at or after.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received at or after.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Received before.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received before.",
+              "title": "Until"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Workspace Events",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/streams/events/{event_id}": {
       "get": {
         "description": "One event by its id, whichever stream holds it: what a forward or a cause points at.",
@@ -34935,7 +36121,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StreamEventResponse"
+                  "$ref": "#/components/schemas/StreamEventDetailResponse"
                 }
               }
             },
@@ -35300,7 +36486,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StreamEventResponse"
+                  "$ref": "#/components/schemas/StreamEventDetailResponse"
                 }
               }
             },
@@ -35396,6 +36582,229 @@
           }
         ],
         "summary": "Create Forward",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/processors": {
+      "post": {
+        "description": "Run code over every matching event of the stream; it writes into the output streams.\n\nThe caller must be able to edit every output stream. The code runs in the\nsandbox, one call per event, and gets no secrets.",
+        "operationId": "create_processor_v1_streams__stream_id__processors_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessorCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Processor",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}": {
+      "delete": {
+        "description": "Remove a processor; the events it wrote stay. The caller must be able to edit its outputs.",
+        "operationId": "delete_processor_v1_streams__stream_id__processors__subscription_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Processor",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      },
+      "patch": {
+        "description": "Change a processor's code, outputs or filter; the next event runs the change.\n\nThe caller must be able to edit every output stream it has and is given.",
+        "operationId": "update_processor_v1_streams__stream_id__processors__subscription_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessorUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Processor",
         "tags": [
           "v1",
           "protected",

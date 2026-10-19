@@ -34,6 +34,34 @@ end
 return redis.call('XADD', KEYS[2], '*', unpack(ARGV, 2))
 """
 
+#: A consumer idle this long with nothing pending belongs to a stopped process.
+#: A live one reads at least every block timeout, so it is never this idle.
+STOPPED_CONSUMER_IDLE = timedelta(minutes=10)
+
+# Check and delete in one step: a consumer that reads between the two would
+# lose its new pending entries with it.
+_PRUNE_SCRIPT = """
+local consumers = redis.pcall('XINFO', 'CONSUMERS', KEYS[1], ARGV[1])
+if type(consumers) == 'table' and consumers.err then
+    if string.find(consumers.err, 'NOGROUP') or string.find(consumers.err, 'no such key') then
+        return 0
+    end
+    return consumers
+end
+local removed = 0
+for _, consumer in ipairs(consumers) do
+    local f = {}
+    for i = 1, #consumer, 2 do
+        f[consumer[i]] = consumer[i + 1]
+    end
+    if f['pending'] == 0 and f['idle'] > tonumber(ARGV[2]) then
+        redis.call('XGROUP', 'DELCONSUMER', KEYS[1], ARGV[1], f['name'])
+        removed = removed + 1
+    end
+end
+return removed
+"""
+
 
 class RedisStreamsBroker:
     """Broker backed by Redis Streams + consumer groups.
@@ -45,13 +73,25 @@ class RedisStreamsBroker:
 
     Callers name streams logically; every Redis key is ``<namespace>.<stream>``
     and messages come back with the logical name.
+
+    Every process start joins a group under a new consumer name. A group's
+    consumers that hold nothing and were idle past `stopped_after` are removed
+    when its runtime starts (`ensure_group`) and on every reclaim (`autoclaim`);
+    one that still holds messages is left for `autoclaim` to empty.
     """
 
-    def __init__(self, redis_url: str, *, namespace: str) -> None:
+    def __init__(
+        self,
+        redis_url: str,
+        *,
+        namespace: str,
+        stopped_after: timedelta = STOPPED_CONSUMER_IDLE,
+    ) -> None:
         if not namespace:
             raise ValueError("RedisStreamsBroker needs a namespace (AGENTAREA_EVENT_NAMESPACE)")
         self._redis_url = redis_url
         self._prefix = f"{namespace}."
+        self._stopped_after_ms = int(stopped_after.total_seconds() * 1000)
         self._client: redis.Redis | None = None
 
     def _key(self, stream: str) -> str:
@@ -95,9 +135,9 @@ class RedisStreamsBroker:
             await client.xgroup_create(self._key(stream), group, id=start, mkstream=True)
         except ResponseError as exc:
             # BUSYGROUP = group already exists — that's the success path.
-            if "BUSYGROUP" in str(exc):
-                return
-            raise
+            if "BUSYGROUP" not in str(exc):
+                raise
+        await self._prune_stopped(client, stream, group)
 
     async def consume(
         self,
@@ -167,6 +207,7 @@ class RedisStreamsBroker:
             start_id=start,
             count=count,
         )
+        await self._prune_stopped(client, stream, group)
         if not response:
             return []
         # redis-py shape: (next_id, claimed_entries[, deleted_ids])
@@ -244,20 +285,11 @@ class RedisStreamsBroker:
         newest: Any = await client.xrevrange(self._key(stream), max="+", min="-", count=1)
         return newest[0][0] if newest else "0-0"
 
-    async def prune_consumers(self, stream: str, group: str, *, idle_ms: int) -> int:
-        client = await self._get_client()
-        try:
-            consumers: Any = await client.xinfo_consumers(self._key(stream), group)
-        except ResponseError as exc:
-            if "no such key" in str(exc) or "NOGROUP" in str(exc):
-                return 0
-            raise
-        removed = 0
-        for consumer in consumers:
-            if int(consumer["pending"]) == 0 and int(consumer["idle"]) > idle_ms:
-                await client.xgroup_delconsumer(self._key(stream), group, consumer["name"])
-                removed += 1
-        return removed
+    async def _prune_stopped(self, client: redis.Redis, stream: str, group: str) -> None:
+        pruned = client.eval(_PRUNE_SCRIPT, 1, self._key(stream), group, self._stopped_after_ms)
+        removed = int(await cast(Awaitable[int], pruned))
+        if removed:
+            logger.info("Removed %d stopped consumers of group %s on %s", removed, group, stream)
 
     async def notify(self, channel: str, fields: Mapping[str, str]) -> None:
         client = await self._get_client()

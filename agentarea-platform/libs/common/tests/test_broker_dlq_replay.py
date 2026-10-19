@@ -38,7 +38,9 @@ def streams() -> tuple[str, str]:
 
 
 async def _dead_letter(broker: RedisStreamsBroker, dlq: str, n: int) -> str:
-    return await broker.submit(dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom"}, retention=timedelta(hours=1))
+    return await broker.submit(
+        dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom"}, retention=timedelta(hours=1)
+    )
 
 
 async def test_replay_moves_every_dead_letter_back_without_the_reason(broker, streams):
@@ -85,7 +87,9 @@ async def test_a_shared_dead_letter_stream_replays_each_letter_to_its_own_partit
     dlq = f"{base}.router.dlq"
     for n, source in enumerate([partitions[1], partitions[0], f"{base}.9"]):
         await broker.submit(
-            dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom", DEAD_LETTER_SOURCE_FIELD: source}, retention=timedelta(hours=1)
+            dlq,
+            {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom", DEAD_LETTER_SOURCE_FIELD: source},
+            retention=timedelta(hours=1),
         )
 
     result = await replay_dead_letters(broker, dlq_stream=dlq, targets=partitions)
@@ -105,6 +109,9 @@ def test_configured_routes_pair_each_group_with_its_dead_letter_stream():
         ),
         ConsumerGroupRoute(
             stream="tasks.events", group="delivery", dlq="tasks.events.delivery.dlq"
+        ),
+        ConsumerGroupRoute(
+            stream="tasks.events", group="platform", dlq="tasks.events.platform.dlq"
         ),
         ConsumerGroupRoute(
             stream="streams.events.0", group="router", dlq="streams.events.router.dlq"

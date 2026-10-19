@@ -94,7 +94,7 @@ async def test_the_journal_and_dispatcher_tables_and_columns_are_gone(session):
         text(
             "SELECT table_name, column_name FROM information_schema.columns "
             "WHERE (table_name = 'stream_subscriptions' AND column_name IN ('cursor_sequence', "
-            "'attempts', 'next_attempt_at', 'last_error', 'leased_until', 'lease_owner')) "
+            "'attempts', 'next_attempt_at', 'leased_until', 'lease_owner')) "
             "OR (table_name = 'streams' AND column_name = 'retention_days')"
         )
     )

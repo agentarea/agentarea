@@ -7,21 +7,32 @@ a webhook with the provider (Telegram's setWebhook) is the Go reconciler's job.
 Shared by the REST routes and the streams toolset.
 """
 
+import base64
+import binascii
 import json
 import logging
-import secrets
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.config.app import get_app_settings
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
+from agentarea_mcp.infrastructure.repository import MCPServerInstanceRepository
+from agentarea_mcp.mcp_events import EventSourceError, check_event_source, parse_arguments
 from agentarea_secrets.catalog_service import (
     ManagedSecretError,
     SecretAccessDeniedError,
     SecretCatalogService,
     SecretNotFoundError,
 )
-from agentarea_streams.application.source_credentials import credential_secret_name
+from agentarea_streams.application.external_subscriptions import release_subscriber_secrets
+from agentarea_streams.application.source_credentials import (
+    credential_secret_name,
+    issue_credential,
+)
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain.source_types import SourceTypeEntry
 from agentarea_streams.domain.verification import VerificationError, configured
@@ -53,6 +64,16 @@ async def source_type_entry(service: StreamService, slug: str) -> SourceTypeEntr
     return entry
 
 
+def _is_whsec(value: str) -> bool:
+    if not value.startswith("whsec_"):
+        return False
+    try:
+        decoded = base64.b64decode(value.removeprefix("whsec_"), validate=True)
+    except (binascii.Error, ValueError):
+        return False
+    return 24 <= len(decoded) <= 64
+
+
 def check_source(entry: SourceTypeEntry, payload: SourceCreate) -> None:
     """Refuse what the entry cannot take, before anything is written."""
     name = entry.name
@@ -77,6 +98,11 @@ def check_source(entry: SourceTypeEntry, payload: SourceCreate) -> None:
                 raise HTTPException(status_code=422, detail=f"{field.key} is empty")
             if field.required and value is None:
                 raise HTTPException(status_code=422, detail=f"{name} needs {field.key}")
+            if field.format == "whsec" and isinstance(value, str) and not _is_whsec(value):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{field.key} must be whsec_ and the base64 of 24 to 64 bytes",
+                )
     if entry.verification is not None:
         try:
             configured(entry.verification, payload.config)
@@ -84,6 +110,57 @@ def check_source(entry: SourceTypeEntry, payload: SourceCreate) -> None:
             raise HTTPException(
                 status_code=422, detail=f"{name} cannot verify with these settings: {error}"
             ) from error
+
+
+def _speaks_mcp_events(entry: SourceTypeEntry) -> bool:
+    return (entry.poll is not None and entry.poll.transport == "mcp_events") or (
+        entry.registration is not None and entry.registration.transport == "mcp_events"
+    )
+
+
+async def mcp_events_config(
+    payload: SourceCreate,
+    *,
+    load_instance: Callable[[UUID], Awaitable[MCPServerInstance | None]],
+    authorize: Callable[[UUID], Awaitable[None]],
+) -> dict[str, str]:
+    """The config of an MCP Events source: an instance of this workspace the member may use
+    that offers the event in the source's mode, with arguments its input schema takes.
+
+    The Go event-service polls and subscribes through the mcp-manager gateway, which
+    sends the instance's own headers and secret headers; an instance that authenticates
+    through an auth config or is platform-managed is refused here rather than called
+    without its credentials.
+    """
+    config = dict(payload.config)
+    try:
+        instance_id = UUID(config["mcp_instance_id"])
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="mcp_instance_id is not an id") from error
+    instance = await load_instance(instance_id)
+    if instance is None:
+        raise HTTPException(status_code=422, detail=f"MCP server {instance_id} not found")
+    await authorize(instance_id)
+    if instance.auth_config_id is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="This MCP server signs in through an auth config; MCP Events sources take "
+            "servers that authenticate with their own headers",
+        )
+    if instance.managed_by == MANAGED_BY_PLATFORM:
+        raise HTTPException(
+            status_code=422, detail="A platform-managed MCP server cannot be an event source"
+        )
+    try:
+        arguments = parse_arguments(config.get("arguments"))
+        check_event_source(
+            instance.events, event=config["event"], arguments=arguments, mode=payload.kind.value
+        )
+    except EventSourceError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    config["mcp_instance_id"] = str(instance_id)
+    config["arguments"] = json.dumps(arguments, sort_keys=True, separators=(",", ":"))
+    return config
 
 
 async def _usable_secret(
@@ -123,6 +200,17 @@ async def create_source(
     """
     entry = await source_type_entry(service, payload.source_type)
     check_source(entry, payload)
+    config = dict(payload.config)
+    if _speaks_mcp_events(entry):
+        instances = service.repository_factory.create_repository(MCPServerInstanceRepository)
+        user_id = service.repository_factory.user_context.user_id
+
+        async def authorize(instance_id: UUID) -> None:
+            await require_permission("use", "mcp_instance", str(instance_id), user_id)
+
+        config = await mcp_events_config(
+            payload, load_instance=instances.get_by_id, authorize=authorize
+        )
 
     stored: dict[str, Any] = {}
     references: list[tuple[UUID, str]] = []
@@ -135,7 +223,7 @@ async def create_source(
         else:
             stored[key] = value
     issued = {
-        field.key: secrets.token_urlsafe(32)
+        field.key: issue_credential(field)
         for field in entry.credentials
         if field.issued and field.key not in stored
     }
@@ -145,7 +233,7 @@ async def create_source(
         stream_id=stream_id,
         kind=payload.kind,
         source_type=entry.slug,
-        webhook_config=dict(payload.config),
+        webhook_config=config,
         event_templates=(
             payload.event_templates.model_dump(exclude_none=True)
             if payload.event_templates
@@ -186,9 +274,11 @@ async def delete_stream_with_sources(
     """Delete a stream and release what its sources hold.
 
     Refused before anything is released while a trigger subscribes to it or a
-    forward writes into it (``StreamInUseError``).
+    forward writes into it (``StreamInUseError``). Its MCP Events subscribers go
+    with it, and their secrets.
     """
     await service.ensure_deletable(stream_id)
     for source in await service.list_sources(stream_id):
         await release_source(source, secret_manager=secret_manager, secret_catalog=secret_catalog)
+    await release_subscriber_secrets(service, secret_manager, stream_id)
     await service.delete_stream(stream_id)

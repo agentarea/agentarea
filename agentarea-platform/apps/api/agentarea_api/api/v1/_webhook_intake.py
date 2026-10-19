@@ -17,6 +17,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import Settings
 from agentarea_common.outbound import Destination, outbound_client
+from agentarea_streams.application.poll_intake import GAP_KIND
 from agentarea_streams.application.source_credentials import (
     CredentialsUnavailableError,
     SecretReader,
@@ -25,6 +26,7 @@ from agentarea_streams.application.source_credentials import (
 )
 from agentarea_streams.application.source_intake import EventFiles, SourceIntake
 from agentarea_streams.domain import StreamError, StreamNotFoundError, StreamQuotaExceededError
+from agentarea_streams.domain.signals import source_signal
 from agentarea_streams.domain.source_types import SourceTypeEntry
 from agentarea_streams.domain.templates import TemplateContext, render, render_value
 from agentarea_streams.domain.verification import (
@@ -34,6 +36,7 @@ from agentarea_streams.domain.verification import (
 )
 from agentarea_streams.infrastructure.bus import StreamBus
 from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
+from agentarea_streams.infrastructure.orm import StreamSourceORM
 from agentarea_streams.infrastructure.repository import find_webhook_source
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,6 +82,15 @@ def handshake_answer(entry: SourceTypeEntry, headers: dict[str, str], body: Any)
         if render(handshake.when, context) == handshake.equals:
             return render_value(handshake.respond, context)
     return None
+
+
+async def end_registration(session: AsyncSession, source: StreamSourceORM, reason: str) -> None:
+    """The provider ended the source's subscription: record why; the reconciler subscribes again."""
+    source.registered_url = None
+    source.subscription_id = None
+    source.refresh_before = None
+    source.poll_error = reason
+    await session.flush()
 
 
 class WebhookSourceIntake:
@@ -149,11 +161,27 @@ class WebhookSourceIntake:
                 answer = handshake_answer(entry, headers, body)
                 if answer is not None:
                     return _answer(200, answer)
+                try:
+                    signal = source_signal(entry, headers, body)
+                except ValueError as error:
+                    logger.warning("Webhook %s refused: %s", webhook_id, error)
+                    return _error(400, str(error))
+                if signal is not None and signal.signal == "ended":
+                    await end_registration(session, source, signal.reason)
+                    logger.warning("Webhook %s: %s", webhook_id, signal.reason)
+                    return _answer(200, {"status": "ended"})
 
                 stream_id = source.stream_id
                 try:
                     receipt = await self._intake.ingest(
-                        session, source, entry, body=body, headers=headers, received_at=received_at
+                        session,
+                        source,
+                        entry,
+                        body=body,
+                        headers=headers,
+                        received_at=received_at,
+                        kind_override=GAP_KIND if signal is not None else None,
+                        key_override=signal.key if signal is not None else None,
                     )
                 except StreamQuotaExceededError as error:
                     await session.rollback()

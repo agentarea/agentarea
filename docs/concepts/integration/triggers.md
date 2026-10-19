@@ -5,155 +5,186 @@ description: "How an agent starts without a person asking, and how its output re
 prerequisites:
   - /concepts/execution/tasks
 related:
+  - /concepts/integration/event-streams
   - /concepts/execution/events
   - /concepts/execution/durable-execution
-  - /concepts/integration/mcp
-  - /concepts/integration/event-streams
   - /concepts/governance/budgets-and-quotas
-last_updated: 2026-10-06
+last_updated: 2026-10-19
 ---
 
 Everything else in AgentArea assumes a person made a request. A trigger is what
-starts a task when nobody did: a schedule fires, or an external system posts to a
-URL. A channel is the other half — where the answer goes, which is usually back
-to whatever produced the input.
+starts a task when nobody did: a schedule comes due, or an event arrives in a
+stream. A channel is the other half: where the answer goes, which is usually
+back to whatever produced the input.
 
-The two are separate systems that meet at the task. A trigger creates a task; a
-channel delivers that task's events somewhere. Neither knows about the other
-except through the task.
+The two meet at the task. A trigger creates a task and stamps it with a
+delivery address. The delivery group sends the task's events to that address.
+Neither knows about the other except through the task.
 
 ## The problem
 
 An agent that only runs when someone clicks is a tool. An agent that runs on a
-schedule, or when a pull request opens, is infrastructure — and infrastructure
-that can act on its own needs answers to questions a manual run never raises.
+schedule, or when a pull request opens, is infrastructure, and infrastructure
+that acts on its own needs answers to questions a manual run never raises.
 
 What stops a broken trigger from running forever? A cron expression that fires
-every minute against an agent whose model is misconfigured will spend money and
-fill the task table until someone notices.
+every minute against an agent whose model is misconfigured spends money and
+fills the task table until someone notices.
 
 What happens to the schedule when the process restarts? Scheduling inside the
 API process means a deploy silently drops every timer.
 
 Where does the answer go? A task started from a Telegram message that finishes
-by writing to the dashboard has failed at its actual job.
+by writing to the dashboard has failed at its actual job. And who is allowed to
+start it? A bot anyone can message is a door to the agent.
 
-And how does the platform decide whether an event deserves a run at all? Most
-webhook payloads are noise. Filtering them in the agent means paying for a model
-call to conclude "nothing to do".
+How does the platform decide whether an event deserves a run at all? Most
+webhook payloads are noise. Filtering them in the agent means paying for a run
+to conclude "nothing to do".
 
 ## How AgentArea approaches it
 
 **A trigger is a stored record, not a running thing.** `Trigger` carries the
 agent it starts, the `task_parameters` used to build the task, a `conditions`
-block, and its own safety counters. Two concrete types subclass it:
+block, and its own safety counters. There are two types:
 
 | Type | Key fields | Fires when |
 |---|---|---|
-| `cron` | `cron_expression`, `timezone`, optional `data_extractor` | The schedule matches |
-| `webhook` | `webhook_id`, `allowed_methods`, `webhook_type`, `validation_rules` | A request arrives at that webhook's URL |
-| `stream` | `stream_id`, `event_filter` | An event in that stream matches the filter |
+| `cron` | `cron_expression`, `timezone` | The schedule comes due |
+| `stream` | `stream_id`, `event_filter`, `session`, `batch` | An event in that stream matches the filter |
 
-**A webhook trigger's intake belongs to its stream, not the trigger itself.**
-Creating a `webhook` trigger auto-creates an [event
-stream](/concepts/integration/event-streams), a webhook source on it carrying
-the same `webhook_id`, `allowed_methods`, `webhook_type` and
-`validation_rules`, and a subscription that fires the trigger for events
-matching `event_types`. The trigger API stays the surface you edit —
-`TriggerService` mirrors every change onto the source in the same request —
-but a request that arrives at the webhook URL is recorded in the stream and
-answered first; the trigger fires moments later, when the dispatcher next
-reaches that event, not inline with the HTTP response. A `stream` trigger
-skips the auto-created stream and `event_types` entirely: it names an
-existing `stream_id` and `event_filter` directly, so it can react to events
-a different trigger's webhook — or a forward — already put there.
+A webhook is not a trigger type. A provider's webhooks arrive at a source of an
+[event stream](/concepts/integration/event-streams), and a `stream` trigger
+subscribes to that stream. One stream can feed any number of triggers, and a
+trigger can sit on a stream that a forward, a processor or the platform writes.
 
 **Cron triggers are Temporal schedules, not in-process timers.** Creating one
-calls `create_schedule` with id `cron-trigger-<trigger_id>` and a
-`ScheduleSpec(cron_expressions=[…], time_zone_name=…)`. The schedule lives in
-Temporal, so it survives a restart of every AgentArea process, and it is visible
-and pauseable through Temporal like any other schedule.
+creates a Temporal schedule with id `cron-trigger-<trigger_id>` from the cron
+expression and time zone. The schedule lives in Temporal, so it survives a
+restart of every AgentArea process, and it is visible and pauseable through
+Temporal like any other schedule.
 
-**Webhook triggers get an unguessable id.** When `webhook_id` is omitted at
-creation the platform generates one with `secrets.token_urlsafe(16)`. The URL is
-the credential for a `generic` webhook, which is why it is not derived from the
-trigger name.
+**A stream trigger fires once per event, after intake has answered.** The
+trigger's subscription reads the stream from the moment it was created. For
+each event its `event_filter` admits, the trigger checks, in order:
 
-**Webhook types are open, not enumerated.** `WebhookType` names the ones the
-platform knows — `telegram`, `slack`, `github`, `discord`, `linear`, `stripe`,
-`gmail`, `teams`, `generic` — but its `_missing_` accepts any string, so a
-deployment can configure a type the enum never heard of instead of being
-rejected.
+1. it is active, or the reaction is `skipped` with "trigger is inactive";
+2. the event is not deeper than `AGENTAREA_EVENT_FORWARD_DEPTH`, and does not
+   come from a task this trigger started;
+3. the sender is admitted, when the source's catalog entry asks for admission;
+4. whoever configured the trigger may still run its agent;
+5. its conditions are met.
+
+The task id is derived from the subscription and the event, so a redelivered
+event never starts a second task. The reaction (`reacted` with the task,
+`skipped` with a reason, or `error`) is recorded once per event and shown on the
+event in the events feed.
+
+**Sessions keep a conversation in one task.** An event carries a `session_key`
+when its catalog entry names one, such as a chat or a thread. With
+`session: {"continue": true, "idle_timeout": "30m"}`, the next event of the same
+session joins the running task instead of starting a new one. Without
+`session`, the trigger continues sessions when the source type has them, and
+the idle timeout is 30 minutes.
+
+**A batch window fires once for many events.** A stream trigger with
+`batch: {"window": "1h", "max_events": 50}` does not fire per event. Each event
+that passes the checks above, conditions included, joins the trigger's open
+batch, and its reaction is recorded as `batched`. The batch is a Temporal
+workflow. It opens with its first event and fires when the window has passed
+or `max_events` have joined, whichever comes first. Either may be left out, and
+no batch holds more than `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS` (100 by default).
+The task the batch starts is told every event under `events`, each `batched`
+reaction is settled with that task, and the task replies to the newest event's
+address. Events a messenger admitted carry their sender's authority, so each
+admitted sender gets a batch of their own. Switching the trigger off or
+deleting it skips the events held in its open batch.
+
+<Note>
+Batch windows are being finished. This section describes the code as it is
+today and can change before release.
+</Note>
+
+**Conditions are evaluated before a task is created,** and by default by a
+model. A condition with no `type` is an `llm` condition: it names the chat or
+decision model instance that judges it in `model_id`, and the model's verdict
+and reason are recorded on the reaction. `rule` and `combined` conditions are
+the deterministic path. The point is filtering noise without writing a parser
+per provider. The cost is a model call per candidate event, which the
+[Limits](#limits) section revisits.
+
+**A messenger admits senders, not anyone who writes.** A catalog entry with an
+`admission` block, today Telegram's, lets an event through only from a sender
+linked to a platform user. A person links their Telegram account from inside
+Telegram with a code they asked for while signed in, then `/confirm`. A linked
+sender is admitted only when the authorization graph lets them run the agent,
+and the task runs as that person, not as whoever configured the trigger.
+Everyone else is refused and the reaction is `skipped`: an unlinked sender is
+told at most once a day how to link, a linked sender without access is told
+they have none, and group chats and other bots are ignored.
+
+**A trigger stops when its configurer loses access.** Before firing, the
+trigger checks that the person who configured it is still a member of the
+workspace and may run its agent. If not, the trigger is stopped and marked
+`needs_owner`, and the reaction is an `error` naming why. Enabling it again
+clears the mark; the next event checks again.
 
 **A trigger disables itself before it does damage.** Every trigger has a
-`failure_threshold` (default 5, bounded 1–100) and a `consecutive_failures`
-counter. A success resets it; crossing the threshold takes the trigger out of
-service. This is the answer to "what stops a broken trigger" — nothing external
-has to notice.
+`failure_threshold` (default 5, bounded 1 to 100) and a `consecutive_failures`
+counter. A success resets the counter; crossing the threshold takes the trigger
+out of service. A firing turned away by its conditions neither counts nor
+resets. Nothing external has to notice a broken trigger.
 
-**Conditions are evaluated before a task is created,** and by default they are
-evaluated by a model. A condition's `type` defaults to `llm`, which sends the
-payload and the condition text to a model instance through litellm and acts on
-the verdict. The point is filtering noise without writing a parser per provider;
-the cost is a model call per candidate event, which the [Limits](#limits)
-section revisits.
-
-**The agent is told what started it.** A task's first message is the ask —
-the trigger's task text when it has one, which says what to do; only a trigger
+**The agent is told what started it.** A task's first message is the ask: the
+trigger's task text when it has one, which says what to do. Only a trigger
 without one, such as a chat channel, takes the incoming message's text as the
-ask — followed by one block, the same for every source: the trigger's name and type, the stream,
-the event's kind, key, received time (UTC) and stream sequence, then the
-event's data as JSON. The data is what the stream recorded, with credential
-headers and query parameters already removed. Data over 16 KiB is never cut:
-the block names a task input file, `inputs/attachments/trigger-event-<sequence>.json`,
-which the run writes into the task's own workspace before the agent starts,
-never into the workspace's shared files. A schedule tick carries no event, so
-its message is the task text alone. All of this is the run's first user
-message, kept in view through compaction; the system prompt stays the agent's
-own. A follow-up delivered into a running chat sends only the person's message.
-
-**Every attempt is recorded, whether or not it produced a task.**
-`TriggerExecution` stores `status` (`success`, `failed`, `timeout`,
-`cancelled`), the `task_id` if one was created, `execution_time_ms`, the error,
-and the Temporal `workflow_id` and `run_id`. A trigger that silently stopped
-producing tasks is diagnosable from its own history.
+ask. One block follows, the same for every source: the trigger's name and type,
+the stream, the event's kind, key and received time (UTC), then the event's
+data as JSON under a notice that it is data from an outside sender, not
+instructions. Credential headers are already removed. Data over 16 KB is never
+cut: the block names a task input file, `inputs/attachments/trigger-event.json`,
+which the run writes into the task's own workspace before the agent starts. A
+schedule tick carries no event, so its message is the task text alone.
 
 ### Channels carry the output back
 
-A channel is an outbound adapter with two jobs: format a workflow event for its
-destination, and send it there. Adapters register into a process-local registry
-by name:
+**A task an event started replies through its delivery address.** When a
+trigger fires on an event, it builds the address from the source that brought
+the event and the `reply` block of that source's catalog entry: which reply
+sender, which target (a chat id, a thread, a mail address read out of the
+event), which credentials, and how much of the run to show. A copy of an event
+made by a forward or a processor has no address; only the original's task
+answers the sender. An event whose entry has no `reply` block, or that names no
+target, starts a task that does not reply.
 
-| Channel | Outbound delivery | Registers its own inbound webhook |
+| Reply sender | Used by | Shows |
 |---|---|---|
-| `telegram` | Yes — streaming sender when Redis is configured, otherwise plain HTTP | Yes |
-| `slack` | Yes | No |
-| `discord` | Yes | No |
-| `email` | Yes | No |
-| `a2a_webhook` | Yes — client-supplied webhooks, delivered as A2A events | No |
+| `http` | Slack, Discord, from the entry's `reply.request` | `concise`: result, questions to the user, status |
+| `telegram_live` | Telegram: one message edited in place as the run goes | `concise` |
+| `smtp` | email and IMAP sources | `summary`: result and questions, at the end |
+| `task_webhook` | the webhook a caller gave when starting a task | |
+| `a2a_webhook` | A2A push notification configs | |
 
-The split in that last column is deliberate. Only a provider that *pushes*
-updates to a URL you registered needs a registrar; a channel that polls or holds
-a gateway connection has none, and the orchestrating service treats the absence
-as a no-op rather than an error.
-
-**Delivery is a stream job, not an inline call.** The workflow emits to an
-outbound stream; a consumer reads it through a Redis Streams consumer group,
-deduplicates, calls the adapter, then acknowledges, requeues, or dead-letters.
-A separate autoclaimer re-delivers messages left pending by a consumer that
-died. A slow Telegram API therefore cannot block the agent loop, and a crashed
-sender loses nothing.
+**Delivery is a consumer group, not an inline call.** A run publishes its
+events once to `tasks.events` and does not know who reads them. The `delivery`
+group reads every task event, looks up where its task replies (the delivery
+address, the caller's task webhook, A2A push configs) and sends each one that
+shows the event. Each target is retried on its own and marked delivered only
+after its send succeeds. A target that fails for good goes to
+`tasks.events.delivery.dlq` naming that target, so a replay sends there only. A
+slow messenger API therefore cannot block the agent loop, and a crashed sender
+loses nothing. See [The event bus](/concepts/integration/event-bus).
 
 ## Why not cron inside the API process
 
 It is one dependency fewer and a few lines of code.
 
-It fails the moment you run more than one API replica — every replica fires the
-same schedule — and it fails again on every deploy, because in-process timers die
-with the process that holds them and nothing records that they were due.
-Temporal is already a required dependency for running tasks at all, and it
-already solves exactly this: durable schedules with a visible history. Adding a
-second, weaker scheduler next to it would be a choice to maintain two.
+It fails the moment you run more than one API replica, because every replica
+fires the same schedule. It fails again on every deploy, because in-process
+timers die with the process that holds them and nothing records that they were
+due. Temporal is already required to run tasks at all, and it already solves
+this: durable schedules with a visible history. Adding a second, weaker
+scheduler next to it would mean maintaining two.
 
 ## Why conditions default to a model rather than a rule language
 
@@ -162,81 +193,58 @@ you control it is the better tool.
 
 The case triggers actually face is the opposite: a webhook body whose shape is
 set by a third party and changes without notice, where the interesting question
-is semantic — "is this issue actually a bug report" — rather than structural. A
+is semantic ("is this issue actually a bug report") rather than structural. A
 rule language answers that by growing into a small programming language, and
 every provider needs its own. The trade accepted here is a model call per
-candidate event, made explicit rather than hidden, with the deterministic path
-still available by setting an explicit condition `type`.
+candidate event, made explicit rather than hidden, with `rule` conditions and
+the stream filter still available for the structural cases.
 
 ## Limits
 
-Verified against the code on 2026-10-06. Where this section and the model above
-disagree, this section describes what a deployment actually gets.
+**Condition evaluation costs a model call per candidate event.** With an `llm`
+condition, a high-volume stream pays for one inference per event the filter
+admits, after the webhook's `202` and before any task exists, so the spend does
+not appear against the agent's task budget. Narrow the `event_filter` first.
 
-<Warning>
-**`polling` is a declared type with no implementation.** `TriggerType.POLLING`
-exists in the enum and the API DTO maps the string `"polling"` onto it, but
-there is no polling domain model, no scheduler, and no execution path — unlike
-`cron` and `webhook`, which have both. A trigger created as `polling` is
-accepted and then does nothing. Use a `cron` trigger with a `data_extractor` for
-periodic fetching.
-</Warning>
+**A disabled trigger's stream keeps recording.** Disabling a trigger, by hand or
+by crossing `failure_threshold`, does not touch the stream or its sources:
+deliveries are still recorded and answered. Only the firing is skipped, with
+the reason "trigger is inactive". Re-enabling the trigger does not replay what
+was skipped while it was off.
 
-**Condition evaluation costs a model call per candidate event.** With the
-default `llm` condition type, a high-volume webhook pays for one inference per
-delivery once the dispatcher reaches it — after the webhook's `202`, not
-during it, but still before any task exists — so the spend does not appear
-against the agent's task budget. Size the source, not the agent.
+**A trigger that disables itself stays disabled.** Nothing re-enables it when
+the underlying problem is fixed. Re-enable it explicitly after fixing the cause.
 
-**The adapter registry is per-process.** Adapters register on import and on a
-configuration call, into an in-memory dict. A channel is available to a process
-that registered it; there is no shared registry to query and no error if a
-process is asked for a channel it never registered — `get_adapter` returns
-`None`.
+**Only entries with a `registration` block register their webhook.** Telegram
+and MCP Events sources are registered with the provider by the event service.
+Every other provider has to be pointed at the source's URL by hand, and nothing
+reports that this step was skipped.
 
-**Only Telegram registers its own inbound webhook.** Every other channel that
-needs a provider-side webhook has to be pointed at the platform by hand, and
-nothing in the platform reports that this step was skipped.
+**Sender admission exists for Telegram only.** Other messengers with a `reply`
+block, such as Slack and Discord, admit any sender the provider delivers, and
+the task runs as the trigger's configurer.
 
-**A trigger that disables itself stays disabled.** Crossing `failure_threshold`
-stops the trigger; nothing re-enables it when the underlying problem is fixed.
-Re-enable it explicitly after fixing the cause, or the schedule stays silent.
+**A batch replies to one address.** A batch's task answers the newest event's
+sender only, even when its events came from several chats.
 
-**A disabled webhook trigger's URL keeps answering `202`.** Disabling a
-trigger — by hand, or by crossing `failure_threshold` — does not touch its
-stream's webhook source: deliveries are still recorded and still answered
-normally. Only the firing is skipped; the dispatcher records a `skipped`
-outcome and creates no task. Re-enabling the trigger does not replay what was
-skipped while it was off — only events the dispatcher reaches afterward fire.
-
-**Signature verification is opt-in, for every type — including `github` and
-`stripe`.** `verify_webhook_signature` first resolves a signing secret from the
-trigger's `validation_rules` and `webhook_config`. With no secret it returns
-`None`, meaning "not enabled", and the request proceeds. A `github` webhook
-created without a secret is no more verified than a `generic` one; the
-unguessable `webhook_id` is then the only thing protecting it.
-
-When a secret *is* configured, the verifier is chosen by type — `slack`,
-`github`, `discord` (Ed25519), `linear` and `stripe` have dedicated verifiers,
-`generic` uses a configurable HMAC whose header, algorithm and prefix come from
-`validation_rules`, and Telegram is validated by bot token at a different layer.
-A configured secret that fails to verify rejects the request, as does a
-configured secret with no raw body to check.
+**The channel registry is per process.** Reply senders register into an
+in-memory registry when the worker starts. A process asked for a sender it
+never registered gets nothing back.
 
 ## Related
 
 <Columns cols={2}>
+  <Card title="Event streams" icon="lightbulb" href="/concepts/integration/event-streams">
+    Sources, the event envelope, and the subscriptions a trigger is one of.
+  </Card>
+  <Card title="The event bus" icon="lightbulb" href="/concepts/integration/event-bus">
+    The delivery group and how task events reach a channel.
+  </Card>
   <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
     What a trigger creates, and the states it can reach.
   </Card>
-  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
-    What a channel formats and delivers.
-  </Card>
-  <Card title="Event streams" icon="plug" href="/concepts/integration/event-streams">
-    The journal a webhook trigger's intake records into, and who else can read it.
-  </Card>
   <Card title="Durable execution" icon="diagram-project" href="/concepts/execution/durable-execution">
-    The Temporal machinery cron triggers reuse.
+    The Temporal machinery cron triggers and batches reuse.
   </Card>
   <Card title="Budgets and quotas" icon="scale-balanced" href="/concepts/governance/budgets-and-quotas">
     Why unattended runs need a ceiling.

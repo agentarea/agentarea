@@ -26,6 +26,10 @@ type Config struct {
 	// SecretKey is the Fernet key the database secret backend encrypts with.
 	SecretKey string
 	Egress    Egress
+	// MCPManagerURL and MCPGatewaySecret reach a member's MCP server through
+	// the mcp-manager gateway, which holds its credentials (MCP Events).
+	MCPManagerURL    string
+	MCPGatewaySecret string
 }
 
 // Egress is the outbound policy for hosts a member names (a feed URL, a
@@ -42,6 +46,8 @@ const (
 	secretKeyEnv         = "AGENTAREA_SECRET_ENCRYPTION_KEY"
 	allowPrivateEnv      = "AGENTAREA_HTTP_ALLOW_PRIVATE"
 	privateAllowlistEnv  = "AGENTAREA_HTTP_PRIVATE_ALLOWLIST"
+	mcpManagerURLEnv     = "AGENTAREA_MCP_MANAGER_URL"
+	mcpGatewaySecretEnv  = "AGENTAREA_MCP_GATEWAY_SECRET" // pragma: allowlist secret
 	supportedSecretStore = "database"
 )
 
@@ -102,6 +108,15 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("%s is required: source credentials are encrypted with it", secretKeyEnv)
 	}
 
+	mcpManagerURL := strings.TrimRight(os.Getenv(mcpManagerURLEnv), "/")
+	if mcpManagerURL == "" {
+		return nil, fmt.Errorf("%s is required: MCP Events sources are polled and subscribed through the mcp-manager gateway", mcpManagerURLEnv)
+	}
+	mcpGatewaySecret := os.Getenv(mcpGatewaySecretEnv)
+	if len(mcpGatewaySecret) < 32 {
+		return nil, fmt.Errorf("%s is required and must contain at least 32 bytes: it authorizes calls to the mcp-manager gateway", mcpGatewaySecretEnv)
+	}
+
 	egress := Egress{}
 	if v := os.Getenv(allowPrivateEnv); v != "" {
 		parsed, err := strconv.ParseBool(v)
@@ -128,6 +143,9 @@ func Load() (*Config, error) {
 		APIURL:       apiURL,
 		SecretKey:    secretKey,
 		Egress:       egress,
+
+		MCPManagerURL:    mcpManagerURL,
+		MCPGatewaySecret: mcpGatewaySecret,
 	}, nil
 }
 

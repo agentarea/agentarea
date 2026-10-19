@@ -94,6 +94,17 @@ def _event(data=None, kind="github.push"):
     return IntegrationEvent(type=kind, source="webhook:test", data=data or {"n": 1})
 
 
+class _Notices:
+    def __init__(self):
+        self.recorded_ids: list = []
+
+    async def recorded(self, event):
+        self.recorded_ids.append(event.id)
+
+    async def processing(self, event):
+        raise AssertionError("the events view announces arrivals only")
+
+
 class _Quota:
     """The sliding-minute quota as Redis keeps it, without the clock: a count per workspace."""
 
@@ -182,7 +193,8 @@ async def test_the_view_writes_a_redelivered_event_once_even_across_days(maker, 
     async with maker() as session:
         stream = await _stream(session, ctx)
     event = _stream_event(stream.id, ctx, "k")
-    view = EventsView(maker)
+    notices = _Notices()
+    view = EventsView(maker, notices)
     await view.handle(event.to_bus())
     await view.handle(event.to_bus())
     yesterday = event.model_copy(update={"received_at": datetime.now(UTC) - timedelta(days=1)})
@@ -191,6 +203,7 @@ async def test_the_view_writes_a_redelivered_event_once_even_across_days(maker, 
         events = await StreamEventRepository(session, ctx).read_after(stream.id, 0, 10)
     assert [e.id for e in events] == [event.id]
     assert events[0].event_key == "k"
+    assert events[0].id in notices.recorded_ids
 
 
 async def test_an_event_for_a_deleted_stream_is_dropped_not_retried(maker, ctx):
@@ -198,7 +211,7 @@ async def test_an_event_for_a_deleted_stream_is_dropped_not_retried(maker, ctx):
         stream = await _stream(session, ctx)
         await session.execute(text("DELETE FROM streams WHERE id = :s"), {"s": stream.id})
         await session.commit()
-    await EventsView(maker).handle(_stream_event(stream.id, ctx, "late").to_bus())
+    await EventsView(maker, _Notices()).handle(_stream_event(stream.id, ctx, "late").to_bus())
 
 
 async def test_reads_page_by_position_and_by_time(maker, ctx):

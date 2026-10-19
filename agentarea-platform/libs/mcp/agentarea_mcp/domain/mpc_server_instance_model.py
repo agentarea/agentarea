@@ -56,6 +56,12 @@ class MCPServerInstance(BaseModel, WorkspaceScopedMixin):
     )
     last_dispatch: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     tools: Mapped[list | None] = mapped_column(JSON, nullable=True, default=None)
+    #: What the server offers as MCP Events, from verification: the extension's
+    #: settings and its events/list (``agentarea_mcp.mcp_events.events_record``).
+    #: NULL when it does not advertise the extension.
+    events: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql"), nullable=True, default=None
+    )
     network_scope: Mapped[str] = mapped_column(String(20), nullable=False, default="private")
     auth_config_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),

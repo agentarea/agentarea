@@ -9,7 +9,11 @@ import {
   Paperclip,
   SlidersHorizontal,
 } from "lucide-react";
-import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
+import type {
+  AgentResponse,
+  TriggerBatchWindow,
+  TriggerResponse,
+} from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
@@ -35,6 +39,7 @@ import {
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
+import { BatchSetting } from "../components/BatchSetting";
 import { SessionSetting, type TriggerSession } from "../components/SessionSetting";
 import { renderTriggerIcon } from "../components/triggerDisplay";
 import {
@@ -62,6 +67,7 @@ const INLINE_ERROR_FIELDS = new Set([
   "description",
   "agent_id",
   "stream_id",
+  "batch",
 ]);
 /** What a trigger can be: a schedule, or a subscription to a stream. */
 const TRIGGER_TYPES = ["cron", "stream"] as const;
@@ -94,6 +100,9 @@ export function CreateTriggerForm({
   // Null until someone changes it: then it follows the chosen stream's default.
   const [session, setSession] = useState<TriggerSession | null>(
     initialData?.session ?? null
+  );
+  const [batch, setBatch] = useState<TriggerBatchWindow | null>(
+    initialData?.batch ?? null
   );
   const [runSettingsOpen, setRunSettingsOpen] = useState(false);
 
@@ -459,6 +468,19 @@ export function CreateTriggerForm({
                   value={effectiveSession}
                   onChange={setSession}
                 />
+              )}
+              {triggerType === "stream" && (
+                <BatchSetting
+                  id="batch"
+                  name="batch"
+                  value={batch}
+                  onChange={setBatch}
+                />
+              )}
+              {state.errors?.batch && (
+                <p className="text-sm text-destructive">
+                  {state.errors.batch[0]}
+                </p>
               )}
               {triggerType === "cron" && (
                 <>

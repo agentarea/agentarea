@@ -14,24 +14,33 @@ from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from agentarea_streams.domain import HandlerResult, StreamEvent, SubscriptionView, Verdict
+from agentarea_streams.domain import (
+    HandlerResult,
+    ReactionTally,
+    StreamEvent,
+    SubscriptionView,
+    Verdict,
+)
 from agentarea_streams.domain.enums import GAVE_UP_REASON
-from sqlalchemy import ColumnElement, and_, delete, func, select
+from sqlalchemy import ColumnElement, and_, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import ExecutionStatus
 from .orm import TriggerExecutionORM
+from .reaction_feed_repository import ReactionFeedRepository
 from .repository import TriggerExecutionRepository
 
 _STATUS = {
     Verdict.REACTED: ExecutionStatus.SUCCESS,
     Verdict.SKIPPED: ExecutionStatus.SKIPPED,
     Verdict.ERROR: ExecutionStatus.FAILED,
+    Verdict.BATCHED: ExecutionStatus.BATCHED,
 }
 _VERDICT = {
     ExecutionStatus.SUCCESS.value: Verdict.REACTED,
     ExecutionStatus.SKIPPED.value: Verdict.SKIPPED,
+    ExecutionStatus.BATCHED.value: Verdict.BATCHED,
 }
 _UNIQUE = "uq_trigger_executions_subscription_event"
 
@@ -147,7 +156,11 @@ class ReactionRepository(WorkspaceScopedRepository[TriggerExecutionORM]):
         return stored, wrote
 
     async def record(self, cause: StreamCause, result: HandlerResult, *, now: datetime) -> None:
-        """Insert the reaction, or give the row a firing wrote its verdict, reason and score."""
+        """Insert the reaction, or give the row a firing wrote its verdict, reason and score.
+
+        A ``batched`` result never overwrites a settled row: the batch may fire
+        before the router records that the event joined it.
+        """
         values = {
             "status": _STATUS[result.verdict].value,
             "verdict": result.verdict.value,
@@ -156,6 +169,7 @@ class ReactionRepository(WorkspaceScopedRepository[TriggerExecutionORM]):
             "score": result.score,
             "task_id": result.task_id,
             "derived_event_ids": [str(e) for e in result.derived_event_ids],
+            "workflow_id": result.workflow_id,
         }
         statement = pg_insert(TriggerExecutionORM).values(**self._row(cause, values, now))
         excluded = statement.excluded
@@ -168,8 +182,15 @@ class ReactionRepository(WorkspaceScopedRepository[TriggerExecutionORM]):
                     "score": func.coalesce(excluded.score, TriggerExecutionORM.score),
                     "task_id": func.coalesce(TriggerExecutionORM.task_id, excluded.task_id),
                     "derived_event_ids": excluded.derived_event_ids,
+                    "workflow_id": func.coalesce(
+                        excluded.workflow_id, TriggerExecutionORM.workflow_id
+                    ),
                     "updated_at": now,
                 },
+                where=or_(
+                    excluded.verdict != Verdict.BATCHED.value,
+                    TriggerExecutionORM.verdict == Verdict.BATCHED.value,
+                ),
             )
         )
 
@@ -279,6 +300,11 @@ class TriggerExecutionReactionLog:
         await self._reactions(session, subscription.workspace_id, subscription.created_by).record(
             StreamCause.of(subscription, event), result, now=self._clock()
         )
+
+    async def tally(self, session: AsyncSession, event: StreamEvent) -> ReactionTally:
+        return await ReactionFeedRepository(
+            session, UserContext(user_id=event.created_by, workspace_id=event.workspace_id)
+        ).tally(event.id)
 
     async def forget_given_up(
         self, session: AsyncSession, subscription: SubscriptionView, event: StreamEvent

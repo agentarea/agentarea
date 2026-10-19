@@ -342,3 +342,114 @@ async def test_a_broker_failure_answers_503_and_the_retry_is_accepted(setup):
     retried = await _post(intake, setup.webhook_id)
     assert retried["status_code"] == 202
     assert retried["body"]["status"] == "accepted"
+
+
+MCP_SECRET = "whsec_" + __import__("base64").b64encode(b"m" * 32).decode()  # pragma: allowlist secret
+
+
+async def _mcp_source(setup):
+    ws, stream_id, source_id = str(uuid4()), uuid4(), uuid4()
+    webhook_id = f"wh{uuid4().hex}"
+    async with setup.maker() as session:
+        await _add_source(
+            session,
+            ws=ws,
+            stream_id=stream_id,
+            source_id=source_id,
+            webhook_id=webhook_id,
+            slug="mcp_events",
+        )
+        await session.execute(
+            text(
+                "UPDATE stream_sources SET registered_url = 'https://x/webhooks/w', "
+                "subscription_id = 'sub_1', refresh_before = now() WHERE id = :id"
+            ),
+            {"id": source_id},
+        )
+        await session.commit()
+    secrets = _Secrets(
+        {f"channel_cred:mcp_events:{source_id}": json.dumps({"signing_secret": MCP_SECRET})}
+    )
+    intake, broker = setup.build()
+    intake._secret_reader_for = lambda _s, _c: secrets
+    return intake, broker, webhook_id, source_id, stream_id
+
+
+async def _mcp_post(intake, webhook_id, body, msg_id, *, secret=MCP_SECRET, subscription="sub_1"):
+    import base64
+    import time
+
+    raw = json.dumps(body).encode()
+    ts = int(time.time())
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    mac = hmac.new(key, f"{msg_id}.{ts}.".encode() + raw, hashlib.sha256).digest()
+    headers = {
+        "content-type": "application/json",
+        "webhook-id": msg_id,
+        "webhook-timestamp": str(ts),
+        "webhook-signature": "v1," + base64.b64encode(mac).decode(),
+    }
+    if subscription is not None:
+        headers["x-mcp-subscription-id"] = subscription
+    return await intake.handle_webhook_request(webhook_id, "POST", headers, body, raw)
+
+
+async def test_an_mcp_events_challenge_is_echoed_only_when_signed(setup):
+    intake, broker, webhook_id, _, _ = await _mcp_source(setup)
+    challenge = {"type": "verification", "challenge": "n-1"}
+    answered = await _mcp_post(intake, webhook_id, challenge, "msg_verification_1")
+    forged = await _mcp_post(
+        intake, webhook_id, challenge, "msg_verification_2", secret="whsec_" + "A" * 44
+    )
+    assert answered == {"status_code": 200, "body": {"challenge": "n-1"}}
+    assert forged["status_code"] == 401
+    assert broker.published == []
+
+
+async def test_an_mcp_event_lands_once_and_a_forged_or_unrouted_one_is_refused(setup):
+    intake, broker, webhook_id, source_id, _ = await _mcp_source(setup)
+    occurrence = {
+        "eventId": "evt_9",
+        "name": "ticket.created",
+        "timestamp": "2026-10-19T10:00:00Z",
+        "data": {"ticketId": "T-9"},
+        "cursor": "9",
+    }
+    first = await _mcp_post(intake, webhook_id, occurrence, "evt_9")
+    retry = await _mcp_post(intake, webhook_id, occurrence, "evt_9")
+    forged = await _mcp_post(intake, webhook_id, occurrence, "evt_9", secret="whsec_" + "B" * 44)
+    unrouted = await _mcp_post(intake, webhook_id, occurrence, "evt_9", subscription=None)
+    assert first["status_code"] == 202 and first["body"]["status"] == "accepted"
+    assert retry["body"]["status"] == "duplicate"
+    assert forged["status_code"] == 401
+    assert unrouted["status_code"] == 401
+    [(_, event)] = broker.published
+    assert (event.type, event.event_key, event.source_id) == ("ticket.created", "evt_9", source_id)
+
+
+async def test_an_mcp_gap_is_a_source_gap_event_and_a_termination_drops_the_subscription(setup):
+    intake, broker, webhook_id, source_id, _ = await _mcp_source(setup)
+    gap = await _mcp_post(intake, webhook_id, {"type": "gap", "cursor": "c2"}, "msg_gap_1")
+    again = await _mcp_post(intake, webhook_id, {"type": "gap", "cursor": "c2"}, "msg_gap_1")
+    ended = await _mcp_post(
+        intake,
+        webhook_id,
+        {"type": "terminated", "error": {"code": -32024, "message": "Forbidden"}},
+        "msg_terminated_1",
+    )
+    assert gap["status_code"] == 202 and again["body"]["status"] == "duplicate"
+    [(_, event)] = broker.published
+    assert event.type == "source.gap"
+    assert ended["status_code"] == 200
+    async with setup.maker() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT registered_url, subscription_id, refresh_before, poll_error "
+                    "FROM stream_sources WHERE id = :id"
+                ),
+                {"id": source_id},
+            )
+        ).one()
+    assert row[:3] == (None, None, None)
+    assert "Forbidden" in row[3]

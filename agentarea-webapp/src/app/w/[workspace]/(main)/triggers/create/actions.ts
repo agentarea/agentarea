@@ -91,6 +91,18 @@ function parseSession(formData: FormData): TriggerCreate["session"] {
   return { continue: keep === "true", idle_timeout: idleTimeout };
 }
 
+/**
+ * A stream trigger's batch window, as `BatchSetting` posts it: null when it is
+ * off, absent when the form carries none.
+ */
+function parseBatch(formData: FormData): TriggerCreate["batch"] {
+  const raw = formData.get("batch");
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  return raw ? (JSON.parse(raw) as TriggerCreate["batch"]) : null;
+}
+
 function buildTriggerCreate(formData: FormData): TriggerCreate {
   const trigger_type = formData.get("trigger_type") as string;
   const task_parameters_raw = formData.get("task_parameters") as string | null;
@@ -127,6 +139,7 @@ function buildTriggerCreate(formData: FormData): TriggerCreate {
   } else if (trigger_type === "stream") {
     body.stream_id = formData.get("stream_id") as string;
     body.session = parseSession(formData);
+    body.batch = parseBatch(formData);
   }
 
   return body;
@@ -239,6 +252,7 @@ export async function updateTriggerAction(
 
   if (trigger_type === "stream") {
     updateBody.session = parseSession(formData);
+    updateBody.batch = parseBatch(formData);
   }
 
   const validated = zTriggerUpdate.safeParse(updateBody);

@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.25.0",
     "httpx2>=2.5.0",
     "mcp>=2.2.0,<3",
+    "jsonschema>=4.23",
     "pyjwt>=2.15.1",
 ]
 

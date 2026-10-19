@@ -7,10 +7,14 @@ value is read when it is needed and never copied.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import secrets
 from typing import Any, Protocol
 from uuid import UUID
+
+from ..domain.source_types import SourceField
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +29,13 @@ class CredentialsUnavailableError(Exception):
 
 class SecretStoreUnreachableError(CredentialsUnavailableError):
     """The secret store did not answer; the sender should retry."""
+
+
+def issue_credential(field: SourceField) -> str:
+    """A value the platform generates for an ``issued`` field the member left empty."""
+    if field.format == "whsec":
+        return "whsec_" + base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+    return secrets.token_urlsafe(32)
 
 
 def credential_secret_name(slug: str, credential_key: UUID | str) -> str:

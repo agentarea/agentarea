@@ -19,7 +19,6 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from agentarea_common.broker import BrokerClient, BrokerMessage
-from agentarea_common.events.adapters.redis_streams import STOPPED_CONSUMER_IDLE_MS
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +85,6 @@ class StreamAutoclaimer:
             )
         for msg in reclaimed:
             await self._handle(msg)
-        # Each process joins under its own name; the names of stopped ones go once
-        # they hold nothing.
-        await self._broker.prune_consumers(
-            self._stream, self._group, idle_ms=STOPPED_CONSUMER_IDLE_MS
-        )
         return len(reclaimed)
 
     async def _run_loop(self) -> None:

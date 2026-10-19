@@ -58,7 +58,7 @@ export function SessionSetting({
         <Switch
           id={`${id}-continue`}
           size="xs"
-          className="mt-0.5"
+          className="mt-0.5 shrink-0"
           checked={value.continue}
           onCheckedChange={(checked) =>
             onChange({ ...value, continue: checked })

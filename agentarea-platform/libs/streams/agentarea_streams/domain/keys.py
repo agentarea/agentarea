@@ -21,6 +21,11 @@ def derived_event_id(processor_id: UUID, source_event_id: UUID) -> UUID:
     return uuid5(processor_id, str(source_event_id))
 
 
+def processor_output_id(processor_id: UUID, source_event_id: UUID, index: int) -> UUID:
+    """The ``index``-th event a processor's code wrote for one source event."""
+    return uuid5(processor_id, f"{source_event_id}:{index}")
+
+
 def task_id_for(subscription_id: UUID, event_id: UUID) -> UUID:
     return uuid5(_TASK_NAMESPACE, f"{subscription_id}:{event_id}")
 

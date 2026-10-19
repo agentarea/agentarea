@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .domain.enums import SourceKind
 from .domain.filters import EventFilter
@@ -55,6 +55,13 @@ class SourceCreate(BaseModel):
         ),
     )
 
+    @field_validator("kind")
+    @classmethod
+    def _not_platform(cls, kind: SourceKind) -> SourceKind:
+        if kind is SourceKind.PLATFORM:
+            raise ValueError("platform sources are the platform's; add a webhook or poll source")
+        return kind
+
 
 class ForwardCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -65,3 +72,34 @@ class ForwardCreate(BaseModel):
     event_filter: EventFilter = Field(
         default_factory=EventFilter, description="Which events are copied; empty copies all."
     )
+
+
+_PROCESSOR_CODE = (
+    "Python defining def process(event: dict) -> list[dict] | None. Each returned dict is "
+    "{stream, kind, data, key?}: stream is an output stream's id or name, kind the new "
+    "event's kind, data its body. Return None or [] to write nothing. No secrets: the "
+    "code gets none and every reader of the stream sees it."
+)
+
+
+class ProcessorCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    output_stream_ids: list[UUID] = Field(
+        min_length=1, description="Streams the code may write to; never the input."
+    )
+    code: str = Field(min_length=1, description=_PROCESSOR_CODE)
+    event_filter: EventFilter = Field(
+        default_factory=EventFilter,
+        description="Which events the code runs on; empty runs it on every event.",
+    )
+
+
+class ProcessorUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    output_stream_ids: list[UUID] | None = Field(
+        default=None, min_length=1, description="New output streams; null keeps them."
+    )
+    code: str | None = Field(default=None, min_length=1, description=_PROCESSOR_CODE)
+    event_filter: EventFilter | None = Field(default=None, description="New filter; null keeps it.")

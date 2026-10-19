@@ -1,12 +1,6 @@
 """The shipped catalog: every entry is valid, and reads each provider's events as the code used to."""
 
 import json
-from pathlib import Path
-
-from agentarea_streams.domain.source_types import SourceTypeEntry
-
-
-import json
 import re
 from pathlib import Path
 from uuid import uuid4
@@ -66,7 +60,9 @@ def test_event_templates_use_only_event_placeholders(slug):
                 assert sep and kind in _EVENT_KINDS, f"{slug}: {{{expression}}}"
 
 
-@pytest.mark.parametrize("slug", sorted(ENTRIES))
+@pytest.mark.parametrize(
+    "slug", sorted(slug for slug, entry in ENTRIES.items() if entry.delivery != "platform")
+)
 def test_a_source_can_be_made_of_every_entry(slug):
     entry = ENTRIES[slug]
     assert entry.accepts("webhook") or entry.accepts("poll")
@@ -170,3 +166,80 @@ def test_a_generic_webhook_without_a_delivery_id_has_no_key():
     assert _event("generic_webhook", {"x": 1}).key is None
     assert _event("generic_webhook", {}, {"Idempotency-Key": "k"}).key == "k"
     assert _event("generic_webhook", {}).kind == "webhook"
+
+
+def test_mcp_events_is_one_generic_entry_by_standard_webhooks_or_poll():
+    entry = ENTRIES["mcp_events"]
+    assert entry.delivery == "both"
+    scheme = entry.verification
+    assert scheme is not None
+    assert (scheme.scheme, scheme.payload, scheme.secret_format) == (
+        "hmac_timestamped",
+        "{id}.{timestamp}.{body}",
+        "whsec",
+    )
+    assert (scheme.header, scheme.timestamp_header, scheme.id_header) == (
+        "webhook-signature",
+        "webhook-timestamp",
+        "webhook-id",
+    )
+    assert scheme.tolerance_seconds == 300
+    assert [h.lower() for h in scheme.required_headers] == ["x-mcp-subscription-id"]
+    secret = next(f for f in entry.credentials if f.key == scheme.secret)
+    assert secret.issued and secret.format == "whsec"
+    assert {f.key for f in entry.config} == {"mcp_instance_id", "event", "arguments"}
+    assert entry.poll is not None and entry.poll.transport == "mcp_events"
+    assert entry.registration is not None and entry.registration.transport == "mcp_events"
+    fields = _event(
+        "mcp_events",
+        {"eventId": "evt_7", "name": "ticket.created", "timestamp": "2026-10-19T10:00:00Z"},
+    )
+    assert (fields.kind, fields.key) == ("ticket.created", "evt_7")
+    assert fields.occurred_at is not None
+    assert (fields.depth, fields.correlation_id, fields.causation_id) == (None, None, None)
+
+
+def test_mcp_events_reads_the_chain_of_an_event_our_own_server_sends():
+    from datetime import UTC, datetime
+
+    from agentarea_streams.domain import StreamEvent
+    from agentarea_streams.domain.mcp_events import occurrence
+
+    origin = StreamEvent(
+        id=uuid4(),
+        type="order.paid",
+        source="test",
+        data={"body": {}},
+        stream_id=uuid4(),
+        workspace_id="ws",
+        created_by="u",
+        event_key="k",
+        received_at=datetime.now(UTC),
+        depth=2,
+        correlation_id=str(uuid4()),
+    )
+    body = json.loads(json.dumps(occurrence(origin, f"ws/{origin.stream_id}")))
+    fields = _event("mcp_events", body)
+    assert (fields.depth, fields.correlation_id, fields.causation_id) == (
+        "2",
+        origin.correlation_id,
+        str(origin.id),
+    )
+    assert fields.kind == "order.paid"
+    assert body["name"] == f"ws/{origin.stream_id}"
+
+
+def test_mcp_events_names_an_event_by_its_type_when_the_payload_carries_no_kind():
+    body = {
+        "eventId": "evt_8",
+        "name": "ticket.created",
+        "timestamp": "2026-10-19T10:00:00Z",
+        "data": {"ticket": {"id": "T-1"}},
+    }
+    assert _event("mcp_events", body).kind == "ticket.created"
+
+
+def test_no_member_source_can_be_made_of_the_platform_entry():
+    entry = ENTRIES["platform"]
+    assert not entry.accepts("webhook")
+    assert not entry.accepts("poll")

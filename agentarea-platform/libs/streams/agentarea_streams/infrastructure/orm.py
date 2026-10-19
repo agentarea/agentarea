@@ -45,6 +45,15 @@ class StreamORM(BaseModel, WorkspaceScopedMixin):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
+# A workspace has one platform stream.
+Index(
+    "uq_streams_platform",
+    StreamORM.workspace_id,
+    unique=True,
+    postgresql_where=StreamORM.kind == "platform",
+)
+
+
 class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
     """A webhook or poll source of a catalog entry; ``webhook_type`` is the entry's slug."""
 
@@ -63,6 +72,9 @@ class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
                 + "AND credential_key IS NOT NULL)"
             ),
             name="ck_stream_sources_poll",
+        ),
+        CheckConstraint(
+            "kind <> 'platform' OR webhook_id IS NULL", name="ck_stream_sources_platform"
         ),
     )
 
@@ -84,6 +96,9 @@ class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
     polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     poll_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     registered_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: An mcp_events webhook source's remote subscription id and when to refresh it.
+    subscription_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class StreamEventORM(JournalBase, WorkspaceScopedMixin):
@@ -91,6 +106,7 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     __table_args__ = (
         Index("ix_stream_events_stream_sequence", "stream_id", "sequence"),
         Index("ix_stream_events_workspace_received", "workspace_id", "received_at"),
+        Index("ix_stream_events_workspace_sequence", "workspace_id", "sequence"),
         # A partitioned table's unique key carries the partition key; a redelivery
         # carries the received_at it was published with.
         Index("uq_stream_events_event", "event_id", "received_at", unique=True),
@@ -127,6 +143,14 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     # The migration gives it the server default '[]'.
     attachments: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    # Written by the router: when it matched the event's subscriptions and how
+    # many matched, then a tally of the reactions recorded since. The tally is
+    # kept here because a deleted subscription takes its reactions with it.
+    routed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subscribers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reacted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):
@@ -134,6 +158,17 @@ class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):
     __table_args__ = (
         CheckConstraint(
             "kind <> 'trigger' OR trigger_id IS NOT NULL", name="ck_stream_subscriptions_trigger"
+        ),
+        CheckConstraint(
+            "kind <> 'processor' OR code IS NOT NULL", name="ck_stream_subscriptions_processor"
+        ),
+        CheckConstraint(
+            (
+                "kind <> 'external' OR (external_id IS NOT NULL AND subscriber IS NOT NULL "
+                + "AND callback_url IS NOT NULL AND secret_name IS NOT NULL "
+                + "AND expires_at IS NOT NULL)"
+            ),
+            name="ck_stream_subscriptions_external",
         ),
     )
 
@@ -152,3 +187,32 @@ class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):
     filter: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     output_stream_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    # Set by the database when the row is written; created_at is a naive local time.
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # An EXTERNAL subscriber (MCP Events webhook): the key's derived id, who asked
+    # (``user:``/``key:``/``client:``), where to POST, and the secret store entry
+    # holding its ``whsec_`` secret.
+    external_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    subscriber: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    callback_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    secret_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_delivery_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    failed_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: A PROCESSOR's Python, ``def process(event)``; it holds no secrets.
+    code: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+Index(
+    "uq_stream_subscriptions_external",
+    StreamSubscriptionORM.workspace_id,
+    StreamSubscriptionORM.external_id,
+    unique=True,
+    postgresql_where=StreamSubscriptionORM.external_id.is_not(None),
+)

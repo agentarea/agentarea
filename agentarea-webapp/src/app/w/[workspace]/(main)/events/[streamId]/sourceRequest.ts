@@ -14,6 +14,8 @@ export interface SourceFormValues {
   secrets: Record<string, string>;
   settings: Record<string, string>;
   templates: Partial<Record<TemplateField, string>>;
+  /** Raw values of an MCP event's argument fields, by property name. */
+  arguments?: Record<string, string | boolean>;
 }
 
 /** How events of `type` can arrive: pushed to a webhook, fetched by polling, or either. */

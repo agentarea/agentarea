@@ -36,10 +36,13 @@ type Poll struct {
 	IMAP      *IMAP    `json:"imap,omitempty"`
 }
 
-// Registration registers a source's webhook URL with its provider.
+// Registration registers a source's webhook URL with its provider: by two
+// templated requests, or by a transport that is a protocol of its own
+// (mcp_events: events/subscribe, refreshed before it expires).
 type Registration struct {
 	Register   *Request `json:"register,omitempty"`
 	Unregister *Request `json:"unregister,omitempty"`
+	Transport  string   `json:"transport,omitempty"`
 }
 
 // Entry is a source type catalog entry, read from registry_items.spec.

@@ -27,7 +27,7 @@ import FocusOnMount from "./FocusOnMount";
 const PANEL_ID = "event-detail";
 const TITLE_ID = "event-detail-title";
 
-type Translator = Awaited<ReturnType<typeof getTranslations>>;
+export type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 export default async function EventDetail({
   streamId,
@@ -43,16 +43,23 @@ export default async function EventDetail({
   /** Names and draws the provider the event came from. */
   sourceTypes: SourceType[];
 }) {
-  const [t, tFilter, locale, eventResult, triggersResult, subscriptionsResult, streamsResult] =
-    await Promise.all([
-      getTranslations("EventsPage.detail"),
-      getTranslations("EventsPage.filter"),
-      getLocale(),
-      getStreamEvent(streamId, sequence),
-      listTriggers(),
-      listStreamSubscriptions(streamId),
-      listStreams(),
-    ]);
+  const [
+    t,
+    tFilter,
+    locale,
+    eventResult,
+    triggersResult,
+    subscriptionsResult,
+    streamsResult,
+  ] = await Promise.all([
+    getTranslations("EventsPage.detail"),
+    getTranslations("EventsPage.filter"),
+    getLocale(),
+    getStreamEvent(streamId, sequence),
+    listTriggers(),
+    listStreamSubscriptions(streamId),
+    listStreams(),
+  ]);
   // Gone past retention, or never existed: the feed is still there, so only
   // this panel says so.
   const event = optionalApiData(eventResult, "stream event");
@@ -182,7 +189,9 @@ function EventBody({
           {t("subscribers")}
         </h3>
         {triggersError && <SectionLoadError message={triggersError} />}
-        {subscriptionsError && <SectionLoadError message={subscriptionsError} />}
+        {subscriptionsError && (
+          <SectionLoadError message={subscriptionsError} />
+        )}
         {streamsError && <SectionLoadError message={streamsError} />}
         {event.outcomes.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
@@ -212,7 +221,9 @@ function EventBody({
                       </WorkspaceLink>
                     ) : (
                       <span className="truncate font-medium">
-                        {t("forward")}
+                        {o.subscription_kind === "processor"
+                          ? t("processor")
+                          : t("forward")}
                         {targets.length > 0 && (
                           <>
                             {": "}
@@ -265,7 +276,12 @@ function EventBody({
                       <span className="flex items-center gap-1">
                         {t("derived")}:{" "}
                         {o.derived_event_ids.map((eventId, index) => {
-                          const targetId = targets[index];
+                          // A processor's code picks each event's stream, so
+                          // only a forward pairs its events with its targets.
+                          const targetId =
+                            o.subscription_kind === "forward"
+                              ? targets[index]
+                              : undefined;
                           return (
                             <span
                               key={eventId}
@@ -306,35 +322,46 @@ function EventBody({
           </WorkspaceLink>
         </div>
       )}
-      <div>
-        <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-          {t("data")}
-        </h3>
-        {typeof event.data.body_ref === "string" && (
-          <p className="mb-2 text-sm">
-            {event.body_url ? (
-              <a
-                href={event.body_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                {t("bodyStored")}
-              </a>
-            ) : (
-              <span className="text-muted-foreground">{t("bodyStored")}</span>
-            )}
-            <span
-              className="ml-2 break-all font-mono text-xs text-muted-foreground"
+      <EventPayload event={event} t={t} />
+    </div>
+  );
+}
+
+/** The request as the sender made it: a stored body links to its file. */
+export function EventPayload({
+  event,
+  t,
+}: {
+  event: StreamEventResponse;
+  t: Translator;
+}) {
+  return (
+    <div>
+      <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+        {t("data")}
+      </h3>
+      {typeof event.data.body_ref === "string" && (
+        <p className="mb-2 text-sm">
+          {event.body_url ? (
+            <a
+              href={event.body_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
             >
-              {event.data.body_ref}
-            </span>
-          </p>
-        )}
-        <pre className="max-h-96 overflow-auto rounded-md bg-muted/50 p-3 text-xs">
-          {JSON.stringify(event.data, null, 2)}
-        </pre>
-      </div>
+              {t("bodyStored")}
+            </a>
+          ) : (
+            <span className="text-muted-foreground">{t("bodyStored")}</span>
+          )}
+          <span className="ml-2 break-all font-mono text-xs text-muted-foreground">
+            {event.data.body_ref}
+          </span>
+        </p>
+      )}
+      <pre className="max-h-96 overflow-auto rounded-md bg-muted/50 p-3 text-xs">
+        {JSON.stringify(event.data, null, 2)}
+      </pre>
     </div>
   );
 }
@@ -344,7 +371,7 @@ function EventBody({
  * entry it came through, its kind, key, session and sender, and its files.
  * Nothing is parsed out of the provider's body; that stays in the payload.
  */
-function EventEnvelope({
+export function EventEnvelope({
   event,
   sourceType,
   locale,

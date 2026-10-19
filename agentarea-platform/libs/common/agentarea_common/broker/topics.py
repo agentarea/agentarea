@@ -17,12 +17,19 @@ STREAMS_INGEST = "streams.ingest"
 TASK_EVENTS = "tasks.events"
 # Pub/sub, never kept: a task's live-only signals (a call started, reply chunks, progress).
 TASK_LIVE = "tasks.live"
+# Pub/sub, never kept: an event of a workspace arrived or moved on, for its open events pages.
+STREAMS_LIVE = "streams.live"
 DOMAIN_EVENTS = "domain.events"
+# Stream events the router matched to an EXTERNAL (MCP Events webhook) subscriber,
+# one message per (event, subscriber), for Delivery to send.
+EXTERNAL_EVENTS = "streams.external"
 
 ROUTER_GROUP = "router"
 EVENTS_VIEW_GROUP = "events-view"
 STREAM_EVENTS_GROUPS = (ROUTER_GROUP, EVENTS_VIEW_GROUP)
 DELIVERY_GROUP = "delivery"
+# Projects task outcomes into each workspace's platform stream.
+PLATFORM_GROUP = "platform"
 INGEST_GROUP = "ingest"
 
 # How long the broker keeps a topic's entries: enough to ride out a consumer
@@ -49,5 +56,14 @@ def task_live_channel(task_id: str) -> str:
     return f"{TASK_LIVE}.{task_id}"
 
 
+def streams_live_channel(workspace_id: str) -> str:
+    return f"{STREAMS_LIVE}.{workspace_id}"
+
+
 def domain_events_topic(event_type: str) -> str:
     return f"{DOMAIN_EVENTS}.{event_type}"
+
+
+def external_retry_topic(attempt: int) -> str:
+    """Where a webhook delivery waits for its ``attempt``-th retry; one delay per topic."""
+    return f"{EXTERNAL_EVENTS}.retry.{attempt}"

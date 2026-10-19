@@ -66,6 +66,8 @@ export type TriggerOverviewModel = {
   cron: { expression: string | null; timezone: string | null } | null;
   /** A stream trigger's session setting; null leaves it to the source's default. */
   session: TriggerResponse["session"];
+  /** A stream trigger's batch window; null fires on every event. */
+  batch: TriggerResponse["batch"];
   failure: { consecutive: number; threshold: number };
   /** The person who configured it can no longer run its agent; it is stopped. */
   needsOwner: boolean;
@@ -466,6 +468,25 @@ export async function TriggerOverviewView({
                               DEFAULT_SESSION_IDLE_TIMEOUT,
                           })
                         : t("sessionEachEvent")
+                  }
+                />
+              )}
+              {model.isStream && (
+                <FactRow
+                  title={t("batch")}
+                  sub={
+                    !model.batch
+                      ? t("batchOff")
+                      : model.batch.window && model.batch.max_events
+                        ? t("batchWindowOrCount", {
+                            window: model.batch.window,
+                            count: model.batch.max_events,
+                          })
+                        : model.batch.window
+                          ? t("batchWindow", { window: model.batch.window })
+                          : t("batchCount", {
+                              count: model.batch.max_events ?? 0,
+                            })
                   }
                 />
               )}

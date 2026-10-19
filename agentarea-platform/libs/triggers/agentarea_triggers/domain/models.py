@@ -172,11 +172,43 @@ class TriggerSession(BaseModel):
     )
 
 
+class TriggerBatchWindow(BaseModel):
+    """A stream trigger that fires once for the events of a batch (ADR-0040 §4).
+
+    The batch opens with its first event and fires when ``window`` has passed or
+    ``max_events`` have joined, whichever comes first. Either may be left out;
+    a batch never holds more than the deployment's cap.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    window: str | None = Field(
+        default=None,
+        pattern=r"^[1-9][0-9]*[smhd]$",
+        description="How long a batch stays open after its first event, e.g. '1h'.",
+    )
+    max_events: int | None = Field(
+        default=None, ge=2, description="Fire as soon as this many events have joined."
+    )
+
+    @model_validator(mode="after")
+    def _a_window_or_a_count(self) -> "TriggerBatchWindow":
+        if self.window is None and self.max_events is None:
+            raise ValueError("a batch needs a window or max_events")
+        return self
+
+    def window_seconds(self) -> float | None:
+        from agentarea_common.config.duration import parse_duration
+
+        return parse_duration(self.window).total_seconds() if self.window else None
+
+
 class StreamTrigger(Trigger):
     """A trigger on the events of a stream; its subscription holds the stream and filter."""
 
     trigger_type: TriggerType = Field(default=TriggerType.STREAM, frozen=True)
     session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = None
 
 
 class TriggerExecution(BaseModel):
@@ -248,6 +280,7 @@ class TriggerCreate(BaseModel):
     stream_id: UUID | None = None
     event_filter: dict[str, Any] | None = None
     session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = None
 
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
 
@@ -257,6 +290,8 @@ class TriggerCreate(BaseModel):
         if self.trigger_type == TriggerType.CRON:
             if not self.cron_expression:
                 raise ValueError("cron_expression is required for CRON triggers")
+            if self.batch is not None:
+                raise ValueError("only a stream trigger takes a batch")
         elif self.trigger_type == TriggerType.STREAM:
             if not self.stream_id:
                 raise ValueError("stream_id is required for STREAM triggers")
@@ -286,6 +321,7 @@ class TriggerUpdate(BaseModel):
     # Stream-specific fields
     event_filter: dict[str, Any] | None = None
     session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = None
 
 
 @dataclass(frozen=True)

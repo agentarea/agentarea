@@ -107,3 +107,26 @@ async def test_create_stream_refuses_a_stream_the_caller_may_not_read(harness, m
 
     check.assert_awaited_once_with(stream_id, "u")
     harness.create_trigger_from_payload.assert_not_called()
+
+
+async def test_create_stream_takes_a_batch_window_and_reports_it(harness):
+    from agentarea_triggers.domain.models import StreamTrigger, TriggerBatchWindow
+
+    batch = TriggerBatchWindow(window="60s", max_events=3)
+    trigger = StreamTrigger(
+        name="digest", agent_id=uuid4(), created_by="u", workspace_id="w", batch=batch
+    )
+    harness.create_trigger_from_payload.return_value = trigger
+    harness.stream_service.trigger_bindings.return_value = {}
+    created = json.loads(
+        await TriggersToolset().create_stream(
+            name="digest",
+            agent_id=str(uuid4()),
+            stream_id=str(uuid4()),
+            task_parameters={"text": "Summarise"},
+            batch={"window": "60s", "max_events": 3},
+        )
+    )
+    payload = harness.create_trigger_from_payload.await_args.args[0]
+    assert payload.batch == batch
+    assert created["batch"] == {"window": "60s", "max_events": 3}

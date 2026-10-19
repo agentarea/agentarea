@@ -117,11 +117,14 @@ async def _deliver(world, data: dict, *, key: str) -> tuple[_Tasks, StreamEvent,
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
         authority=authority,
+        max_depth=8,
         trigger_service_factory=lambda session, context: TriggerService(
             repository_factory=RepositoryFactory(session, context),
             event_broker=AsyncMock(),
             task_service=tasks,
         ),
+        batches=AsyncMock(),
+        batch_cap=100,
     )
     event = StreamEvent.from_bus(
         StreamEvent(

@@ -129,33 +129,162 @@ func acquireInstanceLock(ctx context.Context, conn *sql.Conn, instanceID string)
 	}
 }
 
+// URLServer is a url-transport instance as the gateway reaches it: the merged
+// endpoint, the plain headers, and the names of the secret headers it resolves.
+type URLServer struct {
+	EndpointURL  string
+	Headers      map[string]string
+	EnvVars      []string
+	AuthConfigID string
+	ManagedBy    string
+}
+
+// Target is what a request for one instance reaches: a container workload, or
+// a URL server with no workload at all. Exactly one of the two is set.
+type Target struct {
+	InstanceID  string
+	WorkspaceID string
+	Container   *models.MCPServerInstance
+	URL         *URLServer
+}
+
 func (r *SQLRepository) LoadInstance(ctx context.Context, instanceID string) (*models.MCPServerInstance, error) {
-	var id, name, transport, workspaceID string
-	var instanceJSON, serverJSON, commandJSON []byte
-	var dockerImage sql.NullString
-	err := r.db.QueryRowContext(ctx, `
-SELECT i.id::text, i.name, i.transport, i.json_spec, COALESCE(s.json_spec, '{}'::jsonb),
-       s.docker_image_url, COALESCE(s.cmd, 'null'::json), i.workspace_id
-FROM mcp_server_instances i
-JOIN mcp_servers s ON s.id::text = i.server_spec_id
-WHERE i.id = $1::uuid
-`, instanceID).Scan(&id, &name, &transport, &instanceJSON, &serverJSON, &dockerImage, &commandJSON, &workspaceID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrInstanceNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("load MCP instance: %w", err)
-	}
-	if transport != "docker" && transport != "command" {
-		return nil, fmt.Errorf("instance %s is not a container-backed MCP server", id)
-	}
-	serverSpec, err := mergeLoadedSpecs(serverJSON, instanceJSON, transport, commandJSON, dockerImage.String)
+	target, err := r.LoadTarget(ctx, instanceID)
 	if err != nil {
 		return nil, err
 	}
-	// Runtime object names are identity-derived. The user-facing display name
-	// remains in Postgres and never participates in data-plane addressing.
-	return &models.MCPServerInstance{InstanceID: id, Name: id, WorkspaceID: workspaceID, JSONSpec: serverSpec}, nil
+	if target.Container == nil {
+		return nil, fmt.Errorf("instance %s is not a container-backed MCP server", target.InstanceID)
+	}
+	return target.Container, nil
+}
+
+func (r *SQLRepository) LoadTarget(ctx context.Context, instanceID string) (Target, error) {
+	var id, name, transport, workspaceID string
+	var instanceJSON, serverJSON, commandJSON []byte
+	var dockerImage, remoteURL, authConfigID, managedBy sql.NullString
+	err := r.db.QueryRowContext(ctx, `
+SELECT i.id::text, i.name, i.transport, i.json_spec, COALESCE(s.json_spec, '{}'::jsonb),
+       s.docker_image_url, COALESCE(s.cmd, 'null'::json), i.workspace_id,
+       s.remote_url, i.auth_config_id::text, i.managed_by
+FROM mcp_server_instances i
+JOIN mcp_servers s ON s.id::text = i.server_spec_id
+WHERE i.id = $1::uuid
+`, instanceID).Scan(&id, &name, &transport, &instanceJSON, &serverJSON, &dockerImage, &commandJSON, &workspaceID,
+		&remoteURL, &authConfigID, &managedBy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Target{}, ErrInstanceNotFound
+	}
+	if err != nil {
+		return Target{}, fmt.Errorf("load MCP instance: %w", err)
+	}
+	target := Target{InstanceID: id, WorkspaceID: workspaceID}
+	switch transport {
+	case "docker", "command":
+		serverSpec, err := mergeLoadedSpecs(serverJSON, instanceJSON, transport, commandJSON, dockerImage.String)
+		if err != nil {
+			return Target{}, err
+		}
+		// Runtime object names are identity-derived. The user-facing display name
+		// remains in Postgres and never participates in data-plane addressing.
+		target.Container = &models.MCPServerInstance{InstanceID: id, Name: id, WorkspaceID: workspaceID, JSONSpec: serverSpec}
+	case "url":
+		server, err := urlServerSpec(serverJSON, instanceJSON, remoteURL.String)
+		if err != nil {
+			return Target{}, fmt.Errorf("instance %s: %w", id, err)
+		}
+		server.AuthConfigID = authConfigID.String
+		server.ManagedBy = managedBy.String
+		target.URL = server
+	default:
+		return Target{}, fmt.Errorf("instance %s has transport %q, which the gateway does not serve", id, transport)
+	}
+	return target, nil
+}
+
+// urlServerSpec mirrors agentarea_mcp/transport_spec.py for a url instance:
+// the server row's transport spec (remote_url as the endpoint default) under
+// the instance spec, each normalized from the legacy url keys. The secret
+// names are the instance's own env_vars, as get_configured_env_vars reads them.
+func urlServerSpec(serverJSON, instanceJSON []byte, remoteURL string) (*URLServer, error) {
+	server := map[string]any{}
+	if err := json.Unmarshal(serverJSON, &server); err != nil {
+		return nil, fmt.Errorf("decode MCP server spec: %w", err)
+	}
+	if server == nil {
+		server = map[string]any{}
+	}
+	if remoteURL != "" {
+		if _, exists := server["type"]; !exists {
+			server["type"] = "url"
+		}
+		if _, exists := server["endpoint_url"]; !exists {
+			server["endpoint_url"] = remoteURL
+		}
+	}
+	normalizeURLKeys(server)
+	var instance map[string]any
+	if err := json.Unmarshal(instanceJSON, &instance); err != nil {
+		return nil, fmt.Errorf("decode MCP instance spec: %w", err)
+	}
+	for key, value := range instance {
+		server[key] = value
+	}
+	server["type"] = "url"
+	normalizeURLKeys(server)
+
+	result := &URLServer{}
+	switch endpoint := server["endpoint_url"].(type) {
+	case nil:
+	case string:
+		result.EndpointURL = endpoint
+	default:
+		return nil, fmt.Errorf("endpoint_url must be a string")
+	}
+	switch headers := server["headers"].(type) {
+	case nil:
+	case map[string]any:
+		result.Headers = make(map[string]string, len(headers))
+		for name, value := range headers {
+			text, ok := value.(string)
+			if !ok {
+				return nil, fmt.Errorf("header %q must be a string", name)
+			}
+			result.Headers[name] = text
+		}
+	default:
+		return nil, fmt.Errorf("headers must be an object")
+	}
+	switch names := instance["env_vars"].(type) {
+	case nil:
+	case []any:
+		for _, item := range names {
+			name, ok := item.(string)
+			if !ok {
+				return nil, fmt.Errorf("env_vars must hold names")
+			}
+			result.EnvVars = append(result.EnvVars, name)
+		}
+	default:
+		return nil, fmt.Errorf("env_vars must be a list")
+	}
+	return result, nil
+}
+
+func normalizeURLKeys(spec map[string]any) {
+	if spec["type"] != "url" {
+		return
+	}
+	if endpoint, exists := spec["endpoint_url"]; exists && endpoint != nil && endpoint != "" && endpoint != false {
+		return
+	}
+	for _, legacy := range []string{"url", "external_url"} {
+		if value, ok := spec[legacy].(string); ok && strings.TrimSpace(value) != "" {
+			spec["endpoint_url"] = value
+			delete(spec, legacy)
+			return
+		}
+	}
 }
 
 // decodeSpecs merges the instance spec over the server spec.

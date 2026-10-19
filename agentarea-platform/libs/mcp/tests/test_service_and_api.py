@@ -49,6 +49,7 @@ def _make_instance(
     inst.verification = verification if verification is not None else dict(DEFAULT_VERIFICATION)
     inst.last_dispatch = None
     inst.tools = None
+    inst.events = None
     inst.server_spec_id = "test-spec-id"
     inst.auth_config_id = None
     inst.managed_by = None

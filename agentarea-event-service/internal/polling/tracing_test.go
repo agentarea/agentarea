@@ -28,7 +28,7 @@ func TestAPollSpanRecordsTheSourceTransportAndError(t *testing.T) {
 	tr := &fixedTransport{err: pollErr}
 	m := newManager(newFakeSources(), &fakePublisher{}, &fakeCaller{}, tr)
 
-	if _, err := m.pollOnce(context.Background(), pollSource(), tr, ""); err == nil {
+	if _, _, err := m.pollOnce(context.Background(), pollSource(), tr, ""); err == nil {
 		t.Fatal("pollOnce hid the transport error")
 	}
 	ended := recorder.Ended()
@@ -52,7 +52,7 @@ func TestAPollSpanCountsItems(t *testing.T) {
 	tr := &fixedTransport{result: transport.Result{Items: []any{1, 2}}}
 	m := newManager(newFakeSources(), &fakePublisher{}, &fakeCaller{}, tr)
 
-	if _, err := m.pollOnce(context.Background(), pollSource(), tr, ""); err != nil {
+	if _, _, err := m.pollOnce(context.Background(), pollSource(), tr, ""); err != nil {
 		t.Fatalf("pollOnce: %v", err)
 	}
 	for _, kv := range recorder.Ended()[0].Attributes() {

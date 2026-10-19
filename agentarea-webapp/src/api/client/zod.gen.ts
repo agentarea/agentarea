@@ -926,6 +926,14 @@ export const zFailedTaskBlocker = z.object({
 });
 
 /**
+ * FeedFacetsResponse
+ */
+export const zFeedFacetsResponse = z.object({
+  source_types: z.record(z.number().int()),
+  streams: z.record(z.number().int()),
+});
+
+/**
  * ForwardCreate
  */
 export const zForwardCreate = z.object({
@@ -994,6 +1002,22 @@ export const zGraphResponse = z.object({
   enabled: z.boolean(),
   nodes: z.array(zGraphNode),
   stats: zGraphStats,
+});
+
+/**
+ * HandlerResponse
+ *
+ * One subscription's reaction to an event, named for the person reading it.
+ */
+export const zHandlerResponse = z.object({
+  derived_event_ids: z.array(z.string().uuid()),
+  kind: z.string(),
+  name: z.string(),
+  reason: z.string().nullable(),
+  subscription_id: z.string().uuid(),
+  task_id: z.string().uuid().nullable(),
+  task_status: z.string().nullable(),
+  verdict: z.string(),
 });
 
 /**
@@ -1352,6 +1376,7 @@ export const zMcpServerInstanceResponse = z.object({
   cost: z.record(z.unknown()).nullish(),
   created_at: z.string().datetime(),
   description: z.string().nullable(),
+  events: z.record(z.unknown()).nullish(),
   id: z.string().uuid(),
   json_spec: z.record(z.unknown()),
   last_dispatch: z.record(z.unknown()).nullish(),
@@ -2196,6 +2221,81 @@ export const zPrincipalResponse = z.object({
   email: z.string().nullish(),
   id: z.string(),
   type: zPrincipalType,
+});
+
+/**
+ * ProcessingStatus
+ */
+export const zProcessingStatus = z.enum([
+  "queued",
+  "processing",
+  "handled",
+  "error",
+  "no_handlers",
+  "skipped",
+]);
+
+/**
+ * ProcessingTask
+ */
+export const zProcessingTask = z.object({
+  id: z.string().uuid(),
+  status: z.string(),
+});
+
+/**
+ * Processing
+ */
+export const zProcessing = z.object({
+  errors: z.number().int(),
+  reacted: z.number().int(),
+  skipped: z.number().int(),
+  status: zProcessingStatus,
+  subscribers: z.number().int().nullable(),
+  tasks: z.array(zProcessingTask).optional(),
+});
+
+/**
+ * FeedEventResponse
+ *
+ * An event's envelope without its body, and what the platform did with it.
+ */
+export const zFeedEventResponse = z.object({
+  attachments: z.number().int(),
+  causation_id: z.string().nullable(),
+  correlation_id: z.string().nullable(),
+  depth: z.number().int(),
+  event_id: z.string().uuid(),
+  key: z.string(),
+  kind: z.string(),
+  occurred_at: z.string().datetime(),
+  processing: zProcessing,
+  received_at: z.string().datetime(),
+  sender: z.string().nullable(),
+  sequence: z.number().int(),
+  session_key: z.string().nullable(),
+  source_id: z.string().uuid().nullable(),
+  source_type: z.string().nullable(),
+  stream_id: z.string().uuid(),
+  v: z.number().int().optional().default(1),
+});
+
+/**
+ * ProcessorCreate
+ */
+export const zProcessorCreate = z.object({
+  code: z.string().min(1),
+  event_filter: zEventFilter.optional(),
+  output_stream_ids: z.array(z.string().uuid()).min(1),
+});
+
+/**
+ * ProcessorUpdate
+ */
+export const zProcessorUpdate = z.object({
+  code: z.string().min(1).nullish(),
+  event_filter: zEventFilter.nullish(),
+  output_stream_ids: z.array(z.string().uuid()).min(1).nullish(),
 });
 
 /**
@@ -3101,6 +3201,7 @@ export const zSourceCreated = z.object({
  * A credential or setting a member fills in for a source of this type.
  */
 export const zSourceField = z.object({
+  format: z.enum(["token", "whsec"]).optional().default("token"),
   issued: z.boolean().optional().default(false),
   key: z.string(),
   label: z.string(),
@@ -3111,7 +3212,7 @@ export const zSourceField = z.object({
 /**
  * SourceKind
  */
-export const zSourceKind = z.enum(["webhook", "poll"]);
+export const zSourceKind = z.enum(["webhook", "poll", "platform"]);
 
 /**
  * SourceCreate
@@ -3199,6 +3300,33 @@ export const zStreamCreate = z.object({
 });
 
 /**
+ * StreamEventDetailResponse
+ */
+export const zStreamEventDetailResponse = z.object({
+  attachments: z.array(zEventAttachmentResponse),
+  body_url: z.string().nullable(),
+  causation_id: z.string().nullable(),
+  correlation_id: z.string().nullable(),
+  data: z.record(z.unknown()),
+  depth: z.number().int(),
+  event_id: z.string().uuid(),
+  handlers: z.array(zHandlerResponse),
+  key: z.string(),
+  kind: z.string(),
+  occurred_at: z.string().datetime(),
+  outcomes: z.array(zOutcomeResponse),
+  processing: zProcessing.nullish(),
+  received_at: z.string().datetime(),
+  sender: z.string().nullable(),
+  sequence: z.number().int(),
+  session_key: z.string().nullable(),
+  source_id: z.string().uuid().nullable(),
+  source_type: z.string().nullable(),
+  stream_id: z.string().uuid(),
+  v: z.number().int().optional().default(1),
+});
+
+/**
  * StreamEventResponse
  *
  * The event envelope (ADR-0040 §2) and how each subscription reacted.
@@ -3215,6 +3343,7 @@ export const zStreamEventResponse = z.object({
   kind: z.string(),
   occurred_at: z.string().datetime(),
   outcomes: z.array(zOutcomeResponse),
+  processing: zProcessing.nullish(),
   received_at: z.string().datetime(),
   sender: z.string().nullable(),
   sequence: z.number().int(),
@@ -3286,6 +3415,7 @@ export const zRelationshipWriteRequest = z.object({
  * SubscriptionResponse
  */
 export const zSubscriptionResponse = z.object({
+  code: z.string().nullish(),
   created_at: z.string().datetime(),
   filter: z.record(z.unknown()),
   id: z.string().uuid(),
@@ -3375,6 +3505,7 @@ export const zTaskInputSubmission = z.object({
 export const zTaskProvenance = z.object({
   causation_id: z.string().nullish(),
   correlation_id: z.string().nullish(),
+  depth: z.number().int().optional().default(0),
   origin_id: z.string().nullish(),
   origin_type: z.enum(["user", "trigger", "agent", "api"]).nullish(),
   parent_task_id: z.string().uuid().nullish(),
@@ -3686,6 +3817,23 @@ export const zTaskCreate = z.object({
 });
 
 /**
+ * TriggerBatchWindow
+ *
+ * A stream trigger that fires once for the events of a batch (ADR-0040 §4).
+ *
+ * The batch opens with its first event and fires when ``window`` has passed or
+ * ``max_events`` have joined, whichever comes first. Either may be left out;
+ * a batch never holds more than the deployment's cap.
+ */
+export const zTriggerBatchWindow = z.object({
+  max_events: z.number().int().gte(2).nullish(),
+  window: z
+    .string()
+    .regex(/^[1-9][0-9]*[smhd]$/)
+    .nullish(),
+});
+
+/**
  * TriggerExecuteRequest
  *
  * Request model for executing a trigger via the event service.
@@ -3760,6 +3908,7 @@ export const zTriggerSession = z.object({
  */
 export const zTriggerCreate = z.object({
   agent_id: z.string().uuid(),
+  batch: zTriggerBatchWindow.nullish(),
   conditions: z.record(z.unknown()).optional(),
   cron_expression: z.string().nullish(),
   description: z.string().max(1000).optional().default(""),
@@ -3781,6 +3930,7 @@ export const zTriggerCreate = z.object({
  */
 export const zTriggerResponse = z.object({
   agent_id: z.string().uuid(),
+  batch: zTriggerBatchWindow.nullish(),
   conditions: z.record(z.unknown()),
   consecutive_failures: z.number().int(),
   created_at: z.string().datetime(),
@@ -3817,6 +3967,7 @@ export const zTriggerResponse = z.object({
  * does not exist yet when they are written.
  */
 export const zTriggerSpec = z.object({
+  batch: zTriggerBatchWindow.nullish(),
   conditions: z.record(z.unknown()).optional(),
   cron_expression: z.string().nullish(),
   description: z.string().max(1000).optional().default(""),
@@ -3909,6 +4060,7 @@ export const zTriggerType = z.enum(["cron", "stream"]);
  */
 export const zTriggerUpdate = z.object({
   agent_id: z.string().uuid().nullish(),
+  batch: zTriggerBatchWindow.nullish(),
   conditions: z.record(z.unknown()).nullish(),
   cron_expression: z.string().nullish(),
   description: z.string().max(1000).nullish(),
@@ -4144,6 +4296,15 @@ export const zWalletType = z.enum(["x402", "mpp", "dual"]);
  */
 export const zWorkspaceDirectoryResponse = z.object({
   path: z.string(),
+});
+
+/**
+ * WorkspaceEventPage
+ */
+export const zWorkspaceEventPage = z.object({
+  events: z.array(zFeedEventResponse),
+  facets: zFeedFacetsResponse.nullish(),
+  next_before: z.number().int().nullish(),
 });
 
 /**
@@ -6776,6 +6937,36 @@ export const zCreateStreamV1StreamsPostBody = zStreamCreate;
  */
 export const zCreateStreamV1StreamsPostResponse = zStreamResponse;
 
+export const zListWorkspaceEventsV1StreamsEventsGetQuery = z.object({
+  before: z.number().int().gte(1).lte(9223372036854776000).nullish(),
+  limit: z.number().int().gte(1).lte(200).optional().default(50),
+  stream_id: z.string().uuid().nullish(),
+  source_type: z.string().max(64).nullish(),
+  kind: z.string().max(255).nullish(),
+  sender: z.string().max(512).nullish(),
+  session_key: z.string().max(512).nullish(),
+  result: zProcessingStatus.nullish(),
+  since: z.string().datetime().nullish(),
+  until: z.string().datetime().nullish(),
+});
+
+/**
+ * Successful Response
+ */
+export const zListWorkspaceEventsV1StreamsEventsGetResponse =
+  zWorkspaceEventPage;
+
+export const zStreamWorkspaceEventsV1StreamsEventsLiveGetQuery = z.object({
+  stream_id: z.string().uuid().nullish(),
+  source_type: z.string().max(64).nullish(),
+  kind: z.string().max(255).nullish(),
+  sender: z.string().max(512).nullish(),
+  session_key: z.string().max(512).nullish(),
+  result: zProcessingStatus.nullish(),
+  since: z.string().datetime().nullish(),
+  until: z.string().datetime().nullish(),
+});
+
 export const zGetEventByIdV1StreamsEventsEventIdGetPath = z.object({
   event_id: z.string().uuid(),
 });
@@ -6784,7 +6975,7 @@ export const zGetEventByIdV1StreamsEventsEventIdGetPath = z.object({
  * Successful Response
  */
 export const zGetEventByIdV1StreamsEventsEventIdGetResponse =
-  zStreamEventResponse;
+  zStreamEventDetailResponse;
 
 /**
  * Response List Source Types V1 Streams Source Types Get
@@ -6836,7 +7027,7 @@ export const zGetEventV1StreamsStreamIdEventsSequenceGetPath = z.object({
  * Successful Response
  */
 export const zGetEventV1StreamsStreamIdEventsSequenceGetResponse =
-  zStreamEventResponse;
+  zStreamEventDetailResponse;
 
 export const zCreateForwardV1StreamsStreamIdForwardsPostBody = zForwardCreate;
 
@@ -6848,6 +7039,46 @@ export const zCreateForwardV1StreamsStreamIdForwardsPostPath = z.object({
  * Successful Response
  */
 export const zCreateForwardV1StreamsStreamIdForwardsPostResponse =
+  zSubscriptionResponse;
+
+export const zCreateProcessorV1StreamsStreamIdProcessorsPostBody =
+  zProcessorCreate;
+
+export const zCreateProcessorV1StreamsStreamIdProcessorsPostPath = z.object({
+  stream_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zCreateProcessorV1StreamsStreamIdProcessorsPostResponse =
+  zSubscriptionResponse;
+
+export const zDeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeletePath =
+  z.object({
+    stream_id: z.string().uuid(),
+    subscription_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponse =
+  z.void();
+
+export const zUpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchBody =
+  zProcessorUpdate;
+
+export const zUpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchPath =
+  z.object({
+    stream_id: z.string().uuid(),
+    subscription_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponse =
   zSubscriptionResponse;
 
 export const zListSourcesV1StreamsStreamIdSourcesGetPath = z.object({

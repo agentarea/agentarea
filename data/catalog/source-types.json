@@ -852,14 +852,38 @@
     {
       "slug": "mcp_events",
       "name": "MCP Events",
-      "description": "Events a connected MCP server emits (draft extension), delivered by Standard Webhooks",
+      "description": "Events a connected MCP server offers (MCP Events, draft SEP-3415): pick the server, one of its events and its arguments; delivered by a webhook subscription or by polling",
       "icon": "webhook",
-      "delivery": "webhook",
+      "delivery": "both",
       "credentials": [
         {
           "key": "signing_secret",
           "label": "Subscription Secret",
-          "placeholder": "whsec_… of the subscription",
+          "placeholder": "Issued for the subscription",
+          "required": false,
+          "issued": true,
+          "format": "whsec"
+        }
+      ],
+      "config": [
+        {
+          "key": "mcp_instance_id",
+          "label": "MCP Server",
+          "placeholder": "A connected MCP server that offers events",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "event",
+          "label": "Event",
+          "placeholder": "An event the server lists",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "arguments",
+          "label": "Arguments",
+          "placeholder": "JSON object, by the event's input schema",
           "required": false,
           "issued": false
         }
@@ -874,23 +898,70 @@
         "signature_format": "list",
         "signature_key": "v1",
         "encoding": "base64",
-        "secret_format": "whsec"
+        "secret_format": "whsec",
+        "tolerance_seconds": 300,
+        "required_headers": [
+          "X-MCP-Subscription-Id"
+        ]
       },
       "handshake": [
         {
           "when": "{body:type}",
-          "equals": "challenge",
+          "equals": "verification",
           "respond": {
             "challenge": "{body:challenge}"
           }
         }
       ],
+      "signals": [
+        {
+          "when": "{body:type}",
+          "equals": "gap",
+          "signal": "gap",
+          "key": "gap:{header:webhook-id}",
+          "reason": "the MCP server reports a gap; resuming at cursor {body:cursor}"
+        },
+        {
+          "when": "{body:type}",
+          "equals": "terminated",
+          "signal": "ended",
+          "key": "ended:{header:webhook-id}",
+          "reason": "the MCP server ended the subscription: {body:error.message}"
+        }
+      ],
+      "registration": {
+        "transport": "mcp_events"
+      },
+      "poll": {
+        "transport": "mcp_events",
+        "interval": "30s"
+      },
       "event": {
-        "kind": "{body:name}",
+        "kind": "{body:data.kind|name}",
         "key": "{body:eventId}",
-        "occurred_at": "{body:timestamp}"
+        "occurred_at": "{body:timestamp}",
+        "depth": "{body:data.depth}",
+        "correlation_id": "{body:data.correlation_id}",
+        "causation_id": "{body:data.id}"
       },
       "events": []
+    },
+    {
+      "slug": "platform",
+      "name": "Platform",
+      "description": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Written by the platform; a trigger on it reacts to another agent's outcome.",
+      "icon": "platform",
+      "delivery": "platform",
+      "event": {
+        "kind": "{body:kind}"
+      },
+      "events": [
+        "task.completed",
+        "task.failed",
+        "task.cancelled",
+        "approval.requested",
+        "input.request"
+      ]
     }
   ]
 }

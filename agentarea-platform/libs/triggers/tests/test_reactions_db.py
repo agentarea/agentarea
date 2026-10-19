@@ -18,13 +18,16 @@ from agentarea_common.config.database import TenantScopeMode
 from agentarea_streams.domain import (
     EventFilter,
     HandlerResult,
+    ReactionTally,
     StreamEvent,
     SubscriptionKind,
     SubscriptionView,
     Verdict,
 )
+from agentarea_streams.domain.enums import GAVE_UP_REASON
 from agentarea_streams.domain.keys import event_id_for
 from agentarea_triggers.domain.enums import ExecutionStatus
+from agentarea_triggers.infrastructure.reaction_feed_repository import ReactionFeedRepository
 from agentarea_triggers.infrastructure.reactions import (
     CausedExecutionRepository,
     ReactionRepository,
@@ -92,6 +95,7 @@ async def world():
             trigger_id=trig,
             filter=EventFilter(),
             output_stream_ids=[],
+            started_at=datetime(2026, 1, 1, tzinfo=UTC),
         )
 
     event = StreamEvent(
@@ -211,3 +215,31 @@ async def test_a_forward_reaction_is_not_listed_as_a_trigger_firing(world):
         assert await executions.list_executions_paginated() == []
         assert await executions.count_executions_filtered() == 0
         assert await executions.list_by_status(ExecutionStatus.FAILED) == []
+
+
+async def test_the_tally_counts_every_reaction_and_a_given_up_one_as_an_error(world):
+    log = TriggerExecutionReactionLog()
+    async with world.maker() as session:
+        assert await log.tally(session, world.event) == ReactionTally()
+        await log.record(
+            session,
+            world.trigger_view,
+            world.event,
+            HandlerResult(verdict=Verdict.SKIPPED, reason="not a refund"),
+        )
+        await log.record(
+            session,
+            world.forward_view,
+            world.event,
+            HandlerResult(verdict=Verdict.ERROR, reason=GAVE_UP_REASON),
+        )
+        await session.commit()
+        assert await log.tally(session, world.event) == ReactionTally(
+            reacted=2, skipped=1, errors=1
+        )
+    other = UserContext(user_id="u", workspace_id=str(uuid4()))
+    with workspace_scope(other.workspace_id):
+        async with world.maker() as session:
+            assert await ReactionFeedRepository(session, other).tally(world.event.id) == (
+                ReactionTally()
+            )

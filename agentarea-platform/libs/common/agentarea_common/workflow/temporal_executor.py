@@ -194,6 +194,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             )
 
             workflow_class = AgentExecutionWorkflow.run
+        elif workflow_name == "TriggerBatchWorkflow":
+            from agentarea_execution.workflows.trigger_batch_workflow import (
+                TriggerBatchWorkflow,
+            )
+
+            workflow_class = TriggerBatchWorkflow.run
         else:
             raise ValueError(f"Unknown workflow: {workflow_name}")
 

@@ -42,17 +42,24 @@ def create_platform_mcp_server(*, spanning: bool) -> ToolsetMCPServer:
     from agentarea_agents_sdk.tools.base_tool import BaseTool
     from agentarea_agents_sdk.tools.decorator_tool import Toolset
 
+    from .mcp_events import PinnedScope, SpanningScope, install_mcp_events
+
     # Imported here: the toolsets themselves import this module.
     from .tools import get_platform_tools, get_spanning_mcp_tools
 
     toolsets = get_spanning_mcp_tools() if spanning else get_platform_tools()
-    return create_mcp_server(
+    server = create_mcp_server(
         toolsets=cast(list[Toolset | BaseTool], toolsets),
         name="AgentArea",
         instructions=INSTRUCTIONS,
         workspace_argument=spanning,
         **server_identity(),
     )
+    install_mcp_events(
+        server._lowlevel_server,  # pyright: ignore[reportPrivateUsage]
+        SpanningScope() if spanning else PinnedScope(),
+    )
+    return server
 
 
 @cache

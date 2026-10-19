@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 #: The slug of the entry for a provider the catalog has no entry for.
 GENERIC_WEBHOOK = "generic_webhook"
@@ -26,6 +26,8 @@ class SourceField(BaseModel):
     required: bool = True
     #: The platform generates the value when the member leaves it empty.
     issued: bool = False
+    #: The form of a value: ``whsec`` is a Standard Webhooks secret, ``whsec_<base64>``.
+    format: Literal["token", "whsec"] = "token"
 
 
 class Verification(BaseModel):
@@ -65,6 +67,8 @@ class Verification(BaseModel):
     record: dict[str, str] = Field(default_factory=dict)
     #: Settings a member may override per source, by config key.
     configurable: list[str] = Field(default_factory=list)
+    #: Headers every request must carry besides the signature (MCP Events' subscription id).
+    required_headers: list[str] = Field(default_factory=list)
 
 
 class Handshake(BaseModel):
@@ -89,12 +93,43 @@ class Request(BaseModel):
 
 
 class Registration(BaseModel):
-    """Calls that point the provider at the source's webhook URL, and take it back."""
+    """How the Go reconciler points the provider at the source's webhook URL, and takes it back.
+
+    Either two templated requests, or a ``transport`` that is a protocol of its
+    own: ``mcp_events`` subscribes with events/subscribe and refreshes the
+    subscription before it expires.
+    """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    register_request: Request = Field(alias="register")
+    register_request: Request | None = Field(default=None, alias="register")
     unregister: Request | None = None
+    transport: Literal["mcp_events"] | None = None
+
+    @model_validator(mode="after")
+    def _one_way(self) -> Registration:
+        if (self.register_request is None) == (self.transport is None):
+            raise ValueError("a registration has either a register request or a transport")
+        if self.transport is not None and self.unregister is not None:
+            raise ValueError("a registration transport unregisters by its own protocol")
+        return self
+
+
+class Signal(BaseModel):
+    """A request that reports on the source itself, not an event of it.
+
+    ``gap``: events may be missing; recorded as a ``source.gap`` event keyed by
+    ``key``. ``ended``: the provider ended the subscription; the source records
+    ``reason`` and the reconciler subscribes again.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    when: str
+    equals: str
+    signal: Literal["gap", "ended"]
+    key: str
+    reason: str = ""
 
 
 class Poll(BaseModel):
@@ -137,6 +172,12 @@ class EventTemplates(BaseModel):
     session_key: Template | None = None
     sender: Template | None = None
     occurred_at: Template | None = None
+    #: The chain the producer's own event belongs to, when it is a platform like this one
+    #: (an MCP Events server sending its stream events). Untrusted: read, checked, and used
+    #: only to make the chain longer, never shorter.
+    depth: Template | None = None
+    correlation_id: Template | None = None
+    causation_id: Template | None = None
     attachments: Attachments | None = None
 
 
@@ -196,11 +237,13 @@ class SourceTypeEntry(BaseModel):
     name: str
     description: str = ""
     icon: str = "webhook"
-    delivery: Literal["webhook", "poll", "both"]
+    #: ``platform``: written by the platform only; no member adds a source of it.
+    delivery: Literal["webhook", "poll", "both", "platform"]
     credentials: list[SourceField] = Field(default_factory=list)
     config: list[SourceField] = Field(default_factory=list)
     verification: Verification | None = None
     handshake: list[Handshake] = Field(default_factory=list)
+    signals: list[Signal] = Field(default_factory=list)
     registration: Registration | None = None
     poll: Poll | None = None
     event: EventTemplates

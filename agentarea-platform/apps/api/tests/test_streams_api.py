@@ -19,8 +19,14 @@ from agentarea_streams.domain import (
     NotAForwardError,
     RecordedEvent,
     StreamNameTakenError,
+    StreamManagedByPlatformError,
     StreamNotFoundError,
     SubscriptionNotFoundError,
+)
+from agentarea_streams.domain.errors import (
+    NotAProcessorError,
+    ProcessorCodeError,
+    ProcessorLoopError,
 )
 from httpx import ASGITransport, AsyncClient
 
@@ -302,3 +308,101 @@ async def test_the_largest_sequence_is_still_looked_up(client, service, graph):
     response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events/{largest}")
     assert response.status_code == 404, response.text
     assert service.list_events.await_args.kwargs["after"] == largest - 1
+
+
+def _processor(stream_id, outputs, code="def process(event):\n    return None\n"):
+    return SimpleNamespace(
+        id=uuid4(),
+        stream_id=stream_id,
+        kind="processor",
+        trigger_id=None,
+        filter={},
+        output_stream_ids=[str(o) for o in outputs],
+        status="active",
+        code=code,
+        created_at=NOW,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_processor_is_created_by_whoever_may_edit_its_streams(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    service.create_processor.return_value = _processor(stream, [output])
+    response = await client.post(
+        f"/v1/workspaces/acme/streams/{stream}/processors",
+        json={"output_stream_ids": [str(output)], "code": "def process(event):\n    return None\n"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["kind"] == "processor"
+    assert response.json()["code"].startswith("def process")
+    assert service.create_processor.await_args.kwargs["output_stream_ids"] == [output]
+    checked = {call.kwargs["object"] for call in graph.check.await_args_list}
+    assert {str(stream), str(output)} <= checked
+
+
+@pytest.mark.asyncio
+async def test_a_processor_into_a_stream_the_caller_may_not_edit_is_refused(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    graph.check.side_effect = lambda **kw: SimpleNamespace(allowed=kw["object"] != str(output))
+    response = await client.post(
+        f"/v1/workspaces/acme/streams/{stream}/processors",
+        json={"output_stream_ids": [str(output)], "code": "def process(event):\n    return None\n"},
+    )
+    assert response.status_code == 403, response.text
+    service.create_processor.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (ProcessorCodeError("The code does not parse: invalid syntax (line 1)"), 400),
+        (ProcessorLoopError("A processor may not write into its own input stream"), 400),
+        (StreamManagedByPlatformError("Only the platform writes to the platform stream"), 409),
+    ],
+)
+async def test_a_processor_that_cannot_run_is_refused(client, service, graph, error, status):
+    stream = uuid4()
+    service.create_processor.side_effect = error
+    response = await client.post(
+        f"/v1/workspaces/acme/streams/{stream}/processors",
+        json={"output_stream_ids": [str(stream)], "code": "def process(event:"},
+    )
+    assert response.status_code == status, response.text
+    assert response.json()["detail"] == str(error)
+
+
+@pytest.mark.asyncio
+async def test_a_processor_is_updated_and_deleted(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    processor = _processor(stream, [output])
+    service.get_processor.return_value = processor
+    service.update_processor.return_value = processor
+    response = await client.patch(
+        f"/v1/workspaces/acme/streams/{stream}/processors/{processor.id}",
+        json={"code": "def process(event):\n    return []\n"},
+    )
+    assert response.status_code == 200, response.text
+    assert service.update_processor.await_args.kwargs == {
+        "code": "def process(event):\n    return []\n",
+        "output_stream_ids": None,
+        "event_filter": None,
+    }
+    service.existing_outputs.return_value = [output]
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/processors/{processor.id}"
+    )
+    assert response.status_code == 204, response.text
+    service.delete_processor.assert_awaited_once_with(stream, processor.id)
+
+
+@pytest.mark.asyncio
+async def test_a_forward_is_not_changed_as_a_processor(client, service, graph):
+    stream, subscription = uuid4(), uuid4()
+    service.get_processor.side_effect = NotAProcessorError(subscription)
+    response = await client.patch(
+        f"/v1/workspaces/acme/streams/{stream}/processors/{subscription}",
+        json={"code": "def process(event):\n    return []\n"},
+    )
+    assert response.status_code == 409, response.text
+    service.update_processor.assert_not_called()

@@ -38,3 +38,5 @@ class ExecutionStatus(StrEnum):
     # Turned away by its conditions, or by the trigger being off: no task, and
     # not a failure -- it neither counts toward nor resets failure_threshold.
     SKIPPED = "skipped"
+    # Held in an open batch of a windowed trigger until the batch fires.
+    BATCHED = "batched"

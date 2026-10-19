@@ -28,8 +28,11 @@ from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.envelope import (
+    EventFields,
     attachment_items,
     attachment_path,
+    carried_depth,
+    chain_id,
     read_event,
     without_credentials,
 )
@@ -150,11 +153,14 @@ class SourceIntake:
             if entry.verification
             else None
         )
+        depth, correlation_id, causation_id = self._carried_chain(source.id, fields)
         event = IntegrationEvent(
             type=kind_override or fields.kind,
             source=f"/sources/{source.id}",
             subject=fields.session_key,
             time=fields.occurred_at or received_at,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
             data={
                 "headers": without_credentials(headers, scheme),
                 "body": body,
@@ -171,12 +177,39 @@ class SourceIntake:
                 event,
                 event_key=key,
                 source_id=source.id,
+                depth=depth,
                 event_id=event_id,
                 source_type=entry.slug,
                 session_key=fields.session_key,
                 sender=fields.sender,
                 attachments=attachments,
             )
+
+    def _carried_chain(
+        self, source_id: UUID, fields: EventFields
+    ) -> tuple[int, str | None, str | None]:
+        """Depth, correlation and causation the producer named, the ones that pass the checks."""
+        depth = 0
+        if fields.depth is not None:
+            carried = carried_depth(fields.depth, self._settings.FORWARD_DEPTH)
+            if carried is None:
+                logger.warning(
+                    "Source %s names depth %r, not a count; the event starts a chain",
+                    source_id,
+                    fields.depth,
+                )
+            else:
+                depth = carried
+        ids: list[str | None] = []
+        for name, value in (
+            ("correlation_id", fields.correlation_id),
+            ("causation_id", fields.causation_id),
+        ):
+            checked = chain_id(value) if value is not None else None
+            if value is not None and checked is None:
+                logger.warning("Source %s names %s %r, not a UUID; ignored", source_id, name, value)
+            ids.append(checked)
+        return depth, ids[0], ids[1]
 
     async def _store_attachments(
         self,

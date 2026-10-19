@@ -28,7 +28,16 @@ async def test_partitions_exist_before_the_groups_consume_and_they_stop_first():
     autoclaimer.start = AsyncMock(side_effect=lambda: order.append("autoclaimer"))
     autoclaimer.stop = AsyncMock(side_effect=lambda: order.append("stop autoclaimer"))
 
+    external, external_autoclaimer = MagicMock(), MagicMock()
+    external.start = AsyncMock(side_effect=lambda: order.append("external"))
+    external.stop = AsyncMock(side_effect=lambda: order.append("stop external"))
+    external_autoclaimer.start = AsyncMock(side_effect=lambda: order.append("external autoclaimer"))
+    external_autoclaimer.stop = AsyncMock(
+        side_effect=lambda: order.append("stop external autoclaimer")
+    )
+
     topics = ["streams.events.0", "streams.events.1"]
+    platform = MagicMock()
     runtime = StreamRuntime(
         router=router,
         events_view=events_view,
@@ -38,6 +47,10 @@ async def test_partitions_exist_before_the_groups_consume_and_they_stop_first():
         topics=topics,
         polled=polled,
         polled_autoclaimer=autoclaimer,
+        platform=platform,
+        external=external,
+        external_autoclaimers=[external_autoclaimer],
+        batches=MagicMock(),
     )
     await runtime.start()
     await runtime.stop()
@@ -47,12 +60,18 @@ async def test_partitions_exist_before_the_groups_consume_and_they_stop_first():
         "polled",
         "autoclaimer",
         "changes",
+        "external",
+        "external autoclaimer",
         "events-view",
         "router",
+        "platform",
+        "stop external autoclaimer",
+        "stop external",
         "stop autoclaimer",
         "stop polled",
         "stop events-view",
         "stop router",
+        "stop platform",
         "stop changes",
         "stop partitions",
         "close bus",
@@ -66,6 +85,10 @@ async def test_partitions_exist_before_the_groups_consume_and_they_stop_first():
     assert calls["events-view"]["dead_letter_topic"] == "streams.events.events-view.dlq"
     assert calls["router"]["on_dead_letter"] == router.give_up
     assert calls["events-view"]["handler"] == events_view.handle
+    assert calls["platform"]["topics"] == ["tasks.events"]
+    assert calls["platform"]["handler"] == platform.handle
+    assert calls["platform"]["dead_letter_topic"] == "tasks.events.platform.dlq"
+    assert calls["platform"]["on_dead_letter"] == platform.give_up
 
 
 def test_the_runtime_refuses_to_build_without_a_workflow_executor():

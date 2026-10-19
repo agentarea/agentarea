@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 import DeleteButton from "@/components/DeleteButton";
+import Panel from "@/components/Panel";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,7 +27,7 @@ export default async function StreamSources({
   const onDelete = deleteStreamSourceAction.bind(null, streamId);
 
   return (
-    <SourcesPanel title={t("title")} count={sources.length}>
+    <Panel title={t("title")} count={sources.length}>
       {sources.length === 0 ? (
         <div className="py-6 text-center text-sm text-muted-foreground">
           {t("empty")}
@@ -82,54 +82,34 @@ export default async function StreamSources({
                     </p>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center justify-end">
-                  <DeleteButton
-                    itemId={source.id}
-                    itemName={name}
-                    onDelete={onDelete}
-                    title={t("deleteTitle")}
-                    description={t("deleteDescription", { name })}
-                    size="xs"
-                  />
-                </div>
+                {source.kind !== "platform" && (
+                  <div className="flex shrink-0 items-center justify-end">
+                    <DeleteButton
+                      itemId={source.id}
+                      itemName={name}
+                      onDelete={onDelete}
+                      title={t("deleteTitle")}
+                      description={t("deleteDescription", { name })}
+                      size="xs"
+                    />
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
       )}
-    </SourcesPanel>
-  );
-}
-
-function SourcesPanel({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count?: number;
-  children: ReactNode;
-}) {
-  return (
-    <section className="mb-4 rounded-md border border-zinc-200 bg-white card-shadow dark:border-zinc-700 dark:bg-zinc-800">
-      <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
-        <h2 className="text-base font-semibold">{title}</h2>
-        {count !== undefined && (
-          <span className="note tabular-nums">{count}</span>
-        )}
-      </header>
-      {children}
-    </section>
+    </Panel>
   );
 }
 
 export async function StreamSourcesSkeleton() {
   const t = await getTranslations("EventsPage.sources");
   return (
-    <SourcesPanel title={t("title")}>
+    <Panel title={t("title")}>
       <div className="p-4">
         <Skeleton className="h-12 w-full" />
       </div>
-    </SourcesPanel>
+    </Panel>
   );
 }

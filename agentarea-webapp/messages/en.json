@@ -2079,6 +2079,15 @@
         "continueHint": "The next event of the same session (a chat, a thread) joins the task that is waiting for it.",
         "eachEventHint": "Every event starts its own task.",
         "idleTimeout": "How long the task waits for the next event"
+      },
+      "batch": {
+        "title": "Collect events into a batch",
+        "onHint": "The trigger fires once with all the events of a batch, when the window has passed or the batch is full, whichever comes first.",
+        "offHint": "Every event fires the trigger on its own.",
+        "window": "Window",
+        "noWindow": "No time limit",
+        "maxEvents": "Fire at",
+        "maxEventsPlaceholder": "events"
       }
     },
     "detail": {
@@ -2141,7 +2150,8 @@
         "error": "Error",
         "timeout": "Timed out",
         "cancelled": "Cancelled",
-        "skipped": "Skipped"
+        "skipped": "Skipped",
+        "batched": "In a batch"
       },
       "metricsLoadFailed": "Failed to load metrics",
       "executionsLoadFailed": "Failed to load executions",
@@ -2162,7 +2172,12 @@
       "session": "Conversation",
       "sessionContinues": "The next event of a session joins the same task, which waits {timeout} for it",
       "sessionEachEvent": "Every event starts its own task",
-      "sessionDefault": "As the stream's sources decide: chat sources continue the conversation, others start a task per event"
+      "sessionDefault": "As the stream's sources decide: chat sources continue the conversation, others start a task per event",
+      "batch": "Batch",
+      "batchOff": "Fires on every event",
+      "batchWindowOrCount": "One task for the events of {window}, or sooner at {count} events",
+      "batchWindow": "One task for the events of each {window}",
+      "batchCount": "One task for every {count} events"
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -2176,11 +2191,14 @@
   },
   "EventsPage": {
     "title": "Events",
-    "description": "Everything that arrived, and what each subscriber did with it",
+    "description": "Everything that arrived, and what the platform did with it",
     "searchPlaceholder": "Search streams",
     "streams": {
       "name": "Stream",
-      "created": "Created"
+      "created": "Created",
+      "platformName": "Platform",
+      "platformLabel": "Written by the platform",
+      "platformDescription": "What happened to this workspace's tasks: completed, failed, cancelled, or waiting for an approval or an answer. Put a trigger on it to react to another agent's outcome."
     },
     "noStreams": "No streams yet",
     "noStreamsDescription": "A stream collects the events of its sources. Create one, then add a source to it.",
@@ -2200,7 +2218,8 @@
       "skipped": "Skipped",
       "error": "Error",
       "unheard": "Nobody listened",
-      "unknown": "Unknown outcome"
+      "unknown": "Unknown outcome",
+      "batched": "In a batch"
     },
     "detail": {
       "title": "Event {sequence}",
@@ -2229,7 +2248,8 @@
       "attachments": "Attachments",
       "openAttachment": "Open",
       "fetchedByTask": "Fetched when a task opens it",
-      "bodyStored": "Body stored as a file"
+      "bodyStored": "Body stored as a file",
+      "processor": "Processor"
     },
     "sources": {
       "title": "Sources",
@@ -2269,18 +2289,126 @@
           "noKeyHint": "Without a key, a resent request runs the agent again."
         },
         "events": "Events this provider can send",
-        "eventsHint": "Enable these at the provider; every event it sends arrives in the stream."
+        "eventsHint": "Enable these at the provider; every event it sends arrives in the stream.",
+        "mcp": {
+          "server": "MCP server",
+          "serverPlaceholder": "Pick a server that offers events",
+          "loadingServers": "Loading MCP servers...",
+          "serversLoadFailed": "Could not load the workspace's MCP servers",
+          "noServers": "No connected MCP server offers events yet. Connect one that does, or verify it so its events are listed.",
+          "noServersLink": "Open connections",
+          "eventCount": "{count, plural, one {# event} other {# events}}",
+          "listingFailed": "Could not list events: {error}",
+          "event": "Event",
+          "eventPlaceholder": "Pick an event",
+          "mode": "How events arrive",
+          "modePlaceholder": "Pick how events arrive",
+          "noMode": "This event offers neither a webhook nor polling, so a source cannot receive it.",
+          "modes": {
+            "webhook": {
+              "label": "Webhook",
+              "hint": "the MCP server posts each event to AgentArea; needs AgentArea reachable over public HTTPS."
+            },
+            "poll": {
+              "label": "Polling",
+              "hint": "AgentArea asks the MCP server for new events on a schedule; works behind a firewall."
+            }
+          },
+          "arguments": "Arguments",
+          "choicePlaceholder": "Pick a value",
+          "notSet": "Not set",
+          "jsonPlaceholder": "JSON value",
+          "problems": {
+            "number": "Enter a number",
+            "integer": "Enter a whole number",
+            "json": "Not valid JSON"
+          }
+        }
       },
       "created": {
         "title": "Source added",
         "description": "Give this URL to the sender. Every request to it is verified before it is recorded.",
         "done": "Done",
         "urlLabel": "Webhook URL",
-        "secretWarning": "Copy it now: it is not shown again."
+        "secretWarning": "Copy it now: it is not shown again.",
+        "mcpWebhook": "AgentArea subscribed to the event on the MCP server; each one it posts is verified and recorded in this stream.",
+        "mcpPoll": "AgentArea polls the MCP server for the event; each new one is recorded in this stream."
       },
       "polledAt": "Polled {time}",
       "notPolledYet": "Not polled yet",
       "pollError": "Last poll failed: {error}"
+    },
+    "streamsTitle": "Streams",
+    "streamsDescription": "Named event streams, their sources and forwards",
+    "live": {
+      "on": "Live",
+      "connecting": "Connecting",
+      "off": "Reconnecting"
+    },
+    "streamsMenu": {
+      "button": "Streams",
+      "all": "All streams",
+      "empty": "No streams yet"
+    },
+    "result": {
+      "all": "All",
+      "queued": "Queued",
+      "processing": "Processing",
+      "handled": "Handled",
+      "error": "Error",
+      "no_handlers": "No handlers",
+      "skipped": "Skipped",
+      "unknown": "Unknown"
+    },
+    "list": {
+      "filters": "Filters",
+      "stream": "Stream",
+      "provider": "Provider",
+      "kind": "Kind",
+      "kindPlaceholder": "order.* or order.paid",
+      "result": "Result",
+      "session": "Session",
+      "sender": "Sender",
+      "clear": "Clear filters",
+      "all": "All",
+      "noProvider": "No source",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "newEvents": "{count, plural, one {# new event} other {# new events}}",
+      "empty": "Nothing has arrived in this workspace yet.",
+      "noneMatching": "No events match these filters.",
+      "older": "Older events",
+      "queuedFor": "queued · {age}",
+      "tasks": "{count, plural, one {# task} other {# tasks}}",
+      "skipped": "{count} skipped",
+      "errors": "{count, plural, one {# error} other {# errors}}",
+      "skippedOf": "skipped {done}/{total}",
+      "filterSession": "Show the whole session",
+      "unknownStream": "Deleted stream"
+    },
+    "panel": {
+      "handlers": "Handlers",
+      "pending": "{count, plural, one {# subscriber still to react} other {# subscribers still to react}}",
+      "noHandlers": "No subscription on this stream takes this event.",
+      "queued": "Not routed yet.",
+      "trigger": "Trigger",
+      "forward": "Forward",
+      "deleted": "Deleted subscription",
+      "task": "Task",
+      "derived": "Forwarded as",
+      "openInStream": "Open in its stream",
+      "close": "Close",
+      "gone": "This event is no longer kept.",
+      "title": "Event",
+      "processor": "Processor"
+    },
+    "processors": {
+      "title": "Processors",
+      "writesTo": "Writes to",
+      "kinds": "on {kinds}",
+      "everyEvent": "on every event",
+      "createdAt": "Added {time}",
+      "code": "Code (processor.py)"
     }
   },
   "NetworkPage": {

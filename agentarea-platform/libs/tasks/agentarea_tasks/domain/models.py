@@ -31,6 +31,8 @@ class TaskProvenance(BaseModel):
     correlation_id: str | None = None
     causation_id: str | None = None
     parent_task_id: UUID | None = None
+    #: The causation depth of the event that started the task; 0 when none did.
+    depth: int = 0
 
 
 class Task(BaseModel):

@@ -31,7 +31,7 @@ func TestHTTPJSONReadsItemsAndAdvancesTheCursor(t *testing.T) {
 	}))
 	defer server.Close()
 
-	set := NewSet(openPolicy(t))
+	set := NewSet(openPolicy(t), nil)
 	tr, _ := set.Get(HTTPJSON)
 	res, err := tr.Fetch(context.Background(), Fetch{
 		Poll: catalog.Poll{
@@ -111,18 +111,8 @@ func TestACallRendersAJSONBody(t *testing.T) {
 	}
 }
 
-func TestMCPEventsIsNotBuilt(t *testing.T) {
-	tr, err := NewSet(openPolicy(t)).Get(MCPEvents)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	if _, err := tr.Fetch(context.Background(), Fetch{}); !errors.Is(err, ErrMCPEventsNotBuilt) {
-		t.Fatalf("err = %v", err)
-	}
-}
-
 func TestAnUnknownTransportIsRefused(t *testing.T) {
-	if _, err := NewSet(openPolicy(t)).Get("carrier_pigeon"); err == nil {
+	if _, err := NewSet(openPolicy(t), nil).Get("carrier_pigeon"); err == nil {
 		t.Fatal("got a transport that does not exist")
 	}
 }

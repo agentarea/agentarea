@@ -10,6 +10,7 @@ from agentarea_common.config.streams import EventStreamSettings
 from .topics import (
     DELIVERY_GROUP,
     INGEST_GROUP,
+    PLATFORM_GROUP,
     STREAM_EVENTS,
     STREAM_EVENTS_GROUPS,
     STREAMS_INGEST,
@@ -27,7 +28,7 @@ class ConsumerGroupRoute:
 
 
 def configured_routes(streams: EventStreamSettings) -> tuple[ConsumerGroupRoute, ...]:
-    """Polled items to ingest, task-event delivery, then each stream-events partition per group."""
+    """Ingest, delivery, the platform stream, then each stream-events partition per group."""
     return (
         ConsumerGroupRoute(
             stream=STREAMS_INGEST,
@@ -38,6 +39,11 @@ def configured_routes(streams: EventStreamSettings) -> tuple[ConsumerGroupRoute,
             stream=TASK_EVENTS,
             group=DELIVERY_GROUP,
             dlq=dead_letter_topic(TASK_EVENTS, DELIVERY_GROUP),
+        ),
+        ConsumerGroupRoute(
+            stream=TASK_EVENTS,
+            group=PLATFORM_GROUP,
+            dlq=dead_letter_topic(TASK_EVENTS, PLATFORM_GROUP),
         ),
         *(
             ConsumerGroupRoute(

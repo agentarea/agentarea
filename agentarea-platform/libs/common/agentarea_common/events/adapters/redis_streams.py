@@ -47,8 +47,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_DELIVERY = 5
 # Reclaim messages pending longer than this from dead/stuck consumers.
 DEFAULT_MIN_IDLE_MS = 60_000
-# A consumer idle this long with nothing pending belongs to a stopped process.
-STOPPED_CONSUMER_IDLE_MS = 60 * 60 * 1000
 
 
 _ENVELOPE_FIELDS = frozenset(
@@ -219,9 +217,6 @@ class RedisStreamsEventBus:
                         )
                         for msg in reclaimed:
                             await self._handle(stream, group, msg, handler, dead_letter)
-                        await self._broker.prune_consumers(
-                            stream, group, idle_ms=STOPPED_CONSUMER_IDLE_MS
-                        )
                     next_claim = loop.time() + self._min_idle_ms / 1000
                 fresh = await self._broker.consume_many(
                     streams, group, self._consumer, count=10, block_ms=self._block_ms

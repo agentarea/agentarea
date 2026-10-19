@@ -77,3 +77,12 @@ def test_a_cron_trigger_has_no_session():
     response = TriggerResponse.from_domain_model(cron)
     assert response.session is None
     assert response.cron_expression == "0 9 * * *"
+
+
+def test_a_stream_trigger_shows_its_batch_window():
+    from agentarea_triggers.domain.models import TriggerBatchWindow
+
+    batch = TriggerBatchWindow(window="60s", max_events=3)
+    response = TriggerResponse.from_domain_model(_trigger(batch=batch))
+    assert response.batch == batch
+    assert TriggerResponse.from_domain_model(_trigger()).batch is None

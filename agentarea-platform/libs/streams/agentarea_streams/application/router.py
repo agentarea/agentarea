@@ -8,6 +8,15 @@ notice is on its way. Before acting on a match the
 router re-reads the subscription, so a stale cache never fires a deleted or
 paused one.
 
+The router first writes on the event when it matched its subscriptions and
+how many (0 included; the first time is kept on redelivery), and after each
+reaction a tally of those recorded. Each write is announced to the events
+pages open on the workspace (``EventNotices``).
+
+A subscription starts at the end of its stream: an event received before it
+started, when it is redelivered or replayed, is recorded as skipped for it and
+never handed to its handler.
+
 Each reaction is recorded (``ReactionLog``) before the message is acknowledged.
 A redelivered event finds the reactions already recorded and runs only the
 rest. A failure leaves the message unacknowledged: the broker redelivers it, and
@@ -30,15 +39,28 @@ from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domain.enums import GAVE_UP_REASON, SubscriptionKind, SubscriptionStatus, Verdict
-from ..domain.filters import EventFilter
+from ..domain.enums import (
+    BEFORE_START_REASON,
+    GAVE_UP_REASON,
+    SubscriptionKind,
+    SubscriptionStatus,
+    Verdict,
+)
+from ..domain.filters import filter_for
 from ..domain.models import (
     HandlerResult,
     StreamEvent,
     SubscriptionView,
     consumed_stream_event,
 )
-from ..domain.ports import ReactionLog, SubscriptionHandler
+from ..domain.ports import (
+    EventNotices,
+    FinishReaction,
+    PreparedHandler,
+    ReactionLog,
+    SubscriptionHandler,
+)
+from ..infrastructure.event_repository import StreamEventRepository
 from ..infrastructure.orm import StreamSubscriptionORM
 from ..infrastructure.repository import StreamSubscriptionRepository
 
@@ -55,6 +77,10 @@ class ReactionsFailedError(RuntimeError):
     """Some subscriptions could not react; the event is redelivered for them."""
 
 
+def _context(event: StreamEvent) -> UserContext:
+    return UserContext(user_id=event.created_by, workspace_id=event.workspace_id)
+
+
 def subscription_view(row: StreamSubscriptionORM) -> SubscriptionView:
     return SubscriptionView(
         id=row.id,
@@ -63,8 +89,10 @@ def subscription_view(row: StreamSubscriptionORM) -> SubscriptionView:
         stream_id=row.stream_id,
         kind=SubscriptionKind(row.kind),
         trigger_id=row.trigger_id,
-        filter=EventFilter.model_validate(row.filter),
+        filter=filter_for(SubscriptionKind(row.kind), row.filter),
         output_stream_ids=[UUID(str(s)) for s in row.output_stream_ids],
+        started_at=row.started_at,
+        code=row.code,
     )
 
 
@@ -83,6 +111,7 @@ class EventRouter:
         session_factory: async_sessionmaker[AsyncSession],
         handlers: Mapping[SubscriptionKind, SubscriptionHandler],
         reactions: ReactionLog,
+        notices: EventNotices,
         cache_ttl_s: float = DEFAULT_CACHE_TTL_S,
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], datetime] = _utcnow,
@@ -93,6 +122,7 @@ class EventRouter:
         self._session_factory = session_factory
         self._handlers = dict(handlers)
         self._reactions = reactions
+        self._notices = notices
         self._cache_ttl_s = cache_ttl_s
         self._clock = clock
         self._wall_clock = wall_clock
@@ -108,11 +138,13 @@ class EventRouter:
     async def handle(self, message: IntegrationEvent) -> None:
         event = consumed_stream_event(message)
         with workspace_scope(event.workspace_id):
-            pending = await self._pending(event)
+            matching, pending = await self._pending(event)
+            await self._routed(event, len(matching))
             failed: list[UUID] = []
+            gone = 0
             for view in pending:
                 try:
-                    await self._react(view, event)
+                    reacted = await self._react(view, event)
                 except Exception:
                     # One subscription's failure must not hold back the others;
                     # the redelivery runs only what is not recorded yet.
@@ -124,6 +156,13 @@ class EventRouter:
                         exc_info=True,
                     )
                     failed.append(view.id)
+                    continue
+                if reacted:
+                    await self._notices.processing(event)
+                else:
+                    gone += 1
+            if gone:
+                await self._routed(event, len(matching) - gone)
             if failed:
                 raise ReactionsFailedError(
                     f"event {event.id}: subscriptions {', '.join(map(str, failed))} failed"
@@ -133,10 +172,13 @@ class EventRouter:
         """Record every reaction still missing as ``error``; the event is dead-lettered."""
         event = consumed_stream_event(message)
         with workspace_scope(event.workspace_id):
-            for view in await self._pending(event):
+            matching, pending = await self._pending(event)
+            gone = 0
+            for view in pending:
                 async with self._session_factory() as session:
                     current = await self._recheck(session, view)
                     if current is None:
+                        gone += 1
                         continue
                     await self._reactions.record(
                         session,
@@ -144,21 +186,50 @@ class EventRouter:
                         event,
                         HandlerResult(verdict=Verdict.ERROR, reason=GAVE_UP_REASON),
                     )
+                    await self._tally(session, event)
                     await session.commit()
+            await self._routed(event, len(matching) - gone)
 
-    async def _pending(self, event: StreamEvent) -> list[SubscriptionView]:
-        matching = [
-            view
-            for view in await self._subscriptions(event)
-            if view.filter.matches(event.type, event.data)
-        ]
+    async def _routed(self, event: StreamEvent, subscribers: int) -> None:
+        async with self._session_factory() as session:
+            wrote = await StreamEventRepository(session, _context(event)).mark_routed(
+                event, subscribers, at=self._wall_clock()
+            )
+            await session.commit()
+        if wrote:
+            await self._notices.recorded(event)
+        else:
+            await self._notices.processing(event)
+
+    async def _tally(self, session: AsyncSession, event: StreamEvent) -> None:
+        tally = await self._reactions.tally(session, event)
+        await StreamEventRepository(session, _context(event)).mark_reactions(event, tally)
+
+    async def _pending(
+        self, event: StreamEvent
+    ) -> tuple[list[SubscriptionView], list[SubscriptionView]]:
+        """The subscriptions matching the event, and those of them yet to react."""
+        matching = [view for view in await self._subscriptions(event) if view.filter.admits(event)]
         if not matching:
-            return []
+            return [], []
         async with self._session_factory() as session:
             done = await self._reactions.recorded(session, event)
-        return [view for view in matching if view.id not in done]
+        return matching, [view for view in matching if view.id not in done]
 
-    async def _react(self, view: SubscriptionView, event: StreamEvent) -> None:
+    async def _prepare(self, view: SubscriptionView, event: StreamEvent) -> FinishReaction | None:
+        """A prepared handler's slow part, run with no session open; None for the others."""
+        handler = self._handlers[view.kind]
+        if not isinstance(handler, PreparedHandler) or event.received_at < view.started_at:
+            return None
+        async with self._session_factory() as session:
+            current = await self._recheck(session, view)
+        if current is None:
+            return None
+        return await handler.prepare(current, event)
+
+    async def _react(self, view: SubscriptionView, event: StreamEvent) -> bool:
+        """Run and record the reaction; False when the subscription is gone or paused."""
+        finish = await self._prepare(view, event)
         async with self._session_factory() as session:
             current = await self._recheck(session, view)
             if current is None:
@@ -167,11 +238,17 @@ class EventRouter:
                     view.id,
                     event.id,
                 )
-                return
+                return False
             await self._reactions.forget_given_up(session, current, event)
-            result = await self._handlers[current.kind].handle(current, event, session)
+            if event.received_at < current.started_at:
+                result = HandlerResult(verdict=Verdict.SKIPPED, reason=BEFORE_START_REASON)
+            elif finish is not None:
+                result = await finish(session)
+            else:
+                result = await self._handlers[current.kind].handle(current, event, session)
             try:
                 await self._reactions.record(session, current, event, result)
+                await self._tally(session, event)
                 await session.commit()
             except IntegrityError:
                 await session.rollback()
@@ -183,6 +260,8 @@ class EventRouter:
                     view.id,
                     event.id,
                 )
+                return False
+            return True
 
     async def _recheck(
         self, session: AsyncSession, view: SubscriptionView

@@ -13,7 +13,7 @@ from agentarea_mcp.application.mcp_client import (
     platform_client_factory,
 )
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
-from agentarea_mcp.verification import _list_tools, _RuntimeInstance
+from agentarea_mcp.verification import _discover, _RuntimeInstance
 
 # ---------------------------------------------------------------------------
 # _in_progress_is_stale — wedged-verifying self-heal
@@ -532,15 +532,17 @@ async def test_verify_passes_extra_headers_to_list_tools():
 
 
 # ---------------------------------------------------------------------------
-# _list_tools URL transport selection — preserves explicit /sse and /mcp
+# _discover URL transport selection — preserves explicit /sse and /mcp
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_list_tools_uses_shared_client_for_explicit_sse_url():
+async def test_discover_uses_shared_client_for_explicit_sse_url():
     targets = []
 
     class FakeClient:
+        server_capabilities = MagicMock(extensions=None)
+
         async def list_tools(self):
             return MagicMock(tools=[])
 
@@ -553,7 +555,7 @@ async def test_list_tools_uses_shared_client_for_explicit_sse_url():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools(
+        await _discover(
             "https://mcp.notion.com/sse", httpx_client_factory=platform_client_factory
         )
 
@@ -561,10 +563,12 @@ async def test_list_tools_uses_shared_client_for_explicit_sse_url():
 
 
 @pytest.mark.asyncio
-async def test_list_tools_uses_shared_client_for_explicit_mcp_url():
+async def test_discover_uses_shared_client_for_explicit_mcp_url():
     targets = []
 
     class FakeClient:
+        server_capabilities = MagicMock(extensions=None)
+
         async def list_tools(self):
             return MagicMock(tools=[])
 
@@ -577,7 +581,7 @@ async def test_list_tools_uses_shared_client_for_explicit_mcp_url():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://example.com/mcp", httpx_client_factory=platform_client_factory)
+        await _discover("https://example.com/mcp", httpx_client_factory=platform_client_factory)
 
     assert targets == ["https://example.com/mcp"]
 
@@ -587,6 +591,8 @@ async def test_list_tools_delegates_unsuffixed_transport_selection():
     targets = []
 
     class FakeClient:
+        server_capabilities = MagicMock(extensions=None)
+
         async def list_tools(self):
             return MagicMock(tools=[])
 
@@ -599,7 +605,7 @@ async def test_list_tools_delegates_unsuffixed_transport_selection():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://example.com", httpx_client_factory=platform_client_factory)
+        await _discover("https://example.com", httpx_client_factory=platform_client_factory)
 
     assert targets == ["https://example.com"]
 
@@ -609,6 +615,8 @@ async def test_list_tools_declared_streamable_uses_shared_client():
     targets = []
 
     class FakeClient:
+        server_capabilities = MagicMock(extensions=None)
+
         async def list_tools(self):
             return MagicMock(tools=[])
 
@@ -621,7 +629,7 @@ async def test_list_tools_declared_streamable_uses_shared_client():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools(
+        await _discover(
             "https://mcp.vercel.com",
             None,
             "streamable-http",
@@ -636,6 +644,8 @@ async def test_list_tools_bare_url_uses_shared_client_at_root():
     targets = []
 
     class FakeClient:
+        server_capabilities = MagicMock(extensions=None)
+
         async def list_tools(self):
             return MagicMock(tools=[])
 
@@ -648,7 +658,7 @@ async def test_list_tools_bare_url_uses_shared_client_at_root():
         "agentarea_mcp.application.mcp_client.connected_mcp_client",
         fake_connected,
     ):
-        await _list_tools("https://mcp.vercel.com", httpx_client_factory=platform_client_factory)
+        await _discover("https://mcp.vercel.com", httpx_client_factory=platform_client_factory)
 
     assert targets == ["https://mcp.vercel.com"]
 
@@ -971,3 +981,114 @@ async def test_monitor_reverify_sweep_enqueues_never_attempted():
     assert str(inst_id) in verify_called_instances or len(created_tasks) >= 1, (
         "At least one verify task must have been created for the never_attempted row"
     )
+
+
+# ---------------------------------------------------------------------------
+# MCP Events: the capability and events/list are stored at verification
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_verify_stores_the_events_the_server_lists():
+    from agentarea_mcp.verification import Discovery, verify
+
+    inst = _make_instance("docker")
+    inst.events = None
+    db_mock = _make_db_mock(inst)
+    record = {"extension": "io.modelcontextprotocol/events", "events": [{"name": "a.b"}]}
+
+    async def fake_discover(endpoint_url, headers=None):
+        return Discovery(tools=[{"name": "t"}], events=record)
+
+    with (
+        patch("agentarea_mcp.verification.get_database", return_value=db_mock),
+        patch("agentarea_mcp.verification.get_settings") as mock_settings,
+    ):
+        mock_settings.return_value.mcp.manager_gateway_url.return_value = "http://fake-go/mcp"
+        mock_settings.return_value.mcp.manager_gateway_headers.return_value = {}
+        result = await verify(inst, _list_tools_fn=fake_discover)
+
+    assert result["status"] == "succeeded"
+    assert inst.events == record
+    assert inst.tools == [{"name": "t"}]
+
+
+@pytest.mark.asyncio
+async def test_verify_clears_events_a_server_no_longer_offers():
+    from agentarea_mcp.verification import verify
+
+    inst = _make_instance("docker")
+    inst.events = {"extension": "io.modelcontextprotocol/events", "events": []}
+    db_mock = _make_db_mock(inst)
+
+    async def fake_list_tools(endpoint_url, headers=None):
+        return []
+
+    with (
+        patch("agentarea_mcp.verification.get_database", return_value=db_mock),
+        patch("agentarea_mcp.verification.get_settings") as mock_settings,
+    ):
+        mock_settings.return_value.mcp.manager_gateway_url.return_value = "http://fake-go/mcp"
+        mock_settings.return_value.mcp.manager_gateway_headers.return_value = {}
+        await verify(inst, _list_tools_fn=fake_list_tools)
+
+    assert inst.events is None
+
+
+class _EventsClient:
+    def __init__(self, extensions, pages=None, fail=None):
+        self.server_capabilities = MagicMock(extensions=extensions)
+        self.protocol_version = "2026-07-28"
+        self._pages = list(pages or [])
+        self._fail = fail
+        self.session = self
+
+    async def list_tools(self):
+        return MagicMock(tools=[])
+
+    async def send_request(self, request, result_type):
+        if self._fail:
+            raise self._fail
+        return self._pages.pop(0)
+
+
+async def _discover_with(client):
+    from agentarea_mcp.verification import _discover
+
+    @asynccontextmanager
+    async def fake_connected(url, headers, timeout, **kwargs):
+        yield client
+
+    with patch("agentarea_mcp.application.mcp_client.connected_mcp_client", fake_connected):
+        return await _discover("https://example.com/mcp", httpx_client_factory=platform_client_factory)
+
+
+@pytest.mark.asyncio
+async def test_discover_lists_events_when_the_extension_is_advertised():
+    client = _EventsClient(
+        {"io.modelcontextprotocol/events": {"listChanged": False}},
+        pages=[{"resultType": "complete", "events": [{"name": "ticket.created"}]}],
+    )
+    found = await _discover_with(client)
+    assert found.events is not None
+    assert found.events["protocol_version"] == "2026-07-28"
+    assert [e["name"] for e in found.events["events"]] == ["ticket.created"]
+
+
+@pytest.mark.asyncio
+async def test_discover_skips_events_a_server_does_not_advertise():
+    found = await _discover_with(_EventsClient(None))
+    assert found.events is None
+
+
+@pytest.mark.asyncio
+async def test_a_failing_events_list_is_recorded_not_hidden():
+    from mcp import MCPError
+
+    client = _EventsClient(
+        {"io.modelcontextprotocol/events": {}}, fail=MCPError(-32603, "upstream down")
+    )
+    found = await _discover_with(client)
+    assert found.events is not None
+    assert found.events["events"] == []
+    assert "upstream down" in found.events["error"]

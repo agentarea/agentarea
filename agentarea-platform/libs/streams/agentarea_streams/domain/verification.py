@@ -255,6 +255,9 @@ async def verify_request(
     secret = credentials.get(scheme.secret) if scheme.secret else None
     if not isinstance(secret, str) or not secret:
         raise VerificationError(f"the source has no {scheme.secret or 'secret'} to verify with")
+    for name in scheme.required_headers:
+        if not _header(headers, name):
+            raise VerificationError(f"empty header {name}")
     if scheme.scheme == "hmac":
         verify_hmac(scheme, headers, raw_body, secret)
     elif scheme.scheme == "hmac_timestamped":

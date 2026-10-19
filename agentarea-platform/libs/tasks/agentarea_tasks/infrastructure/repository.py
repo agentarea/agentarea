@@ -42,6 +42,16 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             return None
         return self._orm_to_domain(task_orm)
 
+    async def statuses(self, ids: list[UUID]) -> dict[UUID, str]:
+        if not ids:
+            return {}
+        result = await self.session.execute(
+            select(TaskORM.id, TaskORM.status).where(
+                TaskORM.id.in_(ids), self._get_workspace_filter()
+            )
+        )
+        return dict(result.tuples().all())
+
     async def list_tasks(
         self, limit: int = 100, offset: int = 0, created_by: str | None = None
     ) -> list[Task]:
@@ -114,6 +124,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "correlation_id": entity.provenance.correlation_id or str(entity.id),
             "causation_id": entity.provenance.causation_id,
             "parent_task_id": entity.provenance.parent_task_id,
+            "depth": entity.provenance.depth,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -515,6 +526,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                     "correlation_id": task_orm.correlation_id,
                     "causation_id": task_orm.causation_id,
                     "parent_task_id": task_orm.parent_task_id,
+                    "depth": task_orm.depth,
                 },
             }
         )

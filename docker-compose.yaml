@@ -581,6 +581,9 @@ services:
       - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
       # Source credentials are read from the database secret store.
       - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      # MCP Events sources are polled and subscribed through the manager's gateway.
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
     networks:
       - default
     restart: unless-stopped

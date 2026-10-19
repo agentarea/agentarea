@@ -23,6 +23,7 @@ import type {
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
   ListToolCallApprovalsV1ToolCallApprovalsGetData,
+  ListWorkspaceEventsV1StreamsEventsGetData,
   McpInstanceConsumer,
   McpServerCreate,
   McpServerInstanceCreate,
@@ -53,11 +54,11 @@ import type {
   ProviderSpecWithModelsResponse,
   RelationshipWriteRequest,
   ResolveRequest,
+  ScheduleTaskCreate,
   SkillContentResponse,
   SkillCreateRequest,
   SkillFileResponse,
   SkillResponse,
-  ScheduleTaskCreate,
   SkillUpdateRequest,
   SourceCreate,
   TaskCreate,
@@ -388,11 +389,10 @@ export const resolveEscalation = async (
 };
 
 export const getToolCallApproval = async (approvalId: string) => {
-  const result =
-    await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
-      client: serverClient,
-      path: { approval_id: approvalId },
-    });
+  const result = await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
+    client: serverClient,
+    path: { approval_id: approvalId },
+  });
   return withStatus(result);
 };
 
@@ -1332,6 +1332,16 @@ export const listStreamEvents = async (
     query,
   });
   return { data, error };
+};
+
+export const listWorkspaceEvents = async (
+  query: NonNullable<ListWorkspaceEventsV1StreamsEventsGetData["query"]>
+) => {
+  const result = await sdk.listWorkspaceEventsV1StreamsEventsGet({
+    client: serverClient,
+    query,
+  });
+  return withStatus(result);
 };
 
 export const getStreamEvent = async (streamId: string, sequence: number) => {

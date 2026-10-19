@@ -19,7 +19,7 @@ from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_streams.domain.models import TriggerBinding
 from agentarea_triggers.domain.enums import ExecutionStatus
-from agentarea_triggers.domain.models import TriggerSession
+from agentarea_triggers.domain.models import TriggerBatchWindow, TriggerSession
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerTypeLiteral
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
@@ -85,6 +85,10 @@ class TriggerSummaryOutput(BaseModel):
     session: dict[str, Any] | None = Field(
         default=None,
         description='A stream trigger\'s {"continue", "idle_timeout"}; null takes the defaults.',
+    )
+    batch: dict[str, Any] | None = Field(
+        default=None,
+        description='A stream trigger\'s {"window", "max_events"}; null fires on every event.',
     )
     last_event_at: datetime | None = Field(
         default=None, description="When an event last reached it."
@@ -159,6 +163,9 @@ def _trigger_summary(trigger: Any, binding: TriggerBinding | None) -> dict[str, 
             trigger.session.model_dump(by_alias=True, exclude_none=True)
             if getattr(trigger, "session", None)
             else None
+        ),
+        "batch": (
+            trigger.batch.model_dump(exclude_none=True) if getattr(trigger, "batch", None) else None
         ),
         "last_event_at": binding.last_event_at if binding else None,
     }
@@ -308,6 +315,17 @@ class TriggersToolset(Toolset):
                 )
             ),
         ] = None,
+        batch: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    '{"window": "1h", "max_events": 50}: fire once for the events of a batch, '
+                    "when the window has passed or max_events joined, whichever comes first; "
+                    "either may be left out. The task gets every event of the batch and needs "
+                    "task_parameters.text. Null fires on every event."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Create a trigger that fires the agent on events of an existing stream.
 
@@ -331,6 +349,7 @@ class TriggersToolset(Toolset):
                 stream_id=UUID(stream_id),
                 event_filter=event_filter,
                 session=TriggerSession.model_validate(session) if session else None,
+                batch=TriggerBatchWindow.model_validate(batch) if batch else None,
                 task_parameters=task_parameters or {},
                 conditions=conditions or {},
                 enabled=enabled,

@@ -370,8 +370,9 @@ both, the same way as the secret manager settings just above.
 |---|---|---|---|
 | `AGENTAREA_EVENT_WRITE_QUOTA` | integer | `600` | Events one workspace may append per rolling minute, counted across every stream it owns. Exceeding it answers a webhook `429`. |
 | `AGENTAREA_EVENT_RETENTION` | duration | `7d` | How long the events read model (`stream_events`) keeps a day: an older daily partition is dropped whole. One setting for every stream. |
+| `AGENTAREA_EVENT_ARCHIVE` | boolean | `false` | Before an expired day is dropped, write its events to the object store (`AGENTAREA_S3_BUCKET`) as gzipped JSONL, one object per workspace at `event-archive/<workspace>/<YYYY-MM-DD>.jsonl.gz`. A day the store does not take is kept, logged as an error, and tried again on the next pass. |
 | `AGENTAREA_EVENT_PARTITIONS_AHEAD` | integer | `7` | Daily read-model partitions kept created ahead of today. |
-| `AGENTAREA_EVENT_FORWARD_DEPTH` | integer | `8` | Longest causation chain a forward may extend. |
+| `AGENTAREA_EVENT_FORWARD_DEPTH` | integer | `8` | Longest causation chain a forward or a trigger firing may extend: past it a forward records an error and a trigger skips the event. A task started by an event is at that event's depth, and its outcome in the platform stream one deeper. |
 | `AGENTAREA_EVENT_MAX_ATTEMPTS` | integer | `10` | Deliveries of one bus event before the router records the reactions still missing as `error` and moves the event to `streams.events.router.dlq`. |
 
 These share the `EVENT` domain with `AGENTAREA_EVENT_POLL_INTERVAL` and
@@ -382,6 +383,16 @@ event bus. See [Event streams](/concepts/integration/event-streams).
 Stream events travel on Redis Streams (the partitions of `streams.events`, see
 the Redis group above), so the API and the worker both refuse to start unless `AGENTAREA_BROKER=redis`
 (the default, and what every chart and Compose file sets).
+
+### Trigger batches (not in `config.yaml`)
+
+Read by `TriggerSettings` in the backend (it refuses a trigger whose batch asks
+for more) and in the worker (the router's trigger handler). Set the same value
+on both through `backend.extraEnv` and `worker.extraEnv`.
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS` | integer | `100` | The most events one batch of a windowed stream trigger holds. A batch that reaches it fires at once, also before its window has passed; a trigger's own `max_events` may not exceed it. |
 
 ### Event service (group `eventService` values, chart keys only)
 
@@ -407,6 +418,10 @@ It also reads, from the groups above:
 - `AGENTAREA_HTTP_ALLOW_PRIVATE`, `AGENTAREA_HTTP_PRIVATE_ALLOWLIST`: a host the
   member names (a feed URL, a mailbox) may reach only public addresses unless
   these open private ones, as for the backend.
+- `AGENTAREA_MCP_MANAGER_URL`, `AGENTAREA_MCP_GATEWAY_SECRET`: MCP Events
+  sources are polled and subscribed through the MCP manager's gateway, which
+  adds the MCP server's credentials. Required; the chart sets both, the secret
+  from the same Secret the backend reads.
 
 ### Sandbox runner (`mcpSandboxRunner`)
 
@@ -451,7 +466,8 @@ API and the worker at startup.
 
 ### Outbound URL policy (not in `config.yaml`)
 
-Read by `HttpSettings` in the backend and the worker.
+Read by `HttpSettings` in the backend and the worker, by the event service, and
+by the MCP manager for URL MCP servers reached through its gateway.
 
 | Variable | Helm value | Default |
 |---|---|---|

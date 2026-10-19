@@ -261,12 +261,39 @@ export function getStreamOutcomeStatusPresentation(
       return { label: "Error", labelKey: "error", kind: "failed" };
     case "unheard":
       return { label: "Nobody listened", labelKey: "unheard", kind: "draft" };
+    case "batched":
+      return { label: "In a batch", labelKey: "batched", kind: "scheduled" };
     default:
       return {
         label: "Unknown outcome",
         labelKey: "unknown",
         kind: "attention",
       };
+  }
+}
+
+/**
+ * What the platform did with one event (the workspace feed's status): queued
+ * until the router matched it, in flight until every subscriber reacted.
+ */
+export function getEventProcessingStatusPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "queued":
+      return { label: "Queued", labelKey: "queued", kind: "queued" };
+    case "processing":
+      return { label: "Processing", labelKey: "processing", kind: "running" };
+    case "handled":
+      return { label: "Handled", labelKey: "handled", kind: "done" };
+    case "error":
+      return { label: "Error", labelKey: "error", kind: "failed" };
+    case "no_handlers":
+      return { label: "No handlers", labelKey: "no_handlers", kind: "off" };
+    case "skipped":
+      return { label: "Skipped", labelKey: "skipped", kind: "cancelled" };
+    default:
+      return { label: "Unknown", labelKey: "unknown", kind: "attention" };
   }
 }
 
@@ -293,6 +320,8 @@ export function getTriggerExecutionStatusPresentation(
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     case "skipped":
       return { label: "Skipped", labelKey: "skipped", kind: "off" };
+    case "batched":
+      return { label: "In a batch", labelKey: "batched", kind: "scheduled" };
     default:
       return fallbackStatusPresentation(status);
   }

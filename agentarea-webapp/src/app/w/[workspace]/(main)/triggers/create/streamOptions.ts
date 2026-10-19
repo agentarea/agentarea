@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import type { StreamResponse } from "@/api/client/types.gen";
 import {
   listStreams,
@@ -5,6 +6,7 @@ import {
   listStreamSourceTypes,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { isPlatformStream } from "@/lib/platformStream";
 import { streamContinuesSessions } from "@/lib/sourceTypes";
 
 /**
@@ -20,9 +22,10 @@ export type StreamOptions = { items: StreamOption[]; error: string | null };
 export async function loadStreamOptions(
   failureLabel: string
 ): Promise<StreamOptions> {
-  const [streams, types] = await Promise.all([
+  const [streams, types, t] = await Promise.all([
     listStreams(),
     listStreamSourceTypes(),
+    getTranslations("EventsPage.streams"),
   ]);
   if (!streams.data) {
     return { items: [], error: apiErrorMessage(streams, failureLabel) };
@@ -41,6 +44,7 @@ export async function loadStreamOptions(
   return {
     items: streams.data.map((stream, index) => ({
       ...stream,
+      name: isPlatformStream(stream) ? t("platformName") : stream.name,
       continuesSessions: streamContinuesSessions(
         catalog,
         (sources[index].data ?? []).map((source) => source.source_type)

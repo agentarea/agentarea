@@ -1,7 +1,8 @@
 // Package mcpgateway owns the demand boundary for container-backed MCP
 // instances. Callers send ordinary Streamable HTTP; this package serializes
 // cold starts, observes live requests, renews request leases, and reaps idle
-// workloads without exposing lifecycle mechanics to Python.
+// workloads without exposing lifecycle mechanics to Python. URL instances pass
+// through the same boundary with no lifecycle, so their credentials stay here.
 package mcpgateway
 
 import (
@@ -19,7 +20,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agentarea/mcp-manager/internal/egress"
 	"github.com/agentarea/mcp-manager/internal/models"
+	"github.com/agentarea/mcp-manager/internal/secrets"
 	"github.com/google/uuid"
 )
 
@@ -45,7 +48,7 @@ type InstanceRuntime interface {
 
 type LifecycleRepository interface {
 	WithInstanceLock(context.Context, string, func(context.Context) error) error
-	LoadInstance(context.Context, string) (*models.MCPServerInstance, error)
+	LoadTarget(context.Context, string) (Target, error)
 	MarkStarting(context.Context, string) error
 	MarkFailed(context.Context, string, error) error
 	MarkReadyAndBeginRequest(context.Context, string, string, time.Duration) error
@@ -122,16 +125,26 @@ func (p Policy) Validate() error {
 	return nil
 }
 
-type Gateway struct {
-	repository LifecycleRepository
-	runtime    InstanceRuntime
-	policy     Policy
-	logger     *slog.Logger
-	remote     *RemoteUpstream
-	requests   RequestObserver
+// URLUpstream reaches url-transport instances: their secret headers come from
+// the secret store and their member-chosen hosts are dialed under the egress
+// policy.
+type URLUpstream struct {
+	Secrets secrets.SecretResolver
+	Egress  egress.Policy
 }
 
-func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream) (*Gateway, error) {
+type Gateway struct {
+	repository   LifecycleRepository
+	runtime      InstanceRuntime
+	policy       Policy
+	logger       *slog.Logger
+	remote       *RemoteUpstream
+	requests     RequestObserver
+	urlSecrets   secrets.SecretResolver
+	urlTransport http.RoundTripper
+}
+
+func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy, logger *slog.Logger, remote *RemoteUpstream, urls URLUpstream) (*Gateway, error) {
 	if repository == nil || runtime == nil || logger == nil {
 		return nil, fmt.Errorf("MCP gateway repository, runtime, and logger are required")
 	}
@@ -141,7 +154,13 @@ func New(repository LifecycleRepository, runtime InstanceRuntime, policy Policy,
 	if remote != nil && (remote.BaseURL == "" || remote.Token == "") {
 		return nil, fmt.Errorf("a remote MCP upstream requires both a base URL and a token")
 	}
-	return &Gateway{repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote}, nil
+	if urls.Secrets == nil { // pragma: allowlist secret
+		return nil, fmt.Errorf("MCP gateway requires a secret resolver for URL instances")
+	}
+	return &Gateway{
+		repository: repository, runtime: runtime, policy: policy, logger: logger, remote: remote,
+		urlSecrets: urls.Secrets, urlTransport: urls.Egress.Transport(),
+	}, nil
 }
 
 // isRemoteUpstream reports whether this upstream is the configured data plane,
@@ -212,14 +231,14 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	if g.requests != nil {
 		startedAt = time.Now()
 	}
-	instance, err := g.repository.LoadInstance(request.Context(), instanceID)
+	loaded, err := g.repository.LoadTarget(request.Context(), instanceID)
 	if err != nil {
 		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
 		return
 	}
 	if g.requests != nil {
 		started := RequestStarted{
-			RequestID: requestID, InstanceID: instance.InstanceID, WorkspaceID: instance.WorkspaceID,
+			RequestID: requestID, InstanceID: loaded.InstanceID, WorkspaceID: loaded.WorkspaceID,
 			Method: request.Method, MCPMethod: headerValue(request, "Mcp-Method"), MCPName: headerValue(request, "Mcp-Name"),
 			StartedAt: startedAt,
 		}
@@ -248,6 +267,11 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 			}
 		}()
 	}
+	if loaded.URL != nil {
+		g.serveURL(response, request, instanceID, loaded.URL)
+		return
+	}
+	instance := loaded.Container
 	var upstream string
 	// The start is deliberately detached from the caller's request. A client
 	// abandoning one HTTP request is not a statement that the workload is

@@ -23,6 +23,7 @@ vets and pins the address for the connection itself, on every redirect hop.
 import asyncio
 import fnmatch
 import ipaddress
+import logging
 import socket
 import urllib.request
 from collections.abc import Awaitable, Callable, Iterable
@@ -46,6 +47,8 @@ __all__ = [
     "safe_async_client",
     "validate_outbound_url",
 ]
+
+logger = logging.getLogger(__name__)
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
@@ -319,12 +322,30 @@ class PinnedSender:
         if proxy is not None:
             return await self._pool_for(host, proxy).handle_async_request(request)
 
+        # Each vetted address in turn, as a resolver-driven connect would: a name
+        # that resolves to ::1 and 127.0.0.1 reaches a server listening on one.
+        # Only a refused connection moves on; nothing was sent to that address.
+        *earlier, last = addresses
+        for address in earlier:
+            try:
+                return await self._send_pinned(request, host, address)
+            except self._lib.ConnectError:
+                logger.warning(
+                    "%s refused a connection at %s; trying its next address",
+                    host,
+                    address,
+                    exc_info=True,
+                )
+        return await self._send_pinned(request, host, last)
+
+    async def _send_pinned(self, request: Any, host: str, address: Any) -> Any:
+        url = request.url
         extensions: dict[str, Any] = dict(request.extensions)
-        if url.scheme == "https" and str(addresses[0]) != host:
+        if url.scheme == "https" and str(address) != host:
             extensions.setdefault("sni_hostname", host)
         pinned = self._lib.Request(
             request.method,
-            url.copy_with(host=str(addresses[0])),
+            url.copy_with(host=str(address)),
             headers=request.headers,
             stream=request.stream,
             extensions=extensions,

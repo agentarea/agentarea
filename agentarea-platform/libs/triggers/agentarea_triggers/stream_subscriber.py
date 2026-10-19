@@ -15,17 +15,22 @@ from agentarea_common.workspaces.memberships import (
     check_workspace_membership,
     is_workspace_owner,
 )
+from agentarea_execution.workflows.trigger_batch_workflow import BatchSpec
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 from agentarea_streams.domain import HandlerResult, StreamEvent, SubscriptionView, Verdict
 from agentarea_streams.domain.keys import task_id_for
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .batches import TriggerBatches, batch_workflow_id
 from .channels.sender_admission import Refused, TelegramSenderAdmission, event_admission
 from .delivery_address import event_body, firing_delivery
-from .domain.models import StreamTrigger
+from .domain.models import StreamTrigger, TriggerBatchWindow
 from .event_context import TriggerEvent
+from .failures import is_permanent
+from .infrastructure.causation_repository import StoredCausationChain
 from .infrastructure.reactions import CausedExecutionRepository, ReactionRepository, StreamCause
 from .llm_condition_evaluator import build_condition_evaluator
+from .loop_guard import CausationChainFactory, own_task_in_chain
 from .trigger_service import TriggerService
 
 logger = logging.getLogger(__name__)
@@ -106,12 +111,16 @@ class TriggerSubscriptionHandler:
         secret_manager_factory: SecretManagerFactory,
         workflow_executor: WorkflowExecutor,
         authority: ConfigurerAuthority,
+        max_depth: int,
         trigger_service_factory: Callable[[AsyncSession, UserContext], TriggerService]
         | None = None,
         follow_up_claim_factory: Callable[
             [AsyncSession, SubscriptionView, StreamEvent], SubscriptionFollowUpClaim
         ] = SubscriptionFollowUpClaim,
         sender_admission: TelegramSenderAdmission | None = None,
+        causation_chain: CausationChainFactory = StoredCausationChain,
+        batches: TriggerBatches,
+        batch_cap: int,
     ):
         self._event_broker = event_broker
         self._secret_manager_factory = secret_manager_factory
@@ -120,6 +129,13 @@ class TriggerSubscriptionHandler:
         self._trigger_service_factory = trigger_service_factory or self._build_trigger_service
         self._follow_up_claim_factory = follow_up_claim_factory
         self._sender_admission = sender_admission
+        self._max_depth = max_depth
+        self._causation_chain = causation_chain
+        self._batches = batches
+        self._batch_cap = batch_cap
+
+    def trigger_service(self, session: AsyncSession, context: UserContext) -> TriggerService:
+        return self._trigger_service_factory(session, context)
 
     def _build_trigger_service(self, session: AsyncSession, context: UserContext) -> TriggerService:
         from agentarea_tasks.infrastructure.repository import TaskRepository
@@ -183,6 +199,23 @@ class TriggerSubscriptionHandler:
             )
         if not trigger.is_active:
             return HandlerResult(verdict=Verdict.SKIPPED, reason="trigger is inactive")
+        depth = event.depth + 1
+        if depth > self._max_depth:
+            return HandlerResult(
+                verdict=Verdict.SKIPPED,
+                reason=f"causation depth {depth} exceeds {self._max_depth}",
+            )
+        own = await own_task_in_chain(
+            self._causation_chain(session, subscription.workspace_id),
+            trigger_id=trigger.id,
+            event=event,
+            max_hops=self._max_depth,
+        )
+        if own is not None:
+            return HandlerResult(
+                verdict=Verdict.SKIPPED,
+                reason=f"the event comes from task {own}, which this trigger started",
+            )
         # A messenger is a door to the agent, not a grant: whoever wrote must be a
         # linked user the graph lets run it, and the run is theirs. Without the
         # admission wired, nobody gets through.
@@ -228,6 +261,10 @@ class TriggerSubscriptionHandler:
         trigger_event = TriggerEvent.from_stream_event(
             event, stream_name=stream.name, body=await event_body(event.data, event.workspace_id)
         )
+        if isinstance(trigger, StreamTrigger) and trigger.batch is not None:
+            return await self._join_batch(
+                service, trigger, trigger.batch, subscription, event, trigger_event, caller
+            )
         if caller is not None:
             service = self._service(
                 session, UserContext(user_id=caller, workspace_id=subscription.workspace_id), cause
@@ -242,6 +279,7 @@ class TriggerSubscriptionHandler:
                 origin_id=str(trigger.id),
                 correlation_id=cause.correlation_id,
                 causation_id=cause.causation_id,
+                depth=event.depth,
             ),
             follow_up_claim=follow_up_claim,
             raise_retryable=True,
@@ -259,4 +297,53 @@ class TriggerSubscriptionHandler:
             reason=firing.reason,
             score=firing.verdict.score if firing.verdict else None,
             task_id=firing.task_id,
+        )
+
+    async def _join_batch(
+        self,
+        service: TriggerService,
+        trigger: StreamTrigger,
+        window: TriggerBatchWindow,
+        subscription: SubscriptionView,
+        event: StreamEvent,
+        trigger_event: TriggerEvent,
+        caller: str | None,
+    ) -> HandlerResult:
+        """Hand an admitted event that meets the conditions to the trigger's open batch."""
+        if trigger.conditions:
+            try:
+                verdict = await service.evaluate_trigger_verdict(trigger, trigger_event.data)
+            except Exception as error:
+                if not is_permanent(error):
+                    raise
+                logger.warning(
+                    "Trigger %s could not decide event %s: %s",
+                    trigger.id,
+                    event.id,
+                    error,
+                    exc_info=True,
+                )
+                return HandlerResult(verdict=Verdict.ERROR, reason=str(error))
+            if not verdict.met:
+                return HandlerResult(
+                    verdict=Verdict.SKIPPED, reason=verdict.reason, score=verdict.score
+                )
+        workflow_id = batch_workflow_id(trigger.id, caller)
+        await self._batches.add(
+            BatchSpec(
+                trigger_id=trigger.id,
+                subscription_id=subscription.id,
+                workspace_id=subscription.workspace_id,
+                configured_by=subscription.created_by,
+                caller=caller,
+                window_seconds=window.window_seconds(),
+                max_events=min(window.max_events or self._batch_cap, self._batch_cap),
+            ),
+            event.id,
+            workflow_id=workflow_id,
+        )
+        return HandlerResult(
+            verdict=Verdict.BATCHED,
+            reason=f"held in batch {workflow_id}",
+            workflow_id=workflow_id,
         )

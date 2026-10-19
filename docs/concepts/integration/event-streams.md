@@ -1,248 +1,261 @@
 ---
 title: "Event streams"
 type: concept
-description: "The append-only journal a workspace owns, and how subscriptions turn its events into trigger runs or copies in other streams."
+description: "Streams collect events from catalog sources under one envelope; subscriptions fire triggers, copy events, or deliver them to MCP clients."
 prerequisites:
   - /concepts/integration/triggers
 related:
+  - /concepts/integration/event-bus
   - /guides/triggers/collect-events-into-a-stream
-  - /guides/triggers/trigger-from-a-webhook
-  - /concepts/execution/tasks
+  - /guides/triggers/subscribe-to-a-stream-over-mcp-events
+  - /guides/triggers/transform-a-stream-with-a-processor
   - /concepts/execution/events
-last_updated: 2026-10-07
+last_updated: 2026-10-19
 ---
 
-An event stream is a named, ordered log that a workspace owns. A webhook
-delivery, or anything else recorded into it, becomes a row nobody can rewrite,
-and any number of subscriptions can read the same log independently, each at
-its own position. This is not the task execution feed described in
-[Events](/concepts/execution/events) — that is what one task emits while it
-runs. A stream is what arrives *before* any task exists, and the durable
-record of which subscriptions acted on it and what they decided.
+An event stream is a named channel of events that a workspace owns. Sources
+put events in: a provider posting webhooks, a feed the platform polls, an MCP
+server that offers events, or the platform reporting how a task ended.
+Subscriptions take events out: a trigger runs an agent, a forward copies the
+event into other streams, an MCP client outside AgentArea receives it. The
+workspace's events feed records every event and what each subscription did
+with it. A stream is not the feed of one running task described in
+[Task events](/concepts/execution/events): it holds what arrives before a task
+exists, and what tasks report when they end.
 
 ## The problem
 
-Before a stream existed between them, a webhook and its trigger were wired
-directly: registering the webhook and firing exactly one trigger were the same
-step, and a trigger's own execution history was the only record of what had
-come in. That works fine while a webhook has exactly one consumer. It breaks
-the moment a second one is legitimate — an agent and an audit copy of the same
-GitHub deliveries, or two agents each filtering a different event kind out of
-one repository — because direct wiring has no way to say "deliver this once,
-to more than one place." Adding a second consumer meant registering the
-webhook a second time with the provider: a second URL, a second signing
-secret, a second chance to miss a delivery or verify it differently.
+Wire a webhook straight to the agent it starts and every consumer needs its
+own registration with the provider. A second legitimate reader of the same
+GitHub deliveries, such as a second agent, an audit copy or an outside system,
+means a second URL, a second signing secret, and a second place where a
+delivery can be lost or checked differently.
 
-A provider's own retries raise a second question: what stops a redelivered
-webhook from running the agent twice? And a third: what stops one sender from
-writing enough events to exhaust a workspace's storage, or drowning out every
-other source sharing the account?
+Providers also disagree on everything a platform needs to know about an event:
+how it is signed, where its id is, what kind of event it is, which conversation
+it belongs to. Handling that in code per provider spreads through intake,
+triggers and the UI. And providers retry, so something has to stop a
+redelivered webhook from running the agent twice.
 
 ## How AgentArea approaches it
 
-**A stream is a workspace-scoped, graph-governed resource.** `StreamORM`
-(`__graph_resource__ = True`) carries a `name` unique per workspace, a `kind`,
-and `retention_days`. Every stage-1 stream — created directly through
-`POST /v1/workspaces/{workspace}/streams/` or auto-created for a webhook
-trigger — is `kind: "custom"`; `platform` and `processor_output` exist in the
-enum for later use but nothing produces them yet. Creating a stream grants its
-creator; reading, editing, and deleting are separate graph permissions
-(`requires("read"/"edit"/"delete", "stream", ...)`) checked per stream, not
-per event.
+**A stream is a workspace resource.** It has a name, unique in the workspace,
+a description, and a kind: `custom` for the streams you create, `platform` for
+the one the platform writes. Reading, editing and deleting a stream are
+separate permissions in the authorization graph, checked per stream, and
+creating a stream grants it to its creator. A stream cannot be deleted while a
+trigger subscribes to it or a forward writes into it.
 
-**A source is where events enter.** The only kind in stage 1 is `webhook`: a
-`stream_sources` row carrying `webhook_id`, `webhook_type`, `allowed_methods`,
-`validation_rules`, and `webhook_config` — exactly the fields a webhook
-trigger used to keep on itself. Creating a `webhook` trigger auto-creates a
-stream, a source on it, and a subscription that fires the trigger; the trigger
-API stays the surface you edit, and `TriggerService` mirrors every change onto
-the source in the same request, so nothing about using a webhook trigger
-changed except where the row that remembers its configuration lives.
+**Sources come from the catalog.** A source is an instance of a catalog entry,
+listed by `GET /v1/workspaces/{workspace}/streams/source-types`. The entry
+declares how its events arrive (`webhook`, `poll` or both), which credentials
+and settings a source needs, how a webhook is verified, how a provider's
+endpoint check is answered, and where each event's kind, key, session and
+sender are found in the request. The shipped catalog has entries for generic
+webhooks, GitHub, Slack, Telegram, Linear, Discord, Stripe, Sentry, Gmail,
+Teams, email, IMAP, RSS and MCP Events. A credential is a reference to a
+workspace secret, or a secret the platform issues and shows once.
 
-**A source can also stand alone, with no trigger.**
-`POST /v1/workspaces/{workspace}/streams/{stream_id}/sources` adds a webhook
-source to any stream you may edit, of a type listed by
-`GET /v1/workspaces/{workspace}/streams/source-types` — `generic`, `github`,
-`sentry`, `stripe`, `telegram`, `slack`, `email`. Each type
-declares the credentials its verifier needs, and creation without a required
-one is refused rather than accepted unsigned; `generic` and `email` take an
-optional signing secret and are issued one, shown once, when it is left out.
-A credential is held by reference: the source's entry in the secret store
-names the workspace secret you picked, the value is read from that secret at
-each delivery, and a `secret_references` row keeps the secret from being
-deleted while a source uses it. Sentry is verified by the HMAC-SHA256 of the
-body in `Sentry-Hook-Signature`. A provider that does not sign its
-notifications is checked against its own API instead (the `api_lookup`
-scheme): the notified object is read back with the source's credentials, and
-the event is recorded only when the API answers that object in the notified
-state; an unreachable API is a refusal, not a pass. A source a webhook
-trigger owns cannot be deleted on its own, and neither can a stream such a
-source still feeds — the trigger goes first. See [Collect events into a
-stream](/guides/triggers/collect-events-into-a-stream).
+- A **webhook** source gets an unguessable URL, `/webhooks/{webhook_id}` on the
+  API host. A request that passes the entry's verification is answered `202`
+  with `"status": "accepted"`, or `"duplicate"` for a repeat, before anything
+  reacts to it. A failed verification is a `401`.
+- A **poll** source is fetched by the event service on the entry's interval,
+  from the cursor it stored after the last fetch.
+- An **MCP Events** source reads the events of an MCP server instance in the
+  same workspace that offers them, by polling it or through a webhook
+  subscription the event service keeps at that server and renews before it
+  expires. When subscribing fails, or the server ends the subscription, the
+  error is shown on the source and the next attempt waits: the wait starts at
+  `AGENTAREA_EVENT_POLL_INTERVAL` (5 s by default), doubles after each failure,
+  and stops growing at 1 hour. An event whose payload is an AgentArea event
+  envelope (another stream read through the AgentArea MCP server) keeps the
+  original kind and continues its chain: the same `correlation_id`, the
+  original event as `causation_id`, and its depth plus one. A loop back through
+  the MCP server therefore stops at `AGENTAREA_EVENT_FORWARD_DEPTH`. Without an
+  inner kind, the event is named by its MCP event type.
 
-**Appending is idempotent, size-capped, and quota-limited.**
-`StreamJournal.append` requires an `event_key` naming what makes this event
-new. For a webhook, that is the provider's own delivery id when it sends
-one — a header (GitHub's `X-GitHub-Delivery`, Linear's `linear-delivery`, or
-a generic `webhook-id` or `Idempotency-Key`) or, failing that, a body field
-(Stripe's `id`, Telegram's `update_id`, Slack's `event_id`); Sentry's
-`Request-ID` header names its deliveries, and a notification checked by
-`api_lookup` is typically keyed by its event name and object id together — and
-a fresh `recv:<uuid4()>` otherwise, which is explicitly never recognized as a repeat. The key is enforced with `INSERT ... ON CONFLICT DO
-NOTHING` on `(stream_id, event_key)`, so a redelivered id lands once: the
-first attempt gets `sequence` and `appended: true`, every later one gets the
-same `sequence` and `appended: false`. The event's own id is deterministic too
-— `uuid5` of the stream id and the key — so retrying the same key always reads
-back the same event. A payload over 256 KiB is refused outright, and a
-workspace appending more than `AGENTAREA_EVENT_WRITE_QUOTA` events across
-*every* stream it owns in the trailing minute is refused with a quota error —
-the webhook endpoint turns both into `413` and `429`. Appends to one stream are
-ordered by locking that stream's row for the duration of the insert, against
-one global sequence shared by every stream in the deployment.
+See [Collect events into a stream](/guides/triggers/collect-events-into-a-stream)
+to add a source.
 
-**Intake answers before anything reacts.** A webhook request that passes
-method, signature, and the checks above is recorded and answered `202` with
-`{"status": "accepted", "sequence": n}` (`"duplicate"` instead of
-`"accepted"` on a repeat) — never run inline with the HTTP request. What
-happens next is a separate hop. See [Trigger an agent from a
-webhook](/guides/triggers/trigger-from-a-webhook) for the full request
-lifecycle, including the two provider handshakes that are answered
-synchronously instead and never appended.
+**Every event carries one envelope.** The platform reads these fields off the
+request through the entry's templates. The body is left as it was sent, for
+the agent to read.
 
-**A subscription reads the journal independently, at its own pace.** Two
-kinds exist: `trigger`, which fires a trigger for events that match, and
-`forward`, which copies matching events into one or more other streams. Each
-subscription's `filter` names the event kinds it wants (dotted-prefix
-matching, so `issues` also catches `issues.opened`) and exact field values;
-an empty filter matches everything. Each subscription keeps its own
-`cursor_sequence`, so adding a second subscription to a stream that already
-has years of events starts it at today, not at the beginning — and one
-subscription falling behind or failing never blocks another reading the same
-log.
+| Field | Meaning |
+|---|---|
+| `event_id` | `uuid5` of the stream and the key: a repeat of a key is the same event |
+| `kind` | What happened, such as `push` or `payment_intent.succeeded`; `event` when the entry names none |
+| `key` | What makes the event new, usually the provider's delivery id; `recv:<random>` when the request carries none |
+| `source_id`, `source_type` | The source that brought it and its catalog entry |
+| `session_key` | `<source id>:<value>` for the conversation or thread it belongs to; null when the provider has none |
+| `sender` | Who sent it, when the entry names a sender |
+| `occurred_at`, `received_at` | The provider's time, and the time the platform received it |
+| `correlation_id`, `causation_id`, `depth` | The event that started the chain, the event or task event that caused this one, and how many steps deep it is |
+| `data` | `{headers, body, body_ref}`: headers without credentials or signatures; a body over 64 KB is stored in the workspace's files and referenced by `body_ref` |
+| `attachments` | Files the event carried, stored in the workspace's files |
+| `sequence` | The event's position in the events feed, used as a cursor |
+| `v` | The envelope version, `1` |
 
-**The dispatcher runs inside the worker, leased rather than locked.** It polls
-every `AGENTAREA_EVENT_DISPATCH_EVERY` and wakes sooner on a Redis pub/sub
-signal (`agentarea.streams.wake`) published after a commit — the wake is
-latency only; a publish failure falls back to the next poll instead. Due
-subscriptions are claimed with `FOR UPDATE SKIP LOCKED` and a lease
-(`AGENTAREA_EVENT_LEASE`), not a held row lock, because firing a trigger
-commits inside `TriggerService`'s own session partway through handling — a
-lock held across that would be released early. Events are handled one at a
-time, up to `AGENTAREA_EVENT_DISPATCH_BATCH` per pass; a failed event retries
-with exponential backoff (capped at five minutes) for up to
-`AGENTAREA_EVENT_MAX_ATTEMPTS` tries, after which the outcome is recorded
-`error` and the cursor still advances past it — one event that can never
-succeed does not block everything queued behind it forever.
+A webhook request may be up to 25 MB. A workspace may record
+`AGENTAREA_EVENT_WRITE_QUOTA` events per rolling minute across all its
+streams, 600 by default; past that a webhook is answered `429`.
 
-**Every event a subscription's filter matched gets exactly one outcome.**
-`subscription_outcomes` is unique per `(subscription_id, event_sequence)`:
-`reacted` (with the `task_id` it created, or the stream ids it forwarded
-into), `skipped` (a condition declined, or the trigger is paused), or `error`.
-An event no filter matched gets **no** outcome row at all for that
-subscription — "nobody listened" is a distinct, visible state, not a success
-with no effect. A trigger's `task_id` is itself deterministic — `uuid5` of the
-subscription id and the event's sequence — so a crash between creating the
-task and advancing the cursor is recognized on retry instead of starting a
-second run.
+**Subscriptions take events out.** Each subscription has a filter of event
+kinds and exact field values, for example
+`{"kinds": ["issues"], "fields": {"body.action": "opened"}}`. A kind matches
+by dotted prefix, so `issues` also matches `issues.opened`. An empty filter
+matches every event. A subscription starts at the end of its stream: an event
+received before the subscription was created is skipped with the reason
+"received before the subscription started", even when it is redelivered later.
+Each subscription reacts to an event at most once, and the reaction is recorded
+as `reacted`, `skipped` with a reason, or `error`.
 
-**A forward copies an event, not a model.** `ForwardHandler` appends the same
-`data` into every output stream, tagging the copy's `correlation_id` back to
-the original and `causation_id` to the specific event, one `depth` deeper.
-Forwards refuse to target their own input stream, and a chain of forwards
-through other streams is bounded by `AGENTAREA_EVENT_FORWARD_DEPTH` causation
-hops rather than left to loop. Outputs are written in sorted stream-id order,
-so two forwards sharing outputs cannot lock them in opposite orders and
-deadlock. A forward that hits the write quota fails and retries exactly like a
-webhook delivery would — it is never silently dropped.
+- **Trigger.** A trigger with `trigger_type: "stream"` names a `stream_id` and
+  an `event_filter`, and runs its agent for each matching event that passes its
+  conditions. The task's id is derived from the subscription and the event, so
+  a redelivery never starts a second task. With `session`
+  (`{"continue": true, "idle_timeout": "30m"}`), the next event of the same
+  `session_key` joins the running task instead of starting a new one. With
+  `batch` (`{"window": "1h", "max_events": 50}`, either may be left out), the
+  trigger runs its agent once for the events of a batch: the first event opens
+  it, and it fires when the window has passed or it holds `max_events`,
+  whichever comes first, never above `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS` (100 by
+  default). Each event meets the conditions and the sender check before it
+  joins, and its reaction is recorded as `batched` until the batch fires; then
+  every event in it is `reacted` with the one task, which gets them all under
+  `events`. Switching the trigger off or deleting it closes its open batches:
+  their events are recorded as `skipped` and no task starts.
+- **Forward.** `POST /v1/workspaces/{workspace}/streams/{stream_id}/forwards`
+  copies matching events into one or more other streams, never into its own
+  input, and you must be able to edit every output. A copy keeps the original's
+  source, sender and session, points its `causation_id` at the original, and is
+  one step deeper. A copy that would be deeper than
+  `AGENTAREA_EVENT_FORWARD_DEPTH` (8 by default) is not written, and the
+  forward's reaction is recorded as an error with the depth as the reason.
+- **External MCP Events subscriber.** The AgentArea MCP server offers each
+  stream you can read as an event type named `<workspace>/<stream id>`. An MCP
+  client outside AgentArea reads it with `events/poll` from a cursor, or calls
+  `events/subscribe` to receive signed webhooks at an `https` URL, narrowed by
+  kind prefix, source type or session key. A subscription lasts 1 hour by
+  default (1 minute to 24 hours), is renewed by subscribing again, and a
+  workspace holds at most 100. A failed delivery is retried after 30 s, 2 min,
+  10 min, 30 min, 1 h and 2 h; after the last retry the subscription is marked
+  failed. See
+  [Subscribe to a stream over MCP Events](/guides/triggers/subscribe-to-a-stream-over-mcp-events).
+- **Processor** (in progress). Python an agent writes, `def process(event)`,
+  that the platform runs in the sandbox once per matching event. The events it
+  returns are written into its declared output streams, linked to the event it
+  read. The code gets no secrets and every reader of the stream can see it.
+  See [Transform a stream with a processor](/guides/triggers/transform-a-stream-with-a-processor).
+- **Batch window** (in progress). A stream trigger with
+  `"batch": {"window": "1h", "max_events": 50}` fires once for a batch of
+  events instead of once per event. The batch opens with its first event and
+  fires when the window has passed or `max_events` have joined, whichever comes
+  first. A batch never holds more than `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS`
+  events, 100 by default.
 
-**Any trigger can subscribe to any stream, not only its own.** `webhook`
-triggers keep auto-creating their stream as before. Deleting one keeps the
-stream and its history; re-creating it under the same name and `webhook_id`
-(to keep the sender's URL) takes that stream over, starting after the events
-already in it, provided nothing else feeds it and the creator may edit it.
-Stream names are unique per workspace; a taken name is a `409`. A `stream` trigger has no
-intake of its own: it names an existing `stream_id` and `event_filter`
-directly and rides the same dispatcher path. Firing still checks that the
-person who configured the trigger can still run its agent — a configurer who
-lost access gets the trigger stopped and marked `needs_owner` instead of a
-firing. Enabling it again clears the mark; the next event re-checks access and
-stops it again if that person still cannot run the agent.
+**The platform stream reports how tasks end.** Each workspace has one stream
+named `platform`, created the first time the platform has an event for it, and
+written only by the platform. It carries `task.completed`, `task.failed`,
+`task.cancelled`, `approval.requested` and `input.request` events. Each body
+is a summary: the task and agent ids, the status, the result or error cut to
+500 characters with secrets masked, and the cost. Tool arguments, tool output
+and error details stay in the task. Members can read the stream and put
+triggers on it. Nobody can delete it, add a source to it or forward into it;
+each of those is refused with `409`. A trigger never reacts to an event that
+comes from a task it started, and a firing deeper than
+`AGENTAREA_EVENT_FORWARD_DEPTH` is skipped. A trigger on `task.failed` that
+runs an on-call agent therefore does not wake itself.
 
-**An agent can read a stream instead of being fired by it.** The
-`agentarea/stream_events` toolset has one tool, `read_stream(stream,
-after_sequence, limit)`: events after a sequence, oldest first, with
-`next_after` to pass next time and `has_more` when another page is waiting. It
-resolves the stream by name or id inside the caller's workspace, checks `read`
-on it, strips credential headers from each event's data, and hands the data
-over under the same untrusted-data notice a trigger's event block carries. The
-platform keeps no cursor for it: the reader passes its own `after_sequence`.
+**The events feed shows what happened to each event.** The **Events** page,
+and `GET /v1/workspaces/{workspace}/streams/events`, list the events of every
+stream you can read, newest first. They filter by stream, source type, kind
+(`order.*` for a prefix), sender, session, result and time. While the page is
+open it updates live from `/v1/workspaces/{workspace}/streams/events/live`.
+Each event carries a processing status:
 
-**Partitions are maintained ahead of need, not on demand.** `stream_events` is
-partitioned by day on `received_at`. A worker job keeps
-`AGENTAREA_EVENT_PARTITIONS_AHEAD` days created ahead of today, drops whole
-partitions older than the longest `retention_days` configured on any stream in
-the deployment (floored at `AGENTAREA_EVENT_RETENTION`), and separately trims
-a shorter-lived stream's own rows out of partitions still being kept for
-someone else's longer one. Each step commits on its own and deletes go in
-bounded batches. Creating or dropping a partition locks the whole journal, so
-it waits at most 5 seconds for that lock and otherwise leaves the partition to
-the next hourly pass rather than queue webhook intake behind it.
+| Status | Meaning |
+|---|---|
+| `queued` | Received; its subscriptions have not been matched yet |
+| `processing` | Matched; some subscriptions have not recorded a reaction yet |
+| `handled` | Every matched subscription reacted, and at least one did not skip it |
+| `skipped` | Every matched subscription skipped it |
+| `error` | At least one subscription failed on it |
+| `no_handlers` | No subscription matched it |
 
-## Why not keep a webhook wired to exactly one trigger
+An event's detail lists each subscription that handled it, with its verdict,
+the reason, and the task it started with that task's current status. Agents
+read the same feed with the `streams_list_events` tool, and one stream from a
+cursor with `read_stream` from the `agentarea/stream_events` toolset, which
+hands event data over under a notice that it is data, not instructions.
 
-Wiring a webhook straight to the one trigger it starts is simpler: no
-dispatcher, no lease, no extra hop between "received" and "acted on." It is
-also where AgentArea started. It stops scaling the moment a second consumer
-is legitimate, because direct wiring cannot express "more than one of
-something should see this" — the only way to add a second consumer was a
-second registration with the provider. A shared, ordered log that any number
-of subscriptions can read independently, each from whatever point it joined,
-removes that duplication entirely; the cost is exactly what this page
-describes — a worker process in the loop, a lease to coordinate it, and a
-request that is answered before anything has actually reacted to it.
+**Retention is one setting for the deployment.** The feed keeps events by day.
+A day older than `AGENTAREA_EVENT_RETENTION` (7 days by default) is dropped
+whole, for every stream and workspace at once; a stream has no retention of its
+own. With `AGENTAREA_EVENT_ARCHIVE` on, each day is first written to the object
+store as gzipped JSONL, one object per workspace. An MCP Events poll from a
+cursor older than the retention is answered `truncated`. How events move
+between intake, the router and the feed, and what the broker keeps, is
+described in [The event bus](/concepts/integration/event-bus).
+
+## Why not one webhook per consumer
+
+Wiring a webhook to the one trigger it starts has fewer parts: no stream, no
+router, no recorded reactions. It is where AgentArea started. It stops working
+once a second consumer is legitimate, because the only way to add one is a
+second registration with the provider. A stream takes each delivery once and
+hands it to any number of subscriptions, each recorded on its own.
+
+The cost is a hop. A webhook is answered before anything has reacted to it, so
+the sender's `202` says the event was recorded, not that an agent ran. To know
+what happened you read the event's processing status. The shared envelope has
+a cost too: it names only what every provider can be read for. Anything else
+stays in the body, where an agent reads it or a filter matches it as `body.*`.
 
 ## Limits
 
-- **`platform` and `processor_output` streams are declared, not produced.**
-  Every stream in this release is `kind: "custom"`. Nothing in stage 1
-  publishes a platform-originated event into a stream.
-- **`read_stream` keeps no cursor.** A scheduled agent that wants only what
-  is new must store `next_after` somewhere it can read next run, or read a
-  stream whose retention matches its period from the start.
-- **An `api_lookup` notification is believed only in a state the API still
-  holds.** A delivery that arrives after the object moved on is refused unless
-  the entry lists the new state under `later` (then the fetched object is
-  recorded, named by its fetched state), and if every retry of it comes that
-  late, that earlier state is never recorded.
-- **Authorization is per stream, not per event or per subscriber.** Anyone who
-  can read a stream sees every event in it, including ones no subscription of
-  theirs would ever have matched. There is no audience scoping within a
-  stream in this release.
-- **The write quota is workspace-wide.** `AGENTAREA_EVENT_WRITE_QUOTA` counts
-  appends across every stream the workspace owns in the trailing minute; one
-  noisy source can exhaust the budget for every other stream next to it.
-- **Dedup holds only within retention.** `stream_event_keys` rows are pruned
-  together with the events they protect. A delivery repeating a provider id
-  that aged out of retention is recorded as new, not recognized as a repeat.
-- **A webhook with no provider delivery id is never deduplicated**, by design
-  — a `recv:<uuid4()>` key cannot tell a retry from a first attempt, so a
-  sender that retries without a stable id gets a second row, a second
-  dispatch, and, for a trigger subscription, a second task.
-- **A poisoned event can still exhaust its retries.** Past
-  `AGENTAREA_EVENT_MAX_ATTEMPTS`, the cursor advances anyway and the outcome
-  is recorded `error`; nothing retries it again later, and nothing pages
-  anyone — the outcome row, found by reading the stream, is the only trace.
+- **Read access is per stream.** Whoever can read a stream sees every event in
+  it, including events their own subscriptions would never match.
+- **The write quota is per workspace.** One noisy source can use up the minute's
+  budget for every other stream in the workspace.
+- **An event without a key is never a repeat.** When neither the request nor
+  the entry names a delivery id, each retry from the sender is a new event and
+  can start a new task.
+- **Intake recognizes a repeat for 24 hours.** A repeat that arrives later is
+  recorded in the feed a second time. A subscription that already reacted to
+  the event does not react again.
+- **Retention is not per stream.** A stream that needs a longer history needs a
+  longer `AGENTAREA_EVENT_RETENTION` for the whole deployment, or the archive.
+- **Files outlive their events.** Attachments and large bodies stay in the
+  workspace's files after the event's day is dropped, and the archive is not
+  readable through the API.
+- **The platform stream carries task outcomes only.** No other platform activity
+  is written to it.
+- **Some MCP servers cannot be event sources.** A server instance that
+  authenticates through an auth config, or one the platform manages, is
+  refused when the source is created.
+- **An MCP Events webhook does not replay.** A subscriber that missed events
+  reads them with `events/poll` from its cursor, within the retention.
+- **Processors and batch windows are in progress.** Their behaviour on this page
+  can change before release.
 
 ## Related
 
 <Columns cols={2}>
-  <Card title="Trigger an agent from a webhook" icon="plug" href="/guides/triggers/trigger-from-a-webhook">
-    Create the webhook whose deliveries become a stream's events.
+  <Card title="The event bus" icon="lightbulb" href="/concepts/integration/event-bus">
+    Topics, consumer groups and what each one guarantees.
   </Card>
-  <Card title="Tasks" icon="diagram-project" href="/concepts/execution/tasks">
-    What a `reacted` outcome's `task_id` points at.
+  <Card title="Collect events into a stream" icon="plug" href="/guides/triggers/collect-events-into-a-stream">
+    Add a webhook or poll source to a stream.
   </Card>
-  <Card title="Events" icon="diagram-project" href="/concepts/execution/events">
-    The task execution feed this journal is not.
+  <Card title="Subscribe over MCP Events" icon="plug" href="/guides/triggers/subscribe-to-a-stream-over-mcp-events">
+    Poll a stream or receive signed webhooks from outside.
+  </Card>
+  <Card title="Transform a stream with a processor" icon="plug" href="/guides/triggers/transform-a-stream-with-a-processor">
+    Have an agent write code that turns events into new ones.
+  </Card>
+  <Card title="Task events" icon="lightbulb" href="/concepts/execution/events">
+    The feed one running task emits, which a stream is not.
   </Card>
 </Columns>

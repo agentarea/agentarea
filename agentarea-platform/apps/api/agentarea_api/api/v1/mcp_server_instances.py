@@ -58,6 +58,9 @@ class MCPServerInstanceResponse(BaseModel):
     verification: dict[str, Any]
     last_dispatch: dict[str, Any] | None = None
     tools: list[dict[str, Any]] | None = None
+    # What the server offers as MCP Events, from its last verification: the
+    # extension's settings and events/list. None when it offers none.
+    events: dict[str, Any] | None = None
     auth_config_id: UUID | str | None = None
     # "platform" for a connection the deployment supplies to every workspace on its
     # own credential (read-only here; its calls are charged to the workspace balance).
@@ -113,6 +116,7 @@ class MCPServerInstanceResponse(BaseModel):
                 "verification": verification,
                 "last_dispatch": instance.last_dispatch,
                 "tools": instance.tools,
+                "events": instance.events,
                 "auth_config_id": instance.auth_config_id,
                 "managed_by": instance.managed_by,
                 "cost": instance.cost,

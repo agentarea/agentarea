@@ -1,51 +1,123 @@
 """The events read model: what the bus carried, by stream. Never commits; the caller does.
 
-Written by the ``events-view`` group, read by the events page and agents.
-Nothing reads it to decide what to fire.
+Written by the ``events-view`` group, and by the router: what it did with each
+event (``mark_routed``, ``mark_reactions``), and the event itself when it gets
+there before the events view. Read by the events page and agents. Nothing reads
+it to decide what to fire.
+
+Readers page a stream oldest first by ``sequence > after``. A sequence is taken
+at insert but becomes visible at commit, so two concurrent inserts into one
+stream could commit out of order and the earlier one fall behind a cursor for
+good. Each insert therefore holds its stream's insert lock until its
+transaction ends: within a stream, commit order is sequence order.
 """
 
 import logging
+from collections.abc import Collection
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, and_, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.errors import StreamNotFoundError
-from ..domain.models import Attachment, RecordedEvent, StreamEvent
+from ..domain.feed import FeedFacets, FeedFilter, RoutedEvent
+from ..domain.models import Attachment, ReactionTally, RecordedEvent, StreamEvent
+from ..domain.processing import ProcessingStatus
 from .orm import StreamEventORM, StreamORM
 
 logger = logging.getLogger(__name__)
 
 _FOREIGN_KEY_VIOLATION = "23503"
+#: First key of the two-key advisory lock on a stream's inserts; the second is the stream.
+_INSERT_LOCK_CLASS = 0x53455131
+
+
+def _envelope(row: StreamEventORM) -> dict[str, Any]:
+    return {
+        "id": row.event_id,
+        "type": row.kind,
+        "source": row.source,
+        "time": row.occurred_at,
+        "subject": row.subject,
+        "correlation_id": row.correlation_id,
+        "causation_id": row.causation_id,
+        "data": row.data,
+        "stream_id": row.stream_id,
+        "workspace_id": row.workspace_id,
+        "created_by": row.created_by,
+        "sequence": row.sequence,
+        "event_key": row.event_key,
+        "received_at": row.received_at,
+        "depth": row.depth,
+        "source_id": row.source_id,
+        "source_type": row.source_type,
+        "session_key": row.session_key,
+        "sender": row.sender,
+        "attachments": [Attachment.model_validate(a) for a in row.attachments],
+    }
 
 
 def to_recorded(row: StreamEventORM) -> RecordedEvent:
-    return RecordedEvent(
-        id=row.event_id,
-        type=row.kind,
-        source=row.source,
-        time=row.occurred_at,
-        subject=row.subject,
-        correlation_id=row.correlation_id,
-        causation_id=row.causation_id,
-        data=row.data,
-        stream_id=row.stream_id,
-        workspace_id=row.workspace_id,
-        created_by=row.created_by,
-        sequence=row.sequence,
-        event_key=row.event_key,
-        received_at=row.received_at,
-        depth=row.depth,
-        source_id=row.source_id,
-        source_type=row.source_type,
-        session_key=row.session_key,
-        sender=row.sender,
-        attachments=[Attachment.model_validate(a) for a in row.attachments],
+    return RecordedEvent(**_envelope(row))
+
+
+def to_routed(row: StreamEventORM) -> RoutedEvent:
+    return RoutedEvent(
+        **_envelope(row),
+        routed_at=row.routed_at,
+        subscribers=row.subscribers,
+        reacted=row.reacted,
+        skipped=row.skipped,
+        errors=row.errors,
     )
+
+
+_E = StreamEventORM
+_ROUTED = _E.routed_at.is_not(None)
+_DONE = and_(_ROUTED, _E.errors == 0, _E.reacted >= _E.subscribers, _E.reacted > 0)
+# Mirrors ``processing_status``; the feed suite holds the two to the same answer.
+_RESULT: dict[ProcessingStatus, ColumnElement[bool]] = {
+    ProcessingStatus.QUEUED: _E.routed_at.is_(None),
+    ProcessingStatus.NO_HANDLERS: and_(_ROUTED, _E.subscribers == 0, _E.reacted == 0),
+    ProcessingStatus.ERROR: and_(_ROUTED, _E.errors > 0),
+    ProcessingStatus.PROCESSING: and_(_ROUTED, _E.errors == 0, _E.reacted < _E.subscribers),
+    ProcessingStatus.SKIPPED: and_(_DONE, _E.skipped == _E.reacted),
+    ProcessingStatus.HANDLED: and_(_DONE, _E.skipped < _E.reacted),
+}
+
+
+def _feed_conditions(
+    feed_filter: FeedFilter, *, facet: str | None = None
+) -> list[ColumnElement[bool]]:
+    """The filter as conditions; a facet's own filter is left out of its counts."""
+    f = feed_filter
+    conditions: list[ColumnElement[bool]] = []
+    if f.stream_id is not None and facet != "stream":
+        conditions.append(_E.stream_id == f.stream_id)
+    if f.source_type is not None and facet != "source_type":
+        conditions.append(_E.source_type == f.source_type)
+    if (exact := f.exact_kind()) is not None:
+        conditions.append(_E.kind == exact)
+    if (prefix := f.kind_prefix()) is not None:
+        conditions.append(_E.kind.startswith(prefix, autoescape=True))
+    if f.sender is not None:
+        conditions.append(_E.sender == f.sender)
+    if f.session_key is not None:
+        conditions.append(_E.session_key == f.session_key)
+    if f.result is not None:
+        conditions.append(_RESULT[f.result])
+    if f.since is not None:
+        conditions.append(_E.received_at >= f.since)
+    if f.until is not None:
+        conditions.append(_E.received_at < f.until)
+    if f.event_id is not None:
+        conditions.append(_E.event_id == f.event_id)
+    return conditions
 
 
 class StreamEventRepository:
@@ -58,11 +130,7 @@ class StreamEventRepository:
 
     async def record(self, event: StreamEvent) -> bool:
         """Insert the event once; False for a repeat or a stream deleted meanwhile."""
-        if event.workspace_id != self.user_context.workspace_id:
-            raise ValueError(
-                f"event {event.id} belongs to workspace {event.workspace_id}, "
-                + f"not {self.user_context.workspace_id}"
-            )
+        self._require_own(event)
         seen = await self.session.execute(
             select(StreamEventORM.sequence)
             .where(StreamEventORM.event_id == event.id, self._in_workspace())
@@ -70,6 +138,55 @@ class StreamEventRepository:
         )
         if seen.first() is not None:
             return False
+        return await self._insert(event)
+
+    async def mark_routed(self, event: StreamEvent, subscribers: int, *, at: datetime) -> bool:
+        """The router matched ``subscribers`` subscriptions; the first routing time is kept.
+
+        Writes the event itself when the events view has not yet, and says so.
+        """
+        self._require_own(event)
+        if await self._insert(event, routed_at=at, subscribers=subscribers):
+            return True
+        await self.session.execute(
+            update(StreamEventORM)
+            .where(
+                StreamEventORM.event_id == event.id,
+                StreamEventORM.received_at == event.received_at,
+                self._in_workspace(),
+            )
+            .values(
+                routed_at=func.coalesce(StreamEventORM.routed_at, at),
+                subscribers=subscribers,
+            )
+        )
+        return False
+
+    async def mark_reactions(self, event: StreamEvent, tally: ReactionTally) -> None:
+        self._require_own(event)
+        await self.session.execute(
+            update(StreamEventORM)
+            .where(
+                StreamEventORM.event_id == event.id,
+                StreamEventORM.received_at == event.received_at,
+                self._in_workspace(),
+            )
+            .values(reacted=tally.reacted, skipped=tally.skipped, errors=tally.errors)
+        )
+
+    def _require_own(self, event: StreamEvent) -> None:
+        if event.workspace_id != self.user_context.workspace_id:
+            raise ValueError(
+                f"event {event.id} belongs to workspace {event.workspace_id}, "
+                + f"not {self.user_context.workspace_id}"
+            )
+
+    async def _insert(self, event: StreamEvent, **routing: Any) -> bool:
+        await self.session.execute(
+            select(
+                func.pg_advisory_xact_lock(_INSERT_LOCK_CLASS, func.hashtext(str(event.stream_id)))
+            )
+        )
         try:
             async with self.session.begin_nested():
                 inserted = await self.session.execute(
@@ -94,6 +211,7 @@ class StreamEventRepository:
                         attachments=[a.model_dump(mode="json") for a in event.attachments],
                         workspace_id=event.workspace_id,
                         created_by=event.created_by,
+                        **routing,
                     )
                     .on_conflict_do_nothing(index_elements=["event_id", "received_at"])
                     .returning(StreamEventORM.sequence)
@@ -116,6 +234,53 @@ class StreamEventRepository:
         )
         row = result.scalar_one_or_none()
         return to_recorded(row) if row is not None else None
+
+    async def read_routed(self, event_id: UUID) -> RoutedEvent | None:
+        result = await self.session.execute(
+            select(StreamEventORM)
+            .where(StreamEventORM.event_id == event_id, self._in_workspace())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return to_routed(row) if row is not None else None
+
+    async def read_feed(
+        self,
+        feed_filter: FeedFilter,
+        streams: Collection[UUID],
+        *,
+        before: int | None,
+        limit: int,
+    ) -> list[RoutedEvent]:
+        """Newest first, of ``streams`` only (those the caller may read)."""
+        stmt = select(StreamEventORM).where(
+            self._in_workspace(), _E.stream_id.in_(list(streams)), *_feed_conditions(feed_filter)
+        )
+        if before is not None:
+            stmt = stmt.where(_E.sequence < before)
+        result = await self.session.execute(stmt.order_by(_E.sequence.desc()).limit(limit))
+        return [to_routed(row) for row in result.scalars().all()]
+
+    async def feed_facets(self, feed_filter: FeedFilter, streams: Collection[UUID]) -> FeedFacets:
+        visible = [self._in_workspace(), _E.stream_id.in_(list(streams))]
+        by_stream = await self.session.execute(
+            select(_E.stream_id, func.count())
+            .where(*visible, *_feed_conditions(feed_filter, facet="stream"))
+            .group_by(_E.stream_id)
+        )
+        by_source = await self.session.execute(
+            select(_E.source_type, func.count())
+            .where(
+                *visible,
+                _E.source_type.is_not(None),
+                *_feed_conditions(feed_filter, facet="source_type"),
+            )
+            .group_by(_E.source_type)
+        )
+        return FeedFacets(
+            streams=dict(by_stream.tuples().all()),
+            source_types={k: v for k, v in by_source.tuples().all() if k is not None},
+        )
 
     async def read_after(self, stream_id: UUID, after: int, limit: int) -> list[RecordedEvent]:
         result = await self.session.execute(

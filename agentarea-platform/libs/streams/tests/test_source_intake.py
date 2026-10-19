@@ -233,3 +233,79 @@ def test_provider_time_reads_seconds_milliseconds_and_iso():
     assert provider_time("2026-10-15T12:00:00Z") == RECEIVED
     assert provider_time("Tue, 15 Oct 2026") is None
     assert provider_time(None) is None
+
+
+def test_an_issued_whsec_is_a_standard_webhooks_secret():
+    import base64
+
+    from agentarea_streams.application.source_credentials import issue_credential
+    from agentarea_streams.domain.source_types import SourceField
+
+    whsec = issue_credential(SourceField(key="s", label="S", issued=True, format="whsec"))
+    assert whsec.startswith("whsec_")
+    assert 24 <= len(base64.b64decode(whsec.removeprefix("whsec_"), validate=True)) <= 64
+    token = issue_credential(SourceField(key="t", label="T", issued=True))
+    assert not token.startswith("whsec_") and len(token) >= 32
+    assert issue_credential(SourceField(key="t", label="T", issued=True)) != token
+
+
+CHAINED = SourceTypeEntry.model_validate(
+    {
+        "slug": "relay",
+        "name": "Relay",
+        "delivery": "webhook",
+        "event": {
+            "kind": "{body:type}",
+            "key": "{body:id}",
+            "depth": "{body:hop}",
+            "correlation_id": "{body:chain}",
+            "causation_id": "{body:cause}",
+        },
+    }
+)
+
+
+async def test_a_carried_depth_correlation_and_causation_continue_the_chain(ingest):
+    chain, cause = str(uuid4()), str(uuid4())
+    await _ingest(
+        _source(), {"type": "t", "id": "r1", "hop": 2, "chain": chain, "cause": cause}, entry=CHAINED
+    )
+    (call,) = ingest.calls
+    assert call["depth"] == 3
+    assert (call["event"].correlation_id, call["event"].causation_id) == (chain, cause)
+
+
+async def test_an_event_that_carries_nothing_starts_a_chain(ingest):
+    await _ingest(_source(), {"type": "t", "id": "r1"}, entry=CHAINED)
+    (call,) = ingest.calls
+    assert call.get("depth", 0) == 0
+    assert (call["event"].correlation_id, call["event"].causation_id) == (None, None)
+
+
+async def test_a_carried_depth_past_the_limit_lands_one_over_it(ingest):
+    limit = EventStreamSettings().FORWARD_DEPTH
+    await _ingest(_source(), {"type": "t", "id": "r1", "hop": 10**12}, entry=CHAINED)
+    await _ingest(_source(), {"type": "t", "id": "r2", "hop": limit}, entry=CHAINED)
+    assert [call["depth"] for call in ingest.calls] == [limit + 1, limit + 1]
+
+
+@pytest.mark.parametrize("hop", [-1, "x", 2.5, "", True, "2e3"])
+async def test_a_carried_depth_that_is_not_a_count_is_ignored_and_logged(ingest, caplog, hop):
+    await _ingest(_source(), {"type": "t", "id": "r1", "hop": hop}, entry=CHAINED)
+    (call,) = ingest.calls
+    assert call.get("depth", 0) == 0
+    if hop != "":
+        assert "depth" in caplog.text
+
+
+async def test_a_carried_correlation_or_causation_that_is_not_a_uuid_is_ignored_and_logged(
+    ingest, caplog
+):
+    await _ingest(
+        _source(),
+        {"type": "t", "id": "r1", "chain": "ws-b/evt", "cause": "' or 1=1"},
+        entry=CHAINED,
+    )
+    (call,) = ingest.calls
+    assert (call["event"].correlation_id, call["event"].causation_id) == (None, None)
+    assert "correlation_id" in caplog.text and "causation_id" in caplog.text

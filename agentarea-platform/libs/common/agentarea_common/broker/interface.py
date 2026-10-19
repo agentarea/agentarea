@@ -192,14 +192,6 @@ class BrokerClient(Protocol):
         """
         raise NotImplementedError
 
-    async def prune_consumers(self, stream: str, group: str, *, idle_ms: int) -> int:
-        """Remove the group's consumers that hold nothing and were idle past `idle_ms`.
-
-        Every process start joins with a new consumer name; without this the
-        names of stopped processes pile up. Returns how many were removed.
-        """
-        raise NotImplementedError
-
     async def notify(self, channel: str, fields: Mapping[str, str]) -> None:
         """Broadcast `fields` to whoever listens on `channel` now; nothing is kept."""
         raise NotImplementedError

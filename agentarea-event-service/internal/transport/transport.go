@@ -7,6 +7,7 @@ package transport
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/agentarea/event-service/internal/catalog"
 	"github.com/agentarea/event-service/internal/egress"
@@ -28,6 +29,9 @@ type Fetch struct {
 	// Values fill the poll block's templates; Values.Cursor is the stored
 	// position, "" before the first poll.
 	Values template.Values
+	// MCPInstanceID is the MCP server an mcp_events source names, when it is
+	// one of the source's own workspace.
+	MCPInstanceID string
 }
 
 // Result is what one poll found, oldest item first.
@@ -38,6 +42,9 @@ type Result struct {
 	// Gap, when set, says why items between the last poll and this one may be
 	// missing (a truncated result, a cursor the source no longer knows).
 	Gap string
+	// Next is the wait the source asks for before the next poll; 0 keeps the
+	// entry's interval.
+	Next time.Duration
 }
 
 // Transport fetches what a source has new since its cursor.
@@ -48,14 +55,15 @@ type Transport interface {
 // Set is every transport the service runs, by name.
 type Set map[string]Transport
 
-// NewSet builds the transports over one outbound policy.
-func NewSet(policy egress.Policy) Set {
+// NewSet builds the transports over one outbound policy; MCP Events go
+// through the mcp-manager gateway instead.
+func NewSet(policy egress.Policy, mcp MCPEventsPoller) Set {
 	caller := NewCaller(policy)
 	return Set{
 		HTTPJSON:  &HTTPJSONTransport{caller: caller},
 		Feed:      &FeedTransport{caller: caller},
 		IMAP:      &IMAPTransport{policy: policy},
-		MCPEvents: MCPEventsTransport{},
+		MCPEvents: NewMCPEventsTransport(mcp),
 	}
 }
 

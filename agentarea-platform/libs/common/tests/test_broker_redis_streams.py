@@ -128,20 +128,56 @@ async def test_each_claimed_message_carries_its_own_delivery_count(
     assert by_id[ids[0]] == by_id[ids[4]] == 27
 
 
-async def test_idle_consumers_holding_nothing_are_pruned(
-    broker: RedisStreamsBroker, stream_name: str
-):
+async def _consumers(broker: RedisStreamsBroker, stream_name: str) -> set[str]:
+    client = await broker._get_client()
+    return {c["name"] for c in await client.xinfo_consumers(f"test.{stream_name}", GROUP)}
+
+
+@pytest_asyncio.fixture()
+async def quick_pruning(broker: RedisStreamsBroker):
+    """A broker that takes a consumer idle for 50 ms with nothing pending for a stopped one."""
+    b = RedisStreamsBroker(REDIS_URL, namespace="test", stopped_after=timedelta(milliseconds=50))
+    yield b
+    await b.aclose()
+
+
+async def _a_stopped_and_a_busy_consumer(broker: RedisStreamsBroker, stream_name: str) -> None:
     await broker.ensure_group(stream_name, GROUP, start="0")
     await broker.submit(stream_name, {"n": "1"}, retention=timedelta(hours=1))
     await broker.consume(stream_name, GROUP, "busy", count=1, block_ms=100)
-    await broker.consume(stream_name, GROUP, "idle", count=1, block_ms=100)
+    await broker.consume(stream_name, GROUP, "stopped", count=1, block_ms=100)
+    await asyncio.sleep(0.1)
 
-    removed = await broker.prune_consumers(stream_name, GROUP, idle_ms=-1)
 
-    client = await broker._get_client()
-    names = {c["name"] for c in await client.xinfo_consumers(f"test.{stream_name}", GROUP)}
-    assert removed == 1
-    assert names == {"busy"}
+async def test_a_group_s_runtime_starting_removes_its_stopped_consumers(
+    quick_pruning: RedisStreamsBroker, stream_name: str
+):
+    await _a_stopped_and_a_busy_consumer(quick_pruning, stream_name)
+
+    await quick_pruning.ensure_group(stream_name, GROUP, start="0")
+
+    assert await _consumers(quick_pruning, stream_name) == {"busy"}
+
+
+async def test_reclaiming_removes_stopped_consumers_and_keeps_those_holding_messages(
+    quick_pruning: RedisStreamsBroker, stream_name: str
+):
+    await _a_stopped_and_a_busy_consumer(quick_pruning, stream_name)
+
+    await quick_pruning.autoclaim(stream_name, GROUP, "busy", min_idle_ms=60_000)
+
+    assert await _consumers(quick_pruning, stream_name) == {"busy"}
+
+
+async def test_a_consumer_idle_for_less_than_the_threshold_is_kept(
+    broker: RedisStreamsBroker, stream_name: str
+):
+    await _a_stopped_and_a_busy_consumer(broker, stream_name)
+
+    await broker.ensure_group(stream_name, GROUP, start="0")
+    await broker.autoclaim(stream_name, GROUP, "busy", min_idle_ms=60_000)
+
+    assert await _consumers(broker, stream_name) == {"busy", "stopped"}
 
 
 async def test_last_id_is_the_newest_entry(broker: RedisStreamsBroker, stream_name: str):

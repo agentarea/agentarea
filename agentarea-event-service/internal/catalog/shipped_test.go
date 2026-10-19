@@ -169,6 +169,12 @@ func TestShippedRegistrationTemplatesRender(t *testing.T) {
 			continue
 		}
 		v := sampleValues(e, "")
+		if entry.Registration.Transport != "" {
+			if entry.Registration.Transport != transport.MCPEvents || entry.Registration.Register != nil || entry.Registration.Unregister != nil {
+				t.Errorf("%s: registration transport %q must stand alone", e.Slug, entry.Registration.Transport)
+			}
+			continue
+		}
 		if entry.Registration.Register == nil {
 			t.Errorf("%s: registration without a register call", e.Slug)
 			continue

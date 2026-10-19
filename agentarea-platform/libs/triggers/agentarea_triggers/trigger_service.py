@@ -44,6 +44,7 @@ from .domain.models import (
     ConditionVerdict,
     CronTrigger,
     Trigger,
+    TriggerBatchWindow,
     TriggerCreate,
     TriggerExecution,
     TriggerFiring,
@@ -186,6 +187,22 @@ def compose_task_input(
         event_data=event.data if block.event_file is not None else None,
         follow_up=event_text(trigger_data),
     )
+
+
+def _validate_batch(batch: TriggerBatchWindow | None, task_parameters: dict[str, Any]) -> None:
+    """A batch fits the deployment's cap, and says what to do with its events."""
+    if batch is None:
+        return
+    cap = get_settings().triggers.BATCH_MAX_EVENTS
+    if batch.max_events is not None and batch.max_events > cap:
+        raise TriggerValidationError(
+            f"batch max_events is {batch.max_events}; a batch holds at most {cap} events"
+        )
+    text = (task_parameters or {}).get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise TriggerValidationError(
+            "a batched trigger needs task text: what to do with the events of each batch"
+        )
 
 
 class TriggerService:
@@ -407,6 +424,8 @@ class TriggerService:
         if updated_trigger:
             logger.info(f"Updated trigger {trigger_id}")
             await self._sync_stream_binding(trigger_id, trigger_update)
+            if trigger_update.is_active is False and existing_trigger.is_active:
+                await self._close_open_batches(existing_trigger, "trigger disabled")
 
             # Update schedule if it's a cron trigger
             if updated_trigger.trigger_type == TriggerType.CRON and isinstance(
@@ -459,6 +478,8 @@ class TriggerService:
                 logger.error(
                     f"Failed to delete schedule for cron trigger {trigger_id}: {e}", exc_info=True
                 )
+
+        await self._close_open_batches(existing_trigger, "trigger deleted")
 
         # Delete the trigger (cascade will handle executions)
         success = await self.trigger_repository.delete(trigger_id)
@@ -551,6 +572,8 @@ class TriggerService:
 
             # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)
+            if trigger is not None:
+                await self._close_open_batches(trigger, "trigger disabled")
 
             # Pause schedule if it's a cron trigger
             if (
@@ -568,6 +591,27 @@ class TriggerService:
                     )
 
         return success
+
+    async def _close_open_batches(self, trigger: Trigger, why: str) -> None:
+        """Skip the events held in the trigger's open batches and cancel those batches."""
+        if trigger.trigger_type != TriggerType.STREAM:
+            return
+        from .batch_firing import close_open_batches
+
+        workflow_ids = await close_open_batches(
+            self.repository_factory.session,
+            self.repository_factory.user_context,
+            trigger.id,
+            f"{why} while the event waited in a batch",
+        )
+        for workflow_id in workflow_ids:
+            if self.temporal_schedule_manager is None:
+                logger.info(
+                    f"Batch {workflow_id} of trigger {trigger.id} is not cancelled from here; "
+                    "its events are skipped and it starts no task when its timer fires"
+                )
+                continue
+            await self.temporal_schedule_manager.cancel_batch(workflow_id)
 
     # Execution History
 
@@ -1045,6 +1089,7 @@ class TriggerService:
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration; see ``validate_trigger_configuration``."""
         await validate_trigger_configuration(trigger_data, self.model_instance_repository)
+        _validate_batch(trigger_data.batch, trigger_data.task_parameters)
         if trigger_data.trigger_type == TriggerType.STREAM and trigger_data.stream_id:
             try:
                 await self.stream_service.get_stream(trigger_data.stream_id)
@@ -1097,6 +1142,16 @@ class TriggerService:
             and existing_trigger.trigger_type != TriggerType.STREAM
         ):
             raise TriggerValidationError("session applies only to stream triggers")
+
+        if trigger_update.batch is not None:
+            if existing_trigger.trigger_type != TriggerType.STREAM:
+                raise TriggerValidationError("only a stream trigger takes a batch")
+            _validate_batch(
+                trigger_update.batch,
+                trigger_update.task_parameters
+                if trigger_update.task_parameters is not None
+                else existing_trigger.task_parameters,
+            )
 
         if trigger_update.event_filter is not None:
             if existing_trigger.trigger_type != TriggerType.STREAM:
@@ -1192,6 +1247,7 @@ class TriggerService:
         event: TriggerEvent | None = None,
         caller: str | None = None,
         delivery: FiringDelivery | None = None,
+        evaluate_conditions: bool = True,
     ) -> TriggerFiring:
         """Run a trigger once and say what happened.
 
@@ -1206,7 +1262,8 @@ class TriggerService:
         it creates. ``caller`` is the person a messenger event came from, admitted
         before this call; the task is theirs rather than the trigger owner's.
         ``delivery`` is where a stream firing's task replies and the session it
-        joins (see ``delivery_address``).
+        joins (see ``delivery_address``). A batch, whose every event met the
+        conditions before it joined, fires with ``evaluate_conditions`` off.
 
         With ``raise_retryable`` only a permanent failure (see
         ``failures.is_permanent``) becomes an ``error`` outcome; anything else --
@@ -1273,7 +1330,7 @@ class TriggerService:
         start_time = time.time()
         verdict: ConditionVerdict | None = None
         try:
-            if trigger.conditions:
+            if trigger.conditions and evaluate_conditions:
                 verdict = await self.evaluate_trigger_verdict(trigger, trigger_data)
                 if not verdict.met:
                     logger.info(f"Trigger {trigger_id} conditions not met, skipping execution")

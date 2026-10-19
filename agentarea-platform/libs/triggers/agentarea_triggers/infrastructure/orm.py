@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    column,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -53,6 +54,8 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
 
     #: ``{"continue": bool, "idle_timeout": "30m"}`` for a stream trigger; null = the defaults.
     session: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: ``{"window": "1h", "max_events": 50}`` for a stream trigger that fires per batch; null = per event.
+    batch: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Relationship to executions
     executions: Mapped[list["TriggerExecutionORM"]] = relationship(
@@ -78,6 +81,11 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
         ),
         Index("ix_trigger_executions_stream_event", "stream_id", "event_id"),
         Index("ix_trigger_executions_correlation", "correlation_id"),
+        Index(
+            "ix_trigger_executions_batched",
+            "trigger_id",
+            postgresql_where=column("verdict") == "batched",
+        ),
     )
 
     # Basic execution fields. A forward's reaction to a stream event has no trigger.

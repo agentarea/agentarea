@@ -56,7 +56,13 @@ from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionUpdate,
 )
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
-from agentarea_streams.schemas import ForwardCreate, SourceCreate, StreamCreate
+from agentarea_streams.schemas import (
+    ForwardCreate,
+    ProcessorCreate,
+    ProcessorUpdate,
+    SourceCreate,
+    StreamCreate,
+)
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_triggers.schemas.dto import TriggerCreate
 
@@ -111,6 +117,8 @@ PAIRS: list[Pair] = [
     Pair("streams.create", StreamsToolset.create, StreamCreate),
     Pair("streams.create_forward", StreamsToolset.create_forward, ForwardCreate),
     Pair("streams.create_source", StreamsToolset.create_source, SourceCreate),
+    Pair("streams.create_processor", StreamsToolset.create_processor, ProcessorCreate),
+    Pair("streams.update_processor", StreamsToolset.update_processor, ProcessorUpdate),
 ]
 
 # DTO fields intentionally NOT exposed as toolset kwargs. Per-pair so omissions
@@ -169,11 +177,13 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     # ``TriggerCreate`` is a unified DTO covering cron + stream; each toolset
     # method exposes only its variant's relevant fields and hardcodes
     # ``trigger_type``.
-    "triggers.create_cron": {"trigger_type", "stream_id", "event_filter", "session"},
+    "triggers.create_cron": {"trigger_type", "stream_id", "event_filter", "session", "batch"},
     "triggers.create_stream": {"trigger_type", "cron_expression", "timezone"},
     "streams.create": set(),
     "streams.create_forward": set(),
     "streams.create_source": set(),
+    "streams.create_processor": set(),
+    "streams.update_processor": set(),
 }
 
 # Path-like kwargs that name an entity ID rather than a body field. Allowed
@@ -192,6 +202,7 @@ PATH_LIKE_KWARGS = {
     "skill_id",
     "spec_id",
     "stream_id",
+    "subscription_id",
     "trigger_id",
 }
 

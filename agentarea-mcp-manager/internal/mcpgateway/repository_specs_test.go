@@ -92,3 +92,61 @@ func TestMergeLoadedSpecsPreservesConvertedDockerTransport(t *testing.T) {
 		t.Fatalf("non-transport server metadata was not preserved: %#v", spec["catalog"])
 	}
 }
+
+// urlServerSpec mirrors agentarea_mcp/transport_spec.py for a url instance:
+// server_transport_spec, then merge_transport_spec, each followed by
+// _normalize_url_keys.
+func TestURLServerSpecMirrorsThePlatformMerge(t *testing.T) {
+	for name, tc := range map[string]struct {
+		server, instance, remoteURL, want string
+	}{
+		"remote_url is the default":            {`{}`, `{}`, "https://remote.example/mcp", "https://remote.example/mcp"},
+		"server endpoint_url beats remote_url": {`{"endpoint_url":"https://declared.example"}`, `{}`, "https://remote.example/mcp", "https://declared.example"},
+		"instance endpoint_url wins":           {`{"endpoint_url":"https://declared.example"}`, `{"endpoint_url":"https://mine.example"}`, "https://remote.example", "https://mine.example"},
+		"legacy url on the instance":           {`null`, `{"url":"https://legacy.example"}`, "", "https://legacy.example"},
+		"legacy external_url":                  {`{}`, `{"external_url":"https://external.example"}`, "", "https://external.example"},
+		"server endpoint beats instance url":   {`{}`, `{"url":"https://legacy.example"}`, "https://remote.example", "https://remote.example"},
+		"server legacy url is normalized":      {`{"type":"url","url":"https://server-legacy.example"}`, `null`, "", "https://server-legacy.example"},
+		"no endpoint at all":                   {`{}`, `{}`, "", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server, err := urlServerSpec([]byte(tc.server), []byte(tc.instance), tc.remoteURL)
+			if err != nil {
+				t.Fatalf("urlServerSpec() error = %v", err)
+			}
+			if server.EndpointURL != tc.want {
+				t.Fatalf("EndpointURL = %q, want %q", server.EndpointURL, tc.want)
+			}
+		})
+	}
+}
+
+func TestURLServerSpecHeadersAndSecretNames(t *testing.T) {
+	server, err := urlServerSpec(
+		[]byte(`{"headers":{"X-Server":"s"},"env_vars":["SERVER_ONLY"]}`),
+		[]byte(`{"headers":{"X-Instance":"i"},"env_vars":["X-Api-Key"]}`),
+		"https://remote.example",
+	)
+	if err != nil {
+		t.Fatalf("urlServerSpec() error = %v", err)
+	}
+	if !reflect.DeepEqual(server.Headers, map[string]string{"X-Instance": "i"}) {
+		t.Fatalf("Headers = %#v, want the instance's object replacing the server's", server.Headers)
+	}
+	if !reflect.DeepEqual(server.EnvVars, []string{"X-Api-Key"}) {
+		t.Fatalf("EnvVars = %#v, want the instance's own names only", server.EnvVars)
+	}
+}
+
+func TestURLServerSpecRejectsMalformedHeaders(t *testing.T) {
+	for _, instance := range []string{
+		`{"headers":{"X-Count":3}}`,
+		`{"headers":"X-Api-Key: v"}`,
+		`{"env_vars":[3]}`,
+		`{"endpoint_url":42}`,
+	} {
+		if _, err := urlServerSpec([]byte(`{}`), []byte(instance), "https://remote.example"); err == nil {
+			t.Errorf("urlServerSpec(%s) error = nil, want a refusal", instance)
+		}
+	}
+}

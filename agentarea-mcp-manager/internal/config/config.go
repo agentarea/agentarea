@@ -37,6 +37,15 @@ type Config struct {
 	Features FeaturesConfig `json:"features"`
 	// Package image import configuration
 	PackageImages PackageImageConfig `json:"package_images"`
+	// Outbound URL policy for member-chosen hosts
+	Egress EgressConfig `json:"egress"`
+}
+
+// EgressConfig is the platform's outbound URL policy, applied to the URL MCP
+// servers the gateway reaches.
+type EgressConfig struct {
+	AllowPrivate     bool     `json:"allow_private"`
+	PrivateAllowlist []string `json:"private_allowlist"`
 }
 
 // FeaturesConfig holds feature flag configuration
@@ -173,6 +182,10 @@ func Load() *Config {
 			NPMRegistryURL: getEnv("AGENTAREA_MCP_NPM_REGISTRY", "https://registry.npmjs.org"),
 			PyPIURL:        getEnv("AGENTAREA_MCP_PYPI_URL", "https://pypi.org"),
 		},
+		Egress: EgressConfig{
+			AllowPrivate:     getEnvBool("AGENTAREA_HTTP_ALLOW_PRIVATE", false),
+			PrivateAllowlist: nonEmpty(getEnvStringSlice("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", nil)),
+		},
 	}
 	if config.Server.Port <= 0 || config.Server.ReadTimeout <= 0 || config.Server.WriteTimeout <= 0 {
 		panic("server port and timeouts must be positive")
@@ -240,6 +253,16 @@ func getEnvStringSlice(key string, defaultValue []string) []string {
 		return values
 	}
 	return defaultValue
+}
+
+func nonEmpty(values []string) []string {
+	kept := []string{}
+	for _, value := range values {
+		if value != "" {
+			kept = append(kept, value)
+		}
+	}
+	return kept
 }
 
 // loadKubernetesConfig loads Kubernetes configuration from environment variables

@@ -25,10 +25,10 @@ from agentarea_common.reserved_task_parameters import (
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from agentarea_triggers.domain.enums import TriggerType
+from agentarea_triggers.domain.models import TriggerBatchWindow, TriggerSession
 from agentarea_triggers.domain.models import (
     TriggerCreate as _DomainTriggerCreate,
 )
-from agentarea_triggers.domain.models import TriggerSession
 from agentarea_triggers.domain.models import (
     TriggerUpdate as _DomainTriggerUpdate,
 )
@@ -122,6 +122,15 @@ class TriggerSpec(BaseModel):
         ),
     )
 
+    batch: TriggerBatchWindow | None = Field(
+        default=None,
+        description=(
+            'Fire once for a batch of events instead of once per event: {"window": "1h", '
+            '"max_events": 50} fires when the hour has passed or 50 events joined, '
+            "whichever comes first. Null fires on every event."
+        ),
+    )
+
     @field_validator("trigger_type", mode="before")
     @classmethod
     def _normalize_trigger_type(cls, v: Any) -> Any:
@@ -139,6 +148,8 @@ class TriggerSpec(BaseModel):
     def _require_type_fields(self) -> TriggerSpec:
         if self.trigger_type == "cron" and not self.cron_expression:
             raise ValueError("cron_expression is required when trigger_type is 'cron'")
+        if self.trigger_type == "cron" and self.batch is not None:
+            raise ValueError("only a stream trigger takes a batch")
         if self.trigger_type == "stream" and not self.stream_id:
             raise ValueError("stream_id is required when trigger_type is 'stream'")
         return self
@@ -162,6 +173,7 @@ class TriggerSpec(BaseModel):
             stream_id=self.stream_id,
             event_filter=self.event_filter,
             session=self.session,
+            batch=self.batch,
         )
         # Workspace id is server-assigned and may be ``None`` until auth resolves.
         # Set post-construction so callers can pass through ad-hoc values
@@ -208,11 +220,18 @@ class TriggerUpdate(BaseModel):
 
     event_filter: dict[str, Any] | None = None
     session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = Field(
+        default=None, description="Sent as null, the trigger fires on every event again."
+    )
 
     def to_domain(self) -> _DomainTriggerUpdate:
         """Build the internal domain ``TriggerUpdate`` value object."""
-        # Sent as null, session goes back to the defaults; left out, it stays.
-        session = {"session": self.session} if "session" in self.model_fields_set else {}
+        # Sent as null, session and batch go back to the defaults; left out, they stay.
+        kept: dict[str, Any] = {
+            field: getattr(self, field)
+            for field in ("session", "batch")
+            if field in self.model_fields_set
+        }
         return _DomainTriggerUpdate(
             name=self.name,
             description=self.description,
@@ -224,5 +243,5 @@ class TriggerUpdate(BaseModel):
             cron_expression=self.cron_expression,
             timezone=self.timezone,
             event_filter=self.event_filter,
-            **session,
+            **kept,
         )

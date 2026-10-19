@@ -218,3 +218,43 @@ def test_a_source_cannot_switch_itself_to_a_scheme_that_signs_nothing_of_its_own
         configured(generic, {"scheme": scheme})
     for signing in ("hmac", "hmac_timestamped", "shared_token"):
         assert configured(generic, {"scheme": signing}).scheme == signing
+
+
+def _standard_webhooks(secret: str, msg_id: str, ts: int, body: bytes) -> str:
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    mac = hmac.new(key, f"{msg_id}.{ts}.".encode() + body, hashlib.sha256).digest()
+    return "v1," + base64.b64encode(mac).decode()
+
+
+MCP_EVENTS = Verification(
+    scheme="hmac_timestamped",
+    secret="signing_secret",
+    header="webhook-signature",
+    timestamp_header="webhook-timestamp",
+    id_header="webhook-id",
+    payload="{id}.{timestamp}.{body}",
+    signature_format="list",
+    encoding="base64",
+    secret_format="whsec",
+    required_headers=["X-MCP-Subscription-Id"],
+)
+WHSEC = "whsec_" + base64.b64encode(b"k" * 32).decode()
+
+
+def _mcp_headers(**extra) -> dict[str, str]:
+    ts = int(time.time())
+    headers = {
+        "webhook-id": "evt_1",
+        "webhook-timestamp": str(ts),
+        "webhook-signature": _standard_webhooks(WHSEC, "evt_1", ts, BODY),
+    }
+    headers.update(extra)
+    return headers
+
+
+async def test_a_required_header_must_be_present_even_when_the_signature_holds():
+    await _verify(
+        MCP_EVENTS, _mcp_headers(**{"X-MCP-Subscription-Id": "sub_1"}), {"signing_secret": WHSEC}
+    )
+    with pytest.raises(VerificationError, match="X-MCP-Subscription-Id"):
+        await _verify(MCP_EVENTS, _mcp_headers(), {"signing_secret": WHSEC})

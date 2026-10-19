@@ -76,7 +76,7 @@ func literal(s string) imap.LiteralReader {
 func (m *mailServer) fetch(t *testing.T, cursor string) Result {
 	t.Helper()
 	host, port, _ := net.SplitHostPort(m.addr)
-	tr, _ := NewSet(openPolicy(t)).Get(IMAP)
+	tr, _ := NewSet(openPolicy(t), nil).Get(IMAP)
 	res, err := tr.Fetch(context.Background(), Fetch{
 		Poll: catalog.Poll{Transport: IMAP, IMAP: &catalog.IMAP{
 			Host: "{config.host}", Port: "{config.port}", UseSSL: "{config.use_ssl}", Mailbox: "{config.mailbox}",

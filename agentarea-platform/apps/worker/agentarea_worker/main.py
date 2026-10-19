@@ -312,28 +312,29 @@ class AgentAreaWorker:
 
         await ensure_undispatched_task_schedule(self.client, settings.temporal.QUEUE)
 
-        trigger_activities = make_trigger_activities(dependencies)
-        trigger_queue = getattr(settings, "triggers", None)
-        trigger_task_queue = getattr(
-            trigger_queue, "TEMPORAL_SCHEDULE_TASK_QUEUE", "trigger-schedules"
-        )
-
-        self.trigger_worker = Worker(
-            self.client,
-            task_queue=trigger_task_queue,
-            workflows=[TriggerExecutionWorkflow],
-            activities=trigger_activities,
-            workflow_runner=create_workflow_runner(),
-            max_concurrent_workflow_tasks=5,
-            max_concurrent_activities=5,
-        )
-
         # The delivery group sending task events out.
         await self._setup_channel_subscribers(dependencies)
+
+        from agentarea_execution.activities.trigger_batch_activities import (
+            make_trigger_batch_activities,
+        )
+        from agentarea_execution.workflows.trigger_batch_workflow import TriggerBatchWorkflow
 
         from agentarea_worker.streams import build_stream_runtime
 
         self.stream_runtime = build_stream_runtime(settings, dependencies)
+
+        # The router opens trigger batches on this queue (settings.triggers.QUEUE).
+        self.trigger_worker = Worker(
+            self.client,
+            task_queue=settings.triggers.QUEUE,
+            workflows=[TriggerExecutionWorkflow, TriggerBatchWorkflow],
+            activities=make_trigger_activities(dependencies)
+            + make_trigger_batch_activities(self.stream_runtime.batches),
+            workflow_runner=create_workflow_runner(),
+            max_concurrent_workflow_tasks=5,
+            max_concurrent_activities=5,
+        )
 
         logger.info("Worker created and configured")
 
@@ -414,10 +415,13 @@ class AgentAreaWorker:
 
         # Transactional outbox relay: drains event_outbox rows (written in the
         # same txn as the aggregate change by domain services) and publishes them
-        # to the event broker, or performs the ones that have a handler. FOR
+        # to domain.events.<type>, or performs the ones that have a handler. FOR
         # UPDATE SKIP LOCKED lets it co-reside with any number of workers
         # without coordination.
+        from agentarea_common.broker.topics import BUS_RETENTION
         from agentarea_common.config.database import get_database
+        from agentarea_common.events.adapters.redis_streams import RedisStreamsEventBus
+        from agentarea_common.events.domain_events import DomainEventPublisher
         from agentarea_common.events.outbox_relay import OutboxRelay
         from agentarea_common.workspaces import (
             MEMBERSHIP_ENDED,
@@ -427,7 +431,9 @@ class AgentAreaWorker:
 
         self.outbox_relay = OutboxRelay(
             session_factory=get_database().async_session_factory,
-            event_broker=dependencies.event_broker,
+            event_broker=DomainEventPublisher(
+                RedisStreamsEventBus(self._broker, retention=BUS_RETENTION)
+            ),
             handlers={
                 MEMBERSHIP_ENDED: membership_removal_handler(get_workspace_membership_graph()),
             },

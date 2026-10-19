@@ -20,6 +20,7 @@ from agentarea_streams.domain.envelope import (
     attachment_path,
     read_event,
 )
+from agentarea_streams.domain.signals import source_signal
 from agentarea_streams.domain.source_types import SourceTypeEntry
 from agentarea_streams.domain.templates import (
     TemplateContext,
@@ -59,6 +60,15 @@ MAIL = {
 }
 
 SAMPLES: dict[str, list[Sample]] = {
+    "platform": [
+        Sample(
+            {
+                "task_id": "0b6a6f2e-9a51-4c43-8f3e-2d7c1e5a9b40",
+                "kind": "task.failed",
+                "status": "failed",
+            }
+        ),
+    ],
     "generic_webhook": [
         Sample({"order": {"id": "A-1003"}}, {"webhook-id": "msg_2KWPBgLlAfxdpx2AI54pPJ85f4W"}),
         Sample({"order": {"id": "A-1004"}}, {"Idempotency-Key": "8e03978e-40d5-43e8"}),
@@ -312,7 +322,20 @@ HANDSHAKES: dict[str, list[Sample]] = {
         )
     ],
     "discord": [Sample({"id": "1", "application_id": "2", "type": 1, "token": "t", "version": 1})],
-    "mcp_events": [Sample({"type": "challenge", "challenge": "c-8f2e"})],
+    "mcp_events": [Sample({"type": "verification", "challenge": "c-8f2e"})],
+}
+
+SIGNALS: dict[str, list[tuple[str, Sample]]] = {
+    "mcp_events": [
+        ("gap", Sample({"type": "gap", "cursor": "c-91"}, {"webhook-id": "msg_gap_x1"})),
+        (
+            "ended",
+            Sample(
+                {"type": "terminated", "error": {"code": -32024, "message": "Forbidden"}},
+                {"webhook-id": "msg_terminated_x2"},
+            ),
+        ),
+    ],
 }
 
 _EVENT_FIELDS = ("kind", "key", "session_key", "sender", "occurred_at")
@@ -325,6 +348,18 @@ def _context(sample: Sample) -> TemplateContext:
 def test_every_entry_has_samples():
     assert set(SAMPLES) == set(ENTRIES)
     assert {slug for slug, entry in ENTRIES.items() if entry.handshake} == set(HANDSHAKES)
+    assert {slug for slug, entry in ENTRIES.items() if entry.signals} == set(SIGNALS)
+
+
+@pytest.mark.parametrize("slug", sorted(SIGNALS))
+def test_a_signal_is_recognised_and_events_are_not_signals(slug):
+    entry = ENTRIES[slug]
+    for expected, sample in SIGNALS[slug]:
+        found = source_signal(entry, sample.headers, sample.body)
+        assert found is not None and found.signal == expected, f"{slug}: {sample.body}"
+        assert found.key, f"{slug}: a signal has a key"
+    for sample in SAMPLES[slug] + HANDSHAKES.get(slug, []):
+        assert source_signal(entry, sample.headers, sample.body) is None
 
 
 @pytest.mark.parametrize("slug", sorted(ENTRIES))
@@ -343,9 +378,7 @@ def test_every_event_field_renders_for_some_sample(slug):
         assert fields.kind != FALLBACK_KIND, f"{slug}: {sample.body}"
         if entry.event.key is not None:
             assert fields.key is not None, f"{slug}: no key for {sample.body}"
-        if entry.event.occurred_at is not None and render_first(
-            entry.event.occurred_at, context
-        ):
+        if entry.event.occurred_at is not None and render_first(entry.event.occurred_at, context):
             assert fields.occurred_at is not None, f"{slug}: provider time does not parse"
     for name in _EVENT_FIELDS:
         if getattr(entry.event, name) is not None:

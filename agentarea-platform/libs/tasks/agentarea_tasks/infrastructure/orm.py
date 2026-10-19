@@ -63,6 +63,8 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     parent_task_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), nullable=True, index=True
     )
+    # The causation depth of the event that started the task; 0 when none did.
+    depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):

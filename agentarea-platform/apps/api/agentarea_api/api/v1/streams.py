@@ -1,6 +1,11 @@
-"""Streams: named event streams, their sources, subscriptions, events and reactions."""
+"""Streams: named event streams, their sources, subscriptions, events and reactions.
+
+The workspace events feed (``/streams/events``, its live tail ``/streams/events/live``)
+is every event of the streams the caller may read: see ``stream_event_feed``.
+"""
 
 import logging
+from collections.abc import Sequence
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -12,6 +17,7 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_BIGINT, MAX_OFFSET
+from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.application.stream_service import StreamService
@@ -22,16 +28,34 @@ from agentarea_streams.domain import (
     RecordedEvent,
     StreamEventNotFoundError,
     StreamInUseError,
+    StreamManagedByPlatformError,
     StreamNameTakenError,
     StreamNotFoundError,
     StreamSourceNotFoundError,
     SubscriptionNotFoundError,
 )
+from agentarea_streams.domain.errors import (
+    NotAProcessorError,
+    ProcessorCodeError,
+    ProcessorLoopError,
+)
+from agentarea_streams.domain.feed import FeedFilter, RoutedEvent
+from agentarea_streams.domain.processing import Processing, ProcessingStatus
 from agentarea_streams.domain.source_types import SourceField, SourceTypeEntry
 from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
-from agentarea_streams.schemas import ForwardCreate, SourceCreate, StreamCreate
+from agentarea_streams.infrastructure.event_repository import StreamEventRepository
+from agentarea_streams.schemas import (
+    ForwardCreate,
+    ProcessorCreate,
+    ProcessorUpdate,
+    SourceCreate,
+    StreamCreate,
+)
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_triggers.infrastructure.reactions import ReactionRepository, verdict_of_status
+from agentarea_triggers.infrastructure.repository import TriggerRepository
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
@@ -40,6 +64,15 @@ from ._stream_sources import (
     delete_stream_with_sources,
     public_webhook_url,
     release_source,
+)
+from .stream_event_feed import (
+    FeedEventResponse,
+    FeedFacetsResponse,
+    WorkspaceEventPage,
+    event_notices_hub,
+    feed_items,
+    iter_live_feed,
+    read_feed_item,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,7 +146,9 @@ class SourceTypeResponse(BaseModel):
     description: str
     icon: str
     icon_url: str | None
-    delivery: str = Field(description="webhook, poll or both")
+    delivery: str = Field(
+        description="webhook, poll or both; platform for the platform stream, which no member adds"
+    )
     credentials: list[SourceField] = Field(
         description="Secret fields: write-only, held by reference, never returned."
     )
@@ -185,6 +220,9 @@ class SubscriptionResponse(BaseModel):
     filter: dict[str, Any]
     output_stream_ids: list[UUID]
     status: str
+    code: str | None = Field(
+        default=None, description="A processor's Python (def process(event)); null otherwise."
+    )
     created_at: UtcDatetime
 
 
@@ -193,7 +231,9 @@ class OutcomeResponse(BaseModel):
     subscription_kind: str
     trigger_id: UUID | None
     event_id: UUID
-    verdict: str = Field(description="reacted, skipped or error")
+    verdict: str = Field(
+        description="reacted, skipped, error, or batched while it waits in an open batch"
+    )
     reason: str | None
     score: float | None
     task_id: UUID | None
@@ -238,6 +278,30 @@ class StreamEventResponse(BaseModel):
     outcomes: list[OutcomeResponse] = Field(
         description="One per subscription that took the event; empty means nobody listened."
     )
+    processing: Processing | None = Field(
+        default=None, description="What the platform did with it; on the workspace feed."
+    )
+
+
+class HandlerResponse(BaseModel):
+    """One subscription's reaction to an event, named for the person reading it."""
+
+    subscription_id: UUID
+    kind: str = Field(description="trigger, forward, or deleted")
+    name: str = Field(description="The trigger's name, or the streams a forward writes to.")
+    verdict: str = Field(
+        description="reacted, skipped, error, or batched while it waits in an open batch"
+    )
+    reason: str | None
+    task_id: UUID | None
+    task_status: str | None
+    derived_event_ids: list[UUID]
+
+
+class StreamEventDetailResponse(StreamEventResponse):
+    handlers: list[HandlerResponse] = Field(
+        description="One per subscription that reacted so far; the rest are still to come."
+    )
 
 
 class StreamEventPage(BaseModel):
@@ -260,6 +324,7 @@ def _subscription(row: Any) -> SubscriptionResponse:
         filter=row.filter or {},
         output_stream_ids=[UUID(str(s)) for s in row.output_stream_ids],
         status=row.status,
+        code=row.code,
         created_at=row.created_at,
     )
 
@@ -284,7 +349,7 @@ async def _events_with_outcomes(
     service: StreamService,
     reactions: ReactionRepository,
     stream_id: UUID,
-    events: list[RecordedEvent],
+    events: Sequence[RecordedEvent],
 ) -> list[StreamEventResponse]:
     subscriptions = {row.id: row for row in await service.list_subscriptions(stream_id)}
     by_event: dict[UUID, list[OutcomeResponse]] = {}
@@ -328,6 +393,120 @@ async def _events_with_outcomes(
         )
         for e in events
     ]
+
+
+async def _event_detail(
+    service: StreamService,
+    reactions: ReactionRepository,
+    user_context: Any,
+    event: RecordedEvent,
+) -> StreamEventDetailResponse:
+    (response,) = await _events_with_outcomes(service, reactions, event.stream_id, [event])
+    session = service.repository_factory.session
+    routed = await StreamEventRepository(session, user_context).read_routed(event.id)
+    if routed is None:
+        raise HTTPException(status_code=404, detail=f"Event {event.id} not found")
+    (item,) = await feed_items(session, user_context, [routed])
+    subscriptions = {row.id: row for row in await service.list_subscriptions(event.stream_id)}
+    trigger_names = await TriggerRepository(session, user_context).names(
+        [o.trigger_id for o in response.outcomes if o.trigger_id is not None]
+    )
+    stream_names = {
+        row.id: row.name for row in await service.list_streams(limit=1000, offset=0, ids=None)
+    }
+    task_statuses = await TaskRepository(session, user_context).statuses(
+        [o.task_id for o in response.outcomes if o.task_id is not None]
+    )
+    handlers = []
+    for outcome in response.outcomes:
+        subscription = subscriptions.get(outcome.subscription_id)
+        if outcome.trigger_id is not None:
+            name = trigger_names.get(outcome.trigger_id, str(outcome.trigger_id))
+        elif subscription is not None:
+            name = ", ".join(
+                stream_names.get(UUID(str(s)), str(s)) for s in subscription.output_stream_ids
+            )
+        else:
+            name = str(outcome.subscription_id)
+        handlers.append(
+            HandlerResponse(
+                subscription_id=outcome.subscription_id,
+                kind=outcome.subscription_kind,
+                name=name,
+                verdict=outcome.verdict,
+                reason=outcome.reason,
+                task_id=outcome.task_id,
+                task_status=task_statuses.get(outcome.task_id) if outcome.task_id else None,
+                derived_event_ids=outcome.derived_event_ids,
+            )
+        )
+    return StreamEventDetailResponse.model_validate(
+        {**response.model_dump(), "processing": item.processing, "handlers": handlers}
+    )
+
+
+async def workspace_events(
+    service: StreamService,
+    reactions: ReactionRepository,
+    user_context: Any,
+    filters: FeedFilter,
+    *,
+    before: int | None,
+    limit: int,
+) -> StreamEventPage:
+    """The workspace feed with each event's body and outcomes, for an agent."""
+    streams = await _readable_streams(service, user_context.user_id)
+    session = service.repository_factory.session
+    rows = await StreamEventRepository(session, user_context).read_feed(
+        filters, streams, before=before, limit=limit
+    )
+    processing = {i.event_id: i.processing for i in await feed_items(session, user_context, rows)}
+    by_stream: dict[UUID, list[RoutedEvent]] = {}
+    for row in rows:
+        by_stream.setdefault(row.stream_id, []).append(row)
+    full: dict[UUID, StreamEventResponse] = {}
+    for stream_id, events in by_stream.items():
+        for response in await _events_with_outcomes(service, reactions, stream_id, events):
+            response.processing = processing[response.event_id]
+            full[response.event_id] = response
+    return StreamEventPage(
+        events=[full[row.id] for row in rows],
+        next_before=rows[-1].sequence if len(rows) == limit else None,
+    )
+
+
+async def _readable_streams(service: StreamService, user_id: str) -> list[UUID]:
+    rows = await service.list_streams(
+        limit=1000, offset=0, ids=await readable_resource_ids(user_id)
+    )
+    return [row.id for row in rows]
+
+
+def feed_filter(
+    stream_id: UUID | None = Query(None),
+    source_type: str | None = Query(None, max_length=64),
+    kind: str | None = Query(
+        None, max_length=255, description="An event kind, or a prefix ending in .* (order.*)."
+    ),
+    sender: str | None = Query(None, max_length=512),
+    session_key: str | None = Query(None, max_length=512),
+    result: ProcessingStatus | None = Query(None, description="What the platform did with it."),
+    since: UtcDatetime | None = Query(None, description="Received at or after."),
+    until: UtcDatetime | None = Query(None, description="Received before."),
+) -> FeedFilter:
+    return FeedFilter(
+        stream_id=stream_id,
+        source_type=source_type,
+        kind=kind,
+        sender=sender,
+        session_key=session_key,
+        result=result,
+        since=since,
+        until=until,
+    )
+
+
+FeedFilterDep = Annotated[FeedFilter, Depends(feed_filter)]
 
 
 class EventFileLinks:
@@ -388,8 +567,85 @@ async def list_source_types(service: StreamServiceDep):
 
 
 @router.get(
+    "/events",
+    response_model=WorkspaceEventPage,
+    dependencies=[
+        enforced_in_handler("narrowed to the streams the graph says this caller may read")
+    ],
+)
+async def list_workspace_events(
+    user_context: UserContextDep,
+    service: StreamServiceDep,
+    filters: FeedFilterDep,
+    before: int | None = Query(
+        None, ge=1, le=MAX_BIGINT, description="Newest first, before this sequence."
+    ),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Every event of the workspace's streams the caller may read, newest first.
+
+    Each carries what the platform did with it (``processing``); bodies are
+    left out, the event's own endpoint has them.
+    """
+    streams = await _readable_streams(service, user_context.user_id)
+    session = service.repository_factory.session
+    events = StreamEventRepository(session, user_context)
+    rows = await events.read_feed(filters, streams, before=before, limit=limit)
+    facets = None
+    if before is None:
+        counted = await events.feed_facets(filters, streams)
+        facets = FeedFacetsResponse(streams=counted.streams, source_types=counted.source_types)
+    return WorkspaceEventPage(
+        events=await feed_items(session, user_context, rows),
+        next_before=rows[-1].sequence if len(rows) == limit else None,
+        facets=facets,
+    )
+
+
+@router.get(
+    "/events/live",
+    dependencies=[
+        enforced_in_handler("narrowed to the streams the graph says this caller may read")
+    ],
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def stream_workspace_events(
+    user_context: UserContextDep,
+    service: StreamServiceDep,
+    filters: FeedFilterDep,
+):
+    """SSE: ``event.recorded`` (a feed item) as an event arrives, ``event.processing``
+    ({event_id, processing}) as the platform acts on it. The filters are the feed's;
+    ``result`` is not applied here, since an event's result changes as it is handled.
+    """
+    from agentarea_api.api.deps.database import get_db_session
+    from agentarea_api.api.v1.agents_tasks import _with_sse_heartbeats
+
+    streams = await _readable_streams(service, user_context.user_id)
+    live_filter = filters.model_copy(update={"result": None})
+
+    async def load(event_id: UUID) -> FeedEventResponse | None:
+        # The stream outlives the request whose dependencies bound the workspace.
+        with workspace_scope(user_context.workspace_id):
+            async with get_db_session() as session:
+                return await read_feed_item(session, user_context, live_filter, streams, event_id)
+
+    return StreamingResponse(
+        _with_sse_heartbeats(
+            iter_live_feed(
+                subscribe=lambda: event_notices_hub().subscribe(user_context.workspace_id),
+                streams=streams,
+                load=load,
+            )
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+@router.get(
     "/events/{event_id}",
-    response_model=StreamEventResponse,
+    response_model=StreamEventDetailResponse,
     dependencies=[enforced_in_handler("read on the stream that holds the event")],
 )
 async def get_event_by_id(
@@ -404,8 +660,7 @@ async def get_event_by_id(
     except StreamEventNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     await require_permission("read", "stream", str(event.stream_id), user_context.user_id)
-    (response,) = await _events_with_outcomes(service, reactions, event.stream_id, [event])
-    return response
+    return await _event_detail(service, reactions, user_context, event)
 
 
 @router.get(
@@ -446,7 +701,7 @@ async def delete_stream(
         )
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    except StreamInUseError as error:
+    except (StreamInUseError, StreamManagedByPlatformError) as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return Response(status_code=204)
 
@@ -488,6 +743,8 @@ async def add_source(
         )
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except StreamManagedByPlatformError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return SourceCreated(**source_response(row).model_dump(), issued=issued)
 
 
@@ -508,6 +765,8 @@ async def delete_source(
         source = await service.delete_source(stream_id, source_id)
     except StreamSourceNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except StreamManagedByPlatformError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     await release_source(source, secret_manager=secret_manager, secret_catalog=secret_catalog)
     return Response(status_code=204)
 
@@ -542,6 +801,8 @@ async def create_forward(
         raise HTTPException(status_code=400, detail=str(error)) from error
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except StreamManagedByPlatformError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     return _subscription(row)
 
 
@@ -569,6 +830,106 @@ async def delete_forward(
         raise HTTPException(status_code=404, detail=str(error)) from error
     except NotAForwardError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+    return Response(status_code=204)
+
+
+_PROCESSOR_REFUSALS: tuple[tuple[type[Exception], int], ...] = (
+    (SubscriptionNotFoundError, 404),
+    (StreamNotFoundError, 404),
+    (NotAProcessorError, 409),
+    (StreamManagedByPlatformError, 409),
+    (ProcessorCodeError, 400),
+    (ProcessorLoopError, 400),
+)
+_PROCESSOR_ERRORS = tuple(error for error, _ in _PROCESSOR_REFUSALS)
+
+
+def processor_refusal(error: Exception) -> HTTPException:
+    """The answer to a refused processor change."""
+    status = next(code for kind, code in _PROCESSOR_REFUSALS if isinstance(error, kind))
+    return HTTPException(status_code=status, detail=str(error))
+
+
+@router.post(
+    "/{stream_id}/processors",
+    response_model=SubscriptionResponse,
+    status_code=201,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def create_processor(
+    stream_id: UUID, data: ProcessorCreate, user_context: UserContextDep, service: StreamServiceDep
+):
+    """Run code over every matching event of the stream; it writes into the output streams.
+
+    The caller must be able to edit every output stream. The code runs in the
+    sandbox, one call per event, and gets no secrets.
+    """
+    for output in data.output_stream_ids:
+        await require_permission("edit", "stream", str(output), user_context.user_id)
+    try:
+        row = await service.create_processor(
+            stream_id=stream_id,
+            output_stream_ids=data.output_stream_ids,
+            code=data.code,
+            event_filter=data.event_filter,
+        )
+    except _PROCESSOR_ERRORS as error:
+        raise processor_refusal(error) from error
+    return _subscription(row)
+
+
+@router.patch(
+    "/{stream_id}/processors/{subscription_id}",
+    response_model=SubscriptionResponse,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def update_processor(
+    stream_id: UUID,
+    subscription_id: UUID,
+    data: ProcessorUpdate,
+    user_context: UserContextDep,
+    service: StreamServiceDep,
+):
+    """Change a processor's code, outputs or filter; the next event runs the change.
+
+    The caller must be able to edit every output stream it has and is given.
+    """
+    try:
+        processor = await service.get_processor(stream_id, subscription_id)
+        outputs = {*await service.existing_outputs(processor), *(data.output_stream_ids or [])}
+        for output in sorted(outputs, key=str):
+            await require_permission("edit", "stream", str(output), user_context.user_id)
+        row = await service.update_processor(
+            stream_id,
+            subscription_id,
+            code=data.code,
+            output_stream_ids=data.output_stream_ids,
+            event_filter=data.event_filter,
+        )
+    except _PROCESSOR_ERRORS as error:
+        raise processor_refusal(error) from error
+    return _subscription(row)
+
+
+@router.delete(
+    "/{stream_id}/processors/{subscription_id}",
+    status_code=204,
+    dependencies=[requires("edit", "stream", id_param="stream_id")],
+)
+async def delete_processor(
+    stream_id: UUID,
+    subscription_id: UUID,
+    user_context: UserContextDep,
+    service: StreamServiceDep,
+):
+    """Remove a processor; the events it wrote stay. The caller must be able to edit its outputs."""
+    try:
+        processor = await service.get_processor(stream_id, subscription_id)
+        for output in await service.existing_outputs(processor):
+            await require_permission("edit", "stream", str(output), user_context.user_id)
+        await service.delete_processor(stream_id, subscription_id)
+    except _PROCESSOR_ERRORS as error:
+        raise processor_refusal(error) from error
     return Response(status_code=204)
 
 
@@ -605,11 +966,12 @@ async def list_events(
 
 @router.get(
     "/{stream_id}/events/{sequence}",
-    response_model=StreamEventResponse,
+    response_model=StreamEventDetailResponse,
     dependencies=[requires("read", "stream", id_param="stream_id")],
 )
 async def get_event(
     stream_id: UUID,
+    user_context: UserContextDep,
     service: StreamServiceDep,
     reactions: ReactionsDep,
     # Sequences start at 1 and live in a BIGINT: anything outside is a 422, not
@@ -622,8 +984,7 @@ async def get_event(
         raise HTTPException(status_code=404, detail=str(error)) from error
     if not events or events[0].sequence != sequence:
         raise HTTPException(status_code=404, detail=f"Event {sequence} not found in stream")
-    (response,) = await _events_with_outcomes(service, reactions, stream_id, events)
-    return response
+    return await _event_detail(service, reactions, user_context, events[0])
 
 
 @router.get(

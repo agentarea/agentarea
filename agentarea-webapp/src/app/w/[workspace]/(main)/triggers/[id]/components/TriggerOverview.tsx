@@ -102,6 +102,7 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
         }
       : null,
     session: isStream ? (trigger.session ?? null) : null,
+    batch: isStream ? (trigger.batch ?? null) : null,
     failure: {
       consecutive: trigger.consecutive_failures,
       threshold: trigger.failure_threshold,

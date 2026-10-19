@@ -12,6 +12,7 @@ def test_defaults_are_bounded():
     assert settings.PARTITIONS_AHEAD == 7
     assert settings.FORWARD_DEPTH == 8
     assert settings.MAX_ATTEMPTS == 10
+    assert settings.ARCHIVE is False
 
 
 def test_the_journal_dispatcher_settings_are_gone():

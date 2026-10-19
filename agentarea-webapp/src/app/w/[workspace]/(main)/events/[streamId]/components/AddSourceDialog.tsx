@@ -36,8 +36,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
-import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import {
+  MCP_EVENTS,
+  sourceTypeBySlug,
+  type SourceType,
+} from "@/lib/sourceTypes";
 import { createStreamSourceAction } from "../actions";
+import {
+  mcpEventsReady,
+  mcpEventsServers,
+  selectedMcpEvent,
+  toMcpEventsRequest,
+} from "../mcpEventsSource";
 import {
   missingSourceFields,
   sourceKinds,
@@ -47,6 +57,7 @@ import {
   type SourceFormValues,
   type SourceKind,
 } from "../sourceRequest";
+import McpEventsSourceFields from "./McpEventsSourceFields";
 
 const EMPTY: SourceFormValues = { secrets: {}, settings: {}, templates: {} };
 
@@ -74,6 +85,11 @@ export default function AddSourceDialog({
   const type = sourceTypeBySlug(types, typeId);
   const kinds = type ? sourceKinds(type) : [];
   const missing = type ? missingSourceFields(type, values) : [];
+  const mcpEvents = type?.slug === MCP_EVENTS;
+  const mcpServers = mcpEvents ? mcpEventsServers(resources.mcpInstances) : [];
+  const ready =
+    type !== undefined &&
+    (mcpEvents ? mcpEventsReady(mcpServers, values) : missing.length === 0);
 
   const reset = () => {
     setTypeId("");
@@ -90,12 +106,14 @@ export default function AddSourceDialog({
 
   const submit = () => {
     if (!type) return;
+    const picked = mcpEvents ? selectedMcpEvent(mcpServers, values) : undefined;
+    const request =
+      picked?.event !== undefined
+        ? toMcpEventsRequest(type, picked.server.id, picked.event, values)
+        : toSourceRequest(type, values);
     setError(null);
     startTransition(async () => {
-      const result = await createStreamSourceAction(
-        streamId,
-        toSourceRequest(type, values)
-      );
+      const result = await createStreamSourceAction(streamId, request);
       if (result.error !== null) {
         setError(result.error);
         return;
@@ -125,29 +143,38 @@ export default function AddSourceDialog({
       {created ? (
         <SuccessModalContent
           title={t("created.title")}
-          description={t("created.description")}
+          description={
+            mcpEvents
+              ? t(
+                  created.kind === "poll"
+                    ? "created.mcpPoll"
+                    : "created.mcpWebhook"
+                )
+              : t("created.description")
+          }
           doneLabel={t("created.done")}
           onDone={() => onOpenChange(false)}
         >
-          {created.webhook_url && (
+          {!mcpEvents && created.webhook_url && (
             <div className="min-w-0 space-y-2">
               <FormLabel icon={Link2}>{t("created.urlLabel")}</FormLabel>
               <CopyableText text={created.webhook_url} />
             </div>
           )}
-          {Object.entries(created.issued ?? {}).map(([key, value]) => (
-            <OneTimeSecretField
-              key={key}
-              label={
-                type?.credentials.find((field) => field.key === key)?.label ??
-                key
-              }
-              icon={KeyRound}
-              value={value}
-              warning={t("created.secretWarning")}
-            />
-          ))}
-          {type?.verification_header && (
+          {!mcpEvents &&
+            Object.entries(created.issued ?? {}).map(([key, value]) => (
+              <OneTimeSecretField
+                key={key}
+                label={
+                  type?.credentials.find((field) => field.key === key)?.label ??
+                  key
+                }
+                icon={KeyRound}
+                value={value}
+                warning={t("created.secretWarning")}
+              />
+            ))}
+          {!mcpEvents && type?.verification_header && (
             <SuccessModalDetail label={t("signedWith")}>
               <code className="font-mono text-[12px] text-foreground">
                 {type.verification_header}
@@ -161,11 +188,7 @@ export default function AddSourceDialog({
           description={t("dialog.description")}
           note={t("dialog.note")}
           actions={
-            <Button
-              size="sm"
-              onClick={submit}
-              disabled={pending || !type || missing.length > 0}
-            >
+            <Button size="sm" onClick={submit} disabled={pending || !ready}>
               {pending && <Loader2 className="animate-spin" />}
               {t("dialog.submit")}
             </Button>
@@ -202,7 +225,19 @@ export default function AddSourceDialog({
               {type && <p className="note">{type.description}</p>}
             </div>
 
-            {kinds.length > 1 && (
+            {mcpEvents && (
+              <McpEventsSourceFields
+                servers={mcpServers}
+                resources={resources}
+                values={values}
+                onChange={(next) => {
+                  setValues(next);
+                  setError(null);
+                }}
+              />
+            )}
+
+            {!mcpEvents && kinds.length > 1 && (
               <div className="space-y-2">
                 <FormLabel htmlFor="source-kind" required>
                   {t("dialog.kind")}
@@ -230,73 +265,75 @@ export default function AddSourceDialog({
               </div>
             )}
 
-            {type?.credentials.map((field) => (
-              <div key={`${type.slug}:${field.key}`} className="space-y-2">
-                <FormLabel
-                  htmlFor={`source-secret-${field.key}`}
-                  icon={KeyRound}
-                  required={field.required && !field.issued}
-                  optional={!field.required || field.issued}
-                >
-                  {field.label}
-                </FormLabel>
-                <SecretSelect
-                  id={`source-secret-${field.key}`}
-                  secrets={resources.secrets}
-                  value={values.secrets[field.key] ?? ""}
-                  onChange={(secretId) =>
-                    setField("secrets", field.key, secretId)
-                  }
-                  disabled={
-                    resources.loading || resources.failed.includes("secrets")
-                  }
-                  required={field.required && !field.issued}
-                  placeholder={
-                    resources.loading
-                      ? t("dialog.loadingSecrets")
-                      : t("dialog.selectSecret")
-                  }
-                  searchPlaceholder={t("dialog.selectSecret")}
-                  emptyMessage={t("dialog.noSecrets")}
-                  createLabel={t("dialog.newSecret")}
-                  onCreated={resources.refresh}
-                />
-                {field.issued ? (
-                  <p className="note">{t("dialog.issuedHint")}</p>
-                ) : (
-                  field.placeholder && (
-                    <p className="note">{field.placeholder}</p>
-                  )
-                )}
-              </div>
-            ))}
-            {type && resources.failed.includes("secrets") && (
+            {!mcpEvents &&
+              type?.credentials.map((field) => (
+                <div key={`${type.slug}:${field.key}`} className="space-y-2">
+                  <FormLabel
+                    htmlFor={`source-secret-${field.key}`}
+                    icon={KeyRound}
+                    required={field.required && !field.issued}
+                    optional={!field.required || field.issued}
+                  >
+                    {field.label}
+                  </FormLabel>
+                  <SecretSelect
+                    id={`source-secret-${field.key}`}
+                    secrets={resources.secrets}
+                    value={values.secrets[field.key] ?? ""}
+                    onChange={(secretId) =>
+                      setField("secrets", field.key, secretId)
+                    }
+                    disabled={
+                      resources.loading || resources.failed.includes("secrets")
+                    }
+                    required={field.required && !field.issued}
+                    placeholder={
+                      resources.loading
+                        ? t("dialog.loadingSecrets")
+                        : t("dialog.selectSecret")
+                    }
+                    searchPlaceholder={t("dialog.selectSecret")}
+                    emptyMessage={t("dialog.noSecrets")}
+                    createLabel={t("dialog.newSecret")}
+                    onCreated={resources.refresh}
+                  />
+                  {field.issued ? (
+                    <p className="note">{t("dialog.issuedHint")}</p>
+                  ) : (
+                    field.placeholder && (
+                      <p className="note">{field.placeholder}</p>
+                    )
+                  )}
+                </div>
+              ))}
+            {type && !mcpEvents && resources.failed.includes("secrets") && (
               <p role="alert" className="text-xs text-destructive">
                 {t("dialog.secretsLoadFailed")}
               </p>
             )}
 
-            {type?.config.map((field) => (
-              <div key={`${type.slug}:${field.key}`} className="space-y-2">
-                <FormLabel
-                  htmlFor={`source-setting-${field.key}`}
-                  icon={Settings2}
-                  required={field.required && !field.issued}
-                  optional={!field.required || field.issued}
-                >
-                  {field.label}
-                </FormLabel>
-                <Input
-                  id={`source-setting-${field.key}`}
-                  value={values.settings[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  autoComplete="off"
-                  onChange={(event) =>
-                    setField("settings", field.key, event.target.value)
-                  }
-                />
-              </div>
-            ))}
+            {!mcpEvents &&
+              type?.config.map((field) => (
+                <div key={`${type.slug}:${field.key}`} className="space-y-2">
+                  <FormLabel
+                    htmlFor={`source-setting-${field.key}`}
+                    icon={Settings2}
+                    required={field.required && !field.issued}
+                    optional={!field.required || field.issued}
+                  >
+                    {field.label}
+                  </FormLabel>
+                  <Input
+                    id={`source-setting-${field.key}`}
+                    value={values.settings[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    autoComplete="off"
+                    onChange={(event) =>
+                      setField("settings", field.key, event.target.value)
+                    }
+                  />
+                </div>
+              ))}
 
             {type && takesEventTemplates(type) && (
               <div className="space-y-3">

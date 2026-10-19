@@ -1090,7 +1090,7 @@ async def create_task_for_agent_with_stream(
                     agent_id,
                     task.execution_id,
                     user_context=user_context,
-                    revealed=await caller_may_act_on_task(task, user_context),
+                    revealed=True,
                     emit_connected=False,
                     follow_execution=follow,
                 ):

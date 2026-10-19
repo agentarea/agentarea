@@ -17,6 +17,7 @@ from ..domain.models import (
     CronTrigger,
     StreamTrigger,
     Trigger,
+    TriggerBatchWindow,
     TriggerCreate,
     TriggerExecution,
     TriggerSession,
@@ -36,11 +37,25 @@ def _session(session: TriggerSession | None) -> dict[str, Any] | None:
     return session.model_dump(by_alias=True, exclude_none=True) if session else None
 
 
+def _batch(batch: TriggerBatchWindow | None) -> dict[str, Any] | None:
+    return batch.model_dump(exclude_none=True) if batch else None
+
+
 class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     """Repository for trigger persistence."""
 
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, TriggerORM, user_context)
+
+    async def names(self, ids: list[UUID]) -> dict[UUID, str]:
+        if not ids:
+            return {}
+        result = await self.session.execute(
+            select(TriggerORM.id, TriggerORM.name).where(
+                TriggerORM.id.in_(ids), self._get_workspace_filter()
+            )
+        )
+        return dict(result.tuples().all())
 
     async def get_trigger(self, id: UUID) -> Trigger | None:
         """Get a trigger by ID and convert to domain model."""
@@ -143,6 +158,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             cron_expression=trigger_data.cron_expression,
             timezone=trigger_data.timezone,
             session=_session(trigger_data.session),
+            batch=_batch(trigger_data.batch),
         )
 
         self.session.add(trigger_orm)
@@ -160,12 +176,14 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         update_data = {}
         # event_filter lives on the trigger's stream subscription, not on the row.
         for field, value in trigger_update.model_dump(
-            exclude_unset=True, exclude={"event_filter", "session"}
+            exclude_unset=True, exclude={"event_filter", "session", "batch"}
         ).items():
             if value is not None:
                 update_data[field] = value
         if "session" in trigger_update.model_fields_set:
             update_data["session"] = _session(trigger_update.session)
+        if "batch" in trigger_update.model_fields_set:
+            update_data["batch"] = _batch(trigger_update.batch)
 
         if not update_data:
             return await self.get_trigger(trigger_id)
@@ -284,7 +302,8 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                 context=RECONSTITUTING,
             )
         return StreamTrigger.model_validate(
-            {**base_data, "session": trigger_orm.session}, context=RECONSTITUTING
+            {**base_data, "session": trigger_orm.session, "batch": trigger_orm.batch},
+            context=RECONSTITUTING,
         )
 
     def _domain_to_orm(self, trigger: Trigger) -> TriggerORM:
@@ -313,6 +332,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             )
         elif isinstance(trigger, StreamTrigger):
             orm_data["session"] = _session(trigger.session)
+            orm_data["batch"] = _batch(trigger.batch)
 
         return TriggerORM(**orm_data)
 

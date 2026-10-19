@@ -26,6 +26,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/container"
 	"github.com/agentarea/mcp-manager/internal/database"
 	"github.com/agentarea/mcp-manager/internal/dataplane"
+	"github.com/agentarea/mcp-manager/internal/egress"
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/features"
 	"github.com/agentarea/mcp-manager/internal/mcpgateway"
@@ -197,7 +198,7 @@ func runControlPlane(
 	// Container-backed MCP traffic always crosses this demand boundary. It is
 	// the sole owner of cold start, request leases, and idle reclamation; Python
 	// only speaks ordinary MCP Streamable HTTP to the stable manager endpoint.
-	mcpGateway, gatewayRepository, gatewayRuntime, err := initDemandGateway(ctx, cfg, providerManager, backend, runtime.remoteUpstream, logger)
+	mcpGateway, gatewayRepository, gatewayRuntime, err := initDemandGateway(ctx, cfg, providerManager, backend, runtime.remoteUpstream, secretResolver, logger)
 	if err != nil {
 		return err
 	}
@@ -471,10 +472,14 @@ func initSandboxRuntime(
 	return sandboxRuntime, sandboxProviderName, nil
 }
 
-func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager *providers.ProviderManager, backend backends.Backend, remoteUpstream *mcpgateway.RemoteUpstream, logger *slog.Logger) (*mcpgateway.Gateway, *mcpgateway.SQLRepository, *mcpgateway.ProviderRuntime, error) {
+func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager *providers.ProviderManager, backend backends.Backend, remoteUpstream *mcpgateway.RemoteUpstream, secretResolver secrets.SecretResolver, logger *slog.Logger) (*mcpgateway.Gateway, *mcpgateway.SQLRepository, *mcpgateway.ProviderRuntime, error) {
 	gatewayPolicy, err := mcpgateway.LoadPolicyFromEnv()
 	if err != nil {
 		return nil, nil, nil, failed(logger, "Failed to configure MCP demand gateway", err)
+	}
+	egressPolicy, err := egress.NewPolicy(cfg.Egress.AllowPrivate, cfg.Egress.PrivateAllowlist)
+	if err != nil {
+		return nil, nil, nil, failed(logger, "Invalid AGENTAREA_HTTP_PRIVATE_ALLOWLIST", err)
 	}
 	gatewayRepository, err := mcpgateway.OpenSQLRepository(ctx, database.BuildConnStr(logger))
 	if err != nil {
@@ -485,7 +490,7 @@ func initDemandGateway(ctx context.Context, cfg *config.Config, providerManager 
 		_ = gatewayRepository.Close()
 		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand runtime", err)
 	}
-	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream)
+	mcpGateway, err := mcpgateway.New(gatewayRepository, gatewayRuntime, gatewayPolicy, logger, remoteUpstream, mcpgateway.URLUpstream{Secrets: secretResolver, Egress: egressPolicy})
 	if err != nil {
 		_ = gatewayRepository.Close()
 		return nil, nil, nil, failed(logger, "Failed to initialize MCP demand gateway", err)

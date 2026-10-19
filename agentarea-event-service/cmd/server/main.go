@@ -18,6 +18,7 @@ import (
 	"github.com/agentarea/event-service/internal/config"
 	"github.com/agentarea/event-service/internal/egress"
 	"github.com/agentarea/event-service/internal/ingest"
+	"github.com/agentarea/event-service/internal/mcpevents"
 	"github.com/agentarea/event-service/internal/polling"
 	"github.com/agentarea/event-service/internal/secrets"
 	"github.com/agentarea/event-service/internal/source"
@@ -111,12 +112,14 @@ func main() {
 
 	// Go fetches and publishes raw items to streams.ingest; the platform's
 	// ingest names, keys and dedups them.
+	mcp := mcpevents.NewClient(cfg.MCPManagerURL, cfg.MCPGatewaySecret)
 	mgr := polling.NewManager(polling.Deps{
 		Sources:    source.NewStore(db),
 		Secrets:    secrets.NewStore(db, fernet),
-		Transports: transport.NewSet(policy),
+		Transports: transport.NewSet(policy, mcp),
 		Publisher:  ingest.NewPublisher(broker.NewRedisStreams(redisClient, cfg.Namespace)),
 		Caller:     transport.NewCaller(policy),
+		MCP:        mcp,
 		Claimer:    claim.NewRedisClaimer(redisClient, cfg.WorkerID),
 		APIURL:     cfg.APIURL,
 		Interval:   cfg.PollInterval,

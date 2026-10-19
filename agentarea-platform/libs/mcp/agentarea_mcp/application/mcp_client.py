@@ -423,6 +423,13 @@ class _ConnectedClient:
             raise RuntimeError("MCP client is not connected")
         return client.protocol_version
 
+    @property
+    def server_capabilities(self):
+        client = self._client
+        if client is None:
+            raise RuntimeError("MCP client is not connected")
+        return client.server_capabilities
+
     async def __aenter__(self) -> _ConnectedClient:
         self._mode, self._prior_discover, self._cached = await _read_verdict(
             self._verdict_key, self._verdict_store

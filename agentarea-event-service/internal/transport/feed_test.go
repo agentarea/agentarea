@@ -97,7 +97,7 @@ func TestFeedTransportFetches(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tr, _ := NewSet(openPolicy(t)).Get(Feed)
+	tr, _ := NewSet(openPolicy(t), nil).Get(Feed)
 	res, err := tr.Fetch(context.Background(), Fetch{
 		Poll:   catalog.Poll{Transport: Feed, Request: &catalog.Request{URL: "{config.url}"}},
 		Values: template.Values{Config: map[string]any{"url": server.URL}, Cursor: `["old"]`},

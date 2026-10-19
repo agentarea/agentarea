@@ -20,12 +20,14 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import tenant_scoped_session_class, workspace_scope
 from agentarea_common.config.database import TenantScopeMode
 from agentarea_common.config.streams import EventStreamSettings
+from agentarea_streams.application.events_view import EventsView
 from agentarea_streams.application.forward import ForwardHandler
 from agentarea_streams.application.router import EventRouter, ReactionsFailedError
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     EventFilter,
     HandlerResult,
+    ReactionTally,
     StreamEvent,
     SubscriptionKind,
     Verdict,
@@ -63,6 +65,14 @@ class _Reactions:
         if key in self.rows and self.rows[key].reason == GAVE_UP_REASON:
             del self.rows[key]
 
+    async def tally(self, session, event):
+        verdicts = [r.verdict for (_, e), r in self.rows.items() if e == event.id]
+        return ReactionTally(
+            reacted=len(verdicts),
+            skipped=verdicts.count(Verdict.SKIPPED),
+            errors=verdicts.count(Verdict.ERROR),
+        )
+
 
 class _Triggers:
     def __init__(self, failing: set[UUID] | None = None):
@@ -74,6 +84,17 @@ class _Triggers:
         if subscription.trigger_id in self.failing:
             raise RuntimeError("downstream unavailable")
         return HandlerResult(verdict=Verdict.REACTED, task_id=uuid4())
+
+
+class _Notices:
+    def __init__(self):
+        self.sent: list[tuple[str, UUID]] = []
+
+    async def recorded(self, event):
+        self.sent.append(("recorded", event.id))
+
+    async def processing(self, event):
+        self.sent.append(("processing", event.id))
 
 
 class _Quota:
@@ -141,7 +162,21 @@ async def world():
                 event_filter=EventFilter(),
             )
             await session.commit()
+
+    async def subscribe_new_trigger() -> tuple[UUID, UUID]:
+        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
+            async with maker() as session:
+                trigger_id = await trigger_row(session)
+                sub = await StreamService(
+                    RepositoryFactory(session, ctx), EventStreamSettings()
+                ).subscribe_trigger(
+                    stream_id=source.id, trigger_id=trigger_id, event_filter=EventFilter()
+                )
+                await session.commit()
+        return trigger_id, sub.id
+
     yield SimpleNamespace(
+        subscribe_new_trigger=subscribe_new_trigger,
         maker=maker,
         raw=raw,
         ctx=ctx,
@@ -165,9 +200,6 @@ async def world():
     await engine.dispose()
 
 
-_EARLIER = datetime(2026, 1, 1, tzinfo=UTC)
-
-
 def _event(world, *, kind="push", depth=0, key="e1", received_at=None) -> StreamEvent:
     return StreamEvent(
         id=event_id_for(world.source.id, key),
@@ -183,16 +215,36 @@ def _event(world, *, kind="push", depth=0, key="e1", received_at=None) -> Stream
     )
 
 
-def _router(world, triggers, reactions, bus=None, **kwargs):
+def _router(world, triggers, reactions, bus=None, notices=None, **kwargs):
     return EventRouter(
         session_factory=world.maker,
         handlers={
             SubscriptionKind.TRIGGER: triggers,
             SubscriptionKind.FORWARD: ForwardHandler(EventStreamSettings(), bus or _Bus()),
+            SubscriptionKind.EXTERNAL: _Triggers(),
+            SubscriptionKind.PROCESSOR: _Triggers(),
         },
         reactions=reactions,
+        notices=notices or _Notices(),
         **kwargs,
     )
+
+
+async def _routing(world, event_id) -> tuple[datetime | None, int | None, int]:
+    async with world.raw() as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT routed_at, subscribers, data FROM stream_events "
+                    "WHERE event_id = :e AND workspace_id = :ws"
+                ),
+                {"e": event_id, "ws": world.ctx.workspace_id},
+            )
+        ).all()
+    assert all(row[2] == {"n": 1} for row in rows)
+    if not rows:
+        return None, None, 0
+    return rows[0][0], rows[0][1], len(rows)
 
 
 async def test_one_event_reaches_every_matching_subscription_and_each_is_recorded(world):
@@ -287,6 +339,7 @@ async def test_a_stale_cache_never_fires_a_deleted_or_paused_subscription(world)
 async def test_a_new_subscription_is_seen_once_its_stream_is_invalidated(world):
     triggers, reactions = _Triggers(), _Reactions()
     router = _router(world, triggers, reactions, cache_ttl_s=3600)
+    earlier = datetime.now(UTC)
     await router.handle(_event(world, kind="issue", key="first").to_bus())
     assert triggers.calls.count(world.t3) == 1
     async with world.raw() as session:
@@ -297,7 +350,7 @@ async def test_a_new_subscription_is_seen_once_its_stream_is_invalidated(world):
         await session.commit()
     triggers.calls.clear()
     # Received before the cache was read: served from it.
-    await router.handle(_event(world, kind="issue", key="cached", received_at=_EARLIER).to_bus())
+    await router.handle(_event(world, kind="issue", key="cached", received_at=earlier).to_bus())
     assert world.t3 in triggers.calls
     router.invalidate(world.source.id)
     triggers.calls.clear()
@@ -312,6 +365,61 @@ async def test_a_forward_past_the_causation_depth_is_an_error_and_writes_nothing
     result = reactions.rows[(world.fwd.id, event.id)]
     assert result.verdict is Verdict.ERROR
     assert "causation depth" in (result.reason or "")
+    assert bus.published == []
+
+
+async def test_an_event_carried_back_over_mcp_events_at_the_limit_is_not_forwarded_again(world):
+    """Stream A -> our own MCP Events -> this stream -> forward -> A: the hop keeps the depth."""
+    import json
+    from pathlib import Path
+
+    from agentarea_streams.application.source_intake import SourceIntake
+    from agentarea_streams.domain.mcp_events import occurrence
+    from agentarea_streams.domain.source_types import SourceTypeEntry
+
+    catalog = Path(__file__).parents[4] / "data" / "catalog" / "source-types.json"
+    entry = SourceTypeEntry.model_validate(
+        next(
+            e for e in json.loads(catalog.read_text())["source_types"] if e["slug"] == "mcp_events"
+        )
+    )
+    limit = EventStreamSettings().FORWARD_DEPTH
+    elsewhere = _event(world, depth=limit - 1, key="in-stream-a").model_copy(
+        update={"correlation_id": str(uuid4())}
+    )
+    source = SimpleNamespace(
+        id=uuid4(),
+        stream_id=world.source.id,
+        workspace_id=world.ctx.workspace_id,
+        created_by="u",
+        event_templates=None,
+        webhook_config=None,
+    )
+    intake_bus = _Bus()
+    async with world.maker() as session:
+        with workspace_scope(world.ctx.workspace_id):
+            await SourceIntake(
+                bus=intake_bus, files=object(), settings=EventStreamSettings()
+            ).ingest(
+                session,
+                source,
+                entry,
+                body=json.loads(json.dumps(occurrence(elsewhere, "ws/a"))),
+                headers={},
+                received_at=datetime.now(UTC),
+            )
+    (carried,) = intake_bus.published
+    assert carried.depth == limit
+    assert (carried.causation_id, carried.correlation_id) == (
+        str(elsewhere.id),
+        elsewhere.correlation_id,
+    )
+
+    triggers, reactions, bus = _Triggers(), _Reactions(), _Bus()
+    await _router(world, triggers, reactions, bus).handle(carried.to_bus())
+    result = reactions.rows[(world.fwd.id, carried.id)]
+    assert result.verdict is Verdict.ERROR
+    assert result.reason == f"causation depth {limit + 1} exceeds {limit}"
     assert bus.published == []
 
 
@@ -361,3 +469,126 @@ async def test_a_subscription_created_after_the_cache_was_read_gets_the_next_eve
     await router.handle(_event(world, kind="issue", key="after").to_bus())
 
     assert world.t3 not in triggers.calls
+
+
+async def test_the_router_writes_when_it_routed_an_event_and_to_how_many(world):
+    notices = _Notices()
+    event = _event(world)
+    await _router(world, _Triggers(), _Reactions(), notices=notices).handle(event.to_bus())
+    routed_at, subscribers, rows = await _routing(world, event.id)
+    assert routed_at is not None
+    assert subscribers == 3
+    assert rows == 1
+    # The events view has not written it yet: the router's write is the first.
+    assert notices.sent[0] == ("recorded", event.id)
+    assert notices.sent[1:] == [("processing", event.id)] * 3
+
+
+async def test_an_event_nobody_subscribes_to_is_routed_to_no_one(world):
+    notices = _Notices()
+    event = _event(world).model_copy(update={"stream_id": world.outputs[0].id})
+    await _router(world, _Triggers(), _Reactions(), notices=notices).handle(event.to_bus())
+    routed_at, subscribers, _ = await _routing(world, event.id)
+    assert routed_at is not None
+    assert subscribers == 0
+    assert notices.sent == [("recorded", event.id)]
+
+
+async def test_a_redelivery_keeps_the_first_routing(world):
+    triggers, reactions = _Triggers(failing={world.t2}), _Reactions()
+    router = _router(world, triggers, reactions)
+    event = _event(world)
+    with pytest.raises(ReactionsFailedError):
+        await router.handle(event.to_bus())
+    first = await _routing(world, event.id)
+
+    triggers.failing.clear()
+    await router.handle(event.to_bus())
+    assert await _routing(world, event.id) == first
+    assert first[1] == 3
+
+
+async def test_the_router_and_the_events_view_write_one_row_whichever_is_first(world):
+    notices = _Notices()
+    router = _router(world, _Triggers(), _Reactions(), notices=notices)
+    view = EventsView(world.maker, notices)
+
+    routed_first = _event(world, key="routed-first")
+    await router.handle(routed_first.to_bus())
+    await view.handle(routed_first.to_bus())
+    viewed_first = _event(world, key="viewed-first")
+    await view.handle(viewed_first.to_bus())
+    await router.handle(viewed_first.to_bus())
+
+    for event in (routed_first, viewed_first):
+        routed_at, subscribers, rows = await _routing(world, event.id)
+        assert (routed_at is not None, subscribers, rows) == (True, 3, 1)
+    assert notices.sent.count(("processing", viewed_first.id)) == 4
+    assert notices.sent.count(("recorded", viewed_first.id)) == 1
+
+
+async def test_a_subscription_gone_before_it_reacted_is_not_counted(world):
+    triggers, reactions = _Triggers(), _Reactions()
+    router = _router(world, triggers, reactions, cache_ttl_s=3600)
+    earlier = datetime.now(UTC)
+    await router.handle(_event(world, key="warm").to_bus())
+    async with world.raw() as session:
+        await session.execute(
+            text("DELETE FROM stream_subscriptions WHERE id = :s"), {"s": world.s1.id}
+        )
+        await session.execute(
+            text("UPDATE stream_subscriptions SET status = 'paused' WHERE id = :s"),
+            {"s": world.s2.id},
+        )
+        await session.commit()
+    # Received before the cache was read: the cache still names both.
+    event = _event(world, key="stale", received_at=earlier)
+    await router.handle(event.to_bus())
+    _, subscribers, _ = await _routing(world, event.id)
+    assert subscribers == 1
+
+
+async def test_each_reaction_updates_the_tally_on_the_event(world):
+    triggers, reactions = _Triggers(failing={world.t1}), _Reactions()
+    router = _router(world, triggers, reactions)
+    event = _event(world)
+    with pytest.raises(ReactionsFailedError):
+        await router.handle(event.to_bus())
+    assert await _tally(world, event.id) == (2, 0, 0)
+    await router.give_up(event.to_bus())
+    assert await _tally(world, event.id) == (3, 0, 1)
+
+
+async def _tally(world, event_id) -> tuple[int, int, int]:
+    async with world.raw() as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT reacted, skipped, errors FROM stream_events "
+                    "WHERE event_id = :e AND workspace_id = :ws"
+                ),
+                {"e": event_id, "ws": world.ctx.workspace_id},
+            )
+        ).one()
+    return row[0], row[1], row[2]
+
+
+async def test_a_subscription_never_fires_on_an_event_received_before_it_started(world):
+    triggers, reactions = _Triggers(failing={world.t2}), _Reactions()
+    router = _router(world, triggers, reactions)
+    event = _event(world)
+    with pytest.raises(ReactionsFailedError):
+        await router.handle(event.to_bus())
+    late_trigger, late_sub = await world.subscribe_new_trigger()
+    router.invalidate(world.source.id)
+
+    triggers.failing.clear()
+    triggers.calls.clear()
+    await router.handle(event.to_bus())
+
+    assert triggers.calls == [world.t2]
+    skipped = reactions.rows[(late_sub, event.id)]
+    assert skipped.verdict is Verdict.SKIPPED
+    assert skipped.reason == "received before the subscription started"
+    assert late_trigger not in triggers.calls
+    assert await _tally(world, event.id) == (4, 1, 0)

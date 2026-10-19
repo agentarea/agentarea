@@ -40,6 +40,8 @@ from agentarea_agents_sdk.tools.mcp_tool_identity import (
     server_label,
 )
 from agentarea_agents_sdk.tools.openapi_tool import _slugify_name
+from agentarea_api.mcp_events import ClientScope as EventsClientScope
+from agentarea_api.mcp_events import install_mcp_events
 from agentarea_api.platform_mcp import client_platform_server, server_identity
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
@@ -255,6 +257,40 @@ def _actor_type(principal, client_id: str) -> str:
     return "api_key" if principal.api_key_id else "user"
 
 
+async def _enter_client(session: AsyncSession, client_id: str) -> UserContext | None:
+    """The caller acting in the client's workspace; None when the caller reaches no such client.
+
+    Raises ``ClientAccessDeniedError`` when the caller may not use the client.
+    """
+    from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
+    from agentarea_common.workspaces.lookup import workspace_slug_for
+    from agentarea_mcp.infrastructure.client_repository import ClientRepository
+
+    principal = get_mcp_user_context()
+    workspace_id = await ClientRepository.locate_workspace(
+        session, client_id, principal.accessible_workspaces or []
+    )
+    if workspace_id is None:
+        return None
+    await _authorize_client_access(principal, client_id)
+    return principal.enter(workspace_id, await workspace_slug_for(workspace_id))
+
+
+async def client_events_context() -> UserContext | None:
+    """The caller in the workspace of the client this request names, for MCP Events."""
+    from agentarea_common.config.database import get_database
+
+    try:
+        client_id = str(UUID(_client_id_var.get() or ""))
+    except ValueError:
+        return None
+    async with get_database().read_session() as session:
+        try:
+            return await _enter_client(session, client_id)
+        except ClientAccessDeniedError:
+            return None
+
+
 async def _resolve_client_scope(client_id: str) -> ClientScope | None:
     """Resolve what a client's endpoint serves; None when the client does not exist.
 
@@ -275,7 +311,6 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
     from agentarea_common.base.tenant_scope import workspace_scope
     from agentarea_common.config.database import get_database
     from agentarea_common.infrastructure.connection_manager import get_connection_manager
-    from agentarea_common.workspaces.lookup import workspace_slug_for
     from agentarea_mcp.application.service import MCPServerInstanceService
     from agentarea_mcp.infrastructure.client_repository import ClientRepository
     from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
@@ -286,18 +321,13 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
     broker = await connection_manager.get_event_broker()
 
     async with get_database().read_session() as session:
-        workspace_id = await ClientRepository.locate_workspace(
-            session, client_id, principal.accessible_workspaces or []
-        )
-        if workspace_id is None:
-            return None
-
-        await _authorize_client_access(principal, client_id)
-
         # A client endpoint is itself a workspace reference. Enter it before
         # constructing workspace-scoped dependencies: secret managers may
         # capture the workspace id in their constructor.
-        user_ctx = principal.enter(workspace_id, await workspace_slug_for(workspace_id))
+        user_ctx = await _enter_client(session, client_id)
+        if user_ctx is None:
+            return None
+        workspace_id = user_ctx.workspace_id
         with workspace_scope(workspace_id):
             client_repo = ClientRepository(session, user_ctx)
             client = await client_repo.get_by_id(client_id)
@@ -1094,6 +1124,7 @@ client_mcp_server = Server(
     on_list_tools=_list_tools,
     on_call_tool=_call_tool,
 )
+install_mcp_events(client_mcp_server, EventsClientScope(client_events_context))
 
 
 class ClientMCPScopeMiddleware:
