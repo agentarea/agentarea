@@ -343,9 +343,14 @@ class RegistryItemRepository:
         """Delete the registry's items its source dropped that nothing uses.
 
         An item stays while a workspace installed, forked or connected to it,
-        or while the platform materialized it (an MCP mirror, a model spec).
-        Returns how many items were deleted.
+        or while the platform materialized it (an MCP mirror, a model spec);
+        what stays carries its registry's trust, which the migration that
+        added the column gave only to items still in the source. Returns how
+        many items were deleted.
         """
+        registry = await self.session.get(Registry, registry_id)
+        if registry is None:
+            raise ValueError(f"Registry {registry_id} not found")
         uuid_refs = [
             table(name, column("registry_item_id"))
             for name in ("skills", "mcp_servers", "openapi_connections")
@@ -367,6 +372,15 @@ class RegistryItemRepository:
                     ~referenced,
                 )
             )
+        await self.session.execute(
+            update(RegistryItem)
+            .where(
+                RegistryItem.registry_id == registry_id,
+                RegistryItem.in_source.is_(False),
+                RegistryItem.registry_trust.is_distinct_from(registry.trust),
+            )
+            .values(registry_trust=registry.trust)
+        )
         await self.session.commit()
         return type_cast(CursorResult[Any], result).rowcount
 

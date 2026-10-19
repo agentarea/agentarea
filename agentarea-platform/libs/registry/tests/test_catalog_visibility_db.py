@@ -220,6 +220,17 @@ async def test_the_backfill_labels_the_community_shards(session):
             ),
             {"name": name},
         )
+    # Dropped by its source: hidden, and deleted or relabelled by the first sync.
+    await session.execute(
+        text(
+            "INSERT INTO registry_items (id, registry_id, external_id, name, spec, tags, "
+            "update_available, sort_key, featured, recommendation_rank, registry_type, "
+            "registry_priority, registry_active, in_source, created_at, updated_at) "
+            "SELECT gen_random_uuid(), r.id, 'dropped', 'dropped', '{}', '[]', false, 'dropped', "
+            "false, 0, 'skills', 100, false, false, now(), now() FROM registries r "
+            "WHERE r.name = 'system-skills-community-07'"
+        )
+    )
     # The backfill matches production names, so these rows never commit.
     try:
         await session.execute(text(migration.BACKFILL_REGISTRIES))
@@ -227,7 +238,7 @@ async def test_the_backfill_labels_the_community_shards(session):
         rows = (
             await session.execute(
                 text(
-                    "SELECT r.name, r.scope, r.mode, r.trust, ri.registry_trust "
+                    "SELECT r.name, ri.external_id, r.scope, r.mode, r.trust, ri.registry_trust "
                     "FROM registries r JOIN registry_items ri ON ri.registry_id = r.id "
                     "WHERE r.name IN ('system-skills-community-07', 'system-skills-curated')"
                 )
@@ -237,8 +248,9 @@ async def test_the_backfill_labels_the_community_shards(session):
         await session.rollback()
 
     assert {tuple(r) for r in rows} == {
-        ("system-skills-community-07", "platform", "upstream", "community", "community"),
-        ("system-skills-curated", "platform", "mirror", "official", "official"),
+        ("system-skills-community-07", "probe", "platform", "upstream", "community", "community"),
+        ("system-skills-community-07", "dropped", "platform", "upstream", "community", "official"),
+        ("system-skills-curated", "probe", "platform", "mirror", "official", "official"),
     }
 
 

@@ -240,3 +240,41 @@ async def test_the_reference_check_sees_every_workspace_under_an_enforced_scope(
         )
     ).scalars().all()
     assert left == ["forked"]
+
+
+async def test_an_item_an_install_keeps_takes_its_registrys_trust(session: AsyncSession):
+    # The migration labels only what the source still publishes; a dropped item
+    # an install keeps is relabelled by the cleanup, once the rest is gone.
+    reg = Registry(
+        name=f"{PREFIX}relabel",
+        registry_type="skills",
+        source_type="url",
+        source_url="https://example.test/skills.json",
+        trust="community",
+    )
+    session.add(reg)
+    await session.commit()
+    repo = RegistryItemRepository(session)
+    kept = await repo.create(registry_id=reg.id, external_id="kept", name="kept")
+    await session.execute(
+        text("UPDATE registry_items SET registry_trust = 'official' WHERE id = :id"),
+        {"id": kept.id},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO registry_item_installs (id, workspace_id, registry_item_id, installed_entity_id) "
+            "VALUES (:id, :w, :item, :entity)"
+        ),
+        {"id": uuid.uuid4(), "w": WORKSPACE, "item": kept.id, "entity": uuid.uuid4()},
+    )
+    await session.commit()
+
+    await repo.mark_in_source(reg.id, set())
+    await repo.delete_unreferenced_out_of_source(reg.id)
+
+    trust = (
+        await session.execute(
+            text("SELECT registry_trust FROM registry_items WHERE id = :id"), {"id": kept.id}
+        )
+    ).scalar_one()
+    assert trust == "community"

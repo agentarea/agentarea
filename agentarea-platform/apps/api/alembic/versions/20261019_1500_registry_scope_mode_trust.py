@@ -10,9 +10,14 @@ Existing registries are the platform's: the community skill shards become
 community + upstream, everything else stays official + mirror.
 
 Items carry their registry's workspace and trust like the other copied
-registry fields, so browse stays on one table. The two indexes that answer
-totals and facets from the index alone include the workspace column, so the
-visibility filter does not send them to the heap.
+registry fields, so browse stays on one table. Only items their source still
+publishes are backfilled: the rest are hidden, and the first sync deletes them
+or, for the few an install keeps, gives them their registry's trust. The two
+count indexes gain the workspace column in the next revision, concurrently.
+
+Every statement here waits at most ``lock_timeout`` for its lock: a migration
+queued behind an open transaction would otherwise queue every catalog read
+behind itself.
 
 Registry names are unique per scope: the platform's by name, a workspace's
 within that workspace.
@@ -40,47 +45,14 @@ BACKFILL_REGISTRIES = (
 )
 BACKFILL_ITEM_TRUST = (
     "UPDATE registry_items ri SET registry_trust = r.trust FROM registries r "
-    "WHERE r.id = ri.registry_id AND ri.registry_trust IS DISTINCT FROM r.trust"
+    "WHERE r.id = ri.registry_id AND ri.in_source "
+    "AND ri.registry_trust IS DISTINCT FROM r.trust"
 )
-
-
-_COUNT_INDEXES = {
-    "ix_registry_items_browse_name": (["registry_type", "sort_key", "id"], []),
-    "ix_registry_items_browse_facets": (
-        ["registry_type", "category"],
-        ["protocol", "hosting", "pricing"],
-    ),
-}
-
-
-def _recreate_count_indexes(*, with_workspace: bool) -> None:
-    # Built beside the old one and swapped, all concurrently: a plain DROP or
-    # CREATE INDEX holds a lock every catalog read queues behind.
-    with op.get_context().autocommit_block():
-        for name, (columns, include) in _COUNT_INDEXES.items():
-            # What an interrupted earlier run left behind, invalid.
-            op.drop_index(
-                f"{name}_next",
-                table_name="registry_items",
-                postgresql_concurrently=True,
-                if_exists=True,
-            )
-            op.create_index(
-                f"{name}_next",
-                "registry_items",
-                columns,
-                postgresql_include=[
-                    *include,
-                    *(["registry_workspace_id"] if with_workspace else []),
-                ],
-                postgresql_where=sa.text("registry_active"),
-                postgresql_concurrently=True,
-            )
-            op.drop_index(name, table_name="registry_items", postgresql_concurrently=True)
-            op.execute(f"ALTER INDEX {name}_next RENAME TO {name}")
+LOCK_TIMEOUT = "SET LOCAL lock_timeout = '5s'"
 
 
 def upgrade() -> None:
+    op.execute(LOCK_TIMEOUT)
     op.add_column(
         "registries",
         sa.Column("scope", sa.String(16), nullable=False, server_default="platform"),
@@ -150,11 +122,10 @@ def upgrade() -> None:
         sa.Column("registry_trust", sa.String(16), nullable=False, server_default="official"),
     )
     op.execute(BACKFILL_ITEM_TRUST)
-    _recreate_count_indexes(with_workspace=True)
 
 
 def downgrade() -> None:
-    _recreate_count_indexes(with_workspace=False)
+    op.execute(LOCK_TIMEOUT)
     op.drop_column("registry_items", "registry_trust")
     op.drop_column("registry_items", "registry_workspace_id")
 

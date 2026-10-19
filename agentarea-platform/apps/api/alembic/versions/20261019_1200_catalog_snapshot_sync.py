@@ -26,9 +26,10 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("registries", sa.Column("source_etag", sa.Text(), nullable=True))
     # Concurrently: a plain DROP INDEX queues for ACCESS EXCLUSIVE behind any open
-    # transaction on the table, and every catalog read queues behind it.
+    # transaction on the table, and every catalog read queues behind it. First:
+    # the block commits what ran before it, and a column committed while its
+    # revision is not yet stamped fails the rerun with DuplicateColumn.
     with op.get_context().autocommit_block():
         for column in ("name", "description"):
             op.drop_index(
@@ -37,6 +38,8 @@ def upgrade() -> None:
                 postgresql_concurrently=True,
                 if_exists=True,
             )
+    op.execute("SET LOCAL lock_timeout = '5s'")
+    op.add_column("registries", sa.Column("source_etag", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
