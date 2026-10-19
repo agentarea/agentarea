@@ -37,6 +37,10 @@ import {
   uploadSkillAction as uploadSkill,
 } from "@/lib/server-actions";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
+import {
+  parseGithubSkillUrl,
+  SKILL_IMPORT_QUERY_PARAM,
+} from "@/lib/skill-import";
 import { cn } from "@/lib/utils";
 import type { Skill, SkillContent } from "@/types/skill";
 
@@ -192,8 +196,12 @@ export function CreateSkillForm() {
   const tCreate = useTranslations("SkillsPage.create");
   const tCommon = useTranslations("Common");
   const sourceSkillId = searchParams.get("from");
+  const importParam = searchParams.get(SKILL_IMPORT_QUERY_PARAM);
+  const importUrl = parseGithubSkillUrl(importParam);
 
-  const [source, setSource] = useState<Source>("content");
+  const [source, setSource] = useState<Source>(
+    importParam === null ? "content" : "github"
+  );
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [duplicatedFromId, setDuplicatedFromId] = useState<string | null>(null);
 
@@ -212,7 +220,9 @@ export function CreateSkillForm() {
   );
 
   // GitHub source — the owner/repo path after the static github.com/ prefix.
-  const [githubRepo, setGithubRepo] = useState("");
+  const [githubRepo, setGithubRepo] = useState(
+    importUrl ? importUrl.slice(GH_PREFIX.length) : ""
+  );
 
   // Upload source.
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -222,7 +232,9 @@ export function CreateSkillForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [duplicateAttempt, setDuplicateAttempt] = useState(0);
-  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(
+    importParam !== null && !importUrl ? tCreate("githubUrlInvalid") : null
+  );
 
   useEffect(() => {
     const form = document.getElementById("create-skill-form");
