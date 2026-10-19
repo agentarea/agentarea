@@ -21,7 +21,7 @@ import logging
 import re
 import urllib.error
 import urllib.request
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -1075,9 +1075,16 @@ class RegistryService:
             "deleted": deleted,
         }
 
-    async def retire_registry(self, registry_id: UUID) -> int:
+    async def retire_registry(
+        self, registry_id: UUID, replacements: Collection[UUID] = ()
+    ) -> int:
         """Retire a registry no source feeds any more: everything in it is out of
         source, and what nothing uses is deleted. Returns how many items were.
+
+        Uses of an item a ``replacements`` registry also publishes (the same
+        ``external_id``) move to that item first, in the transaction that deletes
+        what is then unused, so an install survives its registry being folded
+        into another.
         """
         registry = await self.registry_repo.get_by_id(registry_id)
         if not registry:
@@ -1089,6 +1096,9 @@ class RegistryService:
             for item in (await self._items_by_external_id(registry_id)).values():
                 await self._drop_platform_skill(item)
             await self.item_repo.session.commit()
+        moved = await self.item_repo.move_references(registry_id, replacements)
+        if moved:
+            logger.info("Moved %d uses of retired registry %s's items", moved, registry_id)
         return await self.item_repo.delete_unreferenced_out_of_source(registry_id)
 
     async def _items_by_external_id(self, registry_id: UUID) -> dict[str, RegistryItem]:

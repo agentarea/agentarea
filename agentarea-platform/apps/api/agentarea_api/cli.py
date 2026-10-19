@@ -514,8 +514,13 @@ async def _reconcile(
 
     succeeded: list[str] = []
     failed: list[tuple[str, str]] = []
+    # Retired entries last: an install of a retired registry's item moves to
+    # the registry replacing it, which must be synced by then.
+    retired = [c for c in configs if c.get("active", True) is False]
+    ordered = [c for c in configs if c.get("active", True) is not False] + retired
+    replacements: list = []
 
-    for config in configs:
+    for config in ordered:
         registry_name = config["name"]
         click.echo(f"\nReconciling: {registry_name}")
 
@@ -557,7 +562,9 @@ async def _reconcile(
                         # again, so its registry and items would stay listed; what
                         # nothing uses is deleted, the rest stays out of the catalog.
                         if existing is not None:
-                            deleted = await service.retire_registry(existing.id)
+                            deleted = await service.retire_registry(
+                                existing.id, replacements=replacements
+                            )
                             await session.commit()
                             click.echo(f"Retired registry: {existing.id} ({deleted} items deleted)")
                         else:
@@ -612,6 +619,7 @@ async def _reconcile(
                         registry_id = registry.id
                         click.echo(f"Created registry: {registry_id}")
 
+                    replacements.append(registry_id)
                     stats = await service.sync_registry(registry_id, force=force)
                     await session.commit()
                     click.echo(f"Synced: {stats}")

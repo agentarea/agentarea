@@ -17,7 +17,8 @@
     "libs/agents/agentarea_agents/infrastructure/catalog_skill_repository.py": 8,
     "libs/llm/agentarea_llm/infrastructure/catalog_model_spec_repository.py": 2,
     "libs/mcp/agentarea_mcp/infrastructure/catalog_mcp_repository.py": 3,
-    "libs/mcp/agentarea_mcp/infrastructure/repository.py": 2
+    "libs/mcp/agentarea_mcp/infrastructure/repository.py": 2,
+    "libs/registry/agentarea_registry/infrastructure/repository.py": 1
   },
   "session_execute": {
     "apps/api/agentarea_api/api/v1/_secret_owners.py": 1,

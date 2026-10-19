@@ -8,6 +8,7 @@ reads a caller makes go through the ``visible`` methods, which keep another
 workspace's registries and items out and need the caller's ``user_context``.
 """
 
+from collections.abc import Collection
 from typing import Any
 from typing import cast as type_cast
 from uuid import UUID
@@ -26,6 +27,7 @@ from sqlalchemy import (
     or_,
     select,
     table,
+    text,
     update,
 )
 from sqlalchemy.engine import CursorResult
@@ -338,6 +340,85 @@ class RegistryItemRepository:
                 )
             )
         ).scalar_one()
+
+    async def move_references(
+        self, registry_id: UUID | str, replacements: Collection[UUID | str]
+    ) -> int:
+        """Point every use of the registry's items at the same item of a replacement.
+
+        "The same item" is the one with the same ``external_id`` that a
+        replacement registry still publishes (the first by registry weight).
+        Installs, forks, agents and connections move, in every workspace, except
+        where a workspace already holds the replacement item: one fork and one
+        install per item and workspace. Not committed, so the caller deletes
+        what is left unused in the same transaction. Returns how many moved.
+        """
+        if not replacements:
+            return 0
+        # Raw SQL over other modules' tables, across every workspace: the
+        # tenant scope does not confine it, and must not.
+        result = await self.session.execute(
+            text(
+                """
+                WITH moves AS (
+                    SELECT DISTINCT ON (old.id) old.id AS old_id, new.id AS new_id
+                    FROM registry_items old
+                    JOIN registry_items new
+                      ON new.external_id = old.external_id
+                     AND new.registry_type = old.registry_type
+                    WHERE old.registry_id = :registry_id
+                      AND new.registry_id = ANY(:replacements)
+                      AND new.in_source
+                    ORDER BY old.id, new.registry_priority, new.registry_id
+                ),
+                forks AS (
+                    UPDATE skills s SET registry_item_id = m.new_id
+                    FROM moves m
+                    WHERE s.registry_item_id = m.old_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM skills other
+                          WHERE other.workspace_id = s.workspace_id
+                            AND other.registry_item_id = m.new_id
+                      )
+                    RETURNING 1
+                ),
+                installs AS (
+                    UPDATE registry_item_installs x SET registry_item_id = m.new_id
+                    FROM moves m
+                    WHERE x.registry_item_id = m.old_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM registry_item_installs other
+                          WHERE other.workspace_id = x.workspace_id
+                            AND other.registry_item_id = m.new_id
+                      )
+                    RETURNING 1
+                ),
+                agents_moved AS (
+                    UPDATE agents a SET registry_item_id = m.new_id::text
+                    FROM moves m WHERE a.registry_item_id = m.old_id::text
+                    RETURNING 1
+                ),
+                servers AS (
+                    UPDATE mcp_servers t SET registry_item_id = m.new_id
+                    FROM moves m WHERE t.registry_item_id = m.old_id
+                    RETURNING 1
+                ),
+                connections AS (
+                    UPDATE openapi_connections t SET registry_item_id = m.new_id
+                    FROM moves m WHERE t.registry_item_id = m.old_id
+                    RETURNING 1
+                )
+                SELECT (SELECT count(*) FROM forks) + (SELECT count(*) FROM installs)
+                     + (SELECT count(*) FROM agents_moved) + (SELECT count(*) FROM servers)
+                     + (SELECT count(*) FROM connections)
+                """
+            ),
+            {
+                "registry_id": UUID(str(registry_id)),
+                "replacements": [UUID(str(r)) for r in replacements],
+            },
+        )
+        return int(result.scalar_one())
 
     async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:
         """Delete the registry's items its source dropped that nothing uses.

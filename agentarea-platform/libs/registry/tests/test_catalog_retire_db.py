@@ -12,8 +12,9 @@ import uuid
 from collections.abc import AsyncGenerator
 
 import pytest
+from agentarea_registry.application.service import RegistryService
 from agentarea_registry.domain.models import Registry
-from agentarea_registry.infrastructure.repository import RegistryItemRepository
+from agentarea_registry.infrastructure.repository import RegistryItemRepository, RegistryRepository
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -39,7 +40,9 @@ async def engine() -> AsyncGenerator[AsyncEngine, None]:
     yield eng
     async with eng.begin() as conn:
         for table in ("skills", "agents", "openapi_connections", "registry_item_installs"):
-            await conn.execute(text(f"DELETE FROM {table} WHERE workspace_id = :w"), {"w": WORKSPACE})
+            await conn.execute(
+                text(f"DELETE FROM {table} WHERE workspace_id LIKE :w"), {"w": f"{WORKSPACE}%"}
+            )
         await conn.execute(text("DELETE FROM registries WHERE name LIKE :p"), {"p": f"{PREFIX}%"})
     await eng.dispose()
 
@@ -78,14 +81,24 @@ async def test_only_unreferenced_items_the_source_dropped_are_deleted(session: A
             "INSERT INTO skills (id, workspace_id, created_by, name, slug, registry_item_id) "
             "VALUES (:id, :w, 'u', 'forked', :slug, :item)"
         ),
-        {"id": uuid.uuid4(), "w": WORKSPACE, "slug": f"forked-{uuid.uuid4().hex[:8]}", "item": ids["forked"]},
+        {
+            "id": uuid.uuid4(),
+            "w": WORKSPACE,
+            "slug": f"forked-{uuid.uuid4().hex[:8]}",
+            "item": ids["forked"],
+        },
     )
     await session.execute(
         text(
             "INSERT INTO agents (id, workspace_id, created_by, name, slug, status, registry_item_id) "
             "VALUES (:id, :w, 'u', 'agent', :slug, 'active', :item)"
         ),
-        {"id": uuid.uuid4(), "w": WORKSPACE, "slug": f"agent-{uuid.uuid4().hex[:8]}", "item": str(ids["agent"])},
+        {
+            "id": uuid.uuid4(),
+            "w": WORKSPACE,
+            "slug": f"agent-{uuid.uuid4().hex[:8]}",
+            "item": str(ids["agent"]),
+        },
     )
     await session.execute(
         text(
@@ -147,11 +160,15 @@ async def test_a_source_listing_an_item_twice_still_syncs(session: AsyncSession,
 
     assert stats["skipped"] == 0
     names = (
-        await session.execute(
-            text("SELECT external_id FROM registry_items WHERE registry_id = :r ORDER BY 1"),
-            {"r": reg.id},
+        (
+            await session.execute(
+                text("SELECT external_id FROM registry_items WHERE registry_id = :r ORDER BY 1"),
+                {"r": reg.id},
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert names == ["a", "b"]
 
 
@@ -225,7 +242,12 @@ async def test_the_reference_check_sees_every_workspace_under_an_enforced_scope(
             "INSERT INTO skills (id, workspace_id, created_by, name, slug, registry_item_id) "
             "VALUES (:id, :w, 'u', 'forked', :slug, :item)"
         ),
-        {"id": uuid.uuid4(), "w": WORKSPACE, "slug": f"forked-{uuid.uuid4().hex[:8]}", "item": forked.id},
+        {
+            "id": uuid.uuid4(),
+            "w": WORKSPACE,
+            "slug": f"forked-{uuid.uuid4().hex[:8]}",
+            "item": forked.id,
+        },
     )
     await session.commit()
 
@@ -235,10 +257,14 @@ async def test_the_reference_check_sees_every_workspace_under_an_enforced_scope(
         assert await scoped.delete_unreferenced_out_of_source(reg.id) == 1
 
     left = (
-        await session.execute(
-            text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": reg.id}
+        (
+            await session.execute(
+                text("SELECT external_id FROM registry_items WHERE registry_id = :r"), {"r": reg.id}
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert left == ["forked"]
 
 
@@ -278,3 +304,78 @@ async def test_an_item_an_install_keeps_takes_its_registrys_trust(session: Async
         )
     ).scalar_one()
     assert trust == "community"
+
+
+async def test_retiring_a_registry_moves_its_uses_onto_the_replacements_items(
+    session: AsyncSession,
+):
+    # The community shards are folded into one registry that publishes the same
+    # ids. Installs, forks and agents move to its item before the shard's go,
+    # except where a workspace already holds the replacement item.
+    repo = RegistryItemRepository(session)
+    shard = Registry(
+        name=f"{PREFIX}shard", registry_type="skills", source_type="url", source_url="x"
+    )
+    folded = Registry(
+        name=f"{PREFIX}folded", registry_type="skills", source_type="url", source_url="y"
+    )
+    session.add_all([shard, folded])
+    await session.commit()
+    old = await repo.create(registry_id=shard.id, external_id="pdf", name="pdf")
+    clash = await repo.create(registry_id=shard.id, external_id="docx", name="docx")
+    lonely = await repo.create(registry_id=shard.id, external_id="gone", name="gone")
+    new = await repo.create(registry_id=folded.id, external_id="pdf", name="pdf")
+    new_clash = await repo.create(registry_id=folded.id, external_id="docx", name="docx")
+    other_ws = f"{WORKSPACE}-b"
+    skill = uuid.uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO skills (id, workspace_id, created_by, name, slug, registry_item_id) "
+            "VALUES (:id, :w, 'u', 'pdf', :slug, :item)"
+        ),
+        {"id": skill, "w": WORKSPACE, "slug": f"pdf-{uuid.uuid4().hex[:8]}", "item": old.id},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO agents (id, workspace_id, created_by, name, slug, status, registry_item_id) "
+            "VALUES (:id, :w, 'u', 'a', :slug, 'active', :item)"
+        ),
+        {
+            "id": uuid.uuid4(),
+            "w": WORKSPACE,
+            "slug": f"a-{uuid.uuid4().hex[:8]}",
+            "item": str(lonely.id),
+        },
+    )
+    for workspace, item in ((WORKSPACE, old.id), (other_ws, clash.id), (other_ws, new_clash.id)):
+        await session.execute(
+            text(
+                "INSERT INTO registry_item_installs (id, workspace_id, registry_item_id, installed_entity_id) "
+                "VALUES (:id, :w, :item, :entity)"
+            ),
+            {"id": uuid.uuid4(), "w": workspace, "item": item, "entity": uuid.uuid4()},
+        )
+    await session.commit()
+    service = RegistryService(RegistryRepository(session), repo, server_repo=None)  # type: ignore[arg-type]
+
+    await service.retire_registry(shard.id, replacements=[folded.id])
+
+    left = await session.execute(
+        text("SELECT external_id FROM registry_items WHERE registry_id = :r ORDER BY 1"),
+        {"r": shard.id},
+    )
+    assert left.scalars().all() == ["docx", "gone"]
+    moved = await session.execute(
+        text("SELECT registry_item_id FROM skills WHERE id = :id"), {"id": skill}
+    )
+    assert moved.scalar_one() == new.id
+    installs = await session.execute(
+        text(
+            "SELECT workspace_id, registry_item_id FROM registry_item_installs "
+            "WHERE workspace_id IN (:a, :b) ORDER BY 1, 2"
+        ),
+        {"a": WORKSPACE, "b": other_ws},
+    )
+    assert sorted(installs.tuples().all()) == sorted(
+        [(WORKSPACE, new.id), (other_ws, clash.id), (other_ws, new_clash.id)]
+    )

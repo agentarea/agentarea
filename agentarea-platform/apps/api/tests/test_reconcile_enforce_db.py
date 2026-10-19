@@ -24,7 +24,12 @@ from agentarea_common.base.tenant_scope import tenant_scoped_session_class
 from agentarea_common.config.database import TenantScopeMode
 from agentarea_registry.application.service import RegistryService
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 TEST_DATABASE_URL = os.getenv("CATALOG_TEST_DATABASE_URL", "")
 pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="CATALOG_TEST_DATABASE_URL not set")
@@ -124,7 +129,88 @@ async def test_platform_sync_retire_and_workspace_sync_under_enforce(engine, mon
         PLATFORM_URL: {"skills": [{"name": "fresh", "content": "# Fresh"}]},
         WORKSPACE_URL: {"skills": [{"name": "mine", "content": "# Mine"}]},
     }
+    _enforced_reconcile(engine, monkeypatch, payloads)
+    manifest = tmp_path / "registries.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "name": f"{PREFIX}new",
+                    "type": "skills",
+                    "source_url": PLATFORM_URL,
+                    "mode": "upstream",
+                    "trust": "community",
+                },
+                {"name": f"{PREFIX}old", "active": False},
+            ]
+        )
+    )
 
+    await cli._reconcile(None, (), str(manifest), workspace_registries=True)
+
+    async with engine.connect() as conn:
+        new = (
+            await conn.execute(
+                text("SELECT id FROM registries WHERE name = :n"), {"n": f"{PREFIX}new"}
+            )
+        ).scalar_one()
+        assert await _external_ids(conn, new) == {"fresh": True}
+        assert await _external_ids(conn, retired) == {"forked": False}
+        assert await _external_ids(conn, own) == {"mine": True}
+
+
+async def test_a_retired_registrys_installs_move_to_the_registry_replacing_it(
+    engine, monkeypatch, tmp_path
+):
+    # The manifest lists the retired shard first; the registry that replaces it
+    # is synced before it is retired, and the fork follows the item there.
+    async with engine.begin() as conn:
+        shard = await _registry(conn, f"{PREFIX}shard")
+        old_item = await _item(conn, shard, "pdf")
+        fork = uuid.uuid4()
+        await conn.execute(
+            text(
+                "INSERT INTO skills (id, workspace_id, created_by, name, slug, registry_item_id) "
+                "VALUES (:id, :w, 'u', 'pdf', :slug, :item)"
+            ),
+            {"id": fork, "w": OTHER, "slug": f"pdf-{RUN}", "item": old_item},
+        )
+    _enforced_reconcile(
+        engine, monkeypatch, {PLATFORM_URL: {"skills": [{"name": "pdf", "content": "# P"}]}}
+    )
+    manifest = tmp_path / "registries.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {"name": f"{PREFIX}shard", "active": False},
+                {
+                    "name": f"{PREFIX}folded",
+                    "type": "skills",
+                    "source_url": PLATFORM_URL,
+                    "mode": "upstream",
+                    "trust": "community",
+                },
+            ]
+        )
+    )
+
+    await cli._reconcile(None, (), str(manifest))
+
+    async with engine.connect() as conn:
+        assert await _external_ids(conn, shard) == {}
+        moved_to = (
+            await conn.execute(
+                text(
+                    "SELECT r.name FROM skills s JOIN registry_items ri ON ri.id = s.registry_item_id "
+                    "JOIN registries r ON r.id = ri.registry_id WHERE s.id = :id"
+                ),
+                {"id": fork},
+            )
+        ).scalar_one()
+        assert moved_to == f"{PREFIX}folded"
+
+
+def _enforced_reconcile(engine, monkeypatch, payloads) -> None:
     async def untrusted(_self, url):
         return payloads[url]
 
@@ -150,28 +236,3 @@ async def test_platform_sync_retire_and_workspace_sync_under_enforce(engine, mon
     monkeypatch.setattr(RegistryService, "_source_etag", staticmethod(lambda _url: None))
     monkeypatch.setattr(RegistryService, "_fetch_untrusted", untrusted)
     monkeypatch.setattr(RegistryService, "_untrusted_etag", no_etag)
-    manifest = tmp_path / "registries.json"
-    manifest.write_text(
-        json.dumps(
-            [
-                {
-                    "name": f"{PREFIX}new",
-                    "type": "skills",
-                    "source_url": PLATFORM_URL,
-                    "mode": "upstream",
-                    "trust": "community",
-                },
-                {"name": f"{PREFIX}old", "active": False},
-            ]
-        )
-    )
-
-    await cli._reconcile(None, (), str(manifest), workspace_registries=True)
-
-    async with engine.connect() as conn:
-        new = (
-            await conn.execute(text("SELECT id FROM registries WHERE name = :n"), {"n": f"{PREFIX}new"})
-        ).scalar_one()
-        assert await _external_ids(conn, new) == {"fresh": True}
-        assert await _external_ids(conn, retired) == {"forked": False}
-        assert await _external_ids(conn, own) == {"mine": True}
