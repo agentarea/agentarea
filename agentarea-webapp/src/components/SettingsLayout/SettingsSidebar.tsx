@@ -1,7 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { ArrowLeft, CreditCard, Key, ScrollText, User } from "lucide-react";
+import {
+  ArrowLeft,
+  CreditCard,
+  Key,
+  Library,
+  ScrollText,
+  User,
+} from "lucide-react";
 import { AppSidebarFooter } from "@/components/MainLayout/components/AppSidebarFooter";
 import { navItemClassName } from "@/components/MainLayout/components/NavMain";
 import {
@@ -38,6 +45,11 @@ export function SettingsSidebarContent() {
       label: t("workspace"),
       items: [
         { title: t("apiKeys"), href: "/settings/api-keys", icon: Key },
+        {
+          title: t("registries"),
+          href: "/settings/registries",
+          icon: Library,
+        },
         { title: t("auditLog"), href: "/settings/audit", icon: ScrollText },
       ],
     },

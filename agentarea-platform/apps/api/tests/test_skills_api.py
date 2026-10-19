@@ -198,9 +198,10 @@ async def test_get_skill_content_returns_full_content(async_client, mock_skill_s
     skill = MagicMock()
     skill.id = skill_id
     skill.name = "Content Skill"
-    skill.content = "---\nname: Content Skill\n---\n# Content Skill\nBody"
+    skill_md = "---\nname: Content Skill\n---\n# Content Skill\nBody"
 
     mock_skill_service.get_with_catalog.return_value = skill
+    mock_skill_service.read_skill_md.return_value = skill_md
 
     response = await async_client.get(f"/v1/workspaces/acme/skills/{skill_id}/content")
 
@@ -208,7 +209,8 @@ async def test_get_skill_content_returns_full_content(async_client, mock_skill_s
     data = response.json()
     assert data["id"] == str(skill_id)
     assert data["name"] == "Content Skill"
-    assert data["content"] == skill.content
+    assert data["content"] == skill_md
+    mock_skill_service.read_skill_md.assert_awaited_once_with(skill)
 
 
 @pytest.mark.asyncio

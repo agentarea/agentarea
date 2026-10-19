@@ -69,6 +69,8 @@ import type {
   UpdateWalletRequest,
   UploadPlanRequest,
   ValidateRequest,
+  WorkspaceRegistryCreate,
+  WorkspaceRegistryUpdate,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { SPEC_IDS_PER_REQUEST, specIdBatches } from "@/lib/mcp/specIds";
@@ -149,6 +151,54 @@ export const listRegistries = async (params?: {
     query: params,
   });
   return { data, error };
+};
+
+// The workspace's own registries (ADR-0044); the platform's are listed by
+// listRegistries above.
+export const listWorkspaceRegistries = async () => {
+  const result = await sdk.listWorkspaceRegistriesV1WorkspaceRegistriesGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createWorkspaceRegistry = async (body: WorkspaceRegistryCreate) => {
+  const result = await sdk.createWorkspaceRegistryV1WorkspaceRegistriesPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const updateWorkspaceRegistry = async (
+  registryId: string,
+  body: WorkspaceRegistryUpdate
+) => {
+  const result =
+    await sdk.updateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatch({
+      client: serverClient,
+      path: { registry_id: registryId },
+      body,
+    });
+  return withStatus(result);
+};
+
+export const deleteWorkspaceRegistry = async (registryId: string) => {
+  const result =
+    await sdk.deleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDelete({
+      client: serverClient,
+      path: { registry_id: registryId },
+    });
+  return withStatus(result);
+};
+
+export const syncWorkspaceRegistry = async (registryId: string) => {
+  const result =
+    await sdk.syncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPost({
+      client: serverClient,
+      path: { registry_id: registryId },
+    });
+  return withStatus(result);
 };
 
 export const listRegistryItems = async (
@@ -1083,6 +1133,27 @@ export const installSkill = async (skillId: string) => {
   const result = await sdk.installSkillV1SkillsSkillIdInstallPost({
     client: serverClient,
     path: { skill_id: skillId },
+  });
+  return withStatus(result);
+};
+
+// Move an installed catalog skill to the catalog's current version. A skill
+// edited here answers 409 unless the edit is to be discarded.
+export const updateInstalledSkill = async (
+  skillId: string,
+  options: { discardChanges?: boolean } = {}
+) => {
+  const result = await sdk.updateInstalledSkillV1SkillsSkillIdUpdatePost({
+    client: serverClient,
+    path: { skill_id: skillId },
+    query: options.discardChanges ? { discard_changes: true } : undefined,
+  });
+  return withStatus(result);
+};
+
+export const updateAllSkills = async () => {
+  const result = await sdk.updateAllSkillsV1SkillsUpdateAllPost({
+    client: serverClient,
   });
   return withStatus(result);
 };

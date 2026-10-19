@@ -1,12 +1,15 @@
 """GitHub skill importer for downloading skill packages from GitHub repositories."""
 
+import asyncio
+import hashlib
 import io
 import logging
 import posixpath
 import re
 import zipfile
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from typing import Any
+from urllib.parse import quote, urlparse
 
 import httpx
 from agentarea_common.outbound import Destination, outbound_client
@@ -17,6 +20,10 @@ logger = logging.getLogger(__name__)
 MAX_GITHUB_REPO_ZIP_BYTES = 25 * 1024 * 1024
 MAX_GITHUB_PACKAGE_FILES = 200
 MAX_GITHUB_PACKAGE_BYTES = 10 * 1024 * 1024
+FOLDER_DOWNLOAD_CONCURRENCY = 8
+
+_REPO_PART = re.compile(r"[A-Za-z0-9_.-]+")
+_GIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 @dataclass
@@ -51,6 +58,27 @@ class GitHubInvalidURLError(GitHubSkillImporterError):
     """Raised when the GitHub URL is invalid."""
 
     pass
+
+
+class GitHubTreeMismatchError(GitHubSkillImporterError):
+    """The folder at the pinned commit is not the tree the catalog names."""
+
+
+class GitHubSourceGoneError(GitHubNotFoundError):
+    """The repository or folder a catalog skill points at is not there any more."""
+
+
+@dataclass(frozen=True)
+class GitHubFolder:
+    """One folder of a repository at one commit, its files verified by blob SHA."""
+
+    commit: str
+    tree_sha: str
+    files: dict[str, bytes]
+
+
+def git_blob_sha(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\x00" % len(data) + data, usedforsecurity=False).hexdigest()
 
 
 def extract_skill_package(repo_zip_data: bytes, *, package_path: str | None) -> bytes:
@@ -120,14 +148,190 @@ class GitHubSkillImporter:
     GITHUB_API_BASE = "https://api.github.com"
     DEFAULT_TIMEOUT = 30.0
 
-    def __init__(self, github_token: str | None = None):
+    RAW_BASE = "https://raw.githubusercontent.com"
+
+    def __init__(
+        self,
+        github_token: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         """Initialize the importer.
 
         Args:
             github_token: Optional GitHub personal access token for higher rate limits
                          and access to private repositories.
+            transport: HTTP transport for ``download_folder`` (tests pass a mock).
         """
         self.github_token = github_token
+        self._transport = transport
+        # A commit's tree never changes: every folder of one commit (a mirror
+        # sync of a repository) costs one API call, not one per folder.
+        self._commit_trees: dict[str, Any] = {}
+
+    async def download_folder(
+        self, repo: str, path: str, *, ref: str | None, tree_sha: str | None
+    ) -> GitHubFolder:
+        """Download one folder of ``repo`` at a commit, as the catalog pins it.
+
+        ``ref`` names the commit; a branch or tag is resolved to its head, and
+        none means the default branch's head, which is then the pin. With
+        ``tree_sha`` the folder at that commit must be exactly that tree, else
+        nothing is downloaded. Every file is checked against its blob SHA, so
+        what is returned is the content the tree names. Links, submodules and
+        hidden files are left out, as a ZIP upload leaves hidden files out.
+
+        The API is asked once for a pinned commit (the recursive tree of the
+        commit), once more to resolve a missing ref, and once more when the
+        repository is too large to list whole. Files come from
+        raw.githubusercontent.com, which does not count against the 60/hour
+        unauthenticated API limit.
+
+        Raises:
+            GitHubSourceGoneError: The repository or the folder is not there
+                any more.
+            GitHubTreeMismatchError: The folder is not the pinned tree.
+        """
+        parts = repo.split("/")
+        if len(parts) != 2 or not all(
+            _REPO_PART.fullmatch(p) and p not in (".", "..") for p in parts
+        ):
+            raise GitHubSkillImporterError(f"Not a GitHub repository name: {repo!r}")
+        owner, name = parts
+        folder = path.strip("/")
+        where = f"{repo}/{folder}" if folder else repo
+        api = f"{self.GITHUB_API_BASE}/repos/{owner}/{name}"
+
+        async with outbound_client(
+            Destination.VENDOR,
+            timeout=self.DEFAULT_TIMEOUT,
+            follow_redirects=True,
+            transport=self._transport,
+        ) as client:
+            try:
+                commit = await self._resolve_commit(client, api, ref)
+                tree_url = f"{api}/git/trees/{commit}?recursive=1"
+                tree = self._commit_trees.get(tree_url)
+                if tree is None:
+                    tree = self._commit_trees[tree_url] = await self._api_json(client, tree_url)
+            except GitHubNotFoundError as e:
+                raise GitHubSourceGoneError(
+                    f"The skill was removed upstream: {repo} is not on GitHub any more"
+                ) from e
+            entries = [e for e in tree.get("tree") or [] if isinstance(e, dict)]
+            if folder:
+                resolved_tree = next(
+                    (
+                        e.get("sha")
+                        for e in entries
+                        if e.get("path") == folder and e.get("type") == "tree"
+                    ),
+                    None,
+                )
+                if not resolved_tree:
+                    if tree.get("truncated"):
+                        raise GitHubSkillImporterError(f"{repo} is too large to list")
+                    raise GitHubSourceGoneError(
+                        f"The skill was removed upstream: {where} is not in {repo} at {commit}"
+                    )
+                prefix = f"{folder}/"
+                entries = [
+                    {**e, "path": e["path"][len(prefix) :]}
+                    for e in entries
+                    if str(e.get("path", "")).startswith(prefix)
+                ]
+            else:
+                resolved_tree = tree.get("sha")
+            if tree_sha and resolved_tree != tree_sha:
+                raise GitHubTreeMismatchError(
+                    f"{where} at {commit} is tree {resolved_tree}, "
+                    f"not {tree_sha} as the catalog pins it"
+                )
+            if tree.get("truncated"):
+                subtree = await self._api_json(
+                    client, f"{api}/git/trees/{resolved_tree}?recursive=1"
+                )
+                if subtree.get("truncated"):
+                    raise GitHubSkillImporterError(f"{where} is too large to list")
+                entries = [e for e in subtree.get("tree") or [] if isinstance(e, dict)]
+            blobs = self._package_blobs(entries, where)
+            base = f"{self.RAW_BASE}/{owner}/{name}/{commit}/"
+            if folder:
+                base += quote(folder) + "/"
+            limit = asyncio.Semaphore(FOLDER_DOWNLOAD_CONCURRENCY)
+
+            async def fetch(rel: str, sha: str) -> tuple[str, bytes]:
+                async with limit:
+                    try:
+                        response = await client.get(base + quote(rel), headers=self._raw_headers())
+                    except httpx.RequestError as e:
+                        raise GitHubSkillImporterError(
+                            f"Error reading {rel} of {where}: {e}"
+                        ) from e
+                if response.status_code == 404:
+                    raise GitHubSourceGoneError(
+                        f"The skill was removed upstream: {rel} of {where} is gone"
+                    )
+                self._check_response(response)
+                if git_blob_sha(response.content) != sha:
+                    raise GitHubSkillImporterError(
+                        f"{rel} of {where} at {commit} does not match its blob SHA"
+                    )
+                return rel, response.content
+
+            files = dict(await asyncio.gather(*(fetch(rel, sha) for rel, sha in blobs)))
+        return GitHubFolder(commit=commit, tree_sha=str(resolved_tree), files=files)
+
+    async def _resolve_commit(self, client: httpx.AsyncClient, api: str, ref: str | None) -> str:
+        if ref and _GIT_SHA.fullmatch(ref):
+            return ref
+        target = quote(ref, safe="") if ref else "HEAD"
+        sha = (await self._api_json(client, f"{api}/commits/{target}")).get("sha")
+        if not isinstance(sha, str) or not _GIT_SHA.fullmatch(sha):
+            raise GitHubSkillImporterError(f"{api} did not resolve {ref or 'HEAD'!r} to a commit")
+        return sha
+
+    @staticmethod
+    def _package_blobs(entries: list[Any], where: str) -> list[tuple[str, str]]:
+        blobs: list[tuple[str, str]] = []
+        total = 0
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("type") not in ("blob", "commit"):
+                continue
+            rel = str(entry.get("path") or "")
+            if (
+                entry.get("type") == "commit"
+                or entry.get("mode") == "120000"
+                or any(p.startswith(".") for p in rel.split("/"))
+            ):
+                logger.info("Leaving %s out of the skill package from %s", rel, where)
+                continue
+            blobs.append((rel, str(entry.get("sha"))))
+            total += int(entry.get("size") or 0)
+            if len(blobs) > MAX_GITHUB_PACKAGE_FILES:
+                raise ValueError(
+                    f"GitHub skill package contains more than {MAX_GITHUB_PACKAGE_FILES} files"
+                )
+            if total > MAX_GITHUB_PACKAGE_BYTES:
+                mb = MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)
+                raise ValueError(f"GitHub skill package exceeds {mb} MB uncompressed limit")
+        if not blobs:
+            raise ValueError(f"No files found in {where}")
+        return blobs
+
+    async def _api_json(self, client: httpx.AsyncClient, url: str) -> Any:
+        try:
+            response = await client.get(url, headers=self._get_headers())
+        except httpx.TimeoutException as e:
+            raise GitHubSkillImporterError(f"Timeout reading {url}: {e}") from e
+        except httpx.RequestError as e:
+            raise GitHubSkillImporterError(f"Error reading {url}: {e}") from e
+        self._check_response(response)
+        return response.json()
+
+    def _raw_headers(self) -> dict[str, str]:
+        if self.github_token:
+            return {"Authorization": f"Bearer {self.github_token}"}
+        return {}
 
     def parse_github_url(self, url: str) -> GitHubRepoInfo:
         """Parse a GitHub URL to extract repository information.

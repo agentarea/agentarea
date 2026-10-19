@@ -10,7 +10,7 @@ A connection the workspace pays for can carry its own cost declaration, set by a
 member, which wins over its connector's (§2.3).
 
 Revision ID: 20261014_1200_cost_not_price
-Revises: 20261013_2200_drop_decide
+Revises: 20261019_1510_registry_count_ix
 Create Date: 2026-10-14 12:00:00.000000
 """
 
@@ -21,7 +21,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "20261014_1200_cost_not_price"
-down_revision: str | None = "20261013_2200_drop_decide"
+down_revision: str | None = "20261019_1510_registry_count_ix"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

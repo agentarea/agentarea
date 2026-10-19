@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import click
@@ -264,11 +266,119 @@ def validate():
     default=None,
     help="Path to a YAML/JSON manifest listing registry sources.",
 )
-def reconcile(registries_config: str | None, source: tuple[str, ...], config_file: str | None):
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Re-read every source even if its ETag is the one last applied.",
+)
+@click.option(
+    "--workspace-registries",
+    is_flag=True,
+    help="Also sync every active registry a workspace added (ADR-0044).",
+)
+def reconcile(
+    registries_config: str | None,
+    source: tuple[str, ...],
+    config_file: str | None,
+    force: bool,
+    workspace_registries: bool,
+):
     """Idempotent reconcile — ensure registries exist and sync them."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    asyncio.run(_reconcile(registries_config, source, config_file))
+    asyncio.run(
+        _reconcile(
+            registries_config,
+            source,
+            config_file,
+            force=force,
+            workspace_registries=workspace_registries,
+        )
+    )
+
+
+@cli.group()
+def skills():
+    """Skill maintenance."""
+
+
+@skills.command("move-bodies-to-packages")
+def move_bodies_to_packages():
+    """Move every skill body still stored in its row into the skill's package (ADR-0044).
+
+    Reading such a skill moves it too; this does all of them up front. A row
+    that also has a package was edited after its import, which wrote only the
+    row: the edit goes into the workspace's own copy of the package. Safe to
+    run again: a row without a body is left alone. The platform workspace's
+    stub copies are skipped; the reconcile deletes them.
+
+    Run it only once every worker runs this release: an older worker reads
+    the body from the row and would run a moved skill with an empty prompt.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_move_bodies_to_packages())
+
+
+def _require_object_storage() -> None:
+    from agentarea_common.config.aws import (
+        ObjectStorageNotConfiguredError,
+        require_s3_credentials,
+    )
+
+    try:
+        require_s3_credentials()
+    except ObjectStorageNotConfiguredError as e:
+        click.echo(f"Skill packages live in object storage, and {e}", err=True)
+        sys.exit(1)
+
+
+async def _move_bodies_to_packages() -> None:
+    from agentarea_agents.application.skill_packages import move_all_bodies_to_packages
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    _require_object_storage()
+    db = Database(get_db_settings())
+    moved, failed = await move_all_bodies_to_packages(
+        db.async_session_factory, SkillStorageService()
+    )
+    click.echo(f"Moved {moved} skill bodies into packages; {failed} failed")
+    if failed:
+        sys.exit(1)
+
+
+@skills.command("repin-catalog-installs")
+@click.option("--dry-run", is_flag=True, help="Report what would be repinned; change nothing.")
+def repin_catalog_installs(dry_run: bool):
+    """Repin catalog installs made before packages existed, if nobody edited them (ADR-0044).
+
+    Such a skill holds the body its install copied, so it reads as edited.
+    One whose body is still what its catalog item gave it is re-installed from
+    the item's current package (pinned), keeping its id and agents. Edited
+    skills are left alone and reported; so is a skill whose item is gone.
+    Run after ``move-bodies-to-packages`` and the reconcile.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_repin_catalog_installs(dry_run=dry_run))
+
+
+async def _repin_catalog_installs(*, dry_run: bool) -> None:
+    from collections import Counter
+
+    from agentarea_agents.application import skill_service
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    _require_object_storage()
+    db = Database(get_db_settings())
+    results = await skill_service.repin_all_catalog_installs(
+        db.async_session_factory, SkillStorageService(), dry_run=dry_run
+    )
+    for workspace_id, result in results:
+        line = f"{result.status}  {workspace_id}/{result.skill_id}  {result.name}"
+        click.echo(f"{line}: {result.error}" if result.error else line)
+    counts = Counter(result.status for _, result in results)
+    click.echo(", ".join(f"{n} {status}" for status, n in counts.items()) or "No catalog installs")
+    if counts["failed"]:
+        sys.exit(1)
 
 
 async def _register_graph_client() -> None:
@@ -303,10 +413,45 @@ async def _register_graph_client() -> None:
     click.echo(f"Authorization graph: {backend}")
 
 
+@asynccontextmanager
+async def _registry_sync_lock(db: Database, key: str) -> AsyncIterator[bool]:
+    """Whether this run may sync the registry ``key`` names: one run at a time.
+
+    The ArgoCD Sync hook and the hourly CronJob can reconcile at once. A
+    session-level advisory lock on its own connection, in autocommit so the
+    run holds no transaction open; the second run to reach a registry skips it.
+    A session lock needs a direct connection or a session-mode pooler: behind
+    a transaction-mode pooler it would outlive the run and skip forever.
+    """
+    async with db.engine.connect() as conn:
+        conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        held = bool(
+            (
+                await conn.execute(
+                    text("SELECT pg_try_advisory_lock(hashtextextended(:key, 0))"), {"key": key}
+                )
+            ).scalar_one()
+        )
+        try:
+            yield held
+        finally:
+            if held:
+                try:
+                    await conn.execute(
+                        text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key}
+                    )
+                except Exception:
+                    # The connection is gone and its session's lock with it;
+                    # what the sync did stands.
+                    logger.exception("Could not release the reconcile lock %s", key)
+
+
 async def _reconcile(
     registries_config: str | None,
     sources: tuple[str, ...],
     config_file: str | None = None,
+    force: bool = False,
+    workspace_registries: bool = False,
 ):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
@@ -318,7 +463,11 @@ async def _reconcile(
         RegistryRepository,
     )
 
+    from agentarea_api.registry_content import registry_content_mirror
+    from agentarea_api.registry_credentials import registry_credentials_resolver
+
     db = Database(get_db_settings())
+    content_mirror = registry_content_mirror()
     from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 
     system_context = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID)
@@ -359,7 +508,7 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
-    if not configs:
+    if not configs and not workspace_registries:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
 
@@ -406,105 +555,157 @@ async def _reconcile(
 
     succeeded: list[str] = []
     failed: list[tuple[str, str]] = []
+    skipped: list[str] = []
+    # Retired entries last: an install of a retired registry's item moves to
+    # the registry replacing it, which must be synced by then.
+    retired = [c for c in configs if c.get("active", True) is False]
+    ordered = [c for c in configs if c.get("active", True) is not False] + retired
+    replacements: list = []
 
-    for config in configs:
+    for config in ordered:
         registry_name = config["name"]
         click.echo(f"\nReconciling: {registry_name}")
 
         try:
-            with workspace_scope(PLATFORM_WORKSPACE_ID):
-                async with db.async_session_factory() as session:
-                    registry_repo = RegistryRepository(session, system_context)
-                    item_repo = RegistryItemRepository(session, system_context)
-                    server_repo = MCPServerRepository(session, system_context)
-                    skill_repo = skill_repo_cls(session, system_context) if skill_repo_cls else None
-                    provider_spec_repo = (
-                        provider_spec_repo_cls(session, system_context)
-                        if provider_spec_repo_cls
-                        else None
-                    )
-                    model_spec_repo = (
-                        model_spec_repo_cls(session, system_context)
-                        if model_spec_repo_cls
-                        else None
-                    )
-                    agent_repo = agent_repo_cls(session, system_context) if agent_repo_cls else None
-                    service = RegistryService(
-                        registry_repo,
-                        item_repo,
-                        server_repo,
-                        skill_repo=skill_repo,
-                        provider_spec_repo=provider_spec_repo,
-                        model_spec_repo=model_spec_repo,
-                        agent_repo=agent_repo,
-                    )
+            async with _registry_sync_lock(db, f"registry-sync:platform:{registry_name}") as held:
+                if not held:
+                    click.echo(f"Skipped {registry_name}: another reconcile is syncing it")
+                    skipped.append(registry_name)
+                    continue
+                with workspace_scope(PLATFORM_WORKSPACE_ID):
+                    async with db.async_session_factory() as session:
+                        registry_repo = RegistryRepository(session, system_context)
+                        item_repo = RegistryItemRepository(session, system_context)
+                        server_repo = MCPServerRepository(session, system_context)
+                        skill_repo = (
+                            skill_repo_cls(session, system_context) if skill_repo_cls else None
+                        )
+                        provider_spec_repo = (
+                            provider_spec_repo_cls(session, system_context)
+                            if provider_spec_repo_cls
+                            else None
+                        )
+                        model_spec_repo = (
+                            model_spec_repo_cls(session, system_context)
+                            if model_spec_repo_cls
+                            else None
+                        )
+                        agent_repo = (
+                            agent_repo_cls(session, system_context) if agent_repo_cls else None
+                        )
+                        service = RegistryService(
+                            registry_repo,
+                            item_repo,
+                            server_repo,
+                            skill_repo=skill_repo,
+                            provider_spec_repo=provider_spec_repo,
+                            model_spec_repo=model_spec_repo,
+                            agent_repo=agent_repo,
+                            credentials_resolver=registry_credentials_resolver(session),
+                            content_mirror=content_mirror,
+                        )
 
-                    registries = await registry_repo.list_all()
-                    existing = next((r for r in registries if r.name == registry_name), None)
-                    if config.get("active", True) is False:
-                        # A source dropped from the manifest is never reconciled
-                        # again, so its registry and items would stay listed.
-                        if existing is not None and existing.is_active:
-                            await service.update_registry(existing.id, is_active=False)
-                            click.echo(f"Retired registry: {existing.id}")
+                        # The manifest names platform registries; a workspace's own
+                        # registry may share the name.
+                        existing = await registry_repo.get_platform_by_name(registry_name)
+                        if config.get("active", True) is False:
+                            # A source dropped from the manifest is never reconciled
+                            # again, so its registry and items would stay listed; what
+                            # nothing uses is deleted, the rest stays out of the catalog.
+                            if existing is not None:
+                                deleted = await service.retire_registry(
+                                    existing.id, replacements=replacements
+                                )
+                                await session.commit()
+                                click.echo(
+                                    f"Retired registry: {existing.id} ({deleted} items deleted)"
+                                )
+                            else:
+                                click.echo("Registry absent")
+                            succeeded.append(registry_name)
+                            continue
+                        configured_priority = config.get("recommendation_priority")
+                        if existing:
+                            registry_id = existing.id
+                            click.echo(f"Found existing registry: {registry_id}")
+                            # Reconcile is the only way a manifest edit reaches an
+                            # installed platform: without this, changing a source's
+                            # weight would only ever affect brand-new installs.
+                            if (
+                                configured_priority is not None
+                                and configured_priority != existing.recommendation_priority
+                            ):
+                                await service.update_registry(
+                                    registry_id, recommendation_priority=configured_priority
+                                )
+                                click.echo(
+                                    f"Updated recommendation priority: {configured_priority}"
+                                )
+                            labels = {
+                                field: config[field]
+                                for field in ("mode", "trust")
+                                if field in config and config[field] != getattr(existing, field)
+                            }
+                            if labels:
+                                await service.update_registry(registry_id, **labels)
+                                click.echo(f"Updated {labels}")
                         else:
-                            click.echo("Registry already retired or absent")
-                        succeeded.append(registry_name)
-                        continue
-                    configured_priority = config.get("recommendation_priority")
-                    if existing:
-                        registry_id = existing.id
-                        click.echo(f"Found existing registry: {registry_id}")
-                        # Reconcile is the only way a manifest edit reaches an
-                        # installed platform: without this, changing a source's
-                        # weight would only ever affect brand-new installs.
-                        if (
-                            configured_priority is not None
-                            and configured_priority != existing.recommendation_priority
-                        ):
-                            await service.update_registry(
-                                registry_id, recommendation_priority=configured_priority
+                            registry_type = config.get("type")
+                            if not registry_type:
+                                # Detection fetches the source to inspect its shape; the
+                                # subsequent sync_registry fetches it again to parse. The
+                                # extra GET is acceptable for a one-shot reconcile — set an
+                                # explicit `type` in the manifest to skip detection.
+                                registry_type = service.detect_type_from_source(
+                                    config["source_url"]
+                                )
+                                click.echo(f"Detected type: {registry_type}")
+                            registry = await service.create_registry(
+                                name=registry_name,
+                                registry_type=registry_type,
+                                source_type=config.get("source_type", "url"),
+                                source_url=config["source_url"],
+                                description=config.get("description"),
+                                sync_mode=config.get("sync_mode", "manual"),
+                                recommendation_priority=configured_priority,
+                                mode=config.get("mode", "mirror"),
+                                trust=config.get("trust", "official"),
+                                source_ref=config.get("source_ref"),
+                                source_path=config.get("source_path"),
                             )
-                            click.echo(f"Updated recommendation priority: {configured_priority}")
-                    else:
-                        registry_type = config.get("type")
-                        if not registry_type:
-                            # Detection fetches the source to inspect its shape; the
-                            # subsequent sync_registry fetches it again to parse. The
-                            # extra GET is acceptable for a one-shot reconcile — set an
-                            # explicit `type` in the manifest to skip detection.
-                            registry_type = service.detect_type_from_source(config["source_url"])
-                            click.echo(f"Detected type: {registry_type}")
-                        registry = await service.create_registry(
-                            name=registry_name,
-                            registry_type=registry_type,
-                            source_type=config.get("source_type", "url"),
-                            source_url=config["source_url"],
-                            description=config.get("description"),
-                            sync_mode=config.get("sync_mode", "manual"),
-                            recommendation_priority=configured_priority,
-                        )
-                        registry_id = registry.id
-                        click.echo(f"Created registry: {registry_id}")
+                            registry_id = registry.id
+                            click.echo(f"Created registry: {registry_id}")
 
-                    stats = await service.sync_registry(registry_id)
-                    await session.commit()
-                    click.echo(f"Synced: {stats}")
-                    if stats.get("skipped"):
-                        click.echo(
-                            f"  WARNING: skipped {stats['skipped']} item(s) "
-                            "that failed validation (see logs for reasons)",
-                            err=True,
-                        )
-                    succeeded.append(registry_name)
+                        replacements.append(registry_id)
+                        stats = await service.sync_registry(registry_id, force=force)
+                        await session.commit()
+                        click.echo(f"Synced: {stats}")
+                        if stats.get("skipped"):
+                            click.echo(
+                                f"  WARNING: skipped {stats['skipped']} item(s) "
+                                "that failed validation (see logs for reasons)",
+                                err=True,
+                            )
+                        succeeded.append(registry_name)
         except Exception as e:
             logger.exception("Reconcile failed for registry %s", registry_name)
             click.echo(f"Reconcile failed for {registry_name}: {e}", err=True)
             failed.append((registry_name, str(e)))
 
+    busy: list[str] = []
+    if workspace_registries:
+        # A tenant's broken source is recorded on its registry and reported
+        # here; it does not fail the run the platform's sources decide.
+        synced, broken, busy = await _reconcile_workspace_registries(db, force=force)
+        click.echo(f"\nWorkspace registries: {len(synced)} synced, {len(broken)} failed")
+        for name, err in broken:
+            click.echo(f"  - {name}: {err}", err=True)
+    for name in (*skipped, *busy):
+        click.echo(f"  WARNING: skipped, another reconcile was syncing: {name}", err=True)
+
     click.echo(
-        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed "
-        f"(out of {len(configs)})"
+        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed, "
+        f"{len(skipped)} skipped (out of {len(configs)})"
     )
     if failed:
         for name, err in failed:
@@ -555,6 +756,65 @@ async def _dlq_replay(dlq: str, start: str, end: str) -> None:
     finally:
         await broker.aclose()
     click.echo(f"Replayed {result.moved} dead letters from {dlq}; {result.skipped} left in place")
+
+
+async def _reconcile_workspace_registries(
+    db: Database, *, force: bool
+) -> tuple[list[str], list[tuple[str, str]], list[str]]:
+    """Sync every active registry a workspace added, each as its own workspace.
+
+    An unchanged index ETag or repository head is skipped like a platform
+    source's. Credentials resolve from the owning workspace's secrets.
+    """
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.base.tenant_scope import workspace_scope
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+    from agentarea_registry.application.service import RegistryService
+    from agentarea_registry.infrastructure.repository import (
+        RegistryItemRepository,
+        RegistryRepository,
+    )
+
+    from agentarea_api.registry_content import registry_content_mirror
+    from agentarea_api.registry_credentials import registry_credentials_resolver
+
+    content_mirror = registry_content_mirror()
+    async with db.async_session_factory() as session:
+        registries = await RegistryRepository(session).list_active_workspace_registries()
+    click.echo(f"\nWorkspace registries: {len(registries)}")
+
+    succeeded: list[str] = []
+    failed: list[tuple[str, str]] = []
+    skipped: list[str] = []
+    for registry in registries:
+        label = f"{registry.workspace_id}/{registry.name}"
+        click.echo(f"\nReconciling: {label}")
+        owner = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=str(registry.workspace_id))
+        try:
+            async with _registry_sync_lock(db, f"registry-sync:{registry.id}") as held:
+                if not held:
+                    click.echo(f"Skipped {label}: another reconcile is syncing it")
+                    skipped.append(label)
+                    continue
+                with workspace_scope(owner.workspace_id):
+                    async with db.async_session_factory() as session:
+                        service = RegistryService(
+                            RegistryRepository(session, owner),
+                            RegistryItemRepository(session, owner),
+                            MCPServerRepository(session, owner),
+                            credentials_resolver=registry_credentials_resolver(session),
+                            content_mirror=content_mirror,
+                        )
+                        stats = await service.sync_registry(registry.id, force=force)
+                        await session.commit()
+            click.echo(f"Synced: {stats}")
+            succeeded.append(label)
+        except Exception as e:
+            logger.exception("Reconcile failed for workspace registry %s", label)
+            click.echo(f"Reconcile failed for {label}: {e}", err=True)
+            failed.append((label, str(e)))
+    return succeeded, failed, skipped
 
 
 if __name__ == "__main__":

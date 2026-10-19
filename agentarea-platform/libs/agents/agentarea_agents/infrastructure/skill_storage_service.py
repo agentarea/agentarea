@@ -3,16 +3,87 @@
 import io
 import logging
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import BinaryIO
 
 from agentarea_common.config.aws import get_aws_settings, get_s3_client
 from botocore.exceptions import ClientError
 
-from ..application.skill_package_limits import check_zip_budget, read_entry, safe_package_path
+from ..application.skill_package_limits import (
+    MAX_PACKAGE_FILE_BYTES,
+    MAX_PACKAGE_FILES,
+    MAX_PACKAGE_TOTAL_BYTES,
+    check_zip_budget,
+    read_entry,
+    safe_package_path,
+)
 
 logger = logging.getLogger(__name__)
+
+SKILLS_PREFIX = "skills"
+# Immutable packages of the platform registries' skills, keyed by the digest
+# of their files. Shared by every workspace: what is stored here is public
+# catalog content, and no tenant edit ever writes under it (an edit copies into
+# the tenant's own prefix first). A workspace registry's packages live in that
+# workspace's own area (``catalog_area``).
+CATALOG_PREFIX = f"{SKILLS_PREFIX}/catalog"
+CATALOG_AREA = "catalog"
+
+
+def catalog_area(workspace_id: str | None) -> str:
+    """Where catalog packages live: one shared area for the platform's registries,
+    and each workspace's own area for its registries, so private content never
+    lands where another tenant reads.
+    """
+    return (
+        CATALOG_PREFIX if workspace_id is None else f"{SKILLS_PREFIX}/{workspace_id}/{CATALOG_AREA}"
+    )
+
+
+def tenant_package_prefix(workspace_id: str, skill_id: str) -> str:
+    """The prefix a workspace's own copy of a skill lives under."""
+    return f"{SKILLS_PREFIX}/{workspace_id}/{skill_id}/"
+
+
+def is_catalog_package(s3_path: str | None) -> bool:
+    """An immutable package stored by digest, in the shared or a workspace's area."""
+    parts = str(s3_path or "").split("/")
+    return len(parts) > 2 and parts[0] == SKILLS_PREFIX and CATALOG_AREA in (parts[1], parts[2])
+
+
+def package_digest(files: Mapping[str, bytes]) -> str:
+    """sha256 over the sorted (path, bytes) pairs, each length-prefixed."""
+    digest = sha256()
+    for path in sorted(files):
+        for part in (path.encode("utf-8"), files[path]):
+            digest.update(len(part).to_bytes(8, "big"))
+            digest.update(part)
+    return digest.hexdigest()
+
+
+def checked_package_files(files: Mapping[str, bytes]) -> dict[str, bytes]:
+    """The file set with every path normalised, or ``ValueError`` for the whole set."""
+    if len(files) > MAX_PACKAGE_FILES:
+        raise ValueError(f"Skill package contains more than {MAX_PACKAGE_FILES} files")
+    checked: dict[str, bytes] = {}
+    total = 0
+    for path, data in files.items():
+        if len(data) > MAX_PACKAGE_FILE_BYTES:
+            mb = MAX_PACKAGE_FILE_BYTES // (1024 * 1024)
+            raise ValueError(f"Skill package file {path!r} is larger than {mb} MB")
+        total += len(data)
+        checked[safe_package_path(path)] = data
+    if total > MAX_PACKAGE_TOTAL_BYTES:
+        mb = MAX_PACKAGE_TOTAL_BYTES // (1024 * 1024)
+        raise ValueError(f"Skill package is larger than {mb} MB uncompressed")
+    return checked
+
+
+def _github_tree_alias(tree_sha: str, workspace_id: str | None) -> str:
+    return f"{catalog_area(workspace_id)}/github-tree/{tree_sha}"
 
 
 @dataclass
@@ -27,10 +98,11 @@ class FileInfo:
 class SkillStorageService:
     """Service for storing skill packages in S3.
 
-    Skills are stored at: s3://{bucket}/skills/{workspace_id}/{skill_id}/
+    A workspace's own skill is stored at s3://{bucket}/skills/{workspace_id}/{skill_id}/;
+    a catalog skill's package at s3://{bucket}/skills/catalog/{sha256}/.
     """
 
-    SKILLS_PREFIX = "skills"
+    SKILLS_PREFIX = SKILLS_PREFIX
 
     def __init__(self):
         self._client = None
@@ -67,7 +139,81 @@ class SkillStorageService:
         Returns:
             S3 key prefix: skills/{workspace_id}/{skill_id}/
         """
-        return f"{self.SKILLS_PREFIX}/{workspace_id}/{skill_id}/"
+        return tenant_package_prefix(workspace_id, skill_id)
+
+    async def store_catalog_package(
+        self, files: Mapping[str, bytes], *, workspace_id: str | None = None
+    ) -> str:
+        """Store a catalog package under its digest, once; return its prefix.
+
+        ``workspace_id`` is the owner of a workspace registry's item; a
+        platform registry's item goes to the shared area.
+
+        A prefix already holding every path is reused as is: the key is the
+        digest, so the same paths there are the same bytes. One holding only
+        some of them (an earlier store that died midway) is completed.
+        """
+        checked = checked_package_files(files)
+        prefix = f"{catalog_area(workspace_id)}/{package_digest(checked)}/"
+        stored = {f.path for f in await self.list_files(prefix)}
+        missing = [path for path in checked if path not in stored]
+        for path in missing:
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=f"{prefix}{path}",
+                Body=checked[path],
+                ContentType=self._guess_content_type(path),
+            )
+        if missing:
+            logger.info("Stored catalog skill package %s (%d files)", prefix, len(missing))
+        return prefix
+
+    async def store_package_files(
+        self, skill_id: str, workspace_id: str, files: Mapping[str, bytes]
+    ) -> str:
+        """Write a file set into a workspace's own copy of a skill; return its prefix."""
+        checked = checked_package_files(files)
+        prefix = self._get_s3_prefix(workspace_id, skill_id)
+        for path, data in checked.items():
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=f"{prefix}{path}",
+                Body=data,
+                ContentType=self._guess_content_type(path),
+            )
+        return prefix
+
+    async def read_package(self, s3_path: str) -> dict[str, bytes]:
+        """Every file of a package, by relative path."""
+        return {
+            info.path: await self.get_file_content(s3_path, info.path)
+            for info in await self.list_files(s3_path)
+        }
+
+    async def get_github_tree_package(
+        self, tree_sha: str, *, workspace_id: str | None = None
+    ) -> str | None:
+        """The catalog package a GitHub tree was stored as in an area, if it was."""
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket_name, Key=_github_tree_alias(tree_sha, workspace_id)
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "NoSuchKey":
+                return None
+            raise
+        return response["Body"].read().decode("utf-8")
+
+    async def put_github_tree_package(
+        self, tree_sha: str, s3_path: str, *, workspace_id: str | None = None
+    ) -> None:
+        """Record which catalog package a GitHub tree is, so it is fetched once."""
+        self.client.put_object(
+            Bucket=self.bucket_name,
+            Key=_github_tree_alias(tree_sha, workspace_id),
+            Body=s3_path.encode("utf-8"),
+            ContentType="text/plain",
+        )
 
     def _package_entries(self, zf: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]]:
         """Return the archive's stored entries with their package paths.

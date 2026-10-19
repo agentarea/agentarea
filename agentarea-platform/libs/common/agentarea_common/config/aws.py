@@ -27,6 +27,28 @@ class AWSSettings(BaseAppSettings):
     PUBLIC_ENDPOINT: str | None = None  # Public endpoint for frontend access
 
 
+class ObjectStorageNotConfiguredError(RuntimeError):
+    """The deployment gave this process no object storage credentials."""
+
+
+def require_s3_credentials() -> None:
+    """Refuse the built-in credentials where a write must land.
+
+    The defaults suit a local RustFS only; against any other store every write
+    fails, one by one, while the process carries on. A process that stores
+    packages checks this before it starts.
+    """
+    unset = [
+        f"AGENTAREA_S3_{name}"
+        for name in ("ACCESS_KEY", "SECRET_KEY")
+        if name not in AWSSettings().model_fields_set
+    ]
+    if unset:
+        raise ObjectStorageNotConfiguredError(
+            f"object storage is not configured: {', '.join(unset)} unset"
+        )
+
+
 @lru_cache
 def get_aws_settings() -> AWSSettings:
     """Get object storage settings."""

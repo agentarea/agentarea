@@ -584,7 +584,10 @@ async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_trigg
         list=AsyncMock(return_value=[agent]),
         get_with_skills=AsyncMock(return_value=agent),
     )
-    skill_service = SimpleNamespace(list=AsyncMock(return_value=[skill]))
+    skill_service = SimpleNamespace(
+        list=AsyncMock(return_value=[skill]),
+        read_skill_md=AsyncMock(return_value=skill.content),
+    )
     trigger_repository = SimpleNamespace(list_all=AsyncMock(return_value=[cron, stream_trigger]))
     monkeypatch.setattr(
         workspace_export_service,

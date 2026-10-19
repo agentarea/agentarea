@@ -171,7 +171,7 @@ class WorkspaceExportService:
         )
 
         skills = await self.skill_service.list() if self.skill_service else []
-        bundle_skills, skill_keys = self._skills_to_bundle(skills, BundleSkill)
+        bundle_skills, skill_keys = await self._skills_to_bundle(skills, BundleSkill)
 
         agents = await self.agent_service.list()
         workspace_agents: list[Agent] = []
@@ -220,7 +220,7 @@ class WorkspaceExportService:
             sort_keys=False,
         )
 
-    def _skills_to_bundle(
+    async def _skills_to_bundle(
         self, skills: list[Any], bundle_skill_type: Any
     ) -> tuple[list[Any], dict[str, str]]:
         result = []
@@ -239,17 +239,15 @@ class WorkspaceExportService:
                     source_type="github",
                     source_url=skill.source_url,
                 )
-            elif skill.content:
+            elif self.skill_service is not None:
                 bundle_skill = bundle_skill_type(
                     key=key,
                     name=skill.name,
                     source_type="content",
-                    content=skill.content,
+                    content=await self.skill_service.read_skill_md(skill),
                 )
             else:
-                raise ValueError(
-                    f"Skill '{skill.name}' has no inline content for bundle installation"
-                )
+                raise ValueError(f"Skill '{skill.name}' cannot be exported without the skill store")
 
             result.append(bundle_skill)
             skill_keys[str(skill.id)] = key

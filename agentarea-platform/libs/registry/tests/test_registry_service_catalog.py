@@ -633,6 +633,81 @@ class TestParseSkills:
 
         assert "provenance" not in items[0]["spec"]
 
+    def _index_entry(self, **source):
+        return {
+            "external_id": "pdf--anthropics-skills",
+            "name": "pdf--anthropics-skills",
+            "original_name": "pdf",
+            "description": "Create and edit PDF documents.",
+            "tags": ["category:documents"],
+            "recommendation_rank": 3,
+            "stars": 42_500,
+            "license": "Apache-2.0",
+            "source": {"type": "github", "repo": "anthropics/skills", "path": "skills/pdf", **source},
+        }
+
+    def test_platform_index_keeps_the_content_pointer_and_versions_by_tree_sha(self):
+        ref, tree_sha = "a" * 40, "b" * 40
+
+        [item] = RegistryService._parse_skills(
+            {"skills": [self._index_entry(ref=ref, tree_sha=tree_sha)]}
+        )
+
+        assert item["version"] == tree_sha
+        assert item["spec"]["source"] == {
+            "type": "github",
+            "repo": "anthropics/skills",
+            "path": "skills/pdf",
+            "ref": ref,
+            "tree_sha": tree_sha,
+        }
+        assert item["spec"]["source_type"] == "github"
+        assert item["spec"]["source_url"] == f"https://github.com/anthropics/skills/tree/{ref}/skills/pdf"
+        assert "content" not in item["spec"]
+        assert item["spec"]["provenance"] == {
+            "repo": "anthropics/skills",
+            "path": "skills/pdf",
+            "stars": 42_500,
+            "license": "Apache-2.0",
+        }
+        assert item["recommendation_rank"] == 3
+
+    def test_a_pointer_without_tree_sha_is_versioned_latest(self):
+        [item] = RegistryService._parse_skills({"skills": [self._index_entry()]})
+
+        assert item["version"] == "latest"
+        assert item["spec"]["source"] == {
+            "type": "github",
+            "repo": "anthropics/skills",
+            "path": "skills/pdf",
+        }
+        assert item["spec"]["source_url"] == "https://github.com/anthropics/skills/tree/HEAD/skills/pdf"
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            {"type": "gitlab", "repo": "a/b", "path": "x"},
+            {"type": "github", "path": "x"},
+            {"type": "github", "repo": "not-a-repo", "path": "x"},
+            {"type": "github", "repo": "a/b", "path": "../x"},
+            {"type": "github", "repo": "a/b", "path": "x", "tree_sha": "short"},
+        ],
+    )
+    def test_a_malformed_pointer_is_refused(self, source):
+        entry = {**self._index_entry(), "source": source}
+
+        with pytest.raises(ValueError, match="source"):
+            RegistryService._parse_skills({"skills": [entry]})
+
+    def test_an_inline_skill_keeps_its_content_and_version(self):
+        [item] = RegistryService._parse_skills(
+            {"skills": [{"name": "s", "content": "# S", "version": "2.0.0"}]}
+        )
+
+        assert item["version"] == "2.0.0"
+        assert item["spec"]["content"] == "# S"
+        assert "source" not in item["spec"]
+
 
 class TestParseBundles:
     def _bundle(self, **over):

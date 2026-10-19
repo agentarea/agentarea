@@ -1,18 +1,36 @@
 """Repositories for Registry and RegistryItem domain models.
 
-Registries and registry_items are GLOBAL catalog infrastructure (ADR-003), not
-workspace-scoped: built-in/official content lives here once and is readable by
-every tenant. These repositories therefore apply no workspace filter and never
-set workspace_id/created_by. They keep the ``(session, user_context)`` signature
-for call-site compatibility, but ``user_context`` is intentionally unused for
-read/write scoping.
+Registries and registry_items are catalog infrastructure (ADR-003), not
+WorkspaceScopedMixin rows: built-in content lives here once and is readable by
+every tenant. A registry is either the platform's, seen by every workspace, or
+one workspace's (ADR-0044). Sync and reconcile read every row; the catalog
+reads a caller makes go through the ``visible`` methods, which keep another
+workspace's registries and items out and need the caller's ``user_context``.
 """
 
+from collections.abc import Collection
 from typing import Any
+from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import case, false, func, select, update
+from agentarea_common.base.tenant_scope import unscoped
+from sqlalchemy import (
+    String,
+    case,
+    cast,
+    column,
+    delete,
+    exists,
+    false,
+    func,
+    or_,
+    select,
+    table,
+    text,
+    update,
+)
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -22,7 +40,7 @@ from agentarea_registry.application.catalog_facets import (
     CATALOG_PROTOCOLS,
     PROTOCOL_REGISTRY_TYPE,
 )
-from agentarea_registry.domain.models import Registry, RegistryItem
+from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 
 # Accepted catalog orderings, mapped to their ORDER BY. Every ordering ends with
 # ``id`` so rows with equal keys can't let OFFSET paging repeat one and drop
@@ -60,7 +78,28 @@ _COPIED_REGISTRY_FIELDS = {
     "registry_type": "registry_type",
     "recommendation_priority": "registry_priority",
     "is_active": "registry_active",
+    "workspace_id": "registry_workspace_id",
+    "trust": "registry_trust",
 }
+
+
+def _caller_workspace(user_context: UserContext | None) -> str:
+    """The workspace a catalog read is for; there is no default to fall back to."""
+    if user_context is None or not user_context.workspace_id:
+        raise ValueError("a catalog read needs the caller's workspace")
+    return user_context.workspace_id
+
+
+def visible_registry(workspace_id: str) -> ColumnElement[bool]:
+    return or_(Registry.workspace_id.is_(None), Registry.workspace_id == workspace_id)
+
+
+def visible_item(workspace_id: str) -> ColumnElement[bool]:
+    """The platform's items and the caller's workspace's, never another's."""
+    return or_(
+        RegistryItem.registry_workspace_id.is_(None),
+        RegistryItem.registry_workspace_id == workspace_id,
+    )
 
 
 class RegistryRepository:
@@ -87,6 +126,57 @@ class RegistryRepository:
         if limit is not None:
             query = query.limit(limit)
         result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def list_visible(
+        self,
+        active_only: bool = False,
+        registry_type: str | None = None,
+        scope: str | None = None,
+    ) -> list[Registry]:
+        """The platform's registries and the caller's workspace's."""
+        query = select(Registry).where(visible_registry(_caller_workspace(self.user_context)))
+        if active_only:
+            query = query.where(Registry.is_active.is_(True))
+        if registry_type:
+            query = query.where(Registry.registry_type == registry_type)
+        if scope:
+            query = query.where(Registry.scope == scope)
+        result = await self.session.execute(query.order_by(Registry.created_at.desc()))
+        return list(result.scalars().all())
+
+    async def get_visible(self, id: UUID | str) -> Registry | None:
+        record = await self.session.get(Registry, id)
+        if record is None or record.workspace_id not in (
+            None,
+            _caller_workspace(self.user_context),
+        ):
+            return None
+        return record
+
+    async def get_many(self, ids: set[str]) -> list[Registry]:
+        if not ids:
+            return []
+        result = await self.session.execute(select(Registry).where(Registry.id.in_(ids)))
+        return list(result.scalars().all())
+
+    async def get_platform_by_name(self, name: str) -> Registry | None:
+        result = await self.session.execute(
+            select(Registry).where(Registry.scope == "platform", Registry.name == name)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_active_workspace_registries(self) -> list[Registry]:
+        """Every workspace's active synchronized registries, for reconcile."""
+        result = await self.session.execute(
+            select(Registry)
+            .where(
+                Registry.scope == "workspace",
+                Registry.is_active.is_(True),
+                Registry.source_type != "managed",
+            )
+            .order_by(Registry.workspace_id, Registry.name)
+        )
         return list(result.scalars().all())
 
     async def list_active(self, registry_type: str | None = None) -> list[Registry]:
@@ -147,6 +237,16 @@ class RegistryItemRepository:
 
     async def get_by_id(self, id: UUID | str) -> RegistryItem | None:
         return await self.session.get(RegistryItem, id)
+
+    async def get_visible(self, id: UUID | str) -> RegistryItem | None:
+        """The item, unless it belongs to another workspace's registry."""
+        record = await self.session.get(RegistryItem, id)
+        if record is None or record.registry_workspace_id not in (
+            None,
+            _caller_workspace(self.user_context),
+        ):
+            return None
+        return record
 
     async def list_all(
         self, limit: int | None = None, offset: int | None = None, **filters: Any
@@ -220,13 +320,17 @@ class RegistryItemRepository:
         if registry is None:
             raise ValueError(f"Registry {registry_id} not found")
         present = RegistryItem.external_id.in_(external_ids) if external_ids else false()
+        active = present if registry.is_active else false()
         await self.session.execute(
             update(RegistryItem)
-            .where(RegistryItem.registry_id == registry_id)
-            .values(
-                in_source=present,
-                registry_active=present if registry.is_active else false(),
+            .where(
+                RegistryItem.registry_id == registry_id,
+                or_(
+                    RegistryItem.in_source.is_distinct_from(present),
+                    RegistryItem.registry_active.is_distinct_from(active),
+                ),
             )
+            .values(in_source=present, registry_active=active)
         )
         await self.session.commit()
         return (
@@ -236,6 +340,130 @@ class RegistryItemRepository:
                 )
             )
         ).scalar_one()
+
+    async def move_references(
+        self, registry_id: UUID | str, replacements: Collection[UUID | str]
+    ) -> int:
+        """Point every use of the registry's items at the same item of a replacement.
+
+        "The same item" is the one with the same ``external_id`` that a
+        replacement registry still publishes (the first by registry weight).
+        Installs, forks, agents and connections move, in every workspace, except
+        where a workspace already holds the replacement item: one fork and one
+        install per item and workspace. Not committed, so the caller deletes
+        what is left unused in the same transaction. Returns how many moved.
+        """
+        if not replacements:
+            return 0
+        # Raw SQL over other modules' tables, across every workspace: the
+        # tenant scope does not confine it, and must not.
+        result = await self.session.execute(
+            text(
+                """
+                WITH moves AS (
+                    SELECT DISTINCT ON (old.id) old.id AS old_id, new.id AS new_id
+                    FROM registry_items old
+                    JOIN registry_items new
+                      ON new.external_id = old.external_id
+                     AND new.registry_type = old.registry_type
+                    WHERE old.registry_id = :registry_id
+                      AND new.registry_id = ANY(:replacements)
+                      AND new.in_source
+                    ORDER BY old.id, new.registry_priority, new.registry_id
+                ),
+                forks AS (
+                    UPDATE skills s SET registry_item_id = m.new_id
+                    FROM moves m
+                    WHERE s.registry_item_id = m.old_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM skills other
+                          WHERE other.workspace_id = s.workspace_id
+                            AND other.registry_item_id = m.new_id
+                      )
+                    RETURNING 1
+                ),
+                installs AS (
+                    UPDATE registry_item_installs x SET registry_item_id = m.new_id
+                    FROM moves m
+                    WHERE x.registry_item_id = m.old_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM registry_item_installs other
+                          WHERE other.workspace_id = x.workspace_id
+                            AND other.registry_item_id = m.new_id
+                      )
+                    RETURNING 1
+                ),
+                agents_moved AS (
+                    UPDATE agents a SET registry_item_id = m.new_id::text
+                    FROM moves m WHERE a.registry_item_id = m.old_id::text
+                    RETURNING 1
+                ),
+                servers AS (
+                    UPDATE mcp_servers t SET registry_item_id = m.new_id
+                    FROM moves m WHERE t.registry_item_id = m.old_id
+                    RETURNING 1
+                ),
+                connections AS (
+                    UPDATE openapi_connections t SET registry_item_id = m.new_id
+                    FROM moves m WHERE t.registry_item_id = m.old_id
+                    RETURNING 1
+                )
+                SELECT (SELECT count(*) FROM forks) + (SELECT count(*) FROM installs)
+                     + (SELECT count(*) FROM agents_moved) + (SELECT count(*) FROM servers)
+                     + (SELECT count(*) FROM connections)
+                """
+            ),
+            {
+                "registry_id": UUID(str(registry_id)),
+                "replacements": [UUID(str(r)) for r in replacements],
+            },
+        )
+        return int(result.scalar_one())
+
+    async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:
+        """Delete the registry's items its source dropped that nothing uses.
+
+        An item stays while a workspace installed, forked or connected to it,
+        or while the platform materialized it (an MCP mirror, a model spec);
+        what stays carries its registry's trust, which the migration that
+        added the column gave only to items still in the source. Returns how
+        many items were deleted.
+        """
+        registry = await self.session.get(Registry, registry_id)
+        if registry is None:
+            raise ValueError(f"Registry {registry_id} not found")
+        uuid_refs = [
+            table(name, column("registry_item_id"))
+            for name in ("skills", "mcp_servers", "openapi_connections")
+        ]
+        agents = table("agents", column("registry_item_id"))
+        referenced = or_(
+            RegistryItem.installed_entity_id.is_not(None),
+            exists().where(RegistryItemInstall.registry_item_id == RegistryItem.id),
+            *(exists().where(ref.c.registry_item_id == RegistryItem.id) for ref in uuid_refs),
+            exists().where(agents.c.registry_item_id == cast(RegistryItem.id, String)),
+        )
+        # Core tables, not ORM entities: under a workspace scope an entity's
+        # EXISTS would see only that workspace and delete what others use.
+        with unscoped("an item is referenced from any workspace; the check must see all of them"):
+            result = await self.session.execute(
+                delete(RegistryItem).where(
+                    RegistryItem.registry_id == registry_id,
+                    RegistryItem.in_source.is_(False),
+                    ~referenced,
+                )
+            )
+        await self.session.execute(
+            update(RegistryItem)
+            .where(
+                RegistryItem.registry_id == registry_id,
+                RegistryItem.in_source.is_(False),
+                RegistryItem.registry_trust.is_distinct_from(registry.trust),
+            )
+            .values(registry_trust=registry.trust)
+        )
+        await self.session.commit()
+        return type_cast(CursorResult[Any], result).rowcount
 
     async def update(self, id: UUID | str, **kwargs: Any) -> RegistryItem | None:
         record = await self.session.get(RegistryItem, id)
@@ -315,6 +543,7 @@ class RegistryItemRepository:
             # Bare column, not `IS TRUE`: it has to match the partial indexes'
             # predicate for the planner to use them.
             RegistryItem.registry_active.expression,
+            visible_item(_caller_workspace(self.user_context)),
         ]
         if category:
             conditions.append(RegistryItem.category == category)
@@ -482,8 +711,8 @@ class RegistryItemRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[RegistryItem]:
-        """Search catalog items across all registries (global catalog)."""
-        query = select(RegistryItem)
+        """Search the catalog items the caller's workspace may see."""
+        query = select(RegistryItem).where(visible_item(_caller_workspace(self.user_context)))
 
         if update_available is not None:
             query = query.where(RegistryItem.update_available == update_available)

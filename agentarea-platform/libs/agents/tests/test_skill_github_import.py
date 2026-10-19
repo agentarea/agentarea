@@ -100,7 +100,7 @@ async def test_a_github_url_into_a_monorepo_imports_only_that_skill_package(
     assert github_serves_zipball == [ZIPBALL_URL]
     assert _stored_paths(s3_client, str(skill.id)) == {"SKILL.md", "references/x.md"}
     assert skill.name == "seo-audit"
-    assert skill.content == SKILL_MD
+    assert skill.content is None  # the body is the stored SKILL.md
     assert skill.source_type == SkillSourceType.GITHUB.value
     assert skill.source_url == github_url
 

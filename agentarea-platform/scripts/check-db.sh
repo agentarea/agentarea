@@ -49,6 +49,11 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     is recorded saved (and billed) once by a conditional update.
 #   catalog browse plans: /explore is only fast while every browse query has an
 #     index that serves it, a property of the migrated indexes and the planner.
+#   catalog retire: a sync deletes what its source dropped unless a row of
+#     another module (install, fork, agent, connection) still references it.
+#   catalog visibility: a workspace registry's items reach only that workspace
+#     (browse, search, by id, the skill and agent projections), a CHECK keeps
+#     it to catalog-only types, and names are unique per scope (ADR-0044).
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
 #     preset's skill key is matched against hashed catalog names with LIKE.
 #   MCP spec list: tenant specs and catalog items are paged, filtered and
@@ -57,6 +62,17 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     text-to-uuid join on its spec, unioned with OpenAPI connections.
 #   skill list: the catalog half, its total and the fork update check are
 #     served by the partial browse indexes and the primary key, never a scan.
+#   skill packages: an update's check joins the workspace's install row and
+#     moves the pin by upserting on its (item, workspace) key; moving bodies
+#     out of rows reads every workspace's skills and rewrites each in its own.
+#   skill mirror: a mirror registry's sync stores each item in its workspace's
+#     area and an install reads it offline; the catalog reads hand each item's
+#     registry and trust to the install policy's rule rows; the repin reads
+#     catalog installs across workspaces and moves each pin by upsert. Its
+#     sessions run the enforced tenant scope RU deploys with.
+#   reconcile under enforce: a platform sync, a retire and a workspace
+#     registry's sync through the CLI, with sessions that refuse what the bound
+#     scope cannot confine; the cleanup still sees every workspace's forks.
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
 #   task events and conversation: a retried publish batch stores each event once
@@ -114,6 +130,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   owned auth configs: an auth config a connect flow minted is deleted with its
 #     connection or instance by ON DELETE CASCADE, its credential and secret
 #     references first; a shared one survives, and the backfill names owners.
+#   catalog migration rerun: the ADR-0044 revisions run by the real alembic
+#     environment, refused a lock and killed mid index swap, then rerun to head.
+#     Last: it downgrades and upgrades the shared database.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -128,10 +147,16 @@ PY_SUITES=(
   libs/llm/tests/test_cache_price_resync_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
+  libs/registry/tests/test_catalog_retire_db.py
+  libs/registry/tests/test_catalog_visibility_db.py
+  libs/agents/tests/test_catalog_workspace_registry_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
   apps/api/tests/test_catalog_connections_db.py
   libs/agents/tests/test_catalog_skill_list_db.py
+  libs/agents/tests/test_skill_packages_db.py
+  apps/api/tests/test_skill_mirror_db.py
+  apps/api/tests/test_reconcile_enforce_db.py
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_event_recall_scoping_db.py
@@ -172,6 +197,7 @@ PY_SUITES=(
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
   apps/api/tests/test_owned_auth_configs_db.py
+  apps/api/tests/test_registry_migration_rerun_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

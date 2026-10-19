@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import Link from "@/components/WorkspaceLink";
+import { RegistryBadge } from "@/components/RegistryBadge";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import {
@@ -32,13 +33,21 @@ import {
   parseMoneyInput,
 } from "@/lib/money";
 import { cn } from "@/lib/utils";
-import type { Policy, PolicyEffect } from "@/types/policies";
+import {
+  isInstallTarget,
+  REGISTRY_TRUST_LEVELS,
+  registryTarget,
+  registryTrustTarget,
+  type Policy,
+  type PolicyEffect,
+  type RegistryTrustLevel,
+} from "@/types/policies";
 import {
   createPolicyRuleAction,
   deletePolicyRuleAction,
   updatePolicyRuleAction,
 } from "./actions";
-import { EFFECT_STYLES } from "./policy-effects";
+import { EFFECT_STYLES, INSTALL_RULE_STYLE } from "./policy-effects";
 
 // What the editor is operating on. Create modes pre-scope the rule to a
 // subject (workspace, or a picked agent); edit mode locks the subject.
@@ -63,13 +72,35 @@ interface PolicyEditorProps {
   mcpServers: McpServer[];
   openapiConnections: OpenAPIConnectionOption[];
   members: MemberOption[];
+  registries: RegistryOption[];
   workspaceId: string | null;
   returnHref?: string;
 }
 
-// Effects the editor can author. (`allow` exists in the model but tool grants
-// live in the Access view; the editor focuses on restrictions.)
-const EDITABLE_EFFECTS: PolicyEffect[] = ["cap", "deny", "approval", "safety"];
+// Rule kinds the editor can author: the restriction effects (`allow` on a tool
+// exists in the model but tool grants live in the Access view), plus catalog
+// install rules, which allow or deny installs from registries (ADR-0044).
+type RuleKind = PolicyEffect | "install";
+const EDITABLE_KINDS: RuleKind[] = [
+  "cap",
+  "deny",
+  "approval",
+  "safety",
+  "install",
+];
+type InstallEffect = "allow" | "deny";
+
+function kindStyle(kind: RuleKind) {
+  return kind === "install" ? INSTALL_RULE_STYLE : EFFECT_STYLES[kind];
+}
+
+// A registry the workspace can see: the platform's and its own.
+interface RegistryOption {
+  id: string;
+  name: string;
+  trust: RegistryTrustLevel;
+  registry_type: string;
+}
 
 // --- cap sub-form ---------------------------------------------------------
 
@@ -145,11 +176,14 @@ interface FormState {
   // safety
   promptInjection: boolean;
   outputSanitizer: boolean;
+  // catalog installs: registry:<id> / registry_trust:<level> targets
+  installEffect: InstallEffect;
+  installTargets: string[];
 }
 
 interface PolicyDraft {
   id: string;
-  effect: PolicyEffect;
+  effect: RuleKind;
   form: FormState;
 }
 
@@ -166,6 +200,8 @@ const EMPTY_FORM: FormState = {
   approvers: [],
   promptInjection: true,
   outputSanitizer: false,
+  installEffect: "deny",
+  installTargets: [],
 };
 
 function cloneForm(form: FormState): FormState {
@@ -173,10 +209,11 @@ function cloneForm(form: FormState): FormState {
     ...form,
     tools: [...form.tools],
     approvers: [...form.approvers],
+    installTargets: [...form.installTargets],
   };
 }
 
-function newDraft(id: string, effect: PolicyEffect = "cap"): PolicyDraft {
+function newDraft(id: string, effect: RuleKind = "cap"): PolicyDraft {
   return {
     id,
     effect,
@@ -386,7 +423,7 @@ function buildToolCatalog(
 // Seed the form from an existing rule (edit mode). Unknown shapes degrade
 // gracefully — fields that don't apply stay at their defaults.
 function policyToForm(policy: Policy): {
-  effect: PolicyEffect;
+  effect: RuleKind;
   form: FormState;
 } {
   const p =
@@ -394,6 +431,15 @@ function policyToForm(policy: Policy): {
       ? (policy.params as Record<string, unknown>)
       : {};
   const form: FormState = { ...EMPTY_FORM, enabled: policy.enabled };
+
+  if (
+    isInstallTarget(policy.target) &&
+    (policy.effect === "allow" || policy.effect === "deny")
+  ) {
+    form.installEffect = policy.effect;
+    form.installTargets = [policy.target];
+    return { effect: "install", form };
+  }
 
   if (policy.effect === "cap") {
     if (policy.target === "tokens") {
@@ -451,14 +497,27 @@ type RuleBuildError =
   | "atLeastOneToolRequired"
   | "toolRequired"
   | "safetyCheckRequired"
-  | "approverUnsupported";
+  | "approverUnsupported"
+  | "installTargetRequired";
 
 // Build the rule bodies the form describes. Returns an error code instead
 // when the form is incomplete.
 function buildRuleBodies(
-  effect: PolicyEffect,
+  effect: RuleKind,
   form: FormState
 ): { bodies: RuleBody[] } | { error: RuleBuildError } {
+  if (effect === "install") {
+    if (form.installTargets.length === 0)
+      return { error: "installTargetRequired" };
+    return {
+      bodies: form.installTargets.map((target) => ({
+        target,
+        effect: form.installEffect,
+        params: {},
+      })),
+    };
+  }
+
   if (effect === "cap") {
     if (form.capKind === "tokens") {
       const maxTokens = parseInt2(form.maxTokens);
@@ -551,15 +610,15 @@ function EffectSegmented({
   onChange,
   disabled,
 }: {
-  value: PolicyEffect;
-  onChange: (effect: PolicyEffect) => void;
+  value: RuleKind;
+  onChange: (effect: RuleKind) => void;
   disabled?: boolean;
 }) {
   const t = useTranslations("PoliciesPage.editor");
   return (
     <div className="inline-flex flex-wrap items-center gap-px border border-border/70 bg-muted/30 p-px">
-      {EDITABLE_EFFECTS.map((effect) => {
-        const style = EFFECT_STYLES[effect];
+      {EDITABLE_KINDS.map((effect) => {
+        const style = kindStyle(effect);
         const Icon = style.icon;
         const active = effect === value;
         return (
@@ -586,7 +645,9 @@ function EffectSegmented({
                 ? t("effects.deny")
                 : effect === "approval"
                   ? t("effects.approval")
-                  : t("effects.safety")}
+                  : effect === "install"
+                    ? t("effects.install")
+                    : t("effects.safety")}
           </button>
         );
       })}
@@ -1003,8 +1064,15 @@ function BlueprintSection({
   );
 }
 
-function previewTarget(effect: PolicyEffect, form: FormState): string {
+function previewTarget(effect: RuleKind, form: FormState): string {
   if (effect === "cap") return form.capKind;
+  if (effect === "install") {
+    return form.installTargets.length === 1
+      ? form.installTargets[0]
+      : form.installTargets.length === 0
+        ? "registry:<pending>"
+        : "registry";
+  }
   if (effect === "deny") {
     return form.tools.length === 0 ? "tool:<pending>" : "tool";
   }
@@ -1014,7 +1082,11 @@ function previewTarget(effect: PolicyEffect, form: FormState): string {
   return "content";
 }
 
-function previewParams(effect: PolicyEffect, form: FormState): string {
+function previewParams(effect: RuleKind, form: FormState): string {
+  if (effect === "install") {
+    const targets = form.installTargets.length || "pending";
+    return `effect=${form.installEffect} targets=${targets}`;
+  }
   if (effect === "cap") {
     if (form.capKind === "tokens") {
       const parts: string[] = [];
@@ -1057,6 +1129,7 @@ export default function PolicyEditor({
   mcpServers,
   openapiConnections,
   members,
+  registries,
   workspaceId,
   returnHref = "/policies",
 }: PolicyEditorProps) {
@@ -1064,16 +1137,18 @@ export default function PolicyEditor({
   const locale = useLocale();
   const { currency } = useCurrency();
   const t = useTranslations("PoliciesPage.editor");
-  const effectLabel = (effect: PolicyEffect) =>
-    effect === "allow"
-      ? t("effects.allow")
-      : effect === "cap"
-        ? t("effects.cap")
-        : effect === "approval"
-          ? t("effects.approval")
-          : effect === "deny"
-            ? t("effects.deny")
-            : t("effects.safety");
+  const effectLabel = (effect: RuleKind) =>
+    effect === "install"
+      ? t("effects.install")
+      : effect === "allow"
+        ? t("effects.allow")
+        : effect === "cap"
+          ? t("effects.cap")
+          : effect === "approval"
+            ? t("effects.approval")
+            : effect === "deny"
+              ? t("effects.deny")
+              : t("effects.safety");
   const ruleErrorLabel = (error: RuleBuildError) =>
     error === "tokenBudgetRequired"
       ? t("validation.tokenBudgetRequired")
@@ -1089,7 +1164,9 @@ export default function PolicyEditor({
               ? t("validation.toolRequired")
               : error === "approverUnsupported"
                 ? t("validation.approverUnsupported")
-                : t("validation.safetyCheckRequired");
+                : error === "installTargetRequired"
+                  ? t("validation.installTargetRequired")
+                  : t("validation.safetyCheckRequired");
   const currencySymbol = useMemo(
     () => getCurrencySymbol(currency, locale),
     [currency, locale]
@@ -1115,6 +1192,11 @@ export default function PolicyEditor({
       return target.policy.subject_type === "workspace" ? "workspace" : "agent";
     return scopeMode === "agents" ? "agent" : "workspace";
   }, [scopeMode, target]);
+  // Install rules bind to the workspace or a user, never to an agent.
+  const installOnAgents =
+    !isEdit &&
+    subjectType === "agent" &&
+    drafts.some((draft) => draft.effect === "install");
 
   const selectedAgents = useMemo(
     () =>
@@ -1190,11 +1272,20 @@ export default function PolicyEditor({
       )
     );
 
-  const updateActiveEffect = (nextEffect: PolicyEffect) => {
+  const updateActiveEffect = (nextEffect: RuleKind) => {
     setDrafts((prev) =>
       prev.map((draft) =>
         draft.id === activeDraftId ? { ...draft, effect: nextEffect } : draft
       )
+    );
+  };
+
+  // Edit mode rewrites one rule, so it holds one target; create fans out.
+  const toggleInstallTarget = (target: string, on: boolean) => {
+    const others = form.installTargets.filter((value) => value !== target);
+    update(
+      "installTargets",
+      on ? (isEdit ? [target] : [...others, target]) : others
     );
   };
 
@@ -1258,6 +1349,10 @@ export default function PolicyEditor({
           ? t("validation.agentRequired")
           : t("validation.workspaceRequired")
       );
+      return;
+    }
+    if (installOnAgents) {
+      setError(t("validation.installWorkspaceOnly"));
       return;
     }
 
@@ -1375,7 +1470,9 @@ export default function PolicyEditor({
       ? subjectType === "agent"
         ? t("summary.agentScopePending")
         : t("summary.workspaceScopeMissing")
-      : firstInvalidDraft && "error" in firstInvalidDraft.result
+      : installOnAgents
+        ? t("validation.installWorkspaceOnly")
+        : firstInvalidDraft && "error" in firstInvalidDraft.result
         ? t("validation.ruleInvalid", {
             number:
               drafts.findIndex(
@@ -1386,7 +1483,7 @@ export default function PolicyEditor({
           })
         : null;
   const compiledRuleCount =
-    compiledSubjects && !firstInvalidDraft
+    compiledSubjects && !firstInvalidDraft && !installOnAgents
       ? compiledSubjects.length *
         compiledDrafts.reduce(
           (sum, item) =>
@@ -1565,7 +1662,7 @@ export default function PolicyEditor({
               <div className="grid gap-2 md:grid-cols-2">
                 {drafts.map((draft, index) => {
                   const active = draft.id === activeDraftId;
-                  const style = EFFECT_STYLES[draft.effect];
+                  const style = kindStyle(draft.effect);
                   const Icon = style.icon;
                   return (
                     <div
@@ -1812,6 +1909,102 @@ export default function PolicyEditor({
                     {t("approvers.emptyHelp")}
                   </p>
                 </div>
+              </div>
+            </BlueprintSection>
+          )}
+
+          {effect === "install" && (
+            <BlueprintSection code="02" title={t("sections.configuration")}>
+              <div className="space-y-4 border border-border/70 bg-muted/20 p-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="install-effect">{t("install.effect")}</Label>
+                  <Select
+                    value={form.installEffect}
+                    onValueChange={(v) =>
+                      update("installEffect", v as InstallEffect)
+                    }
+                  >
+                    <SelectTrigger id="install-effect">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="deny">{t("install.deny")}</SelectItem>
+                      <SelectItem value="allow">{t("install.allow")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {t("install.semantics")}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t("install.trustLevels")}</Label>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {REGISTRY_TRUST_LEVELS.map((level) => {
+                      const target = registryTrustTarget(level);
+                      return (
+                        <label
+                          key={target}
+                          className="flex cursor-pointer items-center gap-2"
+                        >
+                          <Checkbox
+                            checked={form.installTargets.includes(target)}
+                            onCheckedChange={(checked) =>
+                              toggleInstallTarget(target, checked === true)
+                            }
+                          />
+                          <RegistryBadge trust={level} />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t("install.registries")}</Label>
+                  {registries.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t("install.noRegistries")}
+                    </p>
+                  ) : (
+                    <div className="max-h-64 space-y-1 overflow-y-auto">
+                      {registries.map((registry) => {
+                        const target = registryTarget(registry.id);
+                        return (
+                          <label
+                            key={registry.id}
+                            className="flex cursor-pointer items-center gap-2 border border-border/70 bg-background px-3 py-2 text-sm"
+                          >
+                            <Checkbox
+                              checked={form.installTargets.includes(target)}
+                              onCheckedChange={(checked) =>
+                                toggleInstallTarget(target, checked === true)
+                              }
+                            />
+                            <span className="min-w-0 flex-1 truncate">
+                              {registry.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {registry.registry_type}
+                            </span>
+                            <RegistryBadge trust={registry.trust} />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <LinkIcon className="h-3 w-3" />
+                  {t("install.workspaceOnly")}{" "}
+                  <Link
+                    href="/settings/registries"
+                    className="text-primary underline-offset-4 hover:underline"
+                  >
+                    {t("install.manageRegistries")}
+                  </Link>
+                </p>
               </div>
             </BlueprintSection>
           )}

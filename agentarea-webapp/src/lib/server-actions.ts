@@ -125,7 +125,9 @@ import {
   sendTaskCommand,
   submitTaskInput,
   updateAgentWallet,
+  updateAllSkills,
   updateClient,
+  updateInstalledSkill,
   updateMCPServerInstance,
   updateOpenAPIConnection,
   updateProject,
@@ -431,6 +433,17 @@ export async function updateSkillAction(
 
 export async function installSkillAction(skillId: string) {
   return await installSkill(skillId);
+}
+
+export async function updateInstalledSkillAction(
+  skillId: string,
+  options: { discardChanges?: boolean } = {}
+) {
+  return await updateInstalledSkill(skillId, options);
+}
+
+export async function updateAllSkillsAction() {
+  return await updateAllSkills();
 }
 
 export async function deleteSkillAction(skillId: string) {

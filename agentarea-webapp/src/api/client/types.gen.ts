@@ -6374,6 +6374,12 @@ export type RegistryCreate = {
    */
   description?: string | null;
   /**
+   * Mode
+   *
+   * 'mirror' copies content at sync; 'upstream' keeps only the index
+   */
+  mode?: "mirror" | "upstream";
+  /**
    * Name
    *
    * Human-readable registry name
@@ -6392,6 +6398,18 @@ export type RegistryCreate = {
    */
   registry_type: string;
   /**
+   * Source Path
+   *
+   * GitHub sources: the folder whose skill folders are indexed
+   */
+  source_path?: string | null;
+  /**
+   * Source Ref
+   *
+   * GitHub sources: branch, tag or commit to read
+   */
+  source_ref?: string | null;
+  /**
    * Source Type
    *
    * Source mode: 'url', 'github', 'api', or platform-managed 'managed'
@@ -6409,6 +6427,12 @@ export type RegistryCreate = {
    * 'auto' or 'manual'
    */
   sync_mode?: string;
+  /**
+   * Trust
+   *
+   * Trust label on every catalog card
+   */
+  trust?: "official" | "verified" | "community" | "private";
 };
 
 /**
@@ -6461,6 +6485,22 @@ export type RegistryItemResponse = {
    */
   registry_id: string;
   /**
+   * Registry Mode
+   */
+  registry_mode?: "mirror" | "upstream" | null;
+  /**
+   * Registry Name
+   */
+  registry_name?: string | null;
+  /**
+   * Registry Scope
+   */
+  registry_scope?: "platform" | "workspace" | null;
+  /**
+   * Registry Trust
+   */
+  registry_trust: "official" | "verified" | "community" | "private";
+  /**
    * Spec
    */
   spec: {
@@ -6497,6 +6537,10 @@ export type RegistryResponse = {
    */
   created_at: string;
   /**
+   * Credentials Secret Id
+   */
+  credentials_secret_id?: string | null;
+  /**
    * Description
    */
   description: string | null;
@@ -6521,6 +6565,10 @@ export type RegistryResponse = {
    */
   last_synced_at: string | null;
   /**
+   * Mode
+   */
+  mode: "mirror" | "upstream";
+  /**
    * Name
    */
   name: string;
@@ -6532,6 +6580,18 @@ export type RegistryResponse = {
    * Registry Type
    */
   registry_type: string;
+  /**
+   * Scope
+   */
+  scope: "platform" | "workspace";
+  /**
+   * Source Path
+   */
+  source_path?: string | null;
+  /**
+   * Source Ref
+   */
+  source_ref?: string | null;
   /**
    * Source Type
    */
@@ -6545,9 +6605,17 @@ export type RegistryResponse = {
    */
   sync_mode: string;
   /**
+   * Trust
+   */
+  trust: "official" | "verified" | "community" | "private";
+  /**
    * Updated At
    */
   updated_at: string;
+  /**
+   * Workspace Id
+   */
+  workspace_id?: string | null;
 };
 
 /**
@@ -6562,6 +6630,10 @@ export type RegistryUpdate = {
    * Is Active
    */
   is_active?: boolean | null;
+  /**
+   * Mode
+   */
+  mode?: "mirror" | "upstream" | null;
   /**
    * Name
    */
@@ -6578,6 +6650,10 @@ export type RegistryUpdate = {
    * Sync Mode
    */
   sync_mode?: string | null;
+  /**
+   * Trust
+   */
+  trust?: "official" | "verified" | "community" | "private" | null;
 };
 
 /**
@@ -7451,6 +7527,10 @@ export type SkillResponse = {
    */
   created_at: string;
   /**
+   * Customized
+   */
+  customized?: boolean;
+  /**
    * Description
    */
   description: string | null;
@@ -7474,6 +7554,22 @@ export type SkillResponse = {
    * Registry Item Id
    */
   registry_item_id?: string | null;
+  /**
+   * Registry Name
+   */
+  registry_name?: string | null;
+  /**
+   * Registry Scope
+   */
+  registry_scope?: "platform" | "workspace" | null;
+  /**
+   * Registry Trust
+   */
+  registry_trust?: "official" | "verified" | "community" | "private" | null;
+  /**
+   * Removed Upstream
+   */
+  removed_upstream?: boolean;
   /**
    * Slug
    */
@@ -7501,6 +7597,18 @@ export type SkillResponse = {
 };
 
 /**
+ * SkillUpdateAllResponse
+ *
+ * One result per installed skill that had an update.
+ */
+export type SkillUpdateAllResponse = {
+  /**
+   * Results
+   */
+  results: Array<SkillUpdateResultResponse>;
+};
+
+/**
  * SkillUpdateRequest
  *
  * Request to update a skill.
@@ -7524,6 +7632,31 @@ export type SkillUpdateRequest = {
    * New name
    */
   name?: string | null;
+};
+
+/**
+ * SkillUpdateResultResponse
+ *
+ * What updating one installed skill did.
+ */
+export type SkillUpdateResultResponse = {
+  /**
+   * Error
+   */
+  error?: string | null;
+  /**
+   * Name
+   */
+  name: string;
+  skill?: SkillResponse | null;
+  /**
+   * Skill Id
+   */
+  skill_id: string;
+  /**
+   * Status
+   */
+  status: "updated" | "up_to_date" | "customized" | "failed";
 };
 
 /**
@@ -9989,6 +10122,120 @@ export type WorkspaceFileListResponse = {
    * True when the workspace holds more than 10000 objects and only the first 10000 are listed.
    */
   truncated?: boolean;
+};
+
+/**
+ * WorkspaceRegistryCreate
+ */
+export type WorkspaceRegistryCreate = {
+  /**
+   * Credentials Secret Id
+   *
+   * A workspace secret holding the token a private source is read with
+   */
+  credentials_secret_id?: string | null;
+  /**
+   * Description
+   */
+  description?: string | null;
+  /**
+   * Mode
+   *
+   * 'mirror' stores every skill's content when the registry syncs, so an install needs no network; 'upstream' fetches it on first install. A source read with credentials is mirrored.
+   */
+  mode?: "mirror" | "upstream";
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Registry Type
+   */
+  registry_type?: "skills" | "agents";
+  /**
+   * Source Path
+   *
+   * GitHub: the folder whose skill folders are indexed; the root if unset
+   */
+  source_path?: string | null;
+  /**
+   * Source Ref
+   *
+   * GitHub: branch, tag or commit; the default branch if unset
+   */
+  source_ref?: string | null;
+  /**
+   * Source Type
+   *
+   * 'url': an index in the platform format; 'github': a repository
+   */
+  source_type: "url" | "github";
+  /**
+   * Source Url
+   *
+   * The index URL, or the repository as owner/repo
+   */
+  source_url: string;
+  /**
+   * Trust
+   */
+  trust?: "private" | "community";
+};
+
+/**
+ * WorkspaceRegistryRemoved
+ */
+export type WorkspaceRegistryRemoved = {
+  /**
+   * Kept Items
+   */
+  kept_items: number;
+  /**
+   * Status
+   */
+  status: "deleted" | "retired";
+};
+
+/**
+ * WorkspaceRegistryUpdate
+ */
+export type WorkspaceRegistryUpdate = {
+  /**
+   * Credentials Secret Id
+   */
+  credentials_secret_id?: string | null;
+  /**
+   * Description
+   */
+  description?: string | null;
+  /**
+   * Is Active
+   */
+  is_active?: boolean | null;
+  /**
+   * Mode
+   */
+  mode?: "mirror" | "upstream" | null;
+  /**
+   * Name
+   */
+  name?: string | null;
+  /**
+   * Source Path
+   */
+  source_path?: string | null;
+  /**
+   * Source Ref
+   */
+  source_ref?: string | null;
+  /**
+   * Source Url
+   */
+  source_url?: string | null;
+  /**
+   * Trust
+   */
+  trust?: "private" | "community" | null;
 };
 
 /**
@@ -17160,6 +17407,10 @@ export type ListRegistriesV1RegistriesGetData = {
      * Registry Type
      */
     registry_type?: string | null;
+    /**
+     * Scope
+     */
+    scope?: "platform" | "workspace" | null;
   };
   url: "/v1/workspaces/{workspace}/registries/";
 };
@@ -18289,6 +18540,33 @@ export type CreateSkillV1SkillsPostResponses = {
 export type CreateSkillV1SkillsPostResponse =
   CreateSkillV1SkillsPostResponses[keyof CreateSkillV1SkillsPostResponses];
 
+export type UpdateAllSkillsV1SkillsUpdateAllPostData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/skills/update-all";
+};
+
+export type UpdateAllSkillsV1SkillsUpdateAllPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateAllSkillsV1SkillsUpdateAllPostError =
+  UpdateAllSkillsV1SkillsUpdateAllPostErrors[keyof UpdateAllSkillsV1SkillsUpdateAllPostErrors];
+
+export type UpdateAllSkillsV1SkillsUpdateAllPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SkillUpdateAllResponse;
+};
+
+export type UpdateAllSkillsV1SkillsUpdateAllPostResponse =
+  UpdateAllSkillsV1SkillsUpdateAllPostResponses[keyof UpdateAllSkillsV1SkillsUpdateAllPostResponses];
+
 export type UploadSkillV1SkillsUploadPostData = {
   body: BodyUploadSkillV1SkillsUploadPost;
   path?: never;
@@ -18690,6 +18968,45 @@ export type RemoveSkillMemberV1SkillsSkillIdMembersChildSkillIdDeleteResponses =
      */
     200: unknown;
   };
+
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostData = {
+  body?: never;
+  path: {
+    /**
+     * Skill Id
+     */
+    skill_id: string;
+  };
+  query?: {
+    /**
+     * Discard Changes
+     *
+     * Update a skill edited in this workspace, discarding the edit
+     */
+    discard_changes?: boolean;
+  };
+  url: "/v1/workspaces/{workspace}/skills/{skill_id}/update";
+};
+
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostError =
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors[keyof UpdateInstalledSkillV1SkillsSkillIdUpdatePostErrors];
+
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses = {
+  /**
+   * Successful Response
+   */
+  200: SkillResponse;
+};
+
+export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponse =
+  UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses[keyof UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses];
 
 export type ListStreamsV1StreamsGetData = {
   body?: never;
@@ -20298,6 +20615,201 @@ export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses = {
 
 export type GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse =
   GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses[keyof GetExecutionTimelineV1TriggersTriggerIdTimelineGetResponses];
+
+export type ListWorkspaceRegistriesV1WorkspaceRegistriesGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/workspace-registries";
+};
+
+export type ListWorkspaceRegistriesV1WorkspaceRegistriesGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListWorkspaceRegistriesV1WorkspaceRegistriesGetError =
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetErrors[keyof ListWorkspaceRegistriesV1WorkspaceRegistriesGetErrors];
+
+export type ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponses = {
+  /**
+   * Response List Workspace Registries V1 Workspace Registries Get
+   *
+   * Successful Response
+   */
+  200: Array<RegistryResponse>;
+};
+
+export type ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponse =
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponses[keyof ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponses];
+
+export type CreateWorkspaceRegistryV1WorkspaceRegistriesPostData = {
+  body: WorkspaceRegistryCreate;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/workspace-registries";
+};
+
+export type CreateWorkspaceRegistryV1WorkspaceRegistriesPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateWorkspaceRegistryV1WorkspaceRegistriesPostError =
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostErrors[keyof CreateWorkspaceRegistryV1WorkspaceRegistriesPostErrors];
+
+export type CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: RegistryResponse;
+};
+
+export type CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponse =
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponses[keyof CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponses];
+
+export type DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Registry Id
+     */
+    registry_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}";
+};
+
+export type DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteError =
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteErrors[keyof DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteErrors];
+
+export type DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: WorkspaceRegistryRemoved;
+  };
+
+export type DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponse =
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponses[keyof DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponses];
+
+export type GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Registry Id
+     */
+    registry_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}";
+};
+
+export type GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetError =
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetErrors[keyof GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetErrors];
+
+export type GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: RegistryResponse;
+};
+
+export type GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponse =
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponses[keyof GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponses];
+
+export type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchData = {
+  body: WorkspaceRegistryUpdate;
+  path: {
+    /**
+     * Registry Id
+     */
+    registry_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}";
+};
+
+export type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchError =
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchErrors[keyof UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchErrors];
+
+export type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: RegistryResponse;
+  };
+
+export type UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponse =
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponses[keyof UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponses];
+
+export type SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostData = {
+  body?: never;
+  path: {
+    /**
+     * Registry Id
+     */
+    registry_id: string;
+  };
+  query?: {
+    /**
+     * Force
+     */
+    force?: boolean;
+  };
+  url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}/sync";
+};
+
+export type SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostErrors =
+  {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+  };
+
+export type SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostError =
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostErrors[keyof SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostErrors];
+
+export type SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: AgentareaApiApiV1RegistriesSyncResponse;
+  };
+
+export type SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponse =
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponses[keyof SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponses];
 
 export type WebhookHealthCheckWebhooksHealthGetData = {
   body?: never;

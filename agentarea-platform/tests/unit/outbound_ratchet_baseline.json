@@ -9,7 +9,7 @@
     "libs/llm/agentarea_llm/application/model_discovery_service.py": 1,
     "libs/llm/agentarea_llm/application/model_service.py": 1,
     "libs/mcp/agentarea_mcp/application/mcp_client.py": 2,
-    "libs/registry/agentarea_registry/application/service.py": 1
+    "libs/registry/agentarea_registry/application/service.py": 2
   },
   "litellm": {
     "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 3,

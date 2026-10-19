@@ -32,6 +32,7 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from pydantic import BaseModel, Field
 
 from agentarea_agents.application.skill_parser import parse_frontmatter
@@ -349,7 +350,9 @@ class SkillsToolset(Toolset):
             if not skill:
                 raise ToolError("Skill not found")
             payload = _skill_summary(skill)
-            payload.update({"source_url": skill.source_url, "content": skill.content})
+            payload.update(
+                {"source_url": skill.source_url, "content": await service.read_skill_md(skill)}
+            )
             return json.dumps(payload, default=str)
 
     @tool_method(display_name="Create skill from files", effect="write", output=SkillCreated)
@@ -764,7 +767,12 @@ class SkillsToolset(Toolset):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
-            files = await service.get_skill_files(UUID(skill_id), include_urls=include_urls)
+            try:
+                files = await service.get_skill_files(
+                    UUID(skill_id), include_urls=include_urls, to_run=True
+                )
+            except CatalogInstallRefusedError as exc:
+                raise ToolError(str(exc)) from exc
             return json.dumps(
                 [
                     {"path": f.path, "size": f.size, **({"url": f.url} if f.url else {})}
@@ -807,15 +815,15 @@ class SkillsToolset(Toolset):
             if as_url:
                 try:
                     url = await service.get_skill_file_url(
-                        UUID(skill_id), path, expires_in=expires_in
+                        UUID(skill_id), path, expires_in=expires_in, to_run=True
                     )
-                except ValueError as exc:
+                except (ValueError, CatalogInstallRefusedError) as exc:
                     raise ToolError(str(exc)) from exc
                 return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
             try:
-                raw = await service.get_skill_file_content(UUID(skill_id), path)
-            except (ValueError, FileNotFoundError) as exc:
+                raw = await service.get_skill_file_content(UUID(skill_id), path, to_run=True)
+            except (ValueError, FileNotFoundError, CatalogInstallRefusedError) as exc:
                 raise ToolError(str(exc)) from exc
             try:
                 text = raw.decode("utf-8")

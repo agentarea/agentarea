@@ -1,15 +1,26 @@
 """Skills API endpoints for managing agent skills."""
 
-from typing import Annotated
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from agentarea_agents.application.skill_parser import SkillFrontmatterError
-from agentarea_agents.application.skill_service import SkillService
+from agentarea_agents.application.skill_service import (
+    SkillCustomizedError,
+    SkillNotFromCatalogError,
+    SkillService,
+    SkillUpdateResult,
+    is_customized,
+)
 from agentarea_agents.domain.skill_models import Skill
+from agentarea_agents.infrastructure.catalog_skill_repository import CatalogProvenance
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubNotFoundError,
     GitHubRateLimitError,
     GitHubSkillImporterError,
+    GitHubSourceGoneError,
+    GitHubTreeMismatchError,
 )
 from agentarea_agents.schemas.skills_dto import (
     SkillCreateFromContent,
@@ -19,15 +30,22 @@ from agentarea_agents.schemas.skills_dto import (
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
-from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires,
+    requires_workspace_admin,
+    unrestricted,
+)
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
+from agentarea_common.exceptions.errors import AppError, NotFoundError
 from agentarea_common.utils.types import utc_isoformat
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from ._access_control_grants import grant_resource_owner
+from .registries import RegistryScope, RegistryTrust
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -99,7 +117,17 @@ class SkillResponse(BaseModel):
     # skill that has not been forked into the workspace yet.
     is_catalog: bool = False
     registry_item_id: str | None = None
+    # The catalog item moved past the version this install is pinned to.
     update_available: bool = False
+    # The workspace edited this installed skill; an update would discard that.
+    customized: bool = False
+    # The registry an installed skill's catalog item comes from (ADR-0044).
+    registry_name: str | None = None
+    registry_scope: RegistryScope | None = None
+    registry_trust: RegistryTrust | None = None
+    # Its source no longer publishes the item (or the registry was retired);
+    # the installed skill keeps working.
+    removed_upstream: bool = False
 
     @classmethod
     def from_skill(cls, skill: Skill) -> "SkillResponse":
@@ -109,6 +137,9 @@ class SkillResponse(BaseModel):
             network_scope = "private"
 
         registry_item_id = getattr(skill, "registry_item_id", None)
+        provenance = getattr(skill, "catalog_provenance", None)
+        if not isinstance(provenance, CatalogProvenance):
+            provenance = None
         return cls(
             id=str(skill.id),
             name=skill.name,
@@ -123,7 +154,38 @@ class SkillResponse(BaseModel):
             is_catalog=bool(getattr(skill, "is_catalog", False)),
             registry_item_id=str(registry_item_id) if registry_item_id else None,
             update_available=bool(getattr(skill, "update_available", False)),
+            customized=is_customized(skill),
+            registry_name=provenance.registry_name if provenance else None,
+            registry_scope=cast(RegistryScope, provenance.registry_scope) if provenance else None,
+            registry_trust=cast(RegistryTrust, provenance.registry_trust) if provenance else None,
+            removed_upstream=bool(provenance and provenance.removed_upstream),
         )
+
+
+class SkillUpdateResultResponse(BaseModel):
+    """What updating one installed skill did."""
+
+    skill_id: str
+    name: str
+    status: Literal["updated", "up_to_date", "customized", "failed"]
+    error: str | None = None
+    skill: SkillResponse | None = None
+
+    @classmethod
+    def from_result(cls, result: SkillUpdateResult) -> "SkillUpdateResultResponse":
+        return cls(
+            skill_id=result.skill_id,
+            name=result.name,
+            status=result.status,
+            error=result.error,
+            skill=SkillResponse.from_skill(result.skill) if result.skill else None,
+        )
+
+
+class SkillUpdateAllResponse(BaseModel):
+    """One result per installed skill that had an update."""
+
+    results: list[SkillUpdateResultResponse]
 
 
 class SkillContentResponse(BaseModel):
@@ -174,6 +236,39 @@ class SkillMemberResponse(BaseModel):
     order: int
     is_required: bool
     dependencies: list[str]
+
+
+@contextmanager
+def _source_errors() -> Iterator[None]:
+    """Answer a failed fetch of a catalog skill's source with what went wrong."""
+    try:
+        yield
+    except GitHubSourceGoneError as e:
+        raise AppError(str(e), status_code=410, code="skill_source_gone") from e
+    except GitHubRateLimitError as e:
+        raise AppError(str(e), status_code=429, code="github_rate_limited") from e
+    except GitHubTreeMismatchError as e:
+        raise AppError(str(e), status_code=409, code="skill_tree_mismatch") from e
+    except GitHubSkillImporterError as e:
+        raise AppError(str(e), status_code=502, code="skill_source_unreachable") from e
+
+
+@contextmanager
+def _catalog_fetch_errors() -> Iterator[None]:
+    """Answer a failed install or update of a catalog skill with what went wrong."""
+    try:
+        with _source_errors():
+            yield
+    except SkillCustomizedError as e:
+        raise AppError(str(e), status_code=409, code="skill_customized") from e
+    except SkillNotFromCatalogError as e:
+        raise AppError(str(e), status_code=409, code="skill_not_from_catalog") from e
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail="Skill not found") from e
+    except SkillFrontmatterError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ============================================================================
@@ -329,7 +424,41 @@ async def get_skill(
         # A tenant row; the catalog projection beside it is platform data and
         # carries no ownership tuples to check.
         await require_permission("read", "skill", str(skill_id), user_context.user_id)
+        await skill_service.annotate_installs([skill])
     return SkillResponse.from_skill(skill)
+
+
+@router.post(
+    "/update-all",
+    response_model=SkillUpdateAllResponse,
+    dependencies=[requires_workspace_admin()],
+)
+async def update_all_skills(skill_service: SkillServiceDep):
+    """Update every installed catalog skill that has an update and was not edited here."""
+    results = await skill_service.update_all_from_catalog()
+    return SkillUpdateAllResponse(
+        results=[SkillUpdateResultResponse.from_result(r) for r in results]
+    )
+
+
+@router.post(
+    "/{skill_id}/update",
+    response_model=SkillResponse,
+    dependencies=[requires_workspace_admin()],
+)
+async def update_installed_skill(
+    skill_id: UUID,
+    skill_service: SkillServiceDep,
+    discard_changes: bool = Query(
+        False, description="Update a skill edited in this workspace, discarding the edit"
+    ),
+):
+    """Move an installed catalog skill to its catalog item's current version."""
+    with _catalog_fetch_errors():
+        result = await skill_service.update_from_catalog(skill_id, discard_changes=discard_changes)
+    if result.skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return SkillResponse.from_skill(result.skill)
 
 
 @router.post(
@@ -343,8 +472,12 @@ async def install_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
 ):
-    """Add a built-in catalog skill to the workspace."""
-    skill = await skill_service.install_catalog_skill(skill_id)
+    """Add a built-in catalog skill to the workspace: fetch its package and pin it.
+
+    A policy rule refusing the item's registry answers 403.
+    """
+    with _catalog_fetch_errors():
+        skill = await skill_service.install_catalog_skill(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
@@ -376,11 +509,9 @@ async def get_skill_content(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    return SkillContentResponse(
-        id=str(skill.id),
-        name=skill.name,
-        content=skill.content or "",
-    )
+    with _source_errors():
+        content = await skill_service.read_skill_md(skill)
+    return SkillContentResponse(id=str(skill.id), name=skill.name, content=content)
 
 
 @router.get(
@@ -397,7 +528,8 @@ async def list_skill_files(
 ):
     """List all files in a skill package."""
     try:
-        files = await skill_service.get_skill_files(skill_id, include_urls=include_urls)
+        with _source_errors():
+            files = await skill_service.get_skill_files(skill_id, include_urls=include_urls)
         return SkillFilesResponse(
             skill_id=str(skill_id),
             files=[SkillFileResponse(path=f.path, size=f.size, url=f.url) for f in files],
@@ -424,7 +556,8 @@ async def get_skill_file(
     Set redirect=false to get the presigned URL in the response body.
     """
     try:
-        url = await skill_service.get_skill_file_url(skill_id, path)
+        with _source_errors():
+            url = await skill_service.get_skill_file_url(skill_id, path)
 
         if redirect:
             return RedirectResponse(url=url)
