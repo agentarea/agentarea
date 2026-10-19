@@ -61,6 +61,7 @@ import {
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
+import { useCatalogFetchError } from "@/hooks/useCatalogFetchError";
 import {
   apiErrorMessage,
   formatApiError,
@@ -1433,6 +1434,7 @@ function DetailView({
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   const tBundle = useTranslations("BundleInstall");
   const tConnected = useTranslations("CatalogPage.connected");
+  const catalogFetchError = useCatalogFetchError();
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
   const [configuring, setConfiguring] = useState(false);
@@ -1479,7 +1481,7 @@ function DetailView({
       if (result.error || !result.data) {
         setState({
           phase: "error",
-          message: apiErrorMessage(result, tBundle("agentInstallFailed")),
+          message: catalogFetchError(result, tBundle("agentInstallFailed")),
         });
         return;
       }
@@ -1860,6 +1862,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
   );
   const tBundle = useTranslations("BundleInstall");
   const tCommon = useTranslations("Common");
+  const catalogFetchError = useCatalogFetchError();
 
   // Lazy-load the workspace agents the first time the picker opens.
   useEffect(() => {
@@ -1893,7 +1896,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     try {
       const installed = await installCatalogSkillAction(skillId);
       if (installed.error || !installed.data) {
-        setMessage(apiErrorMessage(installed, tBundle("skillInstallFailed")));
+        setMessage(catalogFetchError(installed, tBundle("skillInstallFailed")));
         setPhase("error");
         return;
       }
@@ -1913,7 +1916,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     try {
       const attached = await addCatalogSkillToAgentAction(skillId, agent.id);
       if (attached.error || !attached.data) {
-        setMessage(apiErrorMessage(attached, label));
+        setMessage(catalogFetchError(attached, label));
         setPhase("error");
         return;
       }

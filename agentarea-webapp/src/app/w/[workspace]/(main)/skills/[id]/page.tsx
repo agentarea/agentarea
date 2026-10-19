@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import FormError from "@/components/FormError";
+import { useCatalogFetchError } from "@/hooks/useCatalogFetchError";
 import type {
   Skill,
   SkillContent,
@@ -97,6 +98,7 @@ export default function SkillDetailPage() {
   const tDetail = useTranslations("SkillsPage.detail");
   const tChildren = useTranslations("SkillsPage.children");
   const tCommon = useTranslations("Common");
+  const catalogFetchError = useCatalogFetchError();
   const skillId = params.id as string;
 
   const [skill, setSkill] = useState<Skill | null>(null);
@@ -347,7 +349,7 @@ export default function SkillDetailPage() {
       const installed = result.data as Skill | undefined;
 
       if (result.error || !installed?.id) {
-        setActionError(apiErrorMessage(result, t("error.installSkill")));
+        setActionError(catalogFetchError(result, t("error.installSkill")));
         return;
       }
 

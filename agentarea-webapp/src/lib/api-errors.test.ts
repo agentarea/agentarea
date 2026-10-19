@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { apiErrorMessage } from "./api-errors";
+import { apiErrorMessage, catalogFetchFailure } from "./api-errors";
 
 /**
  * The generated client hands back the parsed error *body*, not a string.
@@ -57,5 +57,23 @@ describe("apiErrorMessage", () => {
 
   it("passes a plain string error through", () => {
     expect(apiErrorMessage({ error: "boom" }, "Failed")).toBe("Failed: boom");
+  });
+});
+
+describe("catalogFetchFailure", () => {
+  it("names the refusals an install or update can meet", () => {
+    expect(catalogFetchFailure({ error: {}, status: 410 })).toBe(
+      "removedUpstream"
+    );
+    expect(catalogFetchFailure({ error: {}, status: 409 })).toBe("moved");
+    expect(catalogFetchFailure({ error: {}, status: 429 })).toBe("rateLimited");
+    expect(catalogFetchFailure({ error: {}, status: 403 })).toBe(
+      "refusedByPolicy"
+    );
+  });
+
+  it("leaves any other failure to the generic message", () => {
+    expect(catalogFetchFailure({ error: {}, status: 500 })).toBeNull();
+    expect(catalogFetchFailure({ error: "offline" })).toBeNull();
   });
 });

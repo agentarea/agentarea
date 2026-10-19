@@ -3568,5 +3568,11 @@
       "community": "Community",
       "private": "Private"
     }
+  },
+  "CatalogFetchErrors": {
+    "removedUpstream": "Removed upstream",
+    "moved": "Moved or changed upstream",
+    "rateLimited": "Rate limited, try again later",
+    "refusedByPolicy": "Refused by policy"
   }
 }
