@@ -104,7 +104,12 @@ class TestDecision:
 class TestValidation:
     @pytest.mark.parametrize(
         "target",
-        [f"registry:{REGISTRY}", "registry_trust:official", "registry_trust:private"],
+        [
+            f"registry:{REGISTRY}",
+            "registry:github",
+            "registry_trust:official",
+            "registry_trust:private",
+        ],
     )
     @pytest.mark.parametrize("effect", [PolicyEffect.ALLOW, PolicyEffect.DENY])
     def test_install_rules_are_enforceable(self, target, effect):

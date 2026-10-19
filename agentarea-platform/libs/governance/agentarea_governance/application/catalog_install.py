@@ -35,7 +35,8 @@ class CatalogInstallGuard:
     """The one enforcement point for turning a catalog item into a workspace's own.
 
     Every path that does so (install, attaching a catalog skill to an agent,
-    editing a catalog item, which forks it) asks here before anything is written.
+    editing a catalog item, which forks it, importing a skill straight from a
+    GitHub URL) asks here before anything is written.
     """
 
     def __init__(self, session: AsyncSession, user_context: UserContext):

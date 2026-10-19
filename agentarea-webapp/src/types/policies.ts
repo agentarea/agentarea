@@ -119,8 +119,9 @@ export function isCapTarget(target: string): target is CapTarget {
 // --- catalog install targets (ADR-0044) ----------------------------------
 
 // Allow/deny rules on these decide which registries a workspace (or a user)
-// may install catalog items from: `registry:<id>` names one registry,
-// `registry_trust:<level>` every registry of a trust level.
+// may install catalog items from: `registry:<id>` names one registry (or
+// `registry:github`, a direct GitHub import), `registry_trust:<level>` every
+// registry of a trust level.
 export type RegistryTrustLevel = RegistryResponse["trust"];
 
 export const REGISTRY_TRUST_LEVELS: readonly RegistryTrustLevel[] =
@@ -137,6 +138,12 @@ export function registryTarget(registryId: string): string {
 export function registryTrustTarget(trust: RegistryTrustLevel): string {
   return `registry_trust:${trust}`;
 }
+
+// A skill imported straight from a GitHub URL passed through no registry; install
+// rules name that source as this pseudo-registry, of trust "community"
+// (GITHUB_IMPORT_REGISTRY_ID in agentarea_common.constants).
+export const GITHUB_IMPORT_REGISTRY_ID = "github";
+export const GITHUB_IMPORT_TRUST: RegistryTrustLevel = "community";
 
 export function parseInstallTarget(target: string): InstallTarget | null {
   const [kind, value] = target.split(":", 2);
