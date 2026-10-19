@@ -36,6 +36,7 @@ import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import HeaderTabs from "@/components/HeaderTabs";
+import { RegistryBadge } from "@/components/RegistryBadge";
 import Table, { type Column } from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1128,6 +1129,16 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       ) : null,
   },
   {
+    header: "Source",
+    accessor: "source",
+    headerClassName: "hidden w-[200px] lg:table-cell",
+    cellClassName: "hidden lg:table-cell",
+    render: (_, e) =>
+      e?.source ? (
+        <RegistryBadge name={e.source.name} trust={e.source.trust} />
+      ) : null,
+  },
+  {
     header: "Category",
     accessor: "category",
     headerClassName: "hidden w-[200px] sm:table-cell",
@@ -1361,10 +1372,17 @@ function CatalogCard({
           {entry.category && <CategoryBadge category={entry.category} />}
         </div>
         <p className="table-description line-clamp-2">{entry.description}</p>
-        {(entry.protocol ||
+        {(entry.source ||
+          entry.protocol ||
           entry.meta.length > 0 ||
           entry.connections.length > 0) && (
           <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.source && (
+              <RegistryBadge
+                name={entry.source.name}
+                trust={entry.source.trust}
+              />
+            )}
             {entry.connections.length > 0 && (
               <ConnectedCount count={entry.connections.length} />
             )}
@@ -1507,6 +1525,12 @@ function DetailView({
                   <BadgeCheck className="h-3 w-3" />
                   Verified
                 </Badge>
+              )}
+              {entry.source && (
+                <RegistryBadge
+                  name={entry.source.name}
+                  trust={entry.source.trust}
+                />
               )}
               {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
               {entry.category && <CategoryBadge category={entry.category} />}

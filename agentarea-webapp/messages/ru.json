@@ -3560,5 +3560,13 @@
   "ToolPart": {
     "blockedByPolicy": "Заблокировано политикой",
     "rejectedByApprover": "Отклонено согласующим"
+  },
+  "Registries": {
+    "trust": {
+      "official": "Официальный",
+      "verified": "Проверенный",
+      "community": "Сообщество",
+      "private": "Приватный"
+    }
   }
 }

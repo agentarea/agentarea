@@ -23,6 +23,7 @@ const entry = (id: string): CatalogEntry => ({
   verified: false,
   pricing: null,
   connections: [],
+  source: null,
   spec: {},
 });
 

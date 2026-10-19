@@ -3560,5 +3560,13 @@
   "ToolPart": {
     "blockedByPolicy": "Blocked by policy",
     "rejectedByApprover": "Rejected by approver"
+  },
+  "Registries": {
+    "trust": {
+      "official": "Official",
+      "verified": "Verified",
+      "community": "Community",
+      "private": "Private"
+    }
   }
 }
