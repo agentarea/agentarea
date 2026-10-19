@@ -15,6 +15,15 @@ const MAX_CHIPS_PER_DAY = 2;
 
 const noopSubscribe = () => () => {};
 
+/** A run is either a cron trigger firing or a task booked for later. */
+function runHref(run: ScheduledRun) {
+  return run.task_id ? `/tasks/${run.task_id}` : `/triggers/${run.trigger_id}`;
+}
+
+function runKey(run: ScheduledRun) {
+  return `${run.task_id ?? run.trigger_id}-${run.fires_at}`;
+}
+
 /** Days are the viewer's local days, so the grid renders only in the browser. */
 function useIsClient() {
   return useSyncExternalStore(
@@ -40,7 +49,7 @@ function RunChip({
   const name = run.agent_name ? `${run.title} · ${run.agent_name}` : run.title;
   return (
     <Link
-      href={`/triggers/${run.trigger_id}`}
+      href={runHref(run)}
       className="flex min-w-0 items-center gap-1.5 rounded-md border border-zinc-200 bg-background px-1.5 py-0.5 text-[11.5px] leading-[18px] transition-colors hover:bg-muted dark:border-zinc-700"
       title={name}
       aria-label={`${date} ${time(run.fires_at)} ${name}`}
@@ -133,7 +142,7 @@ function DayCell({
       </div>
       {shown.map((run) => (
         <RunChip
-          key={`${run.trigger_id}-${run.fires_at}`}
+          key={runKey(run)}
           run={run}
           time={time}
           date={date}
@@ -279,7 +288,7 @@ function CalendarBody({
             <div className="flex flex-col gap-1">
               {day.items.map((run) => (
                 <RunChip
-                  key={`${run.trigger_id}-${run.fires_at}`}
+                  key={runKey(run)}
                   run={run}
                   time={time}
                   date={dayLabel(day.date)}

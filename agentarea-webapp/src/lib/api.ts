@@ -57,6 +57,7 @@ import type {
   SkillCreateRequest,
   SkillFileResponse,
   SkillResponse,
+  ScheduleTaskCreate,
   SkillUpdateRequest,
   SourceCreate,
   TaskCreate,
@@ -207,6 +208,20 @@ export const createAgentTask = async (agentId: string, task: TaskCreate) => {
       body: task,
     });
   return { data, error };
+};
+
+export const scheduleAgentTask = async (
+  agentId: string,
+  task: ScheduleTaskCreate
+) => {
+  const result = await sdk.scheduleTaskForAgentV1AgentsAgentIdTasksSchedulePost(
+    {
+      client: serverClient,
+      path: { agent_id: agentId },
+      body: task,
+    }
+  );
+  return withStatus(result);
 };
 
 export const getAgentTask = async (agentId: string, taskId: string) => {

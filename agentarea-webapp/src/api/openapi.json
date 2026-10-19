@@ -11745,6 +11745,7 @@
         "type": "object"
       },
       "ScheduledRun": {
+        "description": "One upcoming run: a cron trigger firing or a task booked for later.\n\nExactly one of `trigger_id` and `task_id` is set.",
         "properties": {
           "agent_id": {
             "format": "uuid",
@@ -11767,19 +11768,37 @@
             "title": "Fires At",
             "type": "string"
           },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
           "title": {
             "title": "Title",
             "type": "string"
           },
           "trigger_id": {
-            "format": "uuid",
-            "title": "Trigger Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Id"
           }
         },
         "required": [
           "fires_at",
-          "trigger_id",
           "agent_id",
           "title"
         ],

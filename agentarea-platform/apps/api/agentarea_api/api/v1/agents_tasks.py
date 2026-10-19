@@ -1914,7 +1914,13 @@ async def cancel_agent_task(
 
     try:
         execution_id = task_execution_id(task)
-        success = await workflow_task_service.cancel_task(execution_id)
+        # A run booked for later has not started, so no workflow code will ever
+        # record the cancellation: the task manager cancels and records it. A
+        # started run records its own cancellation.
+        if task.status == "scheduled":
+            success = await task_service.cancel_task(task_id)
+        else:
+            success = await workflow_task_service.cancel_task(execution_id)
 
         if success:
             return {"status": "cancelled", "task_id": str(task_id), "execution_id": execution_id}

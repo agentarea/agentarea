@@ -2624,13 +2624,18 @@ export const zSandboxListResponse = z.object({
 
 /**
  * ScheduledRun
+ *
+ * One upcoming run: a cron trigger firing or a task booked for later.
+ *
+ * Exactly one of `trigger_id` and `task_id` is set.
  */
 export const zScheduledRun = z.object({
   agent_id: z.string().uuid(),
   agent_name: z.string().nullish(),
   fires_at: z.string().datetime(),
+  task_id: z.string().uuid().nullish(),
   title: z.string(),
-  trigger_id: z.string().uuid(),
+  trigger_id: z.string().uuid().nullish(),
 });
 
 /**

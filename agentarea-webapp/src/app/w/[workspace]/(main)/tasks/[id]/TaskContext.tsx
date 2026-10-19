@@ -34,6 +34,8 @@ interface TaskData {
   description?: string;
   status: string;
   created_at?: string;
+  /** Set on a one-shot run booked for a later moment. */
+  scheduled_at?: string;
   execution_id?: string;
   agent_name?: string;
   agent_description?: string;
@@ -92,6 +94,7 @@ function parseTaskData(raw: unknown): TaskData | null {
     description: r.description as string | undefined,
     status: r.status as string,
     created_at: r.created_at as string | undefined,
+    scheduled_at: r.scheduled_at ? String(r.scheduled_at) : undefined,
     execution_id: r.execution_id ? String(r.execution_id) : undefined,
     agent_name: r.agent_name as string | undefined,
     agent_description: r.agent_description

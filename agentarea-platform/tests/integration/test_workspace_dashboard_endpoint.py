@@ -99,6 +99,9 @@ async def seeded(session_factory):
     t13 blocked now-3m               → blockers.blocked_24h and recent_tasks
     t14 blocked now-30h              → recent_tasks only, outside 24h window
     t15 completed, unreadable cost   → recent_tasks with cost_usd None
+    t16 scheduled in 2 days          → schedule.runs, by task
+    t17 scheduled past the horizon, t19 scheduled in another workspace → none
+    t18 scheduled then cancelled     → recent_tasks only, never a run
 
     Cron triggers: daily 09:00 UTC → schedule.runs; every 5 minutes →
     schedule.frequent; inactive, unparseable, and other-workspace ones → none.
@@ -124,6 +127,9 @@ async def seeded(session_factory):
     t15_id = uuid.uuid4()
     daily_trigger_id = uuid.uuid4()
     frequent_trigger_id = uuid.uuid4()
+    t16_id = uuid.uuid4()
+    t16_fires_at = (now + timedelta(days=2)).replace(microsecond=0)
+    t18_id = uuid.uuid4()
 
     async with session_factory() as session:
         session.add(
@@ -345,6 +351,43 @@ async def seeded(session_factory):
             )
         )
 
+        def scheduled_task(
+            task_id: uuid.UUID,
+            description: str,
+            scheduled_at: datetime,
+            *,
+            status: str = "scheduled",
+            task_agent_id: uuid.UUID = agent_id,
+            workspace_id: str = WORKSPACE_ID,
+        ) -> TaskORM:
+            return TaskORM(
+                id=task_id,
+                agent_id=task_agent_id,
+                workspace_id=workspace_id,
+                created_by=USER_ID,
+                description=description,
+                status=status,
+                scheduled_at=scheduled_at,
+                updated_at=now - timedelta(hours=40),
+            )
+
+        session.add(scheduled_task(t16_id, "Monthly accounting report", t16_fires_at))
+        session.add(
+            scheduled_task(uuid.uuid4(), "Next quarter review", now + timedelta(days=60))
+        )
+        session.add(
+            scheduled_task(t18_id, "Called off", now + timedelta(days=1), status="cancelled")
+        )
+        session.add(
+            scheduled_task(
+                uuid.uuid4(),
+                "Scheduled elsewhere",
+                now + timedelta(days=1),
+                task_agent_id=other_workspace_agent_id,
+                workspace_id="other-workspace-999",
+            )
+        )
+
         def cron_trigger(
             name: str,
             cron: str,
@@ -404,6 +447,9 @@ async def seeded(session_factory):
         "t9_id": t9_id,
         "daily_trigger_id": daily_trigger_id,
         "frequent_trigger_id": frequent_trigger_id,
+        "t16_id": t16_id,
+        "t16_fires_at": t16_fires_at,
+        "t18_id": t18_id,
     }
 
 
@@ -690,6 +736,7 @@ class TestTasks:
             seeded["t13_id"],
             seeded["t14_id"],
             seeded["t15_id"],
+            seeded["t18_id"],
         }
         # t3 finished now, t13 3 minutes ago; the rest depends on the hour the
         # suite runs, so pin only the head.
@@ -755,7 +802,7 @@ class TestSchedule:
         self, session_factory, user_context, seeded
     ):
         result = await _call_dashboard(session_factory, user_context)
-        titles = {r.title for r in result.schedule.runs} | {
+        titles = {r.title for r in result.schedule.runs if r.trigger_id is not None} | {
             f.title for f in result.schedule.frequent
         }
         assert titles == {"Morning report", "Inbox sweep"}
@@ -764,6 +811,23 @@ class TestSchedule:
         result = await _call_dashboard(session_factory, user_context)
         times = [r.fires_at for r in result.schedule.runs]
         assert times == sorted(times)
+
+    async def test_a_task_scheduled_inside_the_horizon_is_a_run(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        run = next(r for r in result.schedule.runs if r.task_id == seeded["t16_id"])
+        assert run.trigger_id is None
+        assert run.title == "Monthly accounting report"
+        assert run.agent_name == "Dashboard Test Agent"
+        assert run.fires_at.replace(tzinfo=None) == seeded["t16_fires_at"]
+
+    async def test_only_pending_scheduled_tasks_in_the_horizon_are_runs(
+        self, session_factory, user_context, seeded
+    ):
+        result = await _call_dashboard(session_factory, user_context)
+        task_runs = [r.task_id for r in result.schedule.runs if r.task_id is not None]
+        assert task_runs == [seeded["t16_id"]]
 
 
 class TestWalletExhaustedBlockers:

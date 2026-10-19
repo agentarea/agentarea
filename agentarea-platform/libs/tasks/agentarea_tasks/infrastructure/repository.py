@@ -298,6 +298,24 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         task_orms = result.scalars().all()
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
+    async def list_scheduled_until(
+        self, statuses: Sequence[str], until: datetime
+    ) -> list[tuple[UUID, UUID, str | None, datetime]]:
+        """Runs booked for a later moment that fire no later than ``until``.
+
+        Each row is (task id, agent id, description, scheduled_at), soonest first.
+        """
+        stmt = (
+            select(TaskORM.id, TaskORM.agent_id, TaskORM.description, TaskORM.scheduled_at)
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status.in_(statuses))
+            .where(TaskORM.scheduled_at.isnot(None))
+            .where(TaskORM.scheduled_at <= until)
+            .order_by(TaskORM.scheduled_at)
+        )
+        result = await self.session.execute(stmt)
+        return [(row.id, row.agent_id, row.description, row.scheduled_at) for row in result.all()]
+
     async def find_active_in_session(
         self, agent_id: UUID, trigger_id: str, session_key: str, limit: int = 5
     ) -> list[Task]:

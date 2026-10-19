@@ -79,6 +79,13 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         self.state.task_id = str(request.task_id)
         self.state.user_id = request.user_id
         self.state.workspace_id = request.workspace_id  # Add workspace_id from request
+        # The principal every activity runs as. Set before the first await: a stop
+        # can land there (a run booked for later is woken by it), and the closing
+        # status update still has to say whose task it is.
+        self.state.user_context_data = {
+            "user_id": self.state.user_id,
+            "workspace_id": self.state.workspace_id,
+        }
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         # Single source of truth: the loop-level PEP (BudgetTracker) enforces the
@@ -153,13 +160,6 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
     async def _initialize_agent_config(self) -> None:
         """Initialize agent configuration and available tools."""
         workflow.logger.info("Initializing agent configuration")
-
-        # Prepare user context data for activities
-        # Use actual user_id and workspace_id from the request
-        self.state.user_context_data = {
-            "user_id": self.state.user_id,
-            "workspace_id": self.state.workspace_id,
-        }
 
         # Build agent config using Pydantic request model
         agent_config_request = AgentConfigRequest(

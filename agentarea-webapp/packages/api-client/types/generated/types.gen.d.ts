@@ -6422,6 +6422,10 @@ export type ScheduleTaskCreate = {
 };
 /**
  * ScheduledRun
+ *
+ * One upcoming run: a cron trigger firing or a task booked for later.
+ *
+ * Exactly one of `trigger_id` and `task_id` is set.
  */
 export type ScheduledRun = {
     /**
@@ -6437,13 +6441,17 @@ export type ScheduledRun = {
      */
     fires_at: string;
     /**
+     * Task Id
+     */
+    task_id?: string | null;
+    /**
      * Title
      */
     title: string;
     /**
      * Trigger Id
      */
-    trigger_id: string;
+    trigger_id?: string | null;
 };
 /**
  * ScopedSpendCap

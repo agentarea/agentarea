@@ -1258,7 +1258,13 @@
       "project": "Проект",
       "taskPolicy": "Политика задачи",
       "noProject": "Без проекта",
-      "defaultPolicy": "Политика по умолчанию"
+      "defaultPolicy": "Политика по умолчанию",
+      "when": "Когда",
+      "runNow": "Сейчас",
+      "runAt": "Запустить в",
+      "runNowAction": "Запустить сейчас",
+      "done": "Готово",
+      "scheduleTask": "Запланировать задачу"
     },
     "Messages": {
       "toolCall": "Использую инструмент",
@@ -1279,6 +1285,7 @@
       "resumeFailed": "Не удалось возобновить задачу",
       "stopFailed": "Не удалось остановить задачу",
       "retryFailed": "Не удалось повторить задачу",
+      "scheduleFailed": "Не удалось запланировать задачу",
       "errorLoadingConversation": "Ошибка загрузки истории"
     },
     "ActivityGroup": {
@@ -1416,6 +1423,7 @@
       "retry": "Повторить",
       "retryFailed": "Не удалось повторить задачу"
     },
+    "scheduledRunNotice": "Запустится {when}. Агент возьмёт задачу в это время; до тех пор её можно отменить.",
     "sourceKind": {
       "manualRun": "Ручной запуск",
       "delegation": "Делегировано",
@@ -1760,7 +1768,8 @@
       "waitingInput": "Ждёт ответа",
       "waitingFollowUp": "Ждёт продолжения",
       "finished": "Агент закончил работу",
-      "other": "Запуск: {status}"
+      "other": "Запуск: {status}",
+      "scheduled": "Ждёт времени запуска"
     },
     "keyMetrics": "Ключевые метрики",
     "budget": "Бюджет",
@@ -1843,6 +1852,7 @@
     "changeModel": "Сменить",
     "executionInProgress": "Выполняется",
     "executionAwaitingFollowUp": "Ждёт продолжения",
+    "startsAt": "Запуск",
     "builtinTools": "Встроенные инструменты",
     "toolFailed": "с ошибкой: {count}"
   },

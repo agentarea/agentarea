@@ -8,8 +8,10 @@ import FormError from "@/components/FormError";
 import type { TaskResourceRef } from "@/components/ResourcePicker/TaskResourceAttach";
 import { TaskRetryButton } from "@/components/TaskRetryButton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { scheduleTask } from "@/components/actions";
 import { useMentions } from "@/hooks/useMentions";
 import { useTaskActions } from "@/hooks/useTaskActions";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { canonicalType, type Part } from "@/lib/events/contract";
 import { normalizeSSEEvent } from "@/lib/events/normalize";
@@ -49,6 +51,7 @@ import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
 import { createTaskWithAttachments } from "./utils/createTaskWithAttachments";
 import { deliverTaskMessage } from "./utils/deliverTaskMessage";
 import { openTaskEventStream } from "./utils/openTaskEventStream";
+import { uploadAttachments } from "./utils/uploadAttachments";
 import {
   adoptCreatedTaskId,
   routeComposerMessage,
@@ -352,6 +355,8 @@ export default function FullChat({
   >(null);
   const [taskMcps, setTaskMcps] = React.useState<TaskResourceRef[]>([]);
   const [taskSkills, setTaskSkills] = React.useState<TaskResourceRef[]>([]);
+  const [scheduledAt, setScheduledAt] = React.useState<Date | null>(null);
+  const router = useWorkspaceRouter();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const cardContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -603,6 +608,10 @@ export default function FullChat({
         if (route.resumes && currentTaskId) await followNewRun(currentTaskId);
         return;
       }
+      if (scheduledAt) {
+        await scheduleNewTask(scheduledAt);
+        return;
+      }
       streamReader = await createTaskStream();
 
       const previousReader = activeStreamRef.current;
@@ -628,35 +637,59 @@ export default function FullChat({
       }
     }
 
+    function newTaskBody(attachments: string[]) {
+      return {
+        description:
+          plainContent || "Use the attached files to complete the task.",
+        project_id: selectedProjectId,
+        task_policy: taskPolicy,
+        parameters: {
+          context: {
+            project_id: selectedProjectId,
+            task_policy_rule_id: selectedTaskPolicy?.id,
+            task_policy_rule_name: selectedTaskPolicy?.name,
+          },
+          task_type: "chat",
+          interaction: { channel: "web" },
+          session_id: `chat-${Date.now()}`,
+          // Additive for this run only. The activity resolves these against
+          // the agent's own tools and refuses the run if one has gone away,
+          // so a stale pick fails loudly instead of silently running short.
+          // Only id and name travel: the logo is for the chip, not the run.
+          ...(taskMcps.length > 0 ? { mcps: taskMcps.map(toRunRef) } : {}),
+          ...(taskSkills.length > 0
+            ? { skills: taskSkills.map(toRunRef) }
+            : {}),
+        },
+        ...(attachments.length > 0 ? { attachments } : {}),
+      };
+    }
+
+    // Nothing streams until the run starts, so the task page takes over.
+    async function scheduleNewTask(at: Date) {
+      const attachments = await uploadAttachments(filesToUpload);
+      const result = await scheduleTask(agent.id, {
+        ...newTaskBody(attachments),
+        scheduled_at: at.toISOString(),
+      });
+      if (result.error || !result.data) {
+        setComposerError(apiErrorMessage(result, t("errors.scheduleFailed")));
+        return;
+      }
+      setInput("");
+      setInputDisplay("");
+      clearFiles();
+      setScheduledAt(null);
+      router.push(`/tasks/${result.data.id}`);
+    }
+
     async function createTaskStream() {
       const response = await createTaskWithAttachments({
         files: filesToUpload,
         request: (attachments) => {
           const taskData = {
-            description:
-              plainContent || "Use the attached files to complete the task.",
-            project_id: selectedProjectId,
-            task_policy: taskPolicy,
-            parameters: {
-              context: {
-                project_id: selectedProjectId,
-                task_policy_rule_id: selectedTaskPolicy?.id,
-                task_policy_rule_name: selectedTaskPolicy?.name,
-              },
-              task_type: "chat",
-              interaction: { channel: "web" },
-              session_id: `chat-${Date.now()}`,
-              // Additive for this run only. The activity resolves these against
-              // the agent's own tools and refuses the run if one has gone away,
-              // so a stale pick fails loudly instead of silently running short.
-              // Only id and name travel: the logo is for the chip, not the run.
-              ...(taskMcps.length > 0 ? { mcps: taskMcps.map(toRunRef) } : {}),
-              ...(taskSkills.length > 0
-                ? { skills: taskSkills.map(toRunRef) }
-                : {}),
-            },
+            ...newTaskBody(attachments),
             enable_agent_communication: true,
-            ...(attachments.length > 0 ? { attachments } : {}),
           };
 
           return fetch(`/api/agents/${agent.id}/tasks/create`, {
@@ -1060,6 +1093,8 @@ export default function FullChat({
             taskSkills={taskSkills}
             onTaskMcpsChange={setTaskMcps}
             onTaskSkillsChange={setTaskSkills}
+            scheduledAt={scheduledAt}
+            onScheduledAtChange={currentTaskId ? undefined : setScheduledAt}
             onStop={isLoading && currentTaskId ? handleStop : undefined}
             isStopping={isStopping}
             onResume={currentTaskId ? handleResume : undefined}

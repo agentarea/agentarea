@@ -404,6 +404,41 @@ def _assert_stop_shown_first_and_execution_ended_last(settled_type: str) -> None
 
 
 @pytest.mark.asyncio
+async def test_stopping_a_run_booked_for_later_records_it_cancelled_as_its_user():
+    """A stop wakes a delayed run before it has initialised anything.
+
+    The closing status update must still carry the principal it runs as, or the
+    activity refuses it and the run fails instead of ending cancelled.
+    """
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"stop-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                request = _request(uuid.uuid4())
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    request,
+                    id=f"task-{request.task_id}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(days=1),
+                    start_delay=timedelta(hours=6),
+                )
+                await handle.cancel()
+                with pytest.raises(WorkflowFailureError) as failure:
+                    await handle.result()
+
+    assert isinstance(failure.value.cause, CancelledError)
+    assert _model_windows == []
+    [closing] = _status_requests
+    assert closing.status == "cancelled"
+    assert closing.user_context_data == {
+        "user_id": "stop-user",
+        "workspace_id": "stop-workspace",
+    }
+
+
+@pytest.mark.asyncio
 async def test_stop_cancels_the_running_tool_and_records_it_stopped():
     _tool_behaviour["on_stop"] = "stop"
     _llm_script.append(_tool_turn)

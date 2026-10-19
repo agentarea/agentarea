@@ -1258,7 +1258,13 @@
       "project": "Project",
       "taskPolicy": "Task policy",
       "noProject": "No project",
-      "defaultPolicy": "Default policy"
+      "defaultPolicy": "Default policy",
+      "when": "When",
+      "runNow": "Now",
+      "runAt": "Run at",
+      "runNowAction": "Run now",
+      "done": "Done",
+      "scheduleTask": "Schedule task"
     },
     "Messages": {
       "toolCall": "Tool Call",
@@ -1279,6 +1285,7 @@
       "resumeFailed": "Couldn't resume the task",
       "stopFailed": "Couldn't stop the task",
       "retryFailed": "Couldn't retry the task",
+      "scheduleFailed": "Could not schedule the task",
       "errorLoadingConversation": "Error Loading Conversation"
     },
     "ActivityGroup": {
@@ -1416,6 +1423,7 @@
       "retry": "Retry",
       "retryFailed": "Could not retry the task"
     },
+    "scheduledRunNotice": "Starts {when}. The agent picks the task up then; until that moment you can still cancel it.",
     "sourceKind": {
       "manualRun": "Manual run",
       "delegation": "Delegated",
@@ -1760,7 +1768,8 @@
       "waitingInput": "Waiting for a reply",
       "waitingFollowUp": "Waiting for a follow-up",
       "finished": "The agent has stopped",
-      "other": "Run: {status}"
+      "other": "Run: {status}",
+      "scheduled": "Waits for its start time"
     },
     "keyMetrics": "Key metrics",
     "budget": "Budget",
@@ -1843,6 +1852,7 @@
     "changeModel": "Change",
     "executionInProgress": "In progress",
     "executionAwaitingFollowUp": "Awaiting follow-up",
+    "startsAt": "Starts",
     "builtinTools": "Built-in tools",
     "toolFailed": "{count} failed"
   },
