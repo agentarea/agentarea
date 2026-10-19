@@ -10,6 +10,7 @@ import importlib.util
 import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
@@ -239,3 +240,42 @@ async def test_the_backfill_labels_the_community_shards(session):
         ("system-skills-community-07", "platform", "upstream", "community", "community"),
         ("system-skills-curated", "platform", "mirror", "official", "official"),
     }
+
+
+async def test_a_secret_a_registry_reads_with_cannot_be_deleted(session):
+    secret_id = uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO encrypted_secrets (id, workspace_id, secret_name, encrypted_value, "
+            "created_by, created_at, updated_at) VALUES (:id, :ws, :name, 'x', 'u', now(), now())"
+        ),
+        {"id": secret_id, "ws": ACME.workspace_id, "name": f"{PREFIX}token-{secret_id.hex[:8]}"},
+    )
+    session.add(
+        Registry(
+            name=f"{PREFIX}private-repo",
+            registry_type="skills",
+            source_type="github",
+            source_url="acme/private-skills",
+            scope="workspace",
+            workspace_id=ACME.workspace_id,
+            mode="upstream",
+            trust="private",
+            credentials_secret_ref=secret_id,
+        )
+    )
+    await session.commit()
+    try:
+        with pytest.raises(IntegrityError, match="credentials_secret_ref"):
+            await session.execute(
+                text("DELETE FROM encrypted_secrets WHERE id = :id"), {"id": secret_id}
+            )
+        await session.rollback()
+    finally:
+        await session.execute(
+            text("DELETE FROM registries WHERE credentials_secret_ref = :id"), {"id": secret_id}
+        )
+        await session.execute(
+            text("DELETE FROM encrypted_secrets WHERE id = :id"), {"id": secret_id}
+        )
+        await session.commit()
