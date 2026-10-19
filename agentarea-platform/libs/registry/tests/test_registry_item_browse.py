@@ -521,6 +521,21 @@ class TestInSource:
         _, total = await item_repo.browse("skills")
         assert total == 2
 
+    async def test_an_unchanged_item_is_not_rewritten(self, db_session, item_repo):
+        reg = await _registry(db_session, "src")
+        keep = await _item(item_repo, reg, "keep", "keep")
+        gone = await _item(item_repo, reg, "gone", "gone")
+        await item_repo.mark_in_source(reg.id, {"keep"})
+        await db_session.refresh(keep)
+        await db_session.refresh(gone)
+        stamps = (keep.updated_at, gone.updated_at)
+
+        await item_repo.mark_in_source(reg.id, {"keep"})
+
+        await db_session.refresh(keep)
+        await db_session.refresh(gone)
+        assert (keep.updated_at, gone.updated_at) == stamps
+
     async def test_reactivating_the_registry_keeps_dropped_items_hidden(
         self, db_session, item_repo
     ):

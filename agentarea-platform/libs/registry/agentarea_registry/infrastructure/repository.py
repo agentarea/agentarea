@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import case, false, func, select, update
+from sqlalchemy import case, false, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -220,13 +220,17 @@ class RegistryItemRepository:
         if registry is None:
             raise ValueError(f"Registry {registry_id} not found")
         present = RegistryItem.external_id.in_(external_ids) if external_ids else false()
+        active = present if registry.is_active else false()
         await self.session.execute(
             update(RegistryItem)
-            .where(RegistryItem.registry_id == registry_id)
-            .values(
-                in_source=present,
-                registry_active=present if registry.is_active else false(),
+            .where(
+                RegistryItem.registry_id == registry_id,
+                or_(
+                    RegistryItem.in_source.is_distinct_from(present),
+                    RegistryItem.registry_active.is_distinct_from(active),
+                ),
             )
+            .values(in_source=present, registry_active=active)
         )
         await self.session.commit()
         return (
