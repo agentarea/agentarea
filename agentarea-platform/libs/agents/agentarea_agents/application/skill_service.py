@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Literal
@@ -14,6 +15,11 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
+from agentarea_governance.application.catalog_install import (
+    CatalogInstallGuard,
+    CatalogInstallRefusedError,
+)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_packages import SKILL_MANIFEST, SkillPackages
 from agentarea_agents.application.skill_parser import SkillParser
@@ -25,11 +31,13 @@ from agentarea_agents.infrastructure.catalog_skill_repository import (
 )
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
+    GitHubSourceGoneError,
     extract_skill_package,
 )
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
 from agentarea_agents.infrastructure.skill_storage_service import (
     SkillStorageService,
+    is_catalog_package,
     tenant_package_prefix,
 )
 from agentarea_agents.schemas.skills_dto import (
@@ -78,6 +86,27 @@ class SkillUpdateResult:
 
 
 @dataclass
+class SkillRepinResult:
+    """What re-installing one pre-package catalog install from its item did."""
+
+    skill_id: str
+    name: str
+    status: Literal[
+        "repinned",
+        "would_repin",
+        "pinned",
+        "edited",
+        "unverified",
+        "gone",
+        "refused",
+        "not_installed",
+        "failed",
+    ]
+    skill: Skill | None = None
+    error: str | None = None
+
+
+@dataclass
 class SkillFileInfo:
     """Information about a file in a skill package."""
 
@@ -117,6 +146,7 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
     skill.is_catalog = True
     skill.update_available = False
     skill.catalog_spec = spec
+    skill.catalog_workspace_id = item.registry_workspace_id
     return skill
 
 
@@ -170,12 +200,23 @@ class SkillService:
         user_context: UserContext,
         storage_service: SkillStorageService | None = None,
         github_importer: GitHubSkillImporter | None = None,
+        install_guard: CatalogInstallGuard | None = None,
     ):
         self.repository_factory = repository_factory
         self.user_context = user_context
         self._storage_service = storage_service
         self._github_importer = github_importer
+        self._install_guard = install_guard
         self._parser = SkillParser()
+
+    @property
+    def install_guard(self) -> CatalogInstallGuard:
+        """The policy check before a catalog item's content becomes this workspace's."""
+        if self._install_guard is None:
+            self._install_guard = CatalogInstallGuard(
+                self.repository_factory.session, self.user_context
+            )
+        return self._install_guard
 
     @property
     def storage_service(self) -> SkillStorageService:
@@ -626,7 +667,7 @@ class SkillService:
             from_registry=from_registry,
             ids=ids,
         )
-        await self.flag_outdated_forks(tenant_page)
+        await self.annotate_installs(tenant_page)
 
         # Catalog items are registry-backed by definition, so an explicit
         # "not from a registry" filter excludes the whole catalog half.
@@ -644,12 +685,16 @@ class SkillService:
         page = [*tenant_page, *(_project_catalog_summary(row) for row in catalog_rows)]
         return page, tenant_total + catalog_total
 
-    async def flag_outdated_forks(self, skills: list[Skill]) -> None:
-        """Mark forked skills on this page whose catalog item moved on."""
+    async def annotate_installs(self, skills: list[Skill]) -> None:
+        """Mark installed skills on this page whose catalog item moved on, and say
+        which registry each came from and whether its source still has it.
+        """
         forked = {str(s.registry_item_id) for s in skills if getattr(s, "registry_item_id", None)}
         if not forked:
             return
-        versions = await self._get_catalog_repository().versions_for(forked)
+        catalog = self._get_catalog_repository()
+        versions = await catalog.versions_for(forked)
+        provenance = await catalog.provenance_for(forked)
         for skill in skills:
             item_id = getattr(skill, "registry_item_id", None)
             if item_id is None:
@@ -657,6 +702,7 @@ class SkillService:
             catalog_version, installed_version = versions.get(str(item_id), (None, None))
             if catalog_version and catalog_version != installed_version:
                 skill.update_available = True
+            skill.catalog_provenance = provenance.get(str(item_id))
 
     async def get_with_catalog(self, skill_id: UUID | str) -> Skill | None:
         """Get a tenant skill by id, falling back to a catalog projection.
@@ -690,9 +736,17 @@ class SkillService:
 
         Skill members are not copied here: the catalog spec carries metadata
         only, and member edits on a forked bundle go through the member API.
+
+        Every way a catalog skill becomes the workspace's own comes through
+        here, so this is where the install policy is asked.
         """
+        await self.install_guard.require_allowed(
+            registry_id=item.registry_id, trust=item.registry_trust
+        )
         spec = item.spec or {}
-        package = await self.packages.store_catalog_item(spec)
+        package = await self.packages.store_catalog_item(
+            spec, workspace_id=item.registry_workspace_id
+        )
         repo = self._get_repository()
         skill = await repo.create(
             name=item.name,
@@ -805,11 +859,24 @@ class SkillService:
             )
         if not customized and item.version == item.installed_version:
             return SkillUpdateResult(str(skill_id), skill.name, "up_to_date", skill)
-        own_prefix = skill.s3_path if customized else None
-        package = await self.packages.store_catalog_item(item.spec)
-        await self._get_catalog_repository().mark_installed(item.id, str(skill_id), item.version)
+        updated = await self._pin_to_catalog(skill, item)
+        return SkillUpdateResult(str(skill_id), updated.name, "updated", updated)
+
+    async def _pin_to_catalog(self, skill: Skill, item: CatalogSkillItem) -> Skill:
+        """Point ``skill`` at its item's current package and move the pin there.
+
+        The workspace's own copy, if it had one, is removed afterwards.
+        """
+        await self.install_guard.require_allowed(
+            registry_id=item.registry_id, trust=item.registry_trust
+        )
+        own_prefix = skill.s3_path if is_customized(skill) else None
+        package = await self.packages.store_catalog_item(
+            item.spec, workspace_id=item.registry_workspace_id
+        )
+        await self._get_catalog_repository().mark_installed(item.id, str(skill.id), item.version)
         updated = await self._get_repository().update(
-            str(skill_id),
+            str(skill.id),
             s3_path=package.s3_path,
             content=None,
             source_url=package.source_url or (item.spec or {}).get("source_url"),
@@ -817,24 +884,86 @@ class SkillService:
         if updated is None:
             raise NotFoundError("Skill not found")
         if own_prefix:
-            # The update is done; a copy left behind only costs storage.
+            # The pin has moved; a copy left behind only costs storage.
             try:
                 await self.storage_service.delete_package(own_prefix)
             except Exception:
                 logger.warning(
                     "Failed to remove the discarded copy %s of skill %s",
                     own_prefix,
-                    skill_id,
+                    skill.id,
                     exc_info=True,
                 )
         logger.info(
-            "Updated skill %s to catalog item %s version %s (%s)",
-            skill_id,
+            "Pinned skill %s to catalog item %s version %s (%s)",
+            skill.id,
             item.id,
             item.version,
             package.s3_path,
         )
-        return SkillUpdateResult(str(skill_id), updated.name, "updated", updated)
+        return updated
+
+    async def repin_from_catalog(
+        self, skill_id: UUID | str, *, dry_run: bool = False
+    ) -> SkillRepinResult:
+        """Re-install a catalog install made before packages existed, if nobody edited it.
+
+        Such an install copied its item's body (the stub an index carried)
+        into the row, so it reads as edited. When the body is still exactly
+        what the item gave it, it is pinned to the item's current package in
+        place: same id, same agents. An edited body, or one the item no longer
+        carries to compare with, is left alone; a gone item is reported.
+
+        Raises:
+            NotFoundError: No such skill in this workspace.
+        """
+        found = await self.get(skill_id)
+        if found is None:
+            raise NotFoundError("Skill not found")
+        skill: Skill = found
+
+        def result(status: Any, error: str | None = None) -> SkillRepinResult:
+            return SkillRepinResult(str(skill.id), skill.name, status, skill, error)
+
+        if skill.registry_item_id is None:
+            return result("not_installed")
+        if is_catalog_package(skill.s3_path):
+            return result("pinned")
+        item = await self._get_catalog_repository().get_item(str(skill.registry_item_id))
+        if item is None:
+            return result("gone", "its catalog item is no longer listed")
+        as_installed = await self._holds_what_its_item_gave(skill, item)
+        if as_installed is None:
+            return result("unverified", "its catalog item no longer carries the body it gave")
+        if not as_installed:
+            return result("edited")
+        if dry_run:
+            return result("would_repin")
+        try:
+            skill = await self._pin_to_catalog(skill, item)
+        except CatalogInstallRefusedError as e:
+            return result("refused", str(e))
+        except GitHubSourceGoneError as e:
+            return result("gone", str(e))
+        return result("repinned")
+
+    async def _holds_what_its_item_gave(self, skill: Skill, item: CatalogSkillItem) -> bool | None:
+        """Whether a pre-package install's body is what its item gave it; ``None``
+        when the item no longer carries that body to compare with.
+        """
+        spec = item.spec or {}
+        if skill.s3_path and skill.s3_path == spec.get("s3_path"):
+            # Still reading the package it was installed with; never copied.
+            return True
+        body = spec.get("content")
+        if not isinstance(body, str) or not body:
+            return None
+        if skill.s3_path is None:
+            return skill.content == body
+        if skill.s3_path != tenant_package_prefix(str(skill.workspace_id), str(skill.id)):
+            return False
+        files = await self.storage_service.read_package(skill.s3_path)
+        return files == {SKILL_MANIFEST: body.encode("utf-8")}
 
     async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
         """Resolve a skill id to an editable tenant row, forking if needed.
@@ -1211,6 +1340,43 @@ class SkillService:
         return await self.storage_service.get_file_content(
             await self.packages.resolve_s3_path(skill), path
         )
+
+
+async def repin_all_catalog_installs(
+    session_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]],
+    storage: SkillStorageService,
+    *,
+    dry_run: bool = False,
+) -> list[tuple[str, SkillRepinResult]]:
+    """Repin every pre-package catalog install nobody edited; ``(workspace, result)`` each.
+
+    Each skill is handled in its own session under its own workspace (the
+    workspace's install policy applies), so one failure (logged, reported
+    ``failed``) leaves the rest to go on and the row as it was.
+    """
+    from agentarea_common.base.tenant_scope import workspace_scope
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID
+
+    from agentarea_agents.infrastructure.skill_repository import list_catalog_installs
+
+    async with session_factory() as session:
+        rows = await list_catalog_installs(session)
+    results: list[tuple[str, SkillRepinResult]] = []
+    for skill_id, workspace_id in rows:
+        context = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=workspace_id)
+        try:
+            with workspace_scope(workspace_id):
+                async with session_factory() as session:
+                    service = SkillService(
+                        RepositoryFactory(session, context), context, storage_service=storage
+                    )
+                    result = await service.repin_from_catalog(skill_id, dry_run=dry_run)
+                    await session.commit()
+        except Exception as exc:
+            logger.exception("Failed to repin skill %s of workspace %s", skill_id, workspace_id)
+            result = SkillRepinResult(str(skill_id), "", "failed", error=str(exc))
+        results.append((workspace_id, result))
+    return results
 
 
 def _topological_sort(members: list[SkillMember]) -> list[UUID]:

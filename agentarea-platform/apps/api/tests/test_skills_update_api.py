@@ -12,14 +12,18 @@ from agentarea_agents.application.skill_service import (
     SkillService,
     SkillUpdateResult,
 )
-from agentarea_agents.infrastructure.github_skill_importer import GitHubSourceGoneError
-from agentarea_api.api.v1._catalog_install import get_catalog_install_policy
+from agentarea_agents.infrastructure.catalog_skill_repository import CatalogProvenance
+from agentarea_agents.infrastructure.github_skill_importer import (
+    GitHubSourceGoneError,
+    GitHubTreeMismatchError,
+)
 from agentarea_api.api.v1.skills import get_skill_service, router
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import register_singleton
+from agentarea_common.exceptions import register_error_handlers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -48,6 +52,7 @@ def _skill(**over):
         "updated_at": NOW,
         "is_catalog": False,
         "update_available": False,
+        "catalog_provenance": None,
     }
     return SimpleNamespace(**{**base, **over})
 
@@ -56,12 +61,9 @@ def _client(context: UserContext) -> tuple[TestClient, AsyncMock]:
     service = AsyncMock(spec=SkillService)
     service.user_context = context
     app = FastAPI()
+    register_error_handlers(app)
     app.include_router(router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_skill_service] = lambda: service
-    # The install policy has its own suite (test_catalog_install_policy_api).
-    app.dependency_overrides[get_catalog_install_policy] = lambda: SimpleNamespace(
-        require_allowed=AsyncMock(return_value=None)
-    )
     app.dependency_overrides[get_user_context] = lambda: context
     return TestClient(app), service
 
@@ -108,6 +110,7 @@ def test_updating_a_customized_skill_conflicts_unless_its_changes_are_discarded(
     refused = client.post(f"/v1/workspaces/acme/skills/{SKILL_ID}/update")
 
     assert refused.status_code == 409
+    assert (refused.json()["code"], refused.json()["detail"]) == ("skill_customized", "edited")
     service.update_from_catalog.side_effect = None
     service.update_from_catalog.return_value = SkillUpdateResult(
         str(SKILL_ID), "pdf", "updated", _skill()
@@ -117,11 +120,21 @@ def test_updating_a_customized_skill_conflicts_unless_its_changes_are_discarded(
     service.update_from_catalog.assert_awaited_with(SKILL_ID, discard_changes=True)
 
 
-def test_a_skill_not_from_the_catalog_conflicts():
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (SkillNotFromCatalogError("not installed"), "skill_not_from_catalog"),
+        (GitHubTreeMismatchError("o/r/pdf is another tree"), "skill_tree_mismatch"),
+    ],
+)
+def test_each_update_conflict_says_which_one_it_is(error, code):
     client, service = _client(_admin())
-    service.update_from_catalog.side_effect = SkillNotFromCatalogError("not installed")
+    service.update_from_catalog.side_effect = error
 
-    assert client.post(f"/v1/workspaces/acme/skills/{SKILL_ID}/update").status_code == 409
+    response = client.post(f"/v1/workspaces/acme/skills/{SKILL_ID}/update")
+
+    assert response.status_code == 409
+    assert (response.json()["code"], response.json()["detail"]) == (code, str(error))
 
 
 def test_a_skill_removed_upstream_is_gone_not_a_server_error():
@@ -134,6 +147,7 @@ def test_a_skill_removed_upstream_is_gone_not_a_server_error():
 
     assert response.status_code == 410
     assert "removed upstream" in response.json()["detail"]
+    assert response.json()["code"] == "skill_source_gone"
 
 
 def test_installing_a_skill_removed_upstream_is_gone():
@@ -167,9 +181,18 @@ def test_update_all_reports_every_skill():
 
 def test_a_skill_response_says_whether_the_workspace_edited_it():
     client, service = _client(_member())
-    customized = _skill(s3_path=f"skills/ws-acme/{SKILL_ID}/", update_available=True)
+    customized = _skill(
+        s3_path=f"skills/ws-acme/{SKILL_ID}/",
+        update_available=True,
+        catalog_provenance=CatalogProvenance(
+            registry_name="acme-skills",
+            registry_scope="workspace",
+            registry_trust="private",
+            removed_upstream=True,
+        ),
+    )
     service.get_with_catalog.return_value = customized
-    service.flag_outdated_forks = AsyncMock()
+    service.annotate_installs = AsyncMock()
 
     from agentarea_common.auth import permission
 
@@ -179,9 +202,15 @@ def test_a_skill_response_says_whether_the_workspace_edited_it():
         response = client.get(f"/v1/workspaces/acme/skills/{SKILL_ID}")
 
     assert response.status_code == 200, response.text
-    assert response.json()["customized"] is True
-    assert response.json()["update_available"] is True
-    service.flag_outdated_forks.assert_awaited_once_with([customized])
+    body = response.json()
+    assert (body["customized"], body["update_available"]) == (True, True)
+    assert (body["registry_name"], body["registry_scope"], body["registry_trust"]) == (
+        "acme-skills",
+        "workspace",
+        "private",
+    )
+    assert body["removed_upstream"] is True
+    service.annotate_installs.assert_awaited_once_with([customized])
 
 
 @pytest.mark.parametrize(

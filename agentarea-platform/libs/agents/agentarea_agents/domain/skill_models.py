@@ -77,6 +77,24 @@ class Skill(BaseModel, WorkspaceScopedMixin):
         object.__setattr__(self, "_catalog_spec", value)
 
     @property
+    def catalog_workspace_id(self) -> str | None:
+        """The owner of the workspace registry a projection's item is from, if any."""
+        return getattr(self, "_catalog_workspace_id", None)
+
+    @catalog_workspace_id.setter
+    def catalog_workspace_id(self, value: str | None) -> None:
+        object.__setattr__(self, "_catalog_workspace_id", value)
+
+    @property
+    def catalog_provenance(self) -> Any:
+        """The registry an installed skill's item comes from (a ``CatalogProvenance``)."""
+        return getattr(self, "_catalog_provenance", None)
+
+    @catalog_provenance.setter
+    def catalog_provenance(self, value: Any) -> None:
+        object.__setattr__(self, "_catalog_provenance", value)
+
+    @property
     def update_available(self) -> bool:
         return bool(getattr(self, "_update_available", False))
 

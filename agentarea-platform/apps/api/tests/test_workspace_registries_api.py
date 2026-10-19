@@ -127,7 +127,7 @@ async def test_an_admin_creates_a_registry_for_their_workspace(client, caller):
     assert (body["scope"], body["workspace_id"], body["mode"], body["trust"]) == (
         "workspace",
         "acme",
-        "upstream",
+        "mirror",
         "private",
     )
 
@@ -205,3 +205,24 @@ async def test_credentials_are_held_by_reference(client, caller, secrets):
     assert body["credentials_secret_id"] == str(secret_id)
     secrets.get_for_use.assert_awaited_once_with(secret_id)
     secrets.add_reference.assert_awaited_once_with(secret_id, "registry", body["id"], "credentials")
+
+
+async def test_a_public_source_may_be_read_upstream(client, caller):
+    response = await _create(client, caller, mode="upstream", trust="community")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["mode"] == "upstream"
+
+
+async def test_a_source_read_with_credentials_must_be_mirrored(client, caller, secrets):
+    secret_id = uuid4()
+    secrets.get_for_use.return_value = SimpleNamespace(id=secret_id)
+
+    upstream = await _create(client, caller, mode="upstream", credentials_secret_id=str(secret_id))
+    created = (await _create(client, caller, credentials_secret_id=str(secret_id))).json()
+    switched = await client.patch(_path(ADMIN, f"/{created['id']}"), json={"mode": "upstream"})
+
+    assert upstream.status_code == 400
+    assert "credentials" in upstream.json()["detail"]
+    assert created["mode"] == "mirror"
+    assert switched.status_code == 400

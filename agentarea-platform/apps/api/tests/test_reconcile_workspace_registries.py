@@ -2,7 +2,8 @@
 
 Each is synced as its own workspace (the tenant scope and the repositories'
 context are the owner's, so its credentials resolve from that workspace's
-secrets), one failing does not stop the rest, and the run reports it.
+secrets) with a store for a mirror registry's content; one failing does not
+stop the rest, and the run reports it.
 """
 
 from contextlib import asynccontextmanager
@@ -40,9 +41,12 @@ async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch):
             return [acme, globex]
 
     class _RegistryService:
-        def __init__(self, registry_repo, *_args, credentials_resolver=None, **_kwargs) -> None:
+        def __init__(
+            self, registry_repo, *_args, credentials_resolver=None, content_mirror=None, **_kwargs
+        ) -> None:
             self.context = registry_repo.user_context
             assert credentials_resolver is not None
+            assert content_mirror is not None
 
         async def sync_registry(self, registry_id, force=False):
             if registry_id == globex.id:

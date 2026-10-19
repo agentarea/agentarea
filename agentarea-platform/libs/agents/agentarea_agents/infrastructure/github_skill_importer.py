@@ -164,6 +164,9 @@ class GitHubSkillImporter:
         """
         self.github_token = github_token
         self._transport = transport
+        # A commit's tree never changes: every folder of one commit (a mirror
+        # sync of a repository) costs one API call, not one per folder.
+        self._commit_trees: dict[str, Any] = {}
 
     async def download_folder(
         self, repo: str, path: str, *, ref: str | None, tree_sha: str | None
@@ -206,7 +209,10 @@ class GitHubSkillImporter:
         ) as client:
             try:
                 commit = await self._resolve_commit(client, api, ref)
-                tree = await self._api_json(client, f"{api}/git/trees/{commit}?recursive=1")
+                tree_url = f"{api}/git/trees/{commit}?recursive=1"
+                tree = self._commit_trees.get(tree_url)
+                if tree is None:
+                    tree = self._commit_trees[tree_url] = await self._api_json(client, tree_url)
             except GitHubNotFoundError as e:
                 raise GitHubSourceGoneError(
                     f"The skill was removed upstream: {repo} is not on GitHub any more"

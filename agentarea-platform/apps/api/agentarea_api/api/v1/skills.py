@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from agentarea_agents.application.skill_parser import SkillFrontmatterError
@@ -14,6 +14,7 @@ from agentarea_agents.application.skill_service import (
     is_customized,
 )
 from agentarea_agents.domain.skill_models import Skill
+from agentarea_agents.infrastructure.catalog_skill_repository import CatalogProvenance
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubNotFoundError,
     GitHubRateLimitError,
@@ -37,14 +38,14 @@ from agentarea_common.auth.route_authz import (
 )
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
-from agentarea_common.exceptions.errors import NotFoundError
+from agentarea_common.exceptions.errors import AppError, NotFoundError
 from agentarea_common.utils.types import utc_isoformat
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from ._access_control_grants import grant_resource_owner
-from ._catalog_install import CatalogInstallPolicyDep
+from .registries import RegistryScope, RegistryTrust
 
 router = APIRouter(prefix="/skills", tags=["skills"])
 
@@ -120,6 +121,13 @@ class SkillResponse(BaseModel):
     update_available: bool = False
     # The workspace edited this installed skill; an update would discard that.
     customized: bool = False
+    # The registry an installed skill's catalog item comes from (ADR-0044).
+    registry_name: str | None = None
+    registry_scope: RegistryScope | None = None
+    registry_trust: RegistryTrust | None = None
+    # Its source no longer publishes the item (or the registry was retired);
+    # the installed skill keeps working.
+    removed_upstream: bool = False
 
     @classmethod
     def from_skill(cls, skill: Skill) -> "SkillResponse":
@@ -129,6 +137,9 @@ class SkillResponse(BaseModel):
             network_scope = "private"
 
         registry_item_id = getattr(skill, "registry_item_id", None)
+        provenance = getattr(skill, "catalog_provenance", None)
+        if not isinstance(provenance, CatalogProvenance):
+            provenance = None
         return cls(
             id=str(skill.id),
             name=skill.name,
@@ -144,6 +155,10 @@ class SkillResponse(BaseModel):
             registry_item_id=str(registry_item_id) if registry_item_id else None,
             update_available=bool(getattr(skill, "update_available", False)),
             customized=is_customized(skill),
+            registry_name=provenance.registry_name if provenance else None,
+            registry_scope=cast(RegistryScope, provenance.registry_scope) if provenance else None,
+            registry_trust=cast(RegistryTrust, provenance.registry_trust) if provenance else None,
+            removed_upstream=bool(provenance and provenance.removed_upstream),
         )
 
 
@@ -229,13 +244,13 @@ def _source_errors() -> Iterator[None]:
     try:
         yield
     except GitHubSourceGoneError as e:
-        raise HTTPException(status_code=410, detail=str(e)) from e
+        raise AppError(str(e), status_code=410, code="skill_source_gone") from e
     except GitHubRateLimitError as e:
-        raise HTTPException(status_code=429, detail=str(e)) from e
+        raise AppError(str(e), status_code=429, code="github_rate_limited") from e
     except GitHubTreeMismatchError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise AppError(str(e), status_code=409, code="skill_tree_mismatch") from e
     except GitHubSkillImporterError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        raise AppError(str(e), status_code=502, code="skill_source_unreachable") from e
 
 
 @contextmanager
@@ -245,9 +260,9 @@ def _catalog_fetch_errors() -> Iterator[None]:
         with _source_errors():
             yield
     except SkillCustomizedError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise AppError(str(e), status_code=409, code="skill_customized") from e
     except SkillNotFromCatalogError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+        raise AppError(str(e), status_code=409, code="skill_not_from_catalog") from e
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail="Skill not found") from e
     except SkillFrontmatterError as e:
@@ -409,7 +424,7 @@ async def get_skill(
         # A tenant row; the catalog projection beside it is platform data and
         # carries no ownership tuples to check.
         await require_permission("read", "skill", str(skill_id), user_context.user_id)
-        await skill_service.flag_outdated_forks([skill])
+        await skill_service.annotate_installs([skill])
     return SkillResponse.from_skill(skill)
 
 
@@ -456,10 +471,11 @@ async def update_installed_skill(
 async def install_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
-    install_policy: CatalogInstallPolicyDep,
 ):
-    """Add a built-in catalog skill to the workspace: fetch its package and pin it."""
-    await install_policy.require_allowed(skill_id)
+    """Add a built-in catalog skill to the workspace: fetch its package and pin it.
+
+    A policy rule refusing the item's registry answers 403.
+    """
     with _catalog_fetch_errors():
         skill = await skill_service.install_catalog_skill(skill_id)
     if not skill:

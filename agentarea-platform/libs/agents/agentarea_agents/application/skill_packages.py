@@ -3,7 +3,9 @@
 Every skill body is a package in object storage. A tenant skill points at its
 package by ``s3_path``; a catalog item's package is built from what the index
 carries (a GitHub pointer, an inline body, or a legacy package) and stored once
-under the digest of its files. Catalog packages are immutable, so their files
+under the digest of its files, when its registry syncs if the registry
+mirrors, else on first use. A workspace registry's packages stay in that
+workspace's area. Catalog packages are immutable, so their files
 are cached in-process by ``s3_path`` and never invalidated.
 
 A tenant row that still holds its body in ``skills.content`` (written before
@@ -20,19 +22,24 @@ from collections import OrderedDict
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill
-from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
+from agentarea_agents.infrastructure.github_skill_importer import (
+    GitHubFolder,
+    GitHubRateLimitError,
+    GitHubSkillImporter,
+)
 from agentarea_agents.infrastructure.skill_repository import (
     SkillRepository,
     list_pre_package_skills,
 )
 from agentarea_agents.infrastructure.skill_storage_service import (
     SkillStorageService,
+    catalog_area,
     is_catalog_package,
 )
 
@@ -43,7 +50,7 @@ CATALOG_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 _catalog_files: OrderedDict[str, dict[str, bytes]] = OrderedDict()
 _catalog_bytes = 0
-_github_trees: dict[str, str] = {}
+_github_trees: dict[tuple[str | None, str], str] = {}
 
 
 def _cache_get(s3_path: str) -> dict[str, bytes] | None:
@@ -73,6 +80,12 @@ def clear_package_cache() -> None:
     _catalog_bytes = 0
 
 
+class FolderSource(Protocol):
+    async def download_folder(
+        self, repo: str, path: str, *, ref: str | None, tree_sha: str | None
+    ) -> GitHubFolder: ...
+
+
 @dataclass(frozen=True)
 class CatalogPackage:
     """Where a catalog item's package was stored, and the source it was read from."""
@@ -87,7 +100,7 @@ class SkillPackages:
     def __init__(
         self,
         storage: SkillStorageService,
-        github_importer: GitHubSkillImporter,
+        github_importer: FolderSource,
         repository: SkillRepository | None,
     ):
         self._storage = storage
@@ -131,7 +144,10 @@ class SkillPackages:
         if skill.s3_path:
             return skill.s3_path
         if skill.is_catalog:
-            return (await self.store_catalog_item(skill.catalog_spec)).s3_path
+            workspace_id = skill.catalog_workspace_id
+            return (
+                await self.store_catalog_item(skill.catalog_spec, workspace_id=workspace_id)
+            ).s3_path
         if skill.content is not None:
             return await self.move_body_to_package(skill)
         raise ValueError(f"Skill {skill.id} has neither a package nor a body")
@@ -156,42 +172,65 @@ class SkillPackages:
         )
         return s3_path
 
-    async def store_catalog_item(self, spec: dict[str, Any] | None) -> CatalogPackage:
+    async def store_catalog_item(
+        self, spec: dict[str, Any] | None, *, workspace_id: str | None = None
+    ) -> CatalogPackage:
         """Build a catalog item's package from its index entry and store it by digest.
 
-        A GitHub pointer is downloaded at its pinned commit (verified against
-        its tree SHA); an inline body becomes a single SKILL.md; a legacy
-        package is copied. The package must have a SKILL.md that parses.
+        A mirrored item's package was stored when its registry synced and is
+        used as is. Otherwise a GitHub pointer is downloaded at its pinned
+        commit (verified against its tree SHA); an inline body becomes a single
+        SKILL.md; a legacy package is copied. The package must have a SKILL.md
+        that parses. ``workspace_id`` is the owner of a workspace registry's
+        item, whose package stays in that workspace's area.
         """
         spec = spec or {}
+        mirrored = spec.get("package")
+        if isinstance(mirrored, dict):
+            s3_path = str(mirrored.get("s3_path") or "")
+            if not (
+                s3_path.startswith(f"{catalog_area(workspace_id)}/") and is_catalog_package(s3_path)
+            ):
+                raise ValueError(
+                    f"Catalog skill's mirrored package {s3_path!r} is outside its registry's store"
+                )
+            return CatalogPackage(s3_path, mirrored.get("source_url") or spec.get("source_url"))
         source = spec.get("source")
         if isinstance(source, dict) and source.get("type") == "github":
-            return await self._store_github_source(source)
+            return await self._store_github_source(source, workspace_id)
         if isinstance(spec.get("content"), str) and spec["content"]:
             files = {SKILL_MANIFEST: spec["content"].encode("utf-8")}
-            return CatalogPackage(await self._store_checked(files), spec.get("source_url"))
+            return CatalogPackage(
+                await self._store_checked(files, workspace_id), spec.get("source_url")
+            )
         if spec.get("s3_path"):
             files = await self._storage.read_package(spec["s3_path"])
-            return CatalogPackage(await self._store_checked(files), spec.get("source_url"))
+            return CatalogPackage(
+                await self._store_checked(files, workspace_id), spec.get("source_url")
+            )
         raise ValueError("Catalog skill carries neither a source, a body nor a package")
 
-    async def _store_github_source(self, source: dict[str, Any]) -> CatalogPackage:
+    async def _store_github_source(
+        self, source: dict[str, Any], workspace_id: str | None
+    ) -> CatalogPackage:
         repo, path = str(source["repo"]), str(source.get("path") or "").strip("/")
         tree_sha = source.get("tree_sha")
         if tree_sha:
-            s3_path = _github_trees.get(tree_sha) or await self._storage.get_github_tree_package(
-                tree_sha
-            )
+            s3_path = _github_trees.get(
+                (workspace_id, tree_sha)
+            ) or await self._storage.get_github_tree_package(tree_sha, workspace_id=workspace_id)
             if s3_path:
-                _github_trees[tree_sha] = s3_path
+                _github_trees[(workspace_id, tree_sha)] = s3_path
                 ref = source.get("ref")
                 return CatalogPackage(s3_path, _github_url(repo, path, ref) if ref else None)
         folder = await self._github.download_folder(
             repo, path, ref=source.get("ref"), tree_sha=tree_sha
         )
-        s3_path = await self._store_checked(folder.files)
-        await self._storage.put_github_tree_package(folder.tree_sha, s3_path)
-        _github_trees[folder.tree_sha] = s3_path
+        s3_path = await self._store_checked(folder.files, workspace_id)
+        await self._storage.put_github_tree_package(
+            folder.tree_sha, s3_path, workspace_id=workspace_id
+        )
+        _github_trees[(workspace_id, folder.tree_sha)] = s3_path
         logger.info(
             "Fetched skill %s/%s at %s (tree %s) into %s",
             repo,
@@ -202,9 +241,9 @@ class SkillPackages:
         )
         return CatalogPackage(s3_path, _github_url(repo, path, folder.commit))
 
-    async def _store_checked(self, files: dict[str, bytes]) -> str:
+    async def _store_checked(self, files: dict[str, bytes], workspace_id: str | None) -> str:
         self._parser.parse_content(self._main_file(None, files))
-        return await self._storage.store_catalog_package(files)
+        return await self._storage.store_catalog_package(files, workspace_id=workspace_id)
 
     def _main_file(self, skill: Skill | None, files: dict[str, bytes]) -> str:
         main = self._parser.find_main_skill_file(list(files))
@@ -215,6 +254,45 @@ class SkillPackages:
                 else f"Skill {skill.id} package has no SKILL.md at its root"
             )
         return files[main].decode("utf-8")
+
+
+class CatalogMirror:
+    """Stores the package of every item of a mirror-mode registry as its index syncs.
+
+    One per sync of one registry: ``workspace_id`` is the owner of a workspace
+    registry (``None`` for the platform's), ``github`` reads with that
+    registry's credentials. Returns what the item's spec keeps as ``package``,
+    so an install needs no network. Once GitHub answers that the rate limit is
+    spent it is not asked again in this sync; those items fail, and the next
+    sync retries them.
+    """
+
+    def __init__(
+        self, storage: SkillStorageService, github: FolderSource, *, workspace_id: str | None
+    ):
+        self._packages = SkillPackages(storage, _StopOnRateLimit(github), None)
+        self._workspace_id = workspace_id
+
+    async def __call__(self, spec: dict[str, Any]) -> dict[str, Any]:
+        package = await self._packages.store_catalog_item(spec, workspace_id=self._workspace_id)
+        return {"s3_path": package.s3_path, "source_url": package.source_url}
+
+
+class _StopOnRateLimit:
+    def __init__(self, github: FolderSource):
+        self._github = github
+        self._limited: str | None = None
+
+    async def download_folder(
+        self, repo: str, path: str, *, ref: str | None, tree_sha: str | None
+    ) -> GitHubFolder:
+        if self._limited is not None:
+            raise GitHubRateLimitError(self._limited)
+        try:
+            return await self._github.download_folder(repo, path, ref=ref, tree_sha=tree_sha)
+        except GitHubRateLimitError as e:
+            self._limited = str(e)
+            raise
 
 
 def _github_url(repo: str, path: str, ref: str) -> str:

@@ -4,9 +4,13 @@ import logging
 from uuid import uuid4
 
 import pytest
-from agentarea_agents.application.skill_packages import SkillPackages, clear_package_cache
+from agentarea_agents.application.skill_packages import (
+    CatalogMirror,
+    SkillPackages,
+    clear_package_cache,
+)
 from agentarea_agents.domain.skill_models import Skill
-from agentarea_agents.infrastructure.github_skill_importer import GitHubFolder
+from agentarea_agents.infrastructure.github_skill_importer import GitHubFolder, GitHubRateLimitError
 from agentarea_agents.infrastructure.skill_storage_service import package_digest
 
 from .fake_s3 import fake_storage
@@ -150,3 +154,90 @@ async def test_a_github_folder_without_skill_md_is_refused():
     with pytest.raises(ValueError, match=r"SKILL\.md"):
         await packages.store_catalog_item(spec)
     assert s3.objects == {}
+
+
+MIRRORED = f"skills/catalog/{'a' * 64}/"
+
+
+async def test_a_mirrored_item_is_read_from_its_stored_package_without_github():
+    github = StubGitHub({"SKILL.md": b"# unused"})
+    packages, _, _ = _packages(github=github)
+    spec = {
+        "source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE},
+        "package": {"s3_path": MIRRORED, "source_url": "https://github.com/o/r/tree/c/x"},
+    }
+
+    package = await packages.store_catalog_item(spec)
+
+    assert (package.s3_path, package.source_url) == (MIRRORED, "https://github.com/o/r/tree/c/x")
+    assert github.calls == []
+
+
+@pytest.mark.parametrize(
+    ("s3_path", "workspace_id"),
+    [
+        (f"skills/ws-2/catalog/{'a' * 64}/", "ws-1"),
+        (f"skills/ws-1/catalog/{'a' * 64}/", None),
+        (MIRRORED, "ws-1"),
+        ("skills/ws-1/some-skill/", "ws-1"),
+    ],
+)
+async def test_a_mirrored_package_outside_its_registrys_store_is_refused(s3_path, workspace_id):
+    packages, _, _ = _packages()
+
+    with pytest.raises(ValueError, match="outside"):
+        await packages.store_catalog_item(
+            {"content": "# x", "package": {"s3_path": s3_path}}, workspace_id=workspace_id
+        )
+
+
+async def test_a_workspace_registrys_item_is_stored_and_aliased_in_that_workspace():
+    github = StubGitHub({"SKILL.md": b"---\nname: p\n---\n# Private"})
+    packages, storage, s3 = _packages(github=github)
+    spec = {"source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE}}
+
+    private = await packages.store_catalog_item(spec, workspace_id="ws-1")
+    public = await packages.store_catalog_item(spec)
+
+    assert private.s3_path.startswith("skills/ws-1/catalog/")
+    assert public.s3_path.startswith("skills/catalog/")
+    # The shared store never answers for a workspace's tree, nor the other way round.
+    assert len(github.calls) == 2
+    assert await storage.get_github_tree_package(TREE, workspace_id="ws-1") == private.s3_path
+    inline = await packages.store_catalog_item({"content": "# Inline"}, workspace_id="ws-1")
+    assert inline.s3_path.startswith("skills/ws-1/catalog/")
+
+
+async def test_the_mirror_stores_each_item_and_says_where():
+    github = StubGitHub({"SKILL.md": b"---\nname: p\n---\n# P"})
+    storage, s3 = fake_storage()
+    mirror = CatalogMirror(storage, github, workspace_id="ws-1")
+    spec = {"source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE}}
+
+    package = await mirror(spec)
+
+    assert package["s3_path"].startswith("skills/ws-1/catalog/")
+    assert s3.under(package["s3_path"]) == {"SKILL.md": b"---\nname: p\n---\n# P"}
+    assert package["source_url"] == f"https://github.com/o/r/tree/{COMMIT}/x"
+    assert await mirror({"content": "# Inline"}) == {
+        "s3_path": f"skills/ws-1/catalog/{package_digest({'SKILL.md': b'# Inline'})}/",
+        "source_url": None,
+    }
+
+
+async def test_the_mirror_stops_asking_github_once_it_is_rate_limited():
+    class Limited(StubGitHub):
+        async def download_folder(self, repo, path, *, ref, tree_sha):
+            self.calls.append(path)
+            raise GitHubRateLimitError("rate limited")
+
+    github = Limited({})
+    storage, _ = fake_storage()
+    mirror = CatalogMirror(storage, github, workspace_id=None)
+
+    for folder in ("a", "b"):
+        spec = {"source": {"type": "github", "repo": "o/r", "path": folder, "ref": COMMIT}}
+        with pytest.raises(GitHubRateLimitError):
+            await mirror(spec)
+    assert await mirror({"content": "# Inline"})
+    assert github.calls == ["a"]

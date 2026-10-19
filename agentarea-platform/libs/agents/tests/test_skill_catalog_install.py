@@ -1,9 +1,10 @@
 """Installing a catalog skill fetches its real folder and pins it (ADR-0044)."""
 
+from dataclasses import replace
 from uuid import UUID
 
 import pytest
-from agentarea_agents.application.skill_packages import clear_package_cache
+from agentarea_agents.application.skill_packages import CatalogMirror, clear_package_cache
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubFolder,
@@ -14,7 +15,7 @@ from agentarea_agents.schemas.skills_dto import SkillCreateFromContent
 from agentarea_common.auth.context import UserContext
 
 from .fake_s3 import fake_storage
-from .test_catalog_skills import FakeCatalogRepo, FakeFactory, FakeSkillRepo, _item
+from .test_catalog_skills import AllowInstalls, FakeCatalogRepo, FakeFactory, FakeSkillRepo, _item
 
 COMMIT = "1" * 40
 TREE = "2" * 40
@@ -53,7 +54,11 @@ def _service(repo=None, catalog=None, github=None):
     storage, s3 = fake_storage()
     uc = UserContext(user_id="u1", workspace_id="w1")
     svc = SkillService(
-        FakeFactory(repo, uc), uc, storage_service=storage, github_importer=github or StubGitHub()
+        FakeFactory(repo, uc),
+        uc,
+        storage_service=storage,
+        github_importer=github or StubGitHub(),
+        install_guard=AllowInstalls(),
     )
     svc._get_repository = lambda: repo
     svc._get_catalog_repository = lambda: catalog
@@ -180,3 +185,34 @@ async def test_listing_the_files_of_a_pre_package_row_moves_its_body():
     assert [(f.path, f.size) for f in files] == [("SKILL.md", 5)]
     assert skill.s3_path == f"skills/w1/{skill.id}/"
     assert skill.content is None
+
+
+class OfflineGitHub(StubGitHub):
+    async def download_folder(self, repo, path, *, ref, tree_sha):
+        raise AssertionError("a mirrored item is installed without GitHub")
+
+
+async def test_a_mirrored_item_installs_from_the_package_its_sync_stored():
+    storage, s3 = fake_storage()
+    mirror = CatalogMirror(storage, StubGitHub(), workspace_id=None)
+    item = _pointer_item()
+    item.spec["package"] = await mirror(item.spec)
+    svc, repo, catalog, _ = _service(catalog=FakeCatalogRepo([item]), github=OfflineGitHub())
+    svc._storage_service = storage
+
+    skill = await svc.install_catalog_skill(UUID(item.id))
+
+    assert skill.s3_path == f"skills/catalog/{package_digest(PDF)}/"
+    assert skill.source_url == f"https://github.com/owner/repo/tree/{COMMIT}/skills/pdf"
+    assert catalog.installed == [(item.id, str(skill.id), TREE)]
+    assert await svc.read_skill_md(skill) == PDF["SKILL.md"].decode()
+
+
+async def test_a_workspace_registrys_item_installs_into_that_workspaces_store():
+    item = replace(_pointer_item(), registry_workspace_id="w1")
+    svc, _, _, s3 = _service(catalog=FakeCatalogRepo([item]))
+
+    skill = await svc.install_catalog_skill(UUID(item.id))
+
+    assert skill.s3_path == f"skills/w1/catalog/{package_digest(PDF)}/"
+    assert s3.under("skills/catalog/") == {}

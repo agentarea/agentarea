@@ -33,6 +33,10 @@ class CatalogAgentItem:
     spec: dict[str, Any]
     installed_entity_id: str | None
     installed_version: str | None
+    # The item's registry, as the install policy decides on it (ADR-0044).
+    registry_id: str | None = None
+    registry_trust: str | None = None
+    registry_workspace_id: str | None = None
 
 
 class CatalogAgentRepository:
@@ -46,7 +50,8 @@ class CatalogAgentRepository:
         """List the catalog agent items the caller's workspace may see."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "rii.installed_entity_id, rii.installed_version "
+            "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
@@ -63,7 +68,8 @@ class CatalogAgentRepository:
         """Catalog agents tagged ``preset``: the starting points on agent create."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "rii.installed_entity_id, rii.installed_version "
+            "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
@@ -81,7 +87,8 @@ class CatalogAgentRepository:
         """Get a single catalog agent item by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
-            "rii.installed_entity_id, rii.installed_version "
+            "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id "
             "FROM registry_items ri "
             "JOIN registries r ON r.id = ri.registry_id "
             "LEFT JOIN registry_item_installs rii "
@@ -134,4 +141,7 @@ class CatalogAgentRepository:
             spec=spec,
             installed_entity_id=str(row.installed_entity_id) if row.installed_entity_id else None,
             installed_version=row.installed_version,
+            registry_id=str(row.registry_id),
+            registry_trust=row.registry_trust,
+            registry_workspace_id=row.registry_workspace_id,
         )

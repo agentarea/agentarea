@@ -87,6 +87,11 @@ WORKSPACE_TRUST_LEVELS = ("private", "community")
 
 # Resolves a registry's credentials reference to the value, at sync time.
 CredentialsResolver = Callable[[Registry], Awaitable[str]]
+# Stores one mirror-mode item's content (its spec) as an immutable package and
+# answers where, which the item's spec keeps as ``package`` (ADR-0044).
+ItemContentMirror = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+# Opened once per sync of a registry, with the token its credentials resolve to.
+ContentMirror = Callable[[Registry, str | None], ItemContentMirror]
 
 # Top-level catalog key -> registry type. Each catalog document carries exactly
 # one of these keys, so the registry type can be inferred from the payload shape
@@ -148,6 +153,7 @@ def validate_registry_source(
     workspace_id: str | None,
     mode: str,
     trust: str,
+    credentials: bool = False,
 ) -> None:
     """Refuse a registry the platform could not sync or must not let a workspace add."""
     if scope not in REGISTRY_SCOPES:
@@ -161,6 +167,10 @@ def validate_registry_source(
             raise ValueError("a GitHub repository source holds skills")
         if not GITHUB_REPO_PATTERN.match(source_url):
             raise ValueError("a GitHub source_url is the repository as owner/repo")
+    if credentials and registry_type == "skills" and mode != "mirror":
+        # Credentials are resolved for a sync only; an install of an upstream
+        # item fetches its content with none.
+        raise ValueError("a skills registry read with credentials mirrors its content")
     if scope == "platform":
         if workspace_id is not None:
             raise ValueError("a platform registry belongs to no workspace")
@@ -173,12 +183,6 @@ def validate_registry_source(
         raise ValueError(f"a workspace registry's source_type is one of {WORKSPACE_SOURCE_TYPES}")
     if trust not in WORKSPACE_TRUST_LEVELS:
         raise ValueError(f"a workspace registry's trust is one of {WORKSPACE_TRUST_LEVELS}")
-    if mode == "mirror":
-        # Mirroring stores each item's content when the index syncs, in the
-        # skill package store by digest (ADR-0044), which this sync does not
-        # write yet. Accepting the mode would promise an offline copy that is
-        # not there.
-        raise ValueError("a workspace registry is upstream until mirrored content is stored")
 
 
 def rank_fields(*mappings: Any) -> dict[str, int]:
@@ -339,8 +343,10 @@ class RegistryService:
         agent_repo: Any | None = None,
         credentials_resolver: CredentialsResolver | None = None,
         github_source_factory: Callable[[str | None], GitHubSource] = HttpGitHubSource,
+        content_mirror: ContentMirror | None = None,
     ):
         self.credentials_resolver = credentials_resolver
+        self.content_mirror = content_mirror
         self.github_source_factory = github_source_factory
         self.registry_repo = registry_repo
         self.item_repo = item_repo
@@ -386,6 +392,7 @@ class RegistryService:
             workspace_id=workspace_id,
             mode=mode,
             trust=trust,
+            credentials=credentials_secret_ref is not None,
         )
         return await self.registry_repo.create(
             name=name,
@@ -417,7 +424,7 @@ class RegistryService:
         return await self.registry_repo.list_all()
 
     async def update_registry(self, registry_id: UUID, **fields) -> Registry | None:
-        if {"source_url", "mode", "trust"} & fields.keys():
+        if {"source_url", "mode", "trust", "credentials_secret_ref"} & fields.keys():
             current = await self.registry_repo.get_by_id(registry_id)
             if current is None:
                 return None
@@ -429,9 +436,12 @@ class RegistryService:
                 workspace_id=current.workspace_id,
                 mode=fields.get("mode", current.mode),
                 trust=fields.get("trust", current.trust),
+                credentials=fields.get("credentials_secret_ref", current.credentials_secret_ref)
+                is not None,
             )
-        if {"source_url", "source_ref", "source_path"} & fields.keys():
-            # Another source: what the last sync applied says nothing about it.
+        if {"source_url", "source_ref", "source_path", "mode"} & fields.keys():
+            # Another source, or one now mirrored: what the last sync applied
+            # says nothing about it.
             fields["source_etag"] = None
         if "recommendation_priority" in fields:
             fields["recommendation_priority"] = validated_registry_priority(
@@ -689,12 +699,22 @@ class RegistryService:
             raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
+            mirrors = registry.registry_type == "skills" and registry.mode == "mirror"
+            if mirrors and self.content_mirror is None:
+                raise ValueError(
+                    f"Registry {registry.id} mirrors its content but this sync has no store for it"
+                )
+            token = (
+                await self._credentials(registry)
+                if registry.source_type == "github" or mirrors
+                else None
+            )
             github: GitHubSource | None = None
             head = root_tree = ""
             if registry.source_type == "github":
                 # A repository's version is its head commit, kept where an
                 # index URL keeps its ETag.
-                github = self.github_source_factory(await self._credentials(registry))
+                github = self.github_source_factory(token)
                 head, root_tree = await github.head(registry.source_url, registry.source_ref)
                 source_etag = head
             else:
@@ -734,6 +754,11 @@ class RegistryService:
                 raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
                 parsed_items = self._parse_source(registry.registry_type, raw_data)
             parsed_items = self._dedupe(parsed_items)
+            mirror = (
+                self.content_mirror(registry, token)
+                if mirrors and self.content_mirror is not None
+                else None
+            )
 
             new_specs = 0
             updates_flagged = 0
@@ -748,6 +773,10 @@ class RegistryService:
                 external_id = item_data["external_id"]
                 try:
                     existing = existing_by_id.get(external_id)
+                    if mirror is not None:
+                        item_data["spec"] = await self._mirrored_spec(
+                            mirror, item_data.get("spec", {}), existing
+                        )
 
                     if existing:
                         for field in (
@@ -920,6 +949,23 @@ class RegistryService:
                 len(parsed_items) - len(by_id),
             )
         return list(by_id.values())
+
+    @staticmethod
+    async def _mirrored_spec(
+        mirror: ItemContentMirror, spec: dict[str, Any], existing: RegistryItem | None
+    ) -> dict[str, Any]:
+        """``spec`` with the package its content is stored as.
+
+        An entry the last sync already stored keeps that package: the content
+        is the same, so storing it again would only spend reads (and, for a
+        GitHub folder, the API budget).
+        """
+        if existing is not None:
+            kept = dict(existing.spec or {})
+            package = kept.pop("package", None)
+            if package and kept == spec:
+                return {**spec, "package": package}
+        return {**spec, "package": await mirror(spec)}
 
     async def _credentials(self, registry: Registry) -> str | None:
         """The token a sync reads the source with; resolved now, never stored."""

@@ -16,6 +16,7 @@ from agentarea_agents.application.skill_service import (
 )
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.catalog_skill_repository import (
+    CatalogProvenance,
     CatalogSkillItem,
     CatalogSkillRepository,
     CatalogSkillSummary,
@@ -36,6 +37,13 @@ def _item(item_id=None, name="Built-in", version="1", installed_version=None, sp
         created_at=now,
         updated_at=now,
     )
+
+
+class AllowInstalls:
+    """The install policy with no rule in it: every install proceeds."""
+
+    async def require_allowed(self, *, registry_id, trust):
+        pass
 
 
 class FakeSkillRepo:
@@ -106,8 +114,9 @@ class FakeSkillRepo:
 
 
 class FakeCatalogRepo:
-    def __init__(self, items=None):
+    def __init__(self, items=None, provenance=None):
         self._items = items or []
+        self.provenance = provenance or {}
         self.installed = []
         self.list_items_calls = 0
         self.page_calls = []
@@ -159,6 +168,10 @@ class FakeCatalogRepo:
         wanted = {str(i) for i in item_ids}
         return {i.id: (i.version, i.installed_version) for i in self._items if i.id in wanted}
 
+    async def provenance_for(self, item_ids):
+        wanted = {str(i) for i in item_ids}
+        return {k: v for k, v in self.provenance.items() if k in wanted}
+
     async def get_item(self, item_id):
         return next((i for i in self._items if i.id == item_id), None)
 
@@ -188,7 +201,9 @@ def _service(repo, catalog, workspace_id="w1"):
     from .fake_s3 import fake_storage
 
     uc = UserContext(user_id="u1", workspace_id=workspace_id)
-    svc = SkillService(FakeFactory(repo, uc), uc, storage_service=fake_storage()[0])
+    svc = SkillService(
+        FakeFactory(repo, uc), uc, storage_service=fake_storage()[0], install_guard=AllowInstalls()
+    )
     svc._get_repository = lambda: repo
     svc._get_catalog_repository = lambda: catalog
     return svc
@@ -484,11 +499,21 @@ async def test_list_paginated_flags_update_available_on_returned_page():
         source_type="content",
         registry_item_id=forked_item.id,
     )
-    svc = _service(FakeSkillRepo([tenant_copy]), FakeCatalogRepo([forked_item]))
+    provenance = CatalogProvenance(
+        registry_name="community",
+        registry_scope="platform",
+        registry_trust="community",
+        removed_upstream=True,
+    )
+    svc = _service(
+        FakeSkillRepo([tenant_copy]),
+        FakeCatalogRepo([forked_item], provenance={forked_item.id: provenance}),
+    )
 
     page, _ = await svc.list_paginated(limit=10, offset=0)
 
     assert getattr(page[0], "update_available", False) is True
+    assert page[0].catalog_provenance == provenance
 
 
 async def test_list_paginated_from_registry_false_skips_the_catalog():

@@ -94,5 +94,29 @@ async def test_a_github_tree_alias_points_at_the_stored_package():
 
 def test_only_the_digest_area_is_a_catalog_package():
     assert is_catalog_package(f"skills/catalog/{'a' * 64}/")
+    assert is_catalog_package(f"skills/ws-1/catalog/{'a' * 64}/")
     assert not is_catalog_package("skills/ws-1/skill-1/")
     assert not is_catalog_package(None)
+
+
+async def test_a_workspace_registrys_package_is_stored_under_that_workspace():
+    storage, s3 = fake_storage()
+    files = {"SKILL.md": b"# Private"}
+
+    prefix = await storage.store_catalog_package(files, workspace_id="ws-1")
+
+    assert prefix == f"skills/ws-1/catalog/{package_digest(files)}/"
+    assert is_catalog_package(prefix)
+    assert s3.under("skills/catalog/") == {}
+
+
+async def test_a_github_tree_alias_is_kept_per_store():
+    storage, s3 = fake_storage()
+    prefix = await storage.store_catalog_package({"SKILL.md": b"# P"}, workspace_id="ws-1")
+
+    await storage.put_github_tree_package("c" * 40, prefix, workspace_id="ws-1")
+
+    assert await storage.get_github_tree_package("c" * 40, workspace_id="ws-1") == prefix
+    assert await storage.get_github_tree_package("c" * 40) is None
+    assert await storage.get_github_tree_package("c" * 40, workspace_id="ws-2") is None
+    assert s3.under("skills/catalog/") == {}

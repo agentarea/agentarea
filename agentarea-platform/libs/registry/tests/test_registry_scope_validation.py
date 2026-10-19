@@ -2,7 +2,7 @@
 
 A workspace admin adds a registry for their workspace only: a skills or agents
 index, or a GitHub repository of skills, labelled private or community, read
-upstream. Anything the platform could not sync, or that would let a workspace
+upstream or mirrored. Anything the platform could not sync, or that would let a workspace
 write platform-wide entities or claim the platform's trust, is refused.
 """
 
@@ -43,9 +43,10 @@ def test_a_workspace_cannot_claim_the_platforms_trust(trust):
         _check(**{**WORKSPACE, "trust": trust})
 
 
-def test_a_workspace_registry_is_upstream_until_mirrored_content_is_stored():
-    with pytest.raises(ValueError, match="upstream"):
-        _check(**{**WORKSPACE, "mode": "mirror"})
+@pytest.mark.parametrize("source_type", ["url", "github"])
+def test_a_workspace_registry_may_mirror_its_content(source_type):
+    source_url = "acme/skills" if source_type == "github" else "https://x/skills.json"
+    _check(source_type=source_type, source_url=source_url, **{**WORKSPACE, "mode": "mirror"})
 
 
 def test_a_workspace_registry_needs_its_workspace():
@@ -75,3 +76,11 @@ def test_a_github_source_holds_skills():
 def test_unknown_values_are_refused(field, value):
     with pytest.raises(ValueError, match=field):
         _check(**{**PLATFORM, field: value})
+
+
+@pytest.mark.parametrize("fields", [WORKSPACE, {**PLATFORM, "mode": "upstream"}])
+def test_a_skills_source_read_with_credentials_is_mirrored(fields):
+    with pytest.raises(ValueError, match="credentials"):
+        _check(credentials=True, **fields)
+    _check(credentials=True, **{**fields, "mode": "mirror"})
+    _check("agents", credentials=True, **fields)

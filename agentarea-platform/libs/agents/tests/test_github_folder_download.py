@@ -200,3 +200,15 @@ async def test_a_configured_token_is_sent_to_the_api_and_to_raw():
 async def test_a_malformed_repo_is_refused(repo):
     with pytest.raises(GitHubSkillImporterError):
         await importer(FakeGitHub()).download_folder(repo, "skills/pdf", ref=COMMIT, tree_sha=None)
+
+
+async def test_one_importer_reads_a_commits_tree_once_for_every_folder_of_it():
+    github = FakeGitHub()
+    pdf = importer(github)
+
+    await pdf.download_folder("owner/repo", "skills/pdf", ref=COMMIT, tree_sha=TREE)
+    await pdf.download_folder("owner/repo", "skills/pdf", ref=COMMIT, tree_sha=TREE)
+
+    assert github.api_calls == [
+        f"https://api.github.com/repos/owner/repo/git/trees/{COMMIT}?recursive=1"
+    ]

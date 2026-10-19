@@ -24,12 +24,23 @@ from ..application.skill_package_limits import (
 logger = logging.getLogger(__name__)
 
 SKILLS_PREFIX = "skills"
-# Immutable packages of catalog skills, keyed by the digest of their files.
-# Shared by every workspace: what is stored here is public catalog content,
-# and no tenant edit ever writes under it (an edit copies into the tenant's
-# own prefix first).
+# Immutable packages of the platform registries' skills, keyed by the digest
+# of their files. Shared by every workspace: what is stored here is public
+# catalog content, and no tenant edit ever writes under it (an edit copies into
+# the tenant's own prefix first). A workspace registry's packages live in that
+# workspace's own area (``catalog_area``).
 CATALOG_PREFIX = f"{SKILLS_PREFIX}/catalog"
-GITHUB_TREE_ALIASES = f"{CATALOG_PREFIX}/github-tree"
+CATALOG_AREA = "catalog"
+
+
+def catalog_area(workspace_id: str | None) -> str:
+    """Where catalog packages live: one shared area for the platform's registries,
+    and each workspace's own area for its registries, so private content never
+    lands where another tenant reads.
+    """
+    return (
+        CATALOG_PREFIX if workspace_id is None else f"{SKILLS_PREFIX}/{workspace_id}/{CATALOG_AREA}"
+    )
 
 
 def tenant_package_prefix(workspace_id: str, skill_id: str) -> str:
@@ -38,7 +49,9 @@ def tenant_package_prefix(workspace_id: str, skill_id: str) -> str:
 
 
 def is_catalog_package(s3_path: str | None) -> bool:
-    return bool(s3_path) and str(s3_path).startswith(f"{CATALOG_PREFIX}/")
+    """An immutable package stored by digest, in the shared or a workspace's area."""
+    parts = str(s3_path or "").split("/")
+    return len(parts) > 2 and parts[0] == SKILLS_PREFIX and CATALOG_AREA in (parts[1], parts[2])
 
 
 def package_digest(files: Mapping[str, bytes]) -> str:
@@ -67,6 +80,10 @@ def checked_package_files(files: Mapping[str, bytes]) -> dict[str, bytes]:
         mb = MAX_PACKAGE_TOTAL_BYTES // (1024 * 1024)
         raise ValueError(f"Skill package is larger than {mb} MB uncompressed")
     return checked
+
+
+def _github_tree_alias(tree_sha: str, workspace_id: str | None) -> str:
+    return f"{catalog_area(workspace_id)}/github-tree/{tree_sha}"
 
 
 @dataclass
@@ -124,15 +141,20 @@ class SkillStorageService:
         """
         return tenant_package_prefix(workspace_id, skill_id)
 
-    async def store_catalog_package(self, files: Mapping[str, bytes]) -> str:
+    async def store_catalog_package(
+        self, files: Mapping[str, bytes], *, workspace_id: str | None = None
+    ) -> str:
         """Store a catalog package under its digest, once; return its prefix.
+
+        ``workspace_id`` is the owner of a workspace registry's item; a
+        platform registry's item goes to the shared area.
 
         A prefix already holding every path is reused as is: the key is the
         digest, so the same paths there are the same bytes. One holding only
         some of them (an earlier store that died midway) is completed.
         """
         checked = checked_package_files(files)
-        prefix = f"{CATALOG_PREFIX}/{package_digest(checked)}/"
+        prefix = f"{catalog_area(workspace_id)}/{package_digest(checked)}/"
         stored = {f.path for f in await self.list_files(prefix)}
         missing = [path for path in checked if path not in stored]
         for path in missing:
@@ -168,11 +190,13 @@ class SkillStorageService:
             for info in await self.list_files(s3_path)
         }
 
-    async def get_github_tree_package(self, tree_sha: str) -> str | None:
-        """The catalog package a GitHub tree was stored as, if it was."""
+    async def get_github_tree_package(
+        self, tree_sha: str, *, workspace_id: str | None = None
+    ) -> str | None:
+        """The catalog package a GitHub tree was stored as in an area, if it was."""
         try:
             response = self.client.get_object(
-                Bucket=self.bucket_name, Key=f"{GITHUB_TREE_ALIASES}/{tree_sha}"
+                Bucket=self.bucket_name, Key=_github_tree_alias(tree_sha, workspace_id)
             )
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
@@ -180,11 +204,13 @@ class SkillStorageService:
             raise
         return response["Body"].read().decode("utf-8")
 
-    async def put_github_tree_package(self, tree_sha: str, s3_path: str) -> None:
+    async def put_github_tree_package(
+        self, tree_sha: str, s3_path: str, *, workspace_id: str | None = None
+    ) -> None:
         """Record which catalog package a GitHub tree is, so it is fetched once."""
         self.client.put_object(
             Bucket=self.bucket_name,
-            Key=f"{GITHUB_TREE_ALIASES}/{tree_sha}",
+            Key=_github_tree_alias(tree_sha, workspace_id),
             Body=s3_path.encode("utf-8"),
             ContentType="text/plain",
         )

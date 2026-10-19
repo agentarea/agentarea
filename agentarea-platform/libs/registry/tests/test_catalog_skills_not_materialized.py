@@ -14,7 +14,11 @@ from agentarea_registry.application.service import RegistryService
 
 async def test_a_new_catalog_skill_gets_no_skill_row():
     registry = SimpleNamespace(
-        id=uuid4(), registry_type="skills", source_type="url", source_url="https://x/s.json"
+        id=uuid4(),
+        registry_type="skills",
+        source_type="url",
+        source_url="https://x/s.json",
+        mode="upstream",
     )
     item = SimpleNamespace(id=uuid4(), version="latest", spec={}, name="pdf")
     item_repo = SimpleNamespace(
@@ -50,7 +54,11 @@ async def _legacy_catalog(db_session, monkeypatch, workspace_id, published):
     )
 
     registry = Registry(
-        name="skills", registry_type="skills", source_type="url", source_url="https://x/s.json"
+        name="skills",
+        registry_type="skills",
+        source_type="url",
+        source_url="https://x/s.json",
+        mode="upstream",
     )
     db_session.add(registry)
     await db_session.commit()

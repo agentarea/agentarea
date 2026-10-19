@@ -7,6 +7,10 @@ from ..domain.rules import CatalogInstallDecision, PolicySubjectType, decide_cat
 from ..infrastructure.repository import PolicyRuleRepository
 
 
+class CatalogInstallRefusedError(PermissionError):
+    """A policy rule refuses installing from the item's registry."""
+
+
 async def authorize_catalog_install(
     session: AsyncSession, user_context: UserContext, *, registry_id: str, trust: str
 ) -> CatalogInstallDecision:
@@ -25,3 +29,24 @@ async def authorize_catalog_install(
         ),
     ]
     return decide_catalog_install(rules, registry_id=registry_id, trust=trust)
+
+
+class CatalogInstallGuard:
+    """The one enforcement point for turning a catalog item into a workspace's own.
+
+    Every path that does so (install, attaching a catalog skill to an agent,
+    editing a catalog item, which forks it) asks here before anything is written.
+    """
+
+    def __init__(self, session: AsyncSession, user_context: UserContext):
+        self._session = session
+        self._user_context = user_context
+
+    async def require_allowed(self, *, registry_id: str | None, trust: str | None) -> None:
+        if registry_id is None or trust is None:
+            raise ValueError("A catalog item without its registry cannot be checked for install")
+        decision = await authorize_catalog_install(
+            self._session, self._user_context, registry_id=registry_id, trust=trust
+        )
+        if not decision.allowed:
+            raise CatalogInstallRefusedError(f"Install refused by policy: {decision.reason}")

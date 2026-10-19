@@ -324,6 +324,40 @@ async def _move_bodies_to_packages() -> None:
         sys.exit(1)
 
 
+@skills.command("repin-catalog-installs")
+@click.option("--dry-run", is_flag=True, help="Report what would be repinned; change nothing.")
+def repin_catalog_installs(dry_run: bool):
+    """Repin catalog installs made before packages existed, if nobody edited them (ADR-0044).
+
+    Such a skill holds the body its install copied, so it reads as edited.
+    One whose body is still what its catalog item gave it is re-installed from
+    the item's current package (pinned), keeping its id and agents. Edited
+    skills are left alone and reported; so is a skill whose item is gone.
+    Run after ``move-bodies-to-packages`` and the reconcile.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_repin_catalog_installs(dry_run=dry_run))
+
+
+async def _repin_catalog_installs(*, dry_run: bool) -> None:
+    from collections import Counter
+
+    from agentarea_agents.application import skill_service
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    db = Database(get_db_settings())
+    results = await skill_service.repin_all_catalog_installs(
+        db.async_session_factory, SkillStorageService(), dry_run=dry_run
+    )
+    for workspace_id, result in results:
+        line = f"{result.status}  {workspace_id}/{result.skill_id}  {result.name}"
+        click.echo(f"{line}: {result.error}" if result.error else line)
+    counts = Counter(result.status for _, result in results)
+    click.echo(", ".join(f"{n} {status}" for status, n in counts.items()) or "No catalog installs")
+    if counts["failed"]:
+        sys.exit(1)
+
+
 async def _register_graph_client() -> None:
     """Register the authorization-graph client the API and worker register.
 
@@ -373,7 +407,11 @@ async def _reconcile(
         RegistryRepository,
     )
 
+    from agentarea_api.registry_content import registry_content_mirror
+    from agentarea_api.registry_credentials import registry_credentials_resolver
+
     db = Database(get_db_settings())
+    content_mirror = registry_content_mirror()
     from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 
     system_context = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID)
@@ -492,6 +530,8 @@ async def _reconcile(
                         provider_spec_repo=provider_spec_repo,
                         model_spec_repo=model_spec_repo,
                         agent_repo=agent_repo,
+                        credentials_resolver=registry_credentials_resolver(session),
+                        content_mirror=content_mirror,
                     )
 
                     # The manifest names platform registries; a workspace's own
@@ -606,8 +646,10 @@ async def _reconcile_workspace_registries(
         RegistryRepository,
     )
 
+    from agentarea_api.registry_content import registry_content_mirror
     from agentarea_api.registry_credentials import registry_credentials_resolver
 
+    content_mirror = registry_content_mirror()
     async with db.async_session_factory() as session:
         registries = await RegistryRepository(session).list_active_workspace_registries()
     click.echo(f"\nWorkspace registries: {len(registries)}")
@@ -626,6 +668,7 @@ async def _reconcile_workspace_registries(
                         RegistryItemRepository(session, owner),
                         MCPServerRepository(session, owner),
                         credentials_resolver=registry_credentials_resolver(session),
+                        content_mirror=content_mirror,
                     )
                     stats = await service.sync_registry(registry.id, force=force)
                     await session.commit()

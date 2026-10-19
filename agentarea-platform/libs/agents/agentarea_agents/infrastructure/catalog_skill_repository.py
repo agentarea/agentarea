@@ -46,6 +46,22 @@ class CatalogSkillItem:
     installed_version: str | None
     created_at: datetime
     updated_at: datetime
+    # The item's registry: what the install policy decides on, and whose
+    # package area a workspace registry's item is stored in (ADR-0044).
+    registry_id: str | None = None
+    registry_trust: str | None = None
+    registry_workspace_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CatalogProvenance:
+    """Where an installed skill's catalog item comes from, as its page shows it."""
+
+    registry_name: str
+    registry_scope: str
+    registry_trust: str
+    # The source no longer publishes the item, or its registry was retired.
+    removed_upstream: bool
 
 
 @dataclass(frozen=True)
@@ -80,6 +96,7 @@ class CatalogSkillRepository:
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "LEFT JOIN registry_item_installs rii "
@@ -186,11 +203,44 @@ class CatalogSkillRepository:
         )
         return {str(row.id): (row.version, row.installed_version) for row in result.fetchall()}
 
+    async def provenance_for(self, item_ids: Collection[str]) -> dict[str, CatalogProvenance]:
+        """Map catalog item id to its registry and whether its source still has it.
+
+        Unlike the other reads, an item of a retired registry is returned: an
+        install keeps it, and that is exactly what ``removed_upstream`` says.
+        """
+        if not item_ids:
+            return {}
+        stmt = text(
+            "SELECT ri.id, r.name AS registry_name, r.scope AS registry_scope, "
+            "ri.registry_trust, (NOT ri.in_source OR NOT ri.registry_active) AS removed "
+            "FROM registry_items ri JOIN registries r ON r.id = ri.registry_id "
+            "WHERE ri.registry_type = 'skills' AND " + _VISIBLE + " "
+            "AND ri.id IN :item_ids"
+        ).bindparams(bindparam("item_ids", expanding=True))
+        result = await self.session.execute(
+            stmt,
+            {
+                "workspace_id": self.user_context.workspace_id,
+                "item_ids": [UUID(str(i)) for i in item_ids],
+            },
+        )
+        return {
+            str(row.id): CatalogProvenance(
+                registry_name=row.registry_name,
+                registry_scope=row.registry_scope,
+                registry_trust=row.registry_trust,
+                removed_upstream=bool(row.removed),
+            )
+            for row in result.fetchall()
+        }
+
     async def get_item(self, item_id: str) -> CatalogSkillItem | None:
         """Get a single catalog skill item by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "LEFT JOIN registry_item_installs rii "
@@ -216,6 +266,7 @@ class CatalogSkillRepository:
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "LEFT JOIN registry_item_installs rii "
@@ -291,4 +342,7 @@ class CatalogSkillRepository:
             installed_version=row.installed_version,
             created_at=created_at,
             updated_at=row.updated_at or created_at,
+            registry_id=str(row.registry_id),
+            registry_trust=row.registry_trust,
+            registry_workspace_id=row.registry_workspace_id,
         )

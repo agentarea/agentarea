@@ -49,6 +49,14 @@ class WorkspaceRegistryCreate(BaseModel):
         None, description="GitHub: the folder whose skill folders are indexed; the root if unset"
     )
     trust: Literal["private", "community"] = "private"
+    mode: Literal["mirror", "upstream"] = Field(
+        "mirror",
+        description=(
+            "'mirror' stores every skill's content when the registry syncs, so an install "
+            "needs no network; 'upstream' fetches it on first install. A source read with "
+            "credentials is mirrored."
+        ),
+    )
     credentials_secret_id: UUID | None = Field(
         None, description="A workspace secret holding the token a private source is read with"
     )
@@ -64,6 +72,7 @@ class WorkspaceRegistryUpdate(BaseModel):
     source_path: str | None = None
     is_active: bool | None = None
     trust: Literal["private", "community"] | None = None
+    mode: Literal["mirror", "upstream"] | None = None
     credentials_secret_id: UUID | None = None
 
 
@@ -122,7 +131,7 @@ async def create_workspace_registry(
             description=data.description,
             scope="workspace",
             workspace_id=user_context.workspace_id,
-            mode="upstream",
+            mode=data.mode,
             trust=data.trust,
             credentials_secret_ref=secret_id,
             source_ref=data.source_ref,
