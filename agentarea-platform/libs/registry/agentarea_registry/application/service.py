@@ -20,12 +20,13 @@ import json
 import logging
 import urllib.error
 import urllib.request
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import yaml
-from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID, REGISTRY_TRUST_LEVELS
 from agentarea_common.money import to_optional_money
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
@@ -35,11 +36,20 @@ from agentarea_mcp.infrastructure.repository import MCPServerRepository
 from sqlalchemy.exc import SQLAlchemyError
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
+from agentarea_registry.application.github_index import (
+    GITHUB_REPO_PATTERN,
+    GitHubSource,
+    build_github_skill_index,
+)
 from agentarea_registry.domain.models import (
     DEFAULT_REGISTRY_PRIORITY,
+    REGISTRY_MODES,
+    REGISTRY_SCOPES,
+    WORKSPACE_REGISTRY_TYPES,
     Registry,
     RegistryItem,
 )
+from agentarea_registry.infrastructure.github_client import HttpGitHubSource
 from agentarea_registry.infrastructure.repository import (
     DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
@@ -67,6 +77,15 @@ VALID_REGISTRY_TYPES = (
     "bundles",
 )
 VALID_SOURCE_TYPES = ("url", "github", "api", "managed")
+# What a workspace admin may point a workspace registry at: an index in the
+# platform format, or a GitHub repository whose folders are skills.
+WORKSPACE_SOURCE_TYPES = ("url", "github")
+# Trust a workspace may claim for its own registry; official and verified are
+# the platform's to give.
+WORKSPACE_TRUST_LEVELS = ("private", "community")
+
+# Resolves a registry's credentials reference to the value, at sync time.
+CredentialsResolver = Callable[[Registry], Awaitable[str]]
 
 # Top-level catalog key -> registry type. Each catalog document carries exactly
 # one of these keys, so the registry type can be inferred from the payload shape
@@ -113,6 +132,48 @@ def validated_registry_priority(value: Any) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"recommendation_priority must be a non-negative integer, got {value!r}")
     return value
+
+
+def validate_registry_source(
+    *,
+    registry_type: str,
+    source_type: str,
+    source_url: str,
+    scope: str,
+    workspace_id: str | None,
+    mode: str,
+    trust: str,
+) -> None:
+    """Refuse a registry the platform could not sync or must not let a workspace add."""
+    if scope not in REGISTRY_SCOPES:
+        raise ValueError(f"scope must be one of {REGISTRY_SCOPES}")
+    if mode not in REGISTRY_MODES:
+        raise ValueError(f"mode must be one of {REGISTRY_MODES}")
+    if trust not in REGISTRY_TRUST_LEVELS:
+        raise ValueError(f"trust must be one of {REGISTRY_TRUST_LEVELS}")
+    if source_type == "github":
+        if registry_type != "skills":
+            raise ValueError("a GitHub repository source holds skills")
+        if not GITHUB_REPO_PATTERN.match(source_url):
+            raise ValueError("a GitHub source_url is the repository as owner/repo")
+    if scope == "platform":
+        if workspace_id is not None:
+            raise ValueError("a platform registry belongs to no workspace")
+        return
+    if not workspace_id:
+        raise ValueError("a workspace registry needs its workspace")
+    if registry_type not in WORKSPACE_REGISTRY_TYPES:
+        raise ValueError(f"a workspace registry holds {' or '.join(WORKSPACE_REGISTRY_TYPES)}")
+    if source_type not in WORKSPACE_SOURCE_TYPES:
+        raise ValueError(f"a workspace registry's source_type is one of {WORKSPACE_SOURCE_TYPES}")
+    if trust not in WORKSPACE_TRUST_LEVELS:
+        raise ValueError(f"a workspace registry's trust is one of {WORKSPACE_TRUST_LEVELS}")
+    if mode == "mirror":
+        # Mirroring stores each item's content when the index syncs, in the
+        # skill package store by digest (ADR-0044), which this sync does not
+        # write yet. Accepting the mode would promise an offline copy that is
+        # not there.
+        raise ValueError("a workspace registry is upstream until mirrored content is stored")
 
 
 def rank_fields(*mappings: Any) -> dict[str, int]:
@@ -271,7 +332,11 @@ class RegistryService:
         provider_spec_repo: Any | None = None,
         model_spec_repo: Any | None = None,
         agent_repo: Any | None = None,
+        credentials_resolver: CredentialsResolver | None = None,
+        github_source_factory: Callable[[str | None], GitHubSource] = HttpGitHubSource,
     ):
+        self.credentials_resolver = credentials_resolver
+        self.github_source_factory = github_source_factory
         self.registry_repo = registry_repo
         self.item_repo = item_repo
         self.server_repo = server_repo
@@ -291,6 +356,14 @@ class RegistryService:
         description: str | None = None,
         sync_mode: str = "manual",
         recommendation_priority: int | None = None,
+        *,
+        scope: str = "platform",
+        workspace_id: str | None = None,
+        mode: str = "mirror",
+        trust: str = "official",
+        credentials_secret_ref: UUID | None = None,
+        source_ref: str | None = None,
+        source_path: str | None = None,
     ) -> Registry:
         if registry_type not in VALID_REGISTRY_TYPES:
             raise ValueError(f"registry_type must be one of {VALID_REGISTRY_TYPES}")
@@ -300,6 +373,15 @@ class RegistryService:
             source_url = source_url or "managed://catalog"
         elif not source_url:
             raise ValueError("source_url is required for synchronized registries")
+        validate_registry_source(
+            registry_type=registry_type,
+            source_type=source_type,
+            source_url=source_url,
+            scope=scope,
+            workspace_id=workspace_id,
+            mode=mode,
+            trust=trust,
+        )
         return await self.registry_repo.create(
             name=name,
             registry_type=registry_type,
@@ -308,6 +390,13 @@ class RegistryService:
             description=description,
             sync_mode=sync_mode,
             recommendation_priority=validated_registry_priority(recommendation_priority),
+            scope=scope,
+            workspace_id=workspace_id,
+            mode=mode,
+            trust=trust,
+            credentials_secret_ref=credentials_secret_ref,
+            source_ref=source_ref,
+            source_path=source_path,
         )
 
     async def get_registry(self, registry_id: UUID) -> Registry | None:
@@ -323,6 +412,19 @@ class RegistryService:
         return await self.registry_repo.list_all()
 
     async def update_registry(self, registry_id: UUID, **fields) -> Registry | None:
+        if {"source_url", "mode", "trust"} & fields.keys():
+            current = await self.registry_repo.get_by_id(registry_id)
+            if current is None:
+                return None
+            validate_registry_source(
+                registry_type=current.registry_type,
+                source_type=current.source_type,
+                source_url=fields.get("source_url", current.source_url),
+                scope=current.scope,
+                workspace_id=current.workspace_id,
+                mode=fields.get("mode", current.mode),
+                trust=fields.get("trust", current.trust),
+            )
         if "recommendation_priority" in fields:
             fields["recommendation_priority"] = validated_registry_priority(
                 fields["recommendation_priority"]
@@ -332,11 +434,43 @@ class RegistryService:
     async def delete_registry(self, registry_id: UUID) -> bool:
         return await self.registry_repo.delete(registry_id)
 
+    # ── What the caller's workspace may see (ADR-0044) ──
+
+    async def list_visible_registries(
+        self,
+        active_only: bool = False,
+        registry_type: str | None = None,
+        scope: str | None = None,
+    ) -> list[Registry]:
+        return await self.registry_repo.list_visible(
+            active_only=active_only, registry_type=registry_type, scope=scope
+        )
+
+    async def get_visible_registry(self, registry_id: UUID) -> Registry | None:
+        return await self.registry_repo.get_visible(registry_id)
+
+    async def get_workspace_registry(self, registry_id: UUID, workspace_id: str) -> Registry | None:
+        """One of ``workspace_id``'s own registries; the platform's are not its to change."""
+        registry = await self.registry_repo.get_by_id(registry_id)
+        if registry is None or registry.scope != "workspace":
+            return None
+        return registry if registry.workspace_id == workspace_id else None
+
+    async def get_platform_registry(self, registry_id: UUID) -> Registry | None:
+        registry = await self.registry_repo.get_by_id(registry_id)
+        return registry if registry is not None and registry.scope == "platform" else None
+
+    async def registries_by_id(self, ids: set[str]) -> dict[str, Registry]:
+        """The registries of a page of items, for the source and trust on each card."""
+        return {str(r.id): r for r in await self.registry_repo.get_many(ids)}
+
     # ── Catalog browsing ──
 
     async def list_items(
         self, registry_id: UUID, limit: int = 50, offset: int = 0
     ) -> list[RegistryItem]:
+        if await self.registry_repo.get_visible(registry_id) is None:
+            raise RegistryNotFoundError(f"Registry {registry_id} not found")
         return await self.item_repo.list_by_registry(registry_id, limit=limit, offset=offset)
 
     async def browse_catalog(
@@ -406,7 +540,8 @@ class RegistryService:
         )
 
     async def get_item(self, item_id: UUID) -> RegistryItem | None:
-        return await self.item_repo.get_by_id(item_id)
+        """The item, unless it belongs to another workspace's registry."""
+        return await self.item_repo.get_visible(item_id)
 
     async def create_catalog_item(
         self,
@@ -543,7 +678,16 @@ class RegistryService:
             raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
-            source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
+            github: GitHubSource | None = None
+            head = root_tree = ""
+            if registry.source_type == "github":
+                # A repository's version is its head commit, kept where an
+                # index URL keeps its ETag.
+                github = self.github_source_factory(await self._credentials(registry))
+                head, root_tree = await github.head(registry.source_url, registry.source_ref)
+                source_etag = head
+            else:
+                source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
             etag = f"{SYNC_FORMAT}:{source_etag}" if source_etag else None
             if not force and etag is not None and etag == registry.source_etag:
                 await self.registry_repo.update(
@@ -561,12 +705,24 @@ class RegistryService:
                     "source_unchanged": True,
                 }
 
-            # In a worker thread, not on the loop: _fetch_source is a blocking
-            # urlopen, and the API serves every request from one event loop, so
-            # calling it here directly froze the whole process -- /health with
-            # it, which is what the probes poll.
-            raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
-            parsed_items = self._dedupe(self._parse_source(registry.registry_type, raw_data))
+            if github is not None:
+                parsed_items = await build_github_skill_index(
+                    github,
+                    repo=registry.source_url,
+                    commit=head,
+                    root_tree=root_tree,
+                    path=registry.source_path,
+                )
+                for position, entry in enumerate(parsed_items):
+                    entry.setdefault("recommendation_rank", position)
+            else:
+                # In a worker thread, not on the loop: _fetch_source is a blocking
+                # urlopen, and the API serves every request from one event loop, so
+                # calling it here directly froze the whole process -- /health with
+                # it, which is what the probes poll.
+                raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
+                parsed_items = self._parse_source(registry.registry_type, raw_data)
+            parsed_items = self._dedupe(parsed_items)
 
             new_specs = 0
             updates_flagged = 0
@@ -753,6 +909,16 @@ class RegistryService:
                 len(parsed_items) - len(by_id),
             )
         return list(by_id.values())
+
+    async def _credentials(self, registry: Registry) -> str | None:
+        """The token a sync reads the source with; resolved now, never stored."""
+        if registry.credentials_secret_ref is None:
+            return None
+        if self.credentials_resolver is None:
+            raise ValueError(
+                f"Registry {registry.id} has credentials but this sync has no way to resolve them"
+            )
+        return await self.credentials_resolver(registry)
 
     # ── Update specs ──
 

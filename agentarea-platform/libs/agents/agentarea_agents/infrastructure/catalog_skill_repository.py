@@ -7,8 +7,8 @@ catalog items so the skill service can project them as read-only skills.
 
 It deliberately uses raw SQL against ``registry_items`` to avoid a
 cross-library dependency on ``agentarea-registry``. The catalog is global
-infrastructure (ADR-003): registries/registry_items are not workspace-scoped, so
-every tenant reads the same built-in skill definitions with no workspace filter.
+infrastructure (ADR-003): every tenant reads the platform registries' skills;
+a workspace registry's skills only its own workspace reads (ADR-0044).
 
 Every read filters on the registry type and active flag each item carries, as
 the bare ``registry_active`` column: that is the predicate of the partial browse
@@ -26,6 +26,11 @@ from uuid import UUID, uuid4
 from agentarea_common.auth.context import UserContext
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# The platform's registries and the caller's own (ADR-0044); another
+# workspace's registry is invisible. ``registry_workspace_id`` is in the browse
+# indexes' INCLUDE, so totals stay index-only.
+_VISIBLE = "(ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = :workspace_id)"
 
 
 @dataclass(frozen=True)
@@ -71,7 +76,7 @@ class CatalogSkillRepository:
         self.user_context = user_context
 
     async def list_items(self) -> list[CatalogSkillItem]:
-        """List all catalog skill items (global catalog, no workspace filter)."""
+        """List the catalog skill items the caller's workspace may see."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
@@ -80,7 +85,7 @@ class CatalogSkillRepository:
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
             "ORDER BY ri.name"
         )
         result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
@@ -103,8 +108,8 @@ class CatalogSkillRepository:
         the workspace has already forked, so the tenant copy shadows them
         exactly as the merged list expects.
         """
-        where = ["ri.registry_type = 'skills'", "ri.registry_active"]
-        params: dict[str, Any] = {}
+        where = ["ri.registry_type = 'skills'", "ri.registry_active", _VISIBLE]
+        params: dict[str, Any] = {"workspace_id": self.user_context.workspace_id}
         expanding: list[str] = []
 
         if exclude_item_ids:
@@ -169,7 +174,8 @@ class CatalogSkillRepository:
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND ri.id IN :item_ids"
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
+            "AND ri.id IN :item_ids"
         ).bindparams(bindparam("item_ids", expanding=True))
         result = await self.session.execute(
             stmt,
@@ -190,7 +196,7 @@ class CatalogSkillRepository:
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
             "AND ri.id = :item_id"
         )
         result = await self.session.execute(
@@ -215,7 +221,7 @@ class CatalogSkillRepository:
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
             "AND (ri.name = :key OR ri.name LIKE :prefix) "
             "ORDER BY ri.updated_at DESC, ri.id "
             "LIMIT 1"

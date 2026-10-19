@@ -8,9 +8,10 @@ server-side replacement: filtering, sorting and paging all happen in SQL, so
 one offset means one thing.
 """
 
-import pytest_asyncio
-from agentarea_registry.application.catalog_facets import derive_facets
 import pytest
+import pytest_asyncio
+from agentarea_common.auth.context import UserContext
+from agentarea_registry.application.catalog_facets import derive_facets
 from agentarea_registry.domain.models import Registry
 from agentarea_registry.infrastructure.repository import (
     RegistryItemRepository,
@@ -65,7 +66,7 @@ async def _item(
 
 @pytest_asyncio.fixture
 async def item_repo(db_session):
-    return RegistryItemRepository(db_session)
+    return RegistryItemRepository(db_session, UserContext(user_id="u", workspace_id="ws"))
 
 
 class TestPagingAcrossRegistries:

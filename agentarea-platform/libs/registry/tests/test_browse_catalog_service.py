@@ -7,6 +7,7 @@ describe the same filtered catalog.
 """
 
 import pytest_asyncio
+from agentarea_common.auth.context import UserContext
 from agentarea_registry.application.catalog_facets import derive_facets
 from agentarea_registry.application.service import RegistryService
 from agentarea_registry.domain.models import Registry
@@ -15,8 +16,9 @@ from agentarea_registry.infrastructure.repository import RegistryItemRepository,
 
 @pytest_asyncio.fixture
 async def service(db_session):
-    item_repo = RegistryItemRepository(db_session)
-    registry_repo = RegistryRepository(db_session)
+    caller = UserContext(user_id="u", workspace_id="ws")
+    item_repo = RegistryItemRepository(db_session, caller)
+    registry_repo = RegistryRepository(db_session, caller)
 
     reg = Registry(
         name="skills",
