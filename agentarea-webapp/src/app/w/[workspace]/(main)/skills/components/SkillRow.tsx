@@ -1,12 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { Copy, Star } from "lucide-react";
-import { InteractiveListRow } from "@/components/ui/interactive-list-row";
-import type { Skill } from "@/types/skill";
 import { SkillTile } from "@/components/SkillTile";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
+import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import type { Skill } from "@/types/skill";
 import { scopeMeta, shortAge } from "./skillsMeta";
+import SkillUpdateMarkers from "./SkillUpdateMarkers";
 
 interface SkillRowProps {
   skill: Skill;
@@ -33,6 +34,7 @@ export default function SkillRow({
       contentClassName="gap-3"
       end={
         <>
+          <SkillUpdateMarkers skill={skill} />
           <span className="skill-col-scope inline-flex items-center gap-1 text-[11.5px] text-muted-foreground">
             <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
             {scope.label}

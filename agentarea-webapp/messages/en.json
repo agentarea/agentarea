@@ -1579,6 +1579,28 @@
       "loadOptionsFailed": "Couldn't load the skills to choose from",
       "addFailed": "Couldn't add the child skill",
       "removeFailed": "Couldn't remove the child skill"
+    },
+    "update": {
+      "available": "Update available",
+      "customized": "Customized",
+      "customizedHint": "Edited in this workspace. Updating it replaces the edit with the registry's version.",
+      "update": "Update",
+      "updateAll": "Update all",
+      "failed": "Couldn't update the skill",
+      "allFailed": "Couldn't update the skills",
+      "discardTitle": "Discard your changes?",
+      "discardDescription": "{name} was edited in this workspace. Updating it to the registry's version discards that edit.",
+      "discardAndUpdate": "Discard my changes and update",
+      "resultsTitle": "Update results",
+      "dismiss": "Dismiss",
+      "nothingToUpdate": "Nothing needed an update.",
+      "customizedSkipped": "Edited here, so left as it is. Open it to update.",
+      "results": {
+        "updated": "Updated",
+        "up_to_date": "Up to date",
+        "customized": "Customized",
+        "failed": "Failed"
+      }
     }
   },
   "TaskArtifactsPage": {

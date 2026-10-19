@@ -1071,6 +1071,27 @@ export const installSkill = async (skillId: string) => {
   return withStatus(result);
 };
 
+// Move an installed catalog skill to the catalog's current version. A skill
+// edited here answers 409 unless the edit is to be discarded.
+export const updateInstalledSkill = async (
+  skillId: string,
+  options: { discardChanges?: boolean } = {}
+) => {
+  const result = await sdk.updateInstalledSkillV1SkillsSkillIdUpdatePost({
+    client: serverClient,
+    path: { skill_id: skillId },
+    query: options.discardChanges ? { discard_changes: true } : undefined,
+  });
+  return withStatus(result);
+};
+
+export const updateAllSkills = async () => {
+  const result = await sdk.updateAllSkillsV1SkillsUpdateAllPost({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
 export const deleteSkill = async (skillId: string) => {
   const result = await sdk.deleteSkillV1SkillsSkillIdDelete({
     client: serverClient,

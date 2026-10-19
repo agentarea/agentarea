@@ -397,3 +397,34 @@ export function getBillingStatusPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+/** An installed catalog skill whose registry has a newer version (ADR-0044). */
+export function getSkillUpdateStatusPresentation(skill: {
+  update_available?: boolean | null;
+}): StatusPresentation | null {
+  return skill.update_available
+    ? {
+        label: "Update available",
+        labelKey: "updateAvailable",
+        kind: "attention",
+      }
+    : null;
+}
+
+/** What updating one installed skill did, as POST /skills/update-all reports it. */
+export function getSkillUpdateResultPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "updated":
+      return { label: "Updated", labelKey: "updated", kind: "done" };
+    case "up_to_date":
+      return { label: "Up to date", labelKey: "upToDate", kind: "active" };
+    case "customized":
+      return { label: "Customized", labelKey: "customized", kind: "attention" };
+    case "failed":
+      return { label: "Failed", labelKey: "failed", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
