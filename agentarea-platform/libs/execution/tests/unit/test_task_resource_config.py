@@ -643,3 +643,28 @@ async def test_workflow_forwards_selections_and_keeps_policy_filtering(monkeypat
     assert "restricted_action" not in {
         tool["function"]["name"] for tool in flow.state.available_tools
     }
+
+
+@pytest.mark.asyncio
+async def test_a_selected_skill_whose_source_is_gone_fails_the_run_without_retries(
+    activity_context,
+):
+    from agentarea_agents.infrastructure.github_skill_importer import GitHubSourceGoneError
+
+    ctx, functions = activity_context
+    saved = agent()
+    selected_skill = skill()
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+    ctx.get_skill_service.return_value.get_with_catalog.return_value = selected_skill
+    ctx.get_skill_service.return_value.read_skill_md.side_effect = GitHubSourceGoneError(
+        "The skill was removed upstream: o/r/pdf"
+    )
+    request = AgentConfigRequest(
+        agent_id=saved.id,
+        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        task_parameters={"skills": [{"id": str(selected_skill.id)}]},
+    )
+
+    with pytest.raises(ApplicationError, match="removed upstream") as error:
+        await functions["build_agent_config_activity"](request)
+    assert error.value.non_retryable

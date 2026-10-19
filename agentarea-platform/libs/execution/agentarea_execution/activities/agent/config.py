@@ -10,6 +10,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_agents.domain.config_hash import compute_agent_config_hash
+from agentarea_agents.infrastructure.github_skill_importer import (
+    GitHubSourceGoneError,
+    GitHubTreeMismatchError,
+)
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.domain.model_kind import ModelKind
@@ -374,8 +378,14 @@ def make_config_activities(
             if skills:
                 skill_service = await ctx.get_skill_service()
                 for skill in skills:
-                    content = await skill_service.read_skill_md(skill)
-                    paths = await skill_service.packages.list_paths(skill)
+                    try:
+                        content = await skill_service.read_skill_md(skill)
+                        paths = await skill_service.packages.list_paths(skill)
+                    except (GitHubSourceGoneError, GitHubTreeMismatchError) as exc:
+                        # Retrying cannot bring an upstream folder back.
+                        raise ApplicationError(
+                            f"Skill '{skill.name}' cannot be read: {exc}", non_retryable=True
+                        ) from exc
                     skills_info.append(
                         SkillInfo(
                             id=str(skill.id),
