@@ -150,6 +150,16 @@ export const listRegistries = async (params?: {
   return { data, error };
 };
 
+// The platform's active registries, which every workspace sees and only the
+// operator changes.
+export const listPlatformRegistries = async () => {
+  const result = await sdk.listRegistriesV1RegistriesGet({
+    client: serverClient,
+    query: { scope: "platform", active_only: true },
+  });
+  return withStatus(result);
+};
+
 // The workspace's own registries (ADR-0044); the platform's are listed by
 // listRegistries above.
 export const listWorkspaceRegistries = async () => {
@@ -159,7 +169,9 @@ export const listWorkspaceRegistries = async () => {
   return withStatus(result);
 };
 
-export const createWorkspaceRegistry = async (body: WorkspaceRegistryCreate) => {
+export const createWorkspaceRegistry = async (
+  body: WorkspaceRegistryCreate
+) => {
   const result = await sdk.createWorkspaceRegistryV1WorkspaceRegistriesPost({
     client: serverClient,
     body,
@@ -422,11 +434,10 @@ export const resolveEscalation = async (
 };
 
 export const getToolCallApproval = async (approvalId: string) => {
-  const result =
-    await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
-      client: serverClient,
-      path: { approval_id: approvalId },
-    });
+  const result = await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
+    client: serverClient,
+    path: { approval_id: approvalId },
+  });
   return withStatus(result);
 };
 

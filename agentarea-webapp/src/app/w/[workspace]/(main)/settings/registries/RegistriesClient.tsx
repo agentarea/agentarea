@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useLocale, useTranslations } from "next-intl";
-import { formatDistanceToNow } from "date-fns";
-import { ru } from "date-fns/locale";
+import { useTranslations } from "next-intl";
 import {
   FolderGit2,
   Library,
@@ -17,49 +15,18 @@ import type { RegistryResponse } from "@/api/client/types.gen";
 import BaseModal from "@/components/BaseModal";
 import EmptyState from "@/components/EmptyState";
 import FormError from "@/components/FormError";
-import { RegistryBadge } from "@/components/RegistryBadge";
 import type { SelectableSecret } from "@/components/SecretSelect";
 import Table, { type Column } from "@/components/Table/Table";
 import { TableRowAction } from "@/components/Table/TableRowAction";
-import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
-import { getRegistrySyncStatusPresentation } from "@/lib/status";
 import { deleteRegistryAction, syncRegistryAction } from "./actions";
 import { describeRegistrySource, registryToForm } from "./registry-form";
 import RegistryFormDialog, {
   type RegistryDialogTarget,
 } from "./RegistryFormDialog";
+import { RegistrySection, useRegistryColumns } from "./RegistryTableParts";
 
 type Notice = { tone: "error" | "info"; message: string } | null;
-
-function SyncCell({ registry }: { registry: RegistryResponse }) {
-  const t = useTranslations("Registries");
-  const locale = useLocale();
-  const presentation = getRegistrySyncStatusPresentation(registry);
-  const when = registry.last_synced_at
-    ? formatDistanceToNow(new Date(registry.last_synced_at), {
-        addSuffix: true,
-        locale: locale === "ru" ? ru : undefined,
-      })
-    : null;
-
-  return (
-    <div className="min-w-0 space-y-0.5">
-      <StatusIndicator kind={presentation.kind} size="sm">
-        {t(`sync.${presentation.labelKey}`)}
-        {when && presentation.kind !== "failed" ? ` · ${when}` : ""}
-      </StatusIndicator>
-      {registry.last_sync_error && (
-        <p
-          className="max-w-[260px] truncate text-xs text-red-600 dark:text-red-400"
-          title={registry.last_sync_error}
-        >
-          {registry.last_sync_error}
-        </p>
-      )}
-    </div>
-  );
-}
 
 function RowActions({
   registry,
@@ -137,7 +104,7 @@ function RowActions({
   );
 }
 
-/** The workspace's registries; admins add, edit, sync and remove them. */
+/** The workspace's own registries; admins add, edit, sync and remove them. */
 export default function RegistriesClient({
   registries,
   secrets,
@@ -159,25 +126,9 @@ export default function RegistriesClient({
       session: (previous?.session ?? 0) + 1,
     }));
 
+  const shared = useRegistryColumns<RegistryResponse>();
   const columns: Column<RegistryResponse>[] = [
-    {
-      header: t("table.name"),
-      accessor: "name",
-      cellClassName: "max-w-[260px]",
-      render: (_, registry) =>
-        registry ? (
-          <div className="min-w-0">
-            <span className="block truncate text-[13px] font-medium">
-              {registry.name}
-            </span>
-            {registry.description && (
-              <span className="block truncate text-xs text-muted-foreground">
-                {registry.description}
-              </span>
-            )}
-          </div>
-        ) : null,
-    },
+    shared.name,
     {
       header: t("table.source"),
       accessor: "source_url",
@@ -196,45 +147,10 @@ export default function RegistriesClient({
           </span>
         ) : null,
     },
-    {
-      header: t("table.type"),
-      accessor: "registry_type",
-      headerClassName: "w-[130px]",
-      cellClassName: "whitespace-nowrap text-xs text-muted-foreground",
-      render: (value, registry) => (
-        <div className="space-y-0.5">
-          <span className="block">
-            {value === "agents" || value === "skills"
-              ? t(`form.registryTypes.${value}`)
-              : String(value)}
-          </span>
-          {registry && (
-            <span className="block">{t(`modes.${registry.mode}`)}</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      header: t("table.trust"),
-      accessor: "trust",
-      headerClassName: "w-[120px]",
-      render: (_, registry) =>
-        registry ? <RegistryBadge trust={registry.trust} /> : null,
-    },
-    {
-      header: t("table.items"),
-      accessor: "item_count",
-      headerClassName: "w-[70px] text-right",
-      cellClassName: "text-right tabular-nums text-xs",
-      render: (value) => String(value),
-    },
-    {
-      header: t("table.sync"),
-      accessor: "last_synced_at",
-      headerClassName: "w-[200px]",
-      render: (_, registry) =>
-        registry ? <SyncCell registry={registry} /> : null,
-    },
+    shared.type,
+    shared.trust,
+    shared.items,
+    shared.sync,
     ...(canAdminister
       ? [
           {
@@ -262,7 +178,10 @@ export default function RegistriesClient({
   ];
 
   return (
-    <>
+    <RegistrySection
+      title={t("workspaceSection.title")}
+      description={t("workspaceSection.description")}
+    >
       {!canAdminister && (
         <p className="mb-3 text-xs text-muted-foreground">{t("adminOnly")}</p>
       )}
@@ -308,6 +227,6 @@ export default function RegistriesClient({
           }}
         />
       )}
-    </>
+    </RegistrySection>
   );
 }

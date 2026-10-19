@@ -13,14 +13,27 @@ export function SettingsSection({
 }) {
   return (
     <section className="space-y-2.5">
-      <div className="space-y-0.5">
-        <h3>{title}</h3>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
-      </div>
+      <SettingsSectionHeading title={title} description={description} />
       <SectionCard>{children}</SectionCard>
     </section>
+  );
+}
+
+/** A settings group's heading and optional lead, for a group that draws its own surface. */
+export function SettingsSectionHeading({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <h3>{title}</h3>
+      {description && (
+        <p className="text-xs text-muted-foreground">{description}</p>
+      )}
+    </div>
   );
 }
 
