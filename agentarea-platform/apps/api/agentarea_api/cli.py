@@ -304,8 +304,14 @@ def skills():
 def move_bodies_to_packages():
     """Move every skill body still stored in its row into the skill's package (ADR-0044).
 
-    Reading such a skill moves it too; this does all of them up front. Safe
-    to run again: a row that already has a package is left alone.
+    Reading such a skill moves it too; this does all of them up front. A row
+    that also has a package was edited after its import, which wrote only the
+    row: the edit goes into the workspace's own copy of the package. Safe to
+    run again: a row without a body is left alone. The platform workspace's
+    stub copies are skipped; the reconcile deletes them.
+
+    Run it only once every worker runs this release: an older worker reads
+    the body from the row and would run a moved skill with an empty prompt.
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     asyncio.run(_move_bodies_to_packages())

@@ -222,11 +222,19 @@ async def test_update_all_moves_an_outdated_install_and_its_pin(session, workspa
 
 
 async def test_bodies_left_in_rows_move_into_packages_in_every_workspace(session, workspace):
+    from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+
     storage, s3 = fake_storage()
     other = f"ws-{uuid4()}"
+    shared = f"skills/catalog/{'c' * 64}/"
+    s3.objects.update({f"{shared}SKILL.md": b"# Imported", f"{shared}fill.py": b"print(1)"})
     legacy = await _skill_row(session, workspace, content="# Legacy")
     legacy_elsewhere = await _skill_row(session, other, content="# Elsewhere")
-    packaged = await _skill_row(session, workspace, content="# Stale", s3_path="skills/x/y/")
+    # Edited after an import: the edit lived only in the row, the prompt read it.
+    edited = await _skill_row(session, workspace, content="# Edited", s3_path=shared)
+    unedited = await _skill_row(session, workspace, content="# Imported", s3_path=shared)
+    # The platform workspace's stub copies are deleted by the reconcile.
+    stub = await _skill_row(session, PLATFORM_WORKSPACE_ID, content="# Stub")
 
     @asynccontextmanager
     async def same_session():
@@ -235,13 +243,13 @@ async def test_bodies_left_in_rows_move_into_packages_in_every_workspace(session
     moved, failed = await move_all_bodies_to_packages(same_session, storage)
 
     assert failed == 0
-    assert moved >= 2
+    assert moved >= 4
     rows = {
         str(r.id): r
         for r in (
             await session.execute(
-                text("SELECT id, s3_path, content FROM skills WHERE id IN (:a, :b, :c)"),
-                {"a": legacy, "b": legacy_elsewhere, "c": packaged},
+                text("SELECT id, s3_path, content FROM skills WHERE id IN (:a, :b, :c, :d, :e)"),
+                {"a": legacy, "b": legacy_elsewhere, "c": edited, "d": unedited, "e": stub},
             )
         ).all()
     }
@@ -249,4 +257,8 @@ async def test_bodies_left_in_rows_move_into_packages_in_every_workspace(session
     assert rows[legacy].content is None
     assert s3.under(rows[legacy].s3_path) == {"SKILL.md": b"# Legacy"}
     assert rows[legacy_elsewhere].s3_path == f"skills/{other}/{legacy_elsewhere}/"
-    assert rows[packaged].s3_path == "skills/x/y/"
+    assert (rows[edited].s3_path, rows[edited].content) == (f"skills/{workspace}/{edited}/", None)
+    assert s3.under(rows[edited].s3_path) == {"SKILL.md": b"# Edited", "fill.py": b"print(1)"}
+    assert s3.under(shared) == {"SKILL.md": b"# Imported", "fill.py": b"print(1)"}
+    assert (rows[unedited].s3_path, rows[unedited].content) == (shared, None)
+    assert (rows[stub].s3_path, rows[stub].content) == (None, "# Stub")

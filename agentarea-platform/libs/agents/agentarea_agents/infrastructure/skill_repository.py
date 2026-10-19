@@ -8,6 +8,7 @@ from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
 )
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -21,11 +22,15 @@ from agentarea_agents.domain.skill_models import (
 
 
 async def list_pre_package_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
-    """``(id, workspace_id)`` of every skill whose body is still in its row."""
+    """``(id, workspace_id)`` of every skill whose body is still in its row.
+
+    The platform workspace's rows are stub copies of catalog skills that the
+    reconcile deletes; a package written for one would be left behind.
+    """
     with unscoped("moving pre-package skill bodies into packages spans every workspace"):
         result = await session.execute(
             select(Skill.id, Skill.workspace_id)
-            .where(Skill.content.is_not(None), Skill.s3_path.is_(None))
+            .where(Skill.content.is_not(None), Skill.workspace_id != PLATFORM_WORKSPACE_ID)
             .order_by(Skill.workspace_id, Skill.id)
         )
         return [(row.id, row.workspace_id) for row in result.all()]

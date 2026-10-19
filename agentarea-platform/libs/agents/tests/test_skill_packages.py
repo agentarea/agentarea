@@ -95,6 +95,22 @@ async def test_a_row_still_holding_its_body_is_moved_into_a_package_on_first_rea
     assert any("Moved the body of skill" in r.getMessage() for r in caplog.records)
 
 
+async def test_an_edit_left_in_the_row_of_a_packaged_skill_wins_on_first_read():
+    # Before packages, editing an imported skill wrote only skills.content,
+    # and the prompt read it; the package still holds the import.
+    repo = FakeSkillRepo()
+    packages, storage, s3 = _packages(repo=repo)
+    shared = await storage.store_catalog_package({"SKILL.md": b"# Imported", "fill.py": b"x"})
+    skill = _tenant(content="# Edited", s3_path=shared)
+    repo._skills = [skill]
+
+    assert await packages.read_skill_md(skill) == "# Edited"
+
+    assert (skill.s3_path, skill.content) == (f"skills/w1/{skill.id}/", None)
+    assert s3.under(skill.s3_path) == {"SKILL.md": b"# Edited", "fill.py": b"x"}
+    assert s3.under(shared) == {"SKILL.md": b"# Imported", "fill.py": b"x"}
+
+
 async def test_a_skill_with_neither_package_nor_body_is_an_error():
     packages, _, _ = _packages(repo=FakeSkillRepo())
 

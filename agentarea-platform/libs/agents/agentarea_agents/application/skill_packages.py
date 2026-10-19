@@ -10,9 +10,11 @@ are cached in-process by ``s3_path`` and never invalidated.
 
 A tenant row that still holds its body in ``skills.content`` (written before
 packages) is moved into a package the first time it is read: the package is
-written, ``s3_path`` set and ``content`` cleared. That is a one-way migration
-step, logged each time; ``agentarea-api skills move-bodies-to-packages`` does
-the same for every row up front.
+written, ``s3_path`` set and ``content`` cleared. A row with both had its
+package imported and its body edited, which wrote only the row; the edit wins
+and goes into the workspace's own copy of the package. That is a one-way
+migration step, logged each time; ``agentarea-api skills
+move-bodies-to-packages`` does the same for every row up front.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_parser import SkillParser
@@ -142,6 +145,8 @@ class SkillPackages:
     async def resolve_s3_path(self, skill: Skill) -> str:
         """The package of ``skill``, storing it first when it has none yet."""
         if skill.s3_path:
+            if "content" not in sa_inspect(skill).unloaded and skill.content is not None:
+                return await self.move_body_to_package(skill)
             return skill.s3_path
         if skill.is_catalog:
             workspace_id = skill.catalog_workspace_id
@@ -153,12 +158,28 @@ class SkillPackages:
         raise ValueError(f"Skill {skill.id} has neither a package nor a body")
 
     async def move_body_to_package(self, skill: Skill) -> str:
-        """Write a pre-package row's body as its SKILL.md and stop storing it in the row."""
+        """Write a pre-package row's body as its SKILL.md and stop storing it in the row.
+
+        A row that also has a package keeps that package's other files; the
+        body replaces its SKILL.md in the workspace's own copy, never in a
+        shared (catalog) package. A body that is already the package's SKILL.md
+        is only dropped from the row.
+        """
         if self._repository is None:
             raise RuntimeError("Moving a skill body into a package needs the skill repository")
-        content = skill.content or ""
+        body = (skill.content or "").encode("utf-8")
+        files = {SKILL_MANIFEST: body}
+        if skill.s3_path:
+            files = await self._storage.read_package(skill.s3_path)
+            main = self._parser.find_main_skill_file(list(files)) or SKILL_MANIFEST
+            if files.get(main) == body:
+                if await self._repository.update(str(skill.id), content=None) is None:
+                    raise RuntimeError(f"Skill {skill.id} vanished while its body was moved")
+                skill.content = None
+                return skill.s3_path
+            files = {**files, main: body}
         s3_path = await self._storage.store_package_files(
-            str(skill.id), str(skill.workspace_id), {SKILL_MANIFEST: content.encode("utf-8")}
+            str(skill.id), str(skill.workspace_id), files
         )
         updated = await self._repository.update(str(skill.id), s3_path=s3_path, content=None)
         if updated is None:
@@ -324,7 +345,7 @@ async def move_all_bodies_to_packages(
                         UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=workspace_id),
                     )
                     skill = await repository.get_by_id(skill_id)
-                    if skill is None or skill.s3_path or skill.content is None:
+                    if skill is None or skill.content is None:
                         continue
                     packages = SkillPackages(storage, GitHubSkillImporter(), repository)
                     await packages.move_body_to_package(skill)
