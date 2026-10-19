@@ -66,6 +66,8 @@ import type {
   UploadPlanRequest,
   ValidateRequest,
   WebhookSourceCreate,
+  WorkspaceRegistryCreate,
+  WorkspaceRegistryUpdate,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { SPEC_IDS_PER_REQUEST, specIdBatches } from "@/lib/mcp/specIds";
@@ -146,6 +148,54 @@ export const listRegistries = async (params?: {
     query: params,
   });
   return { data, error };
+};
+
+// The workspace's own registries (ADR-0044); the platform's are listed by
+// listRegistries above.
+export const listWorkspaceRegistries = async () => {
+  const result = await sdk.listWorkspaceRegistriesV1WorkspaceRegistriesGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createWorkspaceRegistry = async (body: WorkspaceRegistryCreate) => {
+  const result = await sdk.createWorkspaceRegistryV1WorkspaceRegistriesPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const updateWorkspaceRegistry = async (
+  registryId: string,
+  body: WorkspaceRegistryUpdate
+) => {
+  const result =
+    await sdk.updateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatch({
+      client: serverClient,
+      path: { registry_id: registryId },
+      body,
+    });
+  return withStatus(result);
+};
+
+export const deleteWorkspaceRegistry = async (registryId: string) => {
+  const result =
+    await sdk.deleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDelete({
+      client: serverClient,
+      path: { registry_id: registryId },
+    });
+  return withStatus(result);
+};
+
+export const syncWorkspaceRegistry = async (registryId: string) => {
+  const result =
+    await sdk.syncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPost({
+      client: serverClient,
+      path: { registry_id: registryId },
+    });
+  return withStatus(result);
 };
 
 export const listRegistryItems = async (

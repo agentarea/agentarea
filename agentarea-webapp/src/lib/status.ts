@@ -428,3 +428,20 @@ export function getSkillUpdateResultPresentation(
       return fallbackStatusPresentation(status);
   }
 }
+
+/** Whether a registry's index is current: off, last sync failed, synced, never. */
+export function getRegistrySyncStatusPresentation(registry: {
+  is_active: boolean;
+  last_synced_at?: string | null;
+  last_sync_error?: string | null;
+}): StatusPresentation {
+  if (!registry.is_active)
+    return { label: "Off", labelKey: "off", kind: "off" };
+  if (registry.last_sync_error) {
+    return { label: "Sync failed", labelKey: "failed", kind: "failed" };
+  }
+  if (registry.last_synced_at) {
+    return { label: "Synced", labelKey: "synced", kind: "done" };
+  }
+  return { label: "Never synced", labelKey: "never", kind: "draft" };
+}

@@ -361,7 +361,8 @@
     "workspace": "Workspace",
     "apiKeys": "API Keys",
     "auditLog": "Audit Log",
-    "workspaceSettings": "Workspace settings"
+    "workspaceSettings": "Workspace settings",
+    "registries": "Registries"
   },
   "LlmBrowsePage": {
     "title": "LLM Models",
@@ -3589,6 +3590,92 @@
       "verified": "Verified",
       "community": "Community",
       "private": "Private"
+    },
+    "title": "Registries",
+    "description": "Sources the catalog lists skills and agents from, besides the platform's own. Installs from them are pinned and governed by policy.",
+    "add": "Add registry",
+    "loadFailed": "Couldn't load the registries",
+    "adminOnly": "Only a workspace admin can add, change, sync or remove registries.",
+    "syncDone": "{name} synced: {total} items, {added} new.",
+    "retired": "{name} is retired: {count, plural, one {# installed item still uses it and keeps working} other {# installed items still use it and keep working}}. It is gone from the catalog.",
+    "table": {
+      "name": "Name",
+      "source": "Source",
+      "type": "Type",
+      "trust": "Trust",
+      "items": "Items",
+      "sync": "Last sync"
+    },
+    "sync": {
+      "off": "Off",
+      "failed": "Sync failed",
+      "synced": "Synced",
+      "never": "Never synced"
+    },
+    "actions": {
+      "sync": "Sync now",
+      "edit": "Edit",
+      "delete": "Remove"
+    },
+    "delete": {
+      "title": "Remove registry?",
+      "description": "{name} leaves the catalog. Skills already installed from it keep working; if any are, the registry is retired instead of deleted."
+    },
+    "empty": {
+      "title": "No registries yet",
+      "description": "Add your own source of skills or agents. The catalog then lists them next to the platform's.",
+      "hintGithub": "A GitHub repository whose folders are skills: owner/repo, with an optional branch and folder.",
+      "hintIndex": "An index URL in the platform format, e.g. a file in your own bucket.",
+      "hintPolicy": "Decide which registries members may install from in Policies."
+    },
+    "errors": {
+      "invalid": "Check the highlighted fields.",
+      "createFailed": "Couldn't add the registry",
+      "updateFailed": "Couldn't save the registry",
+      "deleteFailed": "Couldn't remove the registry",
+      "syncFailed": "Couldn't sync the registry"
+    },
+    "form": {
+      "createTitle": "Add registry",
+      "editTitle": "Edit registry",
+      "description": "A source the catalog reads skills or agents from.",
+      "create": "Add registry",
+      "save": "Save",
+      "createFailed": "Couldn't add the registry",
+      "updateFailed": "Couldn't save the registry",
+      "name": "Name",
+      "namePlaceholder": "acme-skills",
+      "nameRequired": "Name the registry",
+      "descriptionLabel": "Description",
+      "sourceType": "Source",
+      "sourceTypes": {
+        "github": "GitHub repository",
+        "url": "Index URL"
+      },
+      "repository": "Repository",
+      "repositoryPlaceholder": "owner/repo",
+      "indexUrl": "Index URL",
+      "indexUrlPlaceholder": "https://example.com/registry/skills.json",
+      "sourceRequired": "Say where the registry reads from",
+      "ref": "Branch, tag or commit",
+      "refPlaceholder": "Default branch",
+      "path": "Folder",
+      "pathPlaceholder": "Repository root",
+      "registryType": "Lists",
+      "registryTypes": {
+        "skills": "Skills",
+        "agents": "Agents"
+      },
+      "trust": "Trust",
+      "credentials": "Credentials",
+      "credentialsHint": "A workspace secret holding the token a private source is read with. The registry keeps a reference, never a copy.",
+      "credentialsNone": "None (public source)",
+      "credentialsLoading": "Loading secrets…",
+      "credentialsSearch": "Search secrets…",
+      "credentialsEmpty": "No secrets found.",
+      "credentialsCreate": "Create a secret",
+      "credentialsClear": "Clear",
+      "active": "Active: listed in the catalog and synced"
     }
   },
   "CatalogFetchErrors": {
