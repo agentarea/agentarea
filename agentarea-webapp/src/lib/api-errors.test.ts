@@ -61,19 +61,44 @@ describe("apiErrorMessage", () => {
 });
 
 describe("catalogFetchFailure", () => {
-  it("names the refusals an install or update can meet", () => {
-    expect(catalogFetchFailure({ error: {}, status: 410 })).toBe(
+  const problem = (status: number, code: string) => ({
+    error: { status, code, detail: "server words" },
+    status,
+  });
+
+  it("tells the 409s apart by their problem code", () => {
+    expect(catalogFetchFailure(problem(409, "skill_customized"))).toBe(
+      "customized"
+    );
+    expect(catalogFetchFailure(problem(409, "skill_not_from_catalog"))).toBe(
+      "notFromCatalog"
+    );
+    expect(catalogFetchFailure(problem(409, "skill_tree_mismatch"))).toBe(
+      "moved"
+    );
+  });
+
+  it("names the source failures", () => {
+    expect(catalogFetchFailure(problem(410, "skill_source_gone"))).toBe(
       "removedUpstream"
     );
-    expect(catalogFetchFailure({ error: {}, status: 409 })).toBe("moved");
-    expect(catalogFetchFailure({ error: {}, status: 429 })).toBe("rateLimited");
-    expect(catalogFetchFailure({ error: {}, status: 403 })).toBe(
+    expect(catalogFetchFailure(problem(429, "github_rate_limited"))).toBe(
+      "rateLimited"
+    );
+    expect(catalogFetchFailure(problem(502, "skill_source_unreachable"))).toBe(
+      "sourceUnreachable"
+    );
+  });
+
+  it("reads a 403 as the install policy refusing", () => {
+    expect(catalogFetchFailure(problem(403, "permission_denied"))).toBe(
       "refusedByPolicy"
     );
   });
 
-  it("leaves any other failure to the generic message", () => {
-    expect(catalogFetchFailure({ error: {}, status: 500 })).toBeNull();
+  it("leaves a status without a known code to the generic message", () => {
+    expect(catalogFetchFailure({ error: { detail: "x" }, status: 409 })).toBeNull();
+    expect(catalogFetchFailure(problem(500, "internal_error"))).toBeNull();
     expect(catalogFetchFailure({ error: "offline" })).toBeNull();
   });
 });

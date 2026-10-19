@@ -1,3 +1,5 @@
+import type { SkillResponse } from "@/api/client/types.gen";
+
 export type SkillSourceType = "content" | "github" | "zip" | "path";
 export type SkillNetworkScope = "private" | "ingress" | "egress";
 
@@ -15,6 +17,10 @@ export interface Skill {
   registry_item_id?: string | null;
   update_available?: boolean | null;
   customized?: boolean | null;
+  registry_name?: SkillResponse["registry_name"];
+  registry_trust?: SkillResponse["registry_trust"];
+  registry_scope?: SkillResponse["registry_scope"];
+  removed_upstream?: boolean | null;
 }
 
 export interface PaginatedSkills {

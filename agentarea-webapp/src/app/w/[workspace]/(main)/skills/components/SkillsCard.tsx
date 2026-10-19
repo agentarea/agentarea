@@ -8,8 +8,8 @@ import WorkspaceLink from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { cn } from "@/lib/utils";
 import type { Skill } from "@/types/skill";
+import SkillProvenance from "./SkillProvenance";
 import { scopeMeta } from "./skillsMeta";
-import SkillUpdateMarkers from "./SkillUpdateMarkers";
 
 interface SkillsCardProps {
   skill: Skill;
@@ -65,7 +65,7 @@ export default function SkillsCard({
           <ScopeIcon className="h-3 w-3" strokeWidth={1.7} />
           {scope.label}
         </span>
-        <SkillUpdateMarkers skill={skill} />
+        <SkillProvenance skill={skill} />
       </div>
 
       {/* Hidden actions become available on hover, keyboard focus, and touch. */}

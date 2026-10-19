@@ -7,13 +7,13 @@ import BaseModal from "@/components/BaseModal";
 import { Button } from "@/components/ui/button";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { useCatalogFetchError } from "@/hooks/useCatalogFetchError";
-import { apiErrorDetail, getApiStatus } from "@/lib/api-errors";
+import { apiErrorDetail, catalogFetchFailure } from "@/lib/api-errors";
 import { updateInstalledSkillAction } from "@/lib/server-actions";
 
 /**
  * A workspace admin moves an installed catalog skill to the registry's current
- * version. A skill edited here is refused (409); the admin may then discard
- * the edit and update anyway.
+ * version. A skill edited here is refused (skill_customized); only then may
+ * the admin discard the edit and update anyway.
  */
 export default function UpdateSkillButton({
   skill,
@@ -24,7 +24,6 @@ export default function UpdateSkillButton({
     id: string;
     name: string;
     update_available?: boolean | null;
-    customized?: boolean | null;
   };
   onUpdated: () => void;
   onError: (message: string | null) => void;
@@ -51,7 +50,7 @@ export default function UpdateSkillButton({
         onUpdated();
         return;
       }
-      if (getApiStatus(result) === 409 && skill.customized) {
+      if (catalogFetchFailure(result) === "customized") {
         setCustomizedRefusal(apiErrorDetail(result, t("failed")));
         return;
       }

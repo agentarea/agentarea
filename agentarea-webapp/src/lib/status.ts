@@ -411,6 +411,15 @@ export function getSkillUpdateStatusPresentation(skill: {
     : null;
 }
 
+/** An installed catalog skill its registry no longer publishes; it keeps working. */
+export function getSkillSourceStatusPresentation(skill: {
+  removed_upstream?: boolean | null;
+}): StatusPresentation | null {
+  return skill.removed_upstream
+    ? { label: "Removed upstream", labelKey: "removedUpstream", kind: "off" }
+    : null;
+}
+
 /** What updating one installed skill did, as POST /skills/update-all reports it. */
 export function getSkillUpdateResultPresentation(
   status: string

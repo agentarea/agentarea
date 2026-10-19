@@ -55,7 +55,7 @@ import {
   removeSkillMemberAction as removeSkillMember,
   updateSkillAction as updateSkill,
 } from "@/lib/server-actions";
-import SkillUpdateMarkers from "../components/SkillUpdateMarkers";
+import SkillProvenance from "../components/SkillProvenance";
 import UpdateSkillButton from "../components/UpdateSkillButton";
 
 // The page title is the document's only h1, so SKILL.md headings render one
@@ -501,7 +501,7 @@ export default function SkillDetailPage() {
               </Button>
             ) : (
               <>
-                <SkillUpdateMarkers skill={skill} />
+                <SkillProvenance skill={skill} />
                 <UpdateSkillButton
                   skill={skill}
                   onError={setActionError}

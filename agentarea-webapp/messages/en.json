@@ -1601,7 +1601,9 @@
         "up_to_date": "Up to date",
         "customized": "Customized",
         "failed": "Failed"
-      }
+      },
+      "removedUpstream": "Removed upstream",
+      "removedUpstreamHint": "The registry no longer publishes this skill. The installed copy keeps working."
     }
   },
   "TaskArtifactsPage": {
@@ -3707,6 +3709,9 @@
     "removedUpstream": "Removed upstream",
     "moved": "Moved or changed upstream",
     "rateLimited": "Rate limited, try again later",
-    "refusedByPolicy": "Refused by policy"
+    "refusedByPolicy": "Refused by policy",
+    "customized": "Edited in this workspace",
+    "notFromCatalog": "Not installed from the catalog",
+    "sourceUnreachable": "The source could not be reached"
   }
 }
