@@ -2370,12 +2370,19 @@ export const zOpenApiConnectionResponse = z.object({
  */
 export const zRegistryCreate = z.object({
   description: z.string().nullish(),
+  mode: z.enum(["mirror", "upstream"]).optional().default("mirror"),
   name: z.string(),
   recommendation_priority: z.number().int().gte(0).nullish(),
   registry_type: z.string(),
+  source_path: z.string().nullish(),
+  source_ref: z.string().max(255).nullish(),
   source_type: z.string(),
   source_url: z.string().nullish(),
   sync_mode: z.string().optional().default("manual"),
+  trust: z
+    .enum(["official", "verified", "community", "private"])
+    .optional()
+    .default("official"),
 });
 
 /**
@@ -2394,6 +2401,10 @@ export const zRegistryItemResponse = z.object({
   name: z.string(),
   pricing: zCatalogItemPricingResponse.nullish(),
   registry_id: z.string().uuid(),
+  registry_mode: z.enum(["mirror", "upstream"]).nullish(),
+  registry_name: z.string().nullish(),
+  registry_scope: z.enum(["platform", "workspace"]).nullish(),
+  registry_trust: z.enum(["official", "verified", "community", "private"]),
   spec: z.record(z.unknown()),
   tags: z.array(z.string()),
   update_available: z.boolean(),
@@ -2430,19 +2441,26 @@ export const zCatalogBrowseResponse = z.object({
  */
 export const zRegistryResponse = z.object({
   created_at: z.string().datetime(),
+  credentials_secret_id: z.string().uuid().nullish(),
   description: z.string().nullable(),
   id: z.string().uuid(),
   is_active: z.boolean(),
   item_count: z.number().int(),
   last_sync_error: z.string().nullable(),
   last_synced_at: z.string().datetime().nullable(),
+  mode: z.enum(["mirror", "upstream"]),
   name: z.string(),
   recommendation_priority: z.number().int(),
   registry_type: z.string(),
+  scope: z.enum(["platform", "workspace"]),
+  source_path: z.string().nullish(),
+  source_ref: z.string().nullish(),
   source_type: z.string(),
   source_url: z.string(),
   sync_mode: z.string(),
+  trust: z.enum(["official", "verified", "community", "private"]),
   updated_at: z.string().datetime(),
+  workspace_id: z.string().nullish(),
 });
 
 /**
@@ -2451,10 +2469,12 @@ export const zRegistryResponse = z.object({
 export const zRegistryUpdate = z.object({
   description: z.string().nullish(),
   is_active: z.boolean().nullish(),
+  mode: z.enum(["mirror", "upstream"]).nullish(),
   name: z.string().nullish(),
   recommendation_priority: z.number().int().gte(0).nullish(),
   source_url: z.string().nullish(),
   sync_mode: z.string().nullish(),
+  trust: z.enum(["official", "verified", "community", "private"]).nullish(),
 });
 
 /**
@@ -4133,6 +4153,43 @@ export const zWorkspaceFileListResponse = z.object({
   directories: z.array(z.string()).optional(),
   files: z.array(zWorkspaceFileInfo),
   truncated: z.boolean().optional().default(false),
+});
+
+/**
+ * WorkspaceRegistryCreate
+ */
+export const zWorkspaceRegistryCreate = z.object({
+  credentials_secret_id: z.string().uuid().nullish(),
+  description: z.string().nullish(),
+  name: z.string().min(1).max(255),
+  registry_type: z.enum(["skills", "agents"]).optional().default("skills"),
+  source_path: z.string().nullish(),
+  source_ref: z.string().max(255).nullish(),
+  source_type: z.enum(["url", "github"]),
+  source_url: z.string().min(1),
+  trust: z.enum(["private", "community"]).optional().default("private"),
+});
+
+/**
+ * WorkspaceRegistryRemoved
+ */
+export const zWorkspaceRegistryRemoved = z.object({
+  kept_items: z.number().int(),
+  status: z.enum(["deleted", "retired"]),
+});
+
+/**
+ * WorkspaceRegistryUpdate
+ */
+export const zWorkspaceRegistryUpdate = z.object({
+  credentials_secret_id: z.string().uuid().nullish(),
+  description: z.string().nullish(),
+  is_active: z.boolean().nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  source_path: z.string().nullish(),
+  source_ref: z.string().max(255).nullish(),
+  source_url: z.string().min(1).nullish(),
+  trust: z.enum(["private", "community"]).nullish(),
 });
 
 /**
@@ -6250,6 +6307,7 @@ export const zGetProviderSpecV1ProviderSpecsProviderSpecIdGetResponse =
 export const zListRegistriesV1RegistriesGetQuery = z.object({
   active_only: z.boolean().optional().default(false),
   registry_type: z.string().nullish(),
+  scope: z.enum(["platform", "workspace"]).nullish(),
 });
 
 /**
@@ -7195,6 +7253,75 @@ export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetQuery =
  */
 export const zGetExecutionTimelineV1TriggersTriggerIdTimelineGetResponse =
   zExecutionTimelineResponse;
+
+/**
+ * Response List Workspace Registries V1 Workspace Registries Get
+ *
+ * Successful Response
+ */
+export const zListWorkspaceRegistriesV1WorkspaceRegistriesGetResponse =
+  z.array(zRegistryResponse);
+
+export const zCreateWorkspaceRegistryV1WorkspaceRegistriesPostBody =
+  zWorkspaceRegistryCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateWorkspaceRegistryV1WorkspaceRegistriesPostResponse =
+  zRegistryResponse;
+
+export const zDeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeletePath =
+  z.object({
+    registry_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponse =
+  zWorkspaceRegistryRemoved;
+
+export const zGetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetPath =
+  z.object({
+    registry_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponse =
+  zRegistryResponse;
+
+export const zUpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchBody =
+  zWorkspaceRegistryUpdate;
+
+export const zUpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchPath =
+  z.object({
+    registry_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponse =
+  zRegistryResponse;
+
+export const zSyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostPath =
+  z.object({
+    registry_id: z.string().uuid(),
+  });
+
+export const zSyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostQuery =
+  z.object({
+    force: z.boolean().optional().default(false),
+  });
+
+/**
+ * Successful Response
+ */
+export const zSyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponse =
+  zAgentareaApiApiV1RegistriesSyncResponse;
 
 /**
  * Response Webhook Health Check Webhooks Health Get
