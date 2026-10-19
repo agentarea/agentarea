@@ -47,6 +47,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Every SKILL.md rides in this activity's result, a Temporal payload (2 MB warns,
+# 4 MB fails the workflow task): one large body, or many, must fail the run
+# here with the reason rather than as an opaque payload error.
+MAX_SKILL_CONTENT_BYTES = 256 * 1024
+MAX_SKILLS_CONTENT_BYTES = 1024 * 1024
+
 
 def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
@@ -384,6 +390,7 @@ def make_config_activities(
             skills_info = []
             if skills:
                 skill_service = await ctx.get_skill_service()
+                total_bytes = 0
                 for skill in skills:
                     try:
                         content = await skill_service.read_skill_md(skill)
@@ -393,6 +400,20 @@ def make_config_activities(
                         raise ApplicationError(
                             f"Skill '{skill.name}' cannot be read: {exc}", non_retryable=True
                         ) from exc
+                    size = len(content.encode("utf-8"))
+                    total_bytes += size
+                    if size > MAX_SKILL_CONTENT_BYTES:
+                        raise ApplicationError(
+                            f"Skill '{skill.name}' has a SKILL.md of {size} bytes; a run takes "
+                            f"at most {MAX_SKILL_CONTENT_BYTES} per skill",
+                            non_retryable=True,
+                        )
+                    if total_bytes > MAX_SKILLS_CONTENT_BYTES:
+                        raise ApplicationError(
+                            f"The SKILL.md files of this run's skills together exceed "
+                            f"{MAX_SKILLS_CONTENT_BYTES} bytes",
+                            non_retryable=True,
+                        )
                     skills_info.append(
                         SkillInfo(
                             id=str(skill.id),

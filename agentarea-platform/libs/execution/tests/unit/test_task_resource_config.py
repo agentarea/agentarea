@@ -713,3 +713,32 @@ async def test_a_catalog_agent_the_install_policy_refuses_fails_the_run_without_
         await functions["build_agent_config_activity"](request)
     assert error.value.non_retryable
     assert agents.get_with_catalog.await_args.kwargs == {"to_run": True}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("bodies", "message"),
+    [
+        (["x" * 101], "Skill 'S0' has a SKILL.md of 101 bytes"),
+        (["x" * 60, "y" * 60], "together exceed 100 bytes"),
+    ],
+)
+async def test_skill_bodies_too_large_for_the_run_config_fail_without_retries(
+    activity_context, monkeypatch, bodies, message
+):
+    # Every body rides in the config activity's result, a Temporal payload
+    # (2 MB warn, 4 MB hard): a large SKILL.md fails the run at config time.
+    monkeypatch.setattr(config_activities, "MAX_SKILL_CONTENT_BYTES", 100)
+    monkeypatch.setattr(config_activities, "MAX_SKILLS_CONTENT_BYTES", 100)
+    ctx, functions = activity_context
+    skills = [skill(f"S{i}") for i in range(len(bodies))]
+    for selected, body in zip(skills, bodies, strict=True):
+        selected.content = body
+    ctx.get_agent_service.return_value.get_with_skills.return_value = agent(skills=skills)
+    request = AgentConfigRequest(
+        agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
+    )
+
+    with pytest.raises(ApplicationError, match=message) as error:
+        await functions["build_agent_config_activity"](request)
+    assert error.value.non_retryable
