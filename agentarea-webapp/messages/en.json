@@ -3315,7 +3315,8 @@
         "semantics": "A deny always wins. Once any allow rule exists, the catalog installs only from what an allow names.",
         "trustLevels": "Trust levels",
         "registries": "Registries",
-        "noRegistries": "No skill or agent registries are visible to this workspace.",
+        "githubImport": "Direct GitHub imports",
+        "githubImportType": "skill URL",
         "workspaceOnly": "Applies to every install in this workspace.",
         "manageRegistries": "Manage registries"
       }

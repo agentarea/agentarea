@@ -6,6 +6,7 @@ import type {
   PolicyRule,
 } from "@/types/policies";
 import {
+  GITHUB_IMPORT_REGISTRY_ID,
   isToolTarget,
   parseInstallTarget,
   toolNameFromTarget,
@@ -375,7 +376,9 @@ function describeRule(
       value:
         install?.kind === "registry_trust"
           ? `from ${install.trust} registries`
-          : `from registry ${install?.registryId ?? policy.target}`,
+          : install?.registryId === GITHUB_IMPORT_REGISTRY_ID
+            ? "from GitHub URLs"
+            : `from registry ${install?.registryId ?? policy.target}`,
     };
   }
 

@@ -441,6 +441,10 @@ class SkillsToolset(Toolset):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=_user_ctx)
+            try:
+                await service.require_github_import_allowed()
+            except CatalogInstallRefusedError as exc:
+                raise ToolError(str(exc)) from exc
             repo = service._get_repository()
             for candidate in selected:
                 try:

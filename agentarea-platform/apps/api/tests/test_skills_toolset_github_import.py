@@ -59,6 +59,9 @@ async def test_import_from_github_downloads_repo_once_for_multiple_skills(monkey
         def _get_repository(self):
             return FakeRepo()
 
+        async def require_github_import_allowed(self):
+            pass
+
         async def create_from_zip(self, **_kwargs):
             self._counter += 1
             return SimpleNamespace(
@@ -89,6 +92,49 @@ async def test_import_from_github_downloads_repo_once_for_multiple_skills(monkey
     assert result["count"] == 2
     assert download_calls == ["https://github.com/acme/repo"]
     assert package_calls == ["skills/one", "skills/two"]
+
+
+@pytest.mark.asyncio
+async def test_import_from_github_is_refused_when_the_install_policy_excludes_github(
+    monkeypatch,
+):
+    from agentarea_agents.application import skill_service
+    from agentarea_agents.infrastructure import github_skill_importer
+    from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
+
+    created: list[object] = []
+
+    async def fake_candidates(_github_url: str):
+        return None, "main", [{"name": "One", "package_path": "skills/one"}]
+
+    async def fake_download(self, github_url: str):
+        return b"repo-zip"
+
+    @asynccontextmanager
+    async def fake_platform_context():
+        yield (None, SimpleNamespace(user_id="u1", workspace_id="ws-1"), object(), None, None)
+
+    class RefusingSkillService:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def require_github_import_allowed(self):
+            raise CatalogInstallRefusedError(
+                "Install refused by policy: denied by registry:github for workspace ws-1"
+            )
+
+        async def create_from_zip(self, **kwargs):
+            created.append(kwargs)
+
+    monkeypatch.setattr(skills_toolset, "_list_github_skill_candidates", fake_candidates)
+    monkeypatch.setattr(skills_toolset, "platform_context", fake_platform_context)
+    monkeypatch.setattr(github_skill_importer.GitHubSkillImporter, "download_repo", fake_download)
+    monkeypatch.setattr(skill_service, "SkillService", RefusingSkillService)
+
+    with pytest.raises(ToolError, match="registry:github"):
+        await SkillsToolset().import_from_github(github_url="https://github.com/acme/repo")
+
+    assert created == []
 
 
 @pytest.mark.asyncio

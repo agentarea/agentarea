@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.application import workspace_export_service
+from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.workspace_export_service import WorkspaceExportService
 from agentarea_bundles.application.analyzer import BundleAnalyzer, parse_bundle
 from agentarea_bundles.application.installer import (
@@ -18,8 +19,14 @@ from agentarea_bundles.schemas.result import InstallAction
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.base.models import BaseModel
 from agentarea_common.di.container import register_singleton
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
+from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
+from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 FULL = """
 schema_version: "0.1.0"
@@ -720,6 +727,44 @@ agents: [{key: a, name: A, model: gpt-4o, skills: [review]}]
     assert call.github_url == "https://github.com/o/r/tree/main/review"
     assert call.name == "Review"
     assert len(deps["agent_service"].calls[0].skill_ids) == 1
+
+
+async def test_a_github_skill_is_refused_when_the_install_policy_denies_community_sources():
+    caller = UserContext(user_id="u", workspace_id="w", admin_workspaces=["w"])
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda c: BaseModel.metadata.create_all(c, tables=[PolicyRuleORM.__table__])
+        )
+    async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as s:
+        await PolicyRuleRepository(s, caller).create(
+            PolicyRule(
+                subject_type=PolicySubjectType.WORKSPACE,
+                subject_id=caller.workspace_id,
+                target="registry_trust:community",
+                effect=PolicyEffect.DENY,
+            )
+        )
+        await s.commit()
+        package = parse_bundle(
+            """
+schema_version: "0.1.0"
+name: p
+skills:
+  - {key: review, name: Review, source_type: github, source_url: "https://github.com/o/r"}
+agents: [{key: a, name: A, model: gpt-4o, skills: [review]}]
+"""
+        )
+        installer, deps = _installer(
+            skill_service=SkillService(SimpleNamespace(session=s, user_context=caller), caller),
+            user_context=caller,
+        )
+
+        with pytest.raises(CatalogInstallRefusedError, match="registry_trust:community"):
+            await installer.install(package, {})
+
+    await engine.dispose()
+    assert deps["agent_service"].calls == []
 
 
 BLOCKED = """

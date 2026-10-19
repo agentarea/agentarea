@@ -17,7 +17,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from agentarea_common.constants import REGISTRY_TRUST_LEVELS
+from agentarea_common.constants import GITHUB_IMPORT_REGISTRY_ID, REGISTRY_TRUST_LEVELS
 from agentarea_common.money import to_money
 from pydantic import (
     BaseModel,
@@ -652,10 +652,15 @@ def _assert_install_rule(rule: PolicyRule, kind: str, value: str | None) -> None
             f"{rule.target!r} decides installs, so it binds to the workspace or a user"
         )
     if kind == "registry":
+        if value == GITHUB_IMPORT_REGISTRY_ID:
+            return
         try:
             UUID(str(value))
         except ValueError:
-            raise ValueError(f"registry:<id> needs a registry id, not {rule.target!r}") from None
+            raise ValueError(
+                f"registry:<id> needs a registry id or {GITHUB_IMPORT_REGISTRY_ID!r}, "
+                f"not {rule.target!r}"
+            ) from None
     elif value not in REGISTRY_TRUST_LEVELS:
         raise ValueError(
             f"registry_trust:<level> needs one of {', '.join(REGISTRY_TRUST_LEVELS)}, "
