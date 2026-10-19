@@ -35,6 +35,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import tenant_scoped_session_class, workspace_scope
 from agentarea_common.config.database import TenantScopeMode
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
@@ -316,6 +317,7 @@ async def test_the_repin_moves_unedited_installs_in_every_workspace(session):
     untouched = await _legacy_install(session, first, item, STUB)
     elsewhere = await _legacy_install(session, second, item, STUB)
     edited = await _legacy_install(session, third, item, STUB + "\nmine")
+    stub = await _legacy_install(session, PLATFORM_WORKSPACE_ID, item, STUB)
 
     @asynccontextmanager
     async def same_session():
@@ -323,6 +325,7 @@ async def test_the_repin_moves_unedited_installs_in_every_workspace(session):
 
     results = {r.skill_id: r for _, r in await repin_all_catalog_installs(same_session, storage)}
 
+    assert stub not in results
     assert results[untouched].status == "repinned"
     assert results[elsewhere].status == "repinned"
     assert results[edited].status == "edited"
