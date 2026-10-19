@@ -258,7 +258,9 @@ class SkillsToolset(Toolset):
             if not skill:
                 raise ToolError("Skill not found")
             payload = _skill_summary(skill)
-            payload.update({"source_url": skill.source_url, "content": skill.content})
+            payload.update(
+                {"source_url": skill.source_url, "content": await service.read_skill_md(skill)}
+            )
             return json.dumps(payload, default=str)
 
     @tool_method(effect="write")

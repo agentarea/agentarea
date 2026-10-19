@@ -174,6 +174,9 @@ def activity_context(monkeypatch):
 
     ctx = context()
     ctx.__aenter__.return_value = ctx
+    skills = ctx.get_skill_service.return_value
+    skills.read_skill_md = AsyncMock(side_effect=lambda skill: skill.content)
+    skills.packages.list_paths = AsyncMock(return_value=["SKILL.md"])
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     monkeypatch.setattr(

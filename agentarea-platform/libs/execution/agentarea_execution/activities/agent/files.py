@@ -51,7 +51,6 @@ def make_files_activities(
         shell call. A skill carrying only prose is still a bundle — its text is
         written as SKILL.md, so there is one kind of skill, not two.
         """
-        from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
         from agentarea_common.artifacts import DbArtifactEventRecorder, WorkspaceRepository
 
         from ..skill_materialization import (
@@ -72,26 +71,9 @@ def make_files_activities(
                         success=False, error=f"Skill {request.skill_id} not found"
                     )
 
-                # A skill is a folder. Files may be absent, prose may be absent,
-                # but the folder always gets a manifest — there is one kind of
-                # skill, not a "content-only" second kind.
-                bundled: list[tuple[str, bytes]] = []
-                if skill.s3_path:
-                    storage_service = SkillStorageService()
-                    for info in await storage_service.list_files(skill.s3_path):
-                        relative_path = getattr(info, "path", None) or getattr(info, "name", "")
-                        if not relative_path:
-                            continue
-                        bundled.append(
-                            (
-                                relative_path,
-                                await storage_service.get_file_content(
-                                    skill.s3_path, relative_path
-                                ),
-                            )
-                        )
-
-                files = assemble_skill_bundle(skill.content, bundled)
+                # A skill is a folder: its package, with a manifest always.
+                bundled = list((await skill_service.read_files(skill)).items())
+                files = assemble_skill_bundle(None, bundled)
                 workspace_files = build_skill_workspace_files(
                     request.skill_name, str(request.skill_id), files
                 )

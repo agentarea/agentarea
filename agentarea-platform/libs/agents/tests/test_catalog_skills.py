@@ -185,8 +185,10 @@ class FakeFactory:
 
 
 def _service(repo, catalog, workspace_id="w1"):
+    from .fake_s3 import fake_storage
+
     uc = UserContext(user_id="u1", workspace_id=workspace_id)
-    svc = SkillService(FakeFactory(repo, uc), uc)
+    svc = SkillService(FakeFactory(repo, uc), uc, storage_service=fake_storage()[0])
     svc._get_repository = lambda: repo
     svc._get_catalog_repository = lambda: catalog
     return svc
@@ -206,7 +208,9 @@ def test_project_catalog_skill_marks_read_only_with_provenance():
     assert skill.registry_item_id == item.id
     assert skill.is_catalog is True
     assert skill.update_available is False
-    assert skill.content == "# Hello"
+    # The body is read from the package built from the spec, never the row.
+    assert skill.content is None
+    assert skill.catalog_spec == item.spec
     assert skill.source_type == "content"
     assert skill.source_url == "https://example.com"
     assert skill.created_at == item.created_at
@@ -274,7 +278,9 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     assert skill.registry_item_id == item.id
     kw = repo.created_kwargs[0]
     assert kw["registry_item_id"] == item.id
-    assert kw["content"] == "# C"
+    assert kw["content"] is None
+    assert kw["s3_path"].startswith("skills/catalog/")
+    assert await svc.read_skill_md(skill) == "# C"
     assert kw["source_type"] == "content"
     assert kw["source_url"] == "https://x"
     # The install is recorded on the catalog item with the new skill id + version.
@@ -329,7 +335,7 @@ async def test_update_on_catalog_id_forks_tenant_copy():
     # A new tenant row was created (id differs from the catalog item id).
     assert str(updated.id) != item.id
     assert updated.registry_item_id == item.id
-    assert updated.content == "# Orig"
+    assert await svc.read_skill_md(updated) == "# Orig"
     assert updated.description == "new desc"
     assert catalog.installed
     assert catalog.installed[0][0] == item.id
@@ -346,7 +352,7 @@ async def test_set_content_on_catalog_id_forks_tenant_copy():
     assert updated is not None
     assert str(updated.id) != item.id
     assert updated.registry_item_id == item.id
-    assert updated.content == "# New content"
+    assert await svc.read_skill_md(updated) == "# New content"
 
 
 async def test_list_paginated_merges_catalog_and_dedups():

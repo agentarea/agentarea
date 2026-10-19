@@ -278,6 +278,35 @@ def reconcile(
     asyncio.run(_reconcile(registries_config, source, config_file, force=force))
 
 
+@cli.group()
+def skills():
+    """Skill maintenance."""
+
+
+@skills.command("move-bodies-to-packages")
+def move_bodies_to_packages():
+    """Move every skill body still stored in its row into the skill's package (ADR-0044).
+
+    Reading such a skill moves it too; this does all of them up front. Safe
+    to run again: a row that already has a package is left alone.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_move_bodies_to_packages())
+
+
+async def _move_bodies_to_packages() -> None:
+    from agentarea_agents.application.skill_packages import move_all_bodies_to_packages
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    db = Database(get_db_settings())
+    moved, failed = await move_all_bodies_to_packages(
+        db.async_session_factory, SkillStorageService()
+    )
+    click.echo(f"Moved {moved} skill bodies into packages; {failed} failed")
+    if failed:
+        sys.exit(1)
+
+
 async def _register_graph_client() -> None:
     """Register the authorization-graph client the API and worker register.
 

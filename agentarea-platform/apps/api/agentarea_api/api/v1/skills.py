@@ -1,5 +1,7 @@
 """Skills API endpoints for managing agent skills."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Annotated
 from uuid import UUID
 
@@ -10,6 +12,8 @@ from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubNotFoundError,
     GitHubRateLimitError,
     GitHubSkillImporterError,
+    GitHubSourceGoneError,
+    GitHubTreeMismatchError,
 )
 from agentarea_agents.schemas.skills_dto import (
     SkillCreateFromContent,
@@ -174,6 +178,25 @@ class SkillMemberResponse(BaseModel):
     order: int
     is_required: bool
     dependencies: list[str]
+
+
+@contextmanager
+def _catalog_fetch_errors() -> Iterator[None]:
+    """Answer a failed install of a catalog skill with what went wrong."""
+    try:
+        yield
+    except GitHubSourceGoneError as e:
+        raise HTTPException(status_code=410, detail=str(e)) from e
+    except GitHubRateLimitError as e:
+        raise HTTPException(status_code=429, detail=str(e)) from e
+    except GitHubTreeMismatchError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except GitHubSkillImporterError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except SkillFrontmatterError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 # ============================================================================
@@ -343,8 +366,9 @@ async def install_skill(
     skill_id: UUID,
     skill_service: SkillServiceDep,
 ):
-    """Add a built-in catalog skill to the workspace."""
-    skill = await skill_service.install_catalog_skill(skill_id)
+    """Add a built-in catalog skill to the workspace: fetch its package and pin it."""
+    with _catalog_fetch_errors():
+        skill = await skill_service.install_catalog_skill(skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
@@ -379,7 +403,7 @@ async def get_skill_content(
     return SkillContentResponse(
         id=str(skill.id),
         name=skill.name,
-        content=skill.content or "",
+        content=await skill_service.read_skill_md(skill),
     )
 
 

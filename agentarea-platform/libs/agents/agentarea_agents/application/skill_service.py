@@ -15,6 +15,7 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
 
+from agentarea_agents.application.skill_packages import SKILL_MANIFEST, SkillPackages
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType
 from agentarea_agents.infrastructure.catalog_skill_repository import (
@@ -27,7 +28,10 @@ from agentarea_agents.infrastructure.github_skill_importer import (
     extract_skill_package,
 )
 from agentarea_agents.infrastructure.skill_repository import SkillRepository
-from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+from agentarea_agents.infrastructure.skill_storage_service import (
+    SkillStorageService,
+    tenant_package_prefix,
+)
 from agentarea_agents.schemas.skills_dto import (
     SkillCreateFromContent,
     SkillEditMetadata,
@@ -71,9 +75,9 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
     metadata (``is_catalog``, ``registry_item_id``, ``update_available``) is
     attached as plain attributes for the API layer to surface.
 
-    Files are NOT materialized: the projection reuses the catalog item's
-    ``s3_path`` reference (copy-on-write defers any S3 copy until the user edits
-    a file on a forked skill).
+    The projection carries no body: ``catalog_spec`` keeps the item's spec,
+    and the package accessor builds (and stores) the package from it when
+    something reads the body.
     """
     spec = item.spec or {}
 
@@ -84,7 +88,6 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
         description=item.description if item.description is not None else spec.get("description"),
         source_type=spec.get("source_type") or SkillSourceType.CONTENT.value,
         source_url=spec.get("source_url"),
-        content=spec.get("content"),
         s3_path=spec.get("s3_path"),
         network_scope=spec.get("network_scope") or "private",
         registry_item_id=item.id,
@@ -94,7 +97,19 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
     # Read-only catalog projection markers consumed by the API DTO.
     skill.is_catalog = True
     skill.update_available = False
+    skill.catalog_spec = spec
     return skill
+
+
+def is_customized(skill: Skill) -> bool:
+    """An installed catalog skill whose files the workspace has edited.
+
+    Editing an installed skill copies its package into the workspace's own
+    prefix (copy-on-write); from then on an update would discard that edit.
+    """
+    return bool(getattr(skill, "registry_item_id", None)) and skill.s3_path == (
+        tenant_package_prefix(str(skill.workspace_id), str(skill.id))
+    )
 
 
 def _project_catalog_summary(row: CatalogSkillSummary) -> Skill:
@@ -160,6 +175,17 @@ class SkillService:
     def _get_repository(self) -> SkillRepository:
         """Get skill repository from factory."""
         return self.repository_factory.create_repository(SkillRepository)
+
+    @property
+    def packages(self) -> SkillPackages:
+        """The accessor every reader of a skill body goes through."""
+        return SkillPackages(self.storage_service, self.github_importer, self._get_repository())
+
+    async def read_skill_md(self, skill: Skill) -> str:
+        return await self.packages.read_skill_md(skill)
+
+    async def read_files(self, skill: Skill) -> dict[str, bytes]:
+        return await self.packages.read_files(skill)
 
     def _get_catalog_repository(self) -> CatalogSkillRepository:
         """Get the read-only catalog (registry_items) repository for skills."""
@@ -240,24 +266,27 @@ class SkillService:
         Returns:
             Created Skill entity.
         """
-        repo = self._get_repository()
-
-        # Parse content
         parsed = self._parser.parse_content(payload.content)
 
         # Use provided values or fall back to parsed values
         skill_name = _checked_skill_name(payload.name or parsed.metadata.name)
         skill_description = payload.description or parsed.metadata.description
 
-        # Create skill
-        skill = await repo.create(
+        # The body is the package's one file, not a column (ADR-0044).
+        async def store(skill_id: str) -> str:
+            return await self.storage_service.store_package_files(
+                skill_id,
+                self.user_context.workspace_id,
+                {SKILL_MANIFEST: payload.content.encode("utf-8")},
+            )
+
+        skill = await self._create_with_package(
+            store,
             name=skill_name,
-            slug=await self._resolve_unique_slug(skill_name),
             description=skill_description,
             source_type=SkillSourceType.CONTENT.value,
-            content=payload.content,
+            content=None,
             source_url=None,
-            s3_path=None,
         )
 
         logger.info(f"Created skill '{skill_name}' from content (id={skill.id})")
@@ -316,7 +345,7 @@ class SkillService:
             name=skill_name,
             description=skill_description,
             source_type=SkillSourceType.ZIP.value,
-            content=parsed.raw_content,
+            content=None,
             source_url=None,
         )
 
@@ -371,7 +400,7 @@ class SkillService:
             name=skill_name,
             description=skill_description,
             source_type=SkillSourceType.GITHUB.value,
-            content=parsed.raw_content,
+            content=None,
             source_url=payload.github_url,
         )
 
@@ -447,7 +476,7 @@ class SkillService:
                 name=skill_name,
                 description=skill_description,
                 source_type=SkillSourceType.PATH.value,
-                content=content,
+                content=None,
                 source_url=None,
             )
 
@@ -630,17 +659,21 @@ class SkillService:
         catalog item via ``registry_item_id``, and records workspace-scoped
         install state for that catalog item.
 
-        Copy-on-write semantics: the metadata/spec (name, description,
-        source_type, content, s3_path reference) is copied into the tenant row,
-        but S3 package files are NOT eagerly copied. The forked skill keeps the
-        catalog item's ``s3_path`` reference; the actual S3 file copy is deferred
-        until the user first writes a file/content on the fork (see
+        An install is a pin (ADR-0044): the item's package is built from its
+        index entry (a GitHub folder at its pinned commit, verified against its
+        tree SHA, or an inline body), stored once under its digest, and the
+        tenant row points at it. The row stores no body. The pin recorded in
+        ``registry_item_installs.installed_version`` is the item's version --
+        the tree SHA for a GitHub pointer -- which the update check compares
+        with the item's current one. The package is not copied: the first
+        edit of a file copies it into the workspace (copy-on-write, see
         :meth:`set_content` / :meth:`replace_package_from_files`).
 
         Skill members are not copied here: the catalog spec carries metadata
         only, and member edits on a forked bundle go through the member API.
         """
         spec = item.spec or {}
+        package = await self.packages.store_catalog_item(spec)
         repo = self._get_repository()
         skill = await repo.create(
             name=item.name,
@@ -649,9 +682,9 @@ class SkillService:
             if item.description is not None
             else spec.get("description"),
             source_type=spec.get("source_type") or SkillSourceType.CONTENT.value,
-            content=spec.get("content"),
-            source_url=spec.get("source_url"),
-            s3_path=spec.get("s3_path"),
+            content=None,
+            source_url=package.source_url or spec.get("source_url"),
+            s3_path=package.s3_path,
             network_scope=spec.get("network_scope") or "private",
             registry_item_id=item.id,
         )
@@ -740,7 +773,52 @@ class SkillService:
 
     @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
     async def _set_content_audited(self, skill_id: UUID, content: str) -> Skill | None:
-        return await self._get_repository().update(str(skill_id), content=content)
+        skill = await self._get_repository().get_by_id(skill_id)
+        if skill is None:
+            return None
+        files = await self.packages.read_files(skill)
+        main = self._parser.find_main_skill_file(list(files)) or SKILL_MANIFEST
+        return await self._write_own_package(skill, {**files, main: content.encode("utf-8")})
+
+    async def _write_own_package(self, skill: Skill, files: dict[str, bytes]) -> Skill:
+        """Replace the workspace's own copy of a skill's files with ``files``.
+
+        A skill still reading an installed (catalog) package gets its own copy
+        here; the catalog package is never written to. Paths of an own package
+        that ``files`` no longer has are deleted.
+        """
+        own_prefix = self.storage_service._get_s3_prefix(
+            self.user_context.workspace_id, str(skill.id)
+        )
+        owns_package = skill.s3_path == own_prefix
+        old_keys = (
+            {f.path for f in await self.storage_service.list_files(own_prefix)}
+            if owns_package
+            else set()
+        )
+        new_s3_path = await self.storage_service.store_package_files(
+            str(skill.id), self.user_context.workspace_id, files
+        )
+        orphans = old_keys - set(files)
+        if orphans:
+            self.storage_service.client.delete_objects(
+                Bucket=self.storage_service.bucket_name,
+                Delete={"Objects": [{"Key": f"{own_prefix}{p}"} for p in orphans]},
+            )
+        result = await self._get_repository().update(
+            str(skill.id), content=None, s3_path=new_s3_path
+        )
+        if result is None:
+            raise RuntimeError("Failed to update skill content")
+        logger.info(
+            "Replaced package for skill %s: %d files written, %d orphans removed "
+            "(copy_on_write=%s)",
+            skill.id,
+            len(files),
+            len(orphans),
+            not owns_package,
+        )
+        return result
 
     async def replace_package_from_files(
         self,
@@ -765,63 +843,12 @@ class SkillService:
         skill: Skill,
         files: dict[str, str],
     ) -> Skill:
-        import io
-        import zipfile
-
-        if not skill.s3_path:
-            raise ValueError(
-                f"Skill {skill_id} is content-mode; multi-file edits not supported. "
-                "Delete and recreate as a package."
-            )
-
-        skill_md_keys = [k for k in files if k.lower() in ("skill.md", "skill.markdown")]
-        if not skill_md_keys:
+        if not any(k.lower() in ("skill.md", "skill.markdown") for k in files):
             raise ValueError("files must include a SKILL.md at the root")
-        new_skill_md_text = files[skill_md_keys[0]]
-
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-            for path, text in files.items():
-                zf.writestr(path, text)
-
-        owns_package = skill.s3_path == self.storage_service._get_s3_prefix(
-            self.user_context.workspace_id, str(skill_id)
+        await self.packages.resolve_s3_path(skill)
+        return await self._write_own_package(
+            skill, {path: text.encode("utf-8") for path, text in files.items()}
         )
-        old_keys = (
-            {f.path for f in await self.storage_service.list_files(skill.s3_path)}
-            if owns_package
-            else set()
-        )
-        new_keys = set(files.keys())
-
-        new_s3_path = await self.storage_service.store_package_from_zip(
-            skill_id=str(skill_id),
-            workspace_id=self.user_context.workspace_id,
-            zip_data=buffer.getvalue(),
-        )
-
-        orphans = old_keys - new_keys
-        if owns_package and orphans:
-            prefix = skill.s3_path.rstrip("/") + "/"
-            self.storage_service.client.delete_objects(
-                Bucket=self.storage_service.bucket_name,
-                Delete={"Objects": [{"Key": f"{prefix}{p}"} for p in orphans]},
-            )
-
-        result = await self._get_repository().update(
-            str(skill_id), content=new_skill_md_text, s3_path=new_s3_path
-        )
-        if result is None:
-            raise RuntimeError("Failed to update skill content")
-        logger.info(
-            "Replaced package for skill %s: %d files written, %d orphans removed "
-            "(copy_on_write=%s)",
-            skill_id,
-            len(files),
-            len(orphans),
-            not owns_package,
-        )
-        return result
 
     @audited("skill.delete", resource_type="skill", resource_id_param="skill_id")
     async def delete(self, skill_id: UUID | str) -> bool:
@@ -840,10 +867,13 @@ class SkillService:
         if not skill:
             return False
 
-        # Delete from S3 if applicable
-        if skill.s3_path:
+        # Only the workspace's own copy: an installed package is shared.
+        own_prefix = self.storage_service._get_s3_prefix(
+            self.user_context.workspace_id, str(skill.id)
+        )
+        if skill.s3_path == own_prefix:
             try:
-                await self.storage_service.delete_package(skill.s3_path)
+                await self.storage_service.delete_package(own_prefix)
             except Exception as e:
                 logger.warning(
                     f"Failed to delete S3 package for skill {skill_id}: {e}", exc_info=True
@@ -877,11 +907,8 @@ class SkillService:
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
 
-        if not skill.s3_path:
-            # Content-only skill
-            return [SkillFileInfo(path="SKILL.md", size=len(skill.content or ""))]
-
-        files = await self.storage_service.list_files(skill.s3_path)
+        s3_path = await self.packages.resolve_s3_path(skill)
+        files = await self.storage_service.list_files(s3_path)
 
         result = []
         for file_info in files:
@@ -891,10 +918,7 @@ class SkillService:
             )
 
             if include_urls:
-                skill_file.url = await self.storage_service.get_file_url(
-                    skill.s3_path,
-                    file_info.path,
-                )
+                skill_file.url = await self.storage_service.get_file_url(s3_path, file_info.path)
 
             result.append(skill_file)
 
@@ -924,11 +948,8 @@ class SkillService:
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
 
-        if not skill.s3_path:
-            raise ValueError(f"Skill {skill_id} has no file storage (content-only)")
-
         return await self.storage_service.get_file_url(
-            skill.s3_path,
+            await self.packages.resolve_s3_path(skill),
             path,
             expires_in=expires_in,
         )
@@ -1068,13 +1089,9 @@ class SkillService:
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
 
-        if not skill.s3_path:
-            # For content-only skills, return the content if requesting the main file
-            if path in ("SKILL.md", "skill.md"):
-                return (skill.content or "").encode("utf-8")
-            raise FileNotFoundError(f"File not found: {path}")
-
-        return await self.storage_service.get_file_content(skill.s3_path, path)
+        return await self.storage_service.get_file_content(
+            await self.packages.resolve_s3_path(skill), path
+        )
 
 
 def _topological_sort(members: list[SkillMember]) -> list[UUID]:

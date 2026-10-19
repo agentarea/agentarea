@@ -372,21 +372,17 @@ def make_config_activities(
             # Build skill information
             skills_info = []
             if skills:
+                skill_service = await ctx.get_skill_service()
                 for skill in skills:
-                    # Get file list for multi-file skills
-                    files = []
-                    if skill.s3_path:
-                        # For multi-file skills, we would list files from S3
-                        # For now, just note it has additional files
-                        files = ["(additional files available)"]
-
+                    content = await skill_service.read_skill_md(skill)
+                    paths = await skill_service.packages.list_paths(skill)
                     skills_info.append(
                         SkillInfo(
                             id=str(skill.id),
                             name=skill.name,
                             description=skill.description or "",
-                            content=skill.content or "",
-                            files=files,
+                            content=content,
+                            files=["(additional files available)"] if len(paths) > 1 else [],
                         )
                     )
 
