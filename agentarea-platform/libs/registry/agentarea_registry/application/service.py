@@ -18,6 +18,7 @@ Entity-specific details (connection_type, source_type) live in spec JSONB.
 import asyncio
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -56,7 +57,7 @@ logger = logging.getLogger(__name__)
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "1"
+SYNC_FORMAT = "2"
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -113,6 +114,10 @@ def validated_registry_priority(value: Any) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"recommendation_priority must be a non-negative integer, got {value!r}")
     return value
+
+
+_GITHUB_REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+_GIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 def rank_fields(*mappings: Any) -> dict[str, int]:
@@ -1391,11 +1396,36 @@ class RegistryService:
             name = entry.get("name", "")
             if not name:
                 continue
-            spec = {
-                "source_type": entry.get("source_type", "content"),
-                "content": entry.get("content"),
-                "source_url": entry.get("source_url"),
-            }
+            source = RegistryService._skill_source(name, entry.get("source"))
+            if source is None:
+                spec = {
+                    "source_type": entry.get("source_type", "content"),
+                    "content": entry.get("content"),
+                    "source_url": entry.get("source_url"),
+                }
+                version = entry.get("version") or "1.0.0"
+            else:
+                # The platform index (ADR-0044) carries a pointer, not a body:
+                # the folder's tree SHA is the content's identity.
+                folder = f"/{source['path']}" if source["path"] else ""
+                spec = {
+                    "source_type": "github",
+                    "source": source,
+                    "source_url": (
+                        f"https://github.com/{source['repo']}/tree/"
+                        f"{source.get('ref', 'HEAD')}{folder}"
+                    ),
+                }
+                version = source.get("tree_sha") or "latest"
+                if "provenance" not in entry:
+                    entry = {
+                        **entry,
+                        "provenance": {
+                            "repo": source["repo"],
+                            "path": source["path"],
+                            **{k: entry[k] for k in ("stars", "license") if k in entry},
+                        },
+                    }
             original_name = entry.get("original_name")
             if isinstance(original_name, str) and original_name:
                 spec["original_name"] = original_name
@@ -1423,13 +1453,41 @@ class RegistryService:
                     "external_id": name,
                     "name": name,
                     "description": entry.get("description"),
-                    "version": entry.get("version") or "1.0.0",
+                    "version": version,
                     "spec": spec,
                     "tags": entry.get("tags", []),
                     **rank_fields(entry),
                 }
             )
         return items
+
+    @staticmethod
+    def _skill_source(name: str, raw: Any) -> dict[str, str] | None:
+        """The GitHub pointer of a platform-index skill, or ``None`` for an inline one.
+
+        A malformed pointer fails the whole parse: the sync then leaves the last
+        snapshot in place and records why, instead of publishing a skill that
+        cannot be installed.
+        """
+        if raw is None:
+            return None
+        if not isinstance(raw, dict) or raw.get("type") != "github":
+            raise ValueError(f"skill {name!r}: source must be a mapping with type 'github'")
+        repo, path = raw.get("repo"), raw.get("path", "")
+        if not isinstance(repo, str) or not _GITHUB_REPO.fullmatch(repo):
+            raise ValueError(f"skill {name!r}: source.repo must be 'owner/name', got {repo!r}")
+        path = path.strip("/") if isinstance(path, str) else None
+        if path is None or (path and {"", ".", ".."} & set(path.split("/"))):
+            raise ValueError(f"skill {name!r}: source.path must be a plain relative path")
+        source = {"type": "github", "repo": repo, "path": path}
+        for key in ("ref", "tree_sha"):
+            value = raw.get(key)
+            if value is None:
+                continue
+            if not isinstance(value, str) or not _GIT_SHA.fullmatch(value):
+                raise ValueError(f"skill {name!r}: source.{key} must be a 40-hex git sha")
+            source[key] = value
+        return source
 
     @staticmethod
     def _parse_llm_providers(data: dict[str, Any]) -> list[dict[str, Any]]:

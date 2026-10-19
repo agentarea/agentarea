@@ -111,7 +111,8 @@ class RegistryItem(BaseModel):
 
     Entity-specific details live in spec JSONB:
         mcp_servers: spec.connection_type, spec.image, spec.command, etc.
-        skills: spec.source_type, spec.content, spec.source_url, etc.
+        skills: spec.source (a GitHub pointer, ADR-0044) or an inline spec.content,
+            spec.source_type, spec.source_url, etc.
     """
 
     __tablename__ = "registry_items"
