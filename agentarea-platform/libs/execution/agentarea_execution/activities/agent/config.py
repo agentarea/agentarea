@@ -16,6 +16,7 @@ from agentarea_agents.infrastructure.github_skill_importer import (
 )
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
@@ -117,7 +118,10 @@ async def _resolve_task_resources(
         for skill_id in skill_ids:
             if any(str(skill.id) == str(skill_id) for skill in skills):
                 continue
-            skill = await skill_service.get_with_catalog(skill_id)
+            try:
+                skill = await skill_service.get_with_catalog(skill_id, to_run=True)
+            except CatalogInstallRefusedError as exc:
+                raise ApplicationError(str(exc), non_retryable=True) from exc
             if skill is None:
                 raise ApplicationError("Selected task skill is unavailable", non_retryable=True)
             if any(existing.name == skill.name for existing in skills):
@@ -366,7 +370,10 @@ def make_config_activities(
             # tenant agent for this id.
             agent = await agent_service.get_with_skills(request.agent_id)
             if not agent:
-                agent = await agent_service.get_with_catalog(request.agent_id)
+                try:
+                    agent = await agent_service.get_with_catalog(request.agent_id, to_run=True)
+                except CatalogInstallRefusedError as exc:
+                    raise ApplicationError(str(exc), non_retryable=True) from exc
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 

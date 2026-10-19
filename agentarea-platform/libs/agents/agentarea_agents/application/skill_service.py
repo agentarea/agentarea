@@ -704,17 +704,25 @@ class SkillService:
                 skill.update_available = True
             skill.catalog_provenance = provenance.get(str(item_id))
 
-    async def get_with_catalog(self, skill_id: UUID | str) -> Skill | None:
+    async def get_with_catalog(self, skill_id: UUID | str, *, to_run: bool = False) -> Skill | None:
         """Get a tenant skill by id, falling back to a catalog projection.
 
         Returns the tenant ``skills`` row if present; otherwise projects the
         matching catalog ``registry_item`` (read-only). No DB row is created.
+        A run reads the catalog item's content without installing it, so with
+        ``to_run`` the install policy decides first.
         """
         skill = await self.get(skill_id)
         if skill is not None:
             return skill
         item = await self._get_catalog_repository().get_item(str(skill_id))
-        return _project_catalog_skill(item) if item else None
+        if item is None:
+            return None
+        if to_run:
+            await self.install_guard.require_allowed(
+                registry_id=item.registry_id, trust=item.registry_trust
+            )
+        return _project_catalog_skill(item)
 
     async def _fork_catalog_skill(self, item: CatalogSkillItem) -> Skill:
         """Copy-on-write: materialize a tenant ``skills`` row from a catalog item.

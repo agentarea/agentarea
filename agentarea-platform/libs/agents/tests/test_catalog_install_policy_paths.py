@@ -200,3 +200,28 @@ async def test_a_denied_catalog_skill_is_not_attached_to_an_agent(
     assert skills.created_kwargs == []
     assert agents.created_kwargs == []
     assert skill_catalog.installed == []
+
+
+async def test_a_denied_catalog_skill_does_not_run_from_the_catalog(session, community_skill):
+    # A run names catalog skills by id and reads them without installing.
+    await _deny_community(session)
+    official = _from(_skill_item(), "official")
+    svc, _, _ = _skills(session, [community_skill, official])
+
+    with pytest.raises(CatalogInstallRefusedError, match="registry_trust:community"):
+        await svc.get_with_catalog(community_skill.id, to_run=True)
+
+    assert (await svc.get_with_catalog(official.id, to_run=True)).name == official.name
+    # Browsing still shows what the policy keeps out of runs.
+    assert (await svc.get_with_catalog(community_skill.id)).is_catalog
+
+
+async def test_a_denied_catalog_agent_does_not_run_from_its_definition(session):
+    await _deny_community(session)
+    item = _from(_agent_item(spec={"instruction": "x", "tools": []}), "community")
+    svc, *_ = _agents(session, [item], [])
+
+    with pytest.raises(CatalogInstallRefusedError):
+        await svc.get_with_catalog(UUID(item.id), to_run=True)
+
+    assert (await svc.get_with_catalog(UUID(item.id))).is_catalog

@@ -381,17 +381,25 @@ class AgentService(BaseCrudService[Agent]):
                 result.append(_project_catalog_item(item))
         return result
 
-    async def get_with_catalog(self, id: UUID) -> Agent | None:
+    async def get_with_catalog(self, id: UUID, *, to_run: bool = False) -> Agent | None:
         """Get a tenant agent by id, falling back to a catalog projection.
 
         Returns the tenant ``agents`` row if present; otherwise projects the
         matching catalog ``registry_item`` (read-only). No DB row is created.
+        A catalog agent runs from its definition without being installed, so
+        with ``to_run`` the install policy decides first.
         """
         agent = await self.get(id)
         if agent is not None:
             return agent
         item = await self._get_catalog_repository().get_item(str(id))
-        return _project_catalog_item(item) if item else None
+        if item is None:
+            return None
+        if to_run:
+            await self.install_guard.require_allowed(
+                registry_id=item.registry_id, trust=item.registry_trust
+            )
+        return _project_catalog_item(item)
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.

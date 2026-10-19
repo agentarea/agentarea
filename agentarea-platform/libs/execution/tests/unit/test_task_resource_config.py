@@ -122,7 +122,9 @@ async def test_additions_are_canonical_and_deduplicated_without_mutating_agent()
     assert skills[-1].content == "# Instructions"
     assert saved.tools == []
     assert saved.skills == [attached]
-    ctx.get_skill_service.return_value.get_with_catalog.assert_awaited_once_with(selected.id)
+    ctx.get_skill_service.return_value.get_with_catalog.assert_awaited_once_with(
+        selected.id, to_run=True
+    )
     ctx.get_mcp_server_instance_service.return_value.get.assert_awaited_once_with(instance.id)
 
 
@@ -668,3 +670,46 @@ async def test_a_selected_skill_whose_source_is_gone_fails_the_run_without_retri
     with pytest.raises(ApplicationError, match="removed upstream") as error:
         await functions["build_agent_config_activity"](request)
     assert error.value.non_retryable
+
+
+@pytest.mark.asyncio
+async def test_a_skill_the_install_policy_refuses_fails_the_run_without_retries(activity_context):
+    from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
+
+    ctx, functions = activity_context
+    saved = agent()
+    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
+    ctx.get_skill_service.return_value.get_with_catalog.side_effect = CatalogInstallRefusedError(
+        "Install refused by policy: registry_trust:community"
+    )
+    request = AgentConfigRequest(
+        agent_id=saved.id,
+        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        task_parameters={"skills": [str(uuid4())]},
+    )
+
+    with pytest.raises(ApplicationError, match="refused by policy") as error:
+        await functions["build_agent_config_activity"](request)
+    assert error.value.non_retryable
+
+
+@pytest.mark.asyncio
+async def test_a_catalog_agent_the_install_policy_refuses_fails_the_run_without_retries(
+    activity_context,
+):
+    from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
+
+    ctx, functions = activity_context
+    agents = ctx.get_agent_service.return_value
+    agents.get_with_skills.return_value = None
+    agents.get_with_catalog.side_effect = CatalogInstallRefusedError(
+        "Install refused by policy: registry_trust:community"
+    )
+    request = AgentConfigRequest(
+        agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
+    )
+
+    with pytest.raises(ApplicationError, match="refused by policy") as error:
+        await functions["build_agent_config_activity"](request)
+    assert error.value.non_retryable
+    assert agents.get_with_catalog.await_args.kwargs == {"to_run": True}

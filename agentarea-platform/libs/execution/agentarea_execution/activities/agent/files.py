@@ -65,7 +65,7 @@ def make_files_activities(
             user_context = create_user_context(request.user_context_data)
             async with ActivityContext(container, user_context) as ctx:
                 skill_service = await ctx.get_skill_service()
-                skill = await skill_service.get_with_catalog(request.skill_id)
+                skill = await skill_service.get_with_catalog(request.skill_id, to_run=True)
                 if not skill:
                     return MaterializeSkillFilesResult(
                         success=False, error=f"Skill {request.skill_id} not found"
