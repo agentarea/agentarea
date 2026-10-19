@@ -49,6 +49,7 @@ from ._approval_policy_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
 )
+from ._catalog_install import CatalogInstallPolicyDep
 from ._trigger_creation import (
     build_domain_trigger,
     create_trigger_from_spec,
@@ -534,6 +535,7 @@ async def get_agent(
 async def install_agent(
     agent_id: str,
     user_context: UserContextDep,
+    install_policy: CatalogInstallPolicyDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
     """Add a built-in catalog agent to the workspace (copy-on-write fork).
@@ -544,6 +546,7 @@ async def install_agent(
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
+    await install_policy.require_allowed(resolved_id)
     agent = await agent_service.install_catalog_agent(resolved_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

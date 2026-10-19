@@ -7,7 +7,7 @@
     "apps/worker/agentarea_worker/main.py": 1,
     "libs/agents/agentarea_agents/domain/skill_models.py": 1,
     "libs/mcp/agentarea_mcp/container_monitor.py": 2,
-    "libs/registry/agentarea_registry/domain/models.py": 7,
+    "libs/registry/agentarea_registry/domain/models.py": 9,
     "libs/streams/agentarea_streams/infrastructure/partitions.py": 1,
     "libs/tasks/agentarea_tasks/infrastructure/orm.py": 1,
     "libs/wallet/agentarea_wallet/domain/models.py": 1
@@ -32,6 +32,7 @@
     "apps/api/agentarea_api/api/v1/network.py": 6,
     "apps/api/agentarea_api/api/v1/network_people.py": 1,
     "apps/api/agentarea_api/api/v1/triggers.py": 2,
+    "apps/api/agentarea_api/registry_credentials.py": 1,
     "apps/worker/agentarea_worker/cli.py": 1,
     "libs/common/agentarea_common/auth/dependencies.py": 2,
     "libs/llm/agentarea_llm/application/provider_service.py": 4,

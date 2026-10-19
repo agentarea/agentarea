@@ -9,10 +9,12 @@ Entity-specific details (connection_type, source_type, etc.) live in spec JSONB.
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from agentarea_common.base.models import BaseModel
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -33,12 +35,23 @@ from sqlalchemy.orm import Mapped, mapped_column
 # interleave with the curated front page.
 DEFAULT_REGISTRY_PRIORITY = 100
 
+# ADR-0044. A platform registry is seen by every workspace; a workspace registry
+# only by the workspace whose admin added it.
+REGISTRY_SCOPES = ("platform", "workspace")
+# mirror: content is copied when the index syncs; upstream: only the index is
+# kept and content is fetched on first install of a version.
+REGISTRY_MODES = ("mirror", "upstream")
+# A sync of any other type materializes platform-wide entities, so a workspace
+# registry may hold only these catalog-only types.
+WORKSPACE_REGISTRY_TYPES = ("skills", "agents")
+
 
 class Registry(BaseModel):
     """A configured external source of entity definitions.
 
-    Global catalog infrastructure — NOT workspace-scoped. Built-in/official
-    content lives here once and is readable by every tenant.
+    Not workspace-scoped through WorkspaceScopedMixin: a ``platform`` registry
+    is read by every tenant, a ``workspace`` registry only by ``workspace_id``,
+    and the catalog reads filter on that (ADR-0044).
 
     registry_type determines what gets created on sync:
         - "mcp_servers": creates MCPServer specs
@@ -46,9 +59,12 @@ class Registry(BaseModel):
 
     source_type determines how to fetch:
         - "url": JSON or YAML bundle at a URL
-        - "github": GitHub repo with a known registry format
+        - "github": a GitHub repository whose folders are skills
         - "api": REST API endpoint
         - "managed": items are published through the platform catalog API
+
+    A "github" source is ``source_url`` ``owner/repo`` read at ``source_ref``
+    under ``source_path``: every folder holding a SKILL.md is one skill.
     """
 
     __tablename__ = "registries"
@@ -56,7 +72,35 @@ class Registry(BaseModel):
     # racing on a first sync each saw "no such registry" and created one: prod
     # carried a second copy of most skill shards and of the MCP catalog, every
     # item listed twice.
-    __table_args__ = (UniqueConstraint("name", name="uq_registries_name"),)
+    # Names are unique per scope: a workspace's registry may share a name with
+    # the platform's or another workspace's.
+    __table_args__ = (
+        Index(
+            "uq_registries_platform_name",
+            "name",
+            unique=True,
+            postgresql_where=text("scope = 'platform'"),
+        ),
+        Index(
+            "uq_registries_workspace_name",
+            "workspace_id",
+            "name",
+            unique=True,
+            postgresql_where=text("scope = 'workspace'"),
+        ),
+        CheckConstraint("scope IN ('platform', 'workspace')", name="ck_registries_scope"),
+        CheckConstraint("mode IN ('mirror', 'upstream')", name="ck_registries_mode"),
+        CheckConstraint(
+            "trust IN ('official', 'verified', 'community', 'private')",
+            name="ck_registries_trust",
+        ),
+        CheckConstraint(
+            "(scope = 'platform' AND workspace_id IS NULL) OR "
+            "(scope = 'workspace' AND workspace_id IS NOT NULL "
+            "AND registry_type IN ('skills', 'agents'))",
+            name="ck_registries_scope_workspace",
+        ),
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -67,8 +111,30 @@ class Registry(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # The source's ETag as of the last applied sync; an unchanged one is skipped.
+    # The source's ETag (an index URL) or head commit (a GitHub repository) as
+    # of the last applied sync; an unchanged one is skipped.
     source_etag: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # GitHub sources: the branch, tag or commit to read, and the folder under
+    # which every directory holding a SKILL.md is a skill.
+    source_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scope: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="platform", server_default="platform"
+    )
+    workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="mirror", server_default="mirror"
+    )
+    trust: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="official", server_default="official"
+    )
+    # The workspace secret a sync authenticates with; resolved at sync time,
+    # never copied here. The database holds the RESTRICT foreign key to
+    # encrypted_secrets; it is not declared here because this library does not
+    # depend on the one that maps that table.
+    credentials_secret_ref: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True
+    )
     item_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recommendation_priority: Mapped[int] = mapped_column(
         Integer, nullable=False, default=DEFAULT_REGISTRY_PRIORITY
@@ -84,10 +150,24 @@ class Registry(BaseModel):
         sync_mode: str = "manual",
         is_active: bool = True,
         recommendation_priority: int = DEFAULT_REGISTRY_PRIORITY,
+        scope: str = "platform",
+        workspace_id: str | None = None,
+        mode: str = "mirror",
+        trust: str = "official",
+        credentials_secret_ref: UUID | None = None,
+        source_ref: str | None = None,
+        source_path: str | None = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.name = name
+        self.scope = scope
+        self.workspace_id = workspace_id
+        self.mode = mode
+        self.trust = trust
+        self.credentials_secret_ref = credentials_secret_ref
+        self.source_ref = source_ref
+        self.source_path = source_path
         self.description = description
         self.registry_type = registry_type
         self.source_type = source_type
@@ -149,6 +229,7 @@ class RegistryItem(BaseModel):
             "registry_type",
             "sort_key",
             "id",
+            postgresql_include=["registry_workspace_id"],
             postgresql_where=text("registry_active"),
         ),
         Index(
@@ -159,13 +240,14 @@ class RegistryItem(BaseModel):
             "id",
             postgresql_where=text("registry_active"),
         ),
-        # Totals and facet counts: carries every column their filters read, so
-        # they are counted from the index without visiting a row.
+        # Totals and facet counts: carries every column their filters read (the
+        # workspace visibility filter too), so they are counted from the index
+        # without visiting a row.
         Index(
             "ix_registry_items_browse_facets",
             "registry_type",
             "category",
-            postgresql_include=["protocol", "hosting", "pricing"],
+            postgresql_include=["protocol", "hosting", "pricing", "registry_workspace_id"],
             postgresql_where=text("registry_active"),
         ),
     )
@@ -216,6 +298,12 @@ class RegistryItem(BaseModel):
         Integer, nullable=False, default=DEFAULT_REGISTRY_PRIORITY
     )
     registry_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # NULL for a platform registry's item, which every workspace sees; else the
+    # only workspace that may see or install it.
+    registry_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    registry_trust: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="official", server_default="official"
+    )
     # Whether the source still publishes this item. The platform never deletes
     # catalog rows (installs point at them), so an item a source dropped used to
     # stay browsable forever -- the old id of a renamed server showed up as a
@@ -246,10 +334,14 @@ class RegistryItem(BaseModel):
         registry_type: str,
         registry_priority: int,
         registry_active: bool,
+        registry_workspace_id: str | None = None,
+        registry_trust: str = "official",
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.registry_id = registry_id
+        self.registry_workspace_id = registry_workspace_id
+        self.registry_trust = registry_trust
         self.registry_type = registry_type
         self.registry_priority = registry_priority
         self.registry_active = registry_active

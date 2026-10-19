@@ -10502,6 +10502,16 @@
             ],
             "title": "Description"
           },
+          "mode": {
+            "default": "mirror",
+            "description": "'mirror' copies content at sync; 'upstream' keeps only the index",
+            "enum": [
+              "mirror",
+              "upstream"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "description": "Human-readable registry name",
             "title": "Name",
@@ -10525,6 +10535,31 @@
             "title": "Registry Type",
             "type": "string"
           },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub sources: the folder whose skill folders are indexed",
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub sources: branch, tag or commit to read",
+            "title": "Source Ref"
+          },
           "source_type": {
             "description": "Source mode: 'url', 'github', 'api', or platform-managed 'managed'",
             "title": "Source Type",
@@ -10546,6 +10581,18 @@
             "default": "manual",
             "description": "'auto' or 'manual'",
             "title": "Sync Mode",
+            "type": "string"
+          },
+          "trust": {
+            "default": "official",
+            "description": "Trust label on every catalog card",
+            "enum": [
+              "official",
+              "verified",
+              "community",
+              "private"
+            ],
+            "title": "Trust",
             "type": "string"
           }
         },
@@ -10653,6 +10700,57 @@
             "title": "Registry Id",
             "type": "string"
           },
+          "registry_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mirror",
+                  "upstream"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Mode"
+          },
+          "registry_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Name"
+          },
+          "registry_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "workspace"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Scope"
+          },
+          "registry_trust": {
+            "enum": [
+              "official",
+              "verified",
+              "community",
+              "private"
+            ],
+            "title": "Registry Trust",
+            "type": "string"
+          },
           "spec": {
             "additionalProperties": true,
             "title": "Spec",
@@ -10712,6 +10810,7 @@
           "installed_entity_id",
           "update_available",
           "installed_version",
+          "registry_trust",
           "created_at",
           "updated_at"
         ],
@@ -10724,6 +10823,18 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "credentials_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentials Secret Id"
           },
           "description": {
             "anyOf": [
@@ -10772,6 +10883,14 @@
             ],
             "title": "Last Synced At"
           },
+          "mode": {
+            "enum": [
+              "mirror",
+              "upstream"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -10783,6 +10902,36 @@
           "registry_type": {
             "title": "Registry Type",
             "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "platform",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
           },
           "source_type": {
             "title": "Source Type",
@@ -10796,10 +10945,31 @@
             "title": "Sync Mode",
             "type": "string"
           },
+          "trust": {
+            "enum": [
+              "official",
+              "verified",
+              "community",
+              "private"
+            ],
+            "title": "Trust",
+            "type": "string"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
           }
         },
         "required": [
@@ -10811,6 +10981,9 @@
           "source_url",
           "sync_mode",
           "is_active",
+          "scope",
+          "mode",
+          "trust",
           "last_synced_at",
           "last_sync_error",
           "item_count",
@@ -10844,6 +11017,21 @@
               }
             ],
             "title": "Is Active"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mirror",
+                  "upstream"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
           },
           "name": {
             "anyOf": [
@@ -10889,6 +11077,23 @@
               }
             ],
             "title": "Sync Mode"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "enum": [
+                  "official",
+                  "verified",
+                  "community",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust"
           }
         },
         "title": "RegistryUpdate",
@@ -16680,6 +16885,232 @@
           "files"
         ],
         "title": "WorkspaceFileListResponse",
+        "type": "object"
+      },
+      "WorkspaceRegistryCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A workspace secret holding the token a private source is read with",
+            "title": "Credentials Secret Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "registry_type": {
+            "default": "skills",
+            "enum": [
+              "skills",
+              "agents"
+            ],
+            "title": "Registry Type",
+            "type": "string"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub: the folder whose skill folders are indexed; the root if unset",
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub: branch, tag or commit; the default branch if unset",
+            "title": "Source Ref"
+          },
+          "source_type": {
+            "description": "'url': an index in the platform format; 'github': a repository",
+            "enum": [
+              "url",
+              "github"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_url": {
+            "description": "The index URL, or the repository as owner/repo",
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "trust": {
+            "default": "private",
+            "enum": [
+              "private",
+              "community"
+            ],
+            "title": "Trust",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_type",
+          "source_url"
+        ],
+        "title": "WorkspaceRegistryCreate",
+        "type": "object"
+      },
+      "WorkspaceRegistryRemoved": {
+        "properties": {
+          "kept_items": {
+            "title": "Kept Items",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "deleted",
+              "retired"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "kept_items"
+        ],
+        "title": "WorkspaceRegistryRemoved",
+        "type": "object"
+      },
+      "WorkspaceRegistryUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentials Secret Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "enum": [
+                  "private",
+                  "community"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust"
+          }
+        },
+        "title": "WorkspaceRegistryUpdate",
         "type": "object"
       },
       "WorkspaceResponse": {
@@ -31447,6 +31878,26 @@
               ],
               "title": "Registry Type"
             }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "platform",
+                    "workspace"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
           }
         ],
         "responses": {
@@ -37735,6 +38186,393 @@
           "v1",
           "protected",
           "triggers"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/workspace-registries": {
+      "get": {
+        "operationId": "list_workspace_registries_v1_workspace_registries_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryResponse"
+                  },
+                  "title": "Response List Workspace Registries V1 Workspace Registries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Workspace Registries",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "post": {
+        "operationId": "create_workspace_registry_v1_workspace_registries_post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceRegistryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/workspace-registries/{registry_id}": {
+      "delete": {
+        "description": "Remove the registry, or retire it while something still uses its items.",
+        "operationId": "delete_workspace_registry_v1_workspace_registries__registry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRegistryRemoved"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "get": {
+        "operationId": "get_workspace_registry_v1_workspace_registries__registry_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "patch": {
+        "operationId": "update_workspace_registry_v1_workspace_registries__registry_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceRegistryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/workspace-registries/{registry_id}/sync": {
+      "post": {
+        "operationId": "sync_workspace_registry_v1_workspace_registries__registry_id__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/agentarea_api__api__v1__registries__SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
         ]
       }
     },

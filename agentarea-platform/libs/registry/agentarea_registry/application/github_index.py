@@ -1,0 +1,93 @@
+"""The index of a GitHub repository whose folders are skills (ADR-0044).
+
+Every folder holding a ``SKILL.md`` at one commit is one skill. Its item points
+at that folder's tree, the pointer shape the platform skill index uses
+(``spec.source``), so an install fetches exactly the content the index named.
+"""
+
+import logging
+import posixpath
+import re
+from typing import Any, Protocol
+
+import yaml
+
+logger = logging.getLogger(__name__)
+
+SKILL_FILE = "SKILL.md"
+GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
+_FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
+
+
+class GitHubTreeTruncatedError(ValueError):
+    """GitHub returned part of the tree; an index built from it would drop skills."""
+
+
+class GitHubSource(Protocol):
+    async def head(self, repo: str, ref: str | None) -> tuple[str, str]:
+        """``(commit sha, root tree sha)`` of ``ref``, or of the default branch."""
+        ...
+
+    async def tree(self, repo: str, tree_sha: str) -> tuple[list[dict[str, Any]], bool]:
+        """Every entry under ``tree_sha`` recursively, and whether GitHub truncated it."""
+        ...
+
+    async def blob(self, repo: str, sha: str) -> bytes: ...
+
+
+def skill_frontmatter(content: str) -> dict[str, Any]:
+    match = _FRONTMATTER.match(content)
+    if not match:
+        return {}
+    try:
+        data = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        logger.warning("Unreadable SKILL.md frontmatter", exc_info=True)
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+async def build_github_skill_index(
+    source: GitHubSource, *, repo: str, commit: str, root_tree: str, path: str | None
+) -> list[dict[str, Any]]:
+    """Catalog items for every skill folder of ``repo`` at ``commit`` under ``path``."""
+    entries, truncated = await source.tree(repo, root_tree)
+    if truncated:
+        raise GitHubTreeTruncatedError(
+            f"GitHub truncated the tree of {repo} at {commit}; set a path to a smaller folder"
+        )
+    prefix = (path or "").strip("/")
+    trees = {e["path"]: e["sha"] for e in entries if e.get("type") == "tree"}
+    items: list[dict[str, Any]] = []
+    for entry in sorted(entries, key=lambda e: e["path"]):
+        if entry.get("type") != "blob" or posixpath.basename(entry["path"]) != SKILL_FILE:
+            continue
+        folder = posixpath.dirname(entry["path"])
+        if prefix and folder != prefix and not folder.startswith(f"{prefix}/"):
+            continue
+        tree_sha = trees[folder] if folder else root_tree
+        meta = skill_frontmatter((await source.blob(repo, entry["sha"])).decode("utf-8", "replace"))
+        name = meta.get("name") if isinstance(meta.get("name"), str) and meta["name"] else None
+        name = name or posixpath.basename(folder) or repo.rsplit("/", 1)[-1]
+        description = meta.get("description")
+        items.append(
+            {
+                "external_id": folder or name,
+                "name": name,
+                "description": description if isinstance(description, str) else None,
+                "version": tree_sha,
+                "spec": {
+                    "source_type": "github",
+                    "source_url": f"https://github.com/{repo}/tree/{commit}/{folder}".rstrip("/"),
+                    "source": {
+                        "type": "github",
+                        "repo": repo,
+                        "path": folder,
+                        "ref": commit,
+                        "tree_sha": tree_sha,
+                    },
+                },
+                "tags": [],
+            }
+        )
+    return items

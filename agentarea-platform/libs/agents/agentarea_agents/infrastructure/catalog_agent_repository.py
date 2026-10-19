@@ -7,8 +7,8 @@ catalog items so the agent service can project them as read-only agents.
 
 It deliberately uses raw SQL against ``registry_items`` / ``registries`` to avoid
 a cross-library dependency on ``agentarea-registry``. The catalog is global
-infrastructure (ADR-003): registries/registry_items are not workspace-scoped, so
-every tenant reads the same built-in agent definitions with no workspace filter.
+infrastructure (ADR-003): every tenant reads the platform registries' agents;
+a workspace registry's agents only its own workspace reads (ADR-0044).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class CatalogAgentRepository:
         self.user_context = user_context
 
     async def list_items(self) -> list[CatalogAgentItem]:
-        """List all catalog agent items (global catalog, no workspace filter)."""
+        """List the catalog agent items the caller's workspace may see."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version "
@@ -53,6 +53,7 @@ class CatalogAgentRepository:
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
             "WHERE r.registry_type = 'agents' "
+            "AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = :workspace_id) "
             "ORDER BY ri.name"
         )
         result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
@@ -69,6 +70,7 @@ class CatalogAgentRepository:
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
             "WHERE r.registry_type = 'agents' "
+            "AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = :workspace_id) "
             "AND ri.tags @> '[\"preset\"]'::jsonb "
             "ORDER BY ri.recommendation_rank NULLS LAST, ri.name"
         )
@@ -86,6 +88,7 @@ class CatalogAgentRepository:
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
             "WHERE r.registry_type = 'agents' "
+            "AND (ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = :workspace_id) "
             "AND ri.id = :item_id"
         )
         result = await self.session.execute(

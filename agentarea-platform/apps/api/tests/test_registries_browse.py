@@ -45,6 +45,7 @@ class _Item:
         self.featured = featured
         self.hosting = None
         self.pricing = None
+        self.registry_trust = "official"
         self.created_at = datetime(2026, 1, 1)
         self.updated_at = datetime(2026, 1, 1)
 
@@ -62,6 +63,7 @@ class _Service:
             pricings or [],
         )
         self.calls = []
+        self.registries: dict = {}
 
     async def browse_catalog(self, **kwargs):
         self.calls.append(kwargs)
@@ -69,6 +71,12 @@ class _Service:
 
     async def get_item(self, item_id):
         return next((i for i in self._result[0] if i.id == item_id), None)
+
+    async def registries_by_id(self, ids):
+        return {i: self.registries[i] for i in ids if i in self.registries}
+
+    async def get_visible_registry(self, registry_id):
+        return self.registries.get(str(registry_id))
 
 
 class _Lookup:
@@ -269,3 +277,41 @@ class TestWorkspaceConnections:
             ).json()
 
         assert [c["name"] for c in body["workspace_connections"]] == ["Linear"]
+
+
+class _Registry:
+    def __init__(self, registry_id, name, scope, mode, trust):
+        self.id = registry_id
+        self.name = name
+        self.scope = scope
+        self.mode = mode
+        self.trust = trust
+
+
+async def test_each_item_is_labelled_with_its_source_and_trust():
+    item = _Item("pdf")
+    item.registry_trust = "private"
+    service = _Service(items=[item], total=1)
+    service.registries[str(item.registry_id)] = _Registry(
+        item.registry_id, "acme-skills", "workspace", "upstream", "private"
+    )
+
+    app = FastAPI()
+    app.include_router(registries.router, prefix="/v1/workspaces/{workspace}")
+    app.dependency_overrides[registries.get_registry_service] = lambda: service
+    app.dependency_overrides[get_user_context] = lambda: UserContext(
+        user_id="u", workspace_id="acme"
+    )
+    app.dependency_overrides[get_catalog_connections_lookup] = lambda: _Lookup()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            "/v1/workspaces/acme/registries/catalog/browse", params={"registry_type": "skills"}
+        )
+
+    (card,) = response.json()["items"]
+    assert {k: card[k] for k in ("registry_name", "registry_scope", "registry_mode")} == {
+        "registry_name": "acme-skills",
+        "registry_scope": "workspace",
+        "registry_mode": "upstream",
+    }
+    assert card["registry_trust"] == "private"

@@ -13,6 +13,7 @@ from agentarea_agents.application.skill_service import (
     SkillUpdateResult,
 )
 from agentarea_agents.infrastructure.github_skill_importer import GitHubSourceGoneError
+from agentarea_api.api.v1._catalog_install import get_catalog_install_policy
 from agentarea_api.api.v1.skills import get_skill_service, router
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
@@ -57,6 +58,10 @@ def _client(context: UserContext) -> tuple[TestClient, AsyncMock]:
     app = FastAPI()
     app.include_router(router, prefix="/v1/workspaces/{workspace}")
     app.dependency_overrides[get_skill_service] = lambda: service
+    # The install policy has its own suite (test_catalog_install_policy_api).
+    app.dependency_overrides[get_catalog_install_policy] = lambda: SimpleNamespace(
+        require_allowed=AsyncMock(return_value=None)
+    )
     app.dependency_overrides[get_user_context] = lambda: context
     return TestClient(app), service
 

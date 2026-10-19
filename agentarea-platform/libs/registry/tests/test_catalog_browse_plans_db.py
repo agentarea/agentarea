@@ -21,6 +21,7 @@ import os
 from collections.abc import AsyncGenerator
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_registry.application.catalog_facets import derive_facets
 from agentarea_registry.domain.models import Registry
 from agentarea_registry.infrastructure.repository import RegistryItemRepository
@@ -40,6 +41,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 PREFIX = "plan-test-"
+CALLER = UserContext(user_id="u", workspace_id="plan-test-ws")
 
 
 @pytest.fixture
@@ -60,10 +62,15 @@ async def session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
 
 async def _seed(session: AsyncSession) -> None:
     repo = RegistryItemRepository(session)
-    for name, registry_type, priority in (
-        ("skills-curated", "skills", 10),
-        ("skills-mirror", "skills", 900),
-        ("conns", "mcp_servers", 100),
+    # The caller's own registry and another workspace's sit beside the
+    # platform's, so every query carries a visibility filter with rows on both
+    # sides of it.
+    for name, registry_type, priority, workspace_id in (
+        ("skills-curated", "skills", 10, None),
+        ("skills-mirror", "skills", 900, None),
+        ("skills-own", "skills", 100, CALLER.workspace_id),
+        ("skills-other", "skills", 100, "plan-test-other-ws"),
+        ("conns", "mcp_servers", 100, None),
     ):
         reg = Registry(
             name=f"{PREFIX}{name}",
@@ -71,6 +78,10 @@ async def _seed(session: AsyncSession) -> None:
             source_type="url",
             source_url=f"https://example.test/{name}.json",
             recommendation_priority=priority,
+            scope="workspace" if workspace_id else "platform",
+            workspace_id=workspace_id,
+            mode="upstream" if workspace_id else "mirror",
+            trust="private" if workspace_id else "official",
         )
         session.add(reg)
         await session.commit()
@@ -99,7 +110,7 @@ async def _captured(engine: AsyncEngine, session: AsyncSession, call) -> list[tu
 
     event.listen(engine.sync_engine, "before_cursor_execute", capture)
     try:
-        await call(RegistryItemRepository(session))
+        await call(RegistryItemRepository(session, CALLER))
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", capture)
     assert statements, "the repository sent no query touching registry_items"

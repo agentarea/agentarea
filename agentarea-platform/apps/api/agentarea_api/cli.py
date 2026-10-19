@@ -269,13 +269,30 @@ def validate():
     is_flag=True,
     help="Re-read every source even if its ETag is the one last applied.",
 )
+@click.option(
+    "--workspace-registries",
+    is_flag=True,
+    help="Also sync every active registry a workspace added (ADR-0044).",
+)
 def reconcile(
-    registries_config: str | None, source: tuple[str, ...], config_file: str | None, force: bool
+    registries_config: str | None,
+    source: tuple[str, ...],
+    config_file: str | None,
+    force: bool,
+    workspace_registries: bool,
 ):
     """Idempotent reconcile — ensure registries exist and sync them."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    asyncio.run(_reconcile(registries_config, source, config_file, force=force))
+    asyncio.run(
+        _reconcile(
+            registries_config,
+            source,
+            config_file,
+            force=force,
+            workspace_registries=workspace_registries,
+        )
+    )
 
 
 @cli.group()
@@ -344,6 +361,7 @@ async def _reconcile(
     sources: tuple[str, ...],
     config_file: str | None = None,
     force: bool = False,
+    workspace_registries: bool = False,
 ):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
@@ -396,7 +414,7 @@ async def _reconcile(
         )
         configs.append({"name": name, "source_url": src})
 
-    if not configs:
+    if not configs and not workspace_registries:
         click.echo("No registry config provided (set REGISTRIES_CONFIG or use --source)")
         return
 
@@ -476,8 +494,9 @@ async def _reconcile(
                         agent_repo=agent_repo,
                     )
 
-                    registries = await registry_repo.list_all()
-                    existing = next((r for r in registries if r.name == registry_name), None)
+                    # The manifest names platform registries; a workspace's own
+                    # registry may share the name.
+                    existing = await registry_repo.get_platform_by_name(registry_name)
                     if config.get("active", True) is False:
                         # A source dropped from the manifest is never reconciled
                         # again, so its registry and items would stay listed; what
@@ -505,6 +524,14 @@ async def _reconcile(
                                 registry_id, recommendation_priority=configured_priority
                             )
                             click.echo(f"Updated recommendation priority: {configured_priority}")
+                        labels = {
+                            field: config[field]
+                            for field in ("mode", "trust")
+                            if field in config and config[field] != getattr(existing, field)
+                        }
+                        if labels:
+                            await service.update_registry(registry_id, **labels)
+                            click.echo(f"Updated {labels}")
                     else:
                         registry_type = config.get("type")
                         if not registry_type:
@@ -522,6 +549,10 @@ async def _reconcile(
                             description=config.get("description"),
                             sync_mode=config.get("sync_mode", "manual"),
                             recommendation_priority=configured_priority,
+                            mode=config.get("mode", "mirror"),
+                            trust=config.get("trust", "official"),
+                            source_ref=config.get("source_ref"),
+                            source_path=config.get("source_path"),
                         )
                         registry_id = registry.id
                         click.echo(f"Created registry: {registry_id}")
@@ -541,14 +572,70 @@ async def _reconcile(
             click.echo(f"Reconcile failed for {registry_name}: {e}", err=True)
             failed.append((registry_name, str(e)))
 
+    total = len(configs)
+    if workspace_registries:
+        synced, broken = await _reconcile_workspace_registries(db, force=force)
+        succeeded.extend(synced)
+        failed.extend(broken)
+        total += len(synced) + len(broken)
+
     click.echo(
-        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed "
-        f"(out of {len(configs)})"
+        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed (out of {total})"
     )
     if failed:
         for name, err in failed:
             click.echo(f"  - {name}: {err}", err=True)
         sys.exit(1)
+
+
+async def _reconcile_workspace_registries(
+    db: Database, *, force: bool
+) -> tuple[list[str], list[tuple[str, str]]]:
+    """Sync every active registry a workspace added, each as its own workspace.
+
+    An unchanged index ETag or repository head is skipped like a platform
+    source's. Credentials resolve from the owning workspace's secrets.
+    """
+    from agentarea_common.auth.context import UserContext
+    from agentarea_common.base.tenant_scope import workspace_scope
+    from agentarea_common.constants import PLATFORM_PRINCIPAL_ID
+    from agentarea_mcp.infrastructure.repository import MCPServerRepository
+    from agentarea_registry.application.service import RegistryService
+    from agentarea_registry.infrastructure.repository import (
+        RegistryItemRepository,
+        RegistryRepository,
+    )
+
+    from agentarea_api.registry_credentials import registry_credentials_resolver
+
+    async with db.async_session_factory() as session:
+        registries = await RegistryRepository(session).list_active_workspace_registries()
+    click.echo(f"\nWorkspace registries: {len(registries)}")
+
+    succeeded: list[str] = []
+    failed: list[tuple[str, str]] = []
+    for registry in registries:
+        label = f"{registry.workspace_id}/{registry.name}"
+        click.echo(f"\nReconciling: {label}")
+        owner = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=str(registry.workspace_id))
+        try:
+            with workspace_scope(owner.workspace_id):
+                async with db.async_session_factory() as session:
+                    service = RegistryService(
+                        RegistryRepository(session, owner),
+                        RegistryItemRepository(session, owner),
+                        MCPServerRepository(session, owner),
+                        credentials_resolver=registry_credentials_resolver(session),
+                    )
+                    stats = await service.sync_registry(registry.id, force=force)
+                    await session.commit()
+            click.echo(f"Synced: {stats}")
+            succeeded.append(label)
+        except Exception as e:
+            logger.exception("Reconcile failed for workspace registry %s", label)
+            click.echo(f"Reconcile failed for {label}: {e}", err=True)
+            failed.append((label, str(e)))
+    return succeeded, failed
 
 
 if __name__ == "__main__":

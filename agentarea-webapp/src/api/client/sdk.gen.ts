@@ -154,6 +154,9 @@ import type {
   CreateWorkspaceDirectoryV1FilesDirectoriesPostData,
   CreateWorkspaceDirectoryV1FilesDirectoriesPostErrors,
   CreateWorkspaceDirectoryV1FilesDirectoriesPostResponses,
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostData,
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostErrors,
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponses,
   CreateWorkspaceV1WorkspacesPostData,
   CreateWorkspaceV1WorkspacesPostErrors,
   CreateWorkspaceV1WorkspacesPostResponses,
@@ -235,6 +238,9 @@ import type {
   DeleteWorkspaceLogoV1LogoDeleteData,
   DeleteWorkspaceLogoV1LogoDeleteErrors,
   DeleteWorkspaceLogoV1LogoDeleteResponses,
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteData,
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteErrors,
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponses,
   DeployMcpServerV1McpServersServerIdDeployPostData,
   DeployMcpServerV1McpServersServerIdDeployPostErrors,
   DeployMcpServerV1McpServersServerIdDeployPostResponses,
@@ -453,6 +459,9 @@ import type {
   GetWalletV1AgentsAgentIdWalletGetData,
   GetWalletV1AgentsAgentIdWalletGetErrors,
   GetWalletV1AgentsAgentIdWalletGetResponses,
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetData,
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetErrors,
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponses,
   GetWorkspaceSettingsV1SettingsGetData,
   GetWorkspaceSettingsV1SettingsGetErrors,
   GetWorkspaceSettingsV1SettingsGetResponses,
@@ -661,6 +670,9 @@ import type {
   ListWorkspaceFilesV1FilesGetData,
   ListWorkspaceFilesV1FilesGetErrors,
   ListWorkspaceFilesV1FilesGetResponses,
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetData,
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetErrors,
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponses,
   ListWorkspacesV1WorkspacesGetData,
   ListWorkspacesV1WorkspacesGetResponses,
   MoveWorkspaceFileV1FilesMovePostData,
@@ -823,6 +835,9 @@ import type {
   SyncRegistryV1RegistriesRegistryIdSyncPostData,
   SyncRegistryV1RegistriesRegistryIdSyncPostErrors,
   SyncRegistryV1RegistriesRegistryIdSyncPostResponses,
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostData,
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostErrors,
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponses,
   TriggersHealthCheckV1TriggersHealthGetData,
   TriggersHealthCheckV1TriggersHealthGetErrors,
   TriggersHealthCheckV1TriggersHealthGetResponses,
@@ -892,6 +907,9 @@ import type {
   UpdateWalletV1AgentsAgentIdWalletPutData,
   UpdateWalletV1AgentsAgentIdWalletPutErrors,
   UpdateWalletV1AgentsAgentIdWalletPutResponses,
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchData,
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchErrors,
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponses,
   UpdateWorkspaceSettingsV1SettingsPutData,
   UpdateWorkspaceSettingsV1SettingsPutErrors,
   UpdateWorkspaceSettingsV1SettingsPutResponses,
@@ -11091,6 +11109,202 @@ export const getExecutionTimelineV1TriggersTriggerIdTimelineGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/timeline",
+    ...options,
+  });
+
+/**
+ * List Workspace Registries
+ */
+export const listWorkspaceRegistriesV1WorkspaceRegistriesGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    ListWorkspaceRegistriesV1WorkspaceRegistriesGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponses,
+  ListWorkspaceRegistriesV1WorkspaceRegistriesGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListWorkspaceRegistriesV1WorkspaceRegistriesGetResponses,
+    ListWorkspaceRegistriesV1WorkspaceRegistriesGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/workspace-registries",
+    ...options,
+  });
+
+/**
+ * Create Workspace Registry
+ */
+export const createWorkspaceRegistryV1WorkspaceRegistriesPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateWorkspaceRegistryV1WorkspaceRegistriesPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponses,
+  CreateWorkspaceRegistryV1WorkspaceRegistriesPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateWorkspaceRegistryV1WorkspaceRegistriesPostResponses,
+    CreateWorkspaceRegistryV1WorkspaceRegistriesPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/workspace-registries",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Workspace Registry
+ *
+ * Remove the registry, or retire it while something still uses its items.
+ */
+export const deleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponses,
+  DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteResponses,
+    DeleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}",
+    ...options,
+  });
+
+/**
+ * Get Workspace Registry
+ */
+export const getWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponses,
+  GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetResponses,
+    GetWorkspaceRegistryV1WorkspaceRegistriesRegistryIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}",
+    ...options,
+  });
+
+/**
+ * Update Workspace Registry
+ */
+export const updateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponses,
+  UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchResponses,
+    UpdateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Sync Workspace Registry
+ */
+export const syncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponses,
+  SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostResponses,
+    SyncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/workspace-registries/{registry_id}/sync",
     ...options,
   });
 

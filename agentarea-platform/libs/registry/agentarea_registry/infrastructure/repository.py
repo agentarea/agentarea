@@ -1,11 +1,11 @@
 """Repositories for Registry and RegistryItem domain models.
 
-Registries and registry_items are GLOBAL catalog infrastructure (ADR-003), not
-workspace-scoped: built-in/official content lives here once and is readable by
-every tenant. These repositories therefore apply no workspace filter and never
-set workspace_id/created_by. They keep the ``(session, user_context)`` signature
-for call-site compatibility, but ``user_context`` is intentionally unused for
-read/write scoping.
+Registries and registry_items are catalog infrastructure (ADR-003), not
+WorkspaceScopedMixin rows: built-in content lives here once and is readable by
+every tenant. A registry is either the platform's, seen by every workspace, or
+one workspace's (ADR-0044). Sync and reconcile read every row; the catalog
+reads a caller makes go through the ``visible`` methods, which keep another
+workspace's registries and items out and need the caller's ``user_context``.
 """
 
 from typing import Any
@@ -75,7 +75,28 @@ _COPIED_REGISTRY_FIELDS = {
     "registry_type": "registry_type",
     "recommendation_priority": "registry_priority",
     "is_active": "registry_active",
+    "workspace_id": "registry_workspace_id",
+    "trust": "registry_trust",
 }
+
+
+def _caller_workspace(user_context: UserContext | None) -> str:
+    """The workspace a catalog read is for; there is no default to fall back to."""
+    if user_context is None or not user_context.workspace_id:
+        raise ValueError("a catalog read needs the caller's workspace")
+    return user_context.workspace_id
+
+
+def visible_registry(workspace_id: str) -> ColumnElement[bool]:
+    return or_(Registry.workspace_id.is_(None), Registry.workspace_id == workspace_id)
+
+
+def visible_item(workspace_id: str) -> ColumnElement[bool]:
+    """The platform's items and the caller's workspace's, never another's."""
+    return or_(
+        RegistryItem.registry_workspace_id.is_(None),
+        RegistryItem.registry_workspace_id == workspace_id,
+    )
 
 
 class RegistryRepository:
@@ -102,6 +123,57 @@ class RegistryRepository:
         if limit is not None:
             query = query.limit(limit)
         result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def list_visible(
+        self,
+        active_only: bool = False,
+        registry_type: str | None = None,
+        scope: str | None = None,
+    ) -> list[Registry]:
+        """The platform's registries and the caller's workspace's."""
+        query = select(Registry).where(visible_registry(_caller_workspace(self.user_context)))
+        if active_only:
+            query = query.where(Registry.is_active.is_(True))
+        if registry_type:
+            query = query.where(Registry.registry_type == registry_type)
+        if scope:
+            query = query.where(Registry.scope == scope)
+        result = await self.session.execute(query.order_by(Registry.created_at.desc()))
+        return list(result.scalars().all())
+
+    async def get_visible(self, id: UUID | str) -> Registry | None:
+        record = await self.session.get(Registry, id)
+        if record is None or record.workspace_id not in (
+            None,
+            _caller_workspace(self.user_context),
+        ):
+            return None
+        return record
+
+    async def get_many(self, ids: set[str]) -> list[Registry]:
+        if not ids:
+            return []
+        result = await self.session.execute(select(Registry).where(Registry.id.in_(ids)))
+        return list(result.scalars().all())
+
+    async def get_platform_by_name(self, name: str) -> Registry | None:
+        result = await self.session.execute(
+            select(Registry).where(Registry.scope == "platform", Registry.name == name)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_active_workspace_registries(self) -> list[Registry]:
+        """Every workspace's active synchronized registries, for reconcile."""
+        result = await self.session.execute(
+            select(Registry)
+            .where(
+                Registry.scope == "workspace",
+                Registry.is_active.is_(True),
+                Registry.source_type != "managed",
+            )
+            .order_by(Registry.workspace_id, Registry.name)
+        )
         return list(result.scalars().all())
 
     async def list_active(self, registry_type: str | None = None) -> list[Registry]:
@@ -162,6 +234,16 @@ class RegistryItemRepository:
 
     async def get_by_id(self, id: UUID | str) -> RegistryItem | None:
         return await self.session.get(RegistryItem, id)
+
+    async def get_visible(self, id: UUID | str) -> RegistryItem | None:
+        """The item, unless it belongs to another workspace's registry."""
+        record = await self.session.get(RegistryItem, id)
+        if record is None or record.registry_workspace_id not in (
+            None,
+            _caller_workspace(self.user_context),
+        ):
+            return None
+        return record
 
     async def list_all(
         self, limit: int | None = None, offset: int | None = None, **filters: Any
@@ -362,6 +444,7 @@ class RegistryItemRepository:
             # Bare column, not `IS TRUE`: it has to match the partial indexes'
             # predicate for the planner to use them.
             RegistryItem.registry_active.expression,
+            visible_item(_caller_workspace(self.user_context)),
         ]
         if category:
             conditions.append(RegistryItem.category == category)
@@ -529,8 +612,8 @@ class RegistryItemRepository:
         limit: int = 50,
         offset: int = 0,
     ) -> list[RegistryItem]:
-        """Search catalog items across all registries (global catalog)."""
-        query = select(RegistryItem)
+        """Search the catalog items the caller's workspace may see."""
+        query = select(RegistryItem).where(visible_item(_caller_workspace(self.user_context)))
 
         if update_available is not None:
             query = query.where(RegistryItem.update_available == update_available)

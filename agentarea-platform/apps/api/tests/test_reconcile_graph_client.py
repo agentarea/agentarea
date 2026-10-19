@@ -72,8 +72,8 @@ async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
         def __init__(self, *_args) -> None:
             pass
 
-        async def list_all(self):
-            return [live]
+        async def get_platform_by_name(self, name):
+            return live if name == live.name else None
 
     class _RegistryService:
         def __init__(self, *_args, **_kwargs) -> None:
