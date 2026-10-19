@@ -3,6 +3,7 @@ import { zWorkspaceRegistryCreate } from "@/api/client/zod.gen";
 import {
   describeRegistrySource,
   emptyRegistryForm,
+  mustMirror,
   toRegistryCreate,
   toRegistryUpdate,
 } from "./registry-form";
@@ -54,6 +55,34 @@ describe("registry form", () => {
 
     expect(body).toHaveProperty("credentials_secret_id", null);
     expect(body).not.toHaveProperty("source_type");
+  });
+
+  it("mirrors by default", () => {
+    const body = toRegistryCreate({
+      ...emptyRegistryForm(),
+      name: "acme",
+      source_url: "acme/skills",
+    });
+    expect(body.mode).toBe("mirror");
+  });
+
+  it("forces mirror on a skills registry read with credentials", () => {
+    const form = {
+      ...emptyRegistryForm(),
+      name: "acme",
+      source_url: "acme/skills",
+      mode: "upstream" as const,
+      credentials_secret_id: "0b6f8c1e-2a4d-4f7e-9a51-6d2c3b4a5e6f",
+    };
+    expect(mustMirror(form)).toBe(true);
+    expect(toRegistryCreate(form).mode).toBe("mirror");
+    expect(toRegistryUpdate(form).mode).toBe("mirror");
+    expect(toRegistryCreate({ ...form, credentials_secret_id: "" }).mode).toBe(
+      "upstream"
+    );
+    expect(toRegistryCreate({ ...form, registry_type: "agents" }).mode).toBe(
+      "upstream"
+    );
   });
 
   it("reads a repository source as owner/repo@ref:path", () => {

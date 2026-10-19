@@ -54,7 +54,7 @@ export default async function RegistriesPage() {
               { header: t("table.source"), barClassName: "h-4 w-40" },
               {
                 header: t("table.type"),
-                headerClassName: "w-[90px]",
+                headerClassName: "w-[130px]",
                 barClassName: "h-4 w-12",
               },
               {

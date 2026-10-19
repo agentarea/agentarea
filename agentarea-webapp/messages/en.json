@@ -3689,7 +3689,18 @@
       "credentialsEmpty": "No secrets found.",
       "credentialsCreate": "Create a secret",
       "credentialsClear": "Clear",
-      "active": "Active: listed in the catalog and synced"
+      "active": "Active: listed in the catalog and synced",
+      "mode": "Content",
+      "modes": {
+        "mirror": "Mirror: copy every skill on sync",
+        "upstream": "Upstream: fetch on first install"
+      },
+      "modeHint": "A mirror keeps every skill's content here, so installs and runs never reach the source. Upstream keeps only the index and fetches a skill the first time it is installed.",
+      "modeLocked": "A skills registry read with credentials is always mirrored: the credentials are used to sync, never to install."
+    },
+    "modes": {
+      "mirror": "Mirrored",
+      "upstream": "Fetched on install"
     }
   },
   "CatalogFetchErrors": {

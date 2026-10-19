@@ -15,6 +15,7 @@ export type WorkspaceRegistryType = NonNullable<
 export type WorkspaceRegistryTrust = NonNullable<
   WorkspaceRegistryCreate["trust"]
 >;
+export type RegistryMode = NonNullable<WorkspaceRegistryCreate["mode"]>;
 
 // The choices the API accepts, read from its schema rather than listed here.
 export const SOURCE_TYPES: readonly RegistrySourceType[] =
@@ -23,6 +24,8 @@ export const REGISTRY_TYPES: readonly WorkspaceRegistryType[] =
   zWorkspaceRegistryCreate.shape.registry_type.removeDefault().unwrap().options;
 export const WORKSPACE_TRUST_LEVELS: readonly WorkspaceRegistryTrust[] =
   zWorkspaceRegistryCreate.shape.trust.removeDefault().unwrap().options;
+export const REGISTRY_MODES: readonly RegistryMode[] =
+  zWorkspaceRegistryCreate.shape.mode.removeDefault().unwrap().options;
 
 /** What the form edits. Optional text is "" until filled; "" secret is none. */
 export type RegistryFormValues = {
@@ -34,6 +37,7 @@ export type RegistryFormValues = {
   source_path: string;
   registry_type: WorkspaceRegistryType;
   trust: WorkspaceRegistryTrust;
+  mode: RegistryMode;
   credentials_secret_id: string;
   is_active: boolean;
 };
@@ -48,6 +52,7 @@ export function emptyRegistryForm(): RegistryFormValues {
     source_path: "",
     registry_type: "skills",
     trust: "private",
+    mode: "mirror",
     credentials_secret_id: "",
     is_active: true,
   };
@@ -67,12 +72,30 @@ export function registryToForm(registry: RegistryResponse): RegistryFormValues {
     source_path: registry.source_path ?? "",
     registry_type: registry.registry_type === "agents" ? "agents" : "skills",
     trust: asWorkspaceTrust(registry.trust),
+    mode: registry.mode,
     credentials_secret_id: registry.credentials_secret_id ?? "",
     is_active: registry.is_active,
   };
 }
 
 const optional = (value: string) => value.trim() || null;
+
+/**
+ * A skills registry read with credentials must mirror its content: the
+ * credentials are used for a sync only, so an upstream install of one of its
+ * skills would fetch with none (the API refuses the combination).
+ */
+export function mustMirror(
+  form: Pick<RegistryFormValues, "registry_type" | "credentials_secret_id">
+): boolean {
+  return (
+    form.registry_type === "skills" && form.credentials_secret_id.trim() !== ""
+  );
+}
+
+function effectiveMode(form: RegistryFormValues): RegistryMode {
+  return mustMirror(form) ? "mirror" : form.mode;
+}
 
 /** Ref and path only mean something for a GitHub repository. */
 function gitLocation(form: RegistryFormValues) {
@@ -95,6 +118,7 @@ export function toRegistryCreate(
     ...gitLocation(form),
     registry_type: form.registry_type,
     trust: form.trust,
+    mode: effectiveMode(form),
     credentials_secret_id: optional(form.credentials_secret_id),
   };
 }
@@ -113,6 +137,7 @@ export function toRegistryUpdate(
     source_url: form.source_url.trim(),
     ...gitLocation(form),
     trust: form.trust,
+    mode: effectiveMode(form),
     credentials_secret_id: optional(form.credentials_secret_id),
     is_active: form.is_active,
   };

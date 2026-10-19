@@ -12,6 +12,7 @@ import {
   Package,
   ShieldCheck,
   Tag,
+  Warehouse,
 } from "lucide-react";
 import { Controller, useForm, useWatch, type Control } from "react-hook-form";
 import FormLabel from "@/components/FormLabel/FormLabel";
@@ -36,6 +37,8 @@ import { Switch } from "@/components/ui/switch";
 import { createRegistryAction, updateRegistryAction } from "./actions";
 import {
   emptyRegistryForm,
+  mustMirror,
+  REGISTRY_MODES,
   REGISTRY_TYPES,
   SOURCE_TYPES,
   WORKSPACE_TRUST_LEVELS,
@@ -130,6 +133,12 @@ export default function RegistryFormDialog({
     defaultValues: isEdit ? target.values : emptyRegistryForm(),
   });
   const sourceType = useWatch({ control, name: "source_type" });
+  const registryType = useWatch({ control, name: "registry_type" });
+  const credentials = useWatch({ control, name: "credentials_secret_id" });
+  const lockedToMirror = mustMirror({
+    registry_type: registryType,
+    credentials_secret_id: credentials,
+  });
   const isGithub = sourceType === "github";
 
   const onSubmit = async (values: RegistryFormValues) => {
@@ -340,6 +349,41 @@ export default function RegistryFormDialog({
                   )}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <FormLabel htmlFor="registry-mode" icon={Warehouse}>
+                {t("mode")}
+              </FormLabel>
+              <Controller
+                control={control}
+                name="mode"
+                render={({ field }) => (
+                  <Select
+                    value={lockedToMirror ? "mirror" : field.value}
+                    onValueChange={field.onChange}
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger id="registry-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REGISTRY_MODES.map((value) => (
+                        <SelectItem
+                          key={value}
+                          value={value}
+                          disabled={lockedToMirror && value !== "mirror"}
+                        >
+                          {t(`modes.${value}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <p className="text-xs text-muted-foreground">
+                {lockedToMirror ? t("modeLocked") : t("modeHint")}
+              </p>
             </div>
 
             <div className="space-y-2">

@@ -199,12 +199,20 @@ export default function RegistriesClient({
     {
       header: t("table.type"),
       accessor: "registry_type",
-      headerClassName: "w-[90px]",
+      headerClassName: "w-[130px]",
       cellClassName: "whitespace-nowrap text-xs text-muted-foreground",
-      render: (value) =>
-        value === "agents" || value === "skills"
-          ? t(`form.registryTypes.${value}`)
-          : String(value),
+      render: (value, registry) => (
+        <div className="space-y-0.5">
+          <span className="block">
+            {value === "agents" || value === "skills"
+              ? t(`form.registryTypes.${value}`)
+              : String(value)}
+          </span>
+          {registry && (
+            <span className="block">{t(`modes.${registry.mode}`)}</span>
+          )}
+        </div>
+      ),
     },
     {
       header: t("table.trust"),
