@@ -5,7 +5,9 @@ The routes ask nothing themselves: the services' one enforcement point
 reaches the caller as 403 with the rule that decided it. The decision and
 every install path are covered at the service
 (``libs/agents/tests/test_catalog_install_policy_paths.py``); here the service
-is a stand-in that refuses.
+is a stand-in that refuses. A direct GitHub import (``POST /skills`` with a
+``github_url``) is an install from the ``registry:github`` pseudo-registry and
+refuses the same way.
 """
 
 from unittest.mock import AsyncMock
@@ -33,6 +35,7 @@ REFUSAL = CatalogInstallRefusedError(
 async def client():
     skill_service = AsyncMock(spec=SkillService)
     skill_service.install_catalog_skill.side_effect = REFUSAL
+    skill_service.create_from_github.side_effect = REFUSAL
     agent_service = AsyncMock(spec=AgentService)
     agent_service.get.return_value = None
     agent_service.install_catalog_agent.side_effect = REFUSAL
@@ -50,6 +53,15 @@ async def client():
 @pytest.mark.parametrize("kind", ["skills", "agents"])
 async def test_a_refused_install_answers_403_with_the_rule(client, kind):
     response = await client.post(f"/v1/workspaces/acme/{kind}/{uuid4()}/install")
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == str(REFUSAL)
+
+
+async def test_a_refused_github_import_answers_403_with_the_rule(client):
+    response = await client.post(
+        "/v1/workspaces/acme/skills", json={"github_url": "https://github.com/o/r"}
+    )
 
     assert response.status_code == 403, response.text
     assert response.json()["detail"] == str(REFUSAL)

@@ -17,3 +17,9 @@ MANAGED_BY_PLATFORM = "platform"
 # governance policy rules name it (``registry_trust:<level>``), and neither
 # library depends on the other.
 REGISTRY_TRUST_LEVELS = ("official", "verified", "community", "private")
+
+# A skill imported straight from a GitHub URL passed through no registry, so
+# install rules name its source as the pseudo-registry ``registry:github`` and it
+# carries the trust of an unvetted public source.
+GITHUB_IMPORT_REGISTRY_ID = "github"
+GITHUB_IMPORT_TRUST = "community"

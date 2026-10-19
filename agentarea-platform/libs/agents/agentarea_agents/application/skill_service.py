@@ -13,6 +13,7 @@ from uuid import UUID
 from agentarea_common.audit import audited
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
+from agentarea_common.constants import GITHUB_IMPORT_REGISTRY_ID, GITHUB_IMPORT_TRUST
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
 from agentarea_governance.application.catalog_install import (
@@ -221,6 +222,12 @@ class SkillService:
                 self.repository_factory.session, self.user_context
             )
         return self._install_guard
+
+    async def require_github_import_allowed(self) -> None:
+        """A direct GitHub import is an install from the unvetted public source."""
+        await self.install_guard.require_allowed(
+            registry_id=GITHUB_IMPORT_REGISTRY_ID, trust=GITHUB_IMPORT_TRUST
+        )
 
     @property
     def storage_service(self) -> SkillStorageService:
@@ -432,7 +439,10 @@ class SkillService:
         Raises:
             GitHubSkillImporterError: If download fails.
             ValueError: If no skill file is found in the repository.
+            CatalogInstallRefusedError: If the install policy refuses GitHub imports.
         """
+        await self.require_github_import_allowed()
+
         # Download repository as ZIP and re-root it on the package the URL points at
         repo_info = self.github_importer.parse_github_url(payload.github_url)
         repo_zip_data = await self.github_importer.download_repo(payload.github_url)

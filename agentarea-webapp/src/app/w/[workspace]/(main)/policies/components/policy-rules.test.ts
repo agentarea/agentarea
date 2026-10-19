@@ -87,6 +87,10 @@ describe("a catalog install rule", () => {
       label: "Allow installs",
       value: "from registry 0b6f8c1e-2a4d-4f7e-9a51-6d2c3b4a5e6f",
     });
+    expect(policyToRule(install("deny", "registry:github"))).toMatchObject({
+      label: "Deny installs",
+      value: "from GitHub URLs",
+    });
   });
 
   it("is not a tool rule nor custom in the matrix", () => {
