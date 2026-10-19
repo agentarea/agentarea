@@ -114,3 +114,72 @@ async def test_only_unreferenced_items_the_source_dropped_are_deleted(session: A
         "connected": False,
         "mirrored": False,
     }
+
+
+async def _service(session: AsyncSession, monkeypatch, payload: dict):
+    from agentarea_registry.application.service import RegistryService
+    from agentarea_registry.infrastructure.repository import RegistryRepository
+
+    reg = Registry(
+        name=f"{PREFIX}bundles-{uuid.uuid4().hex[:6]}",
+        registry_type="bundles",
+        source_type="url",
+        source_url="https://example.test/bundles.json",
+    )
+    session.add(reg)
+    await session.commit()
+    monkeypatch.setattr(RegistryService, "_fetch_source", staticmethod(lambda _url: payload))
+    monkeypatch.setattr(RegistryService, "_source_etag", staticmethod(lambda _url: None))
+    service = RegistryService(
+        RegistryRepository(session), RegistryItemRepository(session), server_repo=None
+    )
+    return service, reg
+
+
+async def test_a_source_listing_an_item_twice_still_syncs(session: AsyncSession, monkeypatch):
+    # The unique (registry_id, external_id) constraint exists only on the real
+    # schema: the second copy of a new item used to try a second INSERT, and the
+    # failed statement then took every later item and the sync down with it.
+    payload = {"bundles": [{"name": n, "schema_version": "0.1.0"} for n in ("a", "a", "b")]}
+    service, reg = await _service(session, monkeypatch, payload)
+
+    stats = await service.sync_registry(reg.id)
+
+    assert stats["skipped"] == 0
+    names = (
+        await session.execute(
+            text("SELECT external_id FROM registry_items WHERE registry_id = :r ORDER BY 1"),
+            {"r": reg.id},
+        )
+    ).scalars().all()
+    assert names == ["a", "b"]
+
+
+async def test_retiring_a_registry_deletes_what_nothing_uses(session: AsyncSession, monkeypatch):
+    payload = {"bundles": [{"name": n, "schema_version": "0.1.0"} for n in ("used", "unused")]}
+    service, reg = await _service(session, monkeypatch, payload)
+    await service.sync_registry(reg.id)
+    used = (
+        await session.execute(
+            text("SELECT id FROM registry_items WHERE registry_id = :r AND external_id = 'used'"),
+            {"r": reg.id},
+        )
+    ).scalar_one()
+    await session.execute(
+        text(
+            "INSERT INTO registry_item_installs (id, workspace_id, registry_item_id, installed_entity_id) "
+            "VALUES (:id, :w, :item, :entity)"
+        ),
+        {"id": uuid.uuid4(), "w": WORKSPACE, "item": used, "entity": uuid.uuid4()},
+    )
+    await session.commit()
+
+    assert await service.retire_registry(reg.id) == 1
+
+    left = (
+        await session.execute(
+            text("SELECT external_id, registry_active FROM registry_items WHERE registry_id = :r"),
+            {"r": reg.id},
+        )
+    ).all()
+    assert dict(left) == {"used": False}

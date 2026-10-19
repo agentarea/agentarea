@@ -167,19 +167,6 @@ class RegistryItem(BaseModel):
             postgresql_include=["protocol", "hosting", "pricing"],
             postgresql_where=text("registry_active"),
         ),
-        # Free-text search is `ILIKE '%term%'`, which no btree can answer.
-        Index(
-            "ix_registry_items_name_trgm",
-            "name",
-            postgresql_using="gin",
-            postgresql_ops={"name": "gin_trgm_ops"},
-        ),
-        Index(
-            "ix_registry_items_description_trgm",
-            "description",
-            postgresql_using="gin",
-            postgresql_ops={"description": "gin_trgm_ops"},
-        ),
     )
 
     registry_id: Mapped[str] = mapped_column(

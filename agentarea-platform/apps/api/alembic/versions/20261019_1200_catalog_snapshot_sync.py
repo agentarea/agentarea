@@ -27,8 +27,16 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.add_column("registries", sa.Column("source_etag", sa.Text(), nullable=True))
-    for column in ("name", "description"):
-        op.drop_index(f"ix_registry_items_{column}_trgm", table_name="registry_items")
+    # Concurrently: a plain DROP INDEX queues for ACCESS EXCLUSIVE behind any open
+    # transaction on the table, and every catalog read queues behind it.
+    with op.get_context().autocommit_block():
+        for column in ("name", "description"):
+            op.drop_index(
+                f"ix_registry_items_{column}_trgm",
+                table_name="registry_items",
+                postgresql_concurrently=True,
+                if_exists=True,
+            )
 
 
 def downgrade() -> None:

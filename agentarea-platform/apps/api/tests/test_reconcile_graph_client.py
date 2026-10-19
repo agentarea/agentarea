@@ -42,7 +42,7 @@ async def test_reconcile_resolves_the_graph_client_without_temporal_settings(
     assert isinstance(resolve_graph_client(), OpenFGAClient)
 
 
-async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing(
+async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
     monkeypatch,
 ) -> None:
     from contextlib import asynccontextmanager
@@ -79,8 +79,9 @@ async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing
         def __init__(self, *_args, **_kwargs) -> None:
             pass
 
-        async def update_registry(self, registry_id, **fields):
-            calls.append(("update", registry_id, fields))
+        async def retire_registry(self, registry_id):
+            calls.append(("retire", registry_id))
+            return 0
 
         async def sync_registry(self, registry_id):
             calls.append(("sync", registry_id))
@@ -97,9 +98,10 @@ async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing
 
     retired = '[{"name": "system-openapi-connections", "active": false}]'
     await cli._reconcile(retired, (), None)
-    assert calls == [("update", live.id, {"is_active": False})]
+    assert calls == [("retire", live.id)]
 
+    # Retiring again is how items a later release stops using get cleaned.
     live.is_active = False
     calls.clear()
     await cli._reconcile(retired, (), None)
-    assert calls == []
+    assert calls == [("retire", live.id)]

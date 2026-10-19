@@ -42,7 +42,7 @@ async def test_a_new_catalog_skill_gets_no_skill_row():
     item_repo.update.assert_awaited_with(item.id, installed_entity_id=None, installed_version="latest")
 
 
-async def test_a_platform_skill_row_left_by_an_earlier_sync_is_removed(db_session, monkeypatch):
+async def _legacy_catalog(db_session, monkeypatch, workspace_id, published):
     from agentarea_registry.domain.models import Registry
     from agentarea_registry.infrastructure.repository import (
         RegistryItemRepository,
@@ -55,18 +55,49 @@ async def test_a_platform_skill_row_left_by_an_earlier_sync_is_removed(db_sessio
     db_session.add(registry)
     await db_session.commit()
     items = RegistryItemRepository(db_session)
-    legacy_row = uuid4()
-    item = await items.create(registry_id=registry.id, external_id="pdf", name="pdf")
-    await items.update(item.id, installed_entity_id=legacy_row)
-    skill_repo = SimpleNamespace(delete=AsyncMock(return_value=True))
+    rows = {}
+    for name in ("pdf", "docx"):
+        item = await items.create(registry_id=registry.id, external_id=name, name=name)
+        rows[name] = uuid4()
+        await items.update(item.id, installed_entity_id=rows[name])
+    skill_repo = SimpleNamespace(
+        delete=AsyncMock(return_value=True),
+        user_context=SimpleNamespace(workspace_id=workspace_id),
+    )
     service = RegistryService(
         RegistryRepository(db_session), items, server_repo=None, skill_repo=skill_repo
     )
-    source = {"skills": [{"name": "pdf", "description": "Fill PDFs", "content": "# pdf"}]}
+    source = {"skills": [{"name": n, "description": n, "content": f"# {n}"} for n in published]}
     monkeypatch.setattr(RegistryService, "_fetch_source", staticmethod(lambda url: source))
+    return service, registry, items, skill_repo, rows
+
+
+async def test_platform_skill_rows_left_by_earlier_syncs_are_removed(db_session, monkeypatch):
+    from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+
+    service, registry, items, skill_repo, rows = await _legacy_catalog(
+        db_session, monkeypatch, PLATFORM_WORKSPACE_ID, published=["pdf"]
+    )
+    # Which unlinked items are then deleted is covered on the real schema
+    # (test_catalog_retire_db); the referencing tables are not in this SQLite.
+    monkeypatch.setattr(items, "delete_unreferenced_out_of_source", AsyncMock(return_value=0))
 
     await service.sync_registry(registry.id)
 
-    skill_repo.delete.assert_awaited_once_with(legacy_row)
-    await db_session.refresh(item)
-    assert item.installed_entity_id is None
+    # Both: the published item's row, and the dropped item's, so it can go too.
+    assert sorted(c.args[0] for c in skill_repo.delete.await_args_list) == sorted(rows.values())
+    assert all(i.installed_entity_id is None for i in await items.list_by_registry(registry.id))
+
+
+async def test_a_sync_through_a_tenant_repository_leaves_platform_rows_linked(
+    db_session, monkeypatch
+):
+    service, registry, items, skill_repo, rows = await _legacy_catalog(
+        db_session, monkeypatch, "some-workspace", published=["pdf", "docx"]
+    )
+
+    await service.sync_registry(registry.id)
+
+    skill_repo.delete.assert_not_called()
+    linked = {i.external_id: i.installed_entity_id for i in await items.list_by_registry(registry.id)}
+    assert linked == rows

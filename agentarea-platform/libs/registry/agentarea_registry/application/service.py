@@ -18,18 +18,21 @@ Entity-specific details (connection_type, source_type) live in spec JSONB.
 import asyncio
 import json
 import logging
+import urllib.error
 import urllib.request
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import yaml
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.money import to_optional_money
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
+from sqlalchemy.exc import SQLAlchemyError
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
 from agentarea_registry.domain.models import (
@@ -51,6 +54,9 @@ logger = logging.getLogger(__name__)
 # both the readiness and the liveness probe, so a hung source took the pod down
 # with it before the fetch ever gave up.
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
+# Part of the stored ETag: bump it when parsing or facets change, so the next
+# sync re-applies every source instead of skipping the unchanged ones.
+SYNC_FORMAT = "1"
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -537,19 +543,30 @@ class RegistryService:
             raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
-            etag = await asyncio.to_thread(self._source_etag, registry.source_url)
+            source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
+            etag = f"{SYNC_FORMAT}:{source_etag}" if source_etag else None
             if not force and etag is not None and etag == registry.source_etag:
                 await self.registry_repo.update(
                     registry_id, last_synced_at=datetime.utcnow(), last_sync_error=None
                 )
-                return {"source_unchanged": True, "total": registry.item_count}
+                return {
+                    "new_specs": 0,
+                    "updates_flagged": 0,
+                    "unchanged": registry.item_count,
+                    "total": registry.item_count,
+                    "skipped": 0,
+                    "skipped_items": [],
+                    "out_of_source": None,
+                    "deleted": 0,
+                    "source_unchanged": True,
+                }
 
             # In a worker thread, not on the loop: _fetch_source is a blocking
             # urlopen, and the API serves every request from one event loop, so
             # calling it here directly froze the whole process -- /health with
             # it, which is what the probes poll.
             raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
-            parsed_items = self._parse_source(registry.registry_type, raw_data)
+            parsed_items = self._dedupe(self._parse_source(registry.registry_type, raw_data))
 
             new_specs = 0
             updates_flagged = 0
@@ -558,10 +575,7 @@ class RegistryService:
             skipped_items: list[dict[str, str]] = []
             # One read for the whole registry: a lookup per item was a query per
             # catalog row on every sync, millions of them a day.
-            existing_by_id = {
-                item.external_id: item
-                for item in await self.item_repo.list_by_registry(registry_id)
-            }
+            existing_by_id = await self._items_by_external_id(registry_id)
 
             for item_data in parsed_items:
                 external_id = item_data["external_id"]
@@ -595,7 +609,7 @@ class RegistryService:
                         else:
                             unchanged += 1
 
-                        if registry.registry_type == "skills" and existing.installed_entity_id:
+                        if registry.registry_type == "skills":
                             await self._drop_platform_skill(existing)
 
                         await self.item_repo.session.commit()
@@ -641,6 +655,7 @@ class RegistryService:
                             installed_entity_id=entity_id,
                             installed_version=item.version or "latest",
                         )
+                        existing_by_id[external_id] = item
                         new_specs += 1
                 except Exception as e:
                     logger.warning(
@@ -650,6 +665,11 @@ class RegistryService:
                         e,
                         exc_info=True,
                     )
+                    if isinstance(e, SQLAlchemyError):
+                        # A failed statement leaves the transaction unusable for
+                        # every later item; rolling back expires what was loaded.
+                        await self.item_repo.session.rollback()
+                        existing_by_id = await self._items_by_external_id(registry_id)
                     skipped += 1
                     if len(skipped_items) < self.MAX_SKIPPED_DETAILS:
                         skipped_items.append({"external_id": external_id, "reason": str(e)})
@@ -660,10 +680,14 @@ class RegistryService:
             out_of_source = None
             deleted = 0
             if parsed_items:
-                out_of_source = await self.item_repo.mark_in_source(
-                    registry_id, {item["external_id"] for item in parsed_items}
-                )
+                published = {item["external_id"] for item in parsed_items}
+                out_of_source = await self.item_repo.mark_in_source(registry_id, published)
                 if out_of_source:
+                    if registry.registry_type == "skills":
+                        for item in existing_by_id.values():
+                            if item.external_id not in published:
+                                await self._drop_platform_skill(item)
+                        await self.item_repo.session.commit()
                     deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
                     out_of_source -= deleted
 
@@ -673,7 +697,9 @@ class RegistryService:
                 last_synced_at=datetime.utcnow(),
                 last_sync_error=None,
                 item_count=total,
-                source_etag=etag,
+                # A skipped item (a model whose provider has not synced yet) must
+                # be retried by the next run, so the source counts as unread.
+                source_etag=etag if skipped == 0 else None,
             )
 
             return {
@@ -691,6 +717,42 @@ class RegistryService:
             logger.exception(f"Registry sync failed for {registry_id}")
             await self.registry_repo.update(registry_id, last_sync_error=str(e))
             raise
+
+    async def retire_registry(self, registry_id: UUID) -> int:
+        """Retire a registry no source feeds any more: everything in it is out of
+        source, and what nothing uses is deleted. Returns how many items were.
+        """
+        registry = await self.registry_repo.get_by_id(registry_id)
+        if not registry:
+            raise RegistryNotFoundError(f"Registry {registry_id} not found")
+        if registry.is_active:
+            await self.update_registry(registry_id, is_active=False)
+        await self.item_repo.mark_in_source(registry_id, set())
+        if registry.registry_type == "skills":
+            for item in (await self._items_by_external_id(registry_id)).values():
+                await self._drop_platform_skill(item)
+            await self.item_repo.session.commit()
+        return await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+
+    async def _items_by_external_id(self, registry_id: UUID) -> dict[str, RegistryItem]:
+        # One read for the whole registry: a lookup per item was a query per
+        # catalog row on every sync, millions of them a day.
+        return {
+            item.external_id: item for item in await self.item_repo.list_by_registry(registry_id)
+        }
+
+    @staticmethod
+    def _dedupe(parsed_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """One entry per external_id: the last one published, at its first position."""
+        by_id: dict[str, dict[str, Any]] = {}
+        for item in parsed_items:
+            by_id[item["external_id"]] = item
+        if len(by_id) < len(parsed_items):
+            logger.warning(
+                "Source published %d duplicate catalog entries; kept the last of each",
+                len(parsed_items) - len(by_id),
+            )
+        return list(by_id.values())
 
     # ── Update specs ──
 
@@ -902,8 +964,15 @@ class RegistryService:
         Deleting through the repository also revokes the row's ownership in the
         authorization graph.
         """
+        if not item.installed_entity_id:
+            return
         if not self.skill_repo:
             raise ValueError("Skill repository not available")
+        # Only a repository in the platform workspace sees those rows; through a
+        # tenant's (an API-triggered sync) the delete would find nothing and the
+        # link would be dropped while the row stays.
+        if self.skill_repo.user_context.workspace_id != PLATFORM_WORKSPACE_ID:
+            return
         await self.skill_repo.delete(item.installed_entity_id)
         item.installed_entity_id = None
         item.installed_version = None
@@ -1002,10 +1071,16 @@ class RegistryService:
         req = urllib.request.Request(  # noqa: S310
             source_url, method="HEAD", headers={"User-Agent": "agentarea-registry-sync"}
         )
-        with urllib.request.urlopen(  # noqa: S310
-            req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS, context=outbound_ssl_context()
-        ) as resp:
-            return resp.headers.get("ETag")
+        try:
+            with urllib.request.urlopen(  # noqa: S310
+                req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS, context=outbound_ssl_context()
+            ) as resp:
+                return resp.headers.get("ETag")
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            # Some sources refuse HEAD (a presigned GET URL, an API without it);
+            # without an ETag the source is read in full.
+            logger.warning("No ETag from %s; reading it in full", source_url, exc_info=True)
+            return None
 
     @staticmethod
     def _fetch_source(source_url: str) -> dict[str, Any]:

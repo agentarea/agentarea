@@ -451,12 +451,14 @@ async def _reconcile(
                     existing = next((r for r in registries if r.name == registry_name), None)
                     if config.get("active", True) is False:
                         # A source dropped from the manifest is never reconciled
-                        # again, so its registry and items would stay listed.
-                        if existing is not None and existing.is_active:
-                            await service.update_registry(existing.id, is_active=False)
-                            click.echo(f"Retired registry: {existing.id}")
+                        # again, so its registry and items would stay listed; what
+                        # nothing uses is deleted, the rest stays out of the catalog.
+                        if existing is not None:
+                            deleted = await service.retire_registry(existing.id)
+                            await session.commit()
+                            click.echo(f"Retired registry: {existing.id} ({deleted} items deleted)")
                         else:
-                            click.echo("Registry already retired or absent")
+                            click.echo("Registry absent")
                         succeeded.append(registry_name)
                         continue
                     configured_priority = config.get("recommendation_priority")
