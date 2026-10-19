@@ -14,7 +14,11 @@ from agentarea_api.api.v1.registries import RegistryResponse, SyncResponse
 from agentarea_api.registry_credentials import REGISTRY_SECRET_CONSUMER, REGISTRY_SECRET_FIELD
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
-from agentarea_registry.application.service import RegistryNotFoundError, RegistryService
+from agentarea_registry.application.service import (
+    RegistryNotFoundError,
+    RegistryService,
+    sync_error_message,
+)
 from agentarea_secrets.catalog_service import (
     ManagedSecretError,
     SecretAccessDeniedError,
@@ -251,7 +255,5 @@ async def sync_workspace_registry(
         return SyncResponse(**await service.sync_registry(registry_id, force=force))
     except RegistryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Sync failed: {e}") from e
+        raise HTTPException(status_code=502, detail=f"Sync failed: {sync_error_message(e)}") from e

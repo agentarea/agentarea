@@ -226,3 +226,47 @@ async def test_a_source_read_with_credentials_must_be_mirrored(client, caller, s
     assert "credentials" in upstream.json()["detail"]
     assert created["mode"] == "mirror"
     assert switched.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "source_url",
+    ["/app/.env", "file:///proc/self/environ", "http://93.184.216.34/i.json", "https://10.0.0.5/i"],
+)
+async def test_an_index_url_is_public_https(client, caller, source_url):
+    response = await _create(
+        client, caller, name="idx", source_type="url", source_url=source_url, mode="upstream"
+    )
+
+    assert response.status_code == 400
+    assert "public https" in response.json()["detail"]
+
+
+async def test_a_failed_sync_answers_a_classification_not_the_source(client, caller, monkeypatch):
+    import yaml
+
+    async def no_etag(self, _url):
+        return None
+
+    async def leaky(self, _url):
+        raise yaml.scanner.ScannerError(problem="AGENTAREA_DB_PASSWORD=hunter2: x")
+
+    monkeypatch.setattr(RegistryService, "_untrusted_etag", no_etag)
+    monkeypatch.setattr(RegistryService, "_fetch_untrusted", leaky)
+    created = (
+        await _create(
+            client,
+            caller,
+            name="idx",
+            source_type="url",
+            source_url="https://93.184.216.34/i.json",
+            mode="upstream",
+        )
+    ).json()
+
+    response = await client.post(_path(ADMIN, f"/{created['id']}/sync"))
+    listed = (await client.get(_path(ADMIN))).json()
+
+    assert response.status_code == 502
+    assert "hunter2" not in response.text
+    assert response.json()["detail"] == "Sync failed: the source is not a valid JSON or YAML index"
+    assert listed[0]["last_sync_error"] == "the source is not a valid JSON or YAML index"

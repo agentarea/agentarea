@@ -36,6 +36,7 @@ from agentarea_registry.application.service import (
     CatalogItemNotFoundError,
     RegistryNotFoundError,
     RegistryService,
+    sync_error_message,
 )
 from agentarea_registry.domain.models import Registry, RegistryItem
 from agentarea_registry.infrastructure.repository import CATALOG_SORTS
@@ -664,10 +665,8 @@ async def sync_registry(
         return SyncResponse(**stats)
     except RegistryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Sync failed: {e}") from e
+        raise HTTPException(status_code=502, detail=f"Sync failed: {sync_error_message(e)}") from e
 
 
 # ── Catalog items ──

@@ -24,13 +24,21 @@ import urllib.request
 from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 from uuid import UUID
 
+import httpx
 import yaml
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID, REGISTRY_TRUST_LEVELS
 from agentarea_common.money import to_optional_money
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
+from agentarea_common.utils.url_safety import (
+    OutboundPolicy,
+    SafeOutboundTransport,
+    UnsafeUrlError,
+    validate_outbound_url,
+)
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_mcp.domain.env_schema import derive_env_schema_from_spec, normalize_env_schema
 from agentarea_mcp.infrastructure.repository import MCPServerRepository
@@ -38,9 +46,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from agentarea_registry.application.catalog_facets import apply_facets, derive_facets
 from agentarea_registry.application.github_index import (
-    GITHUB_REPO_PATTERN,
     GitHubSource,
+    GitHubTreeTruncatedError,
     build_github_skill_index,
+    is_github_repo,
 )
 from agentarea_registry.domain.models import (
     DEFAULT_REGISTRY_PRIORITY,
@@ -50,7 +59,7 @@ from agentarea_registry.domain.models import (
     Registry,
     RegistryItem,
 )
-from agentarea_registry.infrastructure.github_client import HttpGitHubSource
+from agentarea_registry.infrastructure.github_client import GitHubApiError, HttpGitHubSource
 from agentarea_registry.infrastructure.repository import (
     DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
@@ -67,7 +76,15 @@ logger = logging.getLogger(__name__)
 SOURCE_FETCH_TIMEOUT_SECONDS = 30
 # Part of the stored ETag: bump it when parsing or facets change, so the next
 # sync re-applies every source instead of skipping the unchanged ones.
-SYNC_FORMAT = "2"
+SYNC_FORMAT = "3"
+# A workspace's index is a member-supplied URL: read within these bounds, so a
+# hostile or broken one costs one bounded request and no more.
+MAX_SOURCE_BYTES = 5 * 1024 * 1024
+SOURCE_DEADLINE_SECONDS = 60.0
+MAX_SOURCE_ITEMS = 2000
+MAX_SOURCE_REDIRECTS = 5
+# A whole sync of one workspace registry, so one cannot hold up the next.
+WORKSPACE_SYNC_DEADLINE_SECONDS = 300.0
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -118,6 +135,77 @@ class CatalogItemAlreadyExistsError(ValueError):
     """A registry already contains the requested external identifier."""
 
 
+class RegistrySyncError(Exception):
+    """A sync failed for a reason whose message is safe to show the registry's owner."""
+
+
+class RegistrySourceError(RegistrySyncError):
+    """The source could not be read, or what it holds is not an index."""
+
+
+class RegistryConfigurationError(RegistrySyncError, ValueError):
+    """The registry asks for something this sync was not given."""
+
+
+def sync_error_message(error: BaseException) -> str:
+    """What a failed sync records and answers: a classification, never the error's text.
+
+    The text of a fetch or parse error can quote what the source returned, or
+    where it was fetched from, and a workspace's source is a URL a member chose.
+    """
+    if isinstance(error, (RegistrySyncError, GitHubTreeTruncatedError)):
+        return str(error)
+    if isinstance(error, GitHubApiError):
+        if error.status_code is None:
+            return "GitHub returned something this sync cannot read"
+        return f"GitHub answered {error.status_code}"
+    if isinstance(error, urllib.error.HTTPError):
+        return f"the source answered HTTP {error.code}"
+    if isinstance(error, (httpx.HTTPError, urllib.error.URLError, OSError)):
+        return "the source could not be reached"
+    if isinstance(error, (json.JSONDecodeError, yaml.YAMLError, UnicodeDecodeError)):
+        return "the source is not a valid JSON or YAML index"
+    if isinstance(error, UnsafeUrlError):
+        return "the source could not be reached"
+    if isinstance(error, ValueError):
+        # Our own validation of an entry, naming what the index published.
+        return str(error)
+    return "the sync failed; the server log has the cause"
+
+
+class _NoAliasLoader(yaml.SafeLoader):
+    """YAML without anchors' aliases: a few lines of them expand to gigabytes."""
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        if self.check_event(yaml.AliasEvent):
+            raise yaml.YAMLError("YAML aliases are not accepted in a registry index")
+        return super().compose_node(parent, index)
+
+
+def _parse_untrusted(body: bytes) -> Any:
+    try:
+        text = body.decode("utf-8")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            loader = _NoAliasLoader(text)
+            try:
+                return loader.get_single_data()
+            finally:
+                loader.dispose()
+    except (UnicodeDecodeError, yaml.YAMLError) as e:
+        raise RegistrySourceError("the source is not a valid JSON or YAML index") from e
+
+
+def _size(n: int) -> str:
+    mb = 1024 * 1024
+    return f"{n // mb} MB" if n >= mb else f"{n // 1024} KB"
+
+
+def _default_untrusted_transport() -> httpx.AsyncBaseTransport:
+    return SafeOutboundTransport(OutboundPolicy.from_env())
+
+
 # Where a curator can declare an item's rank explicitly, instead of relying on
 # its position in the published document. The namespaced spelling is what an
 # AgentArea-curated entry uses inside an upstream MCP server's `metadata`,
@@ -142,6 +230,34 @@ def validated_registry_priority(value: Any) -> int:
 
 _GITHUB_REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _GIT_SHA = re.compile(r"[0-9a-f]{40}")
+_GIT_REF = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]{0,254}")
+
+
+def _check_git_ref(ref: str | None) -> None:
+    if ref is None:
+        return
+    if not _GIT_REF.fullmatch(ref) or ".." in ref or "//" in ref or ref.endswith(("/", ".lock")):
+        raise ValueError("source_ref must be a branch, tag or commit name")
+
+
+def _check_source_path(path: str | None) -> None:
+    if path is None:
+        return
+    stripped = path.strip("/")
+    if stripped and (
+        {"", ".", ".."} & set(stripped.split("/")) or "\\" in stripped or "\x00" in stripped
+    ):
+        raise ValueError("source_path must be a plain relative folder path")
+
+
+def _require_public_https(url: str) -> None:
+    refusal = "a workspace registry's index is a public https URL"
+    if urlsplit(url).scheme != "https":
+        raise ValueError(refusal)
+    try:
+        validate_outbound_url(url, policy=OutboundPolicy.from_env())
+    except UnsafeUrlError as e:
+        raise ValueError(refusal) from e
 
 
 def validate_registry_source(
@@ -154,6 +270,8 @@ def validate_registry_source(
     mode: str,
     trust: str,
     credentials: bool = False,
+    source_ref: str | None = None,
+    source_path: str | None = None,
 ) -> None:
     """Refuse a registry the platform could not sync or must not let a workspace add."""
     if scope not in REGISTRY_SCOPES:
@@ -162,10 +280,12 @@ def validate_registry_source(
         raise ValueError(f"mode must be one of {REGISTRY_MODES}")
     if trust not in REGISTRY_TRUST_LEVELS:
         raise ValueError(f"trust must be one of {REGISTRY_TRUST_LEVELS}")
+    _check_git_ref(source_ref)
+    _check_source_path(source_path)
     if source_type == "github":
         if registry_type != "skills":
             raise ValueError("a GitHub repository source holds skills")
-        if not GITHUB_REPO_PATTERN.match(source_url):
+        if not is_github_repo(source_url):
             raise ValueError("a GitHub source_url is the repository as owner/repo")
     if credentials and registry_type == "skills" and mode != "mirror":
         # Credentials are resolved for a sync only; an install of an upstream
@@ -183,6 +303,8 @@ def validate_registry_source(
         raise ValueError(f"a workspace registry's source_type is one of {WORKSPACE_SOURCE_TYPES}")
     if trust not in WORKSPACE_TRUST_LEVELS:
         raise ValueError(f"a workspace registry's trust is one of {WORKSPACE_TRUST_LEVELS}")
+    if source_type == "url":
+        _require_public_https(source_url)
 
 
 def rank_fields(*mappings: Any) -> dict[str, int]:
@@ -344,7 +466,9 @@ class RegistryService:
         credentials_resolver: CredentialsResolver | None = None,
         github_source_factory: Callable[[str | None], GitHubSource] = HttpGitHubSource,
         content_mirror: ContentMirror | None = None,
+        untrusted_transport: Callable[[], httpx.AsyncBaseTransport] = _default_untrusted_transport,
     ):
+        self.untrusted_transport = untrusted_transport
         self.credentials_resolver = credentials_resolver
         self.content_mirror = content_mirror
         self.github_source_factory = github_source_factory
@@ -393,6 +517,8 @@ class RegistryService:
             mode=mode,
             trust=trust,
             credentials=credentials_secret_ref is not None,
+            source_ref=source_ref,
+            source_path=source_path,
         )
         return await self.registry_repo.create(
             name=name,
@@ -424,7 +550,14 @@ class RegistryService:
         return await self.registry_repo.list_all()
 
     async def update_registry(self, registry_id: UUID, **fields) -> Registry | None:
-        if {"source_url", "mode", "trust", "credentials_secret_ref"} & fields.keys():
+        if {
+            "source_url",
+            "source_ref",
+            "source_path",
+            "mode",
+            "trust",
+            "credentials_secret_ref",
+        } & fields.keys():
             current = await self.registry_repo.get_by_id(registry_id)
             if current is None:
                 return None
@@ -438,6 +571,8 @@ class RegistryService:
                 trust=fields.get("trust", current.trust),
                 credentials=fields.get("credentials_secret_ref", current.credentials_secret_ref)
                 is not None,
+                source_ref=fields.get("source_ref", current.source_ref),
+                source_path=fields.get("source_path", current.source_path),
             )
         if {"source_url", "source_ref", "source_path", "mode"} & fields.keys():
             # Another source, or one now mirrored: what the last sync applied
@@ -698,221 +833,247 @@ class RegistryService:
         if registry.source_type == "managed":
             raise ValueError("Managed registry items are changed through the catalog item API")
 
+        deadline = WORKSPACE_SYNC_DEADLINE_SECONDS if registry.scope == "workspace" else None
         try:
-            mirrors = registry.registry_type == "skills" and registry.mode == "mirror"
-            if mirrors and self.content_mirror is None:
-                raise ValueError(
-                    f"Registry {registry.id} mirrors its content but this sync has no store for it"
-                )
-            token = (
-                await self._credentials(registry)
-                if registry.source_type == "github" or mirrors
-                else None
+            try:
+                async with asyncio.timeout(deadline):
+                    return await self._sync(registry, force)
+            except TimeoutError as e:
+                raise RegistrySyncError(f"the sync took longer than {deadline:g} s") from e
+        except Exception as e:
+            logger.exception("Registry sync failed for %s", registry_id)
+            try:
+                await self.item_repo.session.rollback()
+                await self.registry_repo.update(registry_id, last_sync_error=sync_error_message(e))
+            except Exception:
+                logger.exception("Could not record why registry %s failed to sync", registry_id)
+            raise
+
+    async def _sync(self, registry: Registry, force: bool) -> dict[str, Any]:
+        registry_id = registry.id
+        mirrors = registry.registry_type == "skills" and registry.mode == "mirror"
+        if mirrors and self.content_mirror is None:
+            raise RegistryConfigurationError(
+                f"Registry {registry.id} mirrors its content but this sync has no store for it"
             )
-            github: GitHubSource | None = None
-            head = root_tree = ""
-            if registry.source_type == "github":
-                # A repository's version is its head commit, kept where an
-                # index URL keeps its ETag.
-                github = self.github_source_factory(token)
-                head, root_tree = await github.head(registry.source_url, registry.source_ref)
-                source_etag = head
-            else:
-                source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
-            etag = f"{SYNC_FORMAT}:{source_etag}" if source_etag else None
-            if not force and etag is not None and etag == registry.source_etag:
-                await self.registry_repo.update(
-                    registry_id, last_synced_at=datetime.utcnow(), last_sync_error=None
-                )
-                return {
-                    "new_specs": 0,
-                    "updates_flagged": 0,
-                    "unchanged": registry.item_count,
-                    "total": registry.item_count,
-                    "skipped": 0,
-                    "skipped_items": [],
-                    "out_of_source": None,
-                    "deleted": 0,
-                    "source_unchanged": True,
-                }
-
-            if github is not None:
-                parsed_items = await build_github_skill_index(
-                    github,
-                    repo=registry.source_url,
-                    commit=head,
-                    root_tree=root_tree,
-                    path=registry.source_path,
-                )
-                for position, entry in enumerate(parsed_items):
-                    entry.setdefault("recommendation_rank", position)
-            else:
-                # In a worker thread, not on the loop: _fetch_source is a blocking
-                # urlopen, and the API serves every request from one event loop, so
-                # calling it here directly froze the whole process -- /health with
-                # it, which is what the probes poll.
-                raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
-                parsed_items = self._parse_source(registry.registry_type, raw_data)
-            parsed_items = self._dedupe(parsed_items)
-            mirror = (
-                self.content_mirror(registry, token)
-                if mirrors and self.content_mirror is not None
-                else None
-            )
-
-            new_specs = 0
-            updates_flagged = 0
-            unchanged = 0
-            skipped = 0
-            skipped_items: list[dict[str, str]] = []
-            # One read for the whole registry: a lookup per item was a query per
-            # catalog row on every sync, millions of them a day.
-            existing_by_id = await self._items_by_external_id(registry_id)
-
-            for item_data in parsed_items:
-                external_id = item_data["external_id"]
-                try:
-                    existing = existing_by_id.get(external_id)
-                    if mirror is not None:
-                        item_data["spec"] = await self._mirrored_spec(
-                            mirror, item_data.get("spec", {}), existing
-                        )
-
-                    if existing:
-                        for field in (
-                            "name",
-                            "description",
-                            "spec",
-                            "tags",
-                            # Re-published in a different position means the
-                            # curator moved it; keeping the old rank would pin
-                            # the catalog to the order of the first ever sync.
-                            "recommendation_rank",
-                        ):
-                            if field in item_data:
-                                setattr(existing, field, item_data[field])
-                        # Browse facets are derived from the fields just overwritten,
-                        # so they have to be recomputed or the catalog keeps sorting
-                        # and faceting this item by what it used to be.
-                        apply_facets(existing, registry.registry_type)
-
-                        new_version = item_data.get("version") or "latest"
-                        existing.version = new_version
-
-                        if existing.installed_version and existing.installed_version != new_version:
-                            existing.update_available = True
-                            updates_flagged += 1
-                        else:
-                            unchanged += 1
-
-                        if registry.registry_type == "skills":
-                            await self._drop_platform_skill(existing)
-
-                        await self.item_repo.session.commit()
-
-                        # Backfill json_spec on linked entity if missing
-                        if existing.installed_entity_id:
-                            raw_spec = (existing.spec or {}).get("raw_spec")
-                            if raw_spec:
-                                await self._backfill_entity(
-                                    registry.registry_type,
-                                    existing,
-                                    registry_url=registry.source_url,
-                                )
-                    else:
-                        facets = derive_facets(
-                            registry.registry_type,
-                            item_data["name"],
-                            item_data.get("spec", {}),
-                            item_data.get("tags", []),
-                        )
-                        item = await self.item_repo.create(
-                            registry_id=registry_id,
-                            external_id=external_id,
-                            name=item_data["name"],
-                            description=item_data.get("description"),
-                            version=item_data.get("version"),
-                            spec=item_data.get("spec", {}),
-                            tags=item_data.get("tags", []),
-                            recommendation_rank=item_data.get("recommendation_rank", 0),
-                            **facets._asdict(),
-                        )
-                        try:
-                            entity_id = await self._create_entity(
-                                registry.registry_type, item, registry_url=registry.source_url
-                            )
-                        except Exception:
-                            # Don't leave a catalog row with no backing entity
-                            # behind -- a rejected item must not appear browsable.
-                            await self.item_repo.delete(item.id)
-                            raise
-                        await self.item_repo.update(
-                            item.id,
-                            installed_entity_id=entity_id,
-                            installed_version=item.version or "latest",
-                        )
-                        existing_by_id[external_id] = item
-                        new_specs += 1
-                except Exception as e:
-                    logger.warning(
-                        "Skipping catalog item %r in registry %s: %s",
-                        external_id,
-                        registry_id,
-                        e,
-                        exc_info=True,
-                    )
-                    if isinstance(e, SQLAlchemyError):
-                        # A failed statement leaves the transaction unusable for
-                        # every later item; rolling back expires what was loaded.
-                        await self.item_repo.session.rollback()
-                        existing_by_id = await self._items_by_external_id(registry_id)
-                    skipped += 1
-                    if len(skipped_items) < self.MAX_SKIPPED_DETAILS:
-                        skipped_items.append({"external_id": external_id, "reason": str(e)})
-
-            # What the source no longer publishes leaves the catalog. An empty
-            # parse is far likelier a broken source than an emptied one, so it
-            # retires nothing.
-            out_of_source = None
-            deleted = 0
-            if parsed_items:
-                published = {item["external_id"] for item in parsed_items}
-                out_of_source = await self.item_repo.mark_in_source(registry_id, published)
-                if out_of_source:
-                    if registry.registry_type == "skills":
-                        for item in existing_by_id.values():
-                            if item.external_id not in published:
-                                await self._drop_platform_skill(item)
-                        await self.item_repo.session.commit()
-                    deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
-                    out_of_source -= deleted
-
-            total = new_specs + updates_flagged + unchanged
+        token = (
+            await self._credentials(registry)
+            if registry.source_type == "github" or mirrors
+            else None
+        )
+        github: GitHubSource | None = None
+        head = root_tree = ""
+        if registry.source_type == "github":
+            # A repository's version is its head commit, kept where an
+            # index URL keeps its ETag.
+            github = self.github_source_factory(token)
+            head, root_tree = await github.head(registry.source_url, registry.source_ref)
+            source_etag = head
+        elif registry.scope == "workspace":
+            source_etag = await self._untrusted_etag(registry.source_url)
+        else:
+            source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
+        etag = f"{SYNC_FORMAT}:{source_etag}" if source_etag else None
+        if not force and etag is not None and etag == registry.source_etag:
             await self.registry_repo.update(
-                registry_id,
-                last_synced_at=datetime.utcnow(),
-                last_sync_error=None,
-                item_count=total,
-                # A skipped item (a model whose provider has not synced yet) must
-                # be retried by the next run, so the source counts as unread.
-                source_etag=etag if skipped == 0 else None,
+                registry_id, last_synced_at=datetime.utcnow(), last_sync_error=None
             )
-
             return {
-                "new_specs": new_specs,
-                "updates_flagged": updates_flagged,
-                "unchanged": unchanged,
-                "total": len(parsed_items),
-                "skipped": skipped,
-                "skipped_items": skipped_items,
-                "out_of_source": out_of_source,
-                "deleted": deleted,
+                "new_specs": 0,
+                "updates_flagged": 0,
+                "unchanged": registry.item_count,
+                "total": registry.item_count,
+                "skipped": 0,
+                "skipped_items": [],
+                "out_of_source": None,
+                "deleted": 0,
+                "source_unchanged": True,
             }
 
-        except Exception as e:
-            logger.exception(f"Registry sync failed for {registry_id}")
-            await self.registry_repo.update(registry_id, last_sync_error=str(e))
-            raise
+        if github is not None:
+            parsed_items = await build_github_skill_index(
+                github,
+                repo=registry.source_url,
+                commit=head,
+                root_tree=root_tree,
+                path=registry.source_path,
+            )
+            for position, entry in enumerate(parsed_items):
+                entry.setdefault("recommendation_rank", position)
+        else:
+            if registry.scope == "workspace":
+                raw_data = await self._fetch_untrusted(registry.source_url)
+            else:
+                # In a worker thread, not on the loop: _fetch_source is a
+                # blocking urlopen, and the API serves every request from one
+                # event loop, so calling it here directly froze the whole
+                # process -- /health with it, which is what the probes poll.
+                raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
+            try:
+                parsed_items = self._parse_source(registry.registry_type, raw_data)
+            except ValueError as e:
+                raise RegistrySourceError(f"the source is not a valid index: {e}") from e
+            except (TypeError, AttributeError, KeyError) as e:
+                raise RegistrySourceError("the source is not a valid index") from e
+        if registry.scope == "workspace" and len(parsed_items) > MAX_SOURCE_ITEMS:
+            raise RegistrySourceError(f"the source lists more than {MAX_SOURCE_ITEMS} items")
+        parsed_items = self._dedupe(parsed_items)
+        mirror = (
+            self.content_mirror(registry, token)
+            if mirrors and self.content_mirror is not None
+            else None
+        )
+
+        new_specs = 0
+        updates_flagged = 0
+        unchanged = 0
+        skipped = 0
+        skipped_items: list[dict[str, str]] = []
+        # One read for the whole registry: a lookup per item was a query per
+        # catalog row on every sync, millions of them a day.
+        existing_by_id = await self._items_by_external_id(registry_id)
+
+        for item_data in parsed_items:
+            external_id = item_data["external_id"]
+            try:
+                existing = existing_by_id.get(external_id)
+                if mirror is not None:
+                    item_data["spec"] = await self._mirrored_spec(
+                        mirror, item_data.get("spec", {}), existing
+                    )
+
+                if existing:
+                    for field in (
+                        "name",
+                        "description",
+                        "spec",
+                        "tags",
+                        # Re-published in a different position means the
+                        # curator moved it; keeping the old rank would pin
+                        # the catalog to the order of the first ever sync.
+                        "recommendation_rank",
+                    ):
+                        if field in item_data:
+                            setattr(existing, field, item_data[field])
+                    # Browse facets are derived from the fields just overwritten,
+                    # so they have to be recomputed or the catalog keeps sorting
+                    # and faceting this item by what it used to be.
+                    apply_facets(existing, registry.registry_type)
+
+                    new_version = item_data.get("version") or "latest"
+                    existing.version = new_version
+
+                    if existing.installed_version and existing.installed_version != new_version:
+                        existing.update_available = True
+                        updates_flagged += 1
+                    else:
+                        unchanged += 1
+
+                    if registry.registry_type == "skills":
+                        await self._drop_platform_skill(existing)
+
+                    await self.item_repo.session.commit()
+
+                    # Backfill json_spec on linked entity if missing
+                    if existing.installed_entity_id:
+                        raw_spec = (existing.spec or {}).get("raw_spec")
+                        if raw_spec:
+                            await self._backfill_entity(
+                                registry.registry_type,
+                                existing,
+                                registry_url=registry.source_url,
+                            )
+                else:
+                    facets = derive_facets(
+                        registry.registry_type,
+                        item_data["name"],
+                        item_data.get("spec", {}),
+                        item_data.get("tags", []),
+                    )
+                    item = await self.item_repo.create(
+                        registry_id=registry_id,
+                        external_id=external_id,
+                        name=item_data["name"],
+                        description=item_data.get("description"),
+                        version=item_data.get("version"),
+                        spec=item_data.get("spec", {}),
+                        tags=item_data.get("tags", []),
+                        recommendation_rank=item_data.get("recommendation_rank", 0),
+                        **facets._asdict(),
+                    )
+                    try:
+                        entity_id = await self._create_entity(
+                            registry.registry_type, item, registry_url=registry.source_url
+                        )
+                    except Exception:
+                        # Don't leave a catalog row with no backing entity
+                        # behind -- a rejected item must not appear browsable.
+                        await self.item_repo.delete(item.id)
+                        raise
+                    await self.item_repo.update(
+                        item.id,
+                        installed_entity_id=entity_id,
+                        installed_version=item.version or "latest",
+                    )
+                    existing_by_id[external_id] = item
+                    new_specs += 1
+            except Exception as e:
+                logger.warning(
+                    "Skipping catalog item %r in registry %s: %s",
+                    external_id,
+                    registry_id,
+                    e,
+                    exc_info=True,
+                )
+                if isinstance(e, SQLAlchemyError):
+                    # A failed statement leaves the transaction unusable for
+                    # every later item; rolling back expires what was loaded.
+                    await self.item_repo.session.rollback()
+                    existing_by_id = await self._items_by_external_id(registry_id)
+                skipped += 1
+                if len(skipped_items) < self.MAX_SKIPPED_DETAILS:
+                    skipped_items.append(
+                        {"external_id": external_id, "reason": sync_error_message(e)}
+                    )
+
+        # What the source no longer publishes leaves the catalog. An empty
+        # parse is far likelier a broken source than an emptied one, so it
+        # retires nothing.
+        out_of_source = None
+        deleted = 0
+        if parsed_items:
+            published = {item["external_id"] for item in parsed_items}
+            out_of_source = await self.item_repo.mark_in_source(registry_id, published)
+            if out_of_source:
+                if registry.registry_type == "skills":
+                    for item in existing_by_id.values():
+                        if item.external_id not in published:
+                            await self._drop_platform_skill(item)
+                    await self.item_repo.session.commit()
+                deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+                out_of_source -= deleted
+
+        total = new_specs + updates_flagged + unchanged
+        await self.registry_repo.update(
+            registry_id,
+            last_synced_at=datetime.utcnow(),
+            last_sync_error=None,
+            item_count=total,
+            # A skipped item (a model whose provider has not synced yet) must
+            # be retried by the next run, so the source counts as unread.
+            source_etag=etag if skipped == 0 else None,
+        )
+
+        return {
+            "new_specs": new_specs,
+            "updates_flagged": updates_flagged,
+            "unchanged": unchanged,
+            "total": len(parsed_items),
+            "skipped": skipped,
+            "skipped_items": skipped_items,
+            "out_of_source": out_of_source,
+            "deleted": deleted,
+        }
 
     async def retire_registry(self, registry_id: UUID) -> int:
         """Retire a registry no source feeds any more: everything in it is out of
@@ -972,7 +1133,7 @@ class RegistryService:
         if registry.credentials_secret_ref is None:
             return None
         if self.credentials_resolver is None:
-            raise ValueError(
+            raise RegistryConfigurationError(
                 f"Registry {registry.id} has credentials but this sync has no way to resolve them"
             )
         return await self.credentials_resolver(registry)
@@ -1285,6 +1446,58 @@ class RegistryService:
         return await self._create_llm_model(item)
 
     # ── Source fetching (format-agnostic) ──
+
+    def _untrusted_client(self) -> httpx.AsyncClient:
+        """For a member-supplied index: the pinned transport vets every hop's address."""
+        return httpx.AsyncClient(
+            transport=self.untrusted_transport(),
+            follow_redirects=True,
+            max_redirects=MAX_SOURCE_REDIRECTS,
+            timeout=SOURCE_FETCH_TIMEOUT_SECONDS,
+            headers={
+                "Accept": "application/json, application/yaml, text/yaml",
+                "User-Agent": "agentarea-registry-sync",
+            },
+        )
+
+    async def _untrusted_etag(self, source_url: str) -> str | None:
+        if urlsplit(source_url).scheme != "https":
+            raise RegistrySourceError("the source is not a public https URL")
+        try:
+            async with asyncio.timeout(SOURCE_DEADLINE_SECONDS):
+                async with self._untrusted_client() as client:
+                    response = await client.head(source_url)
+        except (httpx.HTTPError, TimeoutError):
+            logger.warning("No ETag from a workspace source; reading it in full", exc_info=True)
+            return None
+        return response.headers.get("ETag") if response.status_code == 200 else None
+
+    async def _fetch_untrusted(self, source_url: str) -> Any:
+        """A workspace's index: https only, within a body cap and a deadline, no YAML aliases."""
+        if urlsplit(source_url).scheme != "https":
+            raise RegistrySourceError("the source is not a public https URL")
+        body = bytearray()
+        try:
+            async with asyncio.timeout(SOURCE_DEADLINE_SECONDS):
+                async with self._untrusted_client() as client:
+                    async with client.stream("GET", source_url) as response:
+                        if response.status_code != 200:
+                            raise RegistrySourceError(
+                                f"the source answered HTTP {response.status_code}"
+                            )
+                        async for chunk in response.aiter_bytes():
+                            body += chunk
+                            if len(body) > MAX_SOURCE_BYTES:
+                                raise RegistrySourceError(
+                                    f"the source is larger than {_size(MAX_SOURCE_BYTES)}"
+                                )
+        except TimeoutError as e:
+            raise RegistrySourceError(
+                f"the source took longer than {SOURCE_DEADLINE_SECONDS:g} s to read"
+            ) from e
+        except httpx.HTTPError as e:
+            raise RegistrySourceError("the source could not be reached") from e
+        return _parse_untrusted(bytes(body))
 
     @staticmethod
     def _source_etag(source_url: str) -> str | None:
@@ -1616,10 +1829,16 @@ class RegistryService:
                 continue
             source = RegistryService._skill_source(name, entry.get("source"))
             if source is None:
+                source_url = entry.get("source_url")
                 spec = {
                     "source_type": entry.get("source_type", "content"),
                     "content": entry.get("content"),
-                    "source_url": entry.get("source_url"),
+                    # Rendered as a link: an index may not hand the UI a script URL.
+                    "source_url": (
+                        source_url
+                        if isinstance(source_url, str) and source_url.startswith("https://")
+                        else None
+                    ),
                 }
                 version = entry.get("version") or "1.0.0"
             else:
@@ -1692,7 +1911,11 @@ class RegistryService:
         if not isinstance(raw, dict) or raw.get("type") != "github":
             raise ValueError(f"skill {name!r}: source must be a mapping with type 'github'")
         repo, path = raw.get("repo"), raw.get("path", "")
-        if not isinstance(repo, str) or not _GITHUB_REPO.fullmatch(repo):
+        if (
+            not isinstance(repo, str)
+            or not _GITHUB_REPO.fullmatch(repo)
+            or {".", ".."} & set(repo.split("/"))
+        ):
             raise ValueError(f"skill {name!r}: source.repo must be 'owner/name', got {repo!r}")
         path = path.strip("/") if isinstance(path, str) else None
         if path is None or (path and {"", ".", ".."} & set(path.split("/"))):

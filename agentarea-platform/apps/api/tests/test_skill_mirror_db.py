@@ -33,7 +33,8 @@ from agentarea_agents.infrastructure.skill_storage_service import (
 from agentarea_api import registry_content
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.repository_factory import RepositoryFactory
-from agentarea_common.base.tenant_scope import workspace_scope
+from agentarea_common.base.tenant_scope import tenant_scoped_session_class, workspace_scope
+from agentarea_common.config.database import TenantScopeMode
 from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
@@ -70,7 +71,13 @@ async def session():
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.connect() as conn:
         transaction = await conn.begin()
-        async with AsyncSession(bind=conn, expire_on_commit=False) as s:
+        # The tenant scope RU enforces: a statement the bound scope cannot
+        # confine raises here instead of running unfiltered.
+        async with AsyncSession(
+            bind=conn,
+            expire_on_commit=False,
+            sync_session_class=tenant_scoped_session_class(TenantScopeMode.ENFORCE),
+        ) as s:
             yield s
         await transaction.rollback()
     await engine.dispose()
@@ -157,7 +164,14 @@ async def _mirror_registry(session, workspace: str, storage, monkeypatch) -> UUI
             },
         ]
     }
-    monkeypatch.setattr(RegistryService, "_fetch_source", staticmethod(lambda _url: index))
+    async def fetch(_self, _url):
+        return index
+
+    async def no_etag(_self, _url):
+        return None
+
+    monkeypatch.setattr(RegistryService, "_fetch_untrusted", fetch)
+    monkeypatch.setattr(RegistryService, "_untrusted_etag", no_etag)
     monkeypatch.setattr(registry_content, "GitHubSkillImporter", FolderGitHub)
     context = _context(workspace)
     service = RegistryService(
@@ -170,7 +184,7 @@ async def _mirror_registry(session, workspace: str, storage, monkeypatch) -> UUI
         name=f"private-{uuid4().hex[:6]}",
         registry_type="skills",
         source_type="url",
-        source_url="https://example.test/skills.json",
+        source_url="https://93.184.216.34/skills.json",
         scope="workspace",
         workspace_id=workspace,
         mode="mirror",
@@ -255,16 +269,15 @@ async def test_a_deny_rule_refuses_an_install_by_the_items_trust(session):
     storage, _ = _storage()
     _, community = await _platform_item(session, "community", {"content": "# C"})
     _, official = await _platform_item(session, "official", {"content": "# O"})
-    await PolicyRuleRepository(session, _context(workspace)).create(
-        PolicyRule(
-            subject_type=PolicySubjectType.WORKSPACE,
-            subject_id=workspace,
-            target="registry_trust:community",
-            effect=PolicyEffect.DENY,
-        )
-    )
-
     with workspace_scope(workspace):
+        await PolicyRuleRepository(session, _context(workspace)).create(
+            PolicyRule(
+                subject_type=PolicySubjectType.WORKSPACE,
+                subject_id=workspace,
+                target="registry_trust:community",
+                effect=PolicyEffect.DENY,
+            )
+        )
         svc = _skills(session, workspace, storage)
         with pytest.raises(CatalogInstallRefusedError):
             await svc.install_catalog_skill(community)

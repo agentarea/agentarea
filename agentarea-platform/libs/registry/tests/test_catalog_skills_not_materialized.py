@@ -18,6 +18,7 @@ async def test_a_new_catalog_skill_gets_no_skill_row():
         registry_type="skills",
         source_type="url",
         source_url="https://x/s.json",
+        scope="platform",
         mode="upstream",
     )
     item = SimpleNamespace(id=uuid4(), version="latest", spec={}, name="pdf")
@@ -58,6 +59,7 @@ async def _legacy_catalog(db_session, monkeypatch, workspace_id, published):
         registry_type="skills",
         source_type="url",
         source_url="https://x/s.json",
+        scope="platform",
         mode="upstream",
     )
     db_session.add(registry)

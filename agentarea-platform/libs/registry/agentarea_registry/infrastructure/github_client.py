@@ -14,6 +14,10 @@ TIMEOUT_SECONDS = 30.0
 class GitHubApiError(RuntimeError):
     """GitHub refused or failed a read."""
 
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class HttpGitHubSource:
     """Reads one repository's commits, trees and blobs, with a token for private ones."""
@@ -34,7 +38,8 @@ class HttpGitHubSource:
             response = await client.get(path, headers=self._headers, params=params)
         if response.status_code != 200:
             raise GitHubApiError(
-                f"GitHub {path} answered {response.status_code}: {response.text[:200]}"
+                f"GitHub {path} answered {response.status_code}: {response.text[:200]}",
+                response.status_code,
             )
         return response.json()
 

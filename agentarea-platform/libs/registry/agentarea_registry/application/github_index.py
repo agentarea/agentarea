@@ -19,6 +19,11 @@ GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9
 _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
 
 
+def is_github_repo(value: str) -> bool:
+    """``owner/repo`` exactly: no trailing newline, no ``.`` or ``..`` for a name."""
+    return bool(GITHUB_REPO_PATTERN.fullmatch(value)) and value.split("/")[1] not in {".", ".."}
+
+
 class GitHubTreeTruncatedError(ValueError):
     """GitHub returned part of the tree; an index built from it would drop skills."""
 
