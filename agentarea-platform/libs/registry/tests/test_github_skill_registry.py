@@ -259,3 +259,68 @@ async def test_a_repository_with_more_skills_than_the_cap_is_refused():
             path=None,
             max_skills=2,
         )
+
+
+def _bomb_frontmatter(kind: str) -> bytes:
+    if kind == "merge":
+        levels = ["a0: &a0 {x: 1}"] + [
+            f"a{i}: &a{i} {{<<: [*a{i - 1}, *a{i - 1}]}}" for i in range(1, 28)
+        ]
+    else:
+        levels = ['a0: &a0 ["x", "x"]'] + [
+            f"a{i}: &a{i} [*a{i - 1}, *a{i - 1}]" for i in range(1, 40)
+        ]
+    return ("---\nname: bomb\n" + "\n".join(levels) + "\n---\n# Bomb\n").encode()
+
+
+@pytest.mark.parametrize("kind", ["merge", "alias"])
+async def test_a_frontmatter_bomb_is_refused_at_once(kind):
+    # A ~750-byte merge-key bomb in one SKILL.md took minutes and gigabytes
+    # through yaml.safe_load; the folder now takes its folder name.
+    import time
+
+    started = time.monotonic()
+
+    items = await build_github_skill_index(
+        StubGitHub({"tools/bomb/SKILL.md": _bomb_frontmatter(kind)}),
+        repo="acme/skills",
+        commit=COMMIT,
+        root_tree=ROOT_TREE,
+        path=None,
+    )
+
+    assert time.monotonic() - started < 1
+    assert [i["name"] for i in items] == ["bomb"]
+
+
+async def test_frontmatters_are_parsed_off_the_event_loop():
+    import asyncio
+
+    big = "\n".join(f"k{i}: {'v' * 40}" for i in range(600))
+    files = {
+        f"skills/s{n}/SKILL.md": f"---\nname: s{n}\n{big}\n---\n# S\n".encode() for n in range(12)
+    }
+    gaps: list[float] = []
+    stop = asyncio.Event()
+
+    async def ticker() -> None:
+        loop = asyncio.get_running_loop()
+        while not stop.is_set():
+            started = loop.time()
+            await asyncio.sleep(0.01)
+            gaps.append(loop.time() - started)
+
+    ticking = asyncio.create_task(ticker())
+    await asyncio.sleep(0)
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    items = await build_github_skill_index(
+        StubGitHub(files), repo="acme/skills", commit=COMMIT, root_tree=ROOT_TREE, path=None
+    )
+    elapsed = loop.time() - started
+    stop.set()
+    await ticking
+
+    assert len(items) == 12
+    assert len(gaps) >= 5
+    assert max(gaps) < elapsed / 2

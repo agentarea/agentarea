@@ -33,6 +33,7 @@ from agentarea_common.constants import PLATFORM_WORKSPACE_ID, REGISTRY_TRUST_LEV
 from agentarea_common.money import to_optional_money
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
+from agentarea_common.utils.untrusted_yaml import load_untrusted_yaml
 from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     SafeOutboundTransport,
@@ -184,22 +185,6 @@ def sync_error_message(error: BaseException) -> str:
     return "the sync failed; the server log has the cause"
 
 
-class _NoAliasLoader(yaml.SafeLoader):
-    """YAML within a node budget and without aliases, which expand to gigabytes."""
-
-    def __init__(self, stream: str):
-        super().__init__(stream)
-        self._nodes = 0
-
-    def compose_node(self, parent: Any, index: Any) -> Any:
-        if self.check_event(yaml.AliasEvent):
-            raise yaml.YAMLError("YAML aliases are not accepted in a registry index")
-        self._nodes += 1
-        if self._nodes > MAX_YAML_NODES:
-            raise yaml.YAMLError(f"a registry index holds at most {MAX_YAML_NODES} YAML nodes")
-        return super().compose_node(parent, index)
-
-
 def _parse_untrusted(body: bytes) -> Any:
     """CPU-bound: run it in a worker thread, never on the event loop."""
     try:
@@ -212,11 +197,9 @@ def _parse_untrusted(body: bytes) -> Any:
                     f"the source is a YAML index over {_size(MAX_YAML_SOURCE_BYTES)}; "
                     "publish it as JSON"
                 ) from None
-            loader = _NoAliasLoader(text)
-            try:
-                return loader.get_single_data()
-            finally:
-                loader.dispose()
+            return load_untrusted_yaml(
+                text, max_nodes=MAX_YAML_NODES, max_bytes=MAX_YAML_SOURCE_BYTES
+            )
     except (UnicodeDecodeError, yaml.YAMLError) as e:
         raise RegistrySourceError("the source is not a valid JSON or YAML index") from e
 

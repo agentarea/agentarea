@@ -5,16 +5,21 @@ at that folder's tree, the pointer shape the platform skill index uses
 (``spec.source``), so an install fetches exactly the content the index named.
 """
 
+import asyncio
 import logging
 import posixpath
 import re
 from typing import Any, Protocol
 
 import yaml
+from agentarea_common.utils.untrusted_yaml import load_untrusted_yaml
 
 logger = logging.getLogger(__name__)
 
 SKILL_FILE = "SKILL.md"
+# A SKILL.md frontmatter is a handful of keys; the repository is anyone's.
+FRONTMATTER_MAX_NODES = 2000
+FRONTMATTER_MAX_BYTES = 64 * 1024
 GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
 _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*(?:\n|\Z)", re.DOTALL)
 
@@ -51,7 +56,9 @@ def skill_frontmatter(content: str) -> dict[str, Any]:
     if not match:
         return {}
     try:
-        data = yaml.safe_load(match.group(1))
+        data = load_untrusted_yaml(
+            match.group(1), max_nodes=FRONTMATTER_MAX_NODES, max_bytes=FRONTMATTER_MAX_BYTES
+        )
     except yaml.YAMLError:
         logger.warning("Unreadable SKILL.md frontmatter", exc_info=True)
         return {}
@@ -94,13 +101,15 @@ async def build_github_skill_index(
         raise GitHubIndexTooLargeError(
             f"{repo} holds more than {max_skills} skills; set a path to a smaller folder"
         )
+    bodies = [await source.raw(repo, commit, entry["path"]) for entry in skill_files]
+    # Pure-Python YAML over files anyone can push: in a worker thread.
+    metas = await asyncio.to_thread(
+        lambda: [skill_frontmatter(body.decode("utf-8", "replace")) for body in bodies]
+    )
     items: list[dict[str, Any]] = []
-    for entry in skill_files:
+    for entry, meta in zip(skill_files, metas, strict=True):
         folder = posixpath.dirname(entry["path"])
         tree_sha = trees[folder] if folder else root_tree
-        meta = skill_frontmatter(
-            (await source.raw(repo, commit, entry["path"])).decode("utf-8", "replace")
-        )
         name = meta.get("name") if isinstance(meta.get("name"), str) and meta["name"] else None
         name = name or posixpath.basename(folder) or repo.rsplit("/", 1)[-1]
         description = meta.get("description")
