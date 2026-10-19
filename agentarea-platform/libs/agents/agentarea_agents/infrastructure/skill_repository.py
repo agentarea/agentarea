@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
@@ -17,6 +18,17 @@ from agentarea_agents.domain.skill_models import (
     agent_skills_table,
     skill_members_table,
 )
+
+
+async def list_pre_package_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
+    """``(id, workspace_id)`` of every skill whose body is still in its row."""
+    with unscoped("moving pre-package skill bodies into packages spans every workspace"):
+        result = await session.execute(
+            select(Skill.id, Skill.workspace_id)
+            .where(Skill.content.is_not(None), Skill.s3_path.is_(None))
+            .order_by(Skill.workspace_id, Skill.id)
+        )
+        return [(row.id, row.workspace_id) for row in result.all()]
 
 
 class SkillRepository(WorkspaceScopedRepository[Skill]):

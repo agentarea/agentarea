@@ -22,13 +22,15 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
-from agentarea_agents.infrastructure.skill_repository import SkillRepository
+from agentarea_agents.infrastructure.skill_repository import (
+    SkillRepository,
+    list_pre_package_skills,
+)
 from agentarea_agents.infrastructure.skill_storage_service import (
     SkillStorageService,
     is_catalog_package,
@@ -233,30 +235,23 @@ async def move_all_bodies_to_packages(
     from agentarea_common.constants import PLATFORM_PRINCIPAL_ID
 
     async with session_factory() as session:
-        rows = (
-            await session.execute(
-                text(
-                    "SELECT id, workspace_id FROM skills "
-                    "WHERE content IS NOT NULL AND s3_path IS NULL ORDER BY workspace_id, id"
-                )
-            )
-        ).all()
+        rows = await list_pre_package_skills(session)
     moved = failed = 0
-    for row in rows:
+    for skill_id, workspace_id in rows:
         try:
-            with workspace_scope(row.workspace_id):
+            with workspace_scope(workspace_id):
                 async with session_factory() as session:
                     repository = SkillRepository(
                         session,
-                        UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=row.workspace_id),
+                        UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=workspace_id),
                     )
-                    skill = await repository.get_by_id(row.id)
+                    skill = await repository.get_by_id(skill_id)
                     if skill is None or skill.s3_path or skill.content is None:
                         continue
                     packages = SkillPackages(storage, GitHubSkillImporter(), repository)
                     await packages.move_body_to_package(skill)
                     moved += 1
         except Exception:
-            logger.exception("Failed to move the body of skill %s into its package", row.id)
+            logger.exception("Failed to move the body of skill %s into its package", skill_id)
             failed += 1
     return moved, failed
