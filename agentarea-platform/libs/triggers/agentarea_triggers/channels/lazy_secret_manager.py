@@ -56,7 +56,7 @@ class LazySecretReader:
                                 workspace_id=str(task_orm.workspace_id),
                             )
                     except (ValueError, Exception):
-                        logger.exception("Failed to resolve task for secret '%s'", name)
+                        logger.exception("Failed to resolve the task a task secret belongs to")
                 elif name.startswith("channel_cred:") and len(parts) == 3:
                     try:
                         found = await session.execute(
@@ -70,10 +70,12 @@ class LazySecretReader:
                                 user_id=str(row.created_by), workspace_id=str(row.workspace_id)
                             )
                     except (ValueError, Exception):
-                        logger.exception("Failed to resolve the source for secret '%s'", name)
+                        logger.exception(
+                            "Failed to resolve the source a source credential belongs to"
+                        )
 
             if not user_context:
-                logger.error("Cannot resolve workspace for secret '%s'", name)
+                logger.error("Cannot resolve the workspace a background secret read belongs to")
                 return None
 
             with workspace_scope(user_context.workspace_id):

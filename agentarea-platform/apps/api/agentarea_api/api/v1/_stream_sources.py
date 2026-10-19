@@ -157,9 +157,7 @@ async def create_source(
     )
     for secret_id, field in references:
         await secret_catalog.add_reference(secret_id, SECRET_CONSUMER, str(source.id), field)
-    logger.info(
-        "Created %s %s source %s on stream %s", entry.slug, payload.kind.value, source.id, stream_id
-    )
+    logger.info("Created source %s on stream %s", source.id, stream_id)
     return source, issued
 
 

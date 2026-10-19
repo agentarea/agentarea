@@ -36,8 +36,8 @@ async def _read(reader: SecretReader, name: str, what: str) -> str | None:
     try:
         return await reader.get_secret(name)
     except Exception as error:
-        # Never the secret name in the log: it is the key handed to the backend.
-        logger.error("Reading %s failed", what, exc_info=True)
+        # Neither the secret name nor the credential field in the log.
+        logger.error("Reading source credentials from the secret store failed", exc_info=True)
         raise SecretStoreUnreachableError(what) from error
 
 

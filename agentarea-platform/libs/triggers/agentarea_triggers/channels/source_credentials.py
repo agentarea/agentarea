@@ -103,7 +103,7 @@ async def _referenced(secrets: Any, field: str, reference: dict[str, Any]) -> st
     try:
         value = await secrets.get_secret(name)
     except Exception as error:
-        logger.error("Reading the secret credential %s refers to failed", field, exc_info=True)
+        logger.error("Reading a source credential from the secret store failed", exc_info=True)
         raise RetryableError(f"secret store: {error}") from error
     if not value:
         raise FatalError(f"the secret credential {field} refers to has no value")
