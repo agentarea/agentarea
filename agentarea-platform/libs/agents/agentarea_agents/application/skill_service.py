@@ -1149,12 +1149,16 @@ class SkillService:
         self,
         skill_id: UUID | str,
         include_urls: bool = False,
+        *,
+        to_run: bool = False,
     ) -> list[SkillFileInfo]:
         """Get list of files in a skill package.
 
         Args:
             skill_id: The skill ID.
             include_urls: If True, include presigned URLs for each file.
+            to_run: Read for a run: a catalog item the install policy
+                refuses is not read (see ``get_with_catalog``).
 
         Returns:
             List of SkillFileInfo objects.
@@ -1162,7 +1166,7 @@ class SkillService:
         Raises:
             ValueError: If skill is not a multi-file package.
         """
-        skill = await self.get_with_catalog(skill_id)
+        skill = await self.get_with_catalog(skill_id, to_run=to_run)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
@@ -1189,6 +1193,8 @@ class SkillService:
         skill_id: UUID | str,
         path: str,
         expires_in: int = 3600,
+        *,
+        to_run: bool = False,
     ) -> str:
         """Get a presigned URL for a file in a skill package.
 
@@ -1196,6 +1202,7 @@ class SkillService:
             skill_id: The skill ID.
             path: Relative path to the file.
             expires_in: URL expiration time in seconds.
+            to_run: Read for a run; see ``get_skill_files``.
 
         Returns:
             Presigned URL.
@@ -1203,7 +1210,7 @@ class SkillService:
         Raises:
             ValueError: If skill is not found or has no S3 storage.
         """
-        skill = await self.get_with_catalog(skill_id)
+        skill = await self.get_with_catalog(skill_id, to_run=to_run)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")
@@ -1330,12 +1337,15 @@ class SkillService:
         self,
         skill_id: UUID | str,
         path: str,
+        *,
+        to_run: bool = False,
     ) -> bytes:
         """Get the content of a file in a skill package.
 
         Args:
             skill_id: The skill ID.
             path: Relative path to the file.
+            to_run: Read for a run; see ``get_skill_files``.
 
         Returns:
             File content as bytes.
@@ -1344,7 +1354,7 @@ class SkillService:
             ValueError: If skill is not found or has no S3 storage.
             FileNotFoundError: If the file does not exist.
         """
-        skill = await self.get_with_catalog(skill_id)
+        skill = await self.get_with_catalog(skill_id, to_run=to_run)
 
         if not skill:
             raise ValueError(f"Skill not found: {skill_id}")

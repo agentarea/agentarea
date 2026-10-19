@@ -225,3 +225,68 @@ async def test_a_denied_catalog_agent_does_not_run_from_its_definition(session):
         await svc.get_with_catalog(UUID(item.id), to_run=True)
 
     assert (await svc.get_with_catalog(UUID(item.id))).is_catalog
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        pytest.param(lambda svc, i: svc.get_skill_files(i, to_run=True), id="list"),
+        pytest.param(lambda svc, i: svc.get_skill_file_url(i, "SKILL.md", to_run=True), id="url"),
+        pytest.param(
+            lambda svc, i: svc.get_skill_file_content(i, "SKILL.md", to_run=True), id="content"
+        ),
+    ],
+)
+async def test_a_run_cannot_read_a_denied_catalog_skills_files(session, community_skill, read):
+    await _deny_community(session)
+    svc, _, _ = _skills(session, [community_skill])
+
+    with pytest.raises(CatalogInstallRefusedError):
+        await read(svc, community_skill.id)
+    # The API's preview stays open.
+    assert await svc.get_skill_file_content(community_skill.id, "SKILL.md") == b"# Community"
+
+
+async def test_the_skills_toolset_reads_package_files_as_a_run(monkeypatch):
+    from contextlib import asynccontextmanager
+
+    from agentarea_agents.application import skill_service
+    from agentarea_agents.tools import skills_toolset
+    from agentarea_agents_sdk.tools.base_tool import ToolError
+
+    asked: list[tuple[str, bool]] = []
+
+    class Refusing:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def get_skill_files(self, _id, include_urls=False, *, to_run=False):
+            asked.append(("files", to_run))
+            raise CatalogInstallRefusedError("Install refused by policy: registry_trust:community")
+
+        async def get_skill_file_url(self, _id, _path, expires_in=3600, *, to_run=False):
+            asked.append(("url", to_run))
+            raise CatalogInstallRefusedError("Install refused by policy: registry_trust:community")
+
+        async def get_skill_file_content(self, _id, _path, *, to_run=False):
+            asked.append(("content", to_run))
+            raise CatalogInstallRefusedError("Install refused by policy: registry_trust:community")
+
+    @asynccontextmanager
+    async def context():
+        yield None, CALLER, None, None, None
+
+    monkeypatch.setattr(skill_service, "SkillService", Refusing)
+    monkeypatch.setattr(skills_toolset, "platform_read_context", context)
+    toolset = skills_toolset.SkillsToolset()
+    item = str(uuid4())
+
+    for call in (
+        toolset.list_files(item),
+        toolset.get_file(item, "SKILL.md", as_url=True),
+        toolset.get_file(item, "SKILL.md"),
+    ):
+        with pytest.raises(ToolError, match="refused by policy"):
+            await call
+
+    assert asked == [("files", True), ("url", True), ("content", True)]
