@@ -16,11 +16,11 @@ export interface Skill {
   is_catalog?: boolean | null;
   registry_item_id?: string | null;
   update_available?: boolean | null;
-  customized?: boolean | null;
+  customized?: SkillResponse["customized"];
   registry_name?: SkillResponse["registry_name"];
   registry_trust?: SkillResponse["registry_trust"];
   registry_scope?: SkillResponse["registry_scope"];
-  removed_upstream?: boolean | null;
+  removed_upstream?: SkillResponse["removed_upstream"];
 }
 
 export interface PaginatedSkills {
