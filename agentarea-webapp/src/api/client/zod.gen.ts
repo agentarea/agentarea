@@ -160,7 +160,7 @@ export const zAnswerCheckPolicy = z.object({
 /**
  * ApprovalDecision
  *
- * One answered approval request, as the workflow recorded the answer.
+ * One answered approval request, as the audit trail recorded the answer.
  */
 export const zApprovalDecision = z.object({
   agent_id: z.string().uuid().nullish(),
@@ -814,6 +814,18 @@ export const zEscalationResolution = z.object({
 });
 
 /**
+ * EventAttachmentResponse
+ */
+export const zEventAttachmentResponse = z.object({
+  mime: z.string().nullable(),
+  name: z.string(),
+  ref: z.string(),
+  sha256: z.string().nullable(),
+  size: z.number().int().nullable(),
+  url: z.string().nullable(),
+});
+
+/**
  * EventFilter
  *
  * Empty kinds and fields match every event.
@@ -821,6 +833,17 @@ export const zEscalationResolution = z.object({
 export const zEventFilter = z.object({
   fields: z.record(z.unknown()).optional(),
   kinds: z.array(z.string()).optional(),
+});
+
+/**
+ * EventOverrides
+ *
+ * What one source may set in place of its entry's templates (a generic webhook's own key).
+ */
+export const zEventOverrides = z.object({
+  key: z.union([z.string(), z.array(z.string())]).nullish(),
+  kind: z.union([z.string(), z.array(z.string())]).nullish(),
+  session_key: z.union([z.string(), z.array(z.string())]).nullish(),
 });
 
 /**
@@ -1910,8 +1933,8 @@ export const zAgentUpdate = z.object({
  */
 export const zOutcomeResponse = z.object({
   created_at: z.string().datetime(),
-  derived_sequences: z.array(z.number().int()),
-  event_sequence: z.number().int(),
+  derived_event_ids: z.array(z.string().uuid()),
+  event_id: z.string().uuid(),
   reason: z.string().nullable(),
   score: z.number().nullable(),
   subscription_id: z.string().uuid(),
@@ -3051,13 +3074,82 @@ export const zDiscoveryResponse = z.object({
 });
 
 /**
+ * SourceCreated
+ */
+export const zSourceCreated = z.object({
+  created_at: z.string().datetime(),
+  event_templates: z.record(z.unknown()).nullish(),
+  id: z.string().uuid(),
+  issued: z.record(z.string()).optional(),
+  kind: z.string(),
+  poll_error: z.string().nullish(),
+  polled_at: z.string().datetime().nullish(),
+  registered: z.boolean().optional().default(false),
+  source_type: z.string().nullable(),
+  webhook_id: z.string().nullable(),
+  webhook_url: z.string().nullable(),
+});
+
+/**
  * SourceField
+ *
+ * A credential or setting a member fills in for a source of this type.
  */
 export const zSourceField = z.object({
+  issued: z.boolean().optional().default(false),
   key: z.string(),
   label: z.string(),
   placeholder: z.string().optional().default(""),
   required: z.boolean().optional().default(true),
+});
+
+/**
+ * SourceKind
+ */
+export const zSourceKind = z.enum(["webhook", "poll"]);
+
+/**
+ * SourceCreate
+ *
+ * A webhook or poll source of a catalog entry on an existing stream.
+ */
+export const zSourceCreate = z.object({
+  config: z.record(z.string()).optional(),
+  credentials: z.record(z.union([z.string(), zSecretRef])).optional(),
+  event_templates: zEventOverrides.nullish(),
+  kind: zSourceKind.optional().default("webhook"),
+  source_type: z.string().min(1).max(50),
+});
+
+/**
+ * SourceTypeTemplates
+ */
+export const zSourceTypeTemplates = z.object({
+  key: z.union([z.string(), z.array(z.string())]).nullable(),
+  kind: z.union([z.string(), z.array(z.string())]),
+  occurred_at: z.union([z.string(), z.array(z.string())]).nullable(),
+  sender: z.union([z.string(), z.array(z.string())]).nullable(),
+  session_key: z.union([z.string(), z.array(z.string())]).nullable(),
+});
+
+/**
+ * SourceTypeResponse
+ */
+export const zSourceTypeResponse = z.object({
+  config: z.array(zSourceField),
+  continues_sessions: z.boolean(),
+  credentials: z.array(zSourceField),
+  delivery: z.string(),
+  description: z.string(),
+  event: zSourceTypeTemplates,
+  events: z.array(z.string()),
+  icon: z.string(),
+  icon_url: z.string().nullable(),
+  name: z.string(),
+  replies: z.boolean(),
+  slug: z.string(),
+  verification_header: z.string().nullable(),
+  verification_scheme: z.string().nullable(),
 });
 
 /**
@@ -3099,26 +3191,33 @@ export const zSpendCard = z.object({
 export const zStreamCreate = z.object({
   description: z.string().max(1000).optional().default(""),
   name: z.string().min(1).max(255),
-  retention_days: z.number().int().gte(1).lte(365).nullish(),
 });
 
 /**
  * StreamEventResponse
+ *
+ * The event envelope (ADR-0040 §2) and how each subscription reacted.
  */
 export const zStreamEventResponse = z.object({
+  attachments: z.array(zEventAttachmentResponse),
+  body_url: z.string().nullable(),
   causation_id: z.string().nullable(),
   correlation_id: z.string().nullable(),
   data: z.record(z.unknown()),
   depth: z.number().int(),
   event_id: z.string().uuid(),
-  event_key: z.string(),
+  key: z.string(),
   kind: z.string(),
   occurred_at: z.string().datetime(),
   outcomes: z.array(zOutcomeResponse),
   received_at: z.string().datetime(),
+  sender: z.string().nullable(),
   sequence: z.number().int(),
-  source: z.string(),
-  subject: z.string().nullable(),
+  session_key: z.string().nullable(),
+  source_id: z.string().uuid().nullable(),
+  source_type: z.string().nullable(),
+  stream_id: z.string().uuid(),
+  v: z.number().int().optional().default(1),
 });
 
 /**
@@ -3140,22 +3239,22 @@ export const zStreamResponse = z.object({
   id: z.string().uuid(),
   kind: z.string(),
   name: z.string(),
-  retention_days: z.number().int(),
 });
 
 /**
- * StreamSourceTypeResponse
+ * StreamSourceResponse
  */
-export const zStreamSourceTypeResponse = z.object({
-  config: z.array(zSourceField).optional(),
-  credentials: z.array(zSourceField),
-  description: z.string(),
-  events: z.array(z.string()).optional(),
-  icon: z.string(),
-  icon_url: z.string().nullable(),
-  name: z.string(),
-  verification: z.enum(["signature", "secret_token", "api_lookup"]),
-  webhook_type: z.string(),
+export const zStreamSourceResponse = z.object({
+  created_at: z.string().datetime(),
+  event_templates: z.record(z.unknown()).nullish(),
+  id: z.string().uuid(),
+  kind: z.string(),
+  poll_error: z.string().nullish(),
+  polled_at: z.string().datetime().nullish(),
+  registered: z.boolean().optional().default(false),
+  source_type: z.string().nullable(),
+  webhook_id: z.string().nullable(),
+  webhook_url: z.string().nullable(),
 });
 
 /**
@@ -3182,14 +3281,10 @@ export const zRelationshipWriteRequest = z.object({
  * SubscriptionResponse
  */
 export const zSubscriptionResponse = z.object({
-  attempts: z.number().int(),
   created_at: z.string().datetime(),
-  cursor_sequence: z.number().int(),
   filter: z.record(z.unknown()),
   id: z.string().uuid(),
   kind: z.string(),
-  last_error: z.string().nullable(),
-  next_attempt_at: z.string().datetime().nullable(),
   output_stream_ids: z.array(z.string().uuid()),
   status: z.string(),
   trigger_id: z.string().uuid().nullable(),
@@ -3238,6 +3333,7 @@ export const zTaskEvent = z.object({
   id: z.string(),
   message: z.string().nullish(),
   metadata: z.record(z.unknown()).optional().default({}),
+  seq: z.number().int().nullish(),
   task_id: z.string(),
   timestamp: z.string().datetime(),
 });
@@ -3305,32 +3401,23 @@ export const zTaskResponse = z.object({
 /**
  * TaskSummary
  *
- * Headline rollup for a single task, derived from the event log.
+ * Headline rollup for a single task: its run times, answer, error and spend.
  *
- * Backed by the ``task_summary`` Postgres view. Stable contract — when
- * the view's implementation moves to a materialized view or projection
- * table, this shape stays the same. Per-tool breakdowns and per-artifact
- * lists are deliberately not here; they live in their own endpoints so
- * this stays small and additive.
+ * Read from the task row and the spend ledger. ``cost`` sums the task's current
+ * ledger lines in ``currency``, the billing currency. ``duration_ms`` runs from the
+ * task's first start to its last end, idle waits between turns included.
  */
 export const zTaskSummary = z.object({
   agent_id: z.string().uuid(),
-  cost_usd: z.number().optional().default(0),
-  delegations_completed: z.number().int().optional().default(0),
-  delegations_failed: z.number().int().optional().default(0),
-  delegations_started: z.number().int().optional().default(0),
+  cost: z.number().optional().default(0),
+  currency: z.string(),
   duration_ms: z.number().nullish(),
   ended_at: z.string().datetime().nullish(),
   final_response: z.string().nullish(),
-  iterations: z.number().int().optional().default(0),
   last_error: z.string().nullish(),
-  llm_calls: z.number().int().optional().default(0),
-  llm_calls_failed: z.number().int().optional().default(0),
   started_at: z.string().datetime().nullish(),
   status: z.string(),
   task_id: z.string().uuid(),
-  tools_called: z.number().int().optional().default(0),
-  tools_failed: z.number().int().optional().default(0),
   workspace_id: z.string(),
 });
 
@@ -3594,45 +3681,11 @@ export const zTaskCreate = z.object({
 });
 
 /**
- * TriggerCreate
- *
- * Payload for creating a trigger on an existing agent.
- */
-export const zTriggerCreate = z.object({
-  agent_id: z.string().uuid(),
-  allowed_methods: z.array(z.string()).optional(),
-  channel_credentials: z.record(z.unknown()).nullish(),
-  conditions: z.record(z.unknown()).optional(),
-  cron_expression: z.string().nullish(),
-  data_extractor: z.string().nullish(),
-  data_extractor_config: z.record(z.unknown()).nullish(),
-  description: z.string().max(1000).optional().default(""),
-  enabled: z.boolean().optional().default(true),
-  event_filter: z.record(z.unknown()).nullish(),
-  event_types: z.array(z.string()).optional(),
-  failure_threshold: z.number().int().gte(1).lte(100).optional().default(5),
-  name: z.string().min(1).max(255),
-  stream_id: z.string().uuid().nullish(),
-  task_parameters: z.record(z.unknown()).optional(),
-  timezone: z.string().optional().default("UTC"),
-  trigger_type: z.enum(["cron", "webhook", "polling", "stream"]),
-  validation_rules: z.record(z.unknown()).optional(),
-  webhook_config: z.record(z.unknown()).nullish(),
-  webhook_id: z
-    .string()
-    .min(16)
-    .regex(/^[A-Za-z0-9_-]+$/)
-    .nullish(),
-  webhook_type: z.string().optional().default("generic"),
-});
-
-/**
  * TriggerExecuteRequest
  *
  * Request model for executing a trigger via the event service.
  */
 export const zTriggerExecuteRequest = z.object({
-  channel_origin: z.record(z.unknown()).optional(),
   events: z.array(z.record(z.unknown())).optional(),
 });
 
@@ -3683,41 +3736,94 @@ export const zTriggerRunResponse = z.object({
 });
 
 /**
+ * TriggerSession
+ *
+ * What happens to the next event of the same session (ADR-0040 §4).
+ */
+export const zTriggerSession = z.object({
+  continue: z.boolean().nullish(),
+  idle_timeout: z
+    .string()
+    .regex(/^[0-9]+[smhd]$/)
+    .nullish(),
+});
+
+/**
+ * TriggerCreate
+ *
+ * Payload for creating a trigger on an existing agent.
+ */
+export const zTriggerCreate = z.object({
+  agent_id: z.string().uuid(),
+  conditions: z.record(z.unknown()).optional(),
+  cron_expression: z.string().nullish(),
+  description: z.string().max(1000).optional().default(""),
+  enabled: z.boolean().optional().default(true),
+  event_filter: z.record(z.unknown()).nullish(),
+  failure_threshold: z.number().int().gte(1).lte(100).optional().default(5),
+  name: z.string().min(1).max(255),
+  session: zTriggerSession.nullish(),
+  stream_id: z.string().uuid().nullish(),
+  task_parameters: z.record(z.unknown()).optional(),
+  timezone: z.string().optional().default("UTC"),
+  trigger_type: z.enum(["cron", "stream"]),
+});
+
+/**
+ * TriggerResponse
+ *
+ * Response model for trigger data.
+ */
+export const zTriggerResponse = z.object({
+  agent_id: z.string().uuid(),
+  conditions: z.record(z.unknown()),
+  consecutive_failures: z.number().int(),
+  created_at: z.string().datetime(),
+  created_by: z.string(),
+  cron_expression: z.string().nullish(),
+  description: z.string(),
+  event_filter: z.record(z.unknown()).nullish(),
+  failure_threshold: z.number().int(),
+  id: z.string().uuid(),
+  is_active: z.boolean(),
+  last_event_at: z.string().datetime().nullish(),
+  last_execution_at: z.string().datetime().nullish(),
+  name: z.string(),
+  needs_new_owner_at: z.string().datetime().nullish(),
+  next_run_time: z.string().datetime().nullish(),
+  session: zTriggerSession.nullish(),
+  status: z.enum(["active", "inactive", "needs_owner"]),
+  stream_id: z.string().uuid().nullish(),
+  task_parameters: z.record(z.unknown()),
+  timezone: z.string().nullish(),
+  trigger_type: z.string(),
+  updated_at: z.string().datetime(),
+});
+
+/**
  * TriggerSpec
  *
  * Everything about a trigger except the agent it fires.
  *
- * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
- * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
- * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
- * ``data_extractor`` configuration. Creating an agent takes a list of these,
- * because the agent does not exist yet when they are written.
+ * A trigger fires an agent — on a cron schedule (``trigger_type='cron'``) or on
+ * the events of a stream (``trigger_type='stream'``). A webhook or a polled
+ * provider is a source of a stream (``streams_create_source``) with a stream
+ * trigger on it. Creating an agent takes a list of these, because the agent
+ * does not exist yet when they are written.
  */
 export const zTriggerSpec = z.object({
-  allowed_methods: z.array(z.string()).optional(),
-  channel_credentials: z.record(z.unknown()).nullish(),
   conditions: z.record(z.unknown()).optional(),
   cron_expression: z.string().nullish(),
-  data_extractor: z.string().nullish(),
-  data_extractor_config: z.record(z.unknown()).nullish(),
   description: z.string().max(1000).optional().default(""),
   enabled: z.boolean().optional().default(true),
   event_filter: z.record(z.unknown()).nullish(),
-  event_types: z.array(z.string()).optional(),
   failure_threshold: z.number().int().gte(1).lte(100).optional().default(5),
   name: z.string().min(1).max(255),
+  session: zTriggerSession.nullish(),
   stream_id: z.string().uuid().nullish(),
   task_parameters: z.record(z.unknown()).optional(),
   timezone: z.string().optional().default("UTC"),
-  trigger_type: z.enum(["cron", "webhook", "polling", "stream"]),
-  validation_rules: z.record(z.unknown()).optional(),
-  webhook_config: z.record(z.unknown()).nullish(),
-  webhook_id: z
-    .string()
-    .min(16)
-    .regex(/^[A-Za-z0-9_-]+$/)
-    .nullish(),
-  webhook_type: z.string().optional().default("generic"),
+  trigger_type: z.enum(["cron", "stream"]),
 });
 
 /**
@@ -3785,27 +3891,29 @@ export const zTriggerStatusResponse = z.object({
 });
 
 /**
+ * TriggerType
+ *
+ * Types of triggers supported by the system.
+ */
+export const zTriggerType = z.enum(["cron", "stream"]);
+
+/**
  * TriggerUpdate
  *
  * Patch payload for a trigger. All fields optional — unset = unchanged.
  */
 export const zTriggerUpdate = z.object({
   agent_id: z.string().uuid().nullish(),
-  allowed_methods: z.array(z.string()).nullish(),
-  channel_credentials: z.record(z.unknown()).nullish(),
   conditions: z.record(z.unknown()).nullish(),
   cron_expression: z.string().nullish(),
   description: z.string().max(1000).nullish(),
   enabled: z.boolean().nullish(),
   event_filter: z.record(z.unknown()).nullish(),
-  event_types: z.array(z.string()).nullish(),
   failure_threshold: z.number().int().gte(1).lte(100).nullish(),
   name: z.string().min(1).max(255).nullish(),
+  session: zTriggerSession.nullish(),
   task_parameters: z.record(z.unknown()).nullish(),
   timezone: z.string().nullish(),
-  validation_rules: z.record(z.unknown()).nullish(),
-  webhook_config: z.record(z.unknown()).nullish(),
-  webhook_type: z.string().nullish(),
 });
 
 /**
@@ -4025,101 +4133,6 @@ export const zWalletStatus = z.enum(["active", "disabled"]);
  * Supported wallet types.
  */
 export const zWalletType = z.enum(["x402", "mpp", "dual"]);
-
-/**
- * WebhookSignatureScheme
- *
- * How a sender signs requests to a generic webhook.
- */
-export const zWebhookSignatureScheme = z.object({
-  algorithm: z.string(),
-  header: z.string(),
-  prefix: z.string(),
-});
-
-/**
- * StreamSourceResponse
- */
-export const zStreamSourceResponse = z.object({
-  allowed_methods: z.array(z.string()).nullable(),
-  created_at: z.string().datetime(),
-  id: z.string().uuid(),
-  kind: z.string(),
-  signature_scheme: zWebhookSignatureScheme.nullish(),
-  trigger_id: z.string().uuid().nullish(),
-  webhook_id: z.string().nullable(),
-  webhook_type: z.string().nullable(),
-  webhook_url: z.string().nullable(),
-});
-
-/**
- * TriggerResponse
- *
- * Response model for trigger data.
- */
-export const zTriggerResponse = z.object({
-  agent_id: z.string().uuid(),
-  allowed_methods: z.array(z.string()).nullish(),
-  conditions: z.record(z.unknown()),
-  consecutive_failures: z.number().int(),
-  created_at: z.string().datetime(),
-  created_by: z.string(),
-  cron_expression: z.string().nullish(),
-  data_extractor: z.string().nullish(),
-  description: z.string(),
-  event_filter: z.record(z.unknown()).nullish(),
-  event_types: z.array(z.string()).optional(),
-  failure_threshold: z.number().int(),
-  has_channel_credentials: z.boolean().optional().default(false),
-  id: z.string().uuid(),
-  is_active: z.boolean(),
-  last_event_at: z.string().datetime().nullish(),
-  last_execution_at: z.string().datetime().nullish(),
-  name: z.string(),
-  needs_new_owner_at: z.string().datetime().nullish(),
-  next_run_time: z.string().datetime().nullish(),
-  signature_scheme: zWebhookSignatureScheme.nullish(),
-  signing_secret: z.string().nullish(),
-  status: z.enum(["active", "inactive", "needs_owner"]),
-  stream_id: z.string().uuid().nullish(),
-  task_parameters: z.record(z.unknown()),
-  timezone: z.string().nullish(),
-  trigger_type: z.string(),
-  updated_at: z.string().datetime(),
-  validation_rules: z.record(z.unknown()).nullish(),
-  webhook_config: z.record(z.unknown()).nullish(),
-  webhook_id: z.string().nullish(),
-  webhook_signing: z.enum(["signed", "unsigned", "unsupported"]).nullish(),
-  webhook_type: z.string().nullish(),
-  webhook_url: z.string().nullish(),
-});
-
-/**
- * WebhookSourceCreate
- *
- * A webhook source on an existing stream, with no trigger.
- */
-export const zWebhookSourceCreate = z.object({
-  config: z.record(z.string()).optional(),
-  credentials: z.record(z.union([z.string(), zSecretRef])).optional(),
-  webhook_type: z.string().min(1).max(50),
-});
-
-/**
- * WebhookSourceCreated
- */
-export const zWebhookSourceCreated = z.object({
-  allowed_methods: z.array(z.string()).nullable(),
-  created_at: z.string().datetime(),
-  id: z.string().uuid(),
-  kind: z.string(),
-  signature_scheme: zWebhookSignatureScheme.nullish(),
-  signing_secret: z.string().nullish(),
-  trigger_id: z.string().uuid().nullish(),
-  webhook_id: z.string().nullable(),
-  webhook_type: z.string().nullable(),
-  webhook_url: z.string().nullable(),
-});
 
 /**
  * WorkspaceDirectoryResponse
@@ -6758,14 +6771,23 @@ export const zCreateStreamV1StreamsPostBody = zStreamCreate;
  */
 export const zCreateStreamV1StreamsPostResponse = zStreamResponse;
 
+export const zGetEventByIdV1StreamsEventsEventIdGetPath = z.object({
+  event_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetEventByIdV1StreamsEventsEventIdGetResponse =
+  zStreamEventResponse;
+
 /**
  * Response List Source Types V1 Streams Source Types Get
  *
  * Successful Response
  */
-export const zListSourceTypesV1StreamsSourceTypesGetResponse = z.array(
-  zStreamSourceTypeResponse
-);
+export const zListSourceTypesV1StreamsSourceTypesGetResponse =
+  z.array(zSourceTypeResponse);
 
 export const zDeleteStreamV1StreamsStreamIdDeletePath = z.object({
   stream_id: z.string().uuid(),
@@ -6836,18 +6858,16 @@ export const zListSourcesV1StreamsStreamIdSourcesGetResponse = z.array(
   zStreamSourceResponse
 );
 
-export const zCreateSourceV1StreamsStreamIdSourcesPostBody =
-  zWebhookSourceCreate;
+export const zAddSourceV1StreamsStreamIdSourcesPostBody = zSourceCreate;
 
-export const zCreateSourceV1StreamsStreamIdSourcesPostPath = z.object({
+export const zAddSourceV1StreamsStreamIdSourcesPostPath = z.object({
   stream_id: z.string().uuid(),
 });
 
 /**
  * Successful Response
  */
-export const zCreateSourceV1StreamsStreamIdSourcesPostResponse =
-  zWebhookSourceCreated;
+export const zAddSourceV1StreamsStreamIdSourcesPostResponse = zSourceCreated;
 
 export const zDeleteSourceV1StreamsStreamIdSourcesSourceIdDeletePath = z.object(
   {
@@ -6995,7 +7015,7 @@ export const zDecideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePostRespo
 
 export const zListTriggersV1TriggersGetQuery = z.object({
   agent_id: z.string().uuid().nullish(),
-  trigger_type: z.string().nullish(),
+  trigger_type: zTriggerType.nullish(),
   active_only: z.boolean().optional().default(false),
   limit: z.number().int().gte(1).lte(1000).optional().default(100),
 });
@@ -7013,24 +7033,6 @@ export const zCreateTriggerV1TriggersPostBody = zTriggerCreate;
  * Successful Response
  */
 export const zCreateTriggerV1TriggersPostResponse = zTriggerResponse;
-
-/**
- * Response Get Catalog V1 Triggers Catalog Get
- *
- * Successful Response
- */
-export const zGetCatalogV1TriggersCatalogGetResponse = z.array(
-  z.record(z.unknown())
-);
-
-/**
- * Response Get Channel Events V1 Triggers Channels Events Get
- *
- * Successful Response
- */
-export const zGetChannelEventsV1TriggersChannelsEventsGetResponse = z.record(
-  z.array(z.string())
-);
 
 /**
  * Response Triggers Health Check V1 Triggers Health Get
@@ -7173,17 +7175,6 @@ export const zRunTriggerNowV1TriggersTriggerIdRunPostPath = z.object({
 export const zRunTriggerNowV1TriggersTriggerIdRunPostResponse =
   zTriggerRunResponse;
 
-export const zRotateSigningSecretV1TriggersTriggerIdSigningSecretPostPath =
-  z.object({
-    trigger_id: z.string().uuid(),
-  });
-
-/**
- * Successful Response
- */
-export const zRotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponse =
-  zTriggerResponse;
-
 export const zGetTriggerStatusV1TriggersTriggerIdStatusGetPath = z.object({
   trigger_id: z.string().uuid(),
 });
@@ -7227,30 +7218,6 @@ export const zWebhookHealthCheckWebhooksHealthGetResponse = z.record(
   z.unknown()
 );
 
-export const zHandleWebhookWebhooksWebhookIdDeletePath = z.object({
-  webhook_id: z.string(),
-});
-
-export const zHandleWebhookWebhooksWebhookIdGetPath = z.object({
-  webhook_id: z.string(),
-});
-
-export const zHandleWebhookWebhooksWebhookIdHeadPath = z.object({
-  webhook_id: z.string(),
-});
-
-export const zHandleWebhookWebhooksWebhookIdOptionsPath = z.object({
-  webhook_id: z.string(),
-});
-
-export const zHandleWebhookWebhooksWebhookIdPatchPath = z.object({
-  webhook_id: z.string(),
-});
-
 export const zHandleWebhookWebhooksWebhookIdPostPath = z.object({
-  webhook_id: z.string(),
-});
-
-export const zHandleWebhookWebhooksWebhookIdPutPath = z.object({
   webhook_id: z.string(),
 });
