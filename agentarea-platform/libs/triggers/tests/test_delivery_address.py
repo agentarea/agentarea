@@ -8,6 +8,7 @@ from agentarea_streams.domain.source_types import SourceTypeEntry
 from agentarea_triggers.delivery_address import (
     FiringDelivery,
     build_delivery_address,
+    event_body,
     task_session,
 )
 from agentarea_triggers.domain.models import TriggerSession
@@ -120,3 +121,52 @@ def test_a_firing_stamps_what_it_has():
 def test_callers_cannot_set_where_a_task_replies_or_its_session(key):
     with pytest.raises(ValueError, match=key):
         reject_reserved_parameters({key: {}})
+
+
+async def test_an_offloaded_body_is_read_back_for_the_address():
+    reads: list[tuple[str, str]] = []
+
+    async def read(workspace_id: str, path: str) -> bytes:
+        reads.append((workspace_id, path))
+        return b'{"message": {"chat": {"id": 42}, "message_id": 7}}'
+
+    data = {"headers": {}, "body": None, "body_ref": "events/s/e/body.json"}
+    assert await event_body(data, "ws-1", read) == {
+        "message": {"chat": {"id": 42}, "message_id": 7}
+    }
+    assert reads == [("ws-1", "events/s/e/body.json")]
+
+
+async def test_an_inline_body_is_not_read_from_files():
+    async def read(workspace_id: str, path: str) -> bytes:
+        raise AssertionError("read")
+
+    assert await event_body({"body": {"a": 1}, "body_ref": None}, "ws-1", read) == {"a": 1}
+
+
+async def test_a_forwarded_copy_neither_replies_nor_joins_a_session():
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock
+
+    from agentarea_streams.domain import StreamEvent
+    from agentarea_triggers.delivery_address import firing_delivery
+
+    copy = StreamEvent(
+        type="message_received",
+        source="/sources/x",
+        data={"body": {"from": "a@b.c"}},
+        stream_id=uuid4(),
+        workspace_id="w",
+        created_by="u",
+        event_key="k",
+        received_at=datetime.now(UTC),
+        source_id=SOURCE_ID,
+        session_key="s:1",
+        depth=1,
+    )
+    session = AsyncMock()
+    delivery = await firing_delivery(
+        session, copy, trigger_id=TRIGGER_ID, session_setting=None, body=copy.data["body"]
+    )
+    assert delivery == FiringDelivery(stream_event_id=str(copy.id))
+    session.get.assert_not_awaited()

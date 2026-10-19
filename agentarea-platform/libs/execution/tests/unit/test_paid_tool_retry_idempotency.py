@@ -334,7 +334,7 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
     )
     mcp_service = ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
-    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
 
     request = _request(
@@ -418,7 +418,7 @@ async def test_payment_that_settled_before_the_request_failed_is_spent(
     )
     mcp_service = ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
-    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
 
     request = _request(
@@ -492,6 +492,7 @@ async def test_retried_http_tool_does_not_pay_again(monkeypatch, activity_fns, w
     ctx, _ = activity_fns
     connection_service = ctx.get_openapi_connection_service.return_value
     connection_service.catalog_connector = AsyncMock(return_value="connection:paid-api")
+    connection_service.catalog_spec = AsyncMock(return_value=None)
     connection_service.get_connection = AsyncMock(
         return_value=SimpleNamespace(
             id=PaidHttpTool.connection_id,
@@ -539,16 +540,16 @@ def test_call_ref_without_tool_call_id_uses_the_activity_identity():
 
 
 GATEWAY_ID = "9a0c6d8e-0000-4000-8000-000000000001"
-YANDEX = {
-    "name": "ru.yandex/search-api",
+EXAMPLE_SEARCH = {
+    "name": "example.com/search-api",
     "metadata": {
         "agentarea:payers": ["workspace", "platform"],
         "agentarea:cost": {
             "tools": {
-                "yandex_search": {
+                "example_search": {
                     "source": "rate",
                     "unit": "request",
-                    "rate": {"amount": "0.488", "currency": "RUB"},
+                    "rate": {"amount": "0.488", "currency": "EUR"},
                 }
             }
         },
@@ -563,14 +564,13 @@ class GatewayService:
         self.calls: list[str] = []
         self.instance = SimpleNamespace(
             id=GATEWAY_ID,
-            name="Yandex Search",
+            name="Example Search",
             json_spec={},
-            server_spec_id="spec-yandex",
+            server_spec_id="spec-example",
             managed_by=managed_by,
         )
-        server = SimpleNamespace(json_spec=YANDEX)
         self.mcp_server_repository = SimpleNamespace(
-            get_server_by_id=AsyncMock(return_value=server)
+            catalog_json_spec=AsyncMock(return_value=EXAMPLE_SEARCH)
         )
 
     async def get(self, instance_id):
@@ -607,7 +607,7 @@ class Billing:
         self.authorizations, self.voids = [], []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.authorizations.append(request)
@@ -617,7 +617,7 @@ class Billing:
             reason="" if self.allow else "no credits remaining",
             hold_id=f"hold-{len(self.authorizations)}" if self.allow else None,
             amount=Decimal("0.64") if self.allow else None,
-            currency="RUB" if self.allow else None,
+            currency="EUR" if self.allow else None,
             expires_at=None,
         )
 
@@ -638,7 +638,7 @@ def _install_gateway(monkeypatch, activity_fns, *, managed_by="platform", billin
     ctx, _ = activity_fns
     service = GatewayService(managed_by)
     ctx.get_mcp_server_instance_service = AsyncMock(return_value=service)
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     monkeypatch.setattr(
         tool_activities,
         "_offload_large_activity_output",
@@ -663,9 +663,9 @@ def _clear_billing():
     tool_billing.get_tool_billing.cache_clear()
 
 
-def _gateway_request(raw_name: str = "yandex_search") -> MCPToolRequest:
+def _gateway_request(raw_name: str = "example_search") -> MCPToolRequest:
     return _request(
-        tool_name=f"yandex__{raw_name}",
+        tool_name=f"example__{raw_name}",
         tool_args={"query": "agentarea"},
         tools=[{"type": "mcp", "name": GATEWAY_ID}],
         mcp_route=McpToolRoute(
@@ -697,11 +697,11 @@ async def test_a_platform_call_holds_then_writes_one_line_at_the_held_amount(
         Decimal("0.64"),
         True,
     )
-    assert service.calls == ["yandex_search", "yandex_search"]
+    assert service.calls == ["example_search", "example_search"]
     first = billing.authorizations[0]
     assert (first["connector"], first["tool"], first["vendor_cost"]) == (
-        "ru.yandex/search-api",
-        "yandex_search",
+        "example.com/search-api",
+        "example_search",
         Decimal("0.488"),
     )
     # The retry's hold is released: the first attempt's line carries the one captured.
@@ -715,20 +715,20 @@ async def test_a_platform_call_holds_then_writes_one_line_at_the_held_amount(
     )
     assert (line.subject_id, line.subject_name, line.payer.value) == (
         GATEWAY_ID,
-        "yandex_search",
+        "example_search",
         "platform",
     )
     assert (line.vendor_cost, line.vendor_currency, line.amount, line.currency) == (
         Decimal("0.488"),
-        "RUB",
+        "EUR",
         Decimal("0.64"),
-        "RUB",
+        "EUR",
     )
     assert (line.quantity, line.unit, line.source.value) == (Decimal(1), "request", "rate")
     assert line.estimate is True
     assert line.evidence == {
-        "connector": "ru.yandex/search-api",
-        "tool_name": "yandex__yandex_search",
+        "connector": "example.com/search-api",
+        "tool_name": "example__example_search",
         "hold_id": "hold-1",
         "settle": "capture",
     }

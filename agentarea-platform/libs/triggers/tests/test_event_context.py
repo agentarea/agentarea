@@ -290,3 +290,12 @@ def test_a_schedule_tick_carries_no_event_so_the_message_is_the_ask():
     task_input = compose_task_input(_stream_trigger("Score leads"), {"source": "schedule"})
     assert task_input is not None
     assert task_input.message == "Score leads"
+
+
+def test_a_body_moved_to_files_reaches_the_run_through_the_event_file():
+    body = {"text": "TAIL-OF-A-LONG-MAIL " * 4000}
+    stored = _journaled({"headers": {}, "body": None, "body_ref": "events/s/e/body.json"})
+    event = TriggerEvent.from_stream_event(stored, stream_name="mail", body=body)
+    assert event.data["body"] == body
+    block = render_event_block(trigger_name="t", trigger_type="stream", event=event)
+    assert block.event_file == "trigger-event.json"

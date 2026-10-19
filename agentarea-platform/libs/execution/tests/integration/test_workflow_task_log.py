@@ -323,6 +323,14 @@ async def test_a_model_change_is_an_event_row_and_the_next_answer_names_the_new_
     }
     answers = [row.meta for row in rows if row.role == "assistant"]
     assert answers[-1] == {"model_id": "model-b", "model_name": "name-of-model-b"}
+    # The call in flight when the model changed was made, and is billed, on the old one.
+    calls = [
+        (row.meta["model_id"], row.meta["model_name"])
+        for row in rows
+        if row.kind == "event" and row.name == "llm.call.completed"
+    ]
+    assert calls[0] == ("gpt-4o-mini", "name-of-gpt-4o-mini")
+    assert calls[-1] == ("model-b", "name-of-model-b")
     assert all(m["role"] != "event" for window in run.windows for m in window)
 
 

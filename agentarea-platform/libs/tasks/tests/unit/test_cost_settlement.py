@@ -24,14 +24,14 @@ class Billing:
         self.captures, self.quote_raises = [], quote_raises
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         raise AssertionError("settlement places no hold")
 
     async def capture(self, **request):
         self.captures.append(request)
-        return SimpleNamespace(amount=Decimal("0.66"), currency="RUB")
+        return SimpleNamespace(amount=Decimal("0.66"), currency="EUR")
 
     async def void(self, *, hold_id):
         raise AssertionError("settlement voids nothing")
@@ -43,8 +43,8 @@ class Billing:
 
 
 @pytest.fixture(autouse=True)
-def rub(monkeypatch):
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+def eur(monkeypatch):
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     ExtensionRegistry.clear()
     tool_billing.get_tool_billing.cache_clear()
     yield
@@ -73,7 +73,7 @@ def _line(**overrides):
         "subject_name": "web_search",
         "call_ref": "call-9",
         "amount": Decimal("0.64"),
-        "currency": "RUB",
+        "currency": "EUR",
         "source": "rate",
         "occurred_at": datetime(2026, 10, 14, 12, tzinfo=UTC),
         "provider_cost_usd": None,
@@ -81,10 +81,10 @@ def _line(**overrides):
         "quantity": Decimal(1),
         "unit": "request",
         "vendor_cost": Decimal("0.488"),
-        "vendor_currency": "RUB",
+        "vendor_currency": "EUR",
         "evidence": {
-            "connector": "ru.yandex/search-api",
-            "tool_name": "yandex__web_search",
+            "connector": "example.com/search-api",
+            "tool_name": "example__web_search",
             "hold_id": "hold-1",
             "settle": "capture",
         },
@@ -106,18 +106,18 @@ async def test_a_held_line_is_captured_and_superseded_by_what_billing_charged():
 
     [capture] = billing.captures
     assert capture["hold_id"] == "hold-1"
-    assert (capture["vendor_cost"], capture["vendor_currency"]) == (Decimal("0.488"), "RUB")
+    assert (capture["vendor_cost"], capture["vendor_currency"]) == (Decimal("0.488"), "EUR")
     assert capture["idempotency_key"] == f"tool:{line.event_id}"
     assert (successor.amount, successor.currency, successor.estimate) == (
         Decimal("0.66"),
-        "RUB",
+        "EUR",
         False,
     )
     assert successor.supersedes_id == line.id
     assert successor.occurred_at == line.occurred_at
     assert successor.evidence == {
-        "connector": "ru.yandex/search-api",
-        "tool_name": "yandex__web_search",
+        "connector": "example.com/search-api",
+        "tool_name": "example__web_search",
         "hold_id": "hold-1",
     }
     # Settling the same line again is the same successor, which the ledger stores once.
@@ -178,7 +178,7 @@ async def test_a_settled_cost_supersedes_the_estimate_in_the_deployment_currency
     assert (successor.vendor_cost, successor.vendor_currency) == (Decimal("0.0123"), "USD")
     assert (successor.amount, successor.currency, successor.estimate) == (
         Decimal("1.1685"),
-        "RUB",
+        "EUR",
         False,
     )
     assert successor.source is CostSource.SETTLED
@@ -187,7 +187,7 @@ async def test_a_settled_cost_supersedes_the_estimate_in_the_deployment_currency
 
 async def test_a_settled_platform_cost_is_then_captured():
     async def done(line):
-        return MeteredCost(Decimal(1), "call", Decimal("0.3"), "RUB", CostSourceKind.SETTLED)
+        return MeteredCost(Decimal(1), "call", Decimal("0.3"), "EUR", CostSourceKind.SETTLED)
 
     line = _line(
         source="settled",
@@ -228,7 +228,7 @@ async def test_a_conversion_is_made_once_billing_answers():
 
     assert (successor.amount, successor.currency, successor.estimate) == (
         Decimal("1.90"),
-        "RUB",
+        "EUR",
         False,
     )
     assert successor.evidence == {"connector": "x"}

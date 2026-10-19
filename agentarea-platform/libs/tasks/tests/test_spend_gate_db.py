@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TASKS_TEST_DATABA
 
 NOW = datetime(2026, 10, 13, 12, tzinfo=UTC)
 USD_RATE = {"source": "rate", "rate": {"amount": "0.40", "currency": "USD"}}
-RUB_RATE = {"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}}
+RUB_RATE = {"source": "rate", "rate": {"amount": "0.488", "currency": "EUR"}}
 
 
 @pytest.fixture
@@ -181,31 +181,31 @@ async def test_connection_tool_and_client_caps_count_only_their_lines(session):
 
 
 async def test_a_cap_counts_only_lines_in_its_own_currency(session):
-    """Nothing is converted: RUB spend is not covered by a USD cap, and never blocked by it."""
+    """Nothing is converted: EUR spend is not covered by a USD cap, and never blocked by it."""
     workspace_id = str(uuid4())
     repo = await _seed(
         session,
         workspace_id,
         [
-            _line(workspace_id, amount="500", currency="RUB"),
+            _line(workspace_id, amount="500", currency="EUR"),
             _line(workspace_id, amount="0.50", currency="USD"),
         ],
     )
     usd_cap = {"budget": {"monthly_spend_cap_usd": "1"}}
-    rub_cap = {"budget": {"spend_caps": [{"amount_usd": "300", "currency": "RUB"}]}}
+    rub_cap = {"budget": {"spend_caps": [{"amount_usd": "300", "currency": "EUR"}]}}
 
     assert (
         await spend_cap_refusal(repo, _call(workspace_id, usd_cap, cost=RUB_RATE), now=NOW) is None
     )
     refused = await spend_cap_refusal(repo, _call(workspace_id, rub_cap, cost=RUB_RATE), now=NOW)
-    assert refused == "workspace monthly spend cap of 300 RUB reached: 500 RUB spent this month"
+    assert refused == "workspace monthly spend cap of 300 EUR reached: 500 EUR spent this month"
     totals = await repo.sum_by_currency_since(datetime(2026, 10, 1, tzinfo=UTC))
-    assert totals == {"RUB": Decimal("500"), "USD": Decimal("0.50")}
+    assert totals == {"EUR": Decimal("500"), "USD": Decimal("0.50")}
 
 
 async def test_no_cap_asks_nothing(session):
     workspace_id = str(uuid4())
-    repo = await _seed(session, workspace_id, [_line(workspace_id, amount="0.488", currency="RUB")])
+    repo = await _seed(session, workspace_id, [_line(workspace_id, amount="0.488", currency="EUR")])
 
     assert await spend_cap_refusal(repo, _call(workspace_id, None, cost=RUB_RATE), now=NOW) is None
 
@@ -305,7 +305,7 @@ async def test_a_call_whose_known_cost_would_exceed_what_a_cap_has_left_is_refus
     )
     assert await spend_cap_refusal(repo, call, (Decimal("0.10"), "USD"), now=NOW) is None
     # A cost in another currency is not covered by the cap, so it cannot exceed it.
-    assert await spend_cap_refusal(repo, call, (Decimal("50"), "RUB"), now=NOW) is None
+    assert await spend_cap_refusal(repo, call, (Decimal("50"), "EUR"), now=NOW) is None
 
 
 async def test_an_agent_may_spend_one_dollar_a_run_of_which_tools_twenty_cents(session):

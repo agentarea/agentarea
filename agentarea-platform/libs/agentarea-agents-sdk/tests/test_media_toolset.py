@@ -15,7 +15,7 @@ from agentarea_agents_sdk.tools.file_toolset import InMemoryStorage
 from agentarea_agents_sdk.tools.media_toolset import MediaToolset
 
 WORKSPACE = "ws-1"
-HELD = {"amount": "150", "currency": "RUB", "hold_id": "hold-1", "settle": "capture"}
+HELD = {"amount": "150", "currency": "EUR", "hold_id": "hold-1", "settle": "capture"}
 
 
 @dataclass
@@ -53,7 +53,7 @@ class _Backend:
             content=b"\x89PNG....",
             media_type="image/png",
             cost=Decimal("4.00"),
-            billing={"amount": "4.00", "currency": "RUB", "hold_id": "hold-1"},
+            billing={"amount": "4.00", "currency": "EUR", "hold_id": "hold-1"},
         )
         self.saved: list = []
         self.submitted: list = []

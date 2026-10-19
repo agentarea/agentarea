@@ -38,6 +38,7 @@ from ...models import (
     ResolveModelRequest,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
+    UpdateTaskStatusRequest,
 )
 from ..constants import (
     ACTIVITY_TIMEOUT,
@@ -56,7 +57,12 @@ from .builtin_tools import (
 )
 from .continue_as_new import ContinueAsNewMixin
 from .delegation import DelegationMixin
-from .patches import INTERACTION_CONTRACT_PATCH, WAIT_TOOL_PATCH
+from .patches import (
+    INTERACTION_CONTRACT_PATCH,
+    RESUME_POSITION_BEFORE_FIRST_RECORD_PATCH,
+    UNSTARTED_TASK_MARKED_RUNNING_PATCH,
+    WAIT_TOOL_PATCH,
+)
 
 
 class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
@@ -115,13 +121,35 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             },
         )
 
+        resumed_before_record = request.resume is not None and workflow.patched(
+            RESUME_POSITION_BEFORE_FIRST_RECORD_PATCH
+        )
+        if resumed_before_record and request.resume is not None:
+            self._adopt_resume(request.resume)
+
         # Publish immediately
         await self._publish_events_immediately()
+
+        if (
+            request.resume is None
+            and (self._workflow_metadata.get("scheduled_at") or self._is_delegation_child())
+            and workflow.patched(UNSTARTED_TASK_MARKED_RUNNING_PATCH)
+        ):
+            # Nothing marked the task running: a booked run waited for its time,
+            # a delegated one was created by its parent.
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
+            )
 
         # Initialize agent configuration
         await self._initialize_agent_config()
 
-        if request.resume is not None:
+        if request.resume is not None and not resumed_before_record:
             self._adopt_resume(request.resume)
             if request.resume.retry:
                 await self._publish_events_immediately()

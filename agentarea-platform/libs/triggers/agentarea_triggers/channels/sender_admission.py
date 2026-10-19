@@ -101,10 +101,23 @@ async def event_admission(session: AsyncSession, event: StreamEvent) -> EventAdm
     """What admits the sender of ``event``; None when its source type admits anyone.
 
     Raises ``LookupError`` when the event names a source or type that cannot be
-    read: a door that cannot be checked stays shut.
+    read, or a type with an admission but no source: a door that cannot be
+    checked stays shut.
     """
     if event.source_id is None:
-        return None
+        if event.source_type is None:
+            return None
+        entry = await CatalogSourceTypeRepository(session).get(event.source_type)
+        if entry is None:
+            raise LookupError(
+                f"source type {event.source_type!r} of event {event.id} is not in the catalog"
+            )
+        if entry.admission is None:
+            return None
+        raise LookupError(
+            f"event {event.id} of source type {event.source_type!r} names no source to admit "
+            + "its sender through"
+        )
     source = await session.get(StreamSourceORM, event.source_id)
     if source is None or source.workspace_id != event.workspace_id:
         raise LookupError(f"source {event.source_id} of event {event.id} is gone")

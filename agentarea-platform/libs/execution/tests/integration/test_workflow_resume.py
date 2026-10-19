@@ -42,6 +42,7 @@ from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity, workflow
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Replayer, UnsandboxedWorkflowRunner, Worker
 
@@ -146,7 +147,13 @@ async def _validate_artifacts(_request: ArtifactValidationRequest) -> ArtifactVa
 
 @activity.defn(name="record_activity")
 async def _record(request: RecordRequest) -> RecordResult:
+    """Write the rows as the task log does: once per event id, one row per seq."""
     for row in request.rows:
+        held = _log.get(row.seq)
+        if held is not None and str(held.event_id) != str(row.event_id):
+            raise ApplicationError(
+                f"seq {row.seq} is already held by another row", non_retryable=True
+            )
         _log.setdefault(
             row.seq,
             ConversationEntry(**row.model_dump(exclude={"event_id"}), event_id=row.event_id),
@@ -398,4 +405,25 @@ async def test_run_recorded_before_the_snapshot_replays(monkeypatch: pytest.Monk
 
     assert _status_requests[-1].status == "completed"
     assert _status_requests[-1].conversation_resume is None
+    await _replay(history)
+
+
+@pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
+@pytest.mark.asyncio
+async def test_a_booked_run_marks_its_task_running_when_it_starts():
+    request = _request(uuid.uuid4()).model_copy(
+        update={"workflow_metadata": {"scheduled_at": "2026-10-19T10:00:00+00:00"}}
+    )
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"resume-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                handle = await _start(env, task_queue, request)
+                assert (await handle.result()).success is True
+                history = await handle.fetch_history()
+
+    statuses = [status.status for status in _status_requests]
+    assert statuses[0] == "running"
+    assert statuses[-1] == "completed"
     await _replay(history)

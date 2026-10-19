@@ -40,20 +40,20 @@ class Billing:
         self.captures = []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         raise AssertionError("settlement places no hold")
 
     async def capture(self, **request):
         self.captures.append(request)
-        return SimpleNamespace(amount=Decimal("0.66"), currency="RUB")
+        return SimpleNamespace(amount=Decimal("0.66"), currency="EUR")
 
     async def void(self, *, hold_id):
         raise AssertionError("settlement voids nothing")
 
     async def quote(self, lines):
-        raise AssertionError("every line here is in RUB")
+        raise AssertionError("every line here is in EUR")
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ async def maker():
 
 @pytest.fixture
 def billing(monkeypatch):
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     ExtensionRegistry.clear()
     tool_billing.get_tool_billing.cache_clear()
     installed = Billing()
@@ -88,14 +88,14 @@ def _line(workspace_id, *, evidence, occurred_at=NOW - timedelta(seconds=30), su
         subject_name="web_search",
         call_ref="call",
         amount=Decimal("0.64"),
-        currency="RUB",
+        currency="EUR",
         source=CostSource.RATE,
         occurred_at=occurred_at,
         payer=Payer.PLATFORM,
         quantity=Decimal(1),
         unit="request",
         vendor_cost=Decimal("0.488"),
-        vendor_currency="RUB",
+        vendor_currency="EUR",
         evidence=evidence,
         supersedes_id=supersedes,
         estimate=True,
@@ -108,7 +108,7 @@ async def _vendor_never(line):
 
 async def test_a_held_line_is_captured_once_and_the_sum_counts_the_charge(maker, billing):
     workspace_id = str(uuid4())
-    held = {"connector": "ru.yandex/search-api", "hold_id": "hold-1", "settle": "capture"}
+    held = {"connector": "example.com/search-api", "hold_id": "hold-1", "settle": "capture"}
     waiting = _line(workspace_id, evidence=held)
     final = _line(workspace_id, evidence={"connector": "x"})
     async with maker() as session:
@@ -124,7 +124,7 @@ async def test_a_held_line_is_captured_once_and_the_sum_counts_the_charge(maker,
     assert ours == ["hold-1"]
     async with maker() as session:
         repo = CostEntryRepository(session, UserContext(user_id="r", workspace_id=workspace_id))
-        total = await repo.sum_since(NOW - timedelta(days=1), currency="RUB", scope=SpendScope())
+        total = await repo.sum_since(NOW - timedelta(days=1), currency="EUR", scope=SpendScope())
     assert total == Decimal("0.66") + Decimal("0.64")
 
 

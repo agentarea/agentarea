@@ -57,7 +57,8 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE stream_sources SET webhook_config = (
-            COALESCE(webhook_config::jsonb, '{}'::jsonb)
+            CASE WHEN jsonb_typeof(webhook_config::jsonb) = 'object'
+                THEN webhook_config::jsonb ELSE '{}'::jsonb END
             || jsonb_strip_nulls(jsonb_build_object(
                 'header', validation_rules::jsonb ->> 'signature_header',
                 'algorithm', validation_rules::jsonb ->> 'signature_algorithm',

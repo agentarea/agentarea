@@ -230,3 +230,24 @@ async def test_a_paged_event_carries_its_payload_under_data_like_the_live_stream
     assert event["data"] == {"message": "done", "execution_id": "exec-1"}
     # Deprecated alias kept for clients that read it.
     assert event["metadata"] == event["data"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("may_act", [True, False])
+async def test_the_tasks_authority_sees_the_command_and_output_and_a_member_does_not(
+    async_client, monkeypatch, may_act
+):
+    from .tool_call_log import FakeFeedReader, assert_member_view, assert_owner_view
+
+    monkeypatch.setattr("agentarea_api.api.v1.agents_tasks.TaskFeedReader", FakeFeedReader)
+    monkeypatch.setattr(
+        "agentarea_api.api.v1.agents_tasks.caller_may_act_on_task", AsyncMock(return_value=may_act)
+    )
+
+    response = await async_client.get(
+        f"/v1/workspaces/acme/agents/{DELETED_AGENT_ID}/tasks/{TASK_ID}/events"
+    )
+
+    assert response.status_code == 200, response.text
+    call, result = (event["data"] for event in response.json()["events"])
+    (assert_owner_view if may_act else assert_member_view)(call, result)

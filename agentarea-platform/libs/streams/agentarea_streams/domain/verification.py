@@ -24,9 +24,12 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .source_types import Verification
-from .templates import TemplateContext, render, render_value
+from .templates import TemplateContext, render, render_url, render_value
 
 logger = logging.getLogger(__name__)
+
+#: The schemes a source may switch itself to: each checks the request against the source's secret.
+SOURCE_SCHEMES = frozenset({"hmac", "hmac_timestamped", "shared_token"})
 
 #: Reads the provider's API for ``api_lookup``: (method, url, auth) -> (status, json).
 ApiLookup = Callable[[str, str, tuple[str, str] | None], Awaitable[tuple[int, Any]]]
@@ -144,25 +147,35 @@ async def verify_api_lookup(
     credentials: Mapping[str, Any],
     config: Mapping[str, Any],
     lookup: ApiLookup,
-) -> None:
-    """Believe the notification only when the provider's API holds the object in that state."""
+) -> Any:
+    """Believe the notification only when the provider's API holds the object in that state.
+
+    ``collection_from`` names ``<object>.<state>``: the object picks the collection,
+    and ``{notified.state}`` is the state claimed. Returns the body with the
+    ``record`` paths taken from the fetched object.
+    """
     if scheme.request is None:
         raise VerificationError("an api_lookup entry names no request")
     values: dict[str, Any] = {"credentials": credentials, "config": config}
     context = TemplateContext(body=body, values=values)
     if scheme.collection_from is not None:
         notified = render(scheme.collection_from, context) or ""
-        collection = scheme.collections.get(notified.partition(".")[0])
+        notified_object, _, notified_state = notified.partition(".")
+        collection = scheme.collections.get(notified_object)
         if collection is None:
             raise VerificationError(f"{notified!r} names no object the API can be asked about")
         values["collection"] = collection
-    request = render_value(scheme.request, TemplateContext(body=body, values=values))
-    url = request.get("url")
-    if not isinstance(url, str):
+        values["notified"] = {"object": notified_object, "state": notified_state}
+    context = TemplateContext(body=body, values=values)
+    request = render_value(
+        {key: value for key, value in scheme.request.items() if key != "url"}, context
+    )
+    url = render_url(scheme.request.get("url"), context)
+    if url is None:
         raise VerificationError("the lookup URL could not be filled in from this notification")
-    auth = request.get("auth")
+    auth = (request or {}).get("auth")
     basic = (str(auth["username"]), str(auth["password"])) if isinstance(auth, dict) else None
-    status, fetched = await lookup(str(request.get("method") or "GET"), url, basic)
+    status, fetched = await lookup(str((request or {}).get("method") or "GET"), url, basic)
     if status != 200 or not isinstance(fetched, Mapping):
         raise VerificationError(f"the provider's API answered {status}")
     for field, template in scheme.expect.items():
@@ -173,17 +186,46 @@ async def verify_api_lookup(
         if wanted is not None and current in scheme.later.get(wanted, []):
             continue
         raise VerificationError(f"the API holds {field}={current!r}, not {wanted!r}")
+    if not scheme.record:
+        return body
+    if not isinstance(body, Mapping):
+        raise VerificationError("a notification recorded from the lookup must be an object")
+    recorded = dict(body)
+    fetched_context = TemplateContext(body=body, values={**values, "fetched": fetched})
+    for path, template in scheme.record.items():
+        value = render_value(template, fetched_context)
+        if value is None:
+            raise VerificationError(f"{path} could not be recorded from the provider's object")
+        recorded = _with_path(recorded, path.split("."), value)
+    return recorded
+
+
+def _with_path(data: Mapping[str, Any], steps: list[str], value: Any) -> dict[str, Any]:
+    head, *rest = steps
+    copied = dict(data)
+    if not rest:
+        copied[head] = value
+        return copied
+    inner = copied.get(head)
+    copied[head] = _with_path(inner if isinstance(inner, Mapping) else {}, rest, value)
+    return copied
 
 
 def configured(scheme: Verification, config: Mapping[str, Any]) -> Verification:
     """The entry's scheme with the settings this source may override taken from its config.
 
     Raises ``pydantic.ValidationError`` for a value the scheme cannot take (an
-    unknown digest), so a source is refused when it is saved, not on every delivery.
+    unknown digest), so a source is refused when it is saved, not on every delivery,
+    and ``VerificationError`` for a scheme outside ``SOURCE_SCHEMES``: no source is
+    unsigned.
     """
     overrides = {
         key: config[key] for key in scheme.configurable if config.get(key) not in (None, "")
     }
+    if "scheme" in overrides and overrides["scheme"] not in SOURCE_SCHEMES:
+        raise VerificationError(
+            f"a source verifies by {', '.join(sorted(SOURCE_SCHEMES))}, not {overrides['scheme']!r}"
+        )
     if not overrides:
         return scheme
     return Verification.model_validate({**scheme.model_dump(), **overrides})
@@ -198,13 +240,18 @@ async def verify_request(
     credentials: Mapping[str, Any],
     config: Mapping[str, Any],
     lookup: ApiLookup,
-) -> None:
-    """Raise ``VerificationError`` unless the request proves it came from the provider."""
+) -> Any:
+    """The body to record; raise ``VerificationError`` unless the request proves its sender.
+
+    The body is the one received, except that ``api_lookup`` records what the
+    provider's API holds in place of what the notification claimed.
+    """
     if scheme.scheme == "none":
-        return
+        return body
     if scheme.scheme == "api_lookup":
-        await verify_api_lookup(scheme, body, credentials=credentials, config=config, lookup=lookup)
-        return
+        return await verify_api_lookup(
+            scheme, body, credentials=credentials, config=config, lookup=lookup
+        )
     secret = credentials.get(scheme.secret) if scheme.secret else None
     if not isinstance(secret, str) or not secret:
         raise VerificationError(f"the source has no {scheme.secret or 'secret'} to verify with")
@@ -216,3 +263,4 @@ async def verify_request(
         verify_ed25519(scheme, headers, raw_body, secret)
     else:
         verify_shared_token(scheme, headers, secret)
+    return body

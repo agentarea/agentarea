@@ -28,17 +28,39 @@ NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
 STREAM = uuid4()
 BASE = f"/v1/workspaces/acme/streams/{STREAM}"
 CATALOG = Path(__file__).resolve().parents[4] / "data" / "catalog" / "source-types.json"
+EXAMPLE_PAY = {
+    "slug": "example_pay",
+    "name": "Example Pay",
+    "description": "Payment notifications, checked against the provider's API",
+    "icon": "webhook",
+    "delivery": "webhook",
+    "credentials": [{"key": "secret_key", "label": "Secret Key", "required": True}],
+    "config": [{"key": "shop_id", "label": "Shop ID", "required": True}],
+    "verification": {
+        "scheme": "api_lookup",
+        "request": {
+            "method": "GET",
+            "url": "https://api.payments.example/v3/{collection}/{body:object.id}",
+            "auth": {"username": "{config.shop_id}", "password": "{credentials.secret_key}"},
+        },
+        "collection_from": "{body:event}",
+        "collections": {"payment": "payments"},
+        "expect": {"id": "{body:object.id}", "status": "{notified.state}"},
+    },
+    "event": {"kind": "{body:event}", "key": "{body:event}:{body:object.id}"},
+    "events": ["payment.succeeded", "payment.canceled"],
+}
 ENTRIES = {
     entry.slug: entry
     for entry in (
         SourceTypeEntry.model_validate(raw)
-        for raw in json.loads(CATALOG.read_text())["source_types"]
+        for raw in [*json.loads(CATALOG.read_text())["source_types"], EXAMPLE_PAY]
     )
 }
 
 
 class _Catalog:
-    """The shipped catalog, as the registry sync writes it to registry_items."""
+    """The shipped catalog and one lookup entry, as the registry sync writes them."""
 
     def __init__(self, _session):
         pass
@@ -146,16 +168,16 @@ async def test_the_source_types_come_from_the_catalog(client, env, graph):
         "generic_webhook",
         "github",
         "sentry",
-        "yookassa",
+        "example_pay",
         "stripe",
         "telegram",
         "slack",
         "email",
     } <= set(types)
     assert [f["key"] for f in types["sentry"]["credentials"]] == ["client_secret"]
-    assert [f["key"] for f in types["yookassa"]["config"]] == ["shop_id"]
-    assert types["yookassa"]["verification_scheme"] == "api_lookup"
-    assert "payment.succeeded" in types["yookassa"]["events"]
+    assert [f["key"] for f in types["example_pay"]["config"]] == ["shop_id"]
+    assert types["example_pay"]["verification_scheme"] == "api_lookup"
+    assert "payment.succeeded" in types["example_pay"]["events"]
     assert types["telegram"]["delivery"] == "both"
     assert types["telegram"]["continues_sessions"] is True
     assert types["github"]["icon_url"].endswith("/channels/github.svg")
@@ -212,8 +234,8 @@ async def test_a_secret_the_caller_may_not_use_is_refused(client, env, graph):
     [
         ({"source_type": "sentry"}, "needs client_secret"),
         ({"source_type": "github", "credentials": {"webhook_secret": ""}}, "webhook_secret is empty"),
-        ({"source_type": "yookassa", "credentials": {"secret_key": "k"}}, "needs shop_id"),
-        ({"source_type": "yookassa", "config": {"shop_id": "1"}}, "needs secret_key"),
+        ({"source_type": "example_pay", "credentials": {"secret_key": "k"}}, "needs shop_id"),
+        ({"source_type": "example_pay", "config": {"shop_id": "1"}}, "needs secret_key"),
         (
             {"source_type": "github", "credentials": {"webhook_secret": "x", "token": "y"}},
             "no credential token",
@@ -236,6 +258,14 @@ async def test_a_secret_the_caller_may_not_use_is_refused(client, env, graph):
         (
             {"source_type": "generic_webhook", "config": {"algorithm": "md5"}},
             "cannot verify with these settings",
+        ),
+        # No source is unsigned: a member may switch only between the signing schemes.
+        *(
+            (
+                {"source_type": "generic_webhook", "config": {"scheme": scheme}},
+                "cannot verify with these settings",
+            )
+            for scheme in ("none", "api_lookup", "ed25519")
         ),
     ],
 )
@@ -301,18 +331,18 @@ async def test_a_secret_given_for_an_optional_field_is_kept_and_never_returned(c
     assert _stored(env, "email", response.json()["id"]) == {"signing_secret": "mine"}
 
 
-async def test_yookassa_settings_are_kept_on_the_source_for_the_verifier(client, env, graph):
+async def test_lookup_settings_are_kept_on_the_source_for_the_verifier(client, env, graph):
     response = await client.post(
         f"{BASE}/sources",
         json={
-            "source_type": "yookassa",
+            "source_type": "example_pay",
             "credentials": {"secret_key": "live_x"},
             "config": {"shop_id": "506751"},
         },
     )
     assert response.status_code == 201, response.text
     assert env.service.add_source.await_args.kwargs["webhook_config"] == {"shop_id": "506751"}
-    assert _stored(env, "yookassa", response.json()["id"]) == {"secret_key": "live_x"}
+    assert _stored(env, "example_pay", response.json()["id"]) == {"secret_key": "live_x"}
 
 
 async def test_a_telegram_source_is_issued_its_token_and_left_to_the_reconciler(

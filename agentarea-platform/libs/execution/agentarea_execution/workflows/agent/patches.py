@@ -127,3 +127,16 @@ REFUSED_TOOL_CALL_ANNOUNCED_PATCH = "refused-tool-call-announced-v1"
 # the task's session (continue, idle timeout); before, only a web chat waited,
 # always 30 minutes, so a chat channel's next message found no task waiting.
 SESSION_DECIDES_FOLLOW_UP_PATCH = "session-decides-follow-up-v1"
+# A run that continues a closed conversation takes its place at the end of the
+# log before its first record; before, its task.started was written at row 0,
+# which the earlier run holds, and the run failed on the duplicate row.
+RESUME_POSITION_BEFORE_FIRST_RECORD_PATCH = "resume-position-before-first-record-v1"
+# A run whose task nothing marked running (booked for later, or a delegated
+# agent's) marks it running when it starts; before, the task stayed
+# "scheduled" or "submitted" until it ended, showed in the schedule while it
+# ran and never got a started_at.
+UNSTARTED_TASK_MARKED_RUNNING_PATCH = "unstarted-task-marked-running-v1"
+# A delegated agent stopped on its own (its task cancelled, not the parent's)
+# answers the delegation as stopped and the parent carries on; before, its
+# cancellation read as the parent's own and stopped the parent too.
+CHILD_STOP_IS_NOT_PARENT_STOP_PATCH = "child-stop-is-not-parent-stop-v1"

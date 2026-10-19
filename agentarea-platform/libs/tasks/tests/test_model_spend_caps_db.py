@@ -80,7 +80,7 @@ async def test_the_workspace_cap_counts_every_line_of_the_month_in_its_currency(
         [
             _line(workspace_id, amount="0.60", agent_id=agent_id),
             _line(workspace_id, amount="0.30", model=False),
-            _line(workspace_id, amount="50", currency="RUB"),
+            _line(workspace_id, amount="50", currency="EUR"),
             _line(workspace_id, amount="9", occurred_at=datetime(2026, 9, 30, tzinfo=UTC)),
         ],
     )

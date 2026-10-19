@@ -5296,7 +5296,7 @@ export const zGetInboxItemsV1InboxGetQuery = z.object({
     .nullish(),
   agent_id: z.string().uuid().nullish(),
   page: z.number().int().gte(1).lte(1000000).optional().default(1),
-  page_size: z.number().int().gte(1).lte(1000).optional().default(100),
+  page_size: z.number().int().gte(1).lte(200).optional().default(100),
 });
 
 /**

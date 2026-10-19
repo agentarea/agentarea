@@ -36,7 +36,7 @@ def ledger(monkeypatch):
 
     monkeypatch.setattr(model_spend_caps, "CostEntryRepository", _Ledger)
     monkeypatch.setattr(
-        model_spend_caps, "get_customer_pricing", lambda: SimpleNamespace(currency=lambda: "RUB")
+        model_spend_caps, "get_customer_pricing", lambda: SimpleNamespace(currency=lambda: "EUR")
     )
     return SimpleNamespace(spend=spend, reads=reads)
 
@@ -51,8 +51,8 @@ async def test_a_call_once_the_workspace_monthly_cap_is_reached_is_refused(ledge
     with pytest.raises(SpendCapReachedError) as raised:
         await _refuse(BudgetPolicy(monthly_spend_cap_usd=Decimal("10")))
 
-    assert raised.value.reason == "Workspace monthly spend cap reached (10.00 RUB/10 RUB)"
-    assert ledger.reads == [(MONTH_START, "RUB", SpendScope())]
+    assert raised.value.reason == "Workspace monthly spend cap reached (10.00 EUR/10 EUR)"
+    assert ledger.reads == [(MONTH_START, "EUR", SpendScope())]
 
 
 async def test_a_call_once_the_agents_monthly_cap_is_reached_is_refused(ledger):
@@ -66,7 +66,7 @@ async def test_a_call_once_the_agents_monthly_cap_is_reached_is_refused(ledger):
             )
         )
 
-    assert raised.value.reason == "Agent monthly spend cap reached (3 RUB/3 RUB)"
+    assert raised.value.reason == "Agent monthly spend cap reached (3 EUR/3 EUR)"
 
 
 async def test_a_call_once_a_monthly_llm_cap_is_reached_is_refused(ledger):
@@ -77,7 +77,7 @@ async def test_a_call_once_a_monthly_llm_cap_is_reached_is_refused(ledger):
             BudgetPolicy.model_validate({"spend_caps": [{"amount_usd": "2", "category": "llm"}]})
         )
 
-    assert raised.value.reason == "Workspace monthly LLM spend cap reached (2 RUB/2 RUB)"
+    assert raised.value.reason == "Workspace monthly LLM spend cap reached (2 EUR/2 EUR)"
 
 
 async def test_a_call_below_every_cap_is_made(ledger):

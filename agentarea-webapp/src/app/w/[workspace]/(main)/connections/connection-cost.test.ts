@@ -63,7 +63,7 @@ describe("a member-set connection cost", () => {
       {
         source: "rate",
         unit: "page",
-        rate: { amount: "0.5", currency: "RUB", quantity: { path: "$.pages" } },
+        rate: { amount: "0.5", currency: "EUR", quantity: { path: "$.pages" } },
       },
       { source: "reported", reported: { path: "$.cost", currency: "EUR" } },
     ];

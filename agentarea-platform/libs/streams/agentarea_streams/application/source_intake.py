@@ -36,6 +36,7 @@ from ..domain.envelope import (
 from ..domain.keys import MAX_INLINE_BODY_BYTES, encoded_size, event_id_for
 from ..domain.models import AppendResult, Attachment
 from ..domain.source_types import EventOverrides, SourceTypeEntry
+from ..domain.verification import configured
 from ..infrastructure.bus import StreamBus
 from ..infrastructure.orm import StreamSourceORM
 from .ingest import StreamIngest
@@ -143,13 +144,19 @@ class SourceIntake:
             )
             body = None
 
+        # The header this source verifies by, which its config may rename, carries a credential.
+        scheme = (
+            configured(entry.verification, source.webhook_config or {})
+            if entry.verification
+            else None
+        )
         event = IntegrationEvent(
             type=kind_override or fields.kind,
             source=f"/sources/{source.id}",
             subject=fields.session_key,
             time=fields.occurred_at or received_at,
             data={
-                "headers": without_credentials(headers, entry.verification),
+                "headers": without_credentials(headers, scheme),
                 "body": body,
                 "body_ref": body_ref,
             },

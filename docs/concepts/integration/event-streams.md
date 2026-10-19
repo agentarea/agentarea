@@ -63,7 +63,7 @@ changed except where the row that remembers its configuration lives.
 `POST /v1/workspaces/{workspace}/streams/{stream_id}/sources` adds a webhook
 source to any stream you may edit, of a type listed by
 `GET /v1/workspaces/{workspace}/streams/source-types` — `generic`, `github`,
-`sentry`, `yookassa`, `stripe`, `telegram`, `slack`, `email`. Each type
+`sentry`, `stripe`, `telegram`, `slack`, `email`. Each type
 declares the credentials its verifier needs, and creation without a required
 one is refused rather than accepted unsigned; `generic` and `email` take an
 optional signing secret and are issued one, shown once, when it is left out.
@@ -71,13 +71,14 @@ A credential is held by reference: the source's entry in the secret store
 names the workspace secret you picked, the value is read from that secret at
 each delivery, and a `secret_references` row keeps the secret from being
 deleted while a source uses it. Sentry is verified by the HMAC-SHA256 of the
-body in `Sentry-Hook-Signature`. YooKassa signs nothing, so its notification
-is checked against its API instead: the notified object is read back with the
-shop's id and key, and the event is recorded only when YooKassa answers that
-object in the notified state; an unreachable API is a refusal, not a pass. A
-source a webhook trigger owns cannot be deleted on its own, and neither can a
-stream such a source still feeds — the trigger goes first. See [Collect events
-into a stream](/guides/triggers/collect-events-into-a-stream).
+body in `Sentry-Hook-Signature`. A provider that does not sign its
+notifications is checked against its own API instead (the `api_lookup`
+scheme): the notified object is read back with the source's credentials, and
+the event is recorded only when the API answers that object in the notified
+state; an unreachable API is a refusal, not a pass. A source a webhook
+trigger owns cannot be deleted on its own, and neither can a stream such a
+source still feeds — the trigger goes first. See [Collect events into a
+stream](/guides/triggers/collect-events-into-a-stream).
 
 **Appending is idempotent, size-capped, and quota-limited.**
 `StreamJournal.append` requires an `event_key` naming what makes this event
@@ -85,9 +86,9 @@ new. For a webhook, that is the provider's own delivery id when it sends
 one — a header (GitHub's `X-GitHub-Delivery`, Linear's `linear-delivery`, or
 a generic `webhook-id` or `Idempotency-Key`) or, failing that, a body field
 (Stripe's `id`, Telegram's `update_id`, Slack's `event_id`); Sentry's
-`Request-ID` header names its deliveries, and a YooKassa notification is keyed
-by its `event` and object `id` together — and a fresh
-`recv:<uuid4()>` otherwise, which is explicitly never recognized as a repeat. The key is enforced with `INSERT ... ON CONFLICT DO
+`Request-ID` header names its deliveries, and a notification checked by
+`api_lookup` is typically keyed by its event name and object id together — and
+a fresh `recv:<uuid4()>` otherwise, which is explicitly never recognized as a repeat. The key is enforced with `INSERT ... ON CONFLICT DO
 NOTHING` on `(stream_id, event_key)`, so a redelivered id lands once: the
 first attempt gets `sequence` and `appended: true`, every later one gets the
 same `sequence` and `appended: false`. The event's own id is deterministic too
@@ -208,10 +209,11 @@ request that is answered before anything has actually reacted to it.
 - **`read_stream` keeps no cursor.** A scheduled agent that wants only what
   is new must store `next_after` somewhere it can read next run, or read a
   stream whose retention matches its period from the start.
-- **A YooKassa notification is believed only while the object is still in the
-  notified state.** A delivery that arrives after the object moved on (a
-  `payment.waiting_for_capture` read back as `succeeded`) is refused, and if
-  every retry of it comes that late, that earlier state is never recorded.
+- **An `api_lookup` notification is believed only in a state the API still
+  holds.** A delivery that arrives after the object moved on is refused unless
+  the entry lists the new state under `later` (then the fetched object is
+  recorded, named by its fetched state), and if every retry of it comes that
+  late, that earlier state is never recorded.
 - **Authorization is per stream, not per event or per subscriber.** Anyone who
   can read a stream sees every event in it, including ones no subscription of
   theirs would ever have matched. There is no audience scoping within a

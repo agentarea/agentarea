@@ -8,8 +8,9 @@ block; what makes the next message join the task is its ``session``.
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -31,6 +32,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 DEFAULT_IDLE_TIMEOUT = "30m"
+
+BodyReader = Callable[[str, str], Awaitable[bytes]]
+
+
+async def _read_workspace_file(workspace_id: str, path: str) -> bytes:
+    from agentarea_common.artifacts import ArtifactService
+
+    data, _ = await ArtifactService().get(workspace_id, path)
+    return data
+
+
+async def event_body(
+    data: Mapping[str, Any], workspace_id: str, read: BodyReader = _read_workspace_file
+) -> Any:
+    """The body as sent: inline, or read back from the workspace file a large one moved to."""
+    ref = data.get("body_ref")
+    if data.get("body") is None and isinstance(ref, str) and ref:
+        return json.loads(await read(workspace_id, ref))
+    return data.get("body")
 
 
 def build_delivery_address(
@@ -123,11 +143,15 @@ async def firing_delivery(
     *,
     trigger_id: UUID,
     session_setting: TriggerSession | None,
+    body: Any,
 ) -> FiringDelivery:
     """The delivery address and session of a task this stream event starts.
 
-    Read from the source that brought the event and its catalog entry; an event
-    with no source (a forward, a processor's output) has neither.
+    Read from the source that brought the event and its catalog entry. An event
+    with no source has neither, and so has a copy (a forward's, a processor's
+    output): it keeps its original's source for sender admission, but only the
+    original's task answers the sender. ``body`` is the event's body as sent
+    (``event_body``), also when a large one was moved to files.
     """
     from agentarea_streams.infrastructure.catalog_source_types import (
         CatalogSourceTypeRepository,
@@ -135,7 +159,7 @@ async def firing_delivery(
     from agentarea_streams.infrastructure.orm import StreamSourceORM
 
     base = FiringDelivery(stream_event_id=str(event.id))
-    if event.source_id is None:
+    if event.source_id is None or event.depth > 0:
         return base
     source = await session.get(StreamSourceORM, event.source_id)
     if source is None or source.workspace_id != event.workspace_id:
@@ -165,7 +189,7 @@ async def firing_delivery(
             credential_key=source.credential_key,
             trigger_id=trigger_id,
             session_key=event.session_key,
-            body=data.get("body"),
+            body=body,
             headers=headers if isinstance(headers, Mapping) else {},
         ),
         session=task_session(session_setting, entry, event.session_key),

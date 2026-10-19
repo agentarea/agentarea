@@ -29,7 +29,7 @@ from agentarea_governance.tool_calls import (
 )
 
 AGENT = UUID(int=7)
-RATE = {"source": "rate", "unit": "request", "rate": {"amount": "0.488", "currency": "RUB"}}
+RATE = {"source": "rate", "unit": "request", "rate": {"amount": "0.488", "currency": "EUR"}}
 
 
 class Ledger:
@@ -44,7 +44,7 @@ class Ledger:
 
 
 class Billing:
-    """Billing as the platform sees it: holds, captures, voids and quotes, in RUB."""
+    """Billing as the platform sees it: holds, captures, voids and quotes, in EUR."""
 
     def __init__(self, *, allowed=True, code="ok", amount="0.64", raises=False, quote_raises=False):
         self.allowed, self.code, self.amount = allowed, code, Decimal(amount)
@@ -52,7 +52,7 @@ class Billing:
         self.authorizations, self.voids, self.quotes = [], [], []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.authorizations.append(request)
@@ -64,7 +64,7 @@ class Billing:
             reason="no credits remaining" if not self.allowed else "",
             hold_id="hold-1" if self.allowed else None,
             amount=self.amount if self.allowed else None,
-            currency="RUB" if self.allowed else None,
+            currency="EUR" if self.allowed else None,
             expires_at=None,
         )
 
@@ -123,7 +123,7 @@ class SpendGate:
 
 @pytest.fixture(autouse=True)
 def clean(monkeypatch):
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     ExtensionRegistry.clear()
     tool_billing.get_tool_billing.cache_clear()
     yield
@@ -140,7 +140,7 @@ def _install(billing=None):
 def _connection(payer=Payer.WORKSPACE, cost=RATE):
     return ToolConnection(
         connection_id="conn-1",
-        connector="ru.yandex/search-api",
+        connector="example.com/search-api",
         tool="web_search",
         payer=payer,
         cost_model=parse_cost_model(cost),
@@ -150,7 +150,7 @@ def _connection(payer=Payer.WORKSPACE, cost=RATE):
 def _call(*, connection=None, policy=None, approved=False, task_id="task-1", client_id=None):
     return GovernedToolCall(
         authorization=ToolAuthorizationRequest(
-            tool_name="yandex__web_search",
+            tool_name="example__web_search",
             tool_args={"query": "agentarea"},
             user_id="runner",
             workspace_id="ws-1",
@@ -185,9 +185,9 @@ async def test_a_call_on_the_customers_key_writes_a_line_at_its_declared_rate():
     assert usage == result.usages[0]
     assert (usage.connection_id, usage.connector, usage.tool, usage.tool_name) == (
         "conn-1",
-        "ru.yandex/search-api",
+        "example.com/search-api",
         "web_search",
-        "yandex__web_search",
+        "example__web_search",
     )
     assert (usage.payer, usage.source, usage.quantity, usage.unit) == (
         Payer.WORKSPACE,
@@ -195,8 +195,8 @@ async def test_a_call_on_the_customers_key_writes_a_line_at_its_declared_rate():
         Decimal(1),
         "request",
     )
-    assert (usage.vendor_cost, usage.vendor_currency) == (Decimal("0.488"), "RUB")
-    assert (usage.amount, usage.currency, usage.estimate) == (Decimal("0.488"), "RUB", True)
+    assert (usage.vendor_cost, usage.vendor_currency) == (Decimal("0.488"), "EUR")
+    assert (usage.amount, usage.currency, usage.estimate) == (Decimal("0.488"), "EUR", True)
     assert (usage.line_key, usage.agent_id, usage.task_id) == ("call-9", AGENT, "task-1")
     assert result.cost == Decimal("0.488")
 
@@ -213,13 +213,13 @@ async def test_the_spend_gate_is_told_what_the_call_will_cost_before_it_runs():
     gate = SpendGate()
     cost = {
         "source": "rate",
-        "rate": {"amount": "0.01", "currency": "RUB", "quantity": {"arg": "n", "default": 50}},
+        "rate": {"amount": "0.01", "currency": "EUR", "quantity": {"arg": "n", "default": 50}},
     }
 
     await _run(_call(connection=_connection(cost=cost)), gate=gate)
 
     [(_, pending)] = gate.calls
-    assert pending == (Decimal("0.50"), "RUB")
+    assert pending == (Decimal("0.50"), "EUR")
 
 
 async def test_the_spend_gate_refuses_before_the_vendor_is_called():
@@ -230,7 +230,7 @@ async def test_the_spend_gate_refuses_before_the_vendor_is_called():
         vendor,
         audit=audit,
         ledger=ledger,
-        gate=SpendGate("agent spend cap of 1 RUB reached"),
+        gate=SpendGate("agent spend cap of 1 EUR reached"),
     )
 
     assert result.verdict is Verdict.DENIED
@@ -247,17 +247,17 @@ async def test_a_platform_call_holds_what_billing_charges_and_its_line_carries_t
 
     [request] = billing.authorizations
     assert request["workspace_id"] == "ws-1"
-    assert (request["connector"], request["tool"]) == ("ru.yandex/search-api", "web_search")
-    assert (request["vendor_cost"], request["vendor_currency"]) == (Decimal("0.488"), "RUB")
+    assert (request["connector"], request["tool"]) == ("example.com/search-api", "web_search")
+    assert (request["vendor_cost"], request["vendor_currency"]) == (Decimal("0.488"), "EUR")
     assert request["idempotency_key"].startswith("hold:call-9:")
     [(_, pending)] = gate.calls
-    assert pending == (Decimal("0.64"), "RUB")
+    assert pending == (Decimal("0.64"), "EUR")
     [usage] = ledger.lines
     assert (usage.payer, usage.vendor_cost, usage.amount, usage.currency, usage.estimate) == (
         Payer.PLATFORM,
         Decimal("0.488"),
         Decimal("0.64"),
-        "RUB",
+        "EUR",
         True,
     )
     assert usage.evidence == {"hold_id": "hold-1", "settle": "capture"}
@@ -334,7 +334,7 @@ async def test_a_retry_whose_line_is_already_written_voids_its_own_new_hold():
 async def test_a_platform_tool_whose_cost_is_unknown_before_the_call_is_refused():
     billing = _install()
     vendor = Vendor()
-    reported = {"source": "reported", "reported": {"path": "$.cost", "currency": "RUB"}}
+    reported = {"source": "reported", "reported": {"path": "$.cost", "currency": "EUR"}}
 
     result = await _run(_call(connection=_connection(Payer.PLATFORM, cost=reported)), vendor)
 
@@ -413,7 +413,7 @@ async def test_billing_converts_a_foreign_currency_cost_on_the_customers_key_wit
     )
 
     [usage] = ledger.lines
-    assert (usage.amount, usage.currency) == (Decimal("1.90"), "RUB")
+    assert (usage.amount, usage.currency) == (Decimal("1.90"), "EUR")
     [line] = billing.quotes
     assert (line.payer, line.vendor_cost, line.vendor_currency) == (
         "workspace",
@@ -442,13 +442,13 @@ async def test_a_settled_cost_writes_its_estimate_and_what_to_settle_it_with():
     ledger = Ledger()
     cost = {
         "source": "settled",
-        "estimate": {"amount": "0.10", "currency": "RUB"},
+        "estimate": {"amount": "0.10", "currency": "EUR"},
         "settled": {
             "fetch": {
                 "url": "https://api.apify.com/v2/actor-runs/{run_id}",
                 "params": {"run_id": "$.data.id"},
                 "cost": "$.data.usageTotalUsd",
-                "currency": "RUB",
+                "currency": "EUR",
             }
         },
     }
@@ -512,7 +512,7 @@ async def test_policy_denies_before_any_gate():
     billing, gate, vendor = _install(), SpendGate(), Vendor()
 
     result = await _run(
-        _call(connection=_connection(Payer.PLATFORM), policy={"tools": {"denied": ["yandex__*"]}}),
+        _call(connection=_connection(Payer.PLATFORM), policy={"tools": {"denied": ["example__*"]}}),
         vendor,
         gate=gate,
     )
@@ -522,7 +522,7 @@ async def test_policy_denies_before_any_gate():
 
 
 async def test_a_held_call_waits_for_its_approval_and_then_runs():
-    policy = {"approval": {"escalation_rules": ["yandex__*"]}}
+    policy = {"approval": {"escalation_rules": ["example__*"]}}
     vendor, ledger = Vendor(), Ledger()
 
     held = await _run(_call(connection=_connection(), policy=policy), vendor, ledger=ledger)

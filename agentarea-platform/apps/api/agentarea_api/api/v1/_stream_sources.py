@@ -24,7 +24,7 @@ from agentarea_secrets.catalog_service import (
 from agentarea_streams.application.source_credentials import credential_secret_name
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain.source_types import SourceTypeEntry
-from agentarea_streams.domain.verification import configured
+from agentarea_streams.domain.verification import VerificationError, configured
 from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
 from agentarea_streams.infrastructure.orm import StreamSourceORM
 from agentarea_streams.schemas import SecretRef, SourceCreate
@@ -80,7 +80,7 @@ def check_source(entry: SourceTypeEntry, payload: SourceCreate) -> None:
     if entry.verification is not None:
         try:
             configured(entry.verification, payload.config)
-        except ValidationError as error:
+        except (ValidationError, VerificationError) as error:
             raise HTTPException(
                 status_code=422, detail=f"{name} cannot verify with these settings: {error}"
             ) from error

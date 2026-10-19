@@ -16,7 +16,7 @@ from uuid import UUID
 from agentarea_common.auth.context import UserContext
 from agentarea_common.broker.redis_streams import RedisStreamsBroker
 from agentarea_common.config import RedisSettings, get_settings
-from agentarea_common.events.contract import LLM_CHUNK
+from agentarea_common.events.contract import LLM_CHUNK, TOOL_CALL, TOOL_RESULT
 from agentarea_common.events.task_stream import (
     TaskEventEnvelope,
     TaskEventsHub,
@@ -108,8 +108,12 @@ async def _iter_snapshot(
     after: TaskEventEnvelope | None = None,
     *,
     batch_size: int = SNAPSHOT_BATCH_SIZE,
+    revealed: bool = False,
 ) -> AsyncIterator[TaskEventEnvelope]:
-    """The task's feed rows from the log in ``seq`` order, after ``after`` when a client resumes."""
+    """The task's feed rows from the log in ``seq`` order, after ``after`` when a client resumes.
+
+    ``revealed``: the caller holds the task's authority (``FeedBodies``).
+    """
     from agentarea_api.api.deps.database import get_db_session
 
     position = after.seq if after is not None and after.seq is not None else -1
@@ -117,7 +121,7 @@ async def _iter_snapshot(
         async with get_db_session() as session:
             reader = TaskFeedReader(session, user_context)
             entries = await reader.after(UUID(task_id), after_seq=position, limit=batch_size)
-            bodies = await reader.bodies(UUID(task_id), entries)
+            bodies = await reader.bodies(UUID(task_id), entries, revealed=revealed)
         for entry in entries:
             envelope = feed_envelope(entry, bodies)
             if envelope is not None:
@@ -125,6 +129,31 @@ async def _iter_snapshot(
         if len(entries) < batch_size:
             return
         position = entries[-1].seq
+
+
+async def _revealed(
+    task_id: str, user_context: UserContext, env: TaskEventEnvelope
+) -> TaskEventEnvelope:
+    """A live tool event as the task's authority sees it: read back from the log.
+
+    The broker carries every event as the event log redacts it; the log holds
+    the command and output the authority may see. The run writes its log
+    before it publishes, so the row is there.
+    """
+    if env.event_type not in (TOOL_CALL, TOOL_RESULT) or env.seq is None:
+        return env
+    from agentarea_api.api.deps.database import get_db_session
+
+    async with get_db_session() as session:
+        reader = TaskFeedReader(session, user_context)
+        entry = await reader.at(UUID(task_id), env.seq)
+        if entry is None:
+            raise LookupError(f"task {task_id} has no log row {env.seq} for its live event")
+        bodies = await reader.bodies(UUID(task_id), [entry], revealed=True)
+    shown = feed_envelope(entry, bodies)
+    if shown is None:
+        raise LookupError(f"task {task_id} log row {env.seq} is not a feed row")
+    return shown
 
 
 # Incremental LLM chunk event type (canonical) dropped when a caller opts out
@@ -141,6 +170,7 @@ async def open_task_event_feed(
     include_chunks: bool = True,
     follow_execution: bool = False,
     last_event_id: str | None = None,
+    revealed: bool = False,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's feed: its log, then live entries.
 
@@ -153,7 +183,9 @@ async def open_task_event_feed(
     add the chunk types to ``exclude_types``. ``last_event_id`` (the SSE
     ``Last-Event-ID``) is the ``seq`` of the last entry the client has; one
     this task's feed does not have replays the whole history, which the client
-    dedups by event id.
+    dedups by event id. ``revealed`` says the caller holds the task's authority:
+    tool calls, replayed and live, show their command and output with secrets
+    masked; for anyone else they stay as the event log redacts them.
     """
     if not include_chunks:
         exclude_types = exclude_types | CHUNK_EVENT_TYPES
@@ -170,11 +202,12 @@ async def open_task_event_feed(
     async for env in iter_task_event_feed(
         hub=task_events_hub(),
         task_id=tid,
-        snapshot=lambda: _iter_snapshot(tid, user_context, resume_after),
+        snapshot=lambda: _iter_snapshot(tid, user_context, resume_after, revealed=revealed),
         terminal_types=terminal_types,
         exclude_types=exclude_types,
         follow_execution=follow_execution,
         resume_after=resume_after,
         run_open=lambda: _run_open(tid, user_context),
+        live_view=(lambda env: _revealed(tid, user_context, env)) if revealed else None,
     ):
         yield env

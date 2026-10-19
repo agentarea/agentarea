@@ -849,6 +849,17 @@ class UpdateTaskGovernanceSnapshotResult(BaseModel):
     error: str | None = None
 
 
+class DelegatedSpendRequest(BaseModel):
+    """What a delegated agent's task spent, read from the spend ledger."""
+
+    task_id: UUID
+    user_context_data: dict[str, Any]
+
+
+class DelegatedSpendResult(BaseModel):
+    spent: Money = Field(ge=ZERO)
+
+
 class MonthlySpendCapRequest(BaseModel):
     """Compare month-to-date spend with the run's monthly caps.
 

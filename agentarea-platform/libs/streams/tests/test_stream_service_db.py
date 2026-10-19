@@ -175,14 +175,14 @@ async def test_a_standalone_source_holds_its_credentials_under_its_own_id():
             source = await service.add_source(
                 stream_id=stream.id,
                 kind=SourceKind.WEBHOOK,
-                source_type="yookassa",
+                source_type="example_pay",
                 webhook_config={"shop_id": "1"},
                 event_templates=None,
             )
             await session.commit()
             assert source.credential_key == source.id
             assert source.webhook_id and len(source.webhook_id) >= 16
-            assert source.webhook_type == "yookassa"
+            assert source.webhook_type == "example_pay"
             assert source.webhook_config == {"shop_id": "1"}
             assert [s.id for s in await service.list_sources(stream.id)] == [source.id]
             removed = await service.delete_source(stream.id, source.id)

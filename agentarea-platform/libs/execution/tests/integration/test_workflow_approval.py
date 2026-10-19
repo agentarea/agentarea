@@ -15,6 +15,7 @@ import json
 import threading
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,6 +33,8 @@ from agentarea_execution.models import (
     ArtifactValidationResult,
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
+    DelegatedSpendRequest,
+    DelegatedSpendResult,
     LLMCallRequest,
     MCPToolRequest,
     ResolveAgentToolsRequest,
@@ -172,6 +175,11 @@ async def _mock_create_delegation_task(
     )
 
 
+@activity.defn(name="delegated_task_spend_activity")
+async def _mock_delegated_spend(_request: DelegatedSpendRequest) -> DelegatedSpendResult:
+    return DelegatedSpendResult(spent=Decimal("0.002"))
+
+
 def _reply(tool_name: str, arguments: dict[str, Any], call_id: str) -> dict[str, Any]:
     return {
         "content": "",
@@ -290,6 +298,7 @@ _ALL_ACTIVITIES = [
     _mock_resolve_model,
     _mock_resolve_agent_tools,
     _mock_create_delegation_task,
+    _mock_delegated_spend,
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
@@ -678,6 +687,8 @@ async def test_a_delegated_childs_task_records_the_workflow_it_runs_as():
     assert created.execution_id is not None
     assert created.execution_id.startswith("delegation-")
     assert created.execution_id.endswith("-call_delegate_1")
+    # Nothing else marks the child's task running; its run does as it starts.
+    assert _status_updates.count("running") == 1
 
 
 @pytest.mark.asyncio
@@ -715,3 +726,43 @@ async def test_stopping_the_parent_while_its_child_works_records_the_delegation_
         if entry.role == "tool" and entry.tool_call_id == "call_delegate_1"
     ]
     assert [json.loads(entry.content)["status"] for entry in answers] == ["cancelled"]
+
+
+@pytest.mark.asyncio
+async def test_stopping_only_the_child_answers_the_delegation_and_the_parent_carries_on():
+    global _hold_child
+    _hold_child = True
+    _child_started.clear()
+    _release_child.clear()
+    _llm_script.extend(["delegate", "complete"])
+    request = _request(_policy())
+
+    async def drive(handle):
+        for _ in range(400):
+            if _child_started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        else:
+            raise AssertionError("the child never started")
+        child = handle._client.get_workflow_handle(f"delegation-{handle.id}-call_delegate_1")
+        await child.cancel()
+        _release_child.set()
+
+    try:
+        result, history = await _execute(request, drive)
+    finally:
+        _hold_child = False
+        _release_child.set()
+
+    assert result.success is True
+    [stopped] = [e["data"] for e in _events("delegation.failed")]
+    assert stopped["cancelled"] is True
+    answers = [
+        entry
+        for entry in _TASK_LOG.entries(str(request.task_id))
+        if entry.role == "tool" and entry.tool_call_id == "call_delegate_1"
+    ]
+    assert [json.loads(entry.content)["status"] for entry in answers] == ["cancelled"]
+    # The parent carries what the stopped child spent, not its whole allocation.
+    assert result.total_cost < Decimal("0.1")
+    await _replay(history)

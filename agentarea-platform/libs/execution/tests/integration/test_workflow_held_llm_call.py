@@ -37,7 +37,7 @@ from temporalio.worker import Worker
 published: list[dict] = []
 BILLING = {
     "amount": "2.85",
-    "currency": "RUB",
+    "currency": "EUR",
     "vendor_cost": "0.02",
     "vendor_currency": "USD",
     "estimate": True,
@@ -96,7 +96,7 @@ async def call_llm(request: LLMCallRequest) -> dict[str, Any]:
         ],
         "cost": "2.85",
         "provider_cost_usd": "0.02",
-        "currency": "RUB",
+        "currency": "EUR",
         "managed_by": "platform",
         "usage": {
             "prompt_tokens": 100,

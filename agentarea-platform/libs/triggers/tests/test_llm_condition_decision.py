@@ -41,7 +41,7 @@ class Billing:
         self.authorizations, self.quotes, self.voids = [], [], []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.authorizations.append(request)
@@ -51,7 +51,7 @@ class Billing:
             reason="no credits remaining" if not self.allowed else "",
             hold_id="hold-1" if self.allowed else None,
             amount=Decimal("19.00") if self.allowed else None,
-            currency="RUB",
+            currency="EUR",
             expires_at=None,
         )
 
@@ -68,7 +68,7 @@ class Billing:
 
 @pytest.fixture(autouse=True)
 def rub_deployment_without_billing(monkeypatch):
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     ExtensionRegistry.clear()
     tool_billing.get_tool_billing.cache_clear()
     yield
@@ -266,7 +266,7 @@ async def test_a_chat_condition_on_the_platforms_key_is_held_before_the_call():
     )
     assert line.task_id is None
     assert line.payer == Payer.PLATFORM
-    assert line.currency == "RUB"
+    assert line.currency == "EUR"
     assert line.evidence["hold_id"] == "hold-1"
     assert line.evidence["settle"] == "capture"
     assert line.evidence["purpose"] == "trigger_condition"
@@ -299,7 +299,7 @@ async def test_a_condition_past_a_monthly_llm_cap_never_reaches_the_model(kind):
     ledger = _Ledger()
     agent_id = uuid4()
     refuse = AsyncMock(
-        side_effect=SpendCapReachedError("Workspace monthly LLM spend cap reached (2 RUB/2 RUB)")
+        side_effect=SpendCapReachedError("Workspace monthly LLM spend cap reached (2 EUR/2 EUR)")
     )
 
     with (
@@ -352,7 +352,7 @@ async def test_a_decision_condition_writes_one_model_line_carrying_its_hold():
     assert line.payer == Payer.PLATFORM
     assert line.evidence["hold_id"] == "hold-1"
     assert line.evidence["trigger_id"] == "trigger-1"
-    assert (line.amount, line.currency) == (Decimal("0.300"), "RUB")
+    assert (line.amount, line.currency) == (Decimal("0.300"), "EUR")
     assert (line.vendor_cost, line.provider_cost_usd) == (Decimal("0.002"), Decimal("0.002"))
     assert billing.voids == []
 

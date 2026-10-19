@@ -168,6 +168,7 @@ class Activities:
     SEARCH_HISTORY: Final[str] = "search_history"
     # Delegation
     CREATE_DELEGATION_TASK: Final[str] = "create_delegation_task_activity"
+    DELEGATED_TASK_SPEND: Final[str] = "delegated_task_spend_activity"
     # Model resolution
     RESOLVE_MODEL: Final[str] = "resolve_model_activity"
 

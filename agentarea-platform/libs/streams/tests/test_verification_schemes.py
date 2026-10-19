@@ -142,11 +142,11 @@ async def test_a_shared_token_must_be_repeated_exactly():
         await _verify(scheme, {"x-telegram-bot-api-secret-token": "u"}, {"secret_token": "t"})
 
 
-YOOKASSA = Verification(
+EXAMPLE_PAY = Verification(
     scheme="api_lookup",
     request={
         "method": "GET",
-        "url": "https://api.yookassa.ru/v3/{collection}/{body:object.id}",
+        "url": "https://api.payments.example/v3/{collection}/{body:object.id}",
         "auth": {"username": "{config.shop_id}", "password": "{credentials.secret_key}"},
     },
     collection_from="{body:event}",
@@ -165,14 +165,14 @@ async def test_api_lookup_believes_a_notification_the_providers_api_confirms():
 
     notification = {"event": "payment.succeeded", "object": {"id": "p1", "status": "succeeded"}}
     await _verify(
-        YOOKASSA,
+        EXAMPLE_PAY,
         {},
         {"secret_key": "live_x"},
         parsed=notification,
         config={"shop_id": "42"},
         lookup=lookup,
     )
-    assert calls == [("GET", "https://api.yookassa.ru/v3/payments/p1", ("42", "live_x"))]
+    assert calls == [("GET", "https://api.payments.example/v3/payments/p1", ("42", "live_x"))]
 
 
 async def test_api_lookup_accepts_a_state_the_object_has_moved_on_to_and_refuses_others():
@@ -187,9 +187,9 @@ async def test_api_lookup_accepts_a_state_the_object_has_moved_on_to_and_refuses
         "object": {"id": "p1", "status": "waiting_for_capture"},
     }
     kwargs = {"parsed": waiting, "config": {"shop_id": "42"}}
-    await _verify(YOOKASSA, {}, {"secret_key": "k"}, lookup=captured, **kwargs)
+    await _verify(EXAMPLE_PAY, {}, {"secret_key": "k"}, lookup=captured, **kwargs)
     with pytest.raises(VerificationError):
-        await _verify(YOOKASSA, {}, {"secret_key": "k"}, lookup=canceled_elsewhere, **kwargs)
+        await _verify(EXAMPLE_PAY, {}, {"secret_key": "k"}, lookup=canceled_elsewhere, **kwargs)
 
 
 async def test_no_verification_passes_everything():
@@ -207,3 +207,14 @@ def test_a_source_overrides_only_the_settings_its_entry_makes_configurable():
     assert (mine.header, mine.algorithm, mine.secret) == ("X-Hasura-Sig", "sha1", "signing_secret")
     with pytest.raises(ValueError):
         configured(generic, {"algorithm": "md5"})
+
+
+@pytest.mark.parametrize("scheme", ["none", "api_lookup", "ed25519"])
+def test_a_source_cannot_switch_itself_to_a_scheme_that_signs_nothing_of_its_own(scheme):
+    generic = Verification(
+        scheme="hmac", secret="signing_secret", header="X-Webhook-Signature", configurable=["scheme"]
+    )
+    with pytest.raises(VerificationError):
+        configured(generic, {"scheme": scheme})
+    for signing in ("hmac", "hmac_timestamped", "shared_token"):
+        assert configured(generic, {"scheme": signing}).scheme == signing

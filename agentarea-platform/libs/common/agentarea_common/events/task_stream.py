@@ -247,6 +247,7 @@ async def iter_task_event_feed(
     resume_after: TaskEventEnvelope | None = None,
     run_open: Callable[[], Awaitable[bool]] | None = None,
     max_wall_time_seconds: float = 30 * 60,
+    live_view: Callable[[TaskEventEnvelope], Awaitable[TaskEventEnvelope]] | None = None,
 ) -> AsyncIterator[TaskEventEnvelope]:
     """Yield a task's feed: its log after ``resume_after``, then live entries.
 
@@ -261,7 +262,8 @@ async def iter_task_event_feed(
     A task's conversation can go on in a later run after one ended, so history
     is replayed in full: a terminal event closes the feed only when no later
     ``task.started`` opened a new run. ``run_open`` says whether a run that has
-    not reported yet was started since; the feed then tails it.
+    not reported yet was started since; the feed then tails it. ``live_view``
+    turns a live entry, as the broker carries it, into what this caller sees.
     """
     terminal = frozenset(canonical_type(t) for t in terminal_types)
     excluded = frozenset(canonical_type(t) for t in exclude_types)
@@ -292,6 +294,8 @@ async def iter_task_event_feed(
                         last_seq = env.seq
                     if canonical_type(env.event_type) in excluded:
                         continue
+                    if live_view is not None:
+                        env = await live_view(env)
                     yield env
                     if _ends_feed(env, terminal, follow_execution):
                         return

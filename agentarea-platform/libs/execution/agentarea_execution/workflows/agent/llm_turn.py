@@ -582,13 +582,15 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     # Which model produced this. Token counts are meaningless without
                     # it — the same 1000 tokens cost very different amounts depending
                     # on the model, so no consumer can interpret `usage` without it.
-                    "model_id": self.state.agent_config.get("model_id"),
+                    # The call's own model: a change_model landing during the call
+                    # has already moved the run's.
+                    "model_id": llm_request.model_id or None,
                     # The provider's own name for the model, alongside the instance id
                     # above. The id identifies a row; this identifies what was actually
                     # bought, and it survives the row being deleted or recreated —
                     # which a metered fact has to, because it is priced and invoiced
                     # long after the run.
-                    "model_name": (self.state.resolved_model or {}).get("model_name"),
+                    "model_name": (llm_request.resolved_model or {}).get("model_name"),
                     # Whose credentials paid the provider. Without it there is no way
                     # to tell a run on the operator's key — real money out of our
                     # account, and the only kind that must be recovered from the

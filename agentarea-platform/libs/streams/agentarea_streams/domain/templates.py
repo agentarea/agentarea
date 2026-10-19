@@ -19,9 +19,10 @@ body has no action). Nothing is computed, converted or branched on.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import quote
 
 _PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
 
@@ -103,8 +104,16 @@ def placeholder_value(expression: str, context: TemplateContext) -> Any:
     return None
 
 
-def render(template: str | None, context: TemplateContext) -> str | None:
-    """The template filled in, or None when it is None or any placeholder has no value."""
+def render(
+    template: str | None,
+    context: TemplateContext,
+    *,
+    encode: Callable[[str], str] | None = None,
+) -> str | None:
+    """The template filled in, or None when it is None or any placeholder has no value.
+
+    ``encode`` is applied to each filled-in value, not to the template's own text.
+    """
     if template is None:
         return None
     parts: list[str] = []
@@ -114,10 +123,16 @@ def render(template: str | None, context: TemplateContext) -> str | None:
         value = placeholder_value(match.group(1), context)
         if value is None or value == "":
             return None
-        parts.append(value if isinstance(value, str) else _scalar(value))
+        text = value if isinstance(value, str) else _scalar(value)
+        parts.append(encode(text) if encode is not None else text)
         position = match.end()
     parts.append(template[position:])
     return "".join(parts)
+
+
+def render_url(template: str | None, context: TemplateContext) -> str | None:
+    """A URL template filled in with each value percent-encoded, so it fills one segment."""
+    return render(template, context, encode=lambda text: quote(text, safe=""))
 
 
 def render_first(templates: str | list[str] | None, context: TemplateContext) -> str | None:

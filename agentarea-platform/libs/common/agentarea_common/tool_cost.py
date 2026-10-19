@@ -373,19 +373,27 @@ def tool_connection(
     payers: Any,
     cost: Any,
     override: Any = None,
+    from_catalog: bool = False,
 ) -> ToolConnection:
     """A call's connection as its connector declares it; a payer it does not allow raises.
 
     A platform-managed connection runs on the platform's key, any other on the
     workspace's. ``override`` is the cost a member set on a connection the workspace
     pays for, which wins over the connector's. Wallet payments are metered from the
-    call, not declared here.
+    call, not declared here. ``from_catalog`` says ``cost`` is a catalog entry's: only
+    one may be settled, since the settle URL receives the connection's credential.
     """
     payer = Payer.PLATFORM if platform_managed else Payer.WORKSPACE
     if payer not in connector_payers(payers):
         raise ToolCostError(f"{connector} does not allow calls paid by the {payer.value}")
     if override is None:
-        return ToolConnection(connection_id, connector, tool, payer, parse_cost_model(cost))
+        model = parse_cost_model(cost)
+        if model.source is CostSourceKind.SETTLED and not from_catalog:
+            raise ToolCostError(
+                "only a catalog entry may declare a settled cost: its URL receives the "
+                + "connection's credential"
+            )
+        return ToolConnection(connection_id, connector, tool, payer, model)
     if payer is Payer.PLATFORM:
         raise ToolCostError("the cost of a connection the platform pays for is not set on it")
     return ToolConnection(connection_id, connector, tool, payer, parse_connection_cost(override))

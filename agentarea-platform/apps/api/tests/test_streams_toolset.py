@@ -264,4 +264,4 @@ async def test_source_types_are_served_to_mcp_callers_too(monkeypatch):
     monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_read_context", ctx)
     monkeypatch.setattr("agentarea_api.api.v1.streams.CatalogSourceTypeRepository", _Catalog)
     types = json.loads(await StreamsToolset().list_source_types())
-    assert {"sentry", "yookassa", "github", "generic_webhook"} <= {t["slug"] for t in types}
+    assert {"sentry", "stripe", "github", "generic_webhook"} <= {t["slug"] for t in types}

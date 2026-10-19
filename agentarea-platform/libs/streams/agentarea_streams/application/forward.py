@@ -4,6 +4,9 @@ A forward never writes into its own input (``StreamService.create_forward``
 refuses it), so only the causation depth is checked here; it bounds a chain of
 forwards that loops back through other streams.
 
+A copy keeps the source and source type of the event it copies: sender
+admission reads them, and a copy must not open a door the original could not.
+
 Each copy's id derives from ``uuid5(forward, source event id)`` and its output
 stream: a redelivered event publishes the same ids again, and the bus drops the
 repeats.
@@ -72,6 +75,7 @@ class ForwardHandler:
                     event_key=f"{event.stream_id}:{event.id}",
                     depth=depth,
                     event_id=derived_id,
+                    source_id=event.source_id,
                     source_type=event.source_type,
                     session_key=event.session_key,
                     sender=event.sender,

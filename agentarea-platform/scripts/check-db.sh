@@ -97,6 +97,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     A stream trigger's run is told the journaled event it fired on.
 #     A source added without a trigger holds a picked workspace secret by a
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
+#     The phase-4 migration leaves a JSON-null webhook_config an object, not
+#     the array jsonb's null || {} makes.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
@@ -147,6 +149,7 @@ PY_SUITES=(
   libs/streams/tests/test_router_db.py
   apps/api/tests/test_webhook_source_intake_db.py
   apps/api/tests/test_stream_sources_db.py
+  apps/api/tests/test_phase4_sources_migration_db.py
   libs/triggers/tests/test_reactions_db.py
   libs/triggers/tests/test_routed_follow_up_once_db.py
   libs/triggers/tests/test_needs_owner_db.py

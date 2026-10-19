@@ -372,7 +372,13 @@ class TaskFeedReader:
         )
         return [entry_from_row(row) for row in result.scalars().all()], total
 
-    async def bodies(self, task_id: UUID, entries: Sequence[ConversationEntry]) -> FeedBodies:
+    async def bodies(
+        self,
+        task_id: UUID,
+        entries: Sequence[ConversationEntry],
+        *,
+        revealed: bool = False,
+    ) -> FeedBodies:
         """The full tool arguments and results behind the tool events among ``entries``."""
         call_ids = {
             call_id
@@ -398,7 +404,9 @@ class TaskFeedReader:
                 ),
             )
         )
-        return FeedBodies.of(entry_from_row(row) for row in result.scalars().all())
+        return FeedBodies.of(
+            (entry_from_row(row) for row in result.scalars().all()), revealed=revealed
+        )
 
     async def at(self, task_id: UUID, seq: int) -> ConversationEntry | None:
         """The feed row at ``seq``, or None when that row is not one the feed shows."""

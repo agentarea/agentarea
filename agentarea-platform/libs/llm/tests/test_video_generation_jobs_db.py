@@ -132,7 +132,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             "media/x.mp4",
             cost_usd=Decimal("1.25"),
             billed_cost=Decimal("125"),
-            billing={"amount": "125", "currency": "RUB", "hold_id": "hold-1", "settle": "capture"},
+            billing={"amount": "125", "currency": "EUR", "hold_id": "hold-1", "settle": "capture"},
             call_ref=call_ref,
         )
 

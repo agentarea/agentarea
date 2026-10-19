@@ -68,7 +68,7 @@ async def test_activity_passes_context_and_relays_progress(harness):
 
     mcp_service = harness.ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
-    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
     task_id = str(uuid4())
     request = MCPToolRequest(

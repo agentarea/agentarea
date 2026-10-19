@@ -277,3 +277,21 @@ async def test_a_telegram_trigger_without_admission_lets_nobody_through():
         result = await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
     assert result.verdict == Verdict.ERROR
     service.fire.assert_not_awaited()
+
+
+async def test_a_body_moved_to_files_is_fired_with_the_body_as_sent():
+    trigger = _trigger()
+    service = _service()
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock(return_value=TriggerFiring(outcome="reacted", task_id=uuid4()))
+    event = _event()
+    event.data = {"headers": {}, "body": None, "body_ref": "events/s/e/body.json"}
+    body = {"text": "a long mail"}
+    with patch(
+        "agentarea_triggers.stream_subscriber.event_body", AsyncMock(return_value=body)
+    ) as read:
+        await _handler(service).handle(_sub(trigger.id), event, AsyncMock())
+    read.assert_awaited_once_with(event.data, "w")
+    told = service.fire.await_args.kwargs["event"]
+    assert told.data == service.fire.await_args.args[1]
+    assert told.data["body"] == body

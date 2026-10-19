@@ -26,13 +26,18 @@ from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import workspace_scope
-from agentarea_common.events.ports import IntegrationEvent, UnprocessableEventError
+from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..domain.enums import GAVE_UP_REASON, SubscriptionKind, SubscriptionStatus, Verdict
 from ..domain.filters import EventFilter
-from ..domain.models import HandlerResult, StreamEvent, SubscriptionView
+from ..domain.models import (
+    HandlerResult,
+    StreamEvent,
+    SubscriptionView,
+    consumed_stream_event,
+)
 from ..domain.ports import ReactionLog, SubscriptionHandler
 from ..infrastructure.orm import StreamSubscriptionORM
 from ..infrastructure.repository import StreamSubscriptionRepository
@@ -48,13 +53,6 @@ def _utcnow() -> datetime:
 
 class ReactionsFailedError(RuntimeError):
     """Some subscriptions could not react; the event is redelivered for them."""
-
-
-def _stream_event(message: IntegrationEvent) -> StreamEvent:
-    try:
-        return StreamEvent.from_bus(message)
-    except Exception as error:
-        raise UnprocessableEventError(f"not a stream event: {error}") from error
 
 
 def subscription_view(row: StreamSubscriptionORM) -> SubscriptionView:
@@ -108,7 +106,7 @@ class EventRouter:
             self._cache.pop(stream_id, None)
 
     async def handle(self, message: IntegrationEvent) -> None:
-        event = _stream_event(message)
+        event = consumed_stream_event(message)
         with workspace_scope(event.workspace_id):
             pending = await self._pending(event)
             failed: list[UUID] = []
@@ -133,7 +131,7 @@ class EventRouter:
 
     async def give_up(self, message: IntegrationEvent) -> None:
         """Record every reaction still missing as ``error``; the event is dead-lettered."""
-        event = _stream_event(message)
+        event = consumed_stream_event(message)
         with workspace_scope(event.workspace_id):
             for view in await self._pending(event):
                 async with self._session_factory() as session:

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agentarea_common.events.contract import MESSAGE_RECEIVED, TOOL_CALL, TOOL_RESULT
+from agentarea_common.events.redaction import reveal_tool_value, sanitize_tool_event_value
 
 from .models import ConversationEntry
 
@@ -19,14 +20,17 @@ class FeedBodies:
 
     The run's events carry bounded copies (the workflow keeps Temporal payloads
     small); the log's messages hold what the tool really got and returned. A
-    body stored outside its row is not here.
+    body stored outside its row is not here. ``revealed`` is for a reader who
+    holds the task's authority: the arguments and result whole, with their
+    secrets masked. Anyone else sees them as the event log redacts them.
     """
 
     results: dict[str, str] = field(default_factory=dict)
     arguments: dict[str, Any] = field(default_factory=dict)
+    revealed: bool = False
 
     @classmethod
-    def of(cls, rows: Iterable[ConversationEntry]) -> "FeedBodies":
+    def of(cls, rows: Iterable[ConversationEntry], *, revealed: bool = False) -> "FeedBodies":
         results: dict[str, str] = {}
         arguments: dict[str, Any] = {}
         for row in rows:
@@ -41,7 +45,7 @@ class FeedBodies:
                     if not call_id or not isinstance(function, dict):
                         continue
                     arguments[call_id] = _arguments(call_id, function.get("arguments"))
-        return cls(results=results, arguments=arguments)
+        return cls(results=results, arguments=arguments, revealed=revealed)
 
 
 def _arguments(call_id: str, raw: Any) -> Any:
@@ -73,9 +77,19 @@ def feed_event(
         call_id = data.get("tool_call_id")
         if bodies is not None and isinstance(call_id, str):
             if entry.name in (TOOL_CALL, TOOL_RESULT) and call_id in bodies.arguments:
-                data["arguments"] = bodies.arguments[call_id]
+                arguments = bodies.arguments[call_id]
+                data["arguments"] = (
+                    reveal_tool_value(arguments)
+                    if bodies.revealed
+                    else sanitize_tool_event_value(arguments)
+                )
             if entry.name == TOOL_RESULT and call_id in bodies.results:
-                data["result"] = bodies.results[call_id]
+                result = bodies.results[call_id]
+                data["result"] = (
+                    reveal_tool_value(result)
+                    if bodies.revealed
+                    else sanitize_tool_event_value(result, field_name="result")
+                )
         return entry.name, data
     if entry.kind == "message" and entry.role == "user":
         data = {

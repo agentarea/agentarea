@@ -836,6 +836,7 @@ def openapi_env(dispatch_env, monkeypatch):
     service = MagicMock()
     service.get_connection = AsyncMock(return_value=connection)
     service.catalog_connector = AsyncMock(return_value="com.google.analytics/admin/openapi")
+    service.catalog_spec = AsyncMock(return_value=connection.spec_content)
     return SimpleNamespace(
         events=dispatch_env.events,
         policy=dispatch_env.policy,

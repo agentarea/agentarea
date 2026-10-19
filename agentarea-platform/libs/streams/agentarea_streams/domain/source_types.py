@@ -60,6 +60,9 @@ class Verification(BaseModel):
     expect: dict[str, str] = Field(default_factory=dict)
     #: api_lookup: a state the object may already have moved on to from the notified one.
     later: dict[str, list[str]] = Field(default_factory=dict)
+    #: api_lookup: body paths recorded from the lookup in place of what the notification
+    #: said, from {fetched} (the object the API holds) and {notified.object}/{notified.state}.
+    record: dict[str, str] = Field(default_factory=dict)
     #: Settings a member may override per source, by config key.
     configurable: list[str] = Field(default_factory=list)
 

@@ -24433,7 +24433,7 @@
             "required": false,
             "schema": {
               "default": 100,
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"

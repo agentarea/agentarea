@@ -17,6 +17,8 @@ from ...interfaces import ActivityDependencies
 from ...models import (
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
+    DelegatedSpendRequest,
+    DelegatedSpendResult,
     MonthlySpendCapRequest,
     MonthlySpendCapResult,
     UpdateTaskGovernanceSnapshotRequest,
@@ -225,6 +227,20 @@ def make_task_state_activities(
         )
 
     @activity.defn
+    async def delegated_task_spend_activity(
+        request: DelegatedSpendRequest,
+    ) -> DelegatedSpendResult:
+        """What a delegated agent's task has spent, every line of it."""
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            spent = await TaskRepository(session, user_context).sum_task_spend(request.task_id)
+        return DelegatedSpendResult(spent=to_money(spent))
+
+    @activity.defn
     async def create_delegation_task_activity(
         request: CreateDelegationTaskRequest,
     ) -> CreateDelegationTaskResult:
@@ -323,4 +339,5 @@ def make_task_state_activities(
         update_task_governance_snapshot_activity,
         check_monthly_spend_cap_activity,
         create_delegation_task_activity,
+        delegated_task_spend_activity,
     ]

@@ -2,6 +2,18 @@
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
+from uuid import uuid4
+import pytest
+from agentarea_streams.application import forward
+from agentarea_streams.application.forward import ForwardHandler
+from agentarea_streams.domain import StreamEvent
+from agentarea_streams.domain.source_types import SourceTypeEntry
+from agentarea_triggers.channels import sender_admission
+from agentarea_triggers.channels.sender_admission import Refused, event_admission
+import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -225,3 +237,92 @@ async def test_an_account_linked_to_someone_else_is_not_moved():
     await admission.admit(object(), trigger, _message(ALICE_TG, "/start link_c0de"), DOOR)
     await admission.admit(object(), trigger, _message(ALICE_TG, "/confirm"), DOOR)
     assert "already linked to another" in sent[-1][1]
+
+
+# An event forwarded into another stream keeps its sender admission.
+
+CATALOG = Path(__file__).parents[4] / "data" / "catalog" / "source-types.json"
+ENTRIES = {
+    raw["slug"]: SourceTypeEntry.model_validate(raw)
+    for raw in json.loads(CATALOG.read_text())["source_types"]
+}
+
+
+class _Catalog:
+    def __init__(self, _session):
+        pass
+
+    async def get(self, slug):
+        return ENTRIES.get(slug)
+
+
+class _Session:
+    def __init__(self, *sources):
+        self.sources = {source.id: source for source in sources}
+
+    async def get(self, _model, source_id):
+        return self.sources.get(source_id)
+
+
+class _Ingest:
+    appended: list[StreamEvent] = []
+
+    def __init__(self, _session, user_context, _settings, _bus):
+        self.user_context = user_context
+
+    async def append(self, stream_id, event, *, event_key, depth, event_id, **stream_fields):
+        _Ingest.appended.append(
+            StreamEvent(
+                **event.model_dump(exclude={"id"}),
+                id=event_id,
+                stream_id=stream_id,
+                workspace_id=self.user_context.workspace_id,
+                created_by=self.user_context.user_id,
+                event_key=event_key,
+                received_at=datetime.now(UTC),
+                depth=depth,
+                **stream_fields,
+            )
+        )
+
+
+async def _forwarded(original: StreamEvent, monkeypatch) -> StreamEvent:
+    _Ingest.appended = []
+    monkeypatch.setattr(forward, "StreamIngest", _Ingest)
+    subscription = SimpleNamespace(
+        id=uuid4(), workspace_id="w", created_by="member", output_stream_ids=[uuid4()]
+    )
+    await ForwardHandler(SimpleNamespace(FORWARD_DEPTH=5), bus=None).handle(
+        subscription, original, session=None
+    )
+    [copy] = _Ingest.appended
+    return copy
+
+
+async def test_a_forwarded_telegram_message_from_an_unlinked_sender_is_refused(monkeypatch):
+    monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
+    original = _message(STRANGER_TG)
+    source = SimpleNamespace(
+        id=original.source_id, workspace_id="w", webhook_type="telegram", credential_key="k"
+    )
+    copy = await _forwarded(original, monkeypatch)
+    assert (copy.source_id, copy.source_type) == (original.source_id, "telegram")
+
+    door = await event_admission(_Session(source), copy)
+    assert door is not None
+    admission, _, calls = _admission()
+    assert isinstance(await admission.admit(object(), _trigger(), copy, door), Refused)
+    assert calls == []
+
+
+async def test_an_event_of_an_admitting_type_without_its_source_is_refused(monkeypatch):
+    monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
+    sourceless = _message(STRANGER_TG).model_copy(update={"source_id": None})
+    with pytest.raises(LookupError):
+        await event_admission(_Session(), sourceless)
+
+
+async def test_an_event_from_no_source_type_admits_anyone(monkeypatch):
+    monkeypatch.setattr(sender_admission, "CatalogSourceTypeRepository", _Catalog)
+    published = _message(STRANGER_TG).model_copy(update={"source_id": None, "source_type": None})
+    assert await event_admission(_Session(), published) is None

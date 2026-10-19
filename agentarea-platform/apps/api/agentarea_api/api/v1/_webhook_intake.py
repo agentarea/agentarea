@@ -130,7 +130,7 @@ class WebhookSourceIntake:
                         self._secret_reader_for(session, context), slug, source.credential_key
                     )
                     scheme = configured(entry.verification, source.webhook_config or {})
-                    await verify_request(
+                    body = await verify_request(
                         scheme,
                         headers=headers,
                         raw_body=raw_body,

@@ -48,7 +48,7 @@ def _monthly_check(monkeypatch, llm_cap_message: str | None = None) -> list:
         return MonthlySpendCapResult(
             exceeded=False,
             month_to_date_usd=Decimal("0"),
-            currency="RUB",
+            currency="EUR",
             llm_cap_message=llm_cap_message,
         )
 
@@ -59,7 +59,7 @@ def _monthly_check(monkeypatch, llm_cap_message: str | None = None) -> list:
 async def test_a_monthly_llm_cap_reached_stops_the_run_before_its_first_turn(monkeypatch):
     llm_cap = {"amount_usd": "2", "category": "llm", "own_agent": True}
     workflow = _workflow(monkeypatch, llm_cap)
-    requests = _monthly_check(monkeypatch, "Agent monthly LLM spend cap reached (2 RUB/2 RUB)")
+    requests = _monthly_check(monkeypatch, "Agent monthly LLM spend cap reached (2 EUR/2 EUR)")
 
     await workflow._check_monthly_spend_cap()
 
@@ -67,7 +67,7 @@ async def test_a_monthly_llm_cap_reached_stops_the_run_before_its_first_turn(mon
     assert (request.agent_id, request.llm_caps) == ("agent-1", [llm_cap])
     should_continue, reason, message = workflow._should_continue_execution()
     assert (should_continue, reason) == (False, "monthly_spend_cap_exceeded")
-    assert message == "Agent monthly LLM spend cap reached (2 RUB/2 RUB)"
+    assert message == "Agent monthly LLM spend cap reached (2 EUR/2 EUR)"
 
 
 async def test_a_tools_or_run_cap_is_not_read_when_the_run_starts(monkeypatch):
@@ -126,7 +126,7 @@ async def test_a_model_call_refused_at_a_monthly_cap_stops_the_run_as_the_start_
     workflow.event_manager = EventManager("task-1", "agent-1", "execution-1")
     monkeypatch.setattr(workflow, "_publish_events_immediately", AsyncMock())
     refusal = ApplicationError(
-        "Workspace monthly LLM spend cap reached (2 RUB/2 RUB)",
+        "Workspace monthly LLM spend cap reached (2 EUR/2 EUR)",
         type="SpendCapReachedError",
         non_retryable=True,
     )
@@ -148,5 +148,5 @@ async def test_a_model_call_refused_at_a_monthly_cap_stops_the_run_as_the_start_
 
     should_continue, reason, message = workflow._should_continue_execution()
     assert (should_continue, reason) == (False, "monthly_spend_cap_exceeded")
-    assert message == "Workspace monthly LLM spend cap reached (2 RUB/2 RUB)"
+    assert message == "Workspace monthly LLM spend cap reached (2 EUR/2 EUR)"
     assert await workflow._await_continuation(reason, message) is False

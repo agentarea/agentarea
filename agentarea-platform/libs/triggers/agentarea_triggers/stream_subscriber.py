@@ -21,7 +21,7 @@ from agentarea_streams.domain.keys import task_id_for
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .channels.sender_admission import Refused, TelegramSenderAdmission, event_admission
-from .delivery_address import firing_delivery
+from .delivery_address import event_body, firing_delivery
 from .domain.models import StreamTrigger
 from .event_context import TriggerEvent
 from .infrastructure.reactions import CausedExecutionRepository, ReactionRepository, StreamCause
@@ -225,14 +225,17 @@ class TriggerSubscriptionHandler:
                 ),
             )
         stream = await service.stream_service.get_stream(event.stream_id)
+        trigger_event = TriggerEvent.from_stream_event(
+            event, stream_name=stream.name, body=await event_body(event.data, event.workspace_id)
+        )
         if caller is not None:
             service = self._service(
                 session, UserContext(user_id=caller, workspace_id=subscription.workspace_id), cause
             )
         firing = await service.fire(
             trigger.id,
-            event.data,
-            event=TriggerEvent.from_stream_event(event, stream_name=stream.name),
+            trigger_event.data,
+            event=trigger_event,
             task_id=task_id_for(subscription.id, event.id),
             provenance=TaskProvenance(
                 origin_type="trigger",
@@ -248,6 +251,7 @@ class TriggerSubscriptionHandler:
                 event,
                 trigger_id=trigger.id,
                 session_setting=trigger.session if isinstance(trigger, StreamTrigger) else None,
+                body=trigger_event.data.get("body"),
             ),
         )
         return HandlerResult(

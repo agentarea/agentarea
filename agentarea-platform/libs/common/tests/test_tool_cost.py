@@ -23,7 +23,7 @@ def test_no_declaration_is_an_unknown_cost():
 
 
 def test_a_rate_is_price_times_one_by_default():
-    model = parse_cost_model({"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}})
+    model = parse_cost_model({"source": "rate", "rate": {"amount": "0.488", "currency": "EUR"}})
 
     cost = meter(model, args={}, body=None)
 
@@ -31,7 +31,7 @@ def test_a_rate_is_price_times_one_by_default():
         Decimal(1),
         "call",
         Decimal("0.488"),
-        "RUB",
+        "EUR",
     )
     assert cost.source is CostSourceKind.RATE
 
@@ -43,7 +43,7 @@ def test_a_rate_quantity_can_come_from_an_argument_with_a_default():
             "unit": "phrase",
             "rate": {
                 "amount": "0.01",
-                "currency": "RUB",
+                "currency": "EUR",
                 "quantity": {"arg": "num_phrases", "default": 50},
             },
         }
@@ -114,9 +114,9 @@ def test_free_and_unknown_calls_have_no_line_at_call_time():
     [
         {"source": "bogus"},
         {"source": "rate"},
-        {"source": "rate", "rate": {"amount": "-1", "currency": "RUB"}},
+        {"source": "rate", "rate": {"amount": "-1", "currency": "EUR"}},
         {"source": "rate", "rate": {"amount": "1", "currency": "rub"}},
-        {"source": "rate", "rate": {"amount": "1", "currency": "RUB", "quantity": {"from": "x"}}},
+        {"source": "rate", "rate": {"amount": "1", "currency": "EUR", "quantity": {"from": "x"}}},
         {"source": "reported", "reported": {"currency": "USD"}},
         {"source": "reported", "reported": {"path": "cost", "currency": "USD"}},
     ],
@@ -127,7 +127,7 @@ def test_a_malformed_declaration_is_refused(raw):
 
 
 def test_an_operation_declaration_overrides_the_connector_default():
-    default = {"source": "rate", "rate": {"amount": "1", "currency": "RUB"}}
+    default = {"source": "rate", "rate": {"amount": "1", "currency": "EUR"}}
     own = {"source": "free"}
 
     assert resolve_cost_model(default, own).source is CostSourceKind.FREE
@@ -143,7 +143,7 @@ def test_payers_default_to_the_workspace_and_reject_unknown_values():
 
 
 def test_a_rate_is_an_estimate_unless_declared_exact_and_a_reported_cost_is_exact():
-    rate = {"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}}
+    rate = {"source": "rate", "rate": {"amount": "0.488", "currency": "EUR"}}
     reported = {"source": "reported", "reported": {"path": "$.cost", "currency": "USD"}}
 
     assert meter(parse_cost_model(rate), args={}, body=None).exact is False
@@ -163,7 +163,7 @@ def test_the_cost_before_a_call_is_known_from_a_rate_on_a_constant_or_an_argumen
     per_phrase = parse_cost_model(
         {
             "source": "rate",
-            "rate": {"amount": "0.01", "currency": "RUB", "quantity": {"arg": "n", "default": 5}},
+            "rate": {"amount": "0.01", "currency": "EUR", "quantity": {"arg": "n", "default": 5}},
         }
     )
     per_item = parse_cost_model(

@@ -314,6 +314,23 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         item = await self._get_catalog_repository().get_item(str(server_id))
         return _project_catalog_mcp_server(item) if item else None
 
+    async def catalog_json_spec(self, server_id: UUID | str) -> dict[str, Any] | None:
+        """The server JSON the catalog holds for a spec: the one that declares what it costs.
+
+        The platform's own row or projection is the catalog's. A workspace's copy
+        reads the registry item it was made from, since its members may edit the
+        copy. A spec a member wrote has none.
+        """
+        server = await self.get_server_by_id(str(server_id))
+        if server is None:
+            return None
+        if server.is_catalog or server.workspace_id == PLATFORM_WORKSPACE_ID:
+            return server.json_spec
+        if server.registry_item_id is None:
+            return None
+        item = await self._get_catalog_repository().get_item(str(server.registry_item_id))
+        return _project_catalog_mcp_server(item).json_spec if item is not None else None
+
 
 class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):

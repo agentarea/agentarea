@@ -44,7 +44,7 @@ def _trigger(**overrides) -> StreamTrigger:
 def _condition_refused() -> Exception:
     try:
         try:
-            raise SpendCapReachedError("Workspace monthly spend cap reached (3.5 RUB/0.01 RUB)")
+            raise SpendCapReachedError("Workspace monthly spend cap reached (3.5 EUR/0.01 EUR)")
         except SpendCapReachedError as refused:
             raise LLMConditionEvaluationError(f"model call refused: {refused}") from refused
     except LLMConditionEvaluationError as error:

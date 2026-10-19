@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/inbox", tags=["inbox"])
 
+#: Workflow queries one inbox load has in flight at once.
+ESCALATION_QUERY_CONCURRENCY = 8
+#: Tasks per inbox page; each one waiting for approval costs a workflow query.
+MAX_INBOX_PAGE_SIZE = 200
+
 
 class InboxResponse(BaseModel):
     items: list[TaskWithAgent]
@@ -68,7 +73,7 @@ class ApprovalDecisionsResponse(BaseModel):
 
 
 async def _latest_open_escalation(
-    workflows: TemporalWorkflowService, task_id: UUID
+    workflows: TemporalWorkflowService, task_id: UUID, slots: asyncio.Semaphore
 ) -> dict[str, Any] | None:
     """The newest escalation the task's workflow still holds open, or None.
 
@@ -76,7 +81,8 @@ async def _latest_open_escalation(
     instead of failing the whole inbox.
     """
     try:
-        pending = await workflows.get_pending_escalations(f"task-{task_id}")
+        async with slots:
+            pending = await workflows.get_pending_escalations(f"task-{task_id}")
     except WorkflowNotFoundError:
         logger.warning("Task %s waits for approval but has no workflow", task_id)
         return None
@@ -98,7 +104,7 @@ async def get_inbox_items(
     status: InboxStatus | None = Query(None, description="Filter to a specific inbox status"),
     agent_id: UUID | None = Query(None, description="Filter by agent ID"),
     page: int = Query(1, ge=1, le=MAX_PAGE),
-    page_size: int = Query(100, ge=1, le=1000),
+    page_size: int = Query(100, ge=1, le=MAX_INBOX_PAGE_SIZE),
     agent_service: AgentService = Depends(get_read_agent_service),
     task_service: TaskService = Depends(get_read_task_service),
     workflows: TemporalWorkflowService = Depends(get_temporal_workflow_service),
@@ -134,11 +140,12 @@ async def get_inbox_items(
         # still holds open (escalation id + tool name) so the inbox UI can
         # approve/reject inline.
         waiting = [task.id for task in tasks if task.status == "waiting_for_approval"]
+        slots = asyncio.Semaphore(ESCALATION_QUERY_CONCURRENCY)
         open_escalations = dict(
             zip(
                 waiting,
                 await asyncio.gather(
-                    *(_latest_open_escalation(workflows, task_id) for task_id in waiting)
+                    *(_latest_open_escalation(workflows, task_id, slots) for task_id in waiting)
                 ),
                 strict=True,
             )

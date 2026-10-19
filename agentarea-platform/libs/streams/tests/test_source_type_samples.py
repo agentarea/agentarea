@@ -231,21 +231,6 @@ SAMPLES: dict[str, list[Sample]] = {
             {"Sentry-Hook-Resource": "issue", "Request-ID": "9b6b1d5e-0b0d-4d6b-8b8a-2d0e5f6a7b8c"},
         ),
     ],
-    "yookassa": [
-        Sample(
-            {
-                "type": "notification",
-                "event": "payment.succeeded",
-                "object": {
-                    "id": "22d6d597-000f-5000-9000-145f6df21d6f",
-                    "status": "succeeded",
-                    "amount": {"value": "2.00", "currency": "RUB"},
-                    "created_at": "2026-10-19T10:00:00.000Z",
-                    "paid": True,
-                },
-            }
-        ),
-    ],
     "gmail": [
         Sample(
             {

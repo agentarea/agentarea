@@ -168,13 +168,13 @@ async def test_completion_does_not_consume_direct_tool_call_quota():
 
 
 class _Billing:
-    """Billing in RUB: holds each platform call, prices 1 USD of it at 142.5 RUB."""
+    """Billing in EUR: holds each platform call, prices 1 USD of it at 142.5 EUR."""
 
     def __init__(self):
         self.authorizations = []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.authorizations.append(request)
@@ -184,7 +184,7 @@ class _Billing:
             reason="",
             hold_id=f"hold-{len(self.authorizations)}",
             amount=to_money("10.00"),
-            currency="RUB",
+            currency="EUR",
             expires_at=None,
         )
 
@@ -207,7 +207,7 @@ def billing(monkeypatch):
     from agentarea_common.extensions.registry import ExtensionRegistry
 
     installed = _Billing()
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     monkeypatch.setattr(ExtensionRegistry, "_factories", {"tool_billing": lambda: installed})
     tool_billing.get_tool_billing.cache_clear()
     yield installed
@@ -279,7 +279,7 @@ async def test_direct_execution_holds_each_call_and_counts_billings_price(billin
     [funding] = model.connect.await_args.args
     assert (funding.hold_id, funding.platform_funded) == ("hold-1", True)
     [line] = repository.record_costs.await_args.args[0]
-    assert (line.amount, line.currency, line.agent_id) == (to_money("1.425"), "RUB", task.agent_id)
+    assert (line.amount, line.currency, line.agent_id) == (to_money("1.425"), "EUR", task.agent_id)
     assert (line.subject_id, line.payer.value, line.estimate) == ("model-1", "platform", True)
     assert line.evidence["hold_id"] == "hold-1" and line.evidence["settle"] == "capture"
     assert (line.vendor_cost, line.vendor_currency) == (to_money("0.01"), "USD")
@@ -297,7 +297,7 @@ async def test_direct_run_budget_error_names_the_billing_currency(billing):
     await manager._execute(task)
 
     error = repository.update_status.await_args.kwargs["error"]
-    assert error == "run budget exceeded: 14.25 RUB/1.00 RUB"
+    assert error == "run budget exceeded: 14.25 EUR/1.00 EUR"
 
 
 @pytest.mark.asyncio

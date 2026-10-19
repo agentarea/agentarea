@@ -672,10 +672,9 @@ async def _catalog_server_spec(user_ctx: UserContext, instance: Any) -> dict | N
 
     with workspace_scope(user_ctx.workspace_id):
         async with get_database().session() as session:
-            server = await MCPServerRepository(session, user_ctx).get_server_by_id(
+            return await MCPServerRepository(session, user_ctx).catalog_json_spec(
                 instance.server_spec_id
             )
-    return getattr(server, "json_spec", None)
 
 
 async def _scope_tool_connection(scope: ClientScope, tool_name: str) -> ToolConnection | None:
@@ -863,7 +862,10 @@ async def _run_openapi_operation(
     tool = tools[0]
     try:
         tool_connection = openapi_tool_connection(
-            connection, await connection_service.catalog_connector(connection), tool.operation_name
+            connection,
+            await connection_service.catalog_connector(connection),
+            tool.operation_name,
+            catalog_spec=await connection_service.catalog_spec(connection),
         )
     except ToolCostError as error:
         return _refusal(f"the tool's cost declaration is invalid: {error}")

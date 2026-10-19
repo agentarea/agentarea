@@ -1,6 +1,12 @@
 """The shipped catalog: every entry is valid, and reads each provider's events as the code used to."""
 
 import json
+from pathlib import Path
+
+from agentarea_streams.domain.source_types import SourceTypeEntry
+
+
+import json
 import re
 from pathlib import Path
 from uuid import uuid4
@@ -9,6 +15,10 @@ import pytest
 from agentarea_streams.domain.envelope import read_event
 from agentarea_streams.domain.source_types import SourceTypeEntry
 from agentarea_streams.domain.templates import TemplateContext, render
+
+EXAMPLE_PAY = SourceTypeEntry.model_validate(
+    json.loads((Path(__file__).parent / "example_pay.json").read_text())
+)
 
 CATALOG = Path(__file__).parents[4] / "data" / "catalog" / "source-types.json"
 _PLACEHOLDER = re.compile(r"\{([^{}]+)\}")
@@ -37,7 +47,6 @@ def test_every_provider_the_code_knew_has_an_entry():
         "discord",
         "stripe",
         "sentry",
-        "yookassa",
         "gmail",
         "teams",
         "email",
@@ -128,10 +137,9 @@ def test_sentry_kind_joins_resource_and_action_and_request_id_keys_it():
     assert (fields.kind, fields.key) == ("issue.created", "req-9")
 
 
-def test_yookassa_key_is_one_object_reaching_one_state():
-    fields = _event(
-        "yookassa", {"event": "payment.succeeded", "object": {"id": "p1", "status": "succeeded"}}
-    )
+def test_an_api_lookup_key_is_one_object_reaching_one_state():
+    body = {"event": "payment.succeeded", "object": {"id": "p1", "status": "succeeded"}}
+    fields = read_event(EXAMPLE_PAY, None, source_id=uuid4(), headers={}, body=body)
     assert (fields.kind, fields.key) == ("payment.succeeded", "payment.succeeded:p1")
 
 

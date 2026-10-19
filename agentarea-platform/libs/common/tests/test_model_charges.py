@@ -31,7 +31,7 @@ class Billing:
         self.authorizations, self.quotes, self.voids = [], [], []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.authorizations.append(request)
@@ -43,7 +43,7 @@ class Billing:
             reason="no credits remaining" if not self.allowed else "",
             hold_id="hold-1" if self.allowed else None,
             amount=Decimal("19.00") if self.allowed else None,
-            currency="RUB",
+            currency="EUR",
             expires_at=None,
         )
 
@@ -62,8 +62,8 @@ class Billing:
 
 
 @pytest.fixture(autouse=True)
-def rub(monkeypatch):
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+def eur(monkeypatch):
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     ExtensionRegistry.clear()
     tool_billing.get_tool_billing.cache_clear()
     yield
@@ -98,7 +98,7 @@ async def test_a_platform_call_is_held_by_its_estimated_vendor_cost_as_a_model()
     assert (request["kind"], request["connector"], request["tool"]) == ("model", "llm", "model-1")
     assert (request["vendor_cost"], request["vendor_currency"]) == (Decimal("0.20"), "USD")
     assert hold.hold_id == "hold-1"
-    assert (hold.held_amount, hold.held_currency) == (Decimal("19.00"), "RUB")
+    assert (hold.held_amount, hold.held_currency) == (Decimal("19.00"), "EUR")
     assert (hold.platform_funded, hold.vendor_cost_estimate) == (True, Decimal("0.20"))
 
 
@@ -147,7 +147,7 @@ async def test_the_line_of_a_held_call_is_billings_price_of_the_actual_cost():
 
     [line] = billing.quotes
     assert (line.payer, line.kind, line.tool) == ("platform", "model", "model-1")
-    assert (charge.amount, charge.currency) == (Decimal("1.425"), "RUB")
+    assert (charge.amount, charge.currency) == (Decimal("1.425"), "EUR")
     assert (charge.estimate, charge.settle, charge.hold_id) == (True, "capture", "hold-1")
     assert (charge.vendor_cost, charge.vendor_currency) == (Decimal("0.01"), "USD")
     assert (charge.cost_unknown, charge.platform_funded) == (False, True)
@@ -160,7 +160,7 @@ async def test_a_held_call_of_unknown_cost_comes_to_the_held_amount():
     charge = await charge_model_call(funding=hold, vendor_cost=None)
 
     assert billing.quotes == []
-    assert (charge.amount, charge.currency) == (Decimal("19.00"), "RUB")
+    assert (charge.amount, charge.currency) == (Decimal("19.00"), "EUR")
     assert (charge.vendor_cost, charge.cost_unknown) == (Decimal("0.20"), True)
     assert (charge.settle, charge.hold_id) == ("capture", "hold-1")
     assert charge.as_billing()["payer"] == "platform"
@@ -173,7 +173,7 @@ async def test_billing_unable_to_price_leaves_the_held_amount_to_be_captured(cap
 
     charge = await charge_model_call(funding=hold, vendor_cost=Decimal("0.01"))
 
-    assert (charge.amount, charge.currency, charge.settle) == (Decimal("19.00"), "RUB", "capture")
+    assert (charge.amount, charge.currency, charge.settle) == (Decimal("19.00"), "EUR", "capture")
     assert "keeps its hold" in caplog.text
 
 
@@ -184,7 +184,7 @@ async def test_a_customer_key_call_is_its_vendor_cost_converted_without_markup()
     charge = await charge_model_call(funding=funding, vendor_cost=Decimal("0.01"))
 
     assert billing.quotes[0].payer == "workspace"
-    assert (charge.amount, charge.currency, charge.settle) == (Decimal("0.95"), "RUB", None)
+    assert (charge.amount, charge.currency, charge.settle) == (Decimal("0.95"), "EUR", None)
     assert charge.as_billing()["payer"] == "workspace"
 
 

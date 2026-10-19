@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from agentarea_common.events.ports import IntegrationEvent
+from agentarea_common.events.ports import IntegrationEvent, UnprocessableEventError
 from pydantic import BaseModel, Field
 
 from .enums import SubscriptionKind, Verdict
@@ -100,6 +100,14 @@ class StreamEvent(IntegrationEvent):
                 "extensions": rest,
             }
         )
+
+
+def consumed_stream_event(message: IntegrationEvent) -> "StreamEvent":
+    """The stream event a bus message carries; a message carrying none is dead-lettered at once."""
+    try:
+        return StreamEvent.from_bus(message)
+    except Exception as error:
+        raise UnprocessableEventError(f"not a stream event: {error}") from error
 
 
 class RecordedEvent(StreamEvent):

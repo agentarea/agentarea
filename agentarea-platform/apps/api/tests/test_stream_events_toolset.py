@@ -25,7 +25,7 @@ MODULE = "agentarea_api.tools.stream_events_toolset"
 def _event(sequence: int, **data) -> RecordedEvent:
     return RecordedEvent(
         type="payment.succeeded",
-        source="webhook:yookassa",
+        source="webhook:example_pay",
         data=data or {"n": sequence},
         stream_id=uuid4(),
         workspace_id="w",

@@ -11,7 +11,7 @@ from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domain.models import StreamEvent
+from ..domain.models import consumed_stream_event
 from ..infrastructure.event_repository import StreamEventRepository
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class EventsView:
         self._session_factory = session_factory
 
     async def handle(self, message: IntegrationEvent) -> None:
-        event = StreamEvent.from_bus(message)
+        event = consumed_stream_event(message)
         context = UserContext(user_id=event.created_by, workspace_id=event.workspace_id)
         with workspace_scope(event.workspace_id):
             async with self._session_factory() as session:

@@ -22,7 +22,7 @@ from agentarea_registry.application.catalog_pricing import (
 
 @pytest.fixture(autouse=True)
 def no_billing(monkeypatch):
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     ExtensionRegistry.clear()
     tool_billing.get_tool_billing.cache_clear()
     yield
@@ -36,7 +36,7 @@ class Billing:
         self.calls = []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         raise AssertionError("browsing holds nothing")
@@ -61,15 +61,15 @@ class Billing:
 
 
 def _rate(amount: str, unit: str = "request") -> dict:
-    return {"source": "rate", "unit": unit, "rate": {"amount": amount, "currency": "RUB"}}
+    return {"source": "rate", "unit": unit, "rate": {"amount": amount, "currency": "EUR"}}
 
 
 def _item(metadata: dict, protocol: str = "api") -> SimpleNamespace:
-    spec = {"raw_spec": {"name": "ru.yandex/search-api", "metadata": metadata}}
+    spec = {"raw_spec": {"name": "example.com/search-api", "metadata": metadata}}
     return SimpleNamespace(
         id="i1",
-        name="Yandex Search API",
-        external_id="ru.yandex/search-api/openapi",
+        name="Example Search API",
+        external_id="example.com/search-api/openapi",
         protocol=protocol,
         spec=spec,
         pricing=derive_facets("mcp_servers", "x", spec, []).pricing,
@@ -97,8 +97,8 @@ async def test_a_paid_entry_is_priced_per_tool_and_from_its_cheapest():
     assert pricing.payers == (Payer.WORKSPACE, Payer.PLATFORM)
     # Without an installed billing, what is shown is the vendor's cost.
     assert pricing.prices == (
-        ToolPrice("web_search", Decimal("0.488"), "RUB", "request", "vendor_cost"),
-        ToolPrice("wordstat_top", Decimal("0.02"), "RUB", "request", "vendor_cost"),
+        ToolPrice("web_search", Decimal("0.488"), "EUR", "request", "vendor_cost"),
+        ToolPrice("wordstat_top", Decimal("0.02"), "EUR", "request", "vendor_cost"),
     )
     assert pricing.price_from == pricing.prices[1]
 
@@ -136,8 +136,8 @@ async def test_with_billing_a_page_is_priced_by_billing_in_one_quote():
         ("platform", "wordstat"),
     ]
     # A tool billing does not price is not for sale on the platform's key.
-    assert first.prices == (ToolPrice("web_search", Decimal("0.65"), "RUB", "request", "price"),)
-    assert second.prices == (ToolPrice("wordstat", Decimal("0.65"), "RUB", "request", "price"),)
+    assert first.prices == (ToolPrice("web_search", Decimal("0.65"), "EUR", "request", "price"),)
+    assert second.prices == (ToolPrice("wordstat", Decimal("0.65"), "EUR", "request", "price"),)
 
 
 async def test_billing_down_shows_the_vendor_cost_as_without_our_price(caplog):
@@ -146,6 +146,6 @@ async def test_billing_down_shows_the_vendor_cost_as_without_our_price(caplog):
     pricing = await price_catalog_item(_paid("web_search"))
 
     assert pricing.prices == (
-        ToolPrice("web_search", Decimal("0.5"), "RUB", "request", "vendor_cost", unavailable=True),
+        ToolPrice("web_search", Decimal("0.5"), "EUR", "request", "vendor_cost", unavailable=True),
     )
     assert "billing unreachable" in caplog.text

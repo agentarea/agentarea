@@ -54,6 +54,7 @@ def _source(**over):
         "workspace_id": "ws-1",
         "created_by": "user-1",
         "event_templates": None,
+        "webhook_config": None,
     }
     return SimpleNamespace(**{**fields, **over})
 
@@ -103,6 +104,24 @@ async def test_the_envelope_carries_what_the_entry_reads(ingest):
     assert event.subject == f"{source.id}:c7"
     assert event.time.year == 2023
     assert event.data == {"headers": {"X-Trace": "1"}, "body": body, "body_ref": None}
+
+
+async def test_the_header_a_source_configured_is_kept_out_of_the_event(ingest):
+    entry = SourceTypeEntry.model_validate(
+        {
+            **ENTRY.model_dump(),
+            "verification": {
+                "scheme": "hmac",
+                "secret": "s",
+                "header": "X-Chat-Signature",
+                "configurable": ["scheme", "header"],
+            },
+        }
+    )
+    source = _source(webhook_config={"scheme": "shared_token", "header": "X-Hasura-Auth"})
+    await _ingest(source, {"id": "m1"}, {"X-Hasura-Auth": "the-token", "X-Trace": "1"}, entry)
+    (call,) = ingest.calls
+    assert call["event"].data["headers"] == {"X-Trace": "1"}
 
 
 async def test_an_event_without_a_key_is_never_a_repeat(ingest):

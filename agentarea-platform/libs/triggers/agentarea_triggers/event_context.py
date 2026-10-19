@@ -41,13 +41,16 @@ class TriggerEvent(BaseModel):
     data: dict[str, Any]
 
     @classmethod
-    def from_stream_event(cls, event: StreamEvent, *, stream_name: str) -> "TriggerEvent":
+    def from_stream_event(
+        cls, event: StreamEvent, *, stream_name: str, body: Any = None
+    ) -> "TriggerEvent":
+        """``body``: a body the event carries by reference only, read back so the run gets it."""
         return cls(
             kind=event.type,
             key=event.event_key,
             received_at=event.received_at,
             stream_name=stream_name,
-            data=event.data,
+            data=event.data if body is None else {**event.data, "body": body},
         )
 
     @classmethod

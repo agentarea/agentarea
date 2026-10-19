@@ -27,7 +27,8 @@ def mcp_tool_connection(
 ) -> ToolConnection:
     """The connection a call of ``tool_name`` on ``instance`` runs on.
 
-    ``server_spec`` is the catalog server JSON the instance was made from, or None.
+    ``server_spec`` is the catalog server JSON the instance was made from
+    (``MCPServerRepository.catalog_json_spec``), or None.
     A malformed declaration raises ``ToolCostError``.
     """
     metadata = (server_spec or {}).get("metadata") or {}
@@ -47,4 +48,5 @@ def mcp_tool_connection(
         payers=metadata.get(META_PAYERS),
         cost=own if own is not None else (cost or {}).get("default"),
         override=getattr(instance, "cost", None),
+        from_catalog=server_spec is not None,
     )

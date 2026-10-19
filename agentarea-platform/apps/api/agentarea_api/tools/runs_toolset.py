@@ -94,6 +94,9 @@ _INPUT_REQUEST_FIELDS = (
 )
 _INPUT_RESPONSE_FIELDS = ("input_request_id", "tool_call_id", "answer_keys", "secret_keys")
 
+#: GET /v1/tasks takes at most this many.
+MAX_RUNS_LISTED = 1000
+
 RunId = Annotated[str, Field(description="Run id, from `runs_list` or `runs_start`.")]
 
 
@@ -196,10 +199,18 @@ class RunEventsPage(BaseModel):
     events: list[RunEvent] = Field(description="Events on this page, oldest first.")
 
 
-def _event_projection(event_type: str, data: dict[str, Any]) -> dict[str, Any]:
-    """The facts of one event worth reading over MCP, without results or content."""
+def _event_projection(
+    event_type: str, data: dict[str, Any], *, revealed: bool = False
+) -> dict[str, Any]:
+    """The facts of one event worth reading over MCP, without results or content.
+
+    ``revealed``: the caller holds the task's authority, so a tool call also
+    carries its arguments and result, secrets masked (``FeedBodies``).
+    """
     fields: tuple[str, ...] = ()
     extra: dict[str, Any] = {}
+    if revealed and event_type in ("tool.call", "tool.result"):
+        extra = {key: data[key] for key in ("arguments", "result") if key in data}
     if event_type in _TERMINAL_TYPES or event_type.startswith("task.awaiting_"):
         fields = _TERMINAL_FIELDS
     elif event_type.endswith(".failed"):
@@ -368,9 +379,14 @@ class RunsToolset(Toolset):
         agent_id: Annotated[
             str, Field(description="Only runs of this agent id, from `agents_list`; empty for any.")
         ] = "",
-        limit: Annotated[int, Field(description="Most runs to return, newest first.")] = 20,
+        limit: Annotated[
+            int, Field(ge=1, le=MAX_RUNS_LISTED, description="Most runs to return, newest first.")
+        ] = 20,
     ) -> str:
         """List the workspace's recent runs, newest first, optionally filtered by agent ID."""
+        # MCP arguments are not validated against the schema before the call.
+        if not 1 <= limit <= MAX_RUNS_LISTED:
+            raise ToolError(f"limit must be between 1 and {MAX_RUNS_LISTED}, got {limit}")
         async with platform_read_context() as (_s, _user_ctx, repo_factory, _broker, _):
             records = await repo_factory.create_repository(TaskRepository).list_page(
                 limit=limit,
@@ -759,13 +775,21 @@ class RunsToolset(Toolset):
         status of a terminal event. For the latest events, page from
         offset=total-limit.
         """
-        async with platform_read_context() as (_s, _user_ctx, repo_factory, _broker, _):
-            entries, total = await TaskFeedReader(
-                repo_factory.session, repo_factory.user_context
-            ).page(UUID(run_id), event_type=event_type, limit=limit, offset=offset)
+        async with platform_read_context() as (_s, user_ctx, repo_factory, _broker, _):
+            reader = TaskFeedReader(repo_factory.session, repo_factory.user_context)
+            entries, total = await reader.page(
+                UUID(run_id), event_type=event_type, limit=limit, offset=offset
+            )
+            revealed = False
+            bodies = None
+            if any(entry.name in ("tool.call", "tool.result") for entry in entries):
+                task = await repo_factory.create_repository(TaskRepository).get_task(UUID(run_id))
+                revealed = task is not None and await caller_may_act_on_task(task, user_ctx)
+            if revealed:
+                bodies = await reader.bodies(UUID(run_id), entries, revealed=True)
             events = []
             for entry in entries:
-                shown = feed_event(entry)
+                shown = feed_event(entry, bodies)
                 if shown is None:
                     continue
                 shown_type, data = shown
@@ -775,7 +799,7 @@ class RunsToolset(Toolset):
                         "seq": entry.seq,
                         "event_type": shown_type,
                         "timestamp": entry.occurred_at,
-                        **_event_projection(shown_type, data),
+                        **_event_projection(shown_type, data, revealed=revealed),
                     }
                 )
             return json.dumps({"total": total, "events": events}, default=str)

@@ -548,14 +548,14 @@ async def test_error_publication_failure_does_not_replace_provider_error(
 
 
 class _Billing:
-    """Billing in RUB: holds 19 RUB per call, prices the platform's 1 USD at 142.5."""
+    """Billing in EUR: holds 19 EUR per call, prices the platform's 1 USD at 142.5."""
 
     def __init__(self, *, allowed=True, quote_fails=False):
         self.allowed, self.quote_fails = allowed, quote_fails
         self.authorizations, self.quotes, self.voids = [], [], []
 
     def currency(self):
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.authorizations.append(request)
@@ -565,7 +565,7 @@ class _Billing:
             reason="" if self.allowed else "no credits remaining",
             hold_id="hold-1" if self.allowed else None,
             amount=to_money("19.00") if self.allowed else None,
-            currency="RUB",
+            currency="EUR",
             expires_at=None,
         )
 
@@ -589,7 +589,7 @@ def billing(monkeypatch):
     from agentarea_common.extensions.registry import ExtensionRegistry
 
     installed = _Billing()
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     monkeypatch.setattr(ExtensionRegistry, "_factories", {"tool_billing": lambda: installed})
     tool_billing.get_tool_billing.cache_clear()
     yield installed
@@ -608,7 +608,7 @@ async def test_a_platform_call_is_held_and_its_line_is_billings_price(
     [hold] = billing.authorizations
     assert (hold["kind"], hold["tool"], hold["vendor_currency"]) == ("model", MODEL_ID, "USD")
     assert hold["vendor_cost"] > to_money("0.02")
-    assert (result.cost, result.currency) == (to_money("2.85"), "RUB")
+    assert (result.cost, result.currency) == (to_money("2.85"), "EUR")
     assert result.provider_cost_usd == to_money("0.02")
     assert result.usage.billing["hold_id"] == "hold-1"
     assert result.usage.billing["settle"] == "capture"
@@ -621,7 +621,7 @@ async def test_a_customer_key_call_holds_nothing_and_is_converted_without_markup
     result = await make_service().execute(_request(), user_context=user_context)
 
     assert billing.authorizations == []
-    assert (result.cost, result.currency) == (to_money("1.90"), "RUB")
+    assert (result.cost, result.currency) == (to_money("1.90"), "EUR")
     assert result.usage.billing["hold_id"] is None
 
 
@@ -677,7 +677,7 @@ async def test_billing_unable_to_price_keeps_the_hold_on_the_line(
 
     result = await make_service().execute(request, user_context=user_context)
 
-    assert (result.cost, result.currency) == (to_money("19.00"), "RUB")
+    assert (result.cost, result.currency) == (to_money("19.00"), "EUR")
     assert result.usage.billing["settle"] == "capture"
 
 
@@ -927,7 +927,7 @@ def llm_cap_reached(monkeypatch, activity_boundary):
 
     async def refuse(session, user_context, budget, agent_id):
         reads.append(([cap.amount_usd for cap in budget.spend_caps or []], agent_id))
-        raise SpendCapReachedError("Agent monthly LLM spend cap reached (2 RUB/2 RUB)")
+        raise SpendCapReachedError("Agent monthly LLM spend cap reached (2 EUR/2 EUR)")
 
     monkeypatch.setattr(llm_activities, "TaskRepository", _Tasks)
     monkeypatch.setattr(llm_activities, "refuse_model_call_at_spend_cap", refuse)
@@ -937,7 +937,7 @@ def llm_cap_reached(monkeypatch, activity_boundary):
 def _assert_refused_at_the_cap(raised) -> None:
     assert raised.value.type == "SpendCapReachedError"
     assert raised.value.non_retryable is True
-    assert raised.value.message == "Agent monthly LLM spend cap reached (2 RUB/2 RUB)"
+    assert raised.value.message == "Agent monthly LLM spend cap reached (2 EUR/2 EUR)"
 
 
 async def test_a_turn_past_a_monthly_llm_cap_is_refused_as_a_spend_cap_stop(

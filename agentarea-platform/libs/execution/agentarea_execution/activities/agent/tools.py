@@ -268,11 +268,10 @@ def make_tools_activities(
                 instance = await service.get(UUID(route.instance_id))
                 if instance is None:
                     return None
-                server = await service.mcp_server_repository.get_server_by_id(
-                    instance.server_spec_id
-                )
                 return mcp_tool_connection(
-                    instance, getattr(server, "json_spec", None), route.raw_name
+                    instance,
+                    await service.mcp_server_repository.catalog_json_spec(instance.server_spec_id),
+                    route.raw_name,
                 )
             openapi_configs = [
                 tc
@@ -305,6 +304,7 @@ def make_tools_activities(
                         connection,
                         await connection_service.catalog_connector(connection),
                         tool.operation_name,
+                        catalog_spec=await connection_service.catalog_spec(connection),
                     )
         return None
 

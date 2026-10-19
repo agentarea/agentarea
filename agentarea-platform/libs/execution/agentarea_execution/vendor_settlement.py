@@ -40,8 +40,8 @@ async def _connection(
     instances = await ctx.get_mcp_server_instance_service()
     instance = await instances.get(connection_id)
     if instance is not None:
-        server = await instances.mcp_server_repository.get_server_by_id(instance.server_spec_id)
-        connection = mcp_tool_connection(instance, getattr(server, "json_spec", None), tool)
+        spec = await instances.mcp_server_repository.catalog_json_spec(instance.server_spec_id)
+        connection = mcp_tool_connection(instance, spec, tool)
         return connection, await instances.credential_headers(instance)
     from agentarea_openapi.application.metering import openapi_tool_connection
 
@@ -49,8 +49,13 @@ async def _connection(
     found = await connections.get_connection(connection_id)
     if found is None:
         raise ToolCostError(f"connection {connection_id} of line {line.id} no longer exists")
-    connector = await connections.catalog_connector(found)
-    return openapi_tool_connection(found, connector, tool), await connections.resolve_headers(found)
+    connection = openapi_tool_connection(
+        found,
+        await connections.catalog_connector(found),
+        tool,
+        catalog_spec=await connections.catalog_spec(found),
+    )
+    return connection, await connections.resolve_headers(found)
 
 
 def make_vendor_settle(container: ActivityServiceContainer) -> VendorSettle:

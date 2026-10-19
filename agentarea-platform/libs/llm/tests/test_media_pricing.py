@@ -1,7 +1,7 @@
 """A media call's cost is what billing says it is, once, where the call returns.
 
 Budgets and task totals are in the deployment currency; a provider USD amount added
-to them unconverted would sum RUB and USD into one total. On the platform's
+to them unconverted would sum EUR and USD into one total. On the platform's
 credentials billing holds the call before the provider is paid and prices it after;
 on the customer's own it converts the cost.
 """
@@ -29,7 +29,7 @@ INSTANCE = str(uuid4())
 
 
 class _Rubles:
-    """Billing in RUB: 100 per provider USD on the customer's key, 150 on ours."""
+    """Billing in EUR: 100 per provider USD on the customer's key, 150 on ours."""
 
     def __init__(self, events: list):
         self.events = events
@@ -38,7 +38,7 @@ class _Rubles:
         self.voids: list = []
 
     def currency(self) -> str:
-        return "RUB"
+        return "EUR"
 
     async def authorize(self, **request):
         self.events.append("authorize")
@@ -49,7 +49,7 @@ class _Rubles:
             reason="",
             hold_id="hold-1",
             amount=request["vendor_cost"] * 150,
-            currency="RUB",
+            currency="EUR",
             expires_at=None,
         )
 
@@ -80,7 +80,7 @@ def pricing(monkeypatch, events):
     from agentarea_common.extensions.registry import ExtensionRegistry
 
     billing = _Rubles(events)
-    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "RUB")
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     monkeypatch.setattr(ExtensionRegistry, "_factories", {"tool_billing": lambda: billing})
     tool_billing.get_tool_billing.cache_clear()
     yield billing
@@ -189,7 +189,7 @@ async def test_an_image_on_our_key_is_held_before_the_provider_and_carries_billi
         INSTANCE,
         Decimal("0.05"),
     )
-    assert (image.cost, image.currency, image.cost_unknown) == (Decimal("6.00"), "RUB", False)
+    assert (image.cost, image.currency, image.cost_unknown) == (Decimal("6.00"), "EUR", False)
     assert (image.billing["hold_id"], image.billing["settle"], image.billing["payer"]) == (
         "hold-1",
         "capture",
@@ -242,7 +242,7 @@ async def test_an_image_on_our_key_of_unknown_cost_comes_to_the_held_amount(pric
 
     image = await _media(models).generate_image("a cat")
 
-    assert (image.cost, image.currency, image.cost_unknown) == (Decimal("7.50"), "RUB", True)
+    assert (image.cost, image.currency, image.cost_unknown) == (Decimal("7.50"), "EUR", True)
     assert (image.billing["hold_id"], image.billing["settle"], image.billing["cost_unknown"]) == (
         "hold-1",
         "capture",
@@ -327,7 +327,7 @@ async def test_a_finished_video_on_our_key_is_billed_on_its_hold(pricing, events
     assert check.billing["hold_id"] == jobs.rows[UUID(job_id)].funding["hold_id"] == "hold-1"
     assert (check.cost, check.currency, check.billing["settle"]) == (
         Decimal("225.0"),
-        "RUB",
+        "EUR",
         "capture",
     )
     assert pricing.voids == []

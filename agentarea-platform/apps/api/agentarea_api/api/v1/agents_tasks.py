@@ -40,6 +40,8 @@ from agentarea_common.events.contract import (
     TASK_CANCELLED,
     TASK_COMPLETED,
     TASK_FAILED,
+    TOOL_CALL,
+    TOOL_RESULT,
 )
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import ZERO, Money, serialize_money
@@ -792,6 +794,7 @@ async def _tail_task_events_sse(
     execution_id: str | None,
     *,
     user_context: UserContext,
+    revealed: bool,
     emit_connected: bool = True,
     include_chunks: bool = True,
     last_event_id: str | None = None,
@@ -805,6 +808,8 @@ async def _tail_task_events_sse(
 
     ``follow_execution`` keeps the stream open past a ``task.completed`` that
     leaves the execution waiting for a follow-up; without it that event ends it.
+    ``revealed``: the caller holds the task's authority, decided once per
+    connection; its tool calls show their command and output, secrets masked.
     """
     from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 
@@ -830,6 +835,7 @@ async def _tail_task_events_sse(
         include_chunks=include_chunks,
         follow_execution=follow_execution,
         last_event_id=last_event_id,
+        revealed=revealed,
     ):
         sse_event = {
             "event_type": env.event_type,
@@ -1084,6 +1090,7 @@ async def create_task_for_agent_with_stream(
                     agent_id,
                     task.execution_id,
                     user_context=user_context,
+                    revealed=await caller_may_act_on_task(task, user_context),
                     emit_connected=False,
                     follow_execution=follow,
                 ):
@@ -2532,7 +2539,13 @@ async def get_task_events(
             limit=page_size,
             offset=(page - 1) * page_size,
         )
-        bodies = await reader.bodies(task_id, entries)
+        shows_tools = any(entry.name in (TOOL_CALL, TOOL_RESULT) for entry in entries)
+        bodies = await reader.bodies(
+            task_id,
+            entries,
+            revealed=shows_tools
+            and await caller_may_act_on_task(task, repository_factory.user_context),
+        )
 
         events = []
         for entry in entries:
@@ -2655,6 +2668,7 @@ async def stream_task_events(
         task = await task_service.get_task(task_id)
         if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
+        revealed = await caller_may_act_on_task(task, user_context)
 
         # Create SSE stream by tailing the task_events table (single source of
         # truth, no pub/sub race) via the shared helper.
@@ -2665,6 +2679,7 @@ async def stream_task_events(
                     agent_id,
                     task.execution_id,
                     user_context=user_context,
+                    revealed=revealed,
                     include_chunks=include_chunks,
                     last_event_id=request.headers.get("last-event-id"),
                 ):
