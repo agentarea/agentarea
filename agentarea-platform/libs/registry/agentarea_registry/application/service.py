@@ -519,13 +519,16 @@ class RegistryService:
     # skip regardless of the cap.
     MAX_SKIPPED_DETAILS = 50
 
-    async def sync_registry(self, registry_id: UUID) -> dict[str, Any]:
+    async def sync_registry(self, registry_id: UUID, force: bool = False) -> dict[str, Any]:
         """Sync: fetch source, upsert catalog, auto-create entities for new items.
 
         A single item failing validation (e.g. an LLM model published with no
         price) must not cost the rest of the batch: such items are skipped and
         reported back in `skipped`/`skipped_items`, not silently dropped and
         not allowed to abort the sync.
+
+        A source whose ETag is the one the last sync applied is not read again;
+        ``force`` reads it anyway (after a change to how items are parsed).
         """
         registry = await self.registry_repo.get_by_id(registry_id)
         if not registry:
@@ -534,6 +537,13 @@ class RegistryService:
             raise ValueError("Managed registry items are changed through the catalog item API")
 
         try:
+            etag = await asyncio.to_thread(self._source_etag, registry.source_url)
+            if not force and etag is not None and etag == registry.source_etag:
+                await self.registry_repo.update(
+                    registry_id, last_synced_at=datetime.utcnow(), last_sync_error=None
+                )
+                return {"source_unchanged": True, "total": registry.item_count}
+
             # In a worker thread, not on the loop: _fetch_source is a blocking
             # urlopen, and the API serves every request from one event loop, so
             # calling it here directly froze the whole process -- /health with
@@ -546,14 +556,17 @@ class RegistryService:
             unchanged = 0
             skipped = 0
             skipped_items: list[dict[str, str]] = []
+            # One read for the whole registry: a lookup per item was a query per
+            # catalog row on every sync, millions of them a day.
+            existing_by_id = {
+                item.external_id: item
+                for item in await self.item_repo.list_by_registry(registry_id)
+            }
 
             for item_data in parsed_items:
                 external_id = item_data["external_id"]
                 try:
-                    existing = await self.item_repo.get_by_external_id(
-                        registry_id=registry_id,
-                        external_id=external_id,
-                    )
+                    existing = existing_by_id.get(external_id)
 
                     if existing:
                         for field in (
@@ -582,8 +595,10 @@ class RegistryService:
                         else:
                             unchanged += 1
 
+                        if registry.registry_type == "skills" and existing.installed_entity_id:
+                            await self._drop_platform_skill(existing)
+
                         await self.item_repo.session.commit()
-                        await self.item_repo.session.refresh(existing)
 
                         # Backfill json_spec on linked entity if missing
                         if existing.installed_entity_id:
@@ -642,13 +657,15 @@ class RegistryService:
             # What the source no longer publishes leaves the catalog. An empty
             # parse is far likelier a broken source than an emptied one, so it
             # retires nothing.
-            out_of_source = (
-                await self.item_repo.mark_in_source(
+            out_of_source = None
+            deleted = 0
+            if parsed_items:
+                out_of_source = await self.item_repo.mark_in_source(
                     registry_id, {item["external_id"] for item in parsed_items}
                 )
-                if parsed_items
-                else None
-            )
+                if out_of_source:
+                    deleted = await self.item_repo.delete_unreferenced_out_of_source(registry_id)
+                    out_of_source -= deleted
 
             total = new_specs + updates_flagged + unchanged
             await self.registry_repo.update(
@@ -656,6 +673,7 @@ class RegistryService:
                 last_synced_at=datetime.utcnow(),
                 last_sync_error=None,
                 item_count=total,
+                source_etag=etag,
             )
 
             return {
@@ -666,6 +684,7 @@ class RegistryService:
                 "skipped": skipped,
                 "skipped_items": skipped_items,
                 "out_of_source": out_of_source,
+                "deleted": deleted,
             }
 
         except Exception as e:
@@ -756,8 +775,7 @@ class RegistryService:
                 return None
             return await self._update_mcp_server(item, registry_url=registry_url)
         elif registry_type == "skills":
-            # Rows materialized before skills went catalog-only.
-            return await self._update_skill(item) if item.installed_entity_id else None
+            return None
         elif registry_type == "llm_providers":
             return await self._update_llm_provider(item)
         elif registry_type == "llm_models":
@@ -878,32 +896,17 @@ class RegistryService:
 
     # ── Skill handlers ──
 
-    async def _create_skill(self, item: RegistryItem) -> str:
-        if not self.skill_repo:
-            raise ValueError("Skill repository not available")
-        spec = item.spec or {}
-        slug = await self._resolve_unique_slug(self.skill_repo, item.name)
-        skill = await self.skill_repo.create(
-            name=item.name,
-            slug=slug,
-            description=item.description,
-            source_type=spec.get("source_type", "content"),
-            content=spec.get("content"),
-            source_url=spec.get("source_url"),
-            registry_item_id=item.id,
-        )
-        return str(skill.id)
+    async def _drop_platform_skill(self, item: RegistryItem) -> None:
+        """Remove the platform Skill row a sync made before skills went catalog-only.
 
-    async def _update_skill(self, item: RegistryItem) -> Any:
+        Deleting through the repository also revokes the row's ownership in the
+        authorization graph.
+        """
         if not self.skill_repo:
             raise ValueError("Skill repository not available")
-        spec = item.spec or {}
-        return await self.skill_repo.update(
-            item.installed_entity_id,
-            description=item.description,
-            content=spec.get("content"),
-            source_url=spec.get("source_url"),
-        )
+        await self.skill_repo.delete(item.installed_entity_id)
+        item.installed_entity_id = None
+        item.installed_version = None
 
     # ── LLM provider handlers ──
 
@@ -990,6 +993,19 @@ class RegistryService:
         return await self._create_llm_model(item)
 
     # ── Source fetching (format-agnostic) ──
+
+    @staticmethod
+    def _source_etag(source_url: str) -> str | None:
+        """The source's current ETag; None for a local file or a host without one."""
+        if not source_url.startswith(("http://", "https://")):
+            return None
+        req = urllib.request.Request(  # noqa: S310
+            source_url, method="HEAD", headers={"User-Agent": "agentarea-registry-sync"}
+        )
+        with urllib.request.urlopen(  # noqa: S310
+            req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS, context=outbound_ssl_context()
+        ) as resp:
+            return resp.headers.get("ETag")
 
     @staticmethod
     def _fetch_source(source_url: str) -> dict[str, Any]:

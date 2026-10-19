@@ -218,16 +218,15 @@ async def test_facets_are_counted_from_an_index(engine, session, seeded, name):
         assert all(n["Node Type"] == "Index Only Scan" and _scoped_to_type(n) for n in scans)
 
 
-async def test_search_uses_the_trigram_indexes(engine, session, seeded):
-    # A btree cannot answer ILIKE '%term%'; with plain index scans switched off
-    # only a bitmap over a trigram index is left, or else a seq scan.
+async def test_search_reads_only_the_live_rows_of_its_type(engine, session, seeded):
+    # Search has no index of its own: ILIKE '%term%' filters the live rows of one
+    # type, which the partial browse indexes already narrow to a few thousand.
+    # A trigram index over every row, dropped items included, cost 294 MB on RU.
     statements = await _captured(
         engine, session, lambda r: r.browse("skills", q="merge", sort="name", limit=48, offset=0)
     )
-    for nodes in await _plans(
-        engine, statements, "enable_seqscan", "enable_indexscan", "enable_indexonlyscan"
-    ):
+    for nodes in await _plans(engine, statements, "enable_seqscan"):
         assert not _seq_scans_on_items(nodes)
-        assert any(
-            n["Node Type"] == "Bitmap Index Scan" and "trgm" in n["Index Name"] for n in nodes
-        )
+        index_reads = [n for n in nodes if n.get("Index Name", "").startswith("ix_registry_items_")]
+        assert index_reads
+        assert all(_scoped_to_type(n) for n in index_reads)

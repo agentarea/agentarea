@@ -9,10 +9,25 @@ read/write scoping.
 """
 
 from typing import Any
+from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import case, false, func, or_, select, update
+from sqlalchemy import (
+    String,
+    case,
+    cast,
+    column,
+    delete,
+    exists,
+    false,
+    func,
+    or_,
+    select,
+    table,
+    update,
+)
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -22,7 +37,7 @@ from agentarea_registry.application.catalog_facets import (
     CATALOG_PROTOCOLS,
     PROTOCOL_REGISTRY_TYPE,
 )
-from agentarea_registry.domain.models import Registry, RegistryItem
+from agentarea_registry.domain.models import Registry, RegistryItem, RegistryItemInstall
 
 # Accepted catalog orderings, mapped to their ORDER BY. Every ordering ends with
 # ``id`` so rows with equal keys can't let OFFSET paging repeat one and drop
@@ -240,6 +255,34 @@ class RegistryItemRepository:
                 )
             )
         ).scalar_one()
+
+    async def delete_unreferenced_out_of_source(self, registry_id: UUID | str) -> int:
+        """Delete the registry's items its source dropped that nothing uses.
+
+        An item stays while a workspace installed, forked or connected to it,
+        or while the platform materialized it (an MCP mirror, a model spec).
+        Returns how many items were deleted.
+        """
+        uuid_refs = [
+            table(name, column("registry_item_id"))
+            for name in ("skills", "mcp_servers", "openapi_connections")
+        ]
+        agents = table("agents", column("registry_item_id"))
+        referenced = or_(
+            RegistryItem.installed_entity_id.is_not(None),
+            exists().where(RegistryItemInstall.registry_item_id == RegistryItem.id),
+            *(exists().where(ref.c.registry_item_id == RegistryItem.id) for ref in uuid_refs),
+            exists().where(agents.c.registry_item_id == cast(RegistryItem.id, String)),
+        )
+        result = await self.session.execute(
+            delete(RegistryItem).where(
+                RegistryItem.registry_id == registry_id,
+                RegistryItem.in_source.is_(False),
+                ~referenced,
+            )
+        )
+        await self.session.commit()
+        return type_cast(CursorResult[Any], result).rowcount
 
     async def update(self, id: UUID | str, **kwargs: Any) -> RegistryItem | None:
         record = await self.session.get(RegistryItem, id)

@@ -47,6 +47,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     is recorded saved (and billed) once by a conditional update.
 #   catalog browse plans: /explore is only fast while every browse query has an
 #     index that serves it, a property of the migrated indexes and the planner.
+#   catalog retire: a sync deletes what its source dropped unless a row of
+#     another module (install, fork, agent, connection) still references it.
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
 #     preset's skill key is matched against hashed catalog names with LIKE.
 #   MCP spec list: tenant specs and catalog items are paged, filtered and
@@ -107,6 +109,7 @@ PY_SUITES=(
   libs/llm/tests/test_catalog_model_instance_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
+  libs/registry/tests/test_catalog_retire_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
   apps/api/tests/test_catalog_connections_db.py

@@ -264,11 +264,18 @@ def validate():
     default=None,
     help="Path to a YAML/JSON manifest listing registry sources.",
 )
-def reconcile(registries_config: str | None, source: tuple[str, ...], config_file: str | None):
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Re-read every source even if its ETag is the one last applied.",
+)
+def reconcile(
+    registries_config: str | None, source: tuple[str, ...], config_file: str | None, force: bool
+):
     """Idempotent reconcile — ensure registries exist and sync them."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    asyncio.run(_reconcile(registries_config, source, config_file))
+    asyncio.run(_reconcile(registries_config, source, config_file, force=force))
 
 
 async def _register_graph_client() -> None:
@@ -307,6 +314,7 @@ async def _reconcile(
     registries_config: str | None,
     sources: tuple[str, ...],
     config_file: str | None = None,
+    force: bool = False,
 ):
     """Async reconcile implementation."""
     from agentarea_common.auth.context import UserContext
@@ -487,7 +495,7 @@ async def _reconcile(
                         registry_id = registry.id
                         click.echo(f"Created registry: {registry_id}")
 
-                    stats = await service.sync_registry(registry_id)
+                    stats = await service.sync_registry(registry_id, force=force)
                     await session.commit()
                     click.echo(f"Synced: {stats}")
                     if stats.get("skipped"):

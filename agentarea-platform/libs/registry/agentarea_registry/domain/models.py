@@ -67,6 +67,8 @@ class Registry(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The source's ETag as of the last applied sync; an unchanged one is skipped.
+    source_etag: Mapped[str | None] = mapped_column(Text, nullable=True)
     item_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     recommendation_priority: Mapped[int] = mapped_column(
         Integer, nullable=False, default=DEFAULT_REGISTRY_PRIORITY
@@ -95,6 +97,7 @@ class Registry(BaseModel):
         self.recommendation_priority = recommendation_priority
         self.last_synced_at = None
         self.last_sync_error = None
+        self.source_etag = None
         self.item_count = 0
 
 
