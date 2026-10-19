@@ -122,7 +122,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     The workspace feed filters by what the platform did with an event in SQL
 #     over the router's routing and tally columns, and agrees with the status
 #     the API reports; the event-routing migration routes recorded events to
-#     the subscriptions that reacted.
+#     the subscriptions that reacted. Its facet counts come from a rollup the
+#     recording transaction keeps and a partition drop cuts, backfilled by the
+#     migration, and equal a full count of the rows.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
@@ -183,6 +185,7 @@ PY_SUITES=(
   libs/streams/tests/test_partition_archive_db.py
   libs/streams/tests/test_router_db.py
   libs/streams/tests/test_event_feed_db.py
+  libs/streams/tests/test_event_counts_db.py
   apps/api/tests/test_event_routing_migration_db.py
   apps/api/tests/test_webhook_source_intake_db.py
   apps/api/tests/test_stream_sources_db.py

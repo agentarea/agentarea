@@ -5002,6 +5002,12 @@
       },
       "FeedFacetsResponse": {
         "properties": {
+          "capped": {
+            "default": false,
+            "description": "Under a filter other than stream and source type the counts stop after the first 1000 matching events; true when more match, so each count is a lower bound.",
+            "title": "Capped",
+            "type": "boolean"
+          },
           "source_types": {
             "additionalProperties": {
               "type": "integer"

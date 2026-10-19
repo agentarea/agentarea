@@ -4,7 +4,8 @@ Runs inside the worker. Infrastructure across every workspace, so it declares
 why it is unscoped. ``CREATE TABLE ... PARTITION OF`` has no SQLAlchemy
 construct and is the one statement written as text.
 
-A day older than ``AGENTAREA_EVENT_RETENTION`` is dropped whole. With
+A day older than ``AGENTAREA_EVENT_RETENTION`` is dropped whole, its rows of
+``stream_event_counts`` in the same transaction. With
 ``AGENTAREA_EVENT_ARCHIVE`` on, its events are first written to the object
 store, one gzipped JSONL object per workspace; a day the store does not take is
 kept, and the next pass tries again. Every step commits on its own: partition DDL takes an ACCESS EXCLUSIVE lock on
@@ -24,7 +25,7 @@ from urllib.parse import quote
 
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config.streams import EventStreamSettings
-from sqlalchemy import Executable, MetaData, Table, column, func, select, table, text
+from sqlalchemy import Executable, MetaData, Table, column, delete, func, select, table, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.schema import DropTable
@@ -32,7 +33,7 @@ from sqlalchemy.schema import DropTable
 from ..domain.feed import RoutedEvent
 from .event_archive import EventArchive
 from .event_repository import to_routed
-from .orm import StreamEventORM
+from .orm import StreamEventCountORM, StreamEventORM
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +145,10 @@ class PartitionMaintainer:
                     if day >= horizon or not await self._archived(name, day, report):
                         continue
                     if await self._ddl(
-                        name, DropTable(Table(name, MetaData()), if_exists=True), report
+                        name,
+                        report,
+                        DropTable(Table(name, MetaData()), if_exists=True),
+                        delete(StreamEventCountORM).where(StreamEventCountORM.day == day),
                     ):
                         report.dropped.append(name)
         if report.created or report.dropped or report.deferred or report.kept:
@@ -216,16 +220,17 @@ class PartitionMaintainer:
             f'CREATE TABLE IF NOT EXISTS "{name}" PARTITION OF stream_events FOR VALUES FROM '
             + f"('{day.isoformat()} 00:00:00+00') TO ('{following.isoformat()} 00:00:00+00')"
         )
-        if await self._ddl(name, statement, report):
+        if await self._ddl(name, report, statement):
             report.created.append(name)
 
-    async def _ddl(self, name: str, statement: Executable, report: PartitionReport) -> bool:
-        """Run one DDL statement in its own short transaction; False when the lock wait ran out."""
+    async def _ddl(self, name: str, report: PartitionReport, *statements: Executable) -> bool:
+        """Run DDL in its own short transaction; False when the lock wait ran out."""
         timeout = f"{int(self._lock_timeout.total_seconds() * 1000)}ms"
         async with self._session_factory() as session:
             await session.execute(select(func.set_config("lock_timeout", timeout, True)))
             try:
-                await session.execute(statement)
+                for statement in statements:
+                    await session.execute(statement)
                 await session.commit()
             except DBAPIError as error:
                 if getattr(error.orig, "sqlstate", None) != _LOCK_NOT_AVAILABLE:

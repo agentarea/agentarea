@@ -12,7 +12,7 @@ import {
 import { isPlatformStream } from "@/lib/platformStream";
 import { requireApiData } from "@/lib/server-resource";
 import FeedContent from "./components/feed/FeedContent";
-import FeedEventPanel from "./components/feed/FeedEventPanel";
+import FeedEventPanelServer from "./components/feed/FeedEventPanelServer";
 import FeedEventSidePanel from "./components/feed/FeedEventSidePanel";
 import { FeedLiveProvider, LiveIndicator } from "./components/feed/FeedLive";
 import { FeedSelectionProvider } from "./components/feed/FeedSelection";
@@ -51,7 +51,7 @@ export default async function EventsPage({
     <FeedLiveProvider
       query={liveQuery(state, showsPlatform(state, platformStreams))}
     >
-      <FeedSelectionProvider>
+      <FeedSelectionProvider serverEvent={event}>
         <ContentBlock
           className="flex overflow-hidden p-0"
           header={{
@@ -77,15 +77,12 @@ export default async function EventsPage({
               </Suspense>
             </div>
           </div>
-          <FeedEventSidePanel
-            event={event}
-            closeHref={feedHref(state, { event: undefined })}
-          >
+          <FeedEventSidePanel streams={streams} sourceTypes={sourceTypes}>
             {event && (
               <Suspense key={event} fallback={<FeedEventPanelSkeleton />}>
-                <FeedEventPanel
+                <FeedEventPanelServer
                   eventId={event}
-                  streamNames={new Map(streams.map((s) => [s.id, s.name]))}
+                  streams={streams}
                   sourceTypes={sourceTypes}
                 />
               </Suspense>

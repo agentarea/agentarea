@@ -1,48 +1,60 @@
-import { getLocale, getTranslations } from "next-intl/server";
-import type { HandlerResponse } from "@/api/client/types.gen";
+"use client";
+
+import { useLocale, useTranslations } from "next-intl";
+import { RefreshCw } from "lucide-react";
+import type {
+  HandlerResponse,
+  StreamEventDetailResponse,
+} from "@/api/client/types.gen";
+import FormError from "@/components/FormError/FormError";
 import {
   InfoPanelBody,
   InfoPanelHeader,
   InfoPanelSection,
 } from "@/components/InfoPanel";
 import { TaskStatus } from "@/components/TaskStatus";
+import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import WorkspaceLink from "@/components/WorkspaceLink";
-import { getStreamEventById } from "@/lib/api";
 import { processingProgress } from "@/lib/eventFeed";
-import { optionalApiData } from "@/lib/server-resource";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getStreamOutcomeStatusPresentation } from "@/lib/status";
 import { formatDateTime } from "@/utils/dateUtils";
 import {
   EventEnvelope,
   EventPayload,
-  type Translator,
-} from "../../[streamId]/components/EventDetail";
+} from "../../[streamId]/components/EventEnvelope";
 import {
   eventHref,
   feedHref as streamFeedHref,
 } from "../../[streamId]/feedHref";
 import ProcessingPill from "./ProcessingPill";
 
+type Translator = ReturnType<typeof useTranslations>;
+
 /** The event open in the side panel: its envelope, each subscriber's answer, its body. */
-export default async function FeedEventPanel({
+export default function FeedEventPanel({
   eventId,
-  streamNames,
+  event,
+  error,
+  onRetry,
+  streams,
   sourceTypes,
 }: {
   eventId: string;
-  streamNames: Map<string, string>;
+  /** Null when the event is no longer kept. */
+  event: StreamEventDetailResponse | null;
+  /** Reading the event failed. */
+  error?: string;
+  onRetry?: () => void;
+  streams: { id: string; name: string }[];
   sourceTypes: SourceType[];
 }) {
-  const [t, tDetail, tFilter, locale, result] = await Promise.all([
-    getTranslations("EventsPage"),
-    getTranslations("EventsPage.detail"),
-    getTranslations("EventsPage.filter"),
-    getLocale(),
-    getStreamEventById(eventId),
-  ]);
-  const event = optionalApiData(result, "stream event");
+  const t = useTranslations("EventsPage");
+  const tDetail = useTranslations("EventsPage.detail");
+  const tFilter = useTranslations("EventsPage.filter");
+  const tCommon = useTranslations("Common");
+  const locale = useLocale();
 
   if (!event) {
     return (
@@ -53,9 +65,21 @@ export default async function FeedEventPanel({
           title={<span className="font-mono">{eventId.slice(0, 8)}</span>}
         />
         <InfoPanelBody>
-          <p className="py-6 text-center text-muted-foreground">
-            {t("panel.gone")}
-          </p>
+          {error ? (
+            <div className="space-y-2">
+              <FormError>{error}</FormError>
+              {onRetry && (
+                <Button size="xs" variant="outline" onClick={onRetry}>
+                  <RefreshCw />
+                  {tCommon("retry")}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-muted-foreground">
+              {t("panel.gone")}
+            </p>
+          )}
         </InfoPanelBody>
       </>
     );
@@ -64,12 +88,13 @@ export default async function FeedEventPanel({
   const progress = event.processing
     ? processingProgress(event.processing)
     : null;
+  const streamName = streams.find((s) => s.id === event.stream_id)?.name;
 
   return (
     <>
       <InfoPanelHeader
         className="pr-10"
-        label={`${streamNames.get(event.stream_id) ?? t("list.unknownStream")} · ${formatDateTime(event.received_at, locale)}`}
+        label={`${streamName ?? t("list.unknownStream")} · ${formatDateTime(event.received_at, locale)}`}
         title={event.kind}
         right={
           event.processing && (

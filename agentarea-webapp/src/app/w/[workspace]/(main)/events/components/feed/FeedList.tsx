@@ -50,7 +50,7 @@ function isTyping(target: EventTarget | null): boolean {
 /**
  * The workspace feed's rows: the page the server read, and what arrived since
  * on top, one table per day. Clicking a row opens it in the side panel
- * (`?event=`); up and down move through the list.
+ * (`?event=`, set in place); up and down move through the list.
  */
 export default function FeedList({
   initial,
@@ -73,8 +73,7 @@ export default function FeedList({
   const locale = useLocale();
   const router = useWorkspaceRouter();
   const { listen } = useFeedLive();
-  const { pending, select } = useFeedSelection();
-  const selected = pending === undefined ? state.event : pending;
+  const { selected, select } = useFeedSelection();
   const listRef = useRef<HTMLDivElement>(null);
   const [arrived, setArrived] = useState<FeedEventResponse[]>([]);
   const [held, setHeld] = useState<FeedEventResponse[]>([]);
@@ -92,13 +91,9 @@ export default function FeedList({
     return () => clearInterval(timer);
   }, []);
 
-  const selectedRef = useRef(state.event);
-  selectedRef.current = state.event;
-
   useEffect(() => {
     if (!live) return;
-    let refresh: ReturnType<typeof setTimeout> | undefined;
-    const stop = listen((message) => {
+    return listen((message) => {
       if (message.type === "resync") {
         router.refresh();
         return;
@@ -113,15 +108,7 @@ export default function FeedList({
         return;
       }
       setMoved((all) => ({ ...all, [message.eventId]: message.processing }));
-      if (message.eventId === selectedRef.current) {
-        clearTimeout(refresh);
-        refresh = setTimeout(() => router.refresh(), 300);
-      }
     });
-    return () => {
-      stop();
-      clearTimeout(refresh);
-    };
   }, [listen, live, router]);
 
   const rows = useMemo(() => {
@@ -171,17 +158,16 @@ export default function FeedList({
       const next = neighbourEvent(rows, selected ?? undefined, step);
       if (!next) return;
       e.preventDefault();
-      select(feedHref(state, { event: next }), next);
+      select(next, selected != null);
       document
         .getElementById(`feed-row-${next}`)
         ?.scrollIntoView({ block: "nearest" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, state, selected, select]);
+  }, [rows, selected, select]);
 
-  const open = (eventId: string) =>
-    select(feedHref(state, { event: eventId }), eventId);
+  const open = (eventId: string) => select(eventId);
   const streamNames = new Map(streams.map((s) => [s.id, s.name]));
   const zone = clock?.zone ?? "UTC";
   const groups = dayGroups(rows, new Date(clock?.now ?? Date.now()), zone);

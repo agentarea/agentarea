@@ -2832,6 +2832,12 @@ export type FeedEventResponse = {
  */
 export type FeedFacetsResponse = {
   /**
+   * Capped
+   *
+   * Under a filter other than stream and source type the counts stop after the first 1000 matching events; true when more match, so each count is a lower bound.
+   */
+  capped?: boolean;
+  /**
    * Source Types
    *
    * Events per source type under the other filters.

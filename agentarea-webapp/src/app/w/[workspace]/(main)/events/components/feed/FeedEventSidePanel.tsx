@@ -6,6 +6,8 @@ import { X } from "lucide-react";
 import { InfoPanelShell } from "@/components/InfoPanel";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import type { SourceType } from "@/lib/sourceTypes";
+import FeedEventPanel from "./FeedEventPanel";
 import { useFeedSelection } from "./FeedSelection";
 import { FeedEventPanelSkeleton } from "./FeedSkeleton";
 
@@ -14,24 +16,29 @@ const NARROW = "(max-width: 1279px)";
 /**
  * The open event in the app's info panel: docked at the right edge of the
  * page on a wide screen, a sheet over the feed on a narrower one. An event
- * picked a moment ago shows its skeleton until its page arrives; closing goes
- * back to the feed without the event.
+ * picked a moment ago shows its skeleton until it is read; closing goes back
+ * to the feed without the event.
  */
 export default function FeedEventSidePanel({
-  event,
-  closeHref,
+  streams,
+  sourceTypes,
   children,
 }: {
-  /** The event the server rendered `children` for. */
-  event: string | undefined;
-  closeHref: string;
+  streams: { id: string; name: string }[];
+  sourceTypes: SourceType[];
+  /** The server's panel for the event the URL came with. */
   children: ReactNode;
 }) {
   const t = useTranslations("EventsPage.panel");
-  const { pending, select } = useFeedSelection();
+  const {
+    selected: shown,
+    detail,
+    serverRendered,
+    select,
+    reload,
+  } = useFeedSelection();
   const [narrow, setNarrow] = useState<boolean | null>(null);
-  const shown = pending === undefined ? event : pending;
-  const close = () => select(closeHref, null);
+  const close = () => select(null);
 
   useEffect(() => {
     const query = window.matchMedia(NARROW);
@@ -50,16 +57,29 @@ export default function FeedEventSidePanel({
         e.target.closest("input, textarea, select, [role=dialog]")
       )
         return;
-      select(closeHref, null);
+      select(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [narrow, shown, closeHref, select]);
+  }, [narrow, shown, select]);
 
   if (!shown) return null;
   const body = (
     <InfoPanelShell className={narrow ? "border-l-0" : undefined}>
-      {shown === event ? children : <FeedEventPanelSkeleton />}
+      {detail ? (
+        <FeedEventPanel
+          eventId={shown}
+          event={"event" in detail ? detail.event : null}
+          error={"error" in detail ? detail.error : undefined}
+          onRetry={reload}
+          streams={streams}
+          sourceTypes={sourceTypes}
+        />
+      ) : serverRendered ? (
+        children
+      ) : (
+        <FeedEventPanelSkeleton />
+      )}
     </InfoPanelShell>
   );
 

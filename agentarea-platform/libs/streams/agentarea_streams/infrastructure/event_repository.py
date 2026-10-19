@@ -13,13 +13,14 @@ transaction ends: within a stream, commit order is sequence order.
 """
 
 import logging
+from collections import Counter
 from collections.abc import Collection
-from datetime import datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from sqlalchemy import ColumnElement, and_, func, select, update
+from sqlalchemy import ColumnElement, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,13 +30,17 @@ from ..domain.feed import FeedFacets, FeedFilter, RoutedEvent
 from ..domain.models import Attachment, ReactionTally, RecordedEvent, StreamEvent
 from ..domain.platform import PLATFORM_SOURCE_TYPE
 from ..domain.processing import ProcessingStatus
-from .orm import StreamEventORM, StreamORM
+from .orm import StreamEventCountORM, StreamEventORM, StreamORM
 
 logger = logging.getLogger(__name__)
 
 _FOREIGN_KEY_VIOLATION = "23503"
 #: First key of the two-key advisory lock on a stream's inserts; the second is the stream.
 _INSERT_LOCK_CLASS = 0x53455131
+#: Under filters the rollup cannot answer, the facets count this many matching events at most.
+FACET_CAP = 1000
+#: ``stream_event_counts.source_type`` of an event with none.
+_NO_SOURCE_TYPE = ""
 
 
 def _envelope(row: StreamEventORM) -> dict[str, Any]:
@@ -108,6 +113,12 @@ def _feed_conditions(
         conditions.append(_E.source_type == f.source_type)
     if not f.platform and facet is None:
         conditions.append(_E.source_type.is_distinct_from(PLATFORM_SOURCE_TYPE))
+    return conditions + _other_conditions(f)
+
+
+def _other_conditions(f: FeedFilter) -> list[ColumnElement[bool]]:
+    """Every filter but the stream, the source type and the platform switch."""
+    conditions: list[ColumnElement[bool]] = []
     if (exact := f.exact_kind()) is not None:
         conditions.append(_E.kind == exact)
     if (prefix := f.kind_prefix()) is not None:
@@ -125,6 +136,10 @@ def _feed_conditions(
     if f.event_id is not None:
         conditions.append(_E.event_id == f.event_id)
     return conditions
+
+
+def _day(at: datetime) -> date:
+    return at.astimezone(UTC).date()
 
 
 class StreamEventRepository:
@@ -223,7 +238,10 @@ class StreamEventRepository:
                     .on_conflict_do_nothing(index_elements=["event_id", "received_at"])
                     .returning(StreamEventORM.sequence)
                 )
-                return inserted.scalar_one_or_none() is not None
+                if inserted.scalar_one_or_none() is None:
+                    return False
+                await self._count(event)
+                return True
         except IntegrityError as error:
             if getattr(error.orig, "sqlstate", None) != _FOREIGN_KEY_VIOLATION:
                 raise
@@ -231,6 +249,30 @@ class StreamEventRepository:
                 "Event %s not recorded: stream %s no longer exists", event.id, event.stream_id
             )
             return False
+
+    async def _count(self, event: StreamEvent) -> None:
+        """One more event in its stream's day; under the stream's insert lock, like the row."""
+        counts = StreamEventCountORM
+        await self.session.execute(
+            pg_insert(counts)
+            .values(
+                workspace_id=event.workspace_id,
+                created_by=event.created_by,
+                stream_id=event.stream_id,
+                day=_day(event.received_at),
+                source_type=event.source_type or _NO_SOURCE_TYPE,
+                count=1,
+            )
+            .on_conflict_do_update(
+                index_elements=[
+                    counts.workspace_id,
+                    counts.stream_id,
+                    counts.day,
+                    counts.source_type,
+                ],
+                set_={"count": counts.count + 1},
+            )
+        )
 
     async def read_by_id(self, event_id: UUID) -> RecordedEvent | None:
         """The event with this id in this workspace, whichever stream holds it."""
@@ -268,26 +310,80 @@ class StreamEventRepository:
         result = await self.session.execute(stmt.order_by(_E.sequence.desc()).limit(limit))
         return [to_routed(row) for row in result.scalars().all()]
 
-    async def feed_facets(self, feed_filter: FeedFilter, streams: Collection[UUID]) -> FeedFacets:
-        visible = [self._in_workspace(), _E.stream_id.in_(list(streams))]
-        by_stream = await self.session.execute(
-            select(_E.stream_id, func.count())
-            .where(*visible, *_feed_conditions(feed_filter, facet="stream"))
-            .group_by(_E.stream_id)
+    async def feed_facets(
+        self, feed_filter: FeedFilter, streams: Collection[UUID], *, cap: int = FACET_CAP
+    ) -> FeedFacets:
+        """Events per stream and per source type, each facet under the other filters.
+
+        Filtered by no more than stream and source type, they come from the
+        rollup. Any other filter counts the rows themselves, up to ``cap`` of them.
+        """
+        if _other_conditions(feed_filter):
+            return await self._capped_facets(feed_filter, streams, cap)
+        return await self._rolled_up_facets(feed_filter, streams)
+
+    async def _rolled_up_facets(
+        self, feed_filter: FeedFilter, streams: Collection[UUID]
+    ) -> FeedFacets:
+        counts = StreamEventCountORM
+        visible: list[ColumnElement[bool]] = [
+            counts.workspace_id == self.user_context.workspace_id,
+            counts.stream_id.in_(list(streams)),
+        ]
+        by_stream = select(counts.stream_id, func.sum(counts.count)).where(*visible)
+        if feed_filter.source_type is not None:
+            by_stream = by_stream.where(counts.source_type == feed_filter.source_type)
+        by_source = select(counts.source_type, func.sum(counts.count)).where(
+            *visible, counts.source_type != _NO_SOURCE_TYPE
         )
-        by_source = await self.session.execute(
-            select(_E.source_type, func.count())
-            .where(
-                *visible,
-                _E.source_type.is_not(None),
-                *_feed_conditions(feed_filter, facet="source_type"),
-            )
-            .group_by(_E.source_type)
-        )
+        if feed_filter.stream_id is not None:
+            by_source = by_source.where(counts.stream_id == feed_filter.stream_id)
+        stream_rows = await self.session.execute(by_stream.group_by(counts.stream_id))
+        source_rows = await self.session.execute(by_source.group_by(counts.source_type))
         return FeedFacets(
-            streams=dict(by_stream.tuples().all()),
-            source_types={k: v for k, v in by_source.tuples().all() if k is not None},
+            streams={stream: int(n) for stream, n in stream_rows.tuples().all()},
+            source_types={source: int(n) for source, n in source_rows.tuples().all()},
         )
+
+    async def _capped_facets(
+        self, feed_filter: FeedFilter, streams: Collection[UUID], cap: int
+    ) -> FeedFacets:
+        """Both facets from one scan that stops after ``cap`` matching events.
+
+        The filter columns have no index, so a count per value would read the
+        workspace once per value. Past ``cap`` the counts are of the events
+        read so far: each is then a lower bound, and ``capped`` says so.
+        """
+        f = feed_filter
+        either: list[ColumnElement[bool]] = []
+        if f.stream_id is not None and f.source_type is not None:
+            either.append(or_(_E.stream_id == f.stream_id, _E.source_type == f.source_type))
+        matched = (
+            select(_E.stream_id, _E.source_type)
+            .where(
+                self._in_workspace(),
+                _E.stream_id.in_(list(streams)),
+                *either,
+                *_other_conditions(f),
+            )
+            .limit(cap + 1)
+            .subquery("matched")
+        )
+        rows = await self.session.execute(
+            select(matched.c.stream_id, matched.c.source_type, func.count()).group_by(
+                matched.c.stream_id, matched.c.source_type
+            )
+        )
+        by_stream: Counter[UUID] = Counter()
+        by_source: Counter[str] = Counter()
+        total = 0
+        for stream_id, source_type, n in rows.tuples().all():
+            total += n
+            if f.source_type is None or source_type == f.source_type:
+                by_stream[stream_id] += n
+            if source_type is not None and (f.stream_id is None or stream_id == f.stream_id):
+                by_source[source_type] += n
+        return FeedFacets(streams=dict(by_stream), source_types=dict(by_source), capped=total > cap)
 
     async def read_after(self, stream_id: UUID, after: int, limit: int) -> list[RecordedEvent]:
         result = await self.session.execute(

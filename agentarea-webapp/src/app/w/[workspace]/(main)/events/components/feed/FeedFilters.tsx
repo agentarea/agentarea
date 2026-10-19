@@ -32,10 +32,19 @@ interface FiltersProps {
   platform: { shown: boolean; forced: boolean };
 }
 
-function Count({ value }: { value: number | undefined }) {
+/** A facet count; `atLeast` when the server stopped counting, so it is a lower bound. */
+function Count({
+  value,
+  atLeast,
+}: {
+  value: number | undefined;
+  atLeast: boolean;
+}) {
+  if (atLeast && value === undefined) return null;
   return (
     <span className="text-xs tabular-nums text-muted-foreground">
       {value ?? 0}
+      {atLeast && "+"}
     </span>
   );
 }
@@ -88,6 +97,7 @@ function Filters({
     );
     onNavigate?.();
   };
+  const capped = facets?.capped ?? false;
   const providers = Object.entries(facets?.source_types ?? {}).sort(
     (a, b) => b[1] - a[1]
   );
@@ -185,7 +195,9 @@ function Filters({
               label={<span className="truncate">{stream.name}</span>}
               selected={state.stream === stream.id}
               onClick={() => go({ stream: stream.id })}
-              trailing={<Count value={facets?.streams[stream.id]} />}
+              trailing={
+                <Count value={facets?.streams[stream.id]} atLeast={capped} />
+              }
             />
           ))}
         </>
@@ -215,7 +227,7 @@ function Filters({
                   label={<span className="truncate">{type?.name ?? slug}</span>}
                   selected={state.source_type === slug}
                   onClick={() => go({ source_type: slug })}
-                  trailing={<Count value={count} />}
+                  trailing={<Count value={count} atLeast={capped} />}
                 />
               );
             })}

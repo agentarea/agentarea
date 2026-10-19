@@ -66,3 +66,5 @@ class FeedFacets(BaseModel):
 
     streams: dict[UUID, int]
     source_types: dict[str, int]
+    #: More events match than were counted: each count is then a lower bound.
+    capped: bool = False

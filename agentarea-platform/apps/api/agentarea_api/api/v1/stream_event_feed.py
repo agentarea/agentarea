@@ -25,7 +25,7 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.domain import ENVELOPE_VERSION
 from agentarea_streams.domain.feed import FeedFilter, RoutedEvent
 from agentarea_streams.domain.processing import Processing, ProcessingTask
-from agentarea_streams.infrastructure.event_repository import StreamEventRepository
+from agentarea_streams.infrastructure.event_repository import FACET_CAP, StreamEventRepository
 from agentarea_streams.infrastructure.live import EventNotice, EventNoticesHub, NoticeKind
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_triggers.domain.enums import ExecutionStatus
@@ -86,6 +86,14 @@ class FeedFacetsResponse(BaseModel):
     streams: dict[UUID, int] = Field(description="Events per stream under the other filters.")
     source_types: dict[str, int] = Field(
         description="Events per source type under the other filters."
+    )
+    capped: bool = Field(
+        default=False,
+        description=(
+            "Under a filter other than stream and source type the counts stop after the "
+            f"first {FACET_CAP} matching events; true when more match, so each count is a "
+            "lower bound."
+        ),
     )
 
 

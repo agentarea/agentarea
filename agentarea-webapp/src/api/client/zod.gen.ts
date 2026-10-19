@@ -929,6 +929,7 @@ export const zFailedTaskBlocker = z.object({
  * FeedFacetsResponse
  */
 export const zFeedFacetsResponse = z.object({
+  capped: z.boolean().optional().default(false),
   source_types: z.record(z.number().int()),
   streams: z.record(z.number().int()),
 });

@@ -1,6 +1,6 @@
 """Stream tables. stream_events, the events read model, is range-partitioned by day."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -151,6 +152,27 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     reacted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class StreamEventCountORM(JournalBase, WorkspaceScopedMixin):
+    """How many events each stream holds per UTC day and source type; the feed's facets.
+
+    Kept by the transaction that records each event, and a day goes when its
+    partition does. ``source_type`` is '' for events of no source type, so the
+    key can be the primary key.
+    """
+
+    __tablename__ = "stream_event_counts"
+
+    workspace_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    #: Who recorded the row's first event.
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    stream_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("streams.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    source_type: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
 class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):

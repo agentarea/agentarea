@@ -600,7 +600,11 @@ async def list_workspace_events(
     facets = None
     if before is None:
         counted = await events.feed_facets(filters, streams)
-        facets = FeedFacetsResponse(streams=counted.streams, source_types=counted.source_types)
+        facets = FeedFacetsResponse(
+            streams=counted.streams,
+            source_types=counted.source_types,
+            capped=counted.capped,
+        )
     return WorkspaceEventPage(
         events=await feed_items(session, user_context, rows),
         next_before=rows[-1].sequence if len(rows) == limit else None,
