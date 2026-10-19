@@ -81,6 +81,9 @@ SYNC_FORMAT = "3"
 # A workspace's index is a member-supplied URL: read within these bounds, so a
 # hostile or broken one costs one bounded request and no more.
 MAX_SOURCE_BYTES = 5 * 1024 * 1024
+# YAML is parsed in pure Python, seconds per megabyte: JSON keeps the full cap.
+MAX_YAML_SOURCE_BYTES = 1024 * 1024
+MAX_YAML_NODES = 200_000
 SOURCE_DEADLINE_SECONDS = 60.0
 MAX_SOURCE_ITEMS = 2000
 MAX_SOURCE_REDIRECTS = 5
@@ -178,20 +181,33 @@ def sync_error_message(error: BaseException) -> str:
 
 
 class _NoAliasLoader(yaml.SafeLoader):
-    """YAML without anchors' aliases: a few lines of them expand to gigabytes."""
+    """YAML within a node budget and without aliases, which expand to gigabytes."""
+
+    def __init__(self, stream: str):
+        super().__init__(stream)
+        self._nodes = 0
 
     def compose_node(self, parent: Any, index: Any) -> Any:
         if self.check_event(yaml.AliasEvent):
             raise yaml.YAMLError("YAML aliases are not accepted in a registry index")
+        self._nodes += 1
+        if self._nodes > MAX_YAML_NODES:
+            raise yaml.YAMLError(f"a registry index holds at most {MAX_YAML_NODES} YAML nodes")
         return super().compose_node(parent, index)
 
 
 def _parse_untrusted(body: bytes) -> Any:
+    """CPU-bound: run it in a worker thread, never on the event loop."""
     try:
         text = body.decode("utf-8")
         try:
             return json.loads(text)
         except json.JSONDecodeError:
+            if len(body) > MAX_YAML_SOURCE_BYTES:
+                raise RegistrySourceError(
+                    f"the source is a YAML index over {_size(MAX_YAML_SOURCE_BYTES)}; "
+                    "publish it as JSON"
+                ) from None
             loader = _NoAliasLoader(text)
             try:
                 return loader.get_single_data()
@@ -915,7 +931,10 @@ class RegistryService:
                 # process -- /health with it, which is what the probes poll.
                 raw_data = await asyncio.to_thread(self._fetch_source, registry.source_url)
             try:
-                parsed_items = self._parse_source(registry.registry_type, raw_data)
+                # Off the loop: a whole catalog parses for as long as it is big.
+                parsed_items = await asyncio.to_thread(
+                    self._parse_source, registry.registry_type, raw_data
+                )
             except ValueError as e:
                 raise RegistrySourceError(f"the source is not a valid index: {e}") from e
             except (TypeError, AttributeError, KeyError) as e:
@@ -1510,7 +1529,7 @@ class RegistryService:
             ) from e
         except httpx.HTTPError as e:
             raise RegistrySourceError("the source could not be reached") from e
-        return _parse_untrusted(bytes(body))
+        return await asyncio.to_thread(_parse_untrusted, bytes(body))
 
     @staticmethod
     def _source_etag(source_url: str) -> str | None:

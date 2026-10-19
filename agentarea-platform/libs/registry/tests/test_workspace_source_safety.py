@@ -285,3 +285,61 @@ async def test_a_workspace_sync_has_a_deadline_of_its_own(db_session, monkeypatc
         await service.sync_registry(registry.id)
     await db_session.refresh(registry)
     assert registry.last_sync_error == "the sync took longer than 0.2 s"
+
+
+def _yaml_index(count: int) -> bytes:
+    return b"skills:\n" + b"".join(b"- {name: s%d, content: x}\n" % i for i in range(count))
+
+
+async def test_parsing_a_large_index_leaves_the_event_loop_free(db_session, monkeypatch):
+    # The API serves every tenant from one event loop; a YAML parse is pure
+    # Python and takes seconds per megabyte, so it must not run on the loop.
+    monkeypatch.setattr(service_module, "MAX_SOURCE_ITEMS", 100_000)
+    body = _yaml_index(12_000)
+    gaps: list[float] = []
+
+    async def ticker(stop: asyncio.Event) -> None:
+        loop = asyncio.get_running_loop()
+        while not stop.is_set():
+            started = loop.time()
+            await asyncio.sleep(0.01)
+            gaps.append(loop.time() - started)
+
+    stop = asyncio.Event()
+    ticking = asyncio.create_task(ticker(stop))
+    await asyncio.sleep(0)
+    await _service(db_session, _serving(body, **{"content-type": "text/yaml"}))._fetch_untrusted(
+        INDEX
+    )
+    stop.set()
+    await ticking
+
+    assert len(gaps) > 3
+    assert max(gaps) < 0.25
+
+
+async def test_a_yaml_index_over_its_own_cap_is_refused(db_session, monkeypatch):
+    monkeypatch.setattr(service_module, "MAX_YAML_SOURCE_BYTES", 1024)
+
+    _, registry = await _sync_error(db_session, _serving(_yaml_index(100)))
+
+    assert registry.last_sync_error == "the source is a YAML index over 1 KB; publish it as JSON"
+
+
+async def test_a_json_index_may_be_larger_than_the_yaml_cap(db_session, monkeypatch):
+    monkeypatch.setattr(service_module, "MAX_YAML_SOURCE_BYTES", 1024)
+    body = b'{"skills": [' + b",".join(b'{"name": "s%d"}' % i for i in range(100)) + b"]}"
+
+    stats = await _service(db_session, _serving(body)).sync_registry(
+        (await _registry(db_session)).id
+    )
+
+    assert stats["new_specs"] == 100
+
+
+async def test_a_yaml_index_over_the_node_budget_is_refused(db_session, monkeypatch):
+    monkeypatch.setattr(service_module, "MAX_YAML_NODES", 50)
+
+    _, registry = await _sync_error(db_session, _serving(_yaml_index(100)))
+
+    assert registry.last_sync_error == "the source is not a valid JSON or YAML index"
