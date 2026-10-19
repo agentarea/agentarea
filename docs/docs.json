@@ -119,6 +119,7 @@
               "guides/agents/create-and-configure",
               "guides/agents/choose-a-model",
               "guides/agents/attach-skills",
+              "guides/agents/add-a-skill-registry",
               "guides/agents/delegate-to-another-workspace"
             ]
           },
@@ -193,6 +194,7 @@
           "self-host/env-migration",
           "self-host/docker-compose",
           "self-host/kubernetes",
+          "self-host/catalog-registries",
           "self-host/mcp-data-plane",
           "self-host/serverless-mcp",
           "self-host/networking",
