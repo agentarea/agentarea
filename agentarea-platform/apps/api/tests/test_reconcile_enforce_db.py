@@ -232,7 +232,9 @@ async def test_a_registry_another_reconcile_is_syncing_is_skipped(
             {"k": f"registry-sync:platform:{PREFIX}busy"},
         )
 
-    assert "another reconcile is syncing it" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "another reconcile is syncing it" in captured.out
+    assert f"WARNING: skipped, another reconcile was syncing: {PREFIX}busy" in captured.err
     async with engine.connect() as conn:
         created = await conn.execute(
             text("SELECT count(*) FROM registries WHERE name = :n"), {"n": f"{PREFIX}busy"}

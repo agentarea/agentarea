@@ -129,3 +129,27 @@ async def test_a_failed_platform_source_still_fails_the_run(monkeypatch):
         await cli._reconcile(config, (), None, workspace_registries=True)
 
     assert exited.value.code == 1
+
+
+async def test_a_failed_unlock_does_not_replace_what_the_sync_did(caplog):
+    # The lock's connection sits idle for the whole sync; when it was cut, the
+    # unlock raised from finally and turned a finished sync into a failure.
+    class _Conn:
+        async def execution_options(self, **_options):
+            return self
+
+        async def execute(self, statement, _params):
+            if "unlock" in str(statement):
+                raise ConnectionResetError("connection reset by peer")
+            return SimpleNamespace(scalar_one=lambda: True)
+
+    class _Engine:
+        @asynccontextmanager
+        async def connect(self):
+            yield _Conn()
+
+    async with cli._registry_sync_lock(SimpleNamespace(engine=_Engine()), "k") as held:
+        assert held
+
+    assert "Could not release the reconcile lock k" in caplog.text
+    assert any(r.exc_info for r in caplog.records)

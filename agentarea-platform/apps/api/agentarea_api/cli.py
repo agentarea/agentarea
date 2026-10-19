@@ -420,6 +420,8 @@ async def _registry_sync_lock(db: Database, key: str) -> AsyncIterator[bool]:
     The ArgoCD Sync hook and the hourly CronJob can reconcile at once. A
     session-level advisory lock on its own connection, in autocommit so the
     run holds no transaction open; the second run to reach a registry skips it.
+    A session lock needs a direct connection or a session-mode pooler: behind
+    a transaction-mode pooler it would outlive the run and skip forever.
     """
     async with db.engine.connect() as conn:
         conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
@@ -434,9 +436,14 @@ async def _registry_sync_lock(db: Database, key: str) -> AsyncIterator[bool]:
             yield held
         finally:
             if held:
-                await conn.execute(
-                    text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key}
-                )
+                try:
+                    await conn.execute(
+                        text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key}
+                    )
+                except Exception:
+                    # The connection is gone and its session's lock with it;
+                    # what the sync did stands.
+                    logger.exception("Could not release the reconcile lock %s", key)
 
 
 async def _reconcile(
@@ -685,13 +692,16 @@ async def _reconcile(
             click.echo(f"Reconcile failed for {registry_name}: {e}", err=True)
             failed.append((registry_name, str(e)))
 
+    busy: list[str] = []
     if workspace_registries:
         # A tenant's broken source is recorded on its registry and reported
         # here; it does not fail the run the platform's sources decide.
-        synced, broken = await _reconcile_workspace_registries(db, force=force)
+        synced, broken, busy = await _reconcile_workspace_registries(db, force=force)
         click.echo(f"\nWorkspace registries: {len(synced)} synced, {len(broken)} failed")
         for name, err in broken:
             click.echo(f"  - {name}: {err}", err=True)
+    for name in (*skipped, *busy):
+        click.echo(f"  WARNING: skipped, another reconcile was syncing: {name}", err=True)
 
     click.echo(
         f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed, "
@@ -705,7 +715,7 @@ async def _reconcile(
 
 async def _reconcile_workspace_registries(
     db: Database, *, force: bool
-) -> tuple[list[str], list[tuple[str, str]]]:
+) -> tuple[list[str], list[tuple[str, str]], list[str]]:
     """Sync every active registry a workspace added, each as its own workspace.
 
     An unchanged index ETag or repository head is skipped like a platform
@@ -731,6 +741,7 @@ async def _reconcile_workspace_registries(
 
     succeeded: list[str] = []
     failed: list[tuple[str, str]] = []
+    skipped: list[str] = []
     for registry in registries:
         label = f"{registry.workspace_id}/{registry.name}"
         click.echo(f"\nReconciling: {label}")
@@ -739,6 +750,7 @@ async def _reconcile_workspace_registries(
             async with _registry_sync_lock(db, f"registry-sync:{registry.id}") as held:
                 if not held:
                     click.echo(f"Skipped {label}: another reconcile is syncing it")
+                    skipped.append(label)
                     continue
                 with workspace_scope(owner.workspace_id):
                     async with db.async_session_factory() as session:
@@ -757,7 +769,7 @@ async def _reconcile_workspace_registries(
             logger.exception("Reconcile failed for workspace registry %s", label)
             click.echo(f"Reconcile failed for {label}: {e}", err=True)
             failed.append((label, str(e)))
-    return succeeded, failed
+    return succeeded, failed, skipped
 
 
 if __name__ == "__main__":
