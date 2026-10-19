@@ -1,15 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  ARTIFACT_CREATED,
   canonicalType,
   derivePart,
   EVENT_TYPES,
   isTaskEventType,
-  reduceParts,
-  VOCABULARY_VERSION,
   LLM_COMPLETED,
+  reduceParts,
   TOOL_CALL,
   TOOL_RESULT,
-  ARTIFACT_CREATED,
+  VOCABULARY_VERSION,
 } from "./contract";
 
 describe("vocabulary", () => {
@@ -145,9 +145,18 @@ describe("derivePart", () => {
 describe("reduceParts", () => {
   it("collapses chunk, chunk, final into a single llm part (final wins)", () => {
     const parts = reduceParts([
-      { eventType: "llm.call.chunk", data: { execution_id: "e", iteration: 0, chunk: "a" } },
-      { eventType: "llm.call.chunk", data: { execution_id: "e", iteration: 0, chunk: "ab" } },
-      { eventType: "llm.call.completed", data: { execution_id: "e", iteration: 0, content: "final" } },
+      {
+        eventType: "llm.call.chunk",
+        data: { execution_id: "e", iteration: 0, chunk: "a" },
+      },
+      {
+        eventType: "llm.call.chunk",
+        data: { execution_id: "e", iteration: 0, chunk: "ab" },
+      },
+      {
+        eventType: "llm.call.completed",
+        data: { execution_id: "e", iteration: 0, content: "final" },
+      },
     ]);
     expect(parts).toHaveLength(1);
     expect(parts[0].eventType).toBe(LLM_COMPLETED);
@@ -165,17 +174,59 @@ describe("reduceParts", () => {
 
   it("keeps a compaction call out of the transcript", () => {
     const parts = reduceParts([
-      { eventType: "llm.call.completed", data: { execution_id: "e", iteration: 1, content: "answer" } },
       {
         eventType: "llm.call.completed",
-        data: { execution_id: "e", iteration: 1, purpose: "compaction", content: "" },
+        data: { execution_id: "e", iteration: 1, content: "answer" },
       },
       {
         eventType: "llm.call.completed",
-        data: { execution_id: "e", iteration: 2, purpose: "compaction", content: "" },
+        data: {
+          execution_id: "e",
+          iteration: 1,
+          purpose: "compaction",
+          content: "",
+        },
+      },
+      {
+        eventType: "llm.call.completed",
+        data: {
+          execution_id: "e",
+          iteration: 2,
+          purpose: "compaction",
+          content: "",
+        },
       },
     ]);
     expect(parts).toHaveLength(1);
     expect(parts[0].data.content).toBe("answer");
+  });
+});
+
+// context.compacted showed only in the Events tab, never in the transcript.
+describe("compaction notice", () => {
+  it("derives a notice part keyed by the event id", () => {
+    const part = derivePart("context.compacted", {
+      event_id: "ev-1",
+      messages_compacted: 12,
+    });
+    expect(part).toEqual({
+      partId: "ev-1",
+      kind: "notice",
+      eventType: "context.compacted",
+      data: { event_id: "ev-1", messages_compacted: 12 },
+    });
+  });
+});
+
+describe("message.received", () => {
+  it("is a message part keyed by its event, so each one keeps its own slot", () => {
+    expect(
+      derivePart("message.received", { event_id: "ev-9", content: "and?" })
+    ).toEqual({
+      partId: "ev-9",
+      kind: "message",
+      eventType: "message.received",
+      data: { event_id: "ev-9", content: "and?" },
+    });
   });
 });

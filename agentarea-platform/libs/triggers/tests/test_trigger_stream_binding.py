@@ -6,9 +6,9 @@ import pytest
 from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
 from agentarea_triggers.domain.models import (
     ConditionVerdict,
+    StreamTrigger,
     TriggerCreate,
     TriggerExecution,
-    WebhookTrigger,
 )
 from agentarea_triggers.logging_utils import TriggerConditionError, TriggerValidationError
 from agentarea_triggers.schemas.dto import TriggerCreate as TriggerCreatePayload
@@ -19,7 +19,6 @@ def _service() -> TriggerService:
     factory = MagicMock()
     service = TriggerService(repository_factory=factory, event_broker=AsyncMock())
     service.trigger_repository = AsyncMock()
-    service.trigger_repository.webhook_id_in_use.return_value = False
     service.trigger_execution_repository = AsyncMock()
     service.agent_repository = AsyncMock()
     service.model_instance_repository = AsyncMock()
@@ -41,38 +40,6 @@ def test_the_dto_accepts_a_stream_trigger_and_requires_its_stream():
     domain = payload.to_domain(created_by="u", workspace_id="w")
     assert domain.trigger_type == TriggerType.STREAM
     assert domain.event_filter == {"kinds": ["push"]}
-
-
-async def test_a_webhook_trigger_gets_its_own_stream_source_and_subscription(monkeypatch):
-    monkeypatch.setattr(
-        "agentarea_triggers.trigger_service.find_webhook_source", AsyncMock(return_value=None)
-    )
-    service = _service()
-    trigger = WebhookTrigger(
-        name="gh",
-        agent_id=uuid4(),
-        created_by="u",
-        workspace_id="w",
-        webhook_id="wh-1234567890abcd",
-        webhook_type="github",
-        event_types=["push"],
-    )
-    service.trigger_repository.create_from_model.return_value = trigger
-    await service.create_trigger(
-        TriggerCreate(
-            name="gh",
-            agent_id=trigger.agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            created_by="u",
-            webhook_id=trigger.webhook_id,
-            webhook_type="github",
-            event_types=["push"],
-        )
-    )
-    kwargs = service.stream_service.create_webhook_stream_for_trigger.await_args.kwargs
-    assert kwargs["trigger_id"] == trigger.id
-    assert kwargs["webhook_id"] == "wh-1234567890abcd"
-    assert kwargs["event_types"] == ["push"]
 
 
 async def test_a_stream_trigger_subscribes_to_the_stream_it_names():
@@ -120,10 +87,9 @@ def _trigger(**overrides):
         agent_id=uuid4(),
         created_by="u",
         workspace_id="w",
-        webhook_id="wh-1234567890abcd",
         conditions={"type": "llm", "description": "x", "model_id": str(uuid4())},
     )
-    return WebhookTrigger(**{**base, **overrides})
+    return StreamTrigger(**{**base, **overrides})
 
 
 def _execution(status=ExecutionStatus.FAILED, message=None, task_id=None):
@@ -205,7 +171,9 @@ async def test_fire_creates_the_task_with_the_given_id_and_provenance():
     service.record_execution = AsyncMock(
         return_value=_execution(ExecutionStatus.SUCCESS, task_id=task_id)
     )
-    provenance = TaskProvenance(origin_type="trigger", origin_id=str(trigger.id), causation_id="evt")
+    provenance = TaskProvenance(
+        origin_type="trigger", origin_id=str(trigger.id), causation_id="evt"
+    )
     firing = await service.fire(trigger.id, {"text": "go"}, task_id=task_id, provenance=provenance)
     submitted = service.task_service.route_or_submit_task.await_args.args[0]
     assert submitted.id == task_id

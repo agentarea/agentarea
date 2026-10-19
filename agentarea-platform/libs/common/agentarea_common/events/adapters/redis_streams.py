@@ -25,15 +25,21 @@ import json
 import logging
 import re
 from collections.abc import AsyncIterator, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from agentarea_common.broker.dlq import DEAD_LETTER_SOURCE_FIELD
+from agentarea_common.broker.dlq import DEAD_LETTER_REASON_FIELD, DEAD_LETTER_SOURCE_FIELD
 from agentarea_common.broker.interface import BrokerClient, BrokerMessage
-from agentarea_common.broker.topics import domain_events_topic
+from agentarea_common.broker.topics import DEAD_LETTER_RETENTION, domain_events_topic
 from agentarea_common.observability.propagation import consumer_span, current_traceparent
 
-from ..ports import DeadLetterHandler, Handler, IntegrationEvent, Subscription
+from ..ports import (
+    DeadLetterHandler,
+    Handler,
+    IntegrationEvent,
+    Subscription,
+    UnprocessableEventError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_DELIVERY = 5
 # Reclaim messages pending longer than this from dead/stuck consumers.
 DEFAULT_MIN_IDLE_MS = 60_000
+# A consumer idle this long with nothing pending belongs to a stopped process.
+STOPPED_CONSUMER_IDLE_MS = 60 * 60 * 1000
 
 
 _ENVELOPE_FIELDS = frozenset(
@@ -146,12 +154,14 @@ class RedisStreamsEventBus:
         self,
         broker: BrokerClient,
         *,
+        retention: timedelta,
         consumer: str | None = None,
         max_delivery: int = DEFAULT_MAX_DELIVERY,
         min_idle_ms: int = DEFAULT_MIN_IDLE_MS,
         block_ms: int = DEFAULT_BLOCK_MS,
     ) -> None:
         self._broker = broker
+        self._retention = retention
         # Unique per process so competing consumers in a group don't collide.
         self._consumer = consumer or f"c-{uuid4().hex[:12]}"
         self._max_delivery = max_delivery
@@ -163,7 +173,9 @@ class RedisStreamsEventBus:
             traceparent = current_traceparent()
             if traceparent is not None:
                 event = event.model_copy(update={"traceparent": traceparent})
-        await self._broker.submit(topic or domain_events_topic(event.type), encode(event))
+        await self._broker.submit(
+            topic or domain_events_topic(event.type), encode(event), retention=self._retention
+        )
 
     async def subscribe(self, *, topic: str, group: str, handler: Handler) -> Subscription:
         stream = topic
@@ -207,6 +219,9 @@ class RedisStreamsEventBus:
                         )
                         for msg in reclaimed:
                             await self._handle(stream, group, msg, handler, dead_letter)
+                        await self._broker.prune_consumers(
+                            stream, group, idle_ms=STOPPED_CONSUMER_IDLE_MS
+                        )
                     next_claim = loop.time() + self._min_idle_ms / 1000
                 fresh = await self._broker.consume_many(
                     streams, group, self._consumer, count=10, block_ms=self._block_ms
@@ -266,9 +281,7 @@ class RedisStreamsEventBus:
         except Exception:
             if dead_letter is not None:
                 logger.exception("Undecodable message %s on %s; dead-lettering it", msg.id, stream)
-                await self._broker.submit(
-                    dead_letter.topic, {**msg.fields, DEAD_LETTER_SOURCE_FIELD: stream}
-                )
+                await self._submit_dead_letter(dead_letter, stream, msg, "undecodable message")
             else:
                 logger.exception("Undecodable message %s on %s; acking to skip", msg.id, stream)
             await self._broker.ack(stream, group, msg.id)
@@ -281,6 +294,18 @@ class RedisStreamsEventBus:
                 consumer_group=group,
             ):
                 await handler(event)
+        except UnprocessableEventError as unprocessable:
+            if dead_letter is None:
+                logger.exception("Unprocessable message %s on %s; acking to skip", msg.id, stream)
+            else:
+                logger.exception(
+                    "Unprocessable message %s on %s; dead-lettering it", msg.id, stream
+                )
+                await self._submit_dead_letter(
+                    dead_letter, stream, msg, f"unprocessable: {unprocessable}"
+                )
+            await self._broker.ack(stream, group, msg.id)
+            return
         except Exception:
             # Do NOT ack — message stays pending and is redelivered via autoclaim.
             logger.exception("Handler failed for %s on %s; will redeliver", msg.id, stream)
@@ -292,26 +317,39 @@ class RedisStreamsEventBus:
     ) -> None:
         """Hand the message to the callback, copy it to the dead-letter topic, ack it.
 
-        A callback that raises leaves the message pending, so it comes back here.
+        A callback that fails does not keep the message: it would fail the same
+        way on every pass and hold the message pending forever. The dead letter
+        records that the callback failed, and a replay runs the message again.
         """
+        attempts = msg.delivery_count - 1
         logger.error(
             "Message %s on %s failed %d deliveries; dead-lettering it to %s",
             msg.id,
             stream,
-            msg.delivery_count - 1,
+            attempts,
             dead_letter.topic,
         )
+        reason = f"max delivery attempts ({attempts}) exceeded"
         try:
             await dead_letter.callback(decode(msg.fields))
-        except Exception:
-            logger.exception(
-                "Dead-letter callback failed for %s on %s; kept pending", msg.id, stream
-            )
-            return
-        await self._broker.submit(
-            dead_letter.topic, {**msg.fields, DEAD_LETTER_SOURCE_FIELD: stream}
-        )
+        except Exception as error:
+            logger.exception("Dead-letter callback failed for %s on %s", msg.id, stream)
+            reason = f"{reason}; dead-letter callback failed: {type(error).__name__}: {error}"
+        await self._submit_dead_letter(dead_letter, stream, msg, reason)
         await self._broker.ack(stream, group, msg.id)
+
+    async def _submit_dead_letter(
+        self, dead_letter: _DeadLetter, stream: str, msg: BrokerMessage, reason: str
+    ) -> None:
+        await self._broker.submit(
+            dead_letter.topic,
+            {
+                **msg.fields,
+                DEAD_LETTER_SOURCE_FIELD: stream,
+                DEAD_LETTER_REASON_FIELD: reason[:500],
+            },
+            retention=DEAD_LETTER_RETENTION,
+        )
 
 
 class _DeadLetter:

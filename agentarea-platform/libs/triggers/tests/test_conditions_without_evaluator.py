@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_triggers.domain.enums import ExecutionStatus
-from agentarea_triggers.domain.models import WebhookTrigger
+from agentarea_triggers.domain.models import StreamTrigger
 from agentarea_triggers.logging_utils import TriggerConditionError
 from agentarea_triggers.trigger_service import TriggerService
 
@@ -19,11 +19,10 @@ from .conftest import make_trigger_repository_factory
 
 
 def _trigger(conditions):
-    return WebhookTrigger(
+    return StreamTrigger(
         id=uuid4(),
         name="Urgent tickets",
         agent_id=uuid4(),
-        webhook_id="webhook_urgent",
         conditions=conditions,
         task_parameters={"text": "Triage the ticket"},
         created_by="test_user",

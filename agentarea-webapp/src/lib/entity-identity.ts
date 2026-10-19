@@ -153,3 +153,13 @@ export function openApiIdentity(connection: {
     initials: domainInitials(connection.base_url, connection.name),
   };
 }
+
+/**
+ * Identity of an event source type: the catalog's artwork, else the stream
+ * glyph. The catalog resolves `icon_url`; nothing here knows a provider.
+ */
+export function sourceTypeIdentity(
+  type: { icon_url?: string | null } | null | undefined
+): EntityIdentity {
+  return { kind: "stream", sources: type?.icon_url ? [type.icon_url] : [] };
+}

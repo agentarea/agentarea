@@ -138,7 +138,8 @@
     "showPassword": "Показать пароль",
     "hidePassword": "Скрыть пароль",
     "previousMonth": "Предыдущий месяц",
-    "nextMonth": "Следующий месяц"
+    "nextMonth": "Следующий месяц",
+    "newValue": "новое"
   },
   "admin": {
     "title": "Панель администратора",
@@ -653,7 +654,6 @@
       "createConfiguration": "Создать конфигурацию",
       "triggerEnabled": "Включён",
       "removeTrigger": "Удалить триггер",
-      "triggerCredentialRequired": "Выберите секрет рабочего пространства",
       "noTriggers": "Триггеров нет. Агент запускается, только когда для него создают задачу.",
       "triggersManagedElsewhere": "Расписания и каналы этого агента настраиваются в разделе «Автоматизация».",
       "openTriggers": "Открыть автоматизацию",
@@ -673,7 +673,8 @@
       "loadOpenapiConnectionsFailed": "Не удалось загрузить OpenAPI-подключения",
       "loadingOpenapiConnections": "Загрузка OpenAPI-подключений...",
       "loadInstanceFailed": "Не удалось загрузить MCP-подключение для редактирования",
-      "updateInstanceFailed": "Не удалось обновить MCP-подключение"
+      "updateInstanceFailed": "Не удалось обновить MCP-подключение",
+      "triggerStreamRequired": "Выберите поток, который слушает триггер"
     },
     "browseCatalog": "Открыть каталог",
     "newTask": "Новая задача",
@@ -1277,7 +1278,31 @@
       "pauseFailed": "Не удалось приостановить задачу",
       "resumeFailed": "Не удалось возобновить задачу",
       "stopFailed": "Не удалось остановить задачу",
-      "retryFailed": "Не удалось повторить задачу"
+      "retryFailed": "Не удалось повторить задачу",
+      "errorLoadingConversation": "Ошибка загрузки истории"
+    },
+    "ActivityGroup": {
+      "working": "Работает",
+      "workCompleted": "Работа завершена",
+      "workStopped": "Работа остановлена",
+      "workFailed": "Работа не удалась",
+      "paused": "Приостановлено",
+      "actions": "{count, plural, one {# действие} few {# действия} many {# действий} other {# действия}}",
+      "failed": "с ошибкой: {count}",
+      "toolGroup": {
+        "read": "прочитано файлов: {count}",
+        "edited": "изменено файлов: {count}",
+        "wrote": "создано файлов: {count}",
+        "ran": "выполнено команд: {count}",
+        "searched": "выполнено поисков: {count}",
+        "fetched": "загружено страниц: {count}",
+        "queried": "выполнено запросов: {count}",
+        "listed": "просмотрено каталогов: {count}",
+        "sent": "отправлено сообщений: {count}",
+        "skill": "использовано навыков: {count}",
+        "delegated": "передано агентам: {count}",
+        "other": "вызвано инструментов: {count}"
+      }
     },
     "continuation": {
       "title": {
@@ -1305,6 +1330,19 @@
         "tokens_required": "Выделите дополнительные токены, чтобы снять лимит токенов.",
         "toolCalls_required": "Выделите дополнительные вызовы инструментов, чтобы снять лимит вызовов."
       }
+    },
+    "conversation": {
+      "tryAgain": "Повторить",
+      "loadingHistory": "Загрузка истории",
+      "historyUnavailable": "История сообщений недоступна. Загрузите её заново перед отправкой.",
+      "historyLoading": "Загружается история. Можно начать писать; отправка станет доступна, когда загрузка завершится.",
+      "noExecutionEvents": "Событий выполнения пока нет.",
+      "messagePlaceholder": "Сообщение для {agent}...",
+      "followUpPlaceholder": "Продолжить с {agent}...",
+      "attachmentNotice": "Файлы будут отправлены в новой задаче для {agent}.",
+      "agentFallback": "агента",
+      "compacted": "Контекст сжат: ранние сообщения ({count}) заменены кратким пересказом",
+      "messageStoredSeparately": "Сообщение хранится отдельно и здесь не показано."
     }
   },
   "TasksPage": {
@@ -1377,6 +1415,13 @@
       "cancelConfirm": "Остановить",
       "retry": "Повторить",
       "retryFailed": "Не удалось повторить задачу"
+    },
+    "sourceKind": {
+      "manualRun": "Ручной запуск",
+      "delegation": "Делегировано",
+      "schedule": "По расписанию",
+      "event": "Событие",
+      "trigger": "Триггер"
     }
   },
   "SkillsPage": {
@@ -1648,6 +1693,7 @@
       "approvalRequest": "Запрошено подтверждение",
       "approvalResponse": "Ответ на подтверждение",
       "messageQueued": "Сообщение в очереди",
+      "messageReceived": "Сообщение получено",
       "messageRemoved": "Сообщение убрано из очереди",
       "commandReceived": "Получена команда",
       "commandRejected": "Команда отклонена",
@@ -1796,7 +1842,9 @@
     "selectModel": "Выберите модель",
     "changeModel": "Сменить",
     "executionInProgress": "Выполняется",
-    "executionAwaitingFollowUp": "Ждёт продолжения"
+    "executionAwaitingFollowUp": "Ждёт продолжения",
+    "builtinTools": "Встроенные инструменты",
+    "toolFailed": "с ошибкой: {count}"
   },
   "Workplace": {
     "hero": {
@@ -1905,7 +1953,7 @@
     "noTriggers": "Триггеров пока нет",
     "noTriggersDescription": "Триггер запускает задачу без вас — по расписанию или когда во внешней системе что-то произошло.",
     "noTriggersHintCron": "Запускайте агента по расписанию — например, ночной отчёт",
-    "noTriggersHintWebhook": "Стартуйте задачу по входящему вебхуку",
+    "noTriggersHintWebhook": "Запускайте задачу по событиям, пришедшим в поток",
     "noTriggersHintHistory": "Каждое срабатывание пишется в историю — видно, что и почему запускалось",
     "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
     "noMatchingTriggersDescription": "Нет триггеров, соответствующих поиску \"{query}\"",
@@ -1925,7 +1973,7 @@
     },
     "type": {
       "cron": "Cron",
-      "webhook": "Webhook"
+      "stream": "Поток"
     },
     "status": {
       "active": "Активен",
@@ -1942,29 +1990,13 @@
       "namePlaceholder": "напр., Ежедневный генератор отчётов",
       "triggerDescription": "Описание",
       "triggerDescriptionPlaceholder": "Что делает эта автоматизация",
-      "credentialsUnchanged": "Оставьте реквизиты пустыми, чтобы сохранить текущие. Для замены заполните все поля реквизитов.",
       "triggerType": "Тип триггера",
       "selectType": "Выберите тип триггера",
-      "catalogLoadFailed": "Не удалось загрузить типы триггеров. Обновите страницу или попробуйте позже.",
       "agent": "Агент",
       "selectAgent": "Выберите агента",
       "cronExpression": "Выражение Cron",
       "cronPlaceholder": "напр., 0 9 * * 1-5",
       "timezone": "Часовой пояс",
-      "webhookType": "Тип Webhook",
-      "selectWebhookType": "Выберите тип webhook",
-      "webhookTypes": {
-        "generic": "Универсальный",
-        "slack": "Slack",
-        "discord": "Discord",
-        "telegram": "Telegram",
-        "github": "GitHub",
-        "gmail": "Gmail",
-        "teams": "Microsoft Teams",
-        "linear": "Linear",
-        "stripe": "Stripe"
-      },
-      "allowedMethods": "Разрешённые методы",
       "taskParameters": "Параметры задачи",
       "failureThreshold": "Порог ошибок",
       "failureThresholdPlaceholder": "напр., 3",
@@ -1972,15 +2004,11 @@
       "updateButton": "Обновить триггер",
       "editTitle": "Редактировать триггер",
       "schedule": "Расписание",
-      "eventTypes": "Типы событий",
-      "eventTypesHint": "Выберите, какие события запускают выполнение. Оставьте пустым, чтобы принимать все.",
       "automationName": "Название автоматизации",
       "automationNamePlaceholder": "Новая автоматизация",
       "taskInstructions": "Задача",
       "whenToRun": "Когда запускать",
       "runSettings": "Настройки запуска",
-      "allEvents": "Все события",
-      "selectedEventsCount": "Выбрано: {count}",
       "execution": {
         "title": "Контекст выполнения",
         "orchestrator": "Оркестратор",
@@ -2021,8 +2049,6 @@
       "taskFilesPlaceholder": "Выбрать файлы",
       "taskSkills": "Дополнительные навыки",
       "taskMcps": "Дополнительные MCP",
-      "taskTextFromChannel": "Текст здесь — это инструкция, которой следует агент; входящее сообщение прикладывается к задаче как событие. Оставьте его пустым, чтобы само сообщение стало заданием.",
-      "taskTextFromCall": "Текст здесь — это инструкция, которой следует агент; входящий вызов прикладывается к задаче как событие. Оставьте его пустым, чтобы сам вызов стал заданием.",
       "taskTextFromStream": "Данные события прикладываются к задаче автоматически. Текст здесь — это инструкция, которой следует агент.",
       "taskFilesHint": "Выберите файлы рабочего пространства для каждой задачи.",
       "searchFiles": "Поиск файлов",
@@ -2034,16 +2060,16 @@
       "resourcesLoadFailed": "Не удалось загрузить ресурсы. Обновите список.",
       "refreshResources": "Обновить список",
       "removeResource": "Убрать {name}",
-      "selectCredentialsHint": "Выберите секреты рабочего пространства для подключения канала.",
-      "selectSecret": "Выбрать секрет",
-      "keepExistingSecret": "Оставить текущий секрет",
-      "noSecrets": "Секретов пока нет.",
-      "newSecret": "Новый секрет",
-      "createdWithSecretTitle": "Вебхук создан",
       "stream": "Поток",
       "streamHint": "Срабатывает на события, пришедшие в этот поток после создания триггера.",
       "noStreams": "Потоков пока нет",
-      "streamsLoadFailed": "Не удалось загрузить потоки"
+      "streamsLoadFailed": "Не удалось загрузить потоки",
+      "session": {
+        "continue": "Продолжать разговор",
+        "continueHint": "Следующее событие той же сессии (чат, тред) попадает в задачу, которая его ждёт.",
+        "eachEventHint": "Каждое событие запускает свою задачу.",
+        "idleTimeout": "Сколько задача ждёт следующего события"
+      }
     },
     "detail": {
       "overview": "Обзор",
@@ -2089,18 +2115,12 @@
       "noneAttached": "Не прикреплено",
       "whenToRun": "Когда запускать",
       "timezone": "Часовой пояс",
-      "webhookUrl": "Webhook-эндпоинт",
-      "methods": "Методы",
-      "events": "События",
-      "allEvents": "Все события",
-      "eventsSelected": "выбрано: {count}",
       "failureThreshold": "Сбоев до отключения",
       "failureThresholdHint": "Сбоев подряд / порог",
       "ofRuns": "успешно {successful} из {total}",
       "noRuns": "Запусков ещё не было",
       "failedRuns": "сбоев: {count}",
       "failureWarning": "{count, plural, one {# сбой} few {# сбоя} other {# сбоев}} подряд из {threshold}",
-      "noSchedule": "Ожидает входящий запрос",
       "noScheduleStream": "Ожидает событий потока",
       "executionStatus": {
         "completed": "Завершено",
@@ -2125,20 +2145,14 @@
       "cost": "Стоимость",
       "firstPage": "Первая страница",
       "noExecutionsOnPage": "На этой странице запусков нет",
-      "signing": "Подпись запросов",
-      "signingStatus": {
-        "signed": "Подписан",
-        "unsigned": "Без подписи",
-        "unsupported": "Не проверяется"
-      },
-      "signingSignedHint": "Запросы без правильной подписи отклоняются.",
-      "signingUnsignedHint": "Любой, кто знает этот адрес, может запустить агента. Создайте секрет подписи и подписывайте им каждый запрос.",
-      "signingUnsignedChannelHint": "Любой, кто знает этот адрес, может запустить агента. Сохраните учётные данные канала ещё раз, чтобы зарегистрировать секрет.",
-      "signingUnsupportedHint": "AgentArea пока не проверяет запросы этого провайдера, поэтому любой, кто знает адрес, может запустить агента. Не публикуйте адрес.",
       "lastEvent": "Последнее событие",
       "noEventsYet": "Событий пока нет",
       "needsOwnerTitle": "Триггер остановлен",
-      "needsOwnerBody": "Тот, кто его настроил, больше не может запускать этого агента. Верните ему доступ и снова включите триггер или создайте его заново от имени того, кто может."
+      "needsOwnerBody": "Тот, кто его настроил, больше не может запускать этого агента. Верните ему доступ и снова включите триггер или создайте его заново от имени того, кто может.",
+      "session": "Разговор",
+      "sessionContinues": "Следующее событие сессии попадает в ту же задачу, она ждёт его {timeout}",
+      "sessionEachEvent": "Каждое событие запускает свою задачу",
+      "sessionDefault": "Как решают источники потока: чаты продолжают разговор, остальные запускают задачу на каждое событие"
     },
     "error": {
       "createFailed": "Не удалось создать триггер",
@@ -2147,28 +2161,7 @@
       "loadFailed": "Не удалось загрузить триггер",
       "enableFailed": "Не удалось включить триггер",
       "disableFailed": "Не удалось отключить триггер",
-      "runFailed": "Не удалось запустить триггер",
-      "rotateSigningSecretFailed": "Не удалось создать секрет подписи"
-    },
-    "signing": {
-      "sign": "Создать секрет подписи",
-      "rotate": "Сменить секрет",
-      "signTitle": "Требовать подпись запросов?",
-      "signDescription": "С этого момента запросы без правильной подписи будут отклоняться. Настройте всех отправителей на подпись новым секретом.",
-      "signConfirm": "Создать секрет",
-      "rotateTitle": "Сменить секрет подписи?",
-      "rotateDescription": "Запросы, подписанные текущим секретом, начнут отклоняться сразу после создания нового. Сразу обновите всех отправителей.",
-      "rotateConfirm": "Сменить секрет",
-      "issuedTitle": "Секрет подписи создан",
-      "issuedDescription": "Подписывайте этим секретом каждый запрос к вебхуку. Запросы без подписи отклоняются.",
-      "secretLabel": "Секрет подписи",
-      "secretWarning": "Показывается один раз. Скопируйте его сейчас и сохраните там, где работает отправитель.",
-      "headerLabel": "Заголовок",
-      "valueLabel": "Подпись",
-      "valueText": "HMAC-{algorithm} от исходного тела запроса с этим секретом, в шестнадцатеричном виде.",
-      "valueTextWithPrefix": "HMAC-{algorithm} от исходного тела запроса с этим секретом, в шестнадцатеричном виде, после префикса {prefix}.",
-      "exampleLabel": "Пример",
-      "done": "Готово"
+      "runFailed": "Не удалось запустить триггер"
     }
   },
   "EventsPage": {
@@ -2180,7 +2173,7 @@
       "created": "Создан"
     },
     "noStreams": "Потоков пока нет",
-    "noStreamsDescription": "Поток появляется у каждого вебхук-триггера, можно создать и свой.",
+    "noStreamsDescription": "Поток собирает события своих источников. Создайте поток и добавьте в него источник.",
     "noMatchingStreams": "Нет подходящих потоков",
     "feed": {
       "received": "Получено",
@@ -2214,7 +2207,19 @@
       "gone": "Это событие больше не хранится.",
       "triggersLoadFailed": "Не удалось загрузить названия триггеров",
       "subscriptionsLoadFailed": "Не удалось загрузить ссылки пересылки",
-      "streamsLoadFailed": "Не удалось загрузить названия потоков"
+      "streamsLoadFailed": "Не удалось загрузить названия потоков",
+      "source": "Источник",
+      "noSource": "Без источника",
+      "kind": "Тип",
+      "key": "Ключ",
+      "session": "Сессия",
+      "noSession": "Нет: каждое событие — своя задача",
+      "sender": "Отправитель",
+      "occurredAt": "Произошло",
+      "attachments": "Вложения",
+      "openAttachment": "Открыть",
+      "fetchedByTask": "Загружается, когда задача его откроет",
+      "bodyStored": "Тело сохранено файлом"
     },
     "sources": {
       "title": "Источники",
@@ -2222,7 +2227,6 @@
       "add": "Добавить источник",
       "signedWith": "Подпись",
       "signedWithHeader": "Подпись в {header}",
-      "ownedByTrigger": "Принадлежит триггеру",
       "deleteTitle": "Удалить источник",
       "deleteDescription": "{name} перестанет доставлять события в этот поток, а его URL начнёт отвечать 400. Уже записанные события останутся.",
       "createFailed": "Не удалось добавить источник",
@@ -2237,16 +2241,36 @@
         "selectSecret": "Выберите секрет",
         "noSecrets": "Секретов пока нет",
         "newSecret": "Новый секрет",
-        "secretsLoadFailed": "Не удалось загрузить секреты воркспейса"
+        "secretsLoadFailed": "Не удалось загрузить секреты воркспейса",
+        "kind": "Как приходят события",
+        "kinds": {
+          "webhook": "Провайдер присылает их на URL",
+          "poll": "AgentArea забирает их сама"
+        },
+        "issuedHint": "Оставьте пустым — AgentArea сгенерирует значение и покажет его один раз после добавления.",
+        "templates": {
+          "kind": "Тип события",
+          "kindPlaceholder": "'{body:trigger.name}'.'{body:event.op}'",
+          "key": "Ключ события",
+          "keyPlaceholder": "'{body:id}'",
+          "session_key": "Сессия",
+          "session_keyPlaceholder": "'{body:conversation.id}'",
+          "hint": "Шаблоны читают запрос: '{body:a.b}' — поле тела, '{header:name}' — заголовок; текст между ними остаётся как есть.",
+          "noKeyHint": "Без ключа повторно отправленный запрос снова запустит агента."
+        },
+        "events": "События, которые может прислать провайдер",
+        "eventsHint": "Включите их у провайдера: всё, что он пришлёт, попадёт в поток."
       },
       "created": {
         "title": "Источник добавлен",
         "description": "Передайте этот URL отправителю. Каждый запрос на него проверяется перед записью.",
         "done": "Готово",
         "urlLabel": "URL вебхука",
-        "secretLabel": "Секрет подписи",
         "secretWarning": "Скопируйте его сейчас: больше он не будет показан."
-      }
+      },
+      "polledAt": "Опрошен {time}",
+      "notPolledYet": "Ещё не опрашивался",
+      "pollError": "Последний опрос не удался: {error}"
     }
   },
   "NetworkPage": {

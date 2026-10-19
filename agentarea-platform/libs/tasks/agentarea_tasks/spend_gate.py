@@ -43,8 +43,7 @@ def _month_start(now: datetime) -> datetime:
     return datetime(now.year, now.month, 1, tzinfo=UTC)
 
 
-def _caps(call: GovernedToolCall, billing_currency: str) -> list[_Cap]:
-    budget = effective_policy_from_json(call.authorization.effective_policy).budget
+def _caps(call: GovernedToolCall, budget: BudgetPolicy | None, billing_currency: str) -> list[_Cap]:
     if budget is None:
         return []
     caps: list[_Cap] = []
@@ -76,6 +75,8 @@ def _caps(call: GovernedToolCall, billing_currency: str) -> list[_Cap]:
     connection = call.connection
     for cap in budget.spend_caps or []:
         if cap.category == "llm":
+            continue
+        if cap.category == "tools" and connection is None and not cap.tool:
             continue
         per_run = cap.period == "run"
         if per_run and call.task_id is None:
@@ -131,14 +132,19 @@ async def spend_cap_refusal(
     call: GovernedToolCall,
     pending: PendingCost | None = None,
     *,
+    budget: BudgetPolicy | None = None,
     now: datetime | None = None,
 ) -> str | None:
     """Why the call may not spend more, or None when every cap it falls under allows it.
 
-    ``pending`` is what the call will cost, when that is known before it runs; it
-    counts against the caps in its currency.
+    ``budget`` holds the caps; a run passes its monthly caps as they are now (see
+    ``model_spend_caps.current_budget``), not as its policy froze them. Without it
+    the caps are those of the call's policy. ``pending`` is what the call will cost,
+    when that is known before it runs; it counts against the caps in its currency.
     """
-    caps = _caps(call, tool_billing.deployment_currency())
+    if budget is None:
+        budget = effective_policy_from_json(call.authorization.effective_policy).budget
+    caps = _caps(call, budget, tool_billing.deployment_currency())
     month_start = _month_start(now or datetime.now(UTC))
     for cap in caps:
         since = _EVER if cap.per_run else month_start

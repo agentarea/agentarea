@@ -40,16 +40,7 @@
         "brainstorming--obra-superpowers",
         "writing-plans--obra-superpowers"
       ],
-      "triggers": [
-        {
-          "name": "Telegram",
-          "trigger_type": "webhook",
-          "webhook_type": "telegram",
-          "task_parameters": {
-            "text": "Reply to the Telegram message you received."
-          }
-        }
-      ]
+      "triggers": []
     },
     {
       "name": "Researcher",

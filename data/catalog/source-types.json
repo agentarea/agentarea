@@ -1,0 +1,965 @@
+{
+  "source_types": [
+    {
+      "slug": "generic_webhook",
+      "name": "Webhook",
+      "description": "Any sender: HMAC over the body with a secret that is issued if you give none. Set the key field to dedupe its retries.",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "signing_secret",
+          "label": "Signing Secret",
+          "placeholder": "Leave empty to have one issued",
+          "required": false,
+          "issued": true
+        }
+      ],
+      "config": [
+        {
+          "key": "scheme",
+          "label": "Verification",
+          "placeholder": "hmac, hmac_timestamped or shared_token",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "header",
+          "label": "Signature Header",
+          "placeholder": "X-Webhook-Signature",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "algorithm",
+          "label": "HMAC Digest",
+          "placeholder": "sha256",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "prefix",
+          "label": "Signature Prefix",
+          "placeholder": "e.g. sha256=",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac",
+        "secret": "signing_secret",
+        "header": "X-Webhook-Signature",
+        "configurable": [
+          "scheme",
+          "header",
+          "algorithm",
+          "prefix"
+        ]
+      },
+      "event": {
+        "kind": "webhook",
+        "key": [
+          "{header:webhook-id}",
+          "{header:idempotency-key}"
+        ]
+      },
+      "events": []
+    },
+    {
+      "slug": "github",
+      "name": "GitHub",
+      "description": "Repository and organization webhooks: pushes, pull requests, issues, releases",
+      "icon": "github",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "webhook_secret",
+          "label": "Webhook Secret",
+          "placeholder": "Secret configured on the GitHub webhook",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac",
+        "secret": "webhook_secret",
+        "header": "X-Hub-Signature-256",
+        "prefix": "sha256="
+      },
+      "handshake": [],
+      "event": {
+        "kind": [
+          "{header:x-github-event}.{body:action}",
+          "{header:x-github-event}"
+        ],
+        "key": "{header:x-github-delivery}",
+        "sender": "github:{body:sender.login}"
+      },
+      "events": [
+        "push",
+        "pull_request.opened",
+        "pull_request.closed",
+        "pull_request.reopened",
+        "pull_request.synchronize",
+        "pull_request.review_requested",
+        "pull_request_review.submitted",
+        "issues.opened",
+        "issues.closed",
+        "issues.labeled",
+        "issue_comment.created",
+        "release.published",
+        "workflow_run.completed",
+        "check_run.completed",
+        "check_suite.completed",
+        "deployment",
+        "deployment_status",
+        "create",
+        "delete",
+        "fork",
+        "star.created",
+        "watch.started",
+        "repository.created",
+        "commit_comment.created",
+        "status",
+        "ping"
+      ]
+    },
+    {
+      "slug": "slack",
+      "name": "Slack",
+      "description": "Events API deliveries of a Slack app; the agent answers in the thread",
+      "icon": "slack",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "signing_secret",
+          "label": "Signing Secret",
+          "placeholder": "Your Slack app's signing secret",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "bot_token",
+          "label": "Bot Token",
+          "placeholder": "xoxb-… to reply in Slack",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac_timestamped",
+        "secret": "signing_secret",
+        "header": "X-Slack-Signature",
+        "timestamp_header": "X-Slack-Request-Timestamp",
+        "payload": "v0:{timestamp}:{body}",
+        "prefix": "v0="
+      },
+      "handshake": [
+        {
+          "when": "{body:type}",
+          "equals": "url_verification",
+          "respond": {
+            "challenge": "{body:challenge}"
+          }
+        }
+      ],
+      "event": {
+        "kind": [
+          "{body:event.type}",
+          "{body:type}",
+          "command"
+        ],
+        "key": [
+          "{body:event_id}",
+          "{body:trigger_id}"
+        ],
+        "session_key": "{body:event.channel}:{body:event.thread_ts|event.ts}",
+        "sender": "slack:{body:event.user|user_id|user.id}",
+        "occurred_at": "{body:event_time}",
+        "attachments": {
+          "path": "event.files",
+          "fetch": "slack.url_private"
+        }
+      },
+      "events": [
+        "message",
+        "app_mention",
+        "reaction_added",
+        "reaction_removed",
+        "channel_created",
+        "channel_archive",
+        "member_joined_channel",
+        "member_left_channel",
+        "file_shared",
+        "app_home_opened",
+        "link_shared",
+        "command"
+      ],
+      "reply": {
+        "sender": "http",
+        "target": {
+          "channel": "{body:event.channel|channel_id}",
+          "thread_ts": "{body:event.thread_ts|event.ts}"
+        },
+        "presentation": "concise",
+        "request": {
+          "method": "POST",
+          "url": "https://slack.com/api/chat.postMessage",
+          "headers": {
+            "Authorization": "Bearer {credentials.bot_token}"
+          },
+          "json": {
+            "channel": "{target:channel}",
+            "text": "{message}",
+            "mrkdwn": true,
+            "thread_ts": "{target:thread_ts}"
+          }
+        },
+        "markup": "slack",
+        "limit": 3000,
+        "permanent_errors": [
+          "invalid_auth",
+          "not_authed",
+          "channel_not_found",
+          "not_in_channel",
+          "account_inactive",
+          "is_archived"
+        ]
+      }
+    },
+    {
+      "slug": "telegram",
+      "name": "Telegram",
+      "description": "Updates of a Telegram bot, by webhook (registered with the bot for you) or by polling",
+      "icon": "telegram",
+      "delivery": "both",
+      "credentials": [
+        {
+          "key": "bot_token",
+          "label": "Bot Token",
+          "placeholder": "Token from @BotFather",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "secret_token",
+          "label": "Webhook Secret Token",
+          "placeholder": "Leave empty to have one issued",
+          "required": false,
+          "issued": true
+        }
+      ],
+      "verification": {
+        "scheme": "shared_token",
+        "secret": "secret_token",
+        "header": "X-Telegram-Bot-Api-Secret-Token"
+      },
+      "registration": {
+        "register": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot{credentials.bot_token}/setWebhook",
+          "json": {
+            "url": "{webhook_url}",
+            "secret_token": "{credentials.secret_token}"
+          }
+        },
+        "unregister": {
+          "method": "POST",
+          "url": "https://api.telegram.org/bot{credentials.bot_token}/deleteWebhook"
+        }
+      },
+      "poll": {
+        "transport": "http_json",
+        "request": {
+          "method": "GET",
+          "url": "https://api.telegram.org/bot{credentials.bot_token}/getUpdates?offset={cursor}&timeout=30"
+        },
+        "items": "result",
+        "cursor": "{item:update_id}+1",
+        "interval": "0s"
+      },
+      "event": {
+        "kind": "{first_key:message|edited_message|channel_post|edited_channel_post|callback_query|inline_query|chosen_inline_result|shipping_query|pre_checkout_query|poll|poll_answer|my_chat_member|chat_member|chat_join_request}",
+        "key": "update:{body:update_id}",
+        "session_key": "{body:message.chat.id|edited_message.chat.id|channel_post.chat.id|edited_channel_post.chat.id|callback_query.message.chat.id|my_chat_member.chat.id|chat_member.chat.id|chat_join_request.chat.id}",
+        "sender": "tg:{body:message.from.id|edited_message.from.id|callback_query.from.id|inline_query.from.id|my_chat_member.from.id|chat_member.from.id|chat_join_request.from.id}",
+        "occurred_at": "{body:message.date|edited_message.date|channel_post.date|edited_channel_post.date}",
+        "attachments": {
+          "path": "message.document|message.photo[-1]|message.video|message.voice|message.audio|message.animation|message.video_note",
+          "fetch": "telegram.getFile"
+        }
+      },
+      "events": [
+        "message",
+        "edited_message",
+        "channel_post",
+        "edited_channel_post",
+        "callback_query",
+        "inline_query",
+        "chosen_inline_result",
+        "shipping_query",
+        "pre_checkout_query",
+        "poll",
+        "poll_answer",
+        "my_chat_member",
+        "chat_member",
+        "chat_join_request"
+      ],
+      "admission": {
+        "identity": "telegram",
+        "external_id": "{body:message.from.id|edited_message.from.id|callback_query.from.id|inline_query.from.id|my_chat_member.from.id|chat_member.from.id|chat_join_request.from.id}",
+        "chat": "{body:message.chat.id|edited_message.chat.id|channel_post.chat.id|edited_channel_post.chat.id|callback_query.message.chat.id|my_chat_member.chat.id|chat_member.chat.id|chat_join_request.chat.id}",
+        "text": "{body:message.text|edited_message.text|message.caption}",
+        "private": "{body:message.chat.type|edited_message.chat.type|callback_query.message.chat.type}",
+        "is_bot": "{body:message.from.is_bot|edited_message.from.is_bot|callback_query.from.is_bot}"
+      },
+      "reply": {
+        "sender": "telegram_live",
+        "target": {
+          "chat_id": "{body:message.chat.id|edited_message.chat.id|channel_post.chat.id|edited_channel_post.chat.id|callback_query.message.chat.id|my_chat_member.chat.id|chat_member.chat.id|chat_join_request.chat.id}",
+          "message_id": "{body:message.message_id|edited_message.message_id|callback_query.message.message_id}"
+        },
+        "presentation": "concise",
+        "markup": "telegram",
+        "limit": 4096,
+        "permanent_errors": [
+          "chat not found",
+          "bot was blocked by the user",
+          "bot was kicked",
+          "Unauthorized"
+        ]
+      }
+    },
+    {
+      "slug": "linear",
+      "name": "Linear",
+      "description": "Issue, comment and project webhooks of a Linear workspace",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "signing_secret",
+          "label": "Signing Secret",
+          "placeholder": "Webhook signing secret from Linear",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac",
+        "secret": "signing_secret",
+        "header": "Linear-Signature"
+      },
+      "event": {
+        "kind": [
+          "{body:type}.{body:action}",
+          "{body:type}"
+        ],
+        "key": "{header:linear-delivery}",
+        "sender": "linear:{body:actor.id}",
+        "occurred_at": "{body:createdAt}"
+      },
+      "events": [
+        "Issue.create",
+        "Issue.update",
+        "Issue.remove",
+        "Comment.create",
+        "Comment.update",
+        "Project.create",
+        "Project.update",
+        "Cycle.create",
+        "Cycle.update",
+        "IssueLabel.create",
+        "Reaction.create"
+      ]
+    },
+    {
+      "slug": "discord",
+      "name": "Discord",
+      "description": "Interactions of a Discord application; the agent answers in the channel",
+      "icon": "discord",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "public_key",
+          "label": "Application Public Key",
+          "placeholder": "Your Discord app's public key",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "bot_token",
+          "label": "Bot Token",
+          "placeholder": "To reply in Discord",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "ed25519",
+        "secret": "public_key",
+        "header": "X-Signature-Ed25519",
+        "timestamp_header": "X-Signature-Timestamp",
+        "payload": "{timestamp}{body}"
+      },
+      "handshake": [
+        {
+          "when": "{body:type}",
+          "equals": "1",
+          "respond": {
+            "type": 1
+          }
+        }
+      ],
+      "event": {
+        "kind": [
+          "{body:t}",
+          "interaction.{body:type}"
+        ],
+        "key": "{body:id|d.id}",
+        "session_key": "{body:channel_id|d.channel_id}",
+        "sender": "discord:{body:member.user.id|user.id|d.author.id|author.id}",
+        "occurred_at": "{body:d.timestamp|timestamp}",
+        "attachments": {
+          "path": "d.attachments|data.resolved.attachments.*|attachments",
+          "fetch": "url"
+        }
+      },
+      "events": [
+        "interaction.2",
+        "interaction.3",
+        "interaction.4",
+        "interaction.5",
+        "MESSAGE_CREATE",
+        "MESSAGE_UPDATE",
+        "MESSAGE_DELETE",
+        "MESSAGE_REACTION_ADD",
+        "GUILD_MEMBER_ADD",
+        "THREAD_CREATE"
+      ],
+      "reply": {
+        "sender": "http",
+        "target": {
+          "channel_id": "{body:channel_id|d.channel_id}",
+          "message_id": "{body:d.id|message.id}"
+        },
+        "presentation": "concise",
+        "request": {
+          "method": "POST",
+          "url": "https://discord.com/api/v10/channels/{target:channel_id}/messages",
+          "headers": {
+            "Authorization": "Bot {credentials.bot_token}"
+          },
+          "json": {
+            "content": "{message}",
+            "message_reference": {
+              "message_id": "{target:message_id}"
+            }
+          }
+        },
+        "markup": "discord",
+        "limit": 2000,
+        "permanent_errors": [
+          "Unknown Channel",
+          "Missing Access",
+          "401: Unauthorized"
+        ]
+      }
+    },
+    {
+      "slug": "stripe",
+      "name": "Stripe",
+      "description": "Payments, invoices and subscriptions",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "signing_secret",
+          "label": "Signing Secret",
+          "placeholder": "whsec_… from the Stripe endpoint",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac_timestamped",
+        "secret": "signing_secret",
+        "header": "Stripe-Signature",
+        "signature_format": "kv",
+        "timestamp_key": "t",
+        "signature_key": "v1",
+        "payload": "{timestamp}.{body}"
+      },
+      "event": {
+        "kind": "{body:type}",
+        "key": "{body:id}",
+        "occurred_at": "{body:created}"
+      },
+      "events": [
+        "payment_intent.succeeded",
+        "payment_intent.payment_failed",
+        "charge.succeeded",
+        "charge.failed",
+        "charge.refunded",
+        "customer.created",
+        "customer.updated",
+        "invoice.paid",
+        "invoice.payment_failed",
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+        "checkout.session.completed"
+      ]
+    },
+    {
+      "slug": "sentry",
+      "name": "Sentry",
+      "description": "Issue, error and alert webhooks of a Sentry internal integration",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "client_secret",
+          "label": "Client Secret",
+          "placeholder": "Client secret of the integration",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac",
+        "secret": "client_secret",
+        "header": "Sentry-Hook-Signature"
+      },
+      "event": {
+        "kind": [
+          "{header:sentry-hook-resource}.{body:action}",
+          "{header:sentry-hook-resource}"
+        ],
+        "key": "{header:request-id}",
+        "sender": "sentry:{body:actor.id}"
+      },
+      "events": [
+        "installation.created",
+        "installation.deleted",
+        "issue.created",
+        "issue.resolved",
+        "issue.assigned",
+        "issue.archived",
+        "issue.unresolved",
+        "error.created",
+        "event_alert.triggered",
+        "metric_alert.critical",
+        "metric_alert.warning",
+        "metric_alert.resolved",
+        "comment.created"
+      ]
+    },
+    {
+      "slug": "yookassa",
+      "name": "YooKassa",
+      "description": "Payment, refund and payout notifications, checked against the YooKassa API",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "secret_key",
+          "label": "Secret Key",
+          "placeholder": "live_… or test_… API key of the shop",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "config": [
+        {
+          "key": "shop_id",
+          "label": "Shop ID",
+          "placeholder": "123456",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "api_lookup",
+        "request": {
+          "method": "GET",
+          "url": "https://api.yookassa.ru/v3/{collection}/{body:object.id}",
+          "auth": {
+            "username": "{config.shop_id}",
+            "password": "{credentials.secret_key}"
+          }
+        },
+        "collection_from": "{body:event}",
+        "collections": {
+          "payment": "payments",
+          "refund": "refunds",
+          "payout": "payouts",
+          "deal": "deals",
+          "payment_method": "payment_methods"
+        },
+        "expect": {
+          "id": "{body:object.id}",
+          "status": "{body:object.status}"
+        },
+        "later": {
+          "waiting_for_capture": [
+            "succeeded",
+            "canceled"
+          ]
+        }
+      },
+      "event": {
+        "kind": "{body:event}",
+        "key": "{body:event}:{body:object.id}",
+        "occurred_at": "{body:object.created_at}"
+      },
+      "events": [
+        "payment.succeeded",
+        "payment.waiting_for_capture",
+        "payment.canceled",
+        "refund.succeeded",
+        "payout.succeeded",
+        "payout.canceled",
+        "deal.closed",
+        "payment_method.active"
+      ]
+    },
+    {
+      "slug": "gmail",
+      "name": "Gmail push",
+      "description": "Pub/Sub change notification: says the mailbox changed, carries no message",
+      "icon": "gmail",
+      "delivery": "webhook",
+      "verification": {
+        "scheme": "none"
+      },
+      "event": {
+        "kind": "message_received",
+        "key": "{body:message.messageId|message.message_id}",
+        "occurred_at": "{body:message.publishTime|message.publish_time}"
+      },
+      "events": [
+        "message_received"
+      ]
+    },
+    {
+      "slug": "teams",
+      "name": "Microsoft Teams",
+      "description": "Bot Framework activities of a Teams bot",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "verification": {
+        "scheme": "none"
+      },
+      "event": {
+        "kind": "{body:type}",
+        "key": "{body:id}",
+        "session_key": "{body:conversation.id}",
+        "sender": "teams:{body:from.id}",
+        "occurred_at": "{body:timestamp}"
+      },
+      "events": [
+        "message",
+        "conversationUpdate",
+        "invoke",
+        "messageReaction"
+      ]
+    },
+    {
+      "slug": "email",
+      "name": "Email",
+      "description": "Mail posted by an inbound-parse provider; the agent replies by SMTP",
+      "icon": "gmail",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "signing_secret",
+          "label": "Signing Secret",
+          "placeholder": "Leave empty to have one issued",
+          "required": false,
+          "issued": true
+        },
+        {
+          "key": "username",
+          "label": "SMTP Username",
+          "placeholder": "apikey",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "password",
+          "label": "SMTP Password",
+          "placeholder": "Password or API key",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "smtp_host",
+          "label": "SMTP Host",
+          "placeholder": "smtp.example.com",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "smtp_port",
+          "label": "SMTP Port",
+          "placeholder": "587",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "from_address",
+          "label": "Reply From",
+          "placeholder": "agent@your-domain.example",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "config": [
+        {
+          "key": "header",
+          "label": "Signature Header",
+          "placeholder": "X-Webhook-Signature",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "algorithm",
+          "label": "HMAC Digest",
+          "placeholder": "sha256",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "prefix",
+          "label": "Signature Prefix",
+          "placeholder": "e.g. sha256=",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac",
+        "secret": "signing_secret",
+        "header": "X-Webhook-Signature",
+        "configurable": [
+          "header",
+          "algorithm",
+          "prefix"
+        ]
+      },
+      "event": {
+        "kind": "message_received",
+        "key": "{body:message_id}",
+        "session_key": "{body:references.0|in_reply_to|message_id}",
+        "sender": "{body:from}",
+        "occurred_at": "{body:date}",
+        "attachments": {
+          "path": "attachments",
+          "fetch": "inline"
+        }
+      },
+      "events": [
+        "message_received"
+      ],
+      "reply": {
+        "sender": "smtp",
+        "target": {
+          "to": "{body:reply_to|from}",
+          "subject": "{body:subject}",
+          "message_id": "{body:message_id}",
+          "references": "{body:references}"
+        },
+        "presentation": "summary",
+        "markup": "plain"
+      }
+    },
+    {
+      "slug": "imap",
+      "name": "Mailbox (IMAP)",
+      "description": "Read a mailbox you already own; the agent replies by SMTP",
+      "icon": "gmail",
+      "delivery": "poll",
+      "credentials": [
+        {
+          "key": "username",
+          "label": "Mailbox Username",
+          "placeholder": "me@example.com",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "password",
+          "label": "Mailbox Password",
+          "placeholder": "App password",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "smtp_host",
+          "label": "SMTP Host",
+          "placeholder": "smtp.example.com",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "smtp_port",
+          "label": "SMTP Port",
+          "placeholder": "587",
+          "required": false,
+          "issued": false
+        },
+        {
+          "key": "from_address",
+          "label": "Reply From",
+          "placeholder": "agent@your-domain.example",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "config": [
+        {
+          "key": "host",
+          "label": "IMAP Host",
+          "placeholder": "imap.example.com",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "port",
+          "label": "IMAP Port",
+          "placeholder": "993",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "use_ssl",
+          "label": "Use SSL",
+          "placeholder": "true",
+          "required": true,
+          "issued": false
+        },
+        {
+          "key": "mailbox",
+          "label": "Mailbox",
+          "placeholder": "INBOX",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "poll": {
+        "transport": "imap",
+        "interval": "60s",
+        "imap": {
+          "host": "{config.host}",
+          "port": "{config.port}",
+          "use_ssl": "{config.use_ssl}",
+          "mailbox": "{config.mailbox}",
+          "username": "{credentials.username}",
+          "password": "{credentials.password}"
+        }
+      },
+      "event": {
+        "kind": "message_received",
+        "key": "{body:message_id}",
+        "session_key": "{body:references.0|in_reply_to|message_id}",
+        "sender": "{body:from}",
+        "occurred_at": "{body:date}",
+        "attachments": {
+          "path": "attachments",
+          "fetch": "inline"
+        }
+      },
+      "events": [
+        "message_received"
+      ],
+      "reply": {
+        "sender": "smtp",
+        "target": {
+          "to": "{body:reply_to|from}",
+          "subject": "{body:subject}",
+          "message_id": "{body:message_id}",
+          "references": "{body:references}"
+        },
+        "presentation": "summary",
+        "markup": "plain"
+      }
+    },
+    {
+      "slug": "rss",
+      "name": "RSS / Atom feed",
+      "description": "New items of an RSS or Atom feed",
+      "icon": "webhook",
+      "delivery": "poll",
+      "config": [
+        {
+          "key": "url",
+          "label": "Feed URL",
+          "placeholder": "https://example.com/feed.xml",
+          "required": true,
+          "issued": false
+        }
+      ],
+      "poll": {
+        "transport": "feed",
+        "request": {
+          "method": "GET",
+          "url": "{config.url}"
+        },
+        "interval": "300s"
+      },
+      "event": {
+        "kind": "item",
+        "key": "{body:id|link}",
+        "occurred_at": "{body:published|updated}",
+        "sender": "{body:author}"
+      },
+      "events": [
+        "item"
+      ]
+    },
+    {
+      "slug": "mcp_events",
+      "name": "MCP Events",
+      "description": "Events a connected MCP server emits (draft extension), delivered by Standard Webhooks",
+      "icon": "webhook",
+      "delivery": "webhook",
+      "credentials": [
+        {
+          "key": "signing_secret",
+          "label": "Subscription Secret",
+          "placeholder": "whsec_… of the subscription",
+          "required": false,
+          "issued": false
+        }
+      ],
+      "verification": {
+        "scheme": "hmac_timestamped",
+        "secret": "signing_secret",
+        "header": "webhook-signature",
+        "timestamp_header": "webhook-timestamp",
+        "id_header": "webhook-id",
+        "payload": "{id}.{timestamp}.{body}",
+        "signature_format": "list",
+        "signature_key": "v1",
+        "encoding": "base64",
+        "secret_format": "whsec"
+      },
+      "handshake": [
+        {
+          "when": "{body:type}",
+          "equals": "challenge",
+          "respond": {
+            "challenge": "{body:challenge}"
+          }
+        }
+      ],
+      "event": {
+        "kind": "{body:name}",
+        "key": "{body:eventId}",
+        "occurred_at": "{body:timestamp}"
+      },
+      "events": []
+    }
+  ]
+}

@@ -236,7 +236,11 @@ export default function FullChat({
   const eventStateRef = React.useRef<EventState>(eventState);
   eventStateRef.current = eventState;
 
-  const parts = eventState.parts;
+  // The chat draws the messages it sent itself, so the stream's copies stay out.
+  const parts = React.useMemo(
+    () => eventState.parts.filter((part) => part.kind !== "message"),
+    [eventState.parts]
+  );
   const hasUserMessages = userEntries.length > 0;
   const visiblePartIds = React.useMemo(
     () => new Set(parts.map((part) => part.partId)),
@@ -254,8 +258,10 @@ export default function FullChat({
 
   const addUserMessage = React.useCallback((message: UserChatMessage) => {
     const currentState = eventStateRef.current;
-    const order = currentState.order;
-    const afterPartId = order.length ? order[order.length - 1] : null;
+    const shown = currentState.order.filter(
+      (partId) => currentState.byId[partId]?.kind !== "message"
+    );
+    const afterPartId = shown.length ? shown[shown.length - 1] : null;
     setUserEntries((prev) => [
       ...prev,
       {
@@ -956,6 +962,7 @@ export default function FullChat({
                         isInteractionClosed(eventState, part)
                       }
                       onA2UIAction={dispatchA2UIAction}
+                      paused={eventState.status === "paused"}
                     />
                   ) : (
                     <PartRenderer

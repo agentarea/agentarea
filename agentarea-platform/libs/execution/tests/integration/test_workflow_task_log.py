@@ -232,7 +232,8 @@ async def test_a_run_records_its_log_and_status_through_the_record_activity():
     assert run.publish_calls == []
     rows = run.log.entries()
     assert [row.seq for row in rows] == list(range(len(rows)))
-    assert (rows[0].role, rows[1].role, rows[1].content) == (
+    messages = [row for row in rows if row.kind != "event"]
+    assert (messages[0].role, messages[1].role, messages[1].content) == (
         "system",
         "user",
         "Build the monthly report",
@@ -249,10 +250,31 @@ async def test_a_run_records_its_log_and_status_through_the_record_activity():
     }
     assert tool.meta["artifact_paths"] == ["out/report.csv"]
     assert tool.meta["started_at"]
-    assert all(row.iteration for row in rows)
+    assert all(row.iteration for row in messages)
     assert all(request.conversation.head_seqs is None for request in run.requests)
     assert any(m.get("content") == "42 rows" for m in run.windows[1])
     assert run.log.statuses[-1].status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_the_runs_events_are_event_rows_and_live_signals_are_not_kept():
+    run = _Run()
+
+    await _drive(run)
+
+    rows = run.log.entries()
+    events = [row.name for row in rows if row.kind == "event"]
+    assert "task.started" in events
+    assert "tool.result" in events
+    assert "task.completed" in events
+    assert not {"llm.call.started", "llm.call.chunk", "tool.progress"} & set(events)
+    assert all(row.meta and row.meta.get("task_id") for row in rows if row.kind == "event")
+    sent = [
+        json.loads(event)["event_type"]
+        for request in run.log.requests
+        for event in request.events_json
+    ]
+    assert set(sent) <= {"llm.call.started", "llm.call.chunk", "tool.progress"}
 
 
 @pytest.mark.asyncio
@@ -293,9 +315,8 @@ async def test_a_model_change_is_an_event_row_and_the_next_answer_names_the_new_
 
     assert result.success is True
     rows = run.log.entries()
-    [changed] = [row for row in rows if row.kind == "event"]
-    assert changed.name == "model.changed"
-    assert changed.meta == {
+    [changed] = [row for row in rows if row.kind == "event" and row.name == "model.changed"]
+    assert {key: changed.meta[key] for key in ("from", "to", "by")} == {
         "from": {"model_id": "gpt-4o-mini", "model_name": "name-of-gpt-4o-mini"},
         "to": {"model_id": "model-b", "model_name": "name-of-model-b"},
         "by": "user-7",

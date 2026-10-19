@@ -10,6 +10,8 @@ Dispatches sync/create by registry_type:
   - "bundles" → catalog-only installable bundles: the registry_item.spec IS
     the canonical Bundle definition. Nothing is materialized on sync; the
     bundle is provisioned into a workspace on demand via BundleService.install.
+  - "source_types" → catalog-only event source types (ADR-0040): the
+    registry_item.spec IS the entry; streams read it by slug.
 
 Source format auto-detected (JSON or YAML).
 Entity-specific details (connection_type, source_type) live in spec JSONB.
@@ -59,6 +61,7 @@ VALID_REGISTRY_TYPES = (
     "llm_models",
     "agents",
     "bundles",
+    "source_types",
 )
 VALID_SOURCE_TYPES = ("url", "github", "api", "managed")
 
@@ -72,6 +75,7 @@ TYPE_BY_TOPLEVEL_KEY = {
     "models": "llm_models",
     "agents": "agents",
     "bundles": "bundles",
+    "source_types": "source_types",
 }
 
 
@@ -749,6 +753,9 @@ class RegistryService:
             # provisioned into a workspace on demand via BundleService.install, so
             # nothing is materialized on sync.
             return None
+        elif registry_type == "source_types":
+            # Catalog-only: streams read the entry from registry_items by slug.
+            return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     async def _update_entity(
@@ -768,8 +775,8 @@ class RegistryService:
         elif registry_type == "agents":
             # No materialized entity to update for catalog agents (ADR-003).
             return None
-        elif registry_type == "bundles":
-            # No materialized entity to update for catalog bundles.
+        elif registry_type in ("bundles", "source_types"):
+            # No materialized entity to update for catalog bundles or source types.
             return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
@@ -1102,6 +1109,8 @@ class RegistryService:
             return RegistryService._parse_agents(data)
         elif registry_type == "bundles":
             return RegistryService._parse_bundles(data)
+        elif registry_type == "source_types":
+            return RegistryService._parse_source_types(data)
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     @staticmethod
@@ -1473,6 +1482,27 @@ class RegistryService:
                         "triggers": entry.get("triggers") or [],
                     },
                     "tags": entry.get("tags", []),
+                    **rank_fields(entry),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _parse_source_types(data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Event source types (ADR-0040): the whole entry is the spec, its slug the external id."""
+        items = []
+        for entry in data.get("source_types", []):
+            slug = entry.get("slug")
+            if not slug:
+                raise ValueError(f"source type entry {entry.get('name')!r} has no slug")
+            items.append(
+                {
+                    "external_id": slug,
+                    "name": entry.get("name") or slug,
+                    "description": (entry.get("description") or "")[:500],
+                    "version": entry.get("version") or "1.0.0",
+                    "spec": entry,
+                    "tags": [entry.get("delivery")] if entry.get("delivery") else [],
                     **rank_fields(entry),
                 }
             )

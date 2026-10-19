@@ -51,22 +51,8 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     cron_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(100), nullable=True, default="UTC")
 
-    # Data extraction for poll-based channels
-    data_extractor: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    data_extractor_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    data_extractor_state: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Webhook-specific fields
-    webhook_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    allowed_methods: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    webhook_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default="generic")
-    validation_rules: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-
-    # Generic webhook configuration - supports any webhook type
-    webhook_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Event type filtering - empty list means accept all events
-    event_types: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    #: ``{"continue": bool, "idle_timeout": "30m"}`` for a stream trigger; null = the defaults.
+    session: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Relationship to executions
     executions: Mapped[list["TriggerExecutionORM"]] = relationship(

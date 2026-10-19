@@ -25,7 +25,7 @@ class CommandsMixin(BudgetMixin):
         previous_model_id = self.state.agent_config.get("model_id")
         self.state.resolved_model = info.model_dump(exclude={"changed_by"})
         self.state.agent_config["model_id"] = info.model_id
-        if self._task_log_on():
+        if self._task_log_on() and not self._events_in_log():
             self._log_event(
                 EventTypes.MODEL_CHANGED,
                 {
@@ -48,6 +48,12 @@ class CommandsMixin(BudgetMixin):
                     "old_model": old.get("model_name") if old else None,
                     "new_model": info.model_name,
                     "new_model_id": info.model_id,
+                    "from": {
+                        "model_id": previous_model_id,
+                        "model_name": old.get("model_name") if old else None,
+                    },
+                    "to": {"model_id": info.model_id, "model_name": info.model_name},
+                    "by": info.changed_by,
                 },
             )
         workflow.logger.info(

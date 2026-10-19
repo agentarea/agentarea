@@ -8,25 +8,20 @@ import {
   FileText,
   Paperclip,
   SlidersHorizontal,
-  Webhook,
 } from "lucide-react";
 import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import ConfigSheet from "@/components/ConfigSheet";
 import { FileTree } from "@/components/files/file-tree";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { SecretSelect } from "@/components/SecretSelect";
 import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -34,26 +29,24 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "@/components/WorkspaceLink";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
-import { cn } from "@/lib/utils";
+import { resolveSession } from "@/lib/sourceTypes";
 import {
   composeTaskParameters,
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
+import { SessionSetting, type TriggerSession } from "../components/SessionSetting";
 import { renderTriggerIcon } from "../components/triggerDisplay";
-import { SigningSecretIssuedDialog } from "../components/WebhookSigning";
 import {
   createTriggerAction,
-  listTriggerCatalogAction,
   updateTriggerAction,
-  type TriggerCatalogEntry,
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
 import type { StreamOptions } from "./streamOptions";
 import { TIMEZONES } from "./timezones";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
-import { triggerShape } from "./triggerShape";
+import { requiresTaskText } from "./triggerShape";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
@@ -61,15 +54,6 @@ interface CreateTriggerFormProps {
   initialData?: TriggerResponse;
 }
 
-const HTTP_METHODS = [
-  "GET",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "HEAD",
-  "OPTIONS",
-] as const;
 const INLINE_ERROR_FIELDS = new Set([
   "name",
   "trigger_type",
@@ -79,34 +63,10 @@ const INLINE_ERROR_FIELDS = new Set([
   "agent_id",
   "stream_id",
 ]);
-const KIND_ORDER: TriggerCatalogEntry["kind"][] = [
-  "schedule",
-  "messaging",
-  "event",
-];
+/** What a trigger can be: a schedule, or a subscription to a stream. */
+const TRIGGER_TYPES = ["cron", "stream"] as const;
 
 type SelectableResource = TaskParameterRef;
-
-function resolveInitialId(
-  catalog: TriggerCatalogEntry[],
-  initialData?: TriggerResponse
-): string {
-  if (!initialData) return "";
-  if (initialData.trigger_type === "cron") {
-    return (
-      catalog.find(
-        (entry) =>
-          entry.backend_type === "cron" &&
-          (entry.data_extractor ?? null) ===
-            (initialData.data_extractor ?? null)
-      )?.id ?? "cron"
-    );
-  }
-  if (initialData.trigger_type === "stream") return "stream";
-  const wt = initialData.webhook_type;
-  if (!wt) return "webhook";
-  return catalog.find((e) => e.webhook_type === wt)?.id ?? "webhook";
-}
 
 export function CreateTriggerForm({
   agents,
@@ -115,6 +75,7 @@ export function CreateTriggerForm({
 }: CreateTriggerFormProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("TriggersPage.create");
+  const tType = useTranslations("TriggersPage.type");
   const tError = useTranslations("TriggersPage.error");
 
   const isEditing = !!initialData;
@@ -123,21 +84,22 @@ export function CreateTriggerForm({
   const initialState: TriggerFormState = { message: "" };
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  const [catalog, setCatalog] = useState<TriggerCatalogEntry[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [triggerType, setTriggerType] = useState<string>(
+    initialData?.trigger_type ?? ""
+  );
   const [selectedAgentId, setSelectedAgentId] = useState(
     initialData?.agent_id ?? ""
   );
-  const [credentialSecrets, setCredentialSecrets] = useState<
-    Record<string, string>
-  >({});
-  const [catalogFailed, setCatalogFailed] = useState(false);
+  const [streamId, setStreamId] = useState(initialData?.stream_id ?? "");
+  // Null until someone changes it: then it follows the chosen stream's default.
+  const [session, setSession] = useState<TriggerSession | null>(
+    initialData?.session ?? null
+  );
   const [runSettingsOpen, setRunSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (
       state.errors?.failure_threshold ||
-      state.errors?.allowed_methods ||
       state.errors?.description
     )
       setRunSettingsOpen(true);
@@ -145,18 +107,9 @@ export function CreateTriggerForm({
   // Field errors the form has no inline slot for (e.g. `config.*` from the
   // schema) are listed in the banner with their path, not dropped.
   const unplacedErrors = Object.entries(state.errors ?? {}).filter(
-    ([key]) =>
-      key !== "_form" &&
-      !INLINE_ERROR_FIELDS.has(key) &&
-      !key.startsWith("credential_secret_")
+    ([key]) => key !== "_form" && !INLINE_ERROR_FIELDS.has(key)
   );
   const [typeMissing, setTypeMissing] = useState(false);
-  const [selectedMethods, setSelectedMethods] = useState<string[]>(
-    initialData?.allowed_methods ?? ["POST"]
-  );
-  const [selectedEvents, setSelectedEvents] = useState<string[]>(
-    initialData?.event_types || []
-  );
   const initialTaskParameters = useMemo(
     () => normalizeTaskParameters(initialData?.task_parameters),
     [initialData?.task_parameters]
@@ -170,14 +123,10 @@ export function CreateTriggerForm({
   const [taskMcps, setTaskMcps] = useState<TaskParameterRef[]>(
     initialTaskParameters.mcps
   );
-  const resources = useAttachableResources({
-    withFiles: true,
-    withSecrets: true,
-  });
+  const resources = useAttachableResources({ withFiles: true });
   const {
     mcpInstances: availableMcps,
     files: availableFiles,
-    secrets: availableSecrets,
     loading: resourcesLoading,
     failed: resourceErrors,
   } = resources;
@@ -191,24 +140,6 @@ export function CreateTriggerForm({
     [resources.skills]
   );
 
-  // Fetch catalog from backend
-  useEffect(() => {
-    listTriggerCatalogAction()
-      .then((data) => {
-        setCatalog(data);
-        setCatalogFailed(false);
-        if (initialData) {
-          setSelectedId(resolveInitialId(data, initialData));
-        }
-      })
-      .catch((e) => {
-        // Swallowing this left an empty type dropdown that looked like the
-        // product simply had no trigger types.
-        console.error("Failed to load trigger catalog:", e);
-        setCatalogFailed(true);
-      });
-  }, [initialData]);
-
   const refreshResourcesControl = (
     <Button
       type="button"
@@ -221,45 +152,18 @@ export function CreateTriggerForm({
     </Button>
   );
 
-  const selected = catalog.find((e) => e.id === selectedId);
-  const webhookType = initialData?.webhook_type ?? selected?.webhook_type ?? "";
-  const { triggerType, isChannel, taskTextRequired } = triggerShape({
-    selected,
-    initialData,
-  });
+  const taskTextRequired = requiresTaskText(triggerType);
+  const stream = streams.items.find((item) => item.id === streamId);
+  const effectiveSession = resolveSession(
+    session,
+    stream?.continuesSessions ?? false
+  );
   const timezones = Array.from(
     new Set([
       ...TIMEZONES,
       ...(initialData?.timezone ? [initialData.timezone] : []),
     ])
   );
-
-  // Reset methods and events when selection changes
-  useEffect(() => {
-    if (selected && !isEditing) {
-      setSelectedMethods(selected.default_methods ?? ["POST"]);
-      setSelectedEvents([]);
-    }
-  }, [isEditing, selected]);
-
-  const availableEvents = Array.from(
-    new Set([...(selected?.events ?? []), ...(initialData?.event_types ?? [])])
-  );
-  const credentialFields = selected?.credential_fields ?? [];
-
-  const toggleEvent = (event: string) => {
-    setSelectedEvents((prev) =>
-      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
-    );
-  };
-
-  const toggleMethod = (method: string) => {
-    setSelectedMethods((prev) =>
-      prev.includes(method)
-        ? prev.filter((m) => m !== method)
-        : [...prev, method]
-    );
-  };
 
   const taskParametersValue = useMemo(
     () =>
@@ -289,25 +193,15 @@ export function CreateTriggerForm({
   }, [isPending]);
 
   useEffect(() => {
-    // A generated signing secret is shown first: navigating away would lose it.
-    if (state.success && !state.signing) {
+    if (state.success) {
       // The action revalidated both paths, so the destination renders fresh.
       // A `router.refresh()` here cancels this navigation instead.
       router.push(initialData ? `/triggers/${initialData.id}` : "/triggers");
     }
   }, [state, router, initialData]);
 
-  // Kind is only a grouping header inside the type dropdown.
-  const kindLabels: Record<string, string> = {
-    schedule: "Scheduling",
-    messaging: "Messaging",
-    event: "Events",
-  };
-  const kinds = new Set(catalog.map((e) => e.kind));
-  const orderedKinds = KIND_ORDER.filter((k) => kinds.has(k));
-
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    if (!isEditing && !selected) {
+    if (!isEditing && !triggerType) {
       event.preventDefault();
       setTypeMissing(true);
     }
@@ -381,18 +275,6 @@ export function CreateTriggerForm({
   );
   return (
     <>
-      {state.success && state.signing && (
-        <SigningSecretIssuedDialog
-          title={t("createdWithSecretTitle")}
-          secret={state.signing.secret}
-          scheme={state.signing.scheme}
-          onDone={() =>
-            router.push(
-              state.triggerId ? `/triggers/${state.triggerId}` : "/triggers"
-            )
-          }
-        />
-      )}
       <form
         id="create-trigger-form"
         action={formAction}
@@ -407,41 +289,11 @@ export function CreateTriggerForm({
       >
         {isEditing && <input type="hidden" name="id" value={initialData.id} />}
         <input type="hidden" name="trigger_type" value={triggerType} />
-        {triggerType === "webhook" && (
-          <input type="hidden" name="webhook_type" value={webhookType} />
-        )}
-        {selected?.data_extractor && (
-          <input
-            type="hidden"
-            name="data_extractor"
-            value={selected.data_extractor}
-          />
-        )}
         <input
           type="hidden"
           name="task_parameters"
           value={taskParametersValue}
         />
-        {triggerType === "webhook" && (
-          <input
-            type="hidden"
-            name="event_types"
-            value={JSON.stringify(selectedEvents)}
-          />
-        )}
-        {/* A channel shows no method checkboxes, and the update action reads the
-          methods straight off them with no fallback — carrying them hidden is
-          what keeps an edit from saving an empty allowed_methods. */}
-        {triggerType === "webhook" &&
-          isChannel &&
-          selectedMethods.map((method) => (
-            <input
-              key={method}
-              type="hidden"
-              name={`method_${method}`}
-              value="on"
-            />
-          ))}
         <div className="mx-auto grid w-full max-w-6xl gap-6 pb-10 pt-2 lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8">
           <div className="min-w-0 space-y-6" data-task-authoring>
             <div className="grid content-start gap-2">
@@ -469,9 +321,9 @@ export function CreateTriggerForm({
                 {!isEditing ? (
                   <>
                     <Select
-                      value={selectedId}
+                      value={triggerType}
                       onValueChange={(value) => {
-                        setSelectedId(value);
+                        setTriggerType(value);
                         setTypeMissing(false);
                       }}
                     >
@@ -483,39 +335,21 @@ export function CreateTriggerForm({
                         <SelectValue placeholder={t("selectType")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {orderedKinds.map((kind) => (
-                          <SelectGroup key={kind}>
-                            <SelectLabel>
-                              {kindLabels[kind] ?? kind}
-                            </SelectLabel>
-                            {catalog
-                              .filter((entry) => entry.kind === kind)
-                              .map((entry) => (
-                                <SelectItem key={entry.id} value={entry.id}>
-                                  <span className="flex items-center gap-2">
-                                    {/* The catalog owns the artwork — drawing it
-                                      from a map here is how channels the map
-                                      never heard of ended up as dots. */}
-                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                                      {renderTriggerIcon(
-                                        entry,
-                                        undefined,
-                                        "h-4 w-4"
-                                      )}
-                                    </span>
-                                    {entry.name}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                          </SelectGroup>
+                        {TRIGGER_TYPES.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            <span className="flex items-center gap-2">
+                              <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+                                {renderTriggerIcon(
+                                  { trigger_type: type },
+                                  "h-4 w-4"
+                                )}
+                              </span>
+                              {tType(type)}
+                            </span>
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {catalogFailed && (
-                      <p role="alert" className="text-sm text-destructive">
-                        {t("catalogLoadFailed")}
-                      </p>
-                    )}
                     {(typeMissing || state.errors?.trigger_type) && (
                       <p className="text-sm text-destructive">
                         {state.errors?.trigger_type?.[0] ?? t("selectType")}
@@ -525,9 +359,9 @@ export function CreateTriggerForm({
                 ) : (
                   <span className="flex items-center gap-2 rounded-md bg-muted px-2 py-1 text-sm text-muted-foreground">
                     <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                      {renderTriggerIcon(selected, initialData, "h-4 w-4")}
+                      {renderTriggerIcon(initialData, "h-4 w-4")}
                     </span>
-                    {selected?.name ?? initialData.trigger_type}
+                    {tType(initialData.trigger_type)}
                   </span>
                 )}
               </div>
@@ -543,15 +377,9 @@ export function CreateTriggerForm({
                 >
                   {t("taskInstructions")}
                 </FormLabel>
-                {Boolean(triggerType) && !taskTextRequired && (
+                {triggerType === "stream" && (
                   <p className="text-xs text-muted-foreground">
-                    {t(
-                      triggerType === "stream"
-                        ? "taskTextFromStream"
-                        : isChannel
-                          ? "taskTextFromChannel"
-                          : "taskTextFromCall"
-                    )}
+                    {t("taskTextFromStream")}
                   </p>
                 )}
                 <Textarea
@@ -589,7 +417,8 @@ export function CreateTriggerForm({
                       trigger to another stream. */}
                   <Select
                     name="stream_id"
-                    defaultValue={initialData?.stream_id ?? undefined}
+                    value={streamId}
+                    onValueChange={setStreamId}
                     disabled={isEditing || streams.error !== null}
                     required
                   >
@@ -623,17 +452,21 @@ export function CreateTriggerForm({
                   )}
                 </div>
               )}
+              {triggerType === "stream" && (
+                <SessionSetting
+                  id="session"
+                  name="session"
+                  value={effectiveSession}
+                  onChange={setSession}
+                />
+              )}
               {triggerType === "cron" && (
                 <>
                   <div className="grid gap-2">
                     <FormLabel required>{t("schedule")}</FormLabel>
                     <CronScheduler
                       name="cron_expression"
-                      defaultValue={
-                        initialData?.cron_expression ??
-                        selected?.default_cron ??
-                        ""
-                      }
+                      defaultValue={initialData?.cron_expression ?? ""}
                     />
                     {state.errors?.cron_expression && (
                       <p className="text-sm text-destructive">
@@ -662,108 +495,6 @@ export function CreateTriggerForm({
                   </div>
                 </>
               )}
-              {credentialFields.length > 0 && (
-                <>
-                  {credentialFields.map((field) => (
-                    <div
-                      key={`${selectedId}:${field.key}`}
-                      className="grid gap-2 md:max-w-sm"
-                    >
-                      <FormLabel
-                        htmlFor={`cred_${field.key}`}
-                        required={
-                          !!selected?.data_extractor &&
-                          !initialData?.has_channel_credentials
-                        }
-                      >
-                        {field.label}
-                      </FormLabel>
-                      <SecretSelect
-                        id={`cred_${field.key}`}
-                        name={`credential_secret_${field.key}`}
-                        secrets={availableSecrets}
-                        value={credentialSecrets[field.key] ?? ""}
-                        onChange={(secretId) =>
-                          setCredentialSecrets((previous) => ({
-                            ...previous,
-                            [field.key]: secretId,
-                          }))
-                        }
-                        disabled={
-                          resourcesLoading || resourceErrors.includes("secrets")
-                        }
-                        required={
-                          !!selected?.data_extractor &&
-                          !initialData?.has_channel_credentials
-                        }
-                        placeholder={
-                          resourcesLoading
-                            ? t("loadingResources")
-                            : isEditing && initialData.has_channel_credentials
-                              ? t("keepExistingSecret")
-                              : t("selectSecret")
-                        }
-                        searchPlaceholder={t("selectSecret")}
-                        emptyMessage={t("noSecrets")}
-                        createLabel={t("newSecret")}
-                        onCreated={resources.refresh}
-                      />
-                      {state.errors?.[`credential_secret_${field.key}`] && (
-                        <p role="alert" className="text-sm text-destructive">
-                          {state.errors[`credential_secret_${field.key}`][0]}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                  {resourceErrors.includes("secrets") && (
-                    <p role="alert" className="text-xs text-destructive">
-                      {t("resourcesLoadFailed")}
-                    </p>
-                  )}
-                </>
-              )}
-              {triggerType === "webhook" &&
-                !isChannel &&
-                availableEvents.length > 0 && (
-                  <details className="group/events rounded-md border border-border/60">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-sm [&::-webkit-details-marker]:hidden">
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5 text-muted-foreground transition-transform group-open/events:rotate-90 motion-reduce:transition-none"
-                      />
-                      <Webhook
-                        aria-hidden="true"
-                        className="h-3.5 w-3.5 text-muted-foreground"
-                      />
-                      <span>{t("eventTypes")}</span>
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {selectedEvents.length
-                          ? t("selectedEventsCount", {
-                              count: selectedEvents.length,
-                            })
-                          : t("allEvents")}
-                      </span>
-                    </summary>
-                    <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto px-3 pb-3">
-                      {availableEvents.map((event) => (
-                        <button
-                          key={event}
-                          type="button"
-                          aria-pressed={selectedEvents.includes(event)}
-                          onClick={() => toggleEvent(event)}
-                          className={cn(
-                            "rounded-md px-2 py-1 text-xs transition-colors",
-                            selectedEvents.includes(event)
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {event}
-                        </button>
-                      ))}
-                    </div>
-                  </details>
-                )}
             </section>
             <details
               data-run-settings
@@ -794,29 +525,6 @@ export function CreateTriggerForm({
                     defaultValue={initialData?.failure_threshold || ""}
                   />
                 </div>
-                {triggerType === "webhook" && !isChannel && (
-                  <div className="grid gap-2">
-                    <FormLabel icon={Webhook}>{t("allowedMethods")}</FormLabel>
-                    <div className="flex flex-wrap gap-3">
-                      {HTTP_METHODS.map((method) => (
-                        <div key={method} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`method_${method}`}
-                            name={`method_${method}`}
-                            checked={selectedMethods.includes(method)}
-                            onCheckedChange={() => toggleMethod(method)}
-                          />
-                          <Label
-                            htmlFor={`method_${method}`}
-                            className="text-sm font-mono cursor-pointer"
-                          >
-                            {method}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 <div className="grid gap-2">
                   <FormLabel htmlFor="description" icon={FileText}>
                     {t("triggerDescription")}

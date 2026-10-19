@@ -1,5 +1,6 @@
 """The tool-call policy gate: allow, deny, or pause for human approval."""
 
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -28,6 +29,7 @@ from ..constants import (
 from .budget import BudgetMixin
 from .patches import (
     APPROVAL_RESPONSE_ONCE_PATCH,
+    REFUSED_TOOL_CALL_ANNOUNCED_PATCH,
     TOOL_CONFIG_ALIASES_PATCH,
     WEB_FETCH_SEEN_URL_PATCH,
 )
@@ -58,15 +60,39 @@ class ToolApprovalMixin(BudgetMixin):
         """Agent-config names that may deny this tool or put it behind approval."""
         return tool_config_aliases(tool_name, *self._policy_tool_configs())
 
+    def _announce_tool_call(self, tool_call: ToolCall) -> None:
+        """Record the model's tool.call for a call refused before it ran, so its result has one."""
+        try:
+            arguments = json.loads(tool_call.function.get("arguments") or "{}")
+        except (json.JSONDecodeError, TypeError):
+            arguments = {}
+        self._events.add_event(
+            EventTypes.TOOL_CALL_STARTED,
+            {
+                "tool_name": tool_call.function["name"],
+                "tool_call_id": tool_call.id,
+                "iteration": self.state.current_iteration,
+                "arguments": sanitize_tool_event_value(arguments),
+            },
+        )
+
     async def _deny_tool_call(
-        self, tool_call: ToolCall, tool_name: str, reason: str, ran: bool = False
+        self,
+        tool_call: ToolCall,
+        tool_name: str,
+        reason: str,
+        ran: bool = False,
+        announced: bool = False,
     ) -> None:
         """Reject a tool call by policy and surface the reason to the LLM.
 
         ``ran`` marks a gate that judged the call's output: the call executed,
-        only its result is kept from the model.
+        only its result is kept from the model. ``announced`` says its tool.call
+        is already recorded; otherwise it is recorded here first.
         """
         workflow.logger.warning(f"Tool '{tool_name}' denied by policy: {reason}")
+        if not announced and workflow.patched(REFUSED_TOOL_CALL_ANNOUNCED_PATCH):
+            self._announce_tool_call(tool_call)
         message = (
             f"Tool call ran, but its result was withheld by policy: {reason}"
             if ran
@@ -127,7 +153,7 @@ class ToolApprovalMixin(BudgetMixin):
         )
         self._pending_escalations[escalation_id] = escalation
         self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
-        if self._task_log_on():
+        if self._task_log_on() and not self._events_in_log():
             self._log_event(
                 EventTypes.APPROVAL_REQUESTED,
                 {
@@ -169,7 +195,7 @@ class ToolApprovalMixin(BudgetMixin):
         await workflow.wait_condition(lambda: escalation.resolved)
 
         approved = escalation.approved
-        if self._task_log_on():
+        if self._task_log_on() and not self._events_in_log():
             self._log_event(
                 EventTypes.APPROVAL_DECIDED,
                 {

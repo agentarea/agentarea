@@ -33,8 +33,10 @@ from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_tasks.domain.exceptions import BudgetCapExceededError, RunStillClosingError
+from agentarea_tasks.domain.feed import feed_event
 from agentarea_tasks.domain.models import TaskProvenance
-from agentarea_tasks.infrastructure.repository import TaskEventRepository, TaskRepository
+from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.infrastructure.task_log import TaskFeedReader
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import HTTPException
@@ -44,7 +46,11 @@ from agentarea_api.api.deps.services import (
     _create_task_manager,
     get_temporal_workflow_service,
 )
-from agentarea_api.api.v1._task_authority import assert_may_act_on_task
+from agentarea_api.api.v1._task_authority import (
+    assert_may_act_on_task,
+    caller_may_act_on_task,
+    may_resolve_escalation,
+)
 from agentarea_api.api.v1.agents_tasks import (
     ContinueTaskPayload,
     EscalationResolution,
@@ -53,6 +59,7 @@ from agentarea_api.api.v1.agents_tasks import (
     TaskInputSubmission,
     _resolve_model_info,
     escalations_caller_may_resolve,
+    task_execution_id,
 )
 
 from .base import platform_context, platform_read_context
@@ -60,6 +67,10 @@ from .base import platform_context, platform_read_context
 RUN_NOT_FOUND = "Run not found"
 RUN_STILL_CLOSING = "The run is still stopping; try again in a few seconds"
 RUN_AUTHORITY = "whoever started the run, or a workspace admin; _ensure_may_act loads the run first"
+ESCALATION_AUTHORITY = (
+    "an escalation's named approvers, else whoever started the run or a workspace admin; "
+    "_escalation_authority loads the run first"
+)
 
 _FAILURE_FIELDS = (
     "error",
@@ -162,6 +173,7 @@ class RunEvent(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: str = Field(description="Event id.")
+    seq: int = Field(description="The event's position in the task log.")
     event_type: str = Field(description="Event type, e.g. tool.call, task.failed.")
     timestamp: str = Field(description="When the event happened.")
     message: str | None = Field(default=None, description="Human-readable summary, when set.")
@@ -224,8 +236,18 @@ async def _build_task_service(repo_factory, event_broker) -> TaskService:
     )
 
 
-async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserContext) -> None:
-    """Refuse unless the caller started this run or administers the workspace."""
+async def _escalation_authority(
+    service: TaskService, run_id: str, user_ctx: UserContext
+) -> tuple[Any, bool]:
+    """The run, and whether the caller may act on it; deciding an escalation is narrower."""
+    task = await service.get_task(UUID(run_id))
+    if not task:
+        raise ToolError(RUN_NOT_FOUND)
+    return task, await caller_may_act_on_task(task, user_ctx)
+
+
+async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserContext) -> Any:
+    """The run, unless the caller neither started it nor administers the workspace."""
     task = await service.get_task(UUID(run_id))
     if not task:
         raise ToolError(RUN_NOT_FOUND)
@@ -233,11 +255,7 @@ async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserConte
         await assert_may_act_on_task(task, user_ctx)
     except HTTPException as exc:
         raise ToolError(exc.detail) from exc
-
-
-def _execution_id(run_id: str) -> str:
-    """Workflow id for a run, matching ``api/v1/agents_tasks.py``."""
-    return f"task-{run_id}"
+    return task
 
 
 async def _model_switch_body(model_instance_id: str, session, user_ctx, broker, secret_mgr) -> dict:
@@ -278,7 +296,7 @@ class RunsToolset(Toolset):
             dict[str, Any] | None,
             Field(
                 description='Free-form task parameters, e.g. {"model_override": "<model id>"} '
-                "plus any agent-specific context. channel_origin is reserved and rejected."
+                "plus any agent-specific context. delivery_address and session are reserved and rejected."
             ),
         ] = None,
         requires_human_approval: Annotated[
@@ -437,9 +455,9 @@ class RunsToolset(Toolset):
         """Pause a running agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
-            paused = await workflow.pause_task(_execution_id(run_id))
+            paused = await workflow.pause_task(task_execution_id(task))
             return json.dumps({"paused": paused})
 
     @tool_method(display_name="Resume run", effect="write", idempotent=True, output=RunResumed)
@@ -448,9 +466,9 @@ class RunsToolset(Toolset):
         """Resume a paused agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
-            resumed = await workflow.resume_task(_execution_id(run_id))
+            resumed = await workflow.resume_task(task_execution_id(task))
             return json.dumps({"resumed": resumed})
 
     @tool_method(display_name="Answer run input request", effect="write", output=InputDelivered)
@@ -486,10 +504,10 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             delivered = await workflow.send_workflow_command(
-                _execution_id(run_id),
+                task_execution_id(task),
                 "submit_user_input",
                 {
                     "input_request_id": submission.input_request_id,
@@ -552,7 +570,7 @@ class RunsToolset(Toolset):
             secret_mgr,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
 
             if payload.command == "queue_message":
                 if not payload.message:
@@ -589,7 +607,7 @@ class RunsToolset(Toolset):
             else:
                 workflow = await get_temporal_workflow_service()
                 delivered = await workflow.send_workflow_command(
-                    _execution_id(run_id), payload.command, body
+                    task_execution_id(task), payload.command, body
                 )
             return json.dumps({"delivered": delivered, "command": payload.command}, default=str)
 
@@ -599,7 +617,7 @@ class RunsToolset(Toolset):
         idempotent=True,
         output=EscalationResolved,
     )
-    @enforced_in_handler(RUN_AUTHORITY)
+    @enforced_in_handler(ESCALATION_AUTHORITY)
     async def resolve_escalation(
         self,
         run_id: RunId,
@@ -620,11 +638,26 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task, may_act = await _escalation_authority(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
+            execution_id = task_execution_id(task)
+            if not may_act:
+                try:
+                    pending = await workflow.get_pending_escalations(execution_id)
+                except WorkflowNotFoundError:
+                    raise ToolError("Escalation not found or no longer pending") from None
+                escalation = next(
+                    (e for e in pending if e["escalation_id"] == resolution.escalation_id), None
+                )
+                if escalation is None:
+                    raise ToolError("Escalation not found or no longer pending")
+                if not may_resolve_escalation(
+                    escalation["approvers"], str(user_ctx.user_id), may_act_on_run=False
+                ):
+                    raise ToolError("You are not an approver of this escalation")
             try:
                 resolved = await workflow.resolve_escalation(
-                    _execution_id(run_id),
+                    execution_id,
                     resolution.escalation_id,
                     resolution.approved,
                     resolution.comment,
@@ -641,29 +674,29 @@ class RunsToolset(Toolset):
         effect="read",
         output=PendingEscalations,
     )
-    @enforced_in_handler(RUN_AUTHORITY)
+    @enforced_in_handler(ESCALATION_AUTHORITY)
     async def list_pending_escalations(self, run_id: RunId) -> str:
         """List the escalations a run is blocked on that you may resolve.
 
         Each carries the exact tool arguments awaiting a decision. Run events
         redact them, since a command can carry an inline secret, so only a
-        caller who may act on the run and is one of the escalation's approvers
-        sees them.
+        caller who may decide an escalation sees it: its named approvers, else
+        whoever may act on the run.
         """
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task, may_act = await _escalation_authority(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             try:
-                pending = await workflow.get_pending_escalations(_execution_id(run_id))
+                pending = await workflow.get_pending_escalations(task_execution_id(task))
             except WorkflowNotFoundError:
                 raise ToolError("Run has no workflow to read escalations from") from None
-            return json.dumps(
-                [
-                    escalation.model_dump()
-                    for escalation in escalations_caller_may_resolve(pending, str(user_ctx.user_id))
-                ]
+            shown = escalations_caller_may_resolve(
+                pending, str(user_ctx.user_id), may_act_on_run=may_act
             )
+            if not may_act and not shown:
+                raise ToolError("You may not act on this run")
+            return json.dumps([escalation.model_dump() for escalation in shown])
 
     @tool_method(display_name="Continue run", effect="privileged", output=ContinuationResult)
     @enforced_in_handler(RUN_AUTHORITY)
@@ -727,22 +760,22 @@ class RunsToolset(Toolset):
         offset=total-limit.
         """
         async with platform_read_context() as (_s, _user_ctx, repo_factory, _broker, _):
-            event_repository = repo_factory.create_repository(TaskEventRepository)
-            records, total = await event_repository.list_for_task(
-                UUID(run_id), event_type=event_type, limit=limit, offset=offset
-            )
-            return json.dumps(
-                {
-                    "total": total,
-                    "events": [
-                        {
-                            "id": str(r.id),
-                            "event_type": r.event_type,
-                            "timestamp": r.timestamp,
-                            **_event_projection(r.event_type, r.data or {}),
-                        }
-                        for r in records
-                    ],
-                },
-                default=str,
-            )
+            entries, total = await TaskFeedReader(
+                repo_factory.session, repo_factory.user_context
+            ).page(UUID(run_id), event_type=event_type, limit=limit, offset=offset)
+            events = []
+            for entry in entries:
+                shown = feed_event(entry)
+                if shown is None:
+                    continue
+                shown_type, data = shown
+                events.append(
+                    {
+                        "id": str(entry.event_id),
+                        "seq": entry.seq,
+                        "event_type": shown_type,
+                        "timestamp": entry.occurred_at,
+                        **_event_projection(shown_type, data),
+                    }
+                )
+            return json.dumps({"total": total, "events": events}, default=str)

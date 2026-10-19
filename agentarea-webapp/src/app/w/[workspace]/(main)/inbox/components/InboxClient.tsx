@@ -19,10 +19,12 @@ import { InboxEmptyState } from "@/app/w/[workspace]/(main)/inbox/components/Inb
 import { InboxSelectionBar } from "@/app/w/[workspace]/(main)/inbox/components/InboxSelectionBar";
 import {
   countInbox,
+  decidedStatus,
   FILTER_KEYS,
   inboxBucket,
   isPending,
-  RESOLVED_ESCALATION_STATUS,
+  pruneDecided,
+  type DecidedEscalations,
   type FilterValue,
   type InboxDecision,
   type InboxTask,
@@ -77,15 +79,13 @@ export function InboxClient({
   const [isCompactLayout, setIsCompactLayout] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [resolved, setResolved] = useState<
-    Record<string, typeof RESOLVED_ESCALATION_STATUS>
-  >({});
+  const [resolved, setResolved] = useState<DecidedEscalations>({});
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [batch, setBatch] = useState<BatchDecision | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
-    setResolved({});
+    setResolved((prev) => pruneDecided(prev, items));
     setChecked(new Set());
   }, [items]);
 
@@ -98,7 +98,7 @@ export function InboxClient({
   }, []);
 
   const effectiveStatus = useCallback(
-    (task: InboxTask): string => resolved[String(task.id)] ?? task.status,
+    (task: InboxTask): string => decidedStatus(task, resolved),
     [resolved]
   );
 
@@ -178,11 +178,13 @@ export function InboxClient({
     }
 
     if (selectedId === id) {
-      const next = visible.find((item) => String(item.id) !== id);
+      const next = visible.find(
+        (item) => String(item.id) !== id && decidable(item)
+      );
       setSelectedId(next ? String(next.id) : null);
     }
 
-    setResolved((prev) => ({ ...prev, [id]: RESOLVED_ESCALATION_STATUS }));
+    setResolved((prev) => ({ ...prev, [id]: escalationId }));
     setChecked((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -235,7 +237,7 @@ export function InboxClient({
     setResolved((prev) => {
       const next = { ...prev };
       for (const task of targets) {
-        next[String(task.id)] = RESOLVED_ESCALATION_STATUS;
+        next[String(task.id)] = task.escalation_id as string;
       }
       return next;
     });

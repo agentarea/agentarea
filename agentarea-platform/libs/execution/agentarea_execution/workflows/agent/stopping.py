@@ -54,6 +54,8 @@ class StoppedModelCall:
 
     iteration: int
     handle: asyncio.Future[Any]
+    # "compaction" for the summary call; None for a turn.
+    purpose: str | None = None
 
 
 def stopped_tool_event(tool_call: ToolCall, outcome: dict[str, Any]) -> dict[str, Any]:
@@ -205,6 +207,7 @@ class ToolStopMixin(BudgetMixin):
     async def _settle_stopped_model_call(self, call: StoppedModelCall) -> Money:
         """Record the interrupted model call, and what it cost when the provider said."""
         model_id = self.state.agent_config.get("model_id")
+        purpose = {"purpose": call.purpose} if call.purpose else {}
         try:
             result = await call.handle
         except ActivityError as error:
@@ -215,6 +218,7 @@ class ToolStopMixin(BudgetMixin):
                     EventTypes.LLM_CALL_COMPLETED,
                     {
                         "iteration": call.iteration,
+                        **purpose,
                         "model_id": model_id,
                         "model_name": (self.state.resolved_model or {}).get("model_name"),
                         "cancelled": True,
@@ -233,6 +237,7 @@ class ToolStopMixin(BudgetMixin):
                 EventTypes.LLM_CALL_FAILED,
                 {
                     "iteration": call.iteration,
+                    **purpose,
                     "model_id": model_id,
                     "cancelled": True,
                     # Cut off before the provider reported usage: the call may
@@ -255,6 +260,7 @@ class ToolStopMixin(BudgetMixin):
             EventTypes.LLM_CALL_COMPLETED,
             {
                 "iteration": call.iteration,
+                **purpose,
                 "model_id": model_id,
                 "model_name": (self.state.resolved_model or {}).get("model_name"),
                 "managed_by": outcome.get("managed_by"),

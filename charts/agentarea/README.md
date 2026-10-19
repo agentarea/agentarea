@@ -288,8 +288,6 @@ The following table lists configurable parameters of the chart and their default
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
-| eventService.inboundStream | string | `"channel.inbound"` |  |
-| eventService.telegramPolling.enabled | bool | `false` |  |
 | eventService.resources | object | `{}` |  |
 | eventService.podAnnotations | object | `{}` |  |
 | eventService.podLabels | object | `{}` |  |
@@ -511,7 +509,7 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | registryReconcile.enabled | bool | `true` |  |
-| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"},{"name":"system-agents","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
+| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"},{"name":"system-agents","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"},{"name":"system-source-types","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |

@@ -97,6 +97,9 @@ class CostEntry:
     supersedes_id: UUID | None = None
     client_id: UUID | None = None
     estimate: bool = False
+    # The chain the spend belongs to (ADR-0043 §10); a task's line takes its task's.
+    correlation_id: str | None = None
+    causation_id: str | None = None
 
 
 def tool_call_event_id(line_key: str) -> UUID:

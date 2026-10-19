@@ -19,6 +19,7 @@ from agentarea_execution.workflows.constants import EventTypes
 def _workflow_logger(monkeypatch):
     # workflow.logger needs the Temporal event loop; these tests run outside it.
     monkeypatch.setattr(module.workflow, "logger", MagicMock())
+    monkeypatch.setattr(module.workflow, "patched", lambda patch_id: True)
 
 
 def _workflow() -> AgentExecutionWorkflow:
@@ -43,9 +44,11 @@ async def test_denial_emits_a_failed_tool_result():
 
     await wf._deny_tool_call(_tool_call(), "shell", "not permitted by policy")
 
-    assert len(wf._emitted) == 1
-    event_type, data = wf._emitted[0]
-    assert event_type == EventTypes.TOOL_CALL_COMPLETED
+    assert [event_type for event_type, _ in wf._emitted] == [
+        EventTypes.TOOL_CALL_STARTED,
+        EventTypes.TOOL_CALL_COMPLETED,
+    ]
+    event_type, data = wf._emitted[1]
     assert data["success"] is False
     assert data["tool_name"] == "shell"
     assert data["tool_call_id"] == "tc-1"
@@ -59,7 +62,7 @@ async def test_event_carries_the_part_id_that_supersedes_the_tool_call():
     wf = _workflow()
     await wf._deny_tool_call(_tool_call(), "shell", "not permitted by policy")
 
-    _, data = wf._emitted[0]
+    _, data = wf._emitted[-1]
     part = derive_part(EventTypes.TOOL_CALL_COMPLETED, data)
     assert part is not None
     assert part.part_id == "tc-1"

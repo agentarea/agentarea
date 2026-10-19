@@ -1,11 +1,13 @@
 package config
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
+	setRequired(t)
 	t.Setenv("AGENTAREA_DB_HOST", "localhost")
 	t.Setenv("AGENTAREA_DB_PORT", "5432")
 	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
@@ -15,9 +17,10 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	t.Setenv("AGENTAREA_EVENT_WORKER_ID", "worker-test")
 	t.Setenv("AGENTAREA_EVENT_POLL_INTERVAL", "17s")
 	t.Setenv("AGENTAREA_EVENT_MAX_POLLERS", "7")
-	t.Setenv("AGENTAREA_EVENT_STREAM", "events.inbound.test")
 	t.Setenv("AGENTAREA_EVENT_NAMESPACE", "staging")
-	t.Setenv("AGENTAREA_EVENT_TELEGRAM_ENABLED", "true")
+	t.Setenv("AGENTAREA_API_URL", "https://api.example.com/")
+	t.Setenv("AGENTAREA_HTTP_ALLOW_PRIVATE", "true")
+	t.Setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "localhost, 10.0.0.0/8")
 	t.Setenv("PORT", "18002")
 	t.Setenv("AGENTAREA_OTEL_ENABLED", "true")
 
@@ -41,11 +44,11 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 	if cfg.Namespace != "staging" {
 		t.Fatalf("Namespace = %q", cfg.Namespace)
 	}
-	if cfg.InboundStream != "events.inbound.test" {
-		t.Fatalf("InboundStream = %q", cfg.InboundStream)
+	if cfg.APIURL != "https://api.example.com" {
+		t.Fatalf("APIURL = %q", cfg.APIURL)
 	}
-	if !cfg.EnableTelegramPolling {
-		t.Fatal("EnableTelegramPolling = false")
+	if !cfg.Egress.AllowPrivate || len(cfg.Egress.PrivateAllowlist) != 2 || cfg.Egress.PrivateAllowlist[1] != "10.0.0.0/8" {
+		t.Fatalf("Egress = %+v", cfg.Egress)
 	}
 	if cfg.Port != "18002" {
 		t.Fatalf("Port = %q", cfg.Port)
@@ -56,6 +59,7 @@ func TestLoadReadsAgentareaEventsEnv(t *testing.T) {
 }
 
 func TestLoadLeavesTracingOffByDefault(t *testing.T) {
+	setRequired(t)
 	t.Setenv("AGENTAREA_OTEL_ENABLED", "")
 
 	if cfg := mustLoad(t); cfg.OTelEnabled {
@@ -64,11 +68,57 @@ func TestLoadLeavesTracingOffByDefault(t *testing.T) {
 }
 
 func TestLoadRejectsUnparsableOTelEnabled(t *testing.T) {
+	setRequired(t)
 	t.Setenv("AGENTAREA_OTEL_ENABLED", "yes please")
 
 	if _, err := Load(); err == nil {
 		t.Fatal("Load accepted AGENTAREA_OTEL_ENABLED=\"yes please\"")
 	}
+}
+
+func TestLoadRequiresTheAPIURL(t *testing.T) {
+	setRequired(t)
+	t.Setenv("AGENTAREA_API_URL", "")
+
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AGENTAREA_API_URL") {
+		t.Fatalf("err = %v, want one naming AGENTAREA_API_URL", err)
+	}
+}
+
+func TestLoadRequiresTheSecretKey(t *testing.T) {
+	setRequired(t)
+	t.Setenv("AGENTAREA_SECRET_ENCRYPTION_KEY", "")
+
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "AGENTAREA_SECRET_ENCRYPTION_KEY") {
+		t.Fatalf("err = %v, want one naming AGENTAREA_SECRET_ENCRYPTION_KEY", err)
+	}
+}
+
+func TestLoadRefusesASecretBackendItCannotRead(t *testing.T) {
+	setRequired(t)
+	t.Setenv("AGENTAREA_SECRET_BACKEND", "infisical")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load accepted a secret backend the event service cannot read")
+	}
+}
+
+func TestLoadRejectsUnparsableAllowPrivate(t *testing.T) {
+	setRequired(t)
+	t.Setenv("AGENTAREA_HTTP_ALLOW_PRIVATE", "sometimes")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load accepted AGENTAREA_HTTP_ALLOW_PRIVATE=\"sometimes\"")
+	}
+}
+
+func setRequired(t *testing.T) {
+	t.Helper()
+	t.Setenv("AGENTAREA_API_URL", "https://api.example.com")
+	t.Setenv("AGENTAREA_SECRET_ENCRYPTION_KEY", "a2V5")
+	t.Setenv("AGENTAREA_SECRET_BACKEND", "")
+	t.Setenv("AGENTAREA_HTTP_ALLOW_PRIVATE", "")
+	t.Setenv("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "")
 }
 
 func mustLoad(t *testing.T) *Config {
@@ -81,6 +131,7 @@ func mustLoad(t *testing.T) *Config {
 }
 
 func TestLoadBuildsEscapedDatabaseConnStringFromComponentEnvs(t *testing.T) {
+	setRequired(t)
 	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
 	t.Setenv("AGENTAREA_DB_PORT", "5432")
 	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
@@ -96,6 +147,7 @@ func TestLoadBuildsEscapedDatabaseConnStringFromComponentEnvs(t *testing.T) {
 }
 
 func TestLoadLeavesDatabaseUnsetWithoutCredentials(t *testing.T) {
+	setRequired(t)
 	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
 	t.Setenv("AGENTAREA_DB_NAME", "agentarea")
 	t.Setenv("AGENTAREA_DB_USER", "")
@@ -107,6 +159,7 @@ func TestLoadLeavesDatabaseUnsetWithoutCredentials(t *testing.T) {
 }
 
 func TestLoadEscapesPostgresConnStringValues(t *testing.T) {
+	setRequired(t)
 	t.Setenv("AGENTAREA_DB_HOST", "agentarea-postgresql")
 	t.Setenv("AGENTAREA_DB_PORT", "5432")
 	t.Setenv("AGENTAREA_DB_NAME", "agentarea")

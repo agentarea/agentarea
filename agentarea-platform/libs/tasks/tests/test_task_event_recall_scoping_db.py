@@ -10,13 +10,12 @@ already-migrated database.
 """
 
 import os
-from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from agentarea_common.auth.context import UserContext
-from agentarea_common.base import RepositoryFactory
-from agentarea_tasks.application.task_event_service import TaskEventService
+from agentarea_tasks.infrastructure.task_log import TaskFeedReader
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DATABASE_URL = os.getenv("TASKS_TEST_DATABASE_URL", "")
@@ -33,33 +32,30 @@ async def session():
     await engine.dispose()
 
 
-def _service(session: AsyncSession, workspace_id: str) -> TaskEventService:
-    user_context = UserContext(user_id="event-writer", workspace_id=workspace_id)
-    return TaskEventService(RepositoryFactory(session, user_context), event_broker=None)
-
-
-async def _record(
-    service: TaskEventService, workspace_id: str, task_id: UUID, at: datetime, text: str
-) -> None:
-    await service.create_workflow_event(
-        task_id=task_id,
-        event_id=uuid4(),
-        event_type="tool.result",
-        data={"text": text},
-        timestamp=at,
-        workspace_id=workspace_id,
-        created_by="event-writer",
+async def _record(session: AsyncSession, workspace_id: str, task_id: UUID, seq: int, note: str):
+    await session.execute(
+        text(
+            "INSERT INTO task_conversation_entries "
+            "(id, task_id, seq, event_id, kind, role, content, name, meta, workspace_id, "
+            "created_by) VALUES (gen_random_uuid(), :task_id, :seq, :event_id, 'event', "
+            "'event', '', 'tool.result', CAST(:meta AS jsonb), :ws, 'event-writer')"
+        ),
+        {
+            "task_id": task_id,
+            "seq": seq,
+            "event_id": uuid4(),
+            "meta": f'{{"text": "{note}"}}',
+            "ws": workspace_id,
+        },
     )
 
 
 async def test_recall_by_type_returns_only_the_recalling_tasks_events(session):
     workspace_id, own_task, other_task = str(uuid4()), uuid4(), uuid4()
-    service = _service(session, workspace_id)
-    start = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
-    await _record(service, workspace_id, own_task, start, "own")
-    await _record(service, workspace_id, other_task, start + timedelta(seconds=1), "foreign")
+    await _record(session, workspace_id, own_task, 0, "own")
+    await _record(session, workspace_id, other_task, 0, "foreign")
+    reader = TaskFeedReader(session, UserContext(user_id="reader", workspace_id=workspace_id))
 
-    recalled = await service.get_events_by_type(task_id=own_task, event_type="tool.result")
+    recalled = await reader.latest_of_types(own_task, ["tool.result"], limit=20)
 
-    assert [event.data["text"] for event in recalled] == ["own"]
-    assert {event.task_id for event in recalled} == {own_task}
+    assert [entry.meta["text"] for entry in recalled] == ["own"]

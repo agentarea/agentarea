@@ -4,7 +4,10 @@ import json
 from typing import Any
 from uuid import UUID, uuid5
 
-MAX_EVENT_BYTES = 256 * 1024
+#: A body larger than this, encoded, is moved to the workspace's files and referenced.
+MAX_INLINE_BODY_BYTES = 64 * 1024
+#: The largest request a source may deliver.
+MAX_REQUEST_BYTES = 25 * 1024 * 1024
 STREAM_EVENT_NAMESPACE = UUID("6f1c7b8e-3d2a-4f5e-9b0c-1a2b3c4d5e6f")
 _TASK_NAMESPACE = UUID("0b6a6f2e-9a51-4c43-8f3e-2d7c1e5a9b40")
 

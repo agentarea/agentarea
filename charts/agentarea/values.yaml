@@ -617,14 +617,10 @@ eventService:
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   # Service port
   port: 8002
-  # Polling configuration
+  # How often the set of stream sources is read again; each poll source polls
+  # at the interval its catalog entry names.
   pollInterval: "30s"
   maxPollers: 10
-  inboundStream: "channel.inbound"
-  telegramPolling:
-    # Dev-only fallback for Telegram getUpdates. Production Telegram ingress
-    # should use webhooks.
-    enabled: false
   # Resource limits and requests
   resources: {}
   #   limits:
@@ -1286,6 +1282,10 @@ registryReconcile:
     # the agent-create form.
     - name: system-agents
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
+      recommendation_priority: 10
+    # Event source types (ADR-0040): webhook and poll providers, read by streams.
+    - name: system-source-types
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json
       recommendation_priority: 10
 
 # OpenFGA ReBAC permission server: the authorization graph backend.

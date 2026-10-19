@@ -6,13 +6,16 @@ and the autoclaimer of a worker that has the adapter must reclaim and deliver
 it -- not merely move it to another consumer's pending list.
 """
 
-import json
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from agentarea_common.broker import BrokerMessage
+from agentarea_common.events.adapters.redis_streams import encode
+from agentarea_common.events.task_stream import task_event
 from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
-from agentarea_triggers.channels.delivery_consumer import ChannelDeliveryConsumer
-from agentarea_triggers.channels.inbound_subscriber import InboundMessageStreamConsumer
+from agentarea_triggers.channels.task_delivery import DELIVERY_TARGET_FIELD, TaskEventDelivery
 
 STREAM = "out"
 GROUP = "workers"
@@ -57,7 +60,10 @@ class _PendingListBroker:
     async def ack(self, stream: str, group: str, message_id: str) -> None:
         self.pending.pop(message_id, None)
 
-    async def submit(self, stream: str, fields: dict[str, str]) -> str:
+    async def prune_consumers(self, stream: str, group: str, *, idle_ms: int) -> int:
+        return 0
+
+    async def submit(self, stream: str, fields: dict[str, str], *, retention) -> str:
         self.dead_letters.append(dict(fields))
         return "dlq-1"
 
@@ -66,29 +72,43 @@ class _Dedup:
     def __init__(self) -> None:
         self.claimed: set[str] = set()
 
-    async def claim(self, key: str) -> bool:
+    async def contains(self, key: str) -> bool:
+        return key in self.claimed
+
+    async def claim(self, key: str, *, hold_seconds: int | None = None) -> bool:
         if key in self.claimed:
             return False
         self.claimed.add(key)
         return True
 
+    async def keep(self, key: str) -> None:
+        self.claimed.add(key)
+
     async def release(self, key: str) -> None:
         self.claimed.discard(key)
 
 
-async def _origin_allowed(_config: dict) -> bool:
-    return True
+async def _no_catalog_reply(_slug: str):
+    return None
 
 
-def _delivery_consumer(broker, dedup, adapters: dict) -> ChannelDeliveryConsumer:
-    return ChannelDeliveryConsumer(
-        broker=broker,
-        dedup=dedup,
-        adapter_resolver=adapters.get,
-        origin_guard=_origin_allowed,
-        stream=STREAM,
-        group=GROUP,
-        dlq_stream="out:dlq",
+TASK_ID = uuid4()
+
+
+async def _task_with_a_webhook(_task_id, _workspace_id):
+    return SimpleNamespace(
+        parameters={}, metadata={"task_webhook": {"url": "https://h/x"}}, owner="u"
+    )
+
+
+def _delivery_consumer(broker, dedup, adapters: dict) -> TaskEventDelivery:
+    return TaskEventDelivery(
+        broker,
+        dedup,
+        adapters.get,
+        load_task=_task_with_a_webhook,
+        reply_for=_no_catalog_reply,
+        consumer_id="c",
     )
 
 
@@ -104,14 +124,23 @@ def _autoclaimer(broker, consumer, consumer_id: str) -> StreamAutoclaimer:
 
 
 def _task_webhook_delivery(broker: _PendingListBroker) -> str:
-    return broker.add(
-        {
-            "channel_type": "task_webhook",
-            "channel_config": json.dumps({"task_id": "t-1"}),
-            "message": '{"status": "completed"}',
-            "dedup_key": "t-1:task.completed",
-        }
+    event = task_event(
+        task_id=str(TASK_ID),
+        workspace_id="ws",
+        event_type="task.completed",
+        event_id=str(uuid4()),
+        timestamp=datetime.now(UTC),
+        data={"final_response": "done"},
+        seq=3,
     )
+    return broker.add(encode(event))
+
+
+def _webhook_adapter(**send) -> MagicMock:
+    adapter = MagicMock()
+    adapter.format = MagicMock(return_value='{"status": "completed"}')
+    adapter.send = AsyncMock(**send)
+    return adapter
 
 
 async def test_a_worker_without_the_adapter_leaves_the_delivery_for_one_that_has_it():
@@ -119,8 +148,7 @@ async def test_a_worker_without_the_adapter_leaves_the_delivery_for_one_that_has
     dedup = _Dedup()
     message_id = _task_webhook_delivery(broker)
     old_worker = _delivery_consumer(broker, dedup, adapters={})
-    adapter = MagicMock()
-    adapter.send = AsyncMock()
+    adapter = _webhook_adapter()
     new_worker = _delivery_consumer(broker, dedup, adapters={"task_webhook": adapter})
 
     for message in await broker.consume(STREAM, GROUP, "old"):
@@ -132,7 +160,13 @@ async def test_a_worker_without_the_adapter_leaves_the_delivery_for_one_that_has
     broker.now_ms += IDLE_MS
     await _autoclaimer(broker, new_worker, "new-autoclaimer").reclaim()
 
-    adapter.send.assert_awaited_once_with({"task_id": "t-1"}, '{"status": "completed"}')
+    config, body = adapter.send.await_args.args
+    assert (config["task_id"], config["url"], body) == (
+        str(TASK_ID),
+        "https://h/x",
+        '{"status": "completed"}',
+    )
+    adapter.send.assert_awaited_once()
     assert broker.pending == {}
     assert broker.dead_letters == []
 
@@ -154,57 +188,21 @@ async def test_a_reclaiming_worker_without_the_adapter_keeps_the_delivery_pendin
     assert broker.dead_letters == []
 
 
-class _InboundConsumer(InboundMessageStreamConsumer):
-    def __init__(self, broker, dedup):
-        super().__init__(
-            broker,
-            dedup,
-            event_broker=AsyncMock(),
-            secret_manager_factory=MagicMock(),
-            stream=STREAM,
-            group=GROUP,
-            dlq_stream="in:dlq",
-        )
-        self.failures_left = 1
-        self.executed: list[str] = []
-
-    async def _execute_trigger(self, trigger_id: str, trigger_data: dict) -> None:
-        if self.failures_left:
-            self.failures_left -= 1
-            raise RuntimeError("database restarting")
-        self.executed.append(trigger_id)
-
-
-async def test_an_inbound_event_whose_firing_failed_is_fired_again_once_reclaimed():
-    broker = _PendingListBroker()
-    broker.add({"trigger_id": "trg-1", "event": "{}", "channel_origin": "{}", "dedup_key": "e-1"})
-    consumer = _InboundConsumer(broker, _Dedup())
-
-    for message in await broker.consume(STREAM, GROUP, "c1"):
-        await consumer.handle(message)
-    assert consumer.executed == []
-
-    broker.now_ms += IDLE_MS
-    await _autoclaimer(broker, consumer, "inbound-autoclaimer").reclaim()
-
-    assert consumer.executed == ["trg-1"]
-    assert broker.pending == {}
-
-
 async def test_a_dead_lettered_delivery_delivers_when_replayed():
     from agentarea_triggers.channels.exceptions import FatalError
 
     broker = _PendingListBroker()
     dedup = _Dedup()
     _task_webhook_delivery(broker)
-    adapter = MagicMock()
-    adapter.send = AsyncMock(side_effect=[FatalError("endpoint gone"), None])
+    adapter = _webhook_adapter(side_effect=[FatalError("endpoint gone"), None])
     worker = _delivery_consumer(broker, dedup, adapters={"task_webhook": adapter})
     for message in await broker.consume(STREAM, GROUP, "w"):
         await worker.handle(message)
     assert len(broker.dead_letters) == 1
 
-    broker.add({k: v for k, v in broker.dead_letters[0].items() if k != "fatal_reason"})
+    replayed = {k: v for k, v in broker.dead_letters[0].items() if k != "fatal_reason"}
+    assert replayed[DELIVERY_TARGET_FIELD] == "task_webhook"
+    broker.add(replayed)
     for message in await broker.consume(STREAM, GROUP, "w"):
         await worker.handle(message)
 

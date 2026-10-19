@@ -464,10 +464,7 @@ async def get_trigger_service(
     )
 
 
-async def get_public_webhook_manager(
-    db_session: DatabaseSessionDep,
-    event_broker: EventBrokerDep,
-):
+async def get_public_webhook_manager():
     """Get a WebhookManager instance for PUBLIC webhook endpoints (no auth required).
 
     This creates a webhook manager without requiring UserContext, since external
@@ -489,18 +486,18 @@ async def get_public_webhook_manager(
         return MockWebhookManager()
 
     from agentarea_api.api.v1._webhook_intake import WebhookSourceIntake
+    from agentarea_common.artifacts import ArtifactService
     from agentarea_common.config.database import get_database
     from agentarea_common.di.container import resolve
     from agentarea_streams.infrastructure.bus import StreamBus
 
     return WebhookSourceIntake(
-        lookup_session=db_session,
         session_scope=get_database().session,
         secret_reader_for=lambda session, context: get_real_secret_manager(
             session=session, user_context=context
         ),
         bus=resolve(StreamBus),
-        event_broker=event_broker,
+        files=ArtifactService(),
         settings=get_settings(),
     )
 
@@ -532,7 +529,7 @@ async def get_trigger_health_check(
 
     trigger_repository = repository_factory.create_repository(TriggerRepository)
     trigger_execution_repository = repository_factory.create_repository(TriggerExecutionRepository)
-    webhook_manager = await get_public_webhook_manager(repository_factory.session, event_broker)
+    webhook_manager = await get_public_webhook_manager()
 
     # Get temporal schedule manager
     temporal_schedule_manager = None

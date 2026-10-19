@@ -20,7 +20,13 @@ class ReactionLog(Protocol):
     """
 
     async def recorded(self, session: AsyncSession, event: StreamEvent) -> set[UUID]:
-        """The subscriptions that already reacted to ``event``."""
+        """The subscriptions that already reacted to ``event``; a given-up reaction is not one."""
+        ...
+
+    async def forget_given_up(
+        self, session: AsyncSession, subscription: SubscriptionView, event: StreamEvent
+    ) -> None:
+        """Drop the given-up reaction of ``subscription`` to ``event``, if any, before a rerun."""
         ...
 
     async def record(

@@ -21,9 +21,11 @@ from agentarea_streams.application.ingest import StreamIngest
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     EventFilter,
+    SourceKind,
     StreamEvent,
     StreamKind,
     StreamNotFoundError,
+    StreamSourceNotFoundError,
     SubscriptionKind,
     TriggerSubscriptionNotFoundError,
 )
@@ -36,7 +38,6 @@ from agentarea_streams.infrastructure.repository import (
     find_webhook_source,
 )
 from sqlalchemy import text
-from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 TEST_DATABASE_URL = os.getenv("STREAMS_TEST_DATABASE_URL", "")
@@ -76,7 +77,6 @@ class _Owned:
     stream_id: UUID
     source_id: UUID
     webhook_id: str
-    credential_key: UUID
     trigger_id: UUID
     subscription_id: UUID
     sequence: int
@@ -87,23 +87,23 @@ async def _owned_by(session: AsyncSession, ctx: UserContext) -> _Owned:
         stream = await StreamRepository(session, ctx).add_stream(
             name="shared-name", description="", kind=StreamKind.CUSTOM
         )
-    webhook_id, credential_key = f"wh{uuid4().hex}", uuid4()
-    source = await StreamSourceRepository(session, ctx).add_webhook_source(
+    webhook_id = f"wh{uuid4().hex}"
+    source = await StreamSourceRepository(session, ctx).add_source(
+        source_id=uuid4(),
         stream_id=stream.id,
+        kind=SourceKind.WEBHOOK,
+        source_type="generic_webhook",
         webhook_id=webhook_id,
-        webhook_type="generic",
-        allowed_methods=["POST"],
-        validation_rules={},
-        webhook_config=None,
-        credential_key=credential_key,
+        webhook_config={},
+        event_templates=None,
     )
     trigger_id = uuid4()
     await session.execute(
         text(
             "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
             "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
-            "consecutive_failures, validation_rules, created_at, updated_at) VALUES (:id, :ws, "
-            "'u', 't', '', :agent, 'webhook', true, '{}', '{}', 5, 0, '{}', now(), now())"
+            "consecutive_failures, created_at, updated_at) VALUES (:id, :ws, "
+            "'u', 't', '', :agent, 'stream', true, '{}', '{}', 5, 0, now(), now())"
         ),
         {"id": trigger_id, "ws": ctx.workspace_id, "agent": uuid4()},
     )
@@ -132,7 +132,6 @@ async def _owned_by(session: AsyncSession, ctx: UserContext) -> _Owned:
         stream_id=stream.id,
         source_id=source.id,
         webhook_id=webhook_id,
-        credential_key=credential_key,
         trigger_id=trigger_id,
         subscription_id=subscription.id,
         sequence=recorded.sequence,
@@ -173,7 +172,7 @@ async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSes
     assert named is not None and named.id == own_stream.id
     sources = StreamSourceRepository(session, other)
     assert await sources.list_for_stream(owned.stream_id) == []
-    assert await sources.find_by_credential_key(owned.credential_key) == []
+    assert await sources.get_in_stream(owned.stream_id, owned.source_id) is None
     subscriptions = StreamSubscriptionRepository(session, other)
     assert await subscriptions.get_for_trigger(owned.trigger_id) is None
     assert await subscriptions.list_for_stream(owned.stream_id) == []
@@ -187,7 +186,8 @@ async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSes
         await service.delete_stream(owned.stream_id)
     with pytest.raises(TriggerSubscriptionNotFoundError):
         await service.update_trigger_filter(owned.trigger_id, EventFilter(kinds=["changed"]))
-    await service.remove_trigger_webhook_sources(owned.credential_key)
+    with pytest.raises(StreamSourceNotFoundError):
+        await service.delete_source(owned.stream_id, owned.source_id)
     await session.commit()
 
     assert len(await StreamSourceRepository(session, owner).list_for_stream(owned.stream_id)) == 1
@@ -195,36 +195,6 @@ async def test_another_workspace_sees_none_of_the_streams_rows(session: AsyncSes
     assert kept is not None and kept.filter == EventFilter().model_dump()
     found = await find_webhook_source(session, owned.webhook_id)
     assert found is not None and found.id == owned.source_id
-
-
-async def test_a_webhook_source_update_must_land_on_one_source_of_this_workspace(
-    session: AsyncSession,
-):
-    owner, other = _ctx(), _ctx()
-    owned = await _owned_by(session, owner)
-
-    with pytest.raises(NoResultFound):
-        await StreamSourceRepository(session, other).update_webhook_fields(
-            owned.source_id, webhook_type="github"
-        )
-    with pytest.raises(NoResultFound):
-        await StreamSourceRepository(session, owner).update_webhook_fields(
-            uuid4(), webhook_type="github"
-        )
-    with pytest.raises(ValueError, match="workspace_id"):
-        await StreamSourceRepository(session, owner).update_webhook_fields(
-            owned.source_id, workspace_id=other.workspace_id
-        )
-    await session.rollback()
-
-    await StreamSourceRepository(session, owner).update_webhook_fields(
-        owned.source_id, webhook_type="github", validation_rules={"secret": "ref"}
-    )
-    await session.commit()
-    found = await find_webhook_source(session, owned.webhook_id)
-    assert found is not None
-    await session.refresh(found)
-    assert found.webhook_type == "github" and found.workspace_id == owner.workspace_id
 
 
 async def test_ingest_and_view_edges(session: AsyncSession):

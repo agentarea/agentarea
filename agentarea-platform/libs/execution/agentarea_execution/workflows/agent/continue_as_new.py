@@ -54,6 +54,8 @@ class ContinueAsNewMixin(CompactionMixin):
         workflow.logger.info("Restoring workflow from continue-as-new state")
 
         state = ContinueAsNewState(**continued_state)
+        # A run rolls over only after a turn, so its log is already seeded.
+        self._conversation_seeded = True
 
         self.state.execution_id = state.execution_id
         self.state.agent_id = state.agent_id

@@ -43,7 +43,9 @@ pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TASKS_TEST_DATABA
 
 
 class _Bodies:
-    async def put(self, workspace_id: str, task_id: UUID, event_id: UUID, body: str) -> str:
+    async def put(
+        self, workspace_id: str, task_id: UUID, event_id: UUID, body: str, *, part: str = "content"
+    ) -> str:
         raise AssertionError("no body here is large enough to be stored by reference")
 
     async def get(self, ref: str) -> str:
@@ -65,13 +67,19 @@ class _Container:
 class _Broker:
     def __init__(self, *, fail: bool) -> None:
         self.fail = fail
-        self.streamed: list[str] = []
+        self.streamed: list[tuple[str, str, str | None]] = []
+        self.notified: list[tuple[str, str]] = []
 
-    async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
+    async def submit(self, stream, fields, *, retention):
+        assert stream == "tasks.events"
         if self.fail:
             raise ConnectionError("redis down")
-        self.streamed.append(str(decode(fields).id))
+        event = decode(fields)
+        self.streamed.append((str(event.id), event.type, event.extensions.get("seq")))
         return f"{len(self.streamed)}-0"
+
+    async def notify(self, channel, fields):
+        self.notified.append((channel, decode(fields).type))
 
 
 @pytest.fixture
@@ -123,6 +131,13 @@ async def test_a_record_retried_after_a_stream_failure_writes_everything_once(ma
         "timestamp": datetime(2026, 10, 15, 12, 0, 1, tzinfo=UTC).isoformat(),
         "data": {"task_id": str(task.id), "approved": True, "approved_by": "approver"},
     }
+    user_row = str(uuid4())
+    started = {
+        "event_id": str(uuid4()),
+        "event_type": "llm.call.started",
+        "timestamp": datetime(2026, 10, 15, 11, 59, tzinfo=UTC).isoformat(),
+        "data": {"task_id": str(task.id)},
+    }
     request = RecordRequest(
         task_id=str(task.id),
         workspace_id=workspace_id,
@@ -130,16 +145,30 @@ async def test_a_record_retried_after_a_stream_failure_writes_everything_once(ma
         execution_id="exec-1",
         rows=[
             LogRow(seq=0, event_id=str(uuid4()), role="system", content="system", iteration=1),
+            LogRow(seq=1, event_id=user_row, role="user", content="hi", iteration=1),
             LogRow(
-                seq=1,
+                seq=2,
                 event_id=str(uuid4()),
                 role="assistant",
                 content="done",
                 iteration=1,
                 meta={"model_name": "m-1"},
             ),
+            *(
+                LogRow(
+                    seq=3 + offset,
+                    event_id=event["event_id"],
+                    kind="event",
+                    role="event",
+                    name=event["event_type"],
+                    meta=event["data"],
+                    iteration=1,
+                    timestamp=event["timestamp"],
+                )
+                for offset, event in enumerate((paid, approved))
+            ),
         ],
-        events_json=[json.dumps(paid), json.dumps(approved)],
+        events_json=[json.dumps(started)],
         status=UpdateTaskStatusRequest(
             task_id=str(task.id),
             workspace_id=workspace_id,
@@ -153,7 +182,6 @@ async def test_a_record_retried_after_a_stream_failure_writes_everything_once(ma
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=broker,
-        channel_delivery_settings=None,
     )
     [record] = make_record_activities(dependencies, _Container(maker))
 
@@ -191,15 +219,19 @@ async def test_a_record_retried_after_a_stream_failure_writes_everything_once(ma
                 text("SELECT count(*) FROM task_events WHERE task_id = :task_id"), params
             )
         assert [(r.seq, r.execution_id, r.correlation_id) for r in rows] == [
-            (0, "exec-1", "corr-7"),
-            (1, "exec-1", "corr-7"),
+            (seq, "exec-1", "corr-7") for seq in range(5)
         ]
-        assert rows[1].meta == {"model_name": "m-1"}
+        assert rows[2].meta == {"model_name": "m-1"}
         assert stored_task.status == "completed"
         assert stored_task.result == {"response": "done", "total_cost": "0.40"}
         assert stored_task.task_metadata["conversation_resume"]["next_seq"] == 2
         assert (costs, audits, events) == (1, 1, 2)
-        assert broker.streamed == [paid["event_id"], approved["event_id"]]
+        assert broker.streamed == [
+            (user_row, "message.received", "1"),
+            (paid["event_id"], "llm.call.completed", "3"),
+            (approved["event_id"], "approval.decided", "4"),
+        ]
+        assert broker.notified == [(f"tasks.live.{task.id}", "llm.call.started")]
     finally:
         async with maker() as session:
             for table in ("cost_entries", "task_events", "task_conversation_entries"):
@@ -228,10 +260,71 @@ async def test_a_record_for_a_task_that_is_gone_is_not_retried(maker):
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=_Broker(fail=False),
-        channel_delivery_settings=None,
     )
     [record] = make_record_activities(dependencies, _Container(maker))
 
     with pytest.raises(ApplicationError) as raised:
         await record(request)
     assert raised.value.non_retryable
+
+
+async def test_content_postgres_cannot_store_is_recorded_not_retried_forever(maker):
+    workspace_id = str(uuid4())
+    task = await _task(maker, workspace_id)
+    request = RecordRequest(
+        task_id=str(task.id),
+        workspace_id=workspace_id,
+        user_id="writer",
+        execution_id="exec-nul",
+        rows=[
+            LogRow(
+                seq=0,
+                event_id=str(uuid4()),
+                role="tool",
+                content="a\x00b\x01c",
+                tool_call_id="call\x00-1",
+                name="shell",
+                meta={"stdout\x00": "x\x00y"},
+                iteration=1,
+            ),
+            LogRow(
+                seq=1,
+                event_id=str(uuid4()),
+                kind="event",
+                role="event",
+                name="tool.result",
+                meta={"task_id": str(task.id), "result": "a\x00b"},
+                iteration=1,
+            ),
+        ],
+    )
+    dependencies = SimpleNamespace(
+        event_broker=SimpleNamespace(publish=AsyncMock()), broker_client=_Broker(fail=False)
+    )
+    [record] = make_record_activities(dependencies, _Container(maker))
+    try:
+        await record(request)
+        async with maker() as session:
+            stored = (
+                await session.execute(
+                    text(
+                        "SELECT content, tool_call_id, meta, tool_calls IS NULL AS no_calls, "
+                        "attachments IS NULL AS no_attachments "
+                        "FROM task_conversation_entries WHERE task_id = :task_id ORDER BY seq"
+                    ),
+                    {"task_id": task.id},
+                )
+            ).fetchall()
+        assert stored[0].content == "a\ufffdb\x01c"
+        assert stored[0].tool_call_id == "call\ufffd-1"
+        assert stored[0].meta == {"stdout\ufffd": "x\ufffdy"}
+        assert stored[0].no_calls and stored[0].no_attachments
+        assert stored[1].meta["result"] == "a\ufffdb"
+    finally:
+        async with maker() as session:
+            for table in ("task_events", "task_conversation_entries"):
+                await session.execute(
+                    text(f"DELETE FROM {table} WHERE task_id = :task_id"), {"task_id": task.id}
+                )
+            await session.execute(text("DELETE FROM tasks WHERE id = :id"), {"id": task.id})
+            await session.commit()

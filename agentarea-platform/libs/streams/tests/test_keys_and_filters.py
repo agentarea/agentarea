@@ -4,7 +4,8 @@ from zlib import crc32
 from agentarea_common.broker.topics import stream_events_partition
 from agentarea_streams.domain.filters import EventFilter
 from agentarea_streams.domain.keys import (
-    MAX_EVENT_BYTES,
+    MAX_INLINE_BODY_BYTES,
+    MAX_REQUEST_BYTES,
     derived_event_id,
     encoded_size,
     event_id_for,
@@ -40,7 +41,8 @@ def test_a_stream_is_carried_on_one_stable_partition():
 
 def test_size_is_measured_on_the_utf8_json():
     assert encoded_size({"a": "é"}) == len('{"a":"é"}'.encode())
-    assert MAX_EVENT_BYTES == 256 * 1024
+    assert MAX_INLINE_BODY_BYTES == 64 * 1024
+    assert MAX_REQUEST_BYTES == 25 * 1024 * 1024
 
 
 def test_empty_filter_matches_everything():

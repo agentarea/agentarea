@@ -83,6 +83,7 @@ export default async function StreamEventsPage({
               sequence={selected}
               outcome={outcome}
               before={before}
+              sourceTypes={sourceTypes}
             />
           </Suspense>
         )}

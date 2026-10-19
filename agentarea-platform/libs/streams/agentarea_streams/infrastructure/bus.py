@@ -12,12 +12,21 @@ from agentarea_common.broker.topics import stream_events_partition
 from agentarea_common.events.ports import EventPublisher
 
 from ..domain.models import StreamEvent
+from .write_quota import WriteQuota
 
 
 class StreamBus:
-    def __init__(self, *, publisher: EventPublisher, dedup: DedupCache, partitions: int):
+    def __init__(
+        self,
+        *,
+        publisher: EventPublisher,
+        dedup: DedupCache,
+        quota: WriteQuota,
+        partitions: int,
+    ):
         self._publisher = publisher
         self._dedup = dedup
+        self.quota = quota
         self._partitions = partitions
 
     async def publish(self, event: StreamEvent) -> bool:

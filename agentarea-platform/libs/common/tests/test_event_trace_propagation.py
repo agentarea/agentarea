@@ -7,6 +7,7 @@ injected and handlers run unchanged.
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -18,7 +19,7 @@ from agentarea_common.events.adapters.redis_streams import (
     encode,
 )
 from agentarea_common.events.ports import IntegrationEvent
-from agentarea_common.events.task_stream import publish_task_event, task_stream_name
+from agentarea_common.events.task_stream import publish_task_event, task_event
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
@@ -34,7 +35,7 @@ class _FakeBroker:
         self.submitted: list[tuple[str, dict[str, str]]] = []
         self.acked: list[str] = []
 
-    async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
+    async def submit(self, stream, fields, *, retention):
         self.submitted.append((stream, dict(fields)))
         return f"{len(self.submitted)}-0"
 
@@ -75,7 +76,7 @@ def _traceparent_trace_id(traceparent: str) -> int:
 @pytest.mark.asyncio
 async def test_publish_injects_active_span_into_traceparent(exporter):
     broker = _FakeBroker()
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     tracer = trace.get_tracer("test")
 
     with tracer.start_as_current_span("request") as span:
@@ -90,7 +91,7 @@ async def test_publish_injects_active_span_into_traceparent(exporter):
 @pytest.mark.asyncio
 async def test_publish_keeps_an_explicit_traceparent(exporter):
     broker = _FakeBroker()
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     explicit = f"00-{'a' * 32}-{'b' * 16}-01"
 
     with trace.get_tracer("test").start_as_current_span("request"):
@@ -102,7 +103,7 @@ async def test_publish_keeps_an_explicit_traceparent(exporter):
 @pytest.mark.asyncio
 async def test_handler_runs_in_consumer_span_linked_to_producer(exporter):
     broker = _FakeBroker()
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     with trace.get_tracer("test").start_as_current_span("request") as producer_span:
         await bus.publish(IntegrationEvent(type=_TYPE, source="svc"))
         producer = producer_span.get_span_context()
@@ -134,7 +135,7 @@ async def test_handler_runs_in_consumer_span_linked_to_producer(exporter):
 @pytest.mark.asyncio
 async def test_failed_handler_records_error_and_is_not_acked(exporter):
     broker = _FakeBroker()
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     fields = encode(IntegrationEvent(type=_TYPE, source="svc"))
 
     async def handler(event: IntegrationEvent) -> None:
@@ -156,18 +157,29 @@ async def test_task_stream_event_carries_active_traceparent(exporter):
     task_id = str(uuid4())
 
     with trace.get_tracer("test").start_as_current_span("activity") as span:
-        await publish_task_event(broker, task_id=task_id, event_type="task.started", data={})
+        await publish_task_event(
+            broker,
+            task_event(
+                task_id=task_id,
+                workspace_id="ws",
+                event_type="task.started",
+                event_id=str(uuid4()),
+                timestamp=datetime.now(UTC),
+                data={},
+                seq=0,
+            ),
+        )
         trace_id = span.get_span_context().trace_id
 
     stream, fields = broker.submitted[0]
-    assert stream == f"tasks.events.{task_id}" == task_stream_name(task_id)
+    assert stream == "tasks.events"
     assert _traceparent_trace_id(decode(fields).traceparent or "") == trace_id
 
 
 @pytest.mark.asyncio
 async def test_disabled_otel_injects_nothing_and_handlers_run(otel_disabled):
     broker = _FakeBroker()
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     with trace.get_tracer("test").start_as_current_span("request"):
         await bus.publish(IntegrationEvent(type=_TYPE, source="svc"))
 

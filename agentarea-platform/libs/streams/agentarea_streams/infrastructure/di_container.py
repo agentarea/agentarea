@@ -9,6 +9,7 @@ from agentarea_common.di.container import register_singleton
 from agentarea_common.events.adapters.redis_streams import RedisStreamsEventBus
 
 from .bus import StreamBus
+from .write_quota import WriteQuota
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +22,11 @@ class StreamBusResources:
     broker: RedisStreamsBroker
     events: RedisStreamsEventBus
     dedup: DedupCache
+    quota: WriteQuota
 
     async def aclose(self) -> None:
         await self.dedup.aclose()
+        await self.quota.aclose()
         await self.broker.aclose()
 
 
@@ -35,10 +38,15 @@ def build_stream_bus(settings: Settings) -> StreamBusResources:
         )
     namespace = settings.streams.NAMESPACE
     broker = RedisStreamsBroker(settings.broker.REDIS_URL, namespace=namespace)
-    events = RedisStreamsEventBus(broker, max_delivery=settings.streams.MAX_ATTEMPTS)
+    events = RedisStreamsEventBus(
+        broker, retention=settings.streams.RETENTION, max_delivery=settings.streams.MAX_ATTEMPTS
+    )
     dedup = DedupCache(settings.broker.REDIS_URL, namespace=namespace, prefix="stream-event")
-    bus = StreamBus(publisher=events, dedup=dedup, partitions=settings.streams.PARTITIONS)
-    return StreamBusResources(bus=bus, broker=broker, events=events, dedup=dedup)
+    quota = WriteQuota(settings.broker.REDIS_URL, namespace=namespace)
+    bus = StreamBus(
+        publisher=events, dedup=dedup, quota=quota, partitions=settings.streams.PARTITIONS
+    )
+    return StreamBusResources(bus=bus, broker=broker, events=events, dedup=dedup, quota=quota)
 
 
 def setup_streams_di(settings: Settings) -> StreamBusResources:

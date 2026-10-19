@@ -58,14 +58,15 @@ import type {
   SkillFileResponse,
   SkillResponse,
   SkillUpdateRequest,
+  SourceCreate,
   TaskCreate,
   ToolCallApprovalDecision,
   TriggerCreate,
+  TriggerType,
   TriggerUpdate,
   UpdateWalletRequest,
   UploadPlanRequest,
   ValidateRequest,
-  WebhookSourceCreate,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { SPEC_IDS_PER_REQUEST, specIdBatches } from "@/lib/mcp/specIds";
@@ -1163,16 +1164,9 @@ export const resolvePrincipals = async (ids: string[]) => {
   return { data, error };
 };
 
-export const listTriggerCatalog = async () => {
-  const { data, error } = await sdk.getCatalogV1TriggersCatalogGet({
-    client: serverClient,
-  });
-  return { data, error };
-};
-
 export const listTriggers = async (params?: {
   agent_id?: string;
-  trigger_type?: string;
+  trigger_type?: TriggerType;
   active_only?: boolean;
 }) => {
   const { data, error } = await sdk.listTriggersV1TriggersGet({
@@ -1236,15 +1230,6 @@ export const runTriggerNow = async (triggerId: string) => {
     client: serverClient,
     path: { trigger_id: triggerId },
   });
-  return withStatus(result);
-};
-
-export const rotateTriggerSigningSecret = async (triggerId: string) => {
-  const result =
-    await sdk.rotateSigningSecretV1TriggersTriggerIdSigningSecretPost({
-      client: serverClient,
-      path: { trigger_id: triggerId },
-    });
   return withStatus(result);
 };
 
@@ -1342,6 +1327,14 @@ export const getStreamEvent = async (streamId: string, sequence: number) => {
   return withStatus(result);
 };
 
+export const getStreamEventById = async (eventId: string) => {
+  const result = await sdk.getEventByIdV1StreamsEventsEventIdGet({
+    client: serverClient,
+    path: { event_id: eventId },
+  });
+  return withStatus(result);
+};
+
 export const listStreamSubscriptions = async (streamId: string) => {
   const { data, error } =
     await sdk.listSubscriptionsV1StreamsStreamIdSubscriptionsGet({
@@ -1368,9 +1361,9 @@ export const listStreamSourceTypes = async () => {
 
 export const createStreamSource = async (
   streamId: string,
-  body: WebhookSourceCreate
+  body: SourceCreate
 ) => {
-  const { data, error } = await sdk.createSourceV1StreamsStreamIdSourcesPost({
+  const { data, error } = await sdk.addSourceV1StreamsStreamIdSourcesPost({
     client: serverClient,
     path: { stream_id: streamId },
     body,

@@ -17,7 +17,28 @@ class TestValidTypes:
             "llm_models",
             "agents",
             "bundles",
+            "source_types",
         }
+
+
+class TestSourceTypeParser:
+    def test_the_entry_is_the_spec_and_its_slug_the_external_id(self):
+        entry = {
+            "slug": "github",
+            "name": "GitHub",
+            "description": "Repository webhooks",
+            "delivery": "webhook",
+            "event": {"kind": "{header:x-github-event}"},
+        }
+        (item,) = parse_source("source_types", {"source_types": [entry]})
+        assert item["external_id"] == "github"
+        assert item["name"] == "GitHub"
+        assert item["spec"] == entry
+        assert item["tags"] == ["webhook"]
+
+    def test_an_entry_without_a_slug_stops_the_reconcile(self):
+        with pytest.raises(ValueError, match="no slug"):
+            parse_source("source_types", {"source_types": [{"name": "Nameless"}]})
 
 
 class TestBundleParser:

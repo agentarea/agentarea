@@ -26,7 +26,7 @@ from agentarea_tasks.domain.models import ConversationEntry
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.model_spend_caps import (
     SpendCapReachedError,
-    caps_monthly_spend,
+    current_budget,
     refuse_model_call_at_spend_cap,
 )
 from temporalio import activity
@@ -127,10 +127,8 @@ def make_llm_activities(
         """Refuse a run's model call once a monthly spend cap it falls under is reached.
 
         Without ``agent_id`` (compaction) the call is for the agent of ``task_id``.
+        The caps are read as they are now, not as the run's policy froze them.
         """
-        budget = effective_policy_from_json(effective_policy).budget
-        if not caps_monthly_spend(budget):
-            return
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
@@ -139,9 +137,11 @@ def make_llm_activities(
                 if task is None:
                     raise ValueError(f"task {task_id} not found")
                 agent_id = str(task.agent_id)
-            await refuse_model_call_at_spend_cap(
-                session, user_context, budget, UUID(agent_id) if agent_id else None
+            agent = UUID(agent_id) if agent_id else None
+            budget = await current_budget(
+                session, user_context, agent, effective_policy_from_json(effective_policy).budget
             )
+            await refuse_model_call_at_spend_cap(session, user_context, budget, agent)
 
     llm_service = llm_execution_service.LLMExecutionService(
         model_service_scope=model_service_scope,

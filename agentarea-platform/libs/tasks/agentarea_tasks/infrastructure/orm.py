@@ -116,6 +116,8 @@ class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
     supersedes_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 Index(

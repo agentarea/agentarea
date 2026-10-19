@@ -106,7 +106,8 @@ async def get_inbox_items(
     """List tasks requiring user attention.
 
     Returns tasks with actionable statuses (waiting_for_approval, completed, failed),
-    ordered by most recently updated first. Includes total count for badge/pagination.
+    newest call for attention first: when an ended run ended, when a waiting task
+    began to wait. Includes total count for badge/pagination.
     """
     try:
         query_statuses = [status] if status else list(INBOX_STATUSES)

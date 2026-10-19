@@ -42,3 +42,28 @@ def require_pg_text(value: Any) -> Any:
     if problem := pg_text_problem(value):
         raise ValueError(problem)
     return value
+
+
+def _storable_text(text: str) -> str:
+    if "\x00" not in text and not any("\ud800" <= char <= "\udfff" for char in text):
+        return text
+    return "".join("�" if char == "\x00" or "\ud800" <= char <= "\udfff" else char for char in text)
+
+
+def pg_storable(value: Any) -> Any:
+    """``value`` with every NUL and unpaired surrogate replaced by U+FFFD, keys included.
+
+    For content the platform did not author (a tool's output, a model's reply):
+    refusing it would lose the whole row, so the characters Postgres cannot
+    store are replaced where the content enters the store.
+    """
+    if isinstance(value, str):
+        return _storable_text(value)
+    if isinstance(value, dict):
+        return {
+            (_storable_text(key) if isinstance(key, str) else key): pg_storable(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [pg_storable(item) for item in value]
+    return value

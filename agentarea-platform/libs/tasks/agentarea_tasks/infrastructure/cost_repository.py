@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ..domain.costs import CostCategory, CostEntry
-from .orm import CostEntryORM
+from .orm import CostEntryORM, TaskORM
 
 
 @dataclass(frozen=True)
@@ -109,6 +109,7 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                     f"Cost entry of event {entry.event_id} belongs to workspace "
                     f"{entry.workspace_id}, not {self.user_context.workspace_id}"
                 )
+        chains = await self._task_chains({e.task_id for e in entries if e.task_id is not None})
         result = await self.session.execute(
             pg_insert(CostEntryORM)
             .values(
@@ -139,6 +140,10 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                         "supersedes_id": entry.supersedes_id,
                         "occurred_at": entry.occurred_at,
                         "estimate": entry.estimate,
+                        "correlation_id": entry.correlation_id
+                        or chains.get(entry.task_id, (None, None))[0],
+                        "causation_id": entry.causation_id
+                        or chains.get(entry.task_id, (None, None))[1],
                     }
                     for entry in entries
                 ]
@@ -147,6 +152,19 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             .returning(CostEntryORM.id)
         )
         return len(result.all())
+
+    async def _task_chains(
+        self, task_ids: set[UUID]
+    ) -> dict[UUID | None, tuple[str | None, str | None]]:
+        """Each task's ``(correlation_id, causation_id)``, for the lines that name it."""
+        if not task_ids:
+            return {}
+        rows = await self.session.execute(
+            select(TaskORM.id, TaskORM.correlation_id, TaskORM.causation_id).where(
+                TaskORM.id.in_(task_ids), TaskORM.workspace_id == self.user_context.workspace_id
+            )
+        )
+        return {row.id: (row.correlation_id, row.causation_id) for row in rows}
 
     def _current_lines_since(
         self, since: datetime, currency: str | None, scope: SpendScope

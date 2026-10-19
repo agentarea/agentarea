@@ -1,26 +1,23 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getTranslations } from "next-intl/server";
-import type {
-  WebhookSourceCreate,
-  WebhookSourceCreated,
-} from "@/api/client/types.gen";
-import { zWebhookSourceCreate } from "@/api/client/zod.gen";
+import { revalidatePath } from "next/cache";
+import type { SourceCreate, SourceCreated } from "@/api/client/types.gen";
+import { zSourceCreate } from "@/api/client/zod.gen";
 import { createStreamSource, deleteStreamSource } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { requestWorkspacePath } from "@/lib/workspace-request";
 
 export type CreateSourceResult =
   | { error: string; source?: undefined }
-  | { error: null; source: WebhookSourceCreated };
+  | { error: null; source: SourceCreated };
 
 export async function createStreamSourceAction(
   streamId: string,
-  input: WebhookSourceCreate
+  input: SourceCreate
 ): Promise<CreateSourceResult> {
   const t = await getTranslations("EventsPage.sources");
-  const body = zWebhookSourceCreate.parse(input);
+  const body = zSourceCreate.parse(input);
   const result = await createStreamSource(streamId, body);
   if (result.error || !result.data) {
     return { error: apiErrorMessage(result, t("createFailed")) };

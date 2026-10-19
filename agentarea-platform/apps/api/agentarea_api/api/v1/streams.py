@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import BaseSecretManagerDep, SecretCatalogServiceDep
+from agentarea_common.artifacts import ArtifactService
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
@@ -15,32 +16,31 @@ from agentarea_common.config import get_settings
 from agentarea_common.utils.types import UtcDatetime
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
+    ENVELOPE_VERSION,
     ForwardLoopError,
     NotAForwardError,
     RecordedEvent,
-    SourceFedByTriggerError,
+    StreamEventNotFoundError,
     StreamInUseError,
     StreamNameTakenError,
     StreamNotFoundError,
     StreamSourceNotFoundError,
     SubscriptionNotFoundError,
 )
-from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
-from agentarea_triggers.channels.webhook_service import ChannelWebhookService
-from agentarea_triggers.domain.source_types import STREAM_SOURCE_TYPES, StreamSourceType
+from agentarea_streams.domain.source_types import SourceField, SourceTypeEntry
+from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
+from agentarea_streams.schemas import ForwardCreate, SourceCreate, StreamCreate
 from agentarea_triggers.infrastructure.reactions import ReactionRepository, verdict_of_status
-from agentarea_triggers.webhook_verification import hmac_signature_scheme
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from pydantic import BaseModel, Field
 
 from ._icons import CHANNEL_ICON_NAMESPACE, build_icon_url
 from ._stream_sources import (
-    create_webhook_source,
+    create_source,
     delete_stream_with_sources,
-    release_webhook_source,
+    public_webhook_url,
+    release_source,
 )
-from ._trigger_creation import get_channel_webhook_service, public_webhook_url
-from .triggers import WebhookSignatureScheme
 
 logger = logging.getLogger(__name__)
 
@@ -74,77 +74,108 @@ class StreamResponse(BaseModel):
 
 class StreamSourceResponse(BaseModel):
     id: UUID
-    kind: str
+    kind: str = Field(description="webhook or poll")
+    source_type: str | None = Field(description="The catalog slug of GET /streams/source-types.")
     webhook_id: str | None
-    webhook_type: str | None
     webhook_url: str | None = Field(
-        description="Public URL senders post to; null for non-webhook sources."
+        description="Public URL the provider posts to; null for a poll source."
     )
-    allowed_methods: list[str] | None
-    trigger_id: UUID | None = Field(
-        default=None,
-        description="The webhook trigger that owns this source; null for a source added directly.",
+    event_templates: dict[str, Any] | None = Field(
+        default=None, description="This source's own kind / key / session_key templates."
     )
-    signature_scheme: WebhookSignatureScheme | None = Field(
-        default=None,
-        description="How a sender signs for a type verified by configurable HMAC; null otherwise.",
+    polled_at: UtcDatetime | None = None
+    poll_error: str | None = None
+    registered: bool = Field(
+        default=False,
+        description="The provider was pointed at webhook_url (entries with a registration).",
     )
     created_at: UtcDatetime
 
 
-class WebhookSourceCreated(StreamSourceResponse):
-    signing_secret: str | None = Field(
-        default=None,
-        description=(
-            "Issued when the type's signing secret is optional and none was given; "
-            "shown this once only."
-        ),
+class SourceCreated(StreamSourceResponse):
+    issued: dict[str, str] = Field(
+        default_factory=dict,
+        description="Credentials generated because they were left out; shown this once only.",
     )
 
 
-class StreamSourceTypeResponse(StreamSourceType):
+class SourceTypeTemplates(BaseModel):
+    kind: str | list[str]
+    key: str | list[str] | None
+    session_key: str | list[str] | None
+    sender: str | list[str] | None
+    occurred_at: str | list[str] | None
+
+
+class SourceTypeResponse(BaseModel):
+    slug: str
+    name: str
+    description: str
+    icon: str
     icon_url: str | None
-
-
-ChannelWebhookServiceDep = Annotated[ChannelWebhookService, Depends(get_channel_webhook_service)]
-
-
-def _signature_scheme(row: Any) -> WebhookSignatureScheme | None:
-    if row.webhook_type is None:
-        return None
-    scheme = hmac_signature_scheme(row.webhook_type, row.validation_rules)
-    if scheme is None:
-        return None
-    return WebhookSignatureScheme(
-        header=scheme.header, algorithm=scheme.algorithm, prefix=scheme.prefix
+    delivery: str = Field(description="webhook, poll or both")
+    credentials: list[SourceField] = Field(
+        description="Secret fields: write-only, held by reference, never returned."
     )
+    config: list[SourceField]
+    events: list[str] = Field(
+        description="What the provider can send, to enable at the provider; not a filter."
+    )
+    event: SourceTypeTemplates
+    verification_scheme: str | None
+    verification_header: str | None
+    continues_sessions: bool = Field(
+        description="Default of a trigger's session.continue for this type."
+    )
+    replies: bool = Field(description="A task started by its event can answer where it came from.")
 
 
 def source_response(row: Any) -> StreamSourceResponse:
     return StreamSourceResponse(
         id=row.id,
         kind=row.kind,
+        source_type=row.webhook_type,
         webhook_id=row.webhook_id,
-        webhook_type=row.webhook_type,
         webhook_url=public_webhook_url(row.webhook_id) if row.webhook_id else None,
-        allowed_methods=row.allowed_methods,
-        trigger_id=(
-            row.credential_key
-            if row.credential_key is not None and row.credential_key != row.id
-            else None
+        event_templates=row.event_templates,
+        polled_at=row.polled_at,
+        poll_error=row.poll_error,
+        registered=bool(
+            row.webhook_id and row.registered_url == public_webhook_url(row.webhook_id)
         ),
-        signature_scheme=_signature_scheme(row),
         created_at=row.created_at,
     )
 
 
-def source_types() -> list[StreamSourceTypeResponse]:
-    return [
-        StreamSourceTypeResponse(
-            **t.model_dump(), icon_url=build_icon_url(CHANNEL_ICON_NAMESPACE, t.icon)
-        )
-        for t in STREAM_SOURCE_TYPES
-    ]
+def source_type_response(entry: SourceTypeEntry) -> SourceTypeResponse:
+    verification = entry.verification
+    return SourceTypeResponse(
+        slug=entry.slug,
+        name=entry.name,
+        description=entry.description,
+        icon=entry.icon,
+        icon_url=build_icon_url(CHANNEL_ICON_NAMESPACE, entry.icon),
+        delivery=entry.delivery,
+        credentials=entry.credentials,
+        config=entry.config,
+        events=entry.events,
+        event=SourceTypeTemplates(
+            kind=entry.event.kind,
+            key=entry.event.key,
+            session_key=entry.event.session_key,
+            sender=entry.event.sender,
+            occurred_at=entry.event.occurred_at,
+        ),
+        verification_scheme=verification.scheme if verification else None,
+        verification_header=verification.header if verification else None,
+        continues_sessions=entry.continues_sessions(),
+        replies=entry.reply is not None,
+    )
+
+
+async def source_types(service: StreamService) -> list[SourceTypeResponse]:
+    repository = CatalogSourceTypeRepository(service.repository_factory.session)
+    return [source_type_response(entry) for entry in await repository.list_entries()]
 
 
 class SubscriptionResponse(BaseModel):
@@ -172,19 +203,38 @@ class OutcomeResponse(BaseModel):
     created_at: UtcDatetime
 
 
+class EventAttachmentResponse(BaseModel):
+    name: str
+    mime: str | None
+    size: int | None
+    sha256: str | None
+    ref: str = Field(description="A workspace file path, or the provider's reference (JSON).")
+    url: str | None = Field(
+        description="Download link for a stored file; null for a provider's reference."
+    )
+
+
 class StreamEventResponse(BaseModel):
+    """The event envelope (ADR-0040 §2) and how each subscription reacted."""
+
     sequence: int
+    v: int = ENVELOPE_VERSION
     event_id: UUID
-    event_key: str
+    stream_id: UUID
+    source_id: UUID | None
+    source_type: str | None
     kind: str
-    source: str
-    subject: str | None
-    occurred_at: UtcDatetime
+    key: str
+    session_key: str | None
+    sender: str | None
     received_at: UtcDatetime
+    occurred_at: UtcDatetime
+    depth: int
     correlation_id: str | None
     causation_id: str | None
-    depth: int
-    data: dict[str, Any]
+    data: dict[str, Any] = Field(description="{headers, body, body_ref}: the request as sent.")
+    body_url: str | None = Field(description="Download link for data.body_ref; null without one.")
+    attachments: list[EventAttachmentResponse]
     outcomes: list[OutcomeResponse] = Field(
         description="One per subscription that took the event; empty means nobody listened."
     )
@@ -244,24 +294,56 @@ async def _events_with_outcomes(
         by_event.setdefault(row.event_id, []).append(
             outcome_response(row, subscriptions.get(row.subscription_id))
         )
+    files = EventFileLinks()
     return [
         StreamEventResponse(
             sequence=e.sequence,
             event_id=e.id,
-            event_key=e.event_key,
+            stream_id=e.stream_id,
+            source_id=e.source_id,
+            source_type=e.source_type,
             kind=e.type,
-            source=e.source,
-            subject=e.subject,
-            occurred_at=e.time,
+            key=e.event_key,
+            session_key=e.session_key,
+            sender=e.sender,
             received_at=e.received_at,
+            occurred_at=e.time,
+            depth=e.depth,
             correlation_id=e.correlation_id,
             causation_id=e.causation_id,
-            depth=e.depth,
             data=e.data,
+            body_url=await files.url(e.workspace_id, e.data.get("body_ref")),
+            attachments=[
+                EventAttachmentResponse(
+                    name=a.name,
+                    mime=a.mime,
+                    size=a.size,
+                    sha256=a.sha256,
+                    ref=a.ref,
+                    url=await files.url(e.workspace_id, a.ref) if a.stored else None,
+                )
+                for a in e.attachments
+            ],
             outcomes=by_event.get(e.id, []),
         )
         for e in events
     ]
+
+
+class EventFileLinks:
+    """Presigned links to an event's stored files; storage is reached only when one exists."""
+
+    EXPIRES_IN = 3600
+
+    def __init__(self) -> None:
+        self._service: ArtifactService | None = None
+
+    async def url(self, workspace_id: str, path: Any) -> str | None:
+        if not isinstance(path, str) or not path:
+            return None
+        if self._service is None:
+            self._service = ArtifactService()
+        return await self._service.presigned_url(workspace_id, path, expires_in=self.EXPIRES_IN)
 
 
 @router.get(
@@ -297,12 +379,33 @@ async def create_stream(data: StreamCreate, service: StreamServiceDep):
 
 @router.get(
     "/source-types",
-    response_model=list[StreamSourceTypeResponse],
+    response_model=list[SourceTypeResponse],
     dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
 )
-async def list_source_types():
-    """Webhook types a source can be, with the credentials and settings each needs."""
-    return source_types()
+async def list_source_types(service: StreamServiceDep):
+    """Source types of the catalog, with the credentials and settings each needs."""
+    return await source_types(service)
+
+
+@router.get(
+    "/events/{event_id}",
+    response_model=StreamEventResponse,
+    dependencies=[enforced_in_handler("read on the stream that holds the event")],
+)
+async def get_event_by_id(
+    event_id: UUID,
+    user_context: UserContextDep,
+    service: StreamServiceDep,
+    reactions: ReactionsDep,
+):
+    """One event by its id, whichever stream holds it: what a forward or a cause points at."""
+    try:
+        event = await service.get_event(event_id)
+    except StreamEventNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    await require_permission("read", "stream", str(event.stream_id), user_context.user_id)
+    (response,) = await _events_with_outcomes(service, reactions, event.stream_id, [event])
+    return response
 
 
 @router.get(
@@ -327,13 +430,12 @@ async def delete_stream(
     service: StreamServiceDep,
     secret_manager: BaseSecretManagerDep,
     secret_catalog: SecretCatalogServiceDep,
-    webhook_service: ChannelWebhookServiceDep,
 ):
     """Delete a stream with its events, sources and subscriptions.
 
-    Refused with 409 while a live webhook trigger's source feeds the stream,
-    while a trigger subscribes to it (delete the trigger first), or while a
-    forward of any stream writes into it (remove that forward first).
+    Refused with 409 while a trigger subscribes to it (delete the trigger
+    first), or while a forward of any stream writes into it (remove that
+    forward first).
     """
     try:
         await delete_stream_with_sources(
@@ -341,11 +443,10 @@ async def delete_stream(
             service=service,
             secret_manager=secret_manager,
             secret_catalog=secret_catalog,
-            webhook_service=webhook_service,
         )
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    except (SourceFedByTriggerError, StreamInUseError) as error:
+    except StreamInUseError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     return Response(status_code=204)
 
@@ -361,35 +462,33 @@ async def list_sources(stream_id: UUID, service: StreamServiceDep):
 
 @router.post(
     "/{stream_id}/sources",
-    response_model=WebhookSourceCreated,
+    response_model=SourceCreated,
     status_code=201,
     dependencies=[requires("edit", "stream", id_param="stream_id")],
 )
-async def create_source(
+async def add_source(
     stream_id: UUID,
-    data: WebhookSourceCreate,
+    data: SourceCreate,
     service: StreamServiceDep,
     secret_manager: BaseSecretManagerDep,
     secret_catalog: SecretCatalogServiceDep,
-    webhook_service: ChannelWebhookServiceDep,
 ):
-    """Add a webhook source to the stream, with no trigger.
+    """Add a webhook or poll source of a catalog entry to the stream.
 
-    Credentials are write-only and held by reference; the response carries the
-    public URL to give the sender.
+    Credentials are write-only and held by reference; a webhook source's
+    response carries the public URL to give the provider.
     """
     try:
-        row, issued = await create_webhook_source(
+        row, issued = await create_source(
             stream_id,
             data,
             service=service,
             secret_manager=secret_manager,
             secret_catalog=secret_catalog,
-            webhook_service=webhook_service,
         )
     except StreamNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    return WebhookSourceCreated(**source_response(row).model_dump(), signing_secret=issued)
+    return SourceCreated(**source_response(row).model_dump(), issued=issued)
 
 
 @router.delete(
@@ -403,21 +502,13 @@ async def delete_source(
     service: StreamServiceDep,
     secret_manager: BaseSecretManagerDep,
     secret_catalog: SecretCatalogServiceDep,
-    webhook_service: ChannelWebhookServiceDep,
 ):
-    """Remove a webhook source; one a live trigger owns is refused with 409."""
+    """Remove a source and its credentials; its events stay."""
     try:
         source = await service.delete_source(stream_id, source_id)
     except StreamSourceNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    except SourceFedByTriggerError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    await release_webhook_source(
-        source,
-        secret_manager=secret_manager,
-        secret_catalog=secret_catalog,
-        webhook_service=webhook_service,
-    )
+    await release_source(source, secret_manager=secret_manager, secret_catalog=secret_catalog)
     return Response(status_code=204)
 
 

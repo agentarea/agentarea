@@ -14,13 +14,15 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/event-service/internal/broker"
-	"github.com/agentarea/event-service/internal/channels"
-	"github.com/agentarea/event-service/internal/channels/telegram"
 	"github.com/agentarea/event-service/internal/claim"
 	"github.com/agentarea/event-service/internal/config"
+	"github.com/agentarea/event-service/internal/egress"
+	"github.com/agentarea/event-service/internal/ingest"
 	"github.com/agentarea/event-service/internal/polling"
-	"github.com/agentarea/event-service/internal/submit"
+	"github.com/agentarea/event-service/internal/secrets"
+	"github.com/agentarea/event-service/internal/source"
 	"github.com/agentarea/event-service/internal/tracing"
+	"github.com/agentarea/event-service/internal/transport"
 )
 
 const version = "0.1.1"
@@ -40,8 +42,6 @@ func main() {
 	slog.Info("event-service starting",
 		"version", version,
 		"worker_id", cfg.WorkerID,
-		"inbound_stream", cfg.InboundStream,
-		"enable_telegram_polling", cfg.EnableTelegramPolling,
 		"poll_interval", cfg.PollInterval,
 		"max_pollers", cfg.MaxPollers,
 		"port", cfg.Port,
@@ -98,22 +98,31 @@ func main() {
 	}
 	slog.Info("redis connected")
 
-	// Register dev-only polling channel adapters.
-	if cfg.EnableTelegramPolling {
-		channels.Register("telegram_polling", telegram.NewPoller)
-		slog.Info("telegram getUpdates polling enabled")
-	} else {
-		slog.Info("telegram getUpdates polling disabled")
+	fernet, err := secrets.NewFernet(cfg.SecretKey)
+	if err != nil {
+		slog.Error("invalid AGENTAREA_SECRET_ENCRYPTION_KEY", "error", err)
+		os.Exit(1)
+	}
+	policy, err := egress.NewPolicy(cfg.Egress.AllowPrivate, cfg.Egress.PrivateAllowlist)
+	if err != nil {
+		slog.Error("invalid AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "error", err)
+		os.Exit(1)
 	}
 
-	// Build dependencies
-	streamBroker := broker.NewRedisStreams(redisClient, cfg.Namespace)
-	submitter := submit.NewStreamSubmitter(streamBroker, cfg.InboundStream)
-	claimer := claim.NewRedisClaimer(redisClient, cfg.WorkerID)
+	// Go fetches and publishes raw items to streams.ingest; the platform's
+	// ingest names, keys and dedups them.
+	mgr := polling.NewManager(polling.Deps{
+		Sources:    source.NewStore(db),
+		Secrets:    secrets.NewStore(db, fernet),
+		Transports: transport.NewSet(policy),
+		Publisher:  ingest.NewPublisher(broker.NewRedisStreams(redisClient, cfg.Namespace)),
+		Caller:     transport.NewCaller(policy),
+		Claimer:    claim.NewRedisClaimer(redisClient, cfg.WorkerID),
+		APIURL:     cfg.APIURL,
+		Interval:   cfg.PollInterval,
+		MaxPollers: cfg.MaxPollers,
+	})
 
-	mgr := polling.NewManager(db, submitter, claimer, cfg.PollInterval, cfg.MaxPollers)
-
-	// Run polling manager (outbound delivery handled by Python worker)
 	errCh := make(chan error, 1)
 
 	healthServer := newHealthServer(cfg.Port)

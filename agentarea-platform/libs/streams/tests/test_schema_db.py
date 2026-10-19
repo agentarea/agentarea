@@ -53,9 +53,9 @@ async def test_a_webhook_id_belongs_to_one_source(session):
     )
     insert_source = text(
         "INSERT INTO stream_sources (id, workspace_id, created_by, stream_id, kind, webhook_id, "
-        "webhook_type, allowed_methods, validation_rules, credential_key, created_at, updated_at) "
-        "VALUES (:id, :ws, 'u', :stream, 'webhook', 'same-webhook-id-0001', 'generic', "
-        "'[\"POST\"]', '{}', :key, now(), now())"
+        "webhook_type, credential_key, created_at, updated_at) "
+        "VALUES (:id, :ws, 'u', :stream, 'webhook', 'same-webhook-id-0001', 'generic_webhook', "
+        ":key, now(), now())"
     )
     await session.execute(
         insert_source, {"id": uuid4(), "ws": ws, "stream": stream_id, "key": uuid4()}

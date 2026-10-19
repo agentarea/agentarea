@@ -7,7 +7,9 @@ and activities. It registers all necessary workflows and activities with Tempora
 
 import asyncio
 import logging
+import os
 import signal
+import socket
 import sys
 from typing import Any
 
@@ -96,10 +98,8 @@ def create_activity_dependencies() -> ActivityDependencies:
 
     secret_manager_factory = SecretManagerFactory(settings.secret_manager)
 
-    # Shared BrokerClient for outbound channel delivery. Built here (not
-    # inside _setup_channel_subscribers) so the publish_workflow_events
-    # activity can enqueue deliveries directly without going through the
-    # lossy pub/sub bridge.
+    # Shared BrokerClient: activities publish task events and live signals on
+    # it, and the channel consumers read through it.
     from agentarea_common.broker import RedisStreamsBroker
 
     broker_client = RedisStreamsBroker(_redis_url(settings), namespace=settings.streams.NAMESPACE)
@@ -109,7 +109,6 @@ def create_activity_dependencies() -> ActivityDependencies:
         event_broker=event_broker,
         secret_manager_factory=secret_manager_factory,
         broker_client=broker_client,
-        channel_delivery_settings=settings.channel_delivery,
     )
 
 
@@ -120,15 +119,12 @@ class AgentAreaWorker:
         self.client = None
         self.worker = None
         self.trigger_worker = None
-        self.inbound_subscriber = None
-        self.inbound_autoclaimer = None
         self.delivery_consumer = None
         self.delivery_autoclaimer = None
         self.outbox_relay = None
         self.stream_runtime = None
         self._broker = None
         self._dedup = None
-        self._inbound_dedup = None
         self.container_monitor = None
         self.dispatch_stamps = None
         self.cost_settlement = None
@@ -332,8 +328,7 @@ class AgentAreaWorker:
             max_concurrent_activities=5,
         )
 
-        # Wire inbound channel message consumer (event-service → Redis Streams → Python)
-        # Wire outbound channel event subscriber (workflow events → Telegram/Slack/Discord)
+        # The delivery group sending task events out.
         await self._setup_channel_subscribers(dependencies)
 
         from agentarea_worker.streams import build_stream_runtime
@@ -351,26 +346,24 @@ class AgentAreaWorker:
         logger.info("Database reachable")
 
     async def _setup_channel_subscribers(self, dependencies) -> None:
-        """Wire inbound stream consumer + outbound delivery consumer.
+        """Wire the ``delivery`` group on ``tasks.events``.
 
-        The router-via-pub/sub bridge is gone: `publish_workflow_events_activity`
-        now enqueues channel deliveries directly via `dependencies.broker_client`.
-        This method only wires the *consumer side* (delivery loop +
-        autoclaimer) and the inbound channel event consumer.
+        Runs publish their events once; the delivery group decides who gets each
+        one from the task's stored reply targets (ADR-0043 §7).
         """
         from agentarea_common.broker import DedupCache
+        from agentarea_common.broker.topics import DELIVERY_GROUP, TASK_EVENTS
         from agentarea_common.config.database import get_database
         from agentarea_triggers.channels import get_adapter
         from agentarea_triggers.channels.adapters import register_all_adapters
         from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
-        from agentarea_triggers.channels.delivery_consumer import (
-            ChannelDeliveryConsumer,
-        )
-        from agentarea_triggers.channels.inbound_subscriber import InboundMessageStreamConsumer
         from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
-        from agentarea_triggers.channels.origin_guard import TriggerWorkspaceGuard
-        from agentarea_triggers.channels.sender_admission import build_telegram_sender_admission
-        from agentarea_triggers.stream_subscriber import ConfigurerAuthority
+        from agentarea_triggers.channels.source_credentials import SourceCredentialReader
+        from agentarea_triggers.channels.task_delivery import (
+            CatalogReplyReader,
+            TaskEventDelivery,
+            TaskReplyTargetReader,
+        )
 
         settings = get_settings()
         redis_url = _redis_url(settings)
@@ -387,75 +380,33 @@ class AgentAreaWorker:
             prefix="channel-delivery",
             ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
         )
-        self._inbound_dedup = DedupCache(
-            redis_url,
-            namespace=settings.streams.NAMESPACE,
-            prefix="channel-inbound",
-            ttl_seconds=int(delivery_cfg.DEDUP_TTL.total_seconds()),
-        )
-
-        # Inbound: event-service webhook/polling → Redis Streams → Python task execution
-        from agentarea_common.auth.permission import PermissionService
-        from agentarea_common.di.container import resolve
-        from agentarea_common.workspaces import get_workspace_membership_graph
-
-        sender_admission = build_telegram_sender_admission(
-            may_run=ConfigurerAuthority(
-                graph=get_workspace_membership_graph(),
-                permissions=resolve(PermissionService),
-            ).may_run,
-            secret_reader=LazySecretReader(dependencies.secret_manager_factory),
-            redis_url=redis_url,
-            namespace=settings.streams.NAMESPACE,
-            app_url=settings.app.APP_URL,
-        )
-        self.inbound_subscriber = InboundMessageStreamConsumer(
-            broker=self._broker,
-            dedup=self._inbound_dedup,
-            event_broker=dependencies.event_broker,
-            secret_manager_factory=dependencies.secret_manager_factory,
-            workflow_executor=dependencies.workflow_executor,
-            sender_admission=sender_admission,
-            stream=delivery_cfg.IN_STREAM,
-            group=delivery_cfg.IN_GROUP,
-            dlq_stream=delivery_cfg.IN_DLQ,
-            block_ms=int(delivery_cfg.BLOCK.total_seconds() * 1000),
-            batch_size=delivery_cfg.BATCH_SIZE,
-            max_delivery_attempts=delivery_cfg.MAX_ATTEMPTS,
-        )
-        self.inbound_autoclaimer = StreamAutoclaimer(
-            broker=self._broker,
-            stream=delivery_cfg.IN_STREAM,
-            group=delivery_cfg.IN_GROUP,
-            consumer_id="inbound-autoclaimer",
-            handle=self.inbound_subscriber.handle,
-            min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
-            interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
-        )
-
         # Register adapters; they raise typed Retryable/Fatal errors that the
         # delivery consumer translates into ACK / requeue / DLQ.
-        secret_reader = LazySecretReader(dependencies.secret_manager_factory)
-        # redis_url enables the Telegram streaming (edit-in-place) sender.
-        register_all_adapters(secret_reader, redis_url)
+        register_all_adapters(
+            LazySecretReader(dependencies.secret_manager_factory),
+            SourceCredentialReader(
+                get_database().async_session_factory, dependencies.secret_manager_factory
+            ),
+            redis_url,
+        )
 
-        self.delivery_consumer = ChannelDeliveryConsumer(
+        consumer_id = f"delivery-{socket.gethostname()}-{os.getpid()}"
+        self.delivery_consumer = TaskEventDelivery(
             broker=self._broker,
             dedup=self._dedup,
             adapter_resolver=get_adapter,
-            origin_guard=TriggerWorkspaceGuard(get_database().async_session_factory),
-            stream=delivery_cfg.OUT_STREAM,
-            group=delivery_cfg.OUT_GROUP,
-            dlq_stream=delivery_cfg.OUT_DLQ,
+            load_task=TaskReplyTargetReader(get_database().async_session_factory),
+            reply_for=CatalogReplyReader(get_database().async_session_factory),
+            consumer_id=consumer_id,
             block_ms=int(delivery_cfg.BLOCK.total_seconds() * 1000),
             batch_size=delivery_cfg.BATCH_SIZE,
             max_delivery_attempts=delivery_cfg.MAX_ATTEMPTS,
         )
         self.delivery_autoclaimer = StreamAutoclaimer(
             broker=self._broker,
-            stream=delivery_cfg.OUT_STREAM,
-            group=delivery_cfg.OUT_GROUP,
-            consumer_id="autoclaimer",
+            stream=TASK_EVENTS,
+            group=DELIVERY_GROUP,
+            consumer_id=consumer_id,
             handle=self.delivery_consumer.handle,
             min_idle_ms=int(delivery_cfg.AUTOCLAIM_IDLE.total_seconds() * 1000),
             interval_seconds=delivery_cfg.AUTOCLAIM_EVERY.total_seconds(),
@@ -501,10 +452,6 @@ class AgentAreaWorker:
         logger.info("Worker starting...")
 
         # Start channel subscribers and delivery pipeline
-        if self.inbound_subscriber:
-            await self.inbound_subscriber.start()
-        if self.inbound_autoclaimer:
-            await self.inbound_autoclaimer.start()
         if self.delivery_consumer:
             await self.delivery_consumer.start()
         if self.delivery_autoclaimer:
@@ -599,12 +546,6 @@ class AgentAreaWorker:
         if self.cost_settlement:
             await self.cost_settlement.stop()
             self.cost_settlement = None
-        if self.inbound_subscriber:
-            await self.inbound_subscriber.stop()
-            self.inbound_subscriber = None
-        if self.inbound_autoclaimer:
-            await self.inbound_autoclaimer.stop()
-            self.inbound_autoclaimer = None
         if self.delivery_autoclaimer:
             await self.delivery_autoclaimer.stop()
             self.delivery_autoclaimer = None
@@ -617,9 +558,6 @@ class AgentAreaWorker:
         if self._dedup:
             await self._dedup.aclose()
             self._dedup = None
-        if self._inbound_dedup:
-            await self._inbound_dedup.aclose()
-            self._inbound_dedup = None
 
         if self.worker:
             self.worker = None

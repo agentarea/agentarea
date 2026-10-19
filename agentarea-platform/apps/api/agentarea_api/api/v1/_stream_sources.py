@@ -1,10 +1,10 @@
-"""Webhook sources a member adds to a stream directly, with no trigger.
+"""Sources a member adds to a stream: a webhook or poll source of a catalog entry.
 
 A source holds no secret. Its credentials live in the secret store under
-``channel_cred:{type}:{source_id}``, the name webhook intake reads them from,
-as a trigger's do: a typed value is kept there, a picked workspace secret is
-kept there only as ``{"secret_name": ...}`` and read at use. Shared by the REST
-routes and the streams toolset.
+``channel_cred:{slug}:{source_id}``: a typed value is kept there, a picked
+workspace secret only as ``{"secret_name": ...}`` and read at use. Registering
+a webhook with the provider (Telegram's setWebhook) is the Go reconciler's job.
+Shared by the REST routes and the streams toolset.
 """
 
 import json
@@ -13,6 +13,7 @@ import secrets
 from typing import Any
 from uuid import UUID
 
+from agentarea_common.config.app import get_app_settings
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_secrets.catalog_service import (
     ManagedSecretError,
@@ -20,40 +21,49 @@ from agentarea_secrets.catalog_service import (
     SecretCatalogService,
     SecretNotFoundError,
 )
+from agentarea_streams.application.source_credentials import credential_secret_name
 from agentarea_streams.application.stream_service import StreamService
+from agentarea_streams.domain.source_types import SourceTypeEntry
+from agentarea_streams.domain.verification import configured
+from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
 from agentarea_streams.infrastructure.orm import StreamSourceORM
-from agentarea_streams.schemas import SecretRef, WebhookSourceCreate
-from agentarea_triggers.channels.webhook_service import ChannelWebhookService
-from agentarea_triggers.domain.source_types import StreamSourceType, get_stream_source_type
-from agentarea_triggers.webhook_verification import (
-    SIGNING_SECRET_KEYS,
-    channel_credential_secret_name,
-    signature_algorithm_error,
-)
+from agentarea_streams.schemas import SecretRef, SourceCreate
 from fastapi import HTTPException
-
-from ._trigger_creation import register_channel_webhook, with_webhook_secret_token
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
 SECRET_CONSUMER = "stream_source"  # noqa: S105 - a consumer type, not a credential
 
 
-def _source_type(webhook_type: str) -> StreamSourceType:
-    source_type = get_stream_source_type(webhook_type)
-    if source_type is None:
+def public_webhook_url(webhook_id: str) -> str:
+    """Where a provider posts a webhook source's events."""
+    settings = get_app_settings()
+    base = (settings.TELEGRAM_WEBHOOK_URL or settings.API_URL).rstrip("/")
+    return f"{base}/webhooks/{webhook_id}"
+
+
+async def source_type_entry(service: StreamService, slug: str) -> SourceTypeEntry:
+    entry = await CatalogSourceTypeRepository(service.repository_factory.session).get(slug)
+    if entry is None:
         raise HTTPException(
             status_code=422,
-            detail=f"Unknown source type {webhook_type!r}; see GET /streams/source-types",
+            detail=f"Unknown source type {slug!r}; see GET /streams/source-types",
         )
-    return source_type
+    return entry
 
 
-def _check_fields(source_type: StreamSourceType, payload: WebhookSourceCreate) -> None:
-    name = source_type.name
+def check_source(entry: SourceTypeEntry, payload: SourceCreate) -> None:
+    """Refuse what the entry cannot take, before anything is written."""
+    name = entry.name
+    if not entry.accepts(payload.kind.value):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{name} sources are {entry.delivery}, not {payload.kind.value}",
+        )
     for given, declared, kind in (
-        (payload.credentials, source_type.credentials, "credential"),
-        (payload.config, source_type.config, "setting"),
+        (payload.credentials, entry.credentials, "credential"),
+        (payload.config, entry.config, "setting"),
     ):
         known = {f.key for f in declared}
         if unknown := sorted(set(given) - known):
@@ -63,15 +73,17 @@ def _check_fields(source_type: StreamSourceType, payload: WebhookSourceCreate) -
             )
         for field in declared:
             value = given.get(field.key)
-            if field.required and (value is None or value == ""):
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"{name} needs {field.key}: its verifier cannot run without it",
-                )
             if value == "":
                 raise HTTPException(status_code=422, detail=f"{field.key} is empty")
-    if error := signature_algorithm_error(payload.config):
-        raise HTTPException(status_code=422, detail=error)
+            if field.required and value is None:
+                raise HTTPException(status_code=422, detail=f"{name} needs {field.key}")
+    if entry.verification is not None:
+        try:
+            configured(entry.verification, payload.config)
+        except ValidationError as error:
+            raise HTTPException(
+                status_code=422, detail=f"{name} cannot verify with these settings: {error}"
+            ) from error
 
 
 async def _usable_secret(
@@ -95,115 +107,74 @@ async def _usable_secret(
     return secret.secret_name
 
 
-async def _value_of(stored: Any, manager: BaseSecretManager) -> str:
-    if isinstance(stored, dict):
-        value = await manager.get_secret(str(stored["secret_name"]))
-        if not value:
-            raise HTTPException(
-                status_code=422, detail=f"Secret {stored['secret_name']!r} has no value"
-            )
-        return value
-    return str(stored)
-
-
-async def create_webhook_source(
+async def create_source(
     stream_id: UUID,
-    payload: WebhookSourceCreate,
+    payload: SourceCreate,
     *,
     service: StreamService,
     secret_manager: BaseSecretManager,
     secret_catalog: SecretCatalogService,
-    webhook_service: ChannelWebhookService,
-) -> tuple[StreamSourceORM, str | None]:
-    """Create the source; return it and the signing secret issued for it, if one was.
+) -> tuple[StreamSourceORM, dict[str, str]]:
+    """Create the source; return it and the credentials issued for it, shown this once.
 
     Every check runs before anything is written, so a refused request leaves
-    nothing behind. A source whose signing secret is optional and was not given
-    gets one, returned here once and never again: no source is left unsigned.
+    nothing behind. A credential the entry marks ``issued`` and the member left
+    out is generated: no source is left unsigned.
     """
-    source_type = _source_type(payload.webhook_type)
-    _check_fields(source_type, payload)
-    webhook_type = source_type.webhook_type
+    entry = await source_type_entry(service, payload.source_type)
+    check_source(entry, payload)
 
     stored: dict[str, Any] = {}
     references: list[tuple[UUID, str]] = []
     for key, value in payload.credentials.items():
         if isinstance(value, SecretRef):
-            name = await _usable_secret(secret_catalog, secret_manager, value, key)
-            stored[key] = {"secret_name": name}
+            stored[key] = {
+                "secret_name": await _usable_secret(secret_catalog, secret_manager, value, key)
+            }
             references.append((value.secret_id, key))
         else:
             stored[key] = value
+    issued = {
+        field.key: secrets.token_urlsafe(32)
+        for field in entry.credentials
+        if field.issued and field.key not in stored
+    }
+    stored.update(issued)
 
-    issued: str | None = None
-    signing_key = SIGNING_SECRET_KEYS.get(webhook_type)
-    optional = {f.key for f in source_type.credentials if not f.required}
-    if signing_key in optional and signing_key not in stored:
-        issued = secrets.token_urlsafe(32)
-        stored[signing_key] = issued
-
-    bot_token = (
-        await _value_of(stored["bot_token"], secret_manager) if webhook_type == "telegram" else None
+    source = await service.add_source(
+        stream_id=stream_id,
+        kind=payload.kind,
+        source_type=entry.slug,
+        webhook_config=dict(payload.config),
+        event_templates=(
+            payload.event_templates.model_dump(exclude_none=True)
+            if payload.event_templates
+            else None
+        ),
     )
-
-    source = await service.add_webhook_source(
-        stream_id=stream_id, webhook_type=webhook_type, validation_rules=dict(payload.config)
-    )
-
-    if bot_token is not None:
-        stored, secret_token = with_webhook_secret_token(webhook_type, stored)
-        try:
-            webhook_service.webhook_url(str(source.webhook_id))
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"The Telegram webhook cannot be registered: {exc}",
-            ) from exc
-        await register_channel_webhook(
-            webhook_service,
-            channel_type=webhook_type,
-            webhook_id=source.webhook_id,
-            credentials={"bot_token": bot_token},
-            secret_token=secret_token,
-        )
-
     await secret_manager.set_secret(
-        channel_credential_secret_name(webhook_type, source.id), json.dumps(stored)
+        credential_secret_name(entry.slug, source.id), json.dumps(stored)
     )
     for secret_id, field in references:
         await secret_catalog.add_reference(secret_id, SECRET_CONSUMER, str(source.id), field)
-    logger.info("Created %s webhook source %s on stream %s", webhook_type, source.id, stream_id)
+    logger.info(
+        "Created %s %s source %s on stream %s", entry.slug, payload.kind.value, source.id, stream_id
+    )
     return source, issued
 
 
-async def release_webhook_source(
+async def release_source(
     source: StreamSourceORM,
     *,
     secret_manager: BaseSecretManager,
     secret_catalog: SecretCatalogService,
-    webhook_service: ChannelWebhookService,
 ) -> None:
-    """Drop what a standalone source holds outside its row: credentials, references, webhook."""
-    if source.webhook_type is None:
+    """Drop what a source holds outside its row: its credentials and their references."""
+    if source.webhook_type is None or source.credential_key is None:
         return
-    secret_name = channel_credential_secret_name(source.webhook_type, source.id)
-    if source.webhook_type == "telegram":
-        raw = await secret_manager.get_secret(secret_name)
-        stored = json.loads(raw) if raw else {}
-        if stored.get("bot_token"):
-            try:
-                bot_token = await _value_of(stored["bot_token"], secret_manager)
-                await webhook_service.deregister(
-                    channel_type="telegram", credentials={"bot_token": bot_token}
-                )
-            except Exception:
-                logger.warning(
-                    "Telegram webhook of source %s could not be deregistered; the bot keeps "
-                    "posting to a URL that now answers 400",
-                    source.id,
-                    exc_info=True,
-                )
-    await secret_manager.delete_secret(secret_name)
+    await secret_manager.delete_secret(
+        credential_secret_name(source.webhook_type, source.credential_key)
+    )
     await secret_catalog.clear_references(SECRET_CONSUMER, str(source.id))
 
 
@@ -213,21 +184,13 @@ async def delete_stream_with_sources(
     service: StreamService,
     secret_manager: BaseSecretManager,
     secret_catalog: SecretCatalogService,
-    webhook_service: ChannelWebhookService,
 ) -> None:
-    """Delete a stream and release what its standalone sources hold.
+    """Delete a stream and release what its sources hold.
 
-    Refused before anything is released while a live webhook trigger's source
-    feeds the stream (``SourceFedByTriggerError``), or while a trigger
-    subscribes to it or a forward writes into it (``StreamInUseError``).
+    Refused before anything is released while a trigger subscribes to it or a
+    forward writes into it (``StreamInUseError``).
     """
     await service.ensure_deletable(stream_id)
     for source in await service.list_sources(stream_id):
-        if source.credential_key == source.id:
-            await release_webhook_source(
-                source,
-                secret_manager=secret_manager,
-                secret_catalog=secret_catalog,
-                webhook_service=webhook_service,
-            )
+        await release_source(source, secret_manager=secret_manager, secret_catalog=secret_catalog)
     await service.delete_stream(stream_id)

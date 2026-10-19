@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import { getTranslations } from "next-intl/server";
-import type { StreamSourceTypeResponse } from "@/api/client/types.gen";
-import { TriggerSourceMark } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import { getLocale, getTranslations } from "next-intl/server";
 import DeleteButton from "@/components/DeleteButton";
+import SourceTypeMark from "@/components/SourceTypeMark";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { Skeleton } from "@/components/ui/skeleton";
-import WorkspaceLink from "@/components/WorkspaceLink";
 import { listStreamSources } from "@/lib/api";
 import { requireApiData } from "@/lib/server-resource";
+import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import { formatDateTime } from "@/utils/dateUtils";
 import { deleteStreamSourceAction } from "../actions";
 
 /** Where the stream's events come from: each source's public URL, and delete for the ones no trigger owns. */
@@ -16,14 +16,14 @@ export default async function StreamSources({
   types,
 }: {
   streamId: string;
-  types: StreamSourceTypeResponse[];
+  types: SourceType[];
 }) {
-  const [t, sourcesResult] = await Promise.all([
+  const [t, locale, sourcesResult] = await Promise.all([
     getTranslations("EventsPage.sources"),
+    getLocale(),
     listStreamSources(streamId),
   ]);
   const sources = requireApiData(sourcesResult, "stream sources");
-  const typeOf = new Map(types.map((type) => [type.webhook_type, type]));
   const onDelete = deleteStreamSourceAction.bind(null, streamId);
 
   return (
@@ -35,51 +35,62 @@ export default async function StreamSources({
       ) : (
         <ul className="space-y-2 p-4">
           {sources.map((source) => {
-            const type = source.webhook_type
-              ? typeOf.get(source.webhook_type)
-              : undefined;
-            const name = type?.name ?? source.webhook_type ?? source.kind;
+            const type = sourceTypeBySlug(types, source.source_type);
+            const name = type?.name ?? source.source_type ?? source.kind;
             return (
               <li
                 key={source.id}
                 className="card-item flex flex-col gap-3 p-3 sm:flex-row sm:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3 sm:w-48 sm:shrink-0">
-                  <TriggerSourceMark entry={type ?? null} size={28} />
+                  <SourceTypeMark
+                    type={type}
+                    slug={source.source_type}
+                    size={28}
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{name}</p>
-                    {source.signature_scheme && (
+                    {source.kind === "poll" ? (
                       <p className="note truncate">
-                        {t("signedWithHeader", {
-                          header: source.signature_scheme.header,
-                        })}
+                        {source.polled_at
+                          ? t("polledAt", {
+                              time: formatDateTime(source.polled_at, locale),
+                            })
+                          : t("notPolledYet")}
                       </p>
+                    ) : (
+                      type?.verification_header && (
+                        <p className="note truncate">
+                          {t("signedWithHeader", {
+                            header: type.verification_header,
+                          })}
+                        </p>
+                      )
                     )}
                   </div>
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 space-y-1">
                   {source.webhook_url && (
                     <CopyableText text={source.webhook_url} />
                   )}
+                  {source.poll_error && (
+                    <p
+                      role="alert"
+                      className="break-words text-xs text-destructive"
+                    >
+                      {t("pollError", { error: source.poll_error })}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center justify-end">
-                  {source.trigger_id ? (
-                    <WorkspaceLink
-                      href={`/triggers/${source.trigger_id}`}
-                      className="note hover:underline"
-                    >
-                      {t("ownedByTrigger")}
-                    </WorkspaceLink>
-                  ) : (
-                    <DeleteButton
-                      itemId={source.id}
-                      itemName={name}
-                      onDelete={onDelete}
-                      title={t("deleteTitle")}
-                      description={t("deleteDescription", { name })}
-                      size="xs"
-                    />
-                  )}
+                  <DeleteButton
+                    itemId={source.id}
+                    itemName={name}
+                    onDelete={onDelete}
+                    title={t("deleteTitle")}
+                    description={t("deleteDescription", { name })}
+                    size="xs"
+                  />
                 </div>
               </li>
             );

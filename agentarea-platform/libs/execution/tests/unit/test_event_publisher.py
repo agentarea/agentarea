@@ -15,9 +15,9 @@ class CapturingStreamBroker:
     def __init__(self) -> None:
         self.events: list[IntegrationEvent] = []
 
-    async def submit(self, topic, fields, *, maxlen=None, ttl_seconds=None) -> str:
+    async def notify(self, channel, fields) -> None:
+        assert channel.startswith("tasks.live.")
         self.events.append(decode(fields))
-        return f"{len(self.events)}-0"
 
 
 class FakeClock:
@@ -88,7 +88,7 @@ async def test_a_long_reply_sends_bounded_bytes():
 
 async def test_a_failed_snapshot_is_dropped_without_failing_the_model_call():
     class _DownBroker:
-        async def submit(self, topic, fields, *, maxlen=None, ttl_seconds=None) -> str:
+        async def notify(self, channel, fields) -> None:
             raise ConnectionError("redis down")
 
     publish = create_event_publisher(_DownBroker(), "task-1")

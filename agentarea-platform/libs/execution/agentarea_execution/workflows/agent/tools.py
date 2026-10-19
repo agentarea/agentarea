@@ -373,7 +373,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
         verdict_type, reason, ran = verdict
 
         if verdict_type == GovernanceDeniedError.__name__:
-            await self._deny_tool_call(tool_call, tool_name, reason, ran=ran)
+            await self._deny_tool_call(tool_call, tool_name, reason, ran=ran, announced=True)
             await self._publish_events_immediately()
             return None
 

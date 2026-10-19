@@ -527,20 +527,19 @@ def dlq_replay(dlq: str, start: str, end: str):
 
 
 async def _dlq_replay(dlq: str, start: str, end: str) -> None:
-    # The broker and channel settings alone: the full application Settings
+    # The broker and stream settings alone: the full application Settings
     # also demands Temporal configuration, which an operator's shell has no use for.
     from agentarea_common.broker import RedisStreamsBroker
     from agentarea_common.broker.dlq import replay_dead_letters
     from agentarea_common.broker.routes import configured_routes, routes_for_dlq
     from agentarea_common.config import BrokerSettings, EventStreamSettings, RedisSettings
-    from agentarea_common.config.channels import ChannelDeliverySettings
 
     broker_type = BrokerSettings().BROKER
     if broker_type != "redis":
         raise click.UsageError(f"dlq-replay needs AGENTAREA_BROKER=redis (current: {broker_type})")
     streams = EventStreamSettings()
     try:
-        routes = routes_for_dlq(configured_routes(ChannelDeliverySettings(), streams), dlq)
+        routes = routes_for_dlq(configured_routes(streams), dlq)
     except LookupError as exc:
         raise click.UsageError(str(exc)) from exc
 

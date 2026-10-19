@@ -1,11 +1,15 @@
-"""Event stream runtime inside the worker: partitions, the router and the events view.
+"""Event stream runtime inside the worker: polled-item ingest, partitions, the router, the events view.
 
-Both are consumer groups over every partition of ``streams.events`` (ADR-0043
-§3, §4): the ``router`` reacts to each event, the ``events-view`` writes it into
-the read model. The router's subscription cache follows the change notices the outbox
-relay publishes.
+The ``ingest`` group on ``streams.ingest`` turns the items the Go event-service
+polled into stream events (ADR-0040 §3). The router and the events view are
+consumer groups over every partition of ``streams.events`` (ADR-0043 §3, §4):
+the ``router`` reacts to each event, the ``events-view`` writes it into the
+read model. The router's subscription cache follows the change notices the
+outbox relay publishes.
 """
 
+import os
+import socket
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,11 +28,14 @@ from agentarea_common.events.ports import Subscription
 from agentarea_common.workspaces import get_workspace_membership_graph
 from agentarea_streams.application.events_view import EventsView
 from agentarea_streams.application.forward import ForwardHandler
+from agentarea_streams.application.poll_intake import PolledItemConsumer
 from agentarea_streams.application.router import EventRouter
+from agentarea_streams.application.source_intake import ingest_source_event
 from agentarea_streams.domain import SubscriptionKind
 from agentarea_streams.infrastructure.di_container import StreamBusResources, setup_streams_di
 from agentarea_streams.infrastructure.partitions import PartitionMaintainer
 from agentarea_streams.infrastructure.subscription_changes import SubscriptionChangeListener
+from agentarea_triggers.channels.autoclaimer import StreamAutoclaimer
 from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
 from agentarea_triggers.channels.sender_admission import build_telegram_sender_admission
 from agentarea_triggers.infrastructure.reactions import TriggerExecutionReactionLog
@@ -43,10 +50,14 @@ class StreamRuntime:
     partitions: PartitionMaintainer
     bus: StreamBusResources
     topics: list[str]
+    polled: PolledItemConsumer
+    polled_autoclaimer: StreamAutoclaimer
     subscriptions: list[Subscription] = field(default_factory=list)
 
     async def start(self) -> None:
         await self.partitions.start()
+        await self.polled.start()
+        await self.polled_autoclaimer.start()
         await self.changes.start(self.router.invalidate)
         self.subscriptions.append(
             await self.bus.events.subscribe_many(
@@ -68,6 +79,8 @@ class StreamRuntime:
         )
 
     async def stop(self) -> None:
+        await self.polled_autoclaimer.stop()
+        await self.polled.stop()
         for subscription in self.subscriptions:
             await subscription.stop()
         self.subscriptions.clear()
@@ -114,6 +127,17 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
         },
         reactions=TriggerExecutionReactionLog(),
     )
+    consumers = settings.channel_delivery
+    consumer_id = f"ingest-{socket.gethostname()}-{os.getpid()}"
+    polled = PolledItemConsumer(
+        bus.broker,
+        session_scope=session_factory,
+        ingest=ingest_source_event,
+        consumer_id=consumer_id,
+        block_ms=int(consumers.BLOCK.total_seconds() * 1000),
+        batch_size=consumers.BATCH_SIZE,
+        max_delivery_attempts=consumers.MAX_ATTEMPTS,
+    )
     return StreamRuntime(
         router=router,
         events_view=EventsView(session_factory),
@@ -121,4 +145,14 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
         partitions=PartitionMaintainer(session_factory, settings.streams),
         bus=bus,
         topics=stream_events_partitions(settings.streams.PARTITIONS),
+        polled=polled,
+        polled_autoclaimer=StreamAutoclaimer(
+            broker=bus.broker,
+            stream=polled.stream,
+            group=polled.group,
+            consumer_id=consumer_id,
+            handle=polled.handle,
+            min_idle_ms=int(consumers.AUTOCLAIM_IDLE.total_seconds() * 1000),
+            interval_seconds=consumers.AUTOCLAIM_EVERY.total_seconds(),
+        ),
     )

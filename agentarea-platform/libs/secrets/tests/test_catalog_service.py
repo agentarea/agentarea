@@ -40,8 +40,10 @@ pytestmark = pytest.mark.skipif(
     reason="SECRETS_TEST_DATABASE_URL not set; skipping schema-backed catalog tests",
 )
 
-WORKSPACE = "catalog-test-ws"
-OTHER_WORKSPACE = "catalog-test-other-ws"
+# Each xdist worker keeps to its own workspaces: the cleanup below empties them.
+_PREFIX = f"catalog-test-{os.getenv('PYTEST_XDIST_WORKER', 'main')}-"
+WORKSPACE = f"{_PREFIX}ws"
+OTHER_WORKSPACE = f"{_PREFIX}other-ws"
 
 
 @pytest.fixture
@@ -53,10 +55,10 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     async with maker() as s:
         yield s
         await s.execute(
-            text("DELETE FROM secret_references WHERE workspace_id LIKE 'catalog-test-%'")
+            text("DELETE FROM secret_references WHERE workspace_id LIKE :p"), {"p": f"{_PREFIX}%"}
         )
         await s.execute(
-            text("DELETE FROM encrypted_secrets WHERE workspace_id LIKE 'catalog-test-%'")
+            text("DELETE FROM encrypted_secrets WHERE workspace_id LIKE :p"), {"p": f"{_PREFIX}%"}
         )
         await s.commit()
     await engine.dispose()

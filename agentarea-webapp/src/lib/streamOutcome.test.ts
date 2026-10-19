@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   eventDisposition,
   matchesDisposition,
-  resolveForwardSource,
   sortedForwardTargets,
   summarizeOutcomes,
 } from "./streamOutcome";
@@ -59,38 +58,6 @@ describe("what happened to an event", () => {
     expect(matchesDisposition(skipped, "skipped")).toBe(true);
     expect(matchesDisposition(skipped, "reacted")).toBe(false);
     expect(matchesDisposition([], "unheard")).toBe(true);
-  });
-});
-
-describe("resolving a forwarded event's source", () => {
-  it("is null when the event carries no causation", () => {
-    expect(
-      resolveForwardSource({
-        causation_id: null,
-        source: "webhook:abc",
-      })
-    ).toBeNull();
-  });
-
-  it("pairs the source stream with the causing event's id", () => {
-    expect(
-      resolveForwardSource({
-        causation_id: "982eeeeb-0000-0000-0000-000000000000",
-        source: "stream:b4ad852d-0000-0000-0000-000000000000",
-      })
-    ).toEqual({
-      streamId: "b4ad852d-0000-0000-0000-000000000000",
-      eventId: "982eeeeb-0000-0000-0000-000000000000",
-    });
-  });
-
-  it("is null for a shape ForwardHandler never produces", () => {
-    expect(
-      resolveForwardSource({
-        causation_id: "set",
-        source: "webhook:abc",
-      })
-    ).toBeNull();
   });
 });
 

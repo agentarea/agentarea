@@ -11,8 +11,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace/noop"
 
-	"github.com/agentarea/event-service/internal/channels"
-	"github.com/agentarea/event-service/internal/trigger"
+	"github.com/agentarea/event-service/internal/transport"
 )
 
 func recordSpans(t *testing.T) *tracetest.SpanRecorder {
@@ -23,65 +22,43 @@ func recordSpans(t *testing.T) *tracetest.SpanRecorder {
 	return recorder
 }
 
-type pollerFunc func(ctx context.Context, offset int64) (*channels.PollResult, error)
-
-func (f pollerFunc) Poll(ctx context.Context, offset int64) (*channels.PollResult, error) {
-	return f(ctx, offset)
-}
-
-func TestPollTickSpanRecordsSourceAndError(t *testing.T) {
+func TestAPollSpanRecordsTheSourceTransportAndError(t *testing.T) {
 	recorder := recordSpans(t)
+	pollErr := errors.New("HTTP 502")
+	tr := &fixedTransport{err: pollErr}
+	m := newManager(newFakeSources(), &fakePublisher{}, &fakeCaller{}, tr)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	pollErr := errors.New("getUpdates HTTP 502")
-	poller := pollerFunc(func(context.Context, int64) (*channels.PollResult, error) {
-		cancel()
-		return nil, pollErr
-	})
-
-	m := &Manager{}
-	m.runPoller(ctx, trigger.Trigger{ID: "trigger-1", DataExtractor: "telegram_polling"}, poller)
-
+	if _, err := m.pollOnce(context.Background(), pollSource(), tr, ""); err == nil {
+		t.Fatal("pollOnce hid the transport error")
+	}
 	ended := recorder.Ended()
 	if len(ended) != 1 {
 		t.Fatalf("ended spans = %d, want 1", len(ended))
 	}
-	span := ended[0]
 	attrs := map[string]string{}
-	for _, kv := range span.Attributes() {
+	for _, kv := range ended[0].Attributes() {
 		attrs[string(kv.Key)] = kv.Value.String()
 	}
-	if attrs["agentarea.source.id"] != "trigger-1" || attrs["agentarea.source.transport"] != "telegram_polling" {
+	if attrs["agentarea.source.id"] != "src-1" || attrs["agentarea.source.transport"] != "fixed" {
 		t.Fatalf("attributes = %v", attrs)
 	}
-	if span.Status().Code != codes.Error || span.Status().Description != pollErr.Error() {
-		t.Fatalf("status = %+v, want error %q", span.Status(), pollErr)
+	if ended[0].Status().Code != codes.Error {
+		t.Fatalf("status = %+v", ended[0].Status())
 	}
 }
 
-func TestPollTickSpanCountsItemsFetched(t *testing.T) {
+func TestAPollSpanCountsItems(t *testing.T) {
 	recorder := recordSpans(t)
+	tr := &fixedTransport{result: transport.Result{Items: []any{1, 2}}}
+	m := newManager(newFakeSources(), &fakePublisher{}, &fakeCaller{}, tr)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	poller := pollerFunc(func(context.Context, int64) (*channels.PollResult, error) {
-		cancel()
-		return &channels.PollResult{}, nil
-	})
-
-	m := &Manager{}
-	m.runPoller(ctx, trigger.Trigger{ID: "trigger-1", DataExtractor: "telegram_polling"}, poller)
-
-	ended := recorder.Ended()
-	if len(ended) != 1 {
-		t.Fatalf("ended spans = %d, want 1", len(ended))
+	if _, err := m.pollOnce(context.Background(), pollSource(), tr, ""); err != nil {
+		t.Fatalf("pollOnce: %v", err)
 	}
-	for _, kv := range ended[0].Attributes() {
-		if kv.Key == "agentarea.poll.items_fetched" {
-			if kv.Value.AsInt64() != 0 {
-				t.Fatalf("items_fetched = %d, want 0", kv.Value.AsInt64())
-			}
+	for _, kv := range recorder.Ended()[0].Attributes() {
+		if kv.Key == "agentarea.poll.items_fetched" && kv.Value.AsInt64() == 2 {
 			return
 		}
 	}
-	t.Fatal("items_fetched attribute missing")
+	t.Fatal("items_fetched is not 2")
 }

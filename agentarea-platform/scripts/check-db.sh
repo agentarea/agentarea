@@ -94,10 +94,7 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     trigger_executions row per (subscription, event): a unique key, an
 #     upsert and a nullable trigger only the migrated schema holds.
 #     Enabling a trigger stopped for a new owner clears the stamp in the row.
-#     A re-created webhook trigger takes over the stream its predecessor left,
-#     whose name the per-workspace unique constraint would otherwise refuse.
-#     A stream trigger's row stores no webhook type, which the column's default
-#     would fill in, and its run is told the journaled event it fired on.
+#     A stream trigger's run is told the journaled event it fired on.
 #     A source added without a trigger holds a picked workspace secret by a
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
@@ -153,7 +150,6 @@ PY_SUITES=(
   libs/triggers/tests/test_reactions_db.py
   libs/triggers/tests/test_routed_follow_up_once_db.py
   libs/triggers/tests/test_needs_owner_db.py
-  libs/triggers/tests/test_webhook_stream_reuse_db.py
   libs/triggers/tests/test_trigger_event_context_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py

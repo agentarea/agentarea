@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -16,7 +17,27 @@ _STREAM_ATTRIBUTES = {
     "received_at": "receivedat",
     "depth": "depth",
     "source_id": "sourceid",
+    "source_type": "sourcetype",
+    "session_key": "sessionkey",
+    "sender": "sender",
 }
+_OPTIONAL_ATTRIBUTES = {"source_id", "source_type", "session_key", "sender"}
+_ATTACHMENTS = "attachments"
+
+#: The version of the event envelope (ADR-0040 §2) this code writes.
+ENVELOPE_VERSION = 1
+
+
+class Attachment(BaseModel):
+    """A file of an event: ``ref`` is a workspace file path, or the provider's reference."""
+
+    name: str
+    mime: str | None = None
+    size: int | None = None
+    sha256: str | None = None
+    ref: str
+    #: True when ``ref`` is a workspace file; False for a provider reference.
+    stored: bool = True
 
 
 class StreamEvent(IntegrationEvent):
@@ -34,6 +55,13 @@ class StreamEvent(IntegrationEvent):
     received_at: datetime
     depth: int = 0
     source_id: UUID | None = None
+    #: The catalog entry of the source that brought it (ADR-0040 §2 envelope).
+    source_type: str | None = None
+    #: ``<source_id>:<value>``: the session a follow-up joins; None when the provider has none.
+    session_key: str | None = None
+    #: Whom sender admission checks; None when it does not apply.
+    sender: str | None = None
+    attachments: list[Attachment] = Field(default_factory=list)
 
     def to_bus(self) -> IntegrationEvent:
         extensions = dict(self.extensions)
@@ -42,8 +70,12 @@ class StreamEvent(IntegrationEvent):
             if value is None:
                 continue
             extensions[name] = value.isoformat() if isinstance(value, datetime) else str(value)
+        if self.attachments:
+            extensions[_ATTACHMENTS] = json.dumps(
+                [a.model_dump(mode="json") for a in self.attachments], separators=(",", ":")
+            )
         return IntegrationEvent(
-            **self.model_dump(exclude={*_STREAM_ATTRIBUTES, "extensions"}),
+            **self.model_dump(exclude={*_STREAM_ATTRIBUTES, "extensions", _ATTACHMENTS}),
             extensions=extensions,
         )
 
@@ -52,14 +84,21 @@ class StreamEvent(IntegrationEvent):
         missing = [
             n
             for f, n in _STREAM_ATTRIBUTES.items()
-            if f != "source_id" and n not in event.extensions
+            if f not in _OPTIONAL_ATTRIBUTES and n not in event.extensions
         ]
         if missing:
             raise ValueError(f"event {event.id} is not a stream event: no {', '.join(missing)}")
         own = {f: event.extensions.get(n) for f, n in _STREAM_ATTRIBUTES.items()}
-        rest = {k: v for k, v in event.extensions.items() if k not in _STREAM_ATTRIBUTES.values()}
+        attachments = json.loads(event.extensions.get(_ATTACHMENTS) or "[]")
+        taken = {*_STREAM_ATTRIBUTES.values(), _ATTACHMENTS}
+        rest = {k: v for k, v in event.extensions.items() if k not in taken}
         return cls.model_validate(
-            {**event.model_dump(exclude={"extensions"}), **own, "extensions": rest}
+            {
+                **event.model_dump(exclude={"extensions"}),
+                **own,
+                "attachments": attachments,
+                "extensions": rest,
+            }
         )
 
 
@@ -95,27 +134,9 @@ class SubscriptionView(BaseModel):
     output_stream_ids: list[UUID]
 
 
-class WebhookSourceSpec(BaseModel):
-    """A webhook source as the intake reads it; duck-types the trigger fields intake needs."""
-
-    id: UUID
-    stream_id: UUID
-    workspace_id: str
-    created_by: str
-    webhook_id: str
-    webhook_type: str
-    allowed_methods: list[str]
-    validation_rules: dict[str, Any]
-    webhook_config: dict[str, Any] | None
-    credential_key: UUID
-    event_types: list[str] = Field(default_factory=list)
-    is_active: bool = True
-
-
 class TriggerBinding(BaseModel):
     """How a trigger is attached to the event journal, for the trigger API."""
 
     stream_id: UUID
     event_filter: dict[str, Any]
-    webhook_id: str | None
     last_event_at: datetime | None

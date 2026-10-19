@@ -12,7 +12,7 @@ import (
 const defaultTTL = 60 * time.Second
 
 // RedisClaimer provides distributed SETNX-based claim semantics so that only
-// one worker processes a given trigger at a time.
+// one worker processes a given source at a time.
 type RedisClaimer struct {
 	client   *redis.Client
 	workerID string
@@ -28,15 +28,15 @@ func NewRedisClaimer(client *redis.Client, workerID string) *RedisClaimer {
 	}
 }
 
-func claimKey(triggerID string) string {
-	return fmt.Sprintf("polling:claim:%s", triggerID)
+func claimKey(id string) string {
+	return fmt.Sprintf("polling:claim:%s", id)
 }
 
-// TryClaim attempts to claim the trigger using SET NX PX.
+// TryClaim attempts to claim the source using SET NX PX.
 // Returns (true, nil) if the claim was acquired or re-acquired,
 // (false, nil) if already claimed by another worker.
-func (c *RedisClaimer) TryClaim(ctx context.Context, triggerID string) (bool, error) {
-	key := claimKey(triggerID)
+func (c *RedisClaimer) TryClaim(ctx context.Context, id string) (bool, error) {
+	key := claimKey(id)
 	ok, err := c.client.SetNX(ctx, key, c.workerID, c.ttl).Result()
 	if err != nil {
 		return false, fmt.Errorf("redis SETNX: %w", err)
@@ -71,13 +71,13 @@ end
 
 // Renew refreshes the TTL on our claim. Returns ErrClaimLost if the claim
 // expired or is held by another worker, so the caller stops polling.
-func (c *RedisClaimer) Renew(ctx context.Context, triggerID string) error {
-	renewed, err := renewLua.Run(ctx, c.client, []string{claimKey(triggerID)}, c.workerID, c.ttl.Milliseconds()).Int()
+func (c *RedisClaimer) Renew(ctx context.Context, id string) error {
+	renewed, err := renewLua.Run(ctx, c.client, []string{claimKey(id)}, c.workerID, c.ttl.Milliseconds()).Int()
 	if err != nil {
 		return fmt.Errorf("redis renew: %w", err)
 	}
 	if renewed == 0 {
-		return fmt.Errorf("renew %s: %w", triggerID, ErrClaimLost)
+		return fmt.Errorf("renew %s: %w", id, ErrClaimLost)
 	}
 	return nil
 }
@@ -92,8 +92,8 @@ end
 `)
 
 // Release removes the claim if it still belongs to this worker.
-func (c *RedisClaimer) Release(ctx context.Context, triggerID string) error {
-	if err := releaseLua.Run(ctx, c.client, []string{claimKey(triggerID)}, c.workerID).Err(); err != nil && !errors.Is(err, redis.Nil) {
+func (c *RedisClaimer) Release(ctx context.Context, id string) error {
+	if err := releaseLua.Run(ctx, c.client, []string{claimKey(id)}, c.workerID).Err(); err != nil && !errors.Is(err, redis.Nil) {
 		return fmt.Errorf("redis release: %w", err)
 	}
 	return nil

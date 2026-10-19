@@ -20,7 +20,9 @@ from agentarea_streams.domain import HandlerResult, StreamEvent, SubscriptionVie
 from agentarea_streams.domain.keys import task_id_for
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .channels.sender_admission import Refused, TelegramSenderAdmission, is_telegram_trigger
+from .channels.sender_admission import Refused, TelegramSenderAdmission, event_admission
+from .delivery_address import firing_delivery
+from .domain.models import StreamTrigger
 from .event_context import TriggerEvent
 from .infrastructure.reactions import CausedExecutionRepository, ReactionRepository, StreamCause
 from .llm_condition_evaluator import build_condition_evaluator
@@ -185,12 +187,17 @@ class TriggerSubscriptionHandler:
         # linked user the graph lets run it, and the run is theirs. Without the
         # admission wired, nobody gets through.
         caller: str | None = None
-        if is_telegram_trigger(trigger):
+        try:
+            door = await event_admission(session, event)
+        except LookupError as error:
+            logger.exception("Event %s cannot be admitted: %s", event.id, error)
+            return HandlerResult(verdict=Verdict.ERROR, reason=f"sender admission: {error}")
+        if door is not None:
             if self._sender_admission is None:
                 return HandlerResult(
-                    verdict=Verdict.ERROR, reason="no sender admission for a Telegram trigger"
+                    verdict=Verdict.ERROR, reason="no sender admission is wired for this source"
                 )
-            admission = await self._sender_admission.admit(session, trigger, event.data)
+            admission = await self._sender_admission.admit(session, trigger, event, door)
             if isinstance(admission, Refused):
                 return HandlerResult(verdict=Verdict.SKIPPED, reason=admission.reason)
             caller = admission.user_id
@@ -236,6 +243,12 @@ class TriggerSubscriptionHandler:
             follow_up_claim=follow_up_claim,
             raise_retryable=True,
             caller=caller,
+            delivery=await firing_delivery(
+                session,
+                event,
+                trigger_id=trigger.id,
+                session_setting=trigger.session if isinstance(trigger, StreamTrigger) else None,
+            ),
         )
         return HandlerResult(
             verdict=_VERDICTS[firing.outcome],

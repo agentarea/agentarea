@@ -1,7 +1,7 @@
 """The task event feed must never read events by task id alone.
 
 Event payloads carry message content and tool arguments. The durable catch-up
-reads go through ``TaskEventRepository`` under the caller's workspace; without
+reads go through ``TaskFeedReader`` under the caller's workspace; without
 that filter the feed returns another tenant's history to any caller that knows
 a task UUID.
 """
@@ -37,6 +37,10 @@ class _CapturingSession:
         self.statements.append(statement.compile())
         return _CapturingResult()
 
+    async def scalar(self, statement, params=None):
+        self.statements.append(statement.compile())
+        return None
+
 
 class _SessionContext:
     def __init__(self, session: _CapturingSession) -> None:
@@ -59,11 +63,11 @@ async def test_catch_up_reads_are_confined_to_the_callers_workspace(monkeypatch)
     task_id = str(uuid4())
 
     [event async for event in task_event_feed._iter_snapshot(task_id, reader)]
-    await task_event_feed._load_cursor(task_id, reader, "00000000-0000-0000-0000-000000000001")
+    await task_event_feed._load_cursor(task_id, reader, "1")
 
     assert len(session.statements) == 2
     for compiled in session.statements:
-        assert "task_events.workspace_id" in str(compiled)
+        assert "task_conversation_entries.workspace_id" in str(compiled)
         assert "ws-1" in compiled.params.values()
 
 

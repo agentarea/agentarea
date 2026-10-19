@@ -766,6 +766,8 @@ class UpdateTaskStatusRequest(BaseModel):
     status: str  # completed, failed, cancelled
     result: str | None = None
     error_message: str | None = None
+    # The stable code of why the run stopped (iteration_limit, provider_out_of_credits...).
+    failure_reason: str | None = None
     workspace_id: str
     total_cost: Money | None = None
     own_cost: Money | None = None
@@ -797,13 +799,17 @@ class LogRow(BaseModel):
     attachments: list[dict[str, Any]] | None = None
     meta: dict[str, Any] | None = None
     iteration: int | None = None
+    # When an event row's moment happened (ISO 8601); None for the store's clock.
+    timestamp: str | None = None
 
 
 class RecordRequest(BaseModel):
     """What a run records at once: log rows, the task's status, then the events it publishes.
 
     The rows, the status and the spend and audit lines the events stand for are
-    written in one transaction; the events are then stored and published.
+    written in one transaction; every event row and every person's message is
+    then published to ``tasks.events``. ``events_json`` carries the live-only
+    signals to broadcast, and, from a run that predates event rows, its events.
     """
 
     task_id: str
@@ -848,7 +854,8 @@ class MonthlySpendCapRequest(BaseModel):
 
     ``cap_usd`` is the workspace cap; ``agent_cap_usd`` the cap on ``agent_id``'s
     own spend; ``llm_caps`` the monthly caps on LLM spend, as the policy's
-    ``budget.spend_caps`` entries. At least one is set.
+    ``budget.spend_caps`` entries. With ``current_caps`` those fields are ignored
+    and the caps the workspace and agent set now are read instead.
     """
 
     workspace_id: str
@@ -857,6 +864,7 @@ class MonthlySpendCapRequest(BaseModel):
     agent_id: str | None = None
     agent_cap_usd: Money | None = None
     llm_caps: list[dict[str, Any]] = Field(default_factory=list)
+    current_caps: bool = False
 
 
 class MonthlySpendCapResult(BaseModel):
@@ -1003,6 +1011,8 @@ class CreateDelegationTaskRequest(BaseModel):
     # provide it and the activity rejects its absence.
     parent_effective_policy: dict[str, Any] | None = None
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    # The child's workflow id, recorded on its task row so the run can be acted on.
+    execution_id: str | None = None
 
 
 class CreateDelegationTaskResult(BaseModel):

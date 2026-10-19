@@ -243,6 +243,11 @@ class ContextWindowManager:
         return self._effective_limit
 
     @property
+    def current_tokens(self) -> int:
+        """The prompt tokens last measured or estimated."""
+        return self._current_tokens
+
+    @property
     def warning_sent(self) -> bool:
         return self._warning_sent
 

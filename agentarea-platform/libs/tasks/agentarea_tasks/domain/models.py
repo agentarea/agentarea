@@ -374,6 +374,8 @@ class ConversationEntry(BaseModel):
     causation_id: str | None = None
     # Where the body of a row too large to keep inline is stored; content is then empty.
     body_ref: str | None = None
+    # When the row's moment happened; the store's clock when None.
+    occurred_at: datetime | None = None
 
     def as_message(self) -> dict[str, Any]:
         """The entry as a chat message, without the fields it does not set."""

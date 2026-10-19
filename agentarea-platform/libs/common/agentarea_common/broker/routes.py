@@ -5,10 +5,18 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from agentarea_common.config.channels import ChannelDeliverySettings
 from agentarea_common.config.streams import EventStreamSettings
 
-from .topics import STREAM_EVENTS, STREAM_EVENTS_GROUPS, dead_letter_topic, stream_events_partitions
+from .topics import (
+    DELIVERY_GROUP,
+    INGEST_GROUP,
+    STREAM_EVENTS,
+    STREAM_EVENTS_GROUPS,
+    STREAMS_INGEST,
+    TASK_EVENTS,
+    dead_letter_topic,
+    stream_events_partitions,
+)
 
 
 @dataclass(frozen=True)
@@ -18,14 +26,18 @@ class ConsumerGroupRoute:
     dlq: str
 
 
-def configured_routes(
-    channels: ChannelDeliverySettings, streams: EventStreamSettings
-) -> tuple[ConsumerGroupRoute, ...]:
-    """Channel groups, then one route per stream-events partition for each of its groups."""
+def configured_routes(streams: EventStreamSettings) -> tuple[ConsumerGroupRoute, ...]:
+    """Polled items to ingest, task-event delivery, then each stream-events partition per group."""
     return (
-        ConsumerGroupRoute(stream=channels.IN_STREAM, group=channels.IN_GROUP, dlq=channels.IN_DLQ),
         ConsumerGroupRoute(
-            stream=channels.OUT_STREAM, group=channels.OUT_GROUP, dlq=channels.OUT_DLQ
+            stream=STREAMS_INGEST,
+            group=INGEST_GROUP,
+            dlq=dead_letter_topic(STREAMS_INGEST, INGEST_GROUP),
+        ),
+        ConsumerGroupRoute(
+            stream=TASK_EVENTS,
+            group=DELIVERY_GROUP,
+            dlq=dead_letter_topic(TASK_EVENTS, DELIVERY_GROUP),
         ),
         *(
             ConsumerGroupRoute(

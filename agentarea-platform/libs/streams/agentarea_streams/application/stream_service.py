@@ -5,20 +5,17 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.streams import EventStreamSettings
-from agentarea_common.di.container import resolve
 from agentarea_common.events.base_events import DomainEvent
 from agentarea_common.events.outbox_publisher import OutboxPublisher
 
-from ..domain.enums import StreamKind, SubscriptionKind
+from ..domain.enums import SourceKind, StreamKind, SubscriptionKind
 from ..domain.errors import (
     ForwardLoopError,
     NotAForwardError,
-    SourceFedByTriggerError,
+    StreamEventNotFoundError,
     StreamInUseError,
-    StreamNameTakenError,
     StreamNotFoundError,
     StreamSourceNotFoundError,
     SubscriptionNotFoundError,
@@ -34,24 +31,6 @@ from ..infrastructure.repository import (
     StreamSourceRepository,
     StreamSubscriptionRepository,
 )
-
-
-def webhook_stream_name(trigger_name: str, webhook_id: str) -> str:
-    """The name a webhook trigger's own stream gets; the backfill migration writes the same.
-
-    ``streams.name`` is a ``varchar(255)``; the trigger name is truncated so the
-    ``" (webhook_id)"`` suffix always survives intact, down to 0 characters of
-    name. A ``webhook_id`` long enough that even the bare suffix would not fit
-    has nothing left to truncate, so this raises instead of cutting the id.
-    """
-    suffix = f" ({webhook_id})"
-    if len(suffix) > 255:
-        raise ValueError(
-            f"webhook_id {webhook_id!r} is {len(webhook_id)} characters; its stream-name "
-            f"suffix alone is {len(suffix)} characters, past the 255-character limit"
-        )
-    name_budget = min(200, 255 - len(suffix))
-    return f"{trigger_name[:name_budget]}{suffix}"
 
 
 class StreamService:
@@ -118,17 +97,14 @@ class StreamService:
     async def ensure_deletable(self, stream_id: UUID) -> None:
         """Raise unless the stream can go without stranding what depends on it.
 
-        Refused while a live webhook trigger's source feeds the stream
-        (``SourceFedByTriggerError``), or while a trigger subscribes to it or a
-        forward writes into it (``StreamInUseError``): the subscription would
-        cascade away and leave its trigger active but deaf, and a forward's
-        outputs are not a foreign key, so it would keep retrying a missing stream.
-        The stream row stays locked until commit, so none is added meanwhile.
+        Refused while a trigger subscribes to it or a forward writes into it
+        (``StreamInUseError``): the subscription would cascade away and leave its
+        trigger active but deaf, and a forward's outputs are not a foreign key,
+        so it would keep retrying a missing stream. The stream row stays locked
+        until commit, so none is added meanwhile.
         """
         if await self._streams().lock_for_delete(stream_id) is None:
             raise StreamNotFoundError(stream_id)
-        if fed := await self.triggers_feeding(stream_id):
-            raise SourceFedByTriggerError(f"Stream {stream_id}", sorted(set(fed.values())))
         triggers = await self._subscriptions().trigger_ids_on_stream(stream_id)
         forwards = await self._subscriptions().forwards_into(stream_id)
         if triggers or forwards:
@@ -141,21 +117,25 @@ class StreamService:
             raise StreamNotFoundError(stream_id)
         await self._subscriptions_changed(stream_id)
 
-    async def add_webhook_source(
-        self, *, stream_id: UUID, webhook_type: str, validation_rules: dict[str, Any]
+    async def add_source(
+        self,
+        *,
+        stream_id: UUID,
+        kind: SourceKind,
+        source_type: str,
+        webhook_config: dict[str, Any],
+        event_templates: dict[str, Any] | None,
     ) -> StreamSourceORM:
-        """A webhook source no trigger owns: its credentials are keyed by its own id."""
+        """A webhook source gets its public webhook id; a poll source is fetched by Go."""
         await self.get_stream(stream_id)
-        source_id = uuid4()
-        return await self._sources().add_webhook_source(
-            source_id=source_id,
+        return await self._sources().add_source(
+            source_id=uuid4(),
             stream_id=stream_id,
-            webhook_id=secrets.token_urlsafe(16),
-            webhook_type=webhook_type,
-            allowed_methods=["POST"],
-            validation_rules=validation_rules,
-            webhook_config=None,
-            credential_key=source_id,
+            kind=kind,
+            source_type=source_type,
+            webhook_id=secrets.token_urlsafe(16) if kind == SourceKind.WEBHOOK else None,
+            webhook_config=webhook_config,
+            event_templates=event_templates,
         )
 
     async def get_source(self, stream_id: UUID, source_id: UUID) -> StreamSourceORM:
@@ -164,95 +144,11 @@ class StreamService:
             raise StreamSourceNotFoundError(source_id)
         return source
 
-    async def triggers_feeding(self, stream_id: UUID) -> dict[UUID, UUID]:
-        """Each source of the stream that a live webhook trigger owns, to that trigger."""
-        owned = {
-            s.id: s.credential_key
-            for s in await self._sources().list_for_stream(stream_id)
-            if s.credential_key is not None and s.credential_key != s.id
-        }
-        live = await self._subscriptions().live_trigger_ids(list(set(owned.values())))
-        return {source: trigger for source, trigger in owned.items() if trigger in live}
-
     async def delete_source(self, stream_id: UUID, source_id: UUID) -> StreamSourceORM:
-        """Remove a source; one a live trigger owns goes with its trigger instead."""
         source = await self.get_source(stream_id, source_id)
-        if trigger_id := (await self.triggers_feeding(stream_id)).get(source.id):
-            raise SourceFedByTriggerError(f"Source {source_id}", [trigger_id])
         if not await self._sources().delete_in_workspace(source.id):
             raise StreamSourceNotFoundError(source_id)
         return source
-
-    async def create_webhook_stream_for_trigger(
-        self,
-        *,
-        trigger_id: UUID,
-        trigger_name: str,
-        webhook_id: str,
-        webhook_type: str,
-        allowed_methods: list[str],
-        validation_rules: dict[str, Any],
-        webhook_config: dict[str, Any] | None,
-        event_types: list[str],
-    ) -> tuple[StreamORM, StreamSourceORM, StreamSubscriptionORM]:
-        """The trigger's stream, source and subscription.
-
-        A stream a deleted trigger with the same name and webhook left behind is
-        taken over, so the webhook's history continues; the new subscription
-        reacts only to events that arrive from now on.
-        """
-        stream = await self.reusable_webhook_stream(trigger_name, webhook_id)
-        if stream is None:
-            stream = await self._streams().add_stream(
-                name=webhook_stream_name(trigger_name, webhook_id),
-                description=f"Webhook {webhook_type}",
-                kind=StreamKind.CUSTOM,
-            )
-        source = await self._sources().add_webhook_source(
-            stream_id=stream.id,
-            webhook_id=webhook_id,
-            webhook_type=webhook_type,
-            allowed_methods=allowed_methods,
-            validation_rules=validation_rules,
-            webhook_config=webhook_config,
-            credential_key=trigger_id,
-        )
-        subscription = await self._subscriptions().add_subscription(
-            stream_id=stream.id,
-            kind=SubscriptionKind.TRIGGER,
-            trigger_id=trigger_id,
-            filter=EventFilter.from_trigger_event_types(event_types),
-            output_stream_ids=[],
-        )
-        await self._subscriptions_changed(stream.id)
-        return stream, source, subscription
-
-    async def reusable_webhook_stream(self, trigger_name: str, webhook_id: str) -> StreamORM | None:
-        """The stream a webhook trigger with this name and webhook would take over, if any.
-
-        Deleting a webhook trigger keeps its stream for the history. Re-creating
-        it under the same name and webhook id (to keep the sender's URL) lands on
-        that stream's name. It is taken over only while no webhook feeds it and
-        the caller may write to it; otherwise the name conflict is refused.
-        """
-        name = webhook_stream_name(trigger_name, webhook_id)
-        existing = await self._streams().get_by_name(name)
-        if existing is None:
-            return None
-        if await self._sources().list_for_stream(existing.id):
-            raise StreamNameTakenError(
-                name,
-                f"Stream {name!r} ({existing.id}) already exists and another source feeds "
-                "it; give the trigger another name",
-            )
-        user_id = self.repository_factory.user_context.user_id
-        if not await resolve(PermissionService).check(user_id, "edit", "stream", str(existing.id)):
-            raise StreamNameTakenError(
-                name,
-                f"Stream {name!r} ({existing.id}) is left from a deleted trigger with this "
-                "webhook and you may not write to it; give the trigger another name",
-            )
-        return existing
 
     async def subscribe_trigger(
         self, *, stream_id: UUID, trigger_id: UUID, event_filter: EventFilter
@@ -274,14 +170,6 @@ class StreamService:
         subscription = await self._subscriptions().get_for_trigger(trigger_id)
         if subscription is not None:
             await self._subscriptions_changed(subscription.stream_id)
-
-    async def sync_trigger_webhook_source(self, trigger_id: UUID, **fields: Any) -> None:
-        sources = await self._sources().find_by_credential_key(trigger_id)
-        for source in sources:
-            await self._sources().update_webhook_fields(source.id, **fields)
-
-    async def remove_trigger_webhook_sources(self, trigger_id: UUID) -> None:
-        await self._sources().delete_by_credential_key(trigger_id)
 
     async def create_forward(
         self, *, stream_id: UUID, output_stream_ids: list[UUID], event_filter: EventFilter
@@ -333,29 +221,22 @@ class StreamService:
     async def trigger_subscription(self, trigger_id: UUID) -> StreamSubscriptionORM | None:
         return await self._subscriptions().get_for_trigger(trigger_id)
 
-    async def webhook_source_for_trigger(self, trigger_id: UUID) -> StreamSourceORM | None:
-        sources = await self._sources().find_by_credential_key(trigger_id)
-        return sources[0] if sources else None
-
     async def last_received_at(self, stream_id: UUID) -> datetime | None:
         await self.get_stream(stream_id)
         return await self._events().last_received_at(stream_id)
 
     async def trigger_bindings(self, trigger_ids: list[UUID]) -> dict[UUID, TriggerBinding]:
-        """Stream, filter, webhook id and last event of each trigger, in three queries."""
+        """Stream, filter and last event of each trigger, in two queries."""
         if not trigger_ids:
             return {}
         subscriptions = await self._subscriptions().list_for_triggers(trigger_ids)
-        sources = await self._sources().find_by_credential_keys(trigger_ids)
         last_by_stream = await self._events().last_received_by_stream(
             list({s.stream_id for s in subscriptions})
         )
-        webhook_by_trigger = {s.credential_key: s.webhook_id for s in sources}
         return {
             s.trigger_id: TriggerBinding(
                 stream_id=s.stream_id,
                 event_filter=s.filter,
-                webhook_id=webhook_by_trigger.get(s.trigger_id),
                 last_event_at=last_by_stream.get(s.stream_id),
             )
             for s in subscriptions
@@ -376,6 +257,13 @@ class StreamService:
         if after is not None:
             return await self._events().read_after(stream_id, after, limit)
         return await self._events().read_before(stream_id, before, limit)
+
+    async def get_event(self, event_id: UUID) -> RecordedEvent:
+        """One event of this workspace's streams by its id, with the stream that holds it."""
+        event = await self._events().read_by_id(event_id)
+        if event is None:
+            raise StreamEventNotFoundError(f"Event {event_id} not found")
+        return event
 
     async def list_events_since(
         self, stream_id: UUID, *, since: datetime, after: int, limit: int

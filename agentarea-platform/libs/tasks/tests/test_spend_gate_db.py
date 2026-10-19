@@ -360,3 +360,50 @@ async def test_the_runs_budget_refuses_a_tool_call_that_would_take_the_run_past_
         "this call costs 0.64 USD"
     )
     assert await spend_cap_refusal(repo, call, (Decimal("0.05"), "USD"), now=NOW) is None
+
+
+def _builtin_call(workspace_id, policy):
+    return GovernedToolCall(
+        authorization=ToolAuthorizationRequest(
+            tool_name="shell",
+            tool_args={},
+            user_id="runner",
+            workspace_id=workspace_id,
+            effective_policy=policy,
+        ),
+        call_id="call",
+        agent_id=None,
+        task_id=None,
+    )
+
+
+async def test_a_reached_tools_cap_leaves_free_built_in_tools_alone(session):
+    workspace_id = str(uuid4())
+    repo = await _seed(session, workspace_id, [_line(workspace_id, amount="1")])
+    tools_cap = {"budget": {"spend_caps": [{"amount_usd": "0", "category": "tools"}]}}
+    workspace_cap = {"budget": {"monthly_spend_cap_usd": "1"}}
+
+    assert await spend_cap_refusal(repo, _builtin_call(workspace_id, tools_cap), now=NOW) is None
+    assert (await spend_cap_refusal(repo, _call(workspace_id, tools_cap), now=NOW)).startswith(
+        "monthly tools spend cap"
+    )
+    assert (
+        await spend_cap_refusal(repo, _builtin_call(workspace_id, workspace_cap), now=NOW)
+    ).startswith("workspace monthly spend cap")
+
+
+async def test_the_caps_passed_in_replace_the_ones_the_call_froze(session):
+    workspace_id = str(uuid4())
+    repo = await _seed(session, workspace_id, [_line(workspace_id, amount="1")])
+    frozen = {"budget": {"monthly_spend_cap_usd": "500"}}
+
+    refused = await spend_cap_refusal(
+        repo,
+        _call(workspace_id, frozen),
+        budget=BudgetPolicy(monthly_spend_cap_usd=Decimal("0.01")),
+        now=NOW,
+    )
+
+    assert refused == (
+        "workspace monthly spend cap of 0.01 USD reached: 1 USD spent this month"
+    )

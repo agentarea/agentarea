@@ -32,9 +32,11 @@ export const TASK_FAILED = "task.failed";
 export const TASK_CANCELLED = "task.cancelled";
 export const TASK_AWAITING_CONTINUATION = "task.awaiting_continuation";
 export const TASK_CONTINUED = "task.continued";
+export const MESSAGE_RECEIVED = "message.received";
+export const CONTEXT_COMPACTED = "context.compacted";
 
 /** Mirrors VOCABULARY_VERSION in contract.py; bumps with every change to EVENT_TYPES. */
-export const VOCABULARY_VERSION = 3;
+export const VOCABULARY_VERSION = 4;
 
 /**
  * The closed task-event vocabulary, the same list as EVENT_TYPES in
@@ -69,6 +71,7 @@ export const EVENT_TYPES = [
   "input.submitted",
   "input.response",
   "message.queued",
+  "message.received",
   "message.removed",
   "command.received",
   "command.rejected",
@@ -106,6 +109,16 @@ export function isTaskEventType(type: string): type is TaskEventType {
   return KNOWN_TYPES.has(type);
 }
 
+/**
+ * Signals that matter only while the run is live: broadcast, never stored, so
+ * a reload or the history never has them (LIVE_ONLY_TYPES in contract.py).
+ */
+export const LIVE_ONLY_TYPES: ReadonlySet<string> = new Set([
+  LLM_STARTED,
+  LLM_CHUNK,
+  "tool.progress",
+]);
+
 export const TERMINAL_TYPES: ReadonlySet<string> = new Set([
   TASK_COMPLETED,
   TASK_FAILED,
@@ -123,7 +136,18 @@ export function canonicalType(eventType: string): string {
     : eventType;
 }
 
-export type PartKind = "llm" | "tool" | "form" | "artifact" | "a2ui";
+/**
+ * A notice marks a moment in the run (a context compaction), not output; a
+ * message is a person's message entering the conversation.
+ */
+export type PartKind =
+  | "llm"
+  | "tool"
+  | "form"
+  | "artifact"
+  | "a2ui"
+  | "notice"
+  | "message";
 
 const KIND_BY_TYPE: Record<string, PartKind> = {
   [LLM_STARTED]: "llm",
@@ -142,6 +166,8 @@ const KIND_BY_TYPE: Record<string, PartKind> = {
   [A2UI_UPDATE_COMPONENTS]: "a2ui",
   [A2UI_UPDATE_DATA]: "a2ui",
   [A2UI_DELETE]: "a2ui",
+  [CONTEXT_COMPACTED]: "notice",
+  [MESSAGE_RECEIVED]: "message",
 };
 
 export type EventData = Record<string, unknown>;
@@ -188,6 +214,9 @@ function partIdFor(
   }
   if (kind === "a2ui") {
     return asStr(data.surface_id);
+  }
+  if (kind === "notice" || kind === "message") {
+    return asStr(data.event_id);
   }
   return asStr(data.artifact_id);
 }

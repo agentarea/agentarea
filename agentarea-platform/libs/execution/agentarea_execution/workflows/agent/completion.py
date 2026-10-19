@@ -38,7 +38,7 @@ from ..constants import (
 )
 from ..retry import make_retry_policy, model_call_retry_policy
 from .budget import BudgetMixin
-from .patches import ANSWER_CHECK_REWRITE_PATCH
+from .patches import ANSWER_CHECK_REWRITE_PATCH, COMPLETED_STATUS_WITH_TURN_EVENTS_PATCH
 
 
 class CompletionMixin(BudgetMixin):
@@ -205,36 +205,36 @@ class CompletionMixin(BudgetMixin):
         workflow.logger.info(f"Task completed: {result_text}")
         workflow.logger.info("Entering awaiting_input state for follow-up messages")
 
-        # Update task status to completed immediately so UI reflects it
-        await self._persist_task_status(
-            UpdateTaskStatusRequest(
-                user_context_data=self.state.user_context_data,
-                task_id=self.state.task_id,
-                status="completed",
-                result=json.dumps(
-                    {
-                        "response": result_text,
-                        "artifacts": [evidence.path for evidence in validation.evidence],
-                        "validation_state": self.state.validation_state,
-                    }
-                ),
-                workspace_id=self.state.workspace_id,
-                total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
-                own_cost=self._own_cost,
-                tokens_used=self.state.tokens_used,
-            )
+        completed = UpdateTaskStatusRequest(
+            user_context_data=self.state.user_context_data,
+            task_id=self.state.task_id,
+            status="completed",
+            result=json.dumps(
+                {
+                    "response": result_text,
+                    "artifacts": [evidence.path for evidence in validation.evidence],
+                    "validation_state": self.state.validation_state,
+                }
+            ),
+            workspace_id=self.state.workspace_id,
+            total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
+            own_cost=self._own_cost,
+            tokens_used=self.state.tokens_used,
         )
-        if (
-            self._interaction_contract_enabled
-            and self.state.interaction_capabilities.channel == "none"
-        ):
+        if self._task_log_on() and workflow.patched(COMPLETED_STATUS_WITH_TURN_EVENTS_PATCH):
+            # Stored when the turn ends, in one record with its closing events.
+            self._completed_status = completed
+        else:
+            await self._persist_task_status(completed)
+        window = self._follow_up_window()
+        if window is None:
             self._awaiting_input = False
             return
         self._events.add_event(
             EventTypes.WORKFLOW_AWAITING_FOLLOW_UP,
             {
                 "state": "awaiting_follow_up",
-                "timeout_seconds": 1800,
+                "timeout_seconds": int(window.total_seconds()),
                 **({"final_response": result_text} if self._interaction_contract_enabled else {}),
             },
         )

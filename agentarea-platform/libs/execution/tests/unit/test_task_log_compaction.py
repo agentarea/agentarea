@@ -43,10 +43,31 @@ def test_compaction_summarizes_everything_since_the_last_one_and_carries_every_s
         "[Previous conversation summary]\nearlier work",
         "Now the totals",
         "",
+        "[Skill activated. It stays active: its full instructions are kept verbatim "
+        "right after the summary.]",
         "Total is 42",
     ]
     assert skills == [_EARLIER_SKILL, _SKILL]
     assert [entry.seq for entry in replaced] == [5, 6, 7, 8]
+
+
+def test_the_summarizer_is_told_a_skill_is_active_and_a_repeat_is_not_carried_as_skill():
+    skill = '<skill_content name="pirate-codeword">The codeword is ARR.</skill_content>'
+    already = "Skill 'pirate-codeword' is already active in this session."
+    window = [
+        ConversationEntry(seq=0, role="system", content="Agent instructions"),
+        ConversationEntry(seq=1, role="tool", content=skill, tool_call_id="a", name="activate_skill"),
+        ConversationEntry(
+            seq=2, role="tool", content=already, tool_call_id="b", name="activate_skill"
+        ),
+    ]
+
+    to_summarize, skills, _ = compaction_input(window)
+
+    assert skills == [skill]
+    assert "ARR" not in to_summarize[0]["content"]
+    assert "Skill 'pirate-codeword' activated. It stays active" in to_summarize[0]["content"]
+    assert to_summarize[1]["content"] == already
 
 
 def test_a_window_of_only_the_system_prompt_has_nothing_to_compact():

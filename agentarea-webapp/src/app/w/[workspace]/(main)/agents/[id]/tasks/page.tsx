@@ -5,15 +5,15 @@ import { notFound } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import TasksList from "@/app/w/[workspace]/(main)/tasks/components/TasksList";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import {
   getAgent,
   listAgentTasks,
-  listTriggerCatalog,
+  listStreamSourceTypes,
   resolvePrincipals,
   type Agent,
   type TaskWithAgent,
 } from "@/lib/api";
+import type { SourceType } from "@/lib/sourceTypes";
 import { getTaskSource } from "@/lib/taskSource";
 import TasksSkeleton from "@/app/w/[workspace]/(main)/tasks/components/TasksSkeleton";
 
@@ -34,18 +34,21 @@ async function AgentTasksData({ agentId }: { agentId: string }) {
   const t = await getTranslations("TasksPage");
 
   let tasks: TaskWithAgent[] = [];
-  let catalog: TriggerCatalogEntry[] = [];
+  let sourceTypes: SourceType[] = [];
   let error: string | null = null;
 
   try {
-    const [{ data: tasksData, error: tasksError }, catalogResponse] =
-      await Promise.all([listAgentTasks(agentId), listTriggerCatalog()]);
+    const [{ data: tasksData, error: tasksError }, typesResponse] =
+      await Promise.all([listAgentTasks(agentId), listStreamSourceTypes()]);
     if (tasksError) {
       error = t("error.loadFailedDescription");
     } else {
       tasks = (tasksData ?? []) as TaskWithAgent[];
     }
-    catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
+    if (typesResponse.error) {
+      console.error("Failed to load source types:", typesResponse.error);
+    }
+    sourceTypes = typesResponse.data ?? [];
   } catch {
     error = t("error.loadFailedDescription");
   }
@@ -95,7 +98,7 @@ async function AgentTasksData({ agentId }: { agentId: string }) {
     <TasksList
       initialTasks={tasks}
       viewMode="table"
-      catalog={catalog}
+      sourceTypes={sourceTypes}
       principalNames={principalNames}
       showAgent={false}
     />

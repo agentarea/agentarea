@@ -138,7 +138,8 @@
     "showPassword": "Show password",
     "hidePassword": "Hide password",
     "previousMonth": "Previous month",
-    "nextMonth": "Next month"
+    "nextMonth": "Next month",
+    "newValue": "new"
   },
   "admin": {
     "title": "Admin Dashboard",
@@ -653,7 +654,6 @@
       "createConfiguration": "Create Configuration",
       "triggerEnabled": "Enabled",
       "removeTrigger": "Remove trigger",
-      "triggerCredentialRequired": "Select a workspace secret",
       "noTriggers": "No triggers. The agent runs only when a task is started for it.",
       "triggersManagedElsewhere": "Schedules and channels of this agent are managed in Automation.",
       "openTriggers": "Open Automation",
@@ -673,7 +673,8 @@
       "loadOpenapiConnectionsFailed": "Couldn't load OpenAPI connections",
       "loadingOpenapiConnections": "Loading OpenAPI connections...",
       "loadInstanceFailed": "Couldn't load the MCP connection for editing",
-      "updateInstanceFailed": "Couldn't update the MCP connection"
+      "updateInstanceFailed": "Couldn't update the MCP connection",
+      "triggerStreamRequired": "Pick the stream this trigger listens to"
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",
@@ -1277,7 +1278,31 @@
       "pauseFailed": "Couldn't pause the task",
       "resumeFailed": "Couldn't resume the task",
       "stopFailed": "Couldn't stop the task",
-      "retryFailed": "Couldn't retry the task"
+      "retryFailed": "Couldn't retry the task",
+      "errorLoadingConversation": "Error Loading Conversation"
+    },
+    "ActivityGroup": {
+      "working": "Working",
+      "workCompleted": "Work completed",
+      "workStopped": "Work stopped",
+      "workFailed": "Work failed",
+      "paused": "Paused",
+      "actions": "{count, plural, one {# action} other {# actions}}",
+      "failed": "{count} failed",
+      "toolGroup": {
+        "read": "read {count, plural, one {# file} other {# files}}",
+        "edited": "edited {count, plural, one {# file} other {# files}}",
+        "wrote": "wrote {count, plural, one {# file} other {# files}}",
+        "ran": "ran {count, plural, one {# command} other {# commands}}",
+        "searched": "ran {count, plural, one {# search} other {# searches}}",
+        "fetched": "fetched {count, plural, one {# page} other {# pages}}",
+        "queried": "ran {count, plural, one {# query} other {# queries}}",
+        "listed": "listed {count, plural, one {# directory} other {# directories}}",
+        "sent": "sent {count, plural, one {# message} other {# messages}}",
+        "skill": "used {count, plural, one {# skill} other {# skills}}",
+        "delegated": "delegated to {count, plural, one {# agent} other {# agents}}",
+        "other": "ran {count, plural, one {# tool} other {# tools}}"
+      }
     },
     "continuation": {
       "title": {
@@ -1305,6 +1330,19 @@
         "tokens_required": "Grant additional tokens to lift the token limit.",
         "toolCalls_required": "Grant additional tool calls to lift the tool-call limit."
       }
+    },
+    "conversation": {
+      "tryAgain": "Try again",
+      "loadingHistory": "Loading conversation history",
+      "historyUnavailable": "Conversation history is unavailable. Retry loading before sending.",
+      "historyLoading": "Loading conversation history. You can start writing; sending will be available when it finishes.",
+      "noExecutionEvents": "No execution events yet.",
+      "messagePlaceholder": "Message {agent}...",
+      "followUpPlaceholder": "Send a follow-up to {agent}...",
+      "attachmentNotice": "Files will be sent in a new task with {agent}.",
+      "agentFallback": "agent",
+      "compacted": "Context compacted: {count, plural, one {# earlier message was} other {# earlier messages were}} summarized",
+      "messageStoredSeparately": "The message is stored separately and is not shown here."
     }
   },
   "TasksPage": {
@@ -1377,6 +1415,13 @@
       "cancelConfirm": "Stop",
       "retry": "Retry",
       "retryFailed": "Could not retry the task"
+    },
+    "sourceKind": {
+      "manualRun": "Manual run",
+      "delegation": "Delegated",
+      "schedule": "Scheduled",
+      "event": "Event",
+      "trigger": "Trigger"
     }
   },
   "SkillsPage": {
@@ -1648,6 +1693,7 @@
       "approvalRequest": "Approval requested",
       "approvalResponse": "Approval answered",
       "messageQueued": "Message queued",
+      "messageReceived": "Message received",
       "messageRemoved": "Message removed",
       "commandReceived": "Command received",
       "commandRejected": "Command rejected",
@@ -1796,7 +1842,9 @@
     "selectModel": "Select model",
     "changeModel": "Change",
     "executionInProgress": "In progress",
-    "executionAwaitingFollowUp": "Awaiting follow-up"
+    "executionAwaitingFollowUp": "Awaiting follow-up",
+    "builtinTools": "Built-in tools",
+    "toolFailed": "{count} failed"
   },
   "Workplace": {
     "hero": {
@@ -1905,7 +1953,7 @@
     "noTriggers": "No triggers yet",
     "noTriggersDescription": "A trigger starts a task without you — on a schedule, or when an external system calls in.",
     "noTriggersHintCron": "Run an agent on a schedule, like a nightly report",
-    "noTriggersHintWebhook": "Start a task from an incoming webhook",
+    "noTriggersHintWebhook": "Start a task from the events arriving in a stream",
     "noTriggersHintHistory": "Every fire is recorded, so you can see what ran and why",
     "noMatchingTriggers": "No triggers match your search",
     "noMatchingTriggersDescription": "No triggers match your search \"{query}\"",
@@ -1925,7 +1973,7 @@
     },
     "type": {
       "cron": "Cron",
-      "webhook": "Webhook"
+      "stream": "Stream"
     },
     "status": {
       "active": "Active",
@@ -1942,29 +1990,13 @@
       "namePlaceholder": "e.g., Daily Report Generator",
       "triggerDescription": "Description",
       "triggerDescriptionPlaceholder": "What this automation does",
-      "credentialsUnchanged": "Leave credentials blank to keep the saved values. Fill in all credential fields to replace them.",
       "triggerType": "Trigger Type",
       "selectType": "Select trigger type",
-      "catalogLoadFailed": "Could not load trigger types. Refresh the page or try again later.",
       "agent": "Agent",
       "selectAgent": "Select an agent",
       "cronExpression": "Cron Expression",
       "cronPlaceholder": "e.g., 0 9 * * 1-5",
       "timezone": "Timezone",
-      "webhookType": "Webhook Type",
-      "selectWebhookType": "Select webhook type",
-      "webhookTypes": {
-        "generic": "Generic",
-        "slack": "Slack",
-        "discord": "Discord",
-        "telegram": "Telegram",
-        "github": "GitHub",
-        "gmail": "Gmail",
-        "teams": "Microsoft Teams",
-        "linear": "Linear",
-        "stripe": "Stripe"
-      },
-      "allowedMethods": "Allowed Methods",
       "taskParameters": "Task Parameters",
       "failureThreshold": "Failure Threshold",
       "failureThresholdPlaceholder": "e.g., 3",
@@ -1972,15 +2004,11 @@
       "updateButton": "Update Trigger",
       "editTitle": "Edit Trigger",
       "schedule": "Schedule",
-      "eventTypes": "Event Types",
-      "eventTypesHint": "Select which events trigger execution. Leave empty to accept all.",
       "automationName": "Automation name",
       "automationNamePlaceholder": "Untitled automation",
       "taskInstructions": "Task",
       "whenToRun": "When to run",
       "runSettings": "Run settings",
-      "allEvents": "All events",
-      "selectedEventsCount": "{count} selected",
       "execution": {
         "title": "Execution context",
         "orchestrator": "Orchestrator",
@@ -2021,8 +2049,6 @@
       "taskFilesPlaceholder": "Select files",
       "taskSkills": "Additional skills",
       "taskMcps": "Additional MCP",
-      "taskTextFromChannel": "This is the instruction the agent follows; the incoming message is attached as the event. Leave it empty to make the message itself the ask.",
-      "taskTextFromCall": "This is the instruction the agent follows; the incoming call is attached as the event. Leave it empty to make the call itself the ask.",
       "taskTextFromStream": "The event's data is attached to the task automatically. The text here is the instruction the agent follows.",
       "taskFilesHint": "Select workspace files to include in every task.",
       "searchFiles": "Search files",
@@ -2034,16 +2060,16 @@
       "resourcesLoadFailed": "Could not load resources. Try refreshing the list.",
       "refreshResources": "Refresh list",
       "removeResource": "Remove {name}",
-      "selectCredentialsHint": "Choose workspace secrets for the channel credentials.",
-      "selectSecret": "Select a secret",
-      "keepExistingSecret": "Keep existing secret",
-      "noSecrets": "No workspace secrets yet.",
-      "newSecret": "New secret",
-      "createdWithSecretTitle": "Webhook created",
       "stream": "Stream",
       "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
       "noStreams": "No streams yet",
-      "streamsLoadFailed": "Could not load streams"
+      "streamsLoadFailed": "Could not load streams",
+      "session": {
+        "continue": "Continue the conversation",
+        "continueHint": "The next event of the same session (a chat, a thread) joins the task that is waiting for it.",
+        "eachEventHint": "Every event starts its own task.",
+        "idleTimeout": "How long the task waits for the next event"
+      }
     },
     "detail": {
       "overview": "Overview",
@@ -2089,18 +2115,12 @@
       "noneAttached": "None attached",
       "whenToRun": "When to run",
       "timezone": "Timezone",
-      "webhookUrl": "Webhook endpoint",
-      "methods": "Methods",
-      "events": "Events",
-      "allEvents": "All events",
-      "eventsSelected": "{count} selected",
       "failureThreshold": "Failures before auto-disable",
       "failureThresholdHint": "Consecutive failures / threshold",
       "ofRuns": "{successful} of {total} runs succeeded",
       "noRuns": "No runs yet",
       "failedRuns": "{count} failed",
       "failureWarning": "{count, plural, one {# consecutive failure} other {# consecutive failures}} of {threshold}",
-      "noSchedule": "Waiting for an incoming request",
       "noScheduleStream": "Waiting for stream events",
       "executionStatus": {
         "completed": "Completed",
@@ -2125,20 +2145,14 @@
       "cost": "Cost",
       "firstPage": "First page",
       "noExecutionsOnPage": "No runs on this page",
-      "signing": "Request signing",
-      "signingStatus": {
-        "signed": "Signed",
-        "unsigned": "Unsigned",
-        "unsupported": "Not verified"
-      },
-      "signingSignedHint": "Requests without a valid signature are refused.",
-      "signingUnsignedHint": "Anyone who knows this URL can start the agent. Generate a signing secret, then sign every request with it.",
-      "signingUnsignedChannelHint": "Anyone who knows this URL can start the agent. Save the channel credentials again to register a secret.",
-      "signingUnsupportedHint": "AgentArea does not verify this provider's requests yet, so anyone who knows this URL can start the agent. Keep the URL private.",
       "lastEvent": "Last event",
       "noEventsYet": "No events yet",
       "needsOwnerTitle": "This trigger stopped",
-      "needsOwnerBody": "The person who set it up can no longer run this agent. Restore their access and enable it again, or recreate it from an account that can."
+      "needsOwnerBody": "The person who set it up can no longer run this agent. Restore their access and enable it again, or recreate it from an account that can.",
+      "session": "Conversation",
+      "sessionContinues": "The next event of a session joins the same task, which waits {timeout} for it",
+      "sessionEachEvent": "Every event starts its own task",
+      "sessionDefault": "As the stream's sources decide: chat sources continue the conversation, others start a task per event"
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -2147,28 +2161,7 @@
       "loadFailed": "Failed to load trigger",
       "enableFailed": "Failed to enable trigger",
       "disableFailed": "Failed to disable trigger",
-      "runFailed": "Couldn't run the trigger",
-      "rotateSigningSecretFailed": "Failed to generate the signing secret"
-    },
-    "signing": {
-      "sign": "Generate signing secret",
-      "rotate": "Rotate secret",
-      "signTitle": "Require signed requests?",
-      "signDescription": "From now on, requests without a valid signature are refused. Update every sender to sign with the new secret.",
-      "signConfirm": "Generate secret",
-      "rotateTitle": "Rotate the signing secret?",
-      "rotateDescription": "Requests signed with the current secret are refused as soon as the new one exists. Update every sender right away.",
-      "rotateConfirm": "Rotate secret",
-      "issuedTitle": "Signing secret generated",
-      "issuedDescription": "Sign every request to this webhook with this secret. Unsigned requests are refused.",
-      "secretLabel": "Signing secret",
-      "secretWarning": "Shown only once. Copy it now and store it where the sender runs.",
-      "headerLabel": "Header",
-      "valueLabel": "Signature",
-      "valueText": "Hex-encoded HMAC-{algorithm} of the raw request body, keyed with this secret.",
-      "valueTextWithPrefix": "Hex-encoded HMAC-{algorithm} of the raw request body, keyed with this secret, after the prefix {prefix}.",
-      "exampleLabel": "Example",
-      "done": "Done"
+      "runFailed": "Couldn't run the trigger"
     }
   },
   "EventsPage": {
@@ -2180,7 +2173,7 @@
       "created": "Created"
     },
     "noStreams": "No streams yet",
-    "noStreamsDescription": "A stream appears for every webhook trigger, and you can create your own.",
+    "noStreamsDescription": "A stream collects the events of its sources. Create one, then add a source to it.",
     "noMatchingStreams": "No matching streams",
     "feed": {
       "received": "Received",
@@ -2214,7 +2207,19 @@
       "gone": "This event is no longer kept.",
       "triggersLoadFailed": "Could not load trigger names",
       "subscriptionsLoadFailed": "Could not load forward links",
-      "streamsLoadFailed": "Could not load stream names"
+      "streamsLoadFailed": "Could not load stream names",
+      "source": "Source",
+      "noSource": "No source",
+      "kind": "Kind",
+      "key": "Key",
+      "session": "Session",
+      "noSession": "None: every event is its own task",
+      "sender": "Sender",
+      "occurredAt": "Occurred",
+      "attachments": "Attachments",
+      "openAttachment": "Open",
+      "fetchedByTask": "Fetched when a task opens it",
+      "bodyStored": "Body stored as a file"
     },
     "sources": {
       "title": "Sources",
@@ -2222,7 +2227,6 @@
       "add": "Add source",
       "signedWith": "Signature",
       "signedWithHeader": "Signed in {header}",
-      "ownedByTrigger": "Owned by its trigger",
       "deleteTitle": "Delete source",
       "deleteDescription": "{name} stops delivering to this stream, and its URL starts answering 400. Events already recorded stay.",
       "createFailed": "Could not add the source",
@@ -2237,16 +2241,36 @@
         "selectSecret": "Select a secret",
         "noSecrets": "No secrets yet",
         "newSecret": "New secret",
-        "secretsLoadFailed": "Could not load the workspace secrets"
+        "secretsLoadFailed": "Could not load the workspace secrets",
+        "kind": "How events arrive",
+        "kinds": {
+          "webhook": "The provider sends them to a URL",
+          "poll": "AgentArea fetches them"
+        },
+        "issuedHint": "Leave it empty and AgentArea generates one, shown once after the source is added.",
+        "templates": {
+          "kind": "Event kind",
+          "kindPlaceholder": "'{body:trigger.name}'.'{body:event.op}'",
+          "key": "Event key",
+          "keyPlaceholder": "'{body:id}'",
+          "session_key": "Session",
+          "session_keyPlaceholder": "'{body:conversation.id}'",
+          "hint": "Templates read the request: '{body:a.b}' for a field of the body, '{header:name}' for a header; text between them is kept as is.",
+          "noKeyHint": "Without a key, a resent request runs the agent again."
+        },
+        "events": "Events this provider can send",
+        "eventsHint": "Enable these at the provider; every event it sends arrives in the stream."
       },
       "created": {
         "title": "Source added",
         "description": "Give this URL to the sender. Every request to it is verified before it is recorded.",
         "done": "Done",
         "urlLabel": "Webhook URL",
-        "secretLabel": "Signing secret",
         "secretWarning": "Copy it now: it is not shown again."
-      }
+      },
+      "polledAt": "Polled {time}",
+      "notPolledYet": "Not polled yet",
+      "pollError": "Last poll failed: {error}"
     }
   },
   "NetworkPage": {

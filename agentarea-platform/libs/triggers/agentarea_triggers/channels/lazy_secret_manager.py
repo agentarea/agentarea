@@ -2,9 +2,9 @@
 
 Adapters running in the worker's delivery consumer have no request-scoped
 DB session or `UserContext`. `LazySecretReader.get_secret` opens a fresh
-session per call and resolves the workspace from the trigger_id embedded
-in the secret name (`channel_cred:<channel_type>:<trigger_id>`), then
-delegates to the configured `SecretManagerFactory`.
+session per call and resolves the workspace from the id embedded in the
+secret name -- a source's credential key (`channel_cred:<slug>:<credential_key>`)
+or a task's id -- then delegates to the configured `SecretManagerFactory`.
 
 Implements `SecretReader` (read-only). Set/rotate goes through the
 authenticated API path with a real `UserContext`, never through this.
@@ -31,19 +31,17 @@ class LazySecretReader:
         from agentarea_common.auth.context import UserContext
         from agentarea_common.base.tenant_scope import unscoped, workspace_scope
         from agentarea_common.config import get_database
-
-        from agentarea_triggers.infrastructure.orm import TriggerORM
+        from agentarea_streams.infrastructure.orm import StreamSourceORM
+        from sqlalchemy import select
 
         database = get_database()
         async with database.async_session_factory() as session:
             # Resolve workspace context from an id embedded in the secret name.
-            # Channel creds:   "channel_cred:<channel_type>:<trigger_id>"  → TriggerORM
+            # Source creds:    "channel_cred:<slug>:<credential_key>"      → StreamSourceORM
             # A2A push tokens: "a2a_push_token:<task_id>:<config_id>"      → TaskORM
             # Task webhooks:   "task_webhook:<task_id>"                     → TaskORM
             user_context: UserContext | None = None
-            with unscoped(
-                "a background secret read names a trigger or task; its workspace decides"
-            ):
+            with unscoped("a background secret read names a source or task; its workspace decides"):
                 parts = name.split(":")
                 if (name.startswith("a2a_push_token:") and len(parts) >= 3) or (
                     name.startswith("task_webhook:") and len(parts) == 2
@@ -59,17 +57,20 @@ class LazySecretReader:
                             )
                     except (ValueError, Exception):
                         logger.exception("Failed to resolve task for secret '%s'", name)
-                elif len(parts) >= 3:
+                elif name.startswith("channel_cred:") and len(parts) == 3:
                     try:
-                        trigger_id = UUID(parts[-1])
-                        trigger_orm = await session.get(TriggerORM, trigger_id)
-                        if trigger_orm:
+                        found = await session.execute(
+                            select(StreamSourceORM.created_by, StreamSourceORM.workspace_id)
+                            .where(StreamSourceORM.credential_key == UUID(parts[2]))
+                            .limit(1)
+                        )
+                        row = found.first()
+                        if row:
                             user_context = UserContext(
-                                user_id=str(trigger_orm.created_by),
-                                workspace_id=str(trigger_orm.workspace_id),
+                                user_id=str(row.created_by), workspace_id=str(row.workspace_id)
                             )
                     except (ValueError, Exception):
-                        logger.exception("Failed to resolve trigger for secret '%s'", name)
+                        logger.exception("Failed to resolve the source for secret '%s'", name)
 
             if not user_context:
                 logger.error("Cannot resolve workspace for secret '%s'", name)

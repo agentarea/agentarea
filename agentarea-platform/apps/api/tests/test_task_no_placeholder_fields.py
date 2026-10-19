@@ -7,7 +7,7 @@ agent — and callers had no way to detect the difference. Absent means null.
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -132,28 +132,34 @@ async def test_task_event_message_is_null_when_the_event_carries_none(async_clie
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    record = MagicMock()
-    record.id = uuid4()
-    record.task_id = task.id
-    record.timestamp = datetime.now(UTC)
-    record.event_type = "task.failed"
-    record.data = {"error": "no evidence"}
-    record.metadata = {}
+    from agentarea_tasks.domain.models import ConversationEntry
+
+    row = ConversationEntry(
+        seq=4,
+        kind="event",
+        role="event",
+        content="",
+        name="task.failed",
+        meta={"error": "no evidence"},
+        event_id=uuid4(),
+        occurred_at=datetime.now(UTC),
+    )
+    feed = MagicMock()
+    feed.return_value.page = AsyncMock(return_value=([row], 1))
+    feed.return_value.bodies = AsyncMock(return_value=None)
 
     task_service = AsyncMock()
     task_service.get_task.return_value = task
-    event_repository = AsyncMock()
-    event_repository.list_for_task.return_value = ([record], 1)
     repository_factory = MagicMock()
-    repository_factory.create_repository.return_value = event_repository
 
     app.dependency_overrides[get_read_task_service] = lambda: task_service
     app.dependency_overrides[get_read_repository_factory] = lambda: repository_factory
     app.dependency_overrides[get_user_context] = lambda: MagicMock()
     try:
-        response = await async_client.get(
-            f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task.id}/events"
-        )
+        with patch("agentarea_api.api.v1.agents_tasks.TaskFeedReader", feed):
+            response = await async_client.get(
+                f"/v1/workspaces/acme/agents/{agent_id}/tasks/{task.id}/events"
+            )
     finally:
         for dep in (get_read_task_service, get_read_repository_factory, get_user_context):
             app.dependency_overrides.pop(dep, None)

@@ -96,6 +96,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             final_status = "cancelled"
         else:
             final_status = "failed"
+        self._keep_queued_messages()
         conversation_pending = self._conversation_payload()
         # A completed, stopped or failed conversation can be continued by a later
         # message, or a retry, after the workflow closes; the snapshot tells that
@@ -111,6 +112,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             )
             and not self._is_delegation_child()
             and workflow.patched(CONVERSATION_RESUME_SNAPSHOT_PATCH)
+            and self._conversation_resumable_from_here()
             else None
         )
         await self._persist_task_status(
@@ -128,6 +130,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                 else None,
                 error_message=self.state.error_message
                 or (self.state.blocked_reason if final_status == "blocked" else None),
+                failure_reason=None if self.state.success else self.state.failure_reason,
                 workspace_id=self.state.workspace_id,
                 total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
                 own_cost=self._own_cost,
@@ -207,13 +210,20 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                 self._answer_unanswered_tool_calls(
                     "Not executed: the run failed before this call ran."
                 )
-                conversation_resume = self._conversation_resume_snapshot(len(self.state.messages))
+                self._keep_queued_messages()
+                if self._conversation_resumable_from_here():
+                    conversation_resume = self._conversation_resume_snapshot(
+                        len(self.state.messages)
+                    )
+            else:
+                self._keep_queued_messages()
             await self._persist_task_status(
                 UpdateTaskStatusRequest(
                     user_context_data=self.state.user_context_data,
                     task_id=self.state.task_id,
                     status=status,
                     error_message=self.state.blocked_reason or error_details,
+                    failure_reason=self._failure_cause(error) or self.state.failure_reason,
                     workspace_id=self.state.workspace_id,
                     total_cost=self.budget_tracker.cost if self.budget_tracker else None,
                     own_cost=self._own_cost if self.budget_tracker else None,

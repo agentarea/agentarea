@@ -26,65 +26,28 @@ describe("getTaskSource", () => {
 
   assertEqual(
     getTaskSource({
-      channel_origin: {
-        type: "telegram",
-        chat_id: "123",
-        chat_title: "Team chat",
-      },
+      trigger_type: "stream",
+      trigger_name: "Support inbox",
+      source_type: "chat_bot",
     }),
     {
-      kind: "telegram",
-      label: "Telegram",
-      detail: "Team chat",
-      channel: "telegram",
+      kind: "event",
+      label: "Event",
+      detail: "Support inbox",
+      sourceType: "chat_bot",
     },
-    "telegram with chat_title"
+    "stream event carries its catalog slug for the catalog to name"
   );
 
-  assertEqual(
-    getTaskSource({ channel_origin: { type: "telegram", chat_id: "123" } }),
-    { kind: "telegram", label: "Telegram", detail: "123", channel: "telegram" },
-    "telegram falls back to chat_id"
-  );
-
+  // Provider-specific parameters are not read: which providers exist is the
+  // catalog's business, and only source_type points into it.
   assertEqual(
     getTaskSource({
-      channel_origin: { type: "email", from: "user@example.com" },
+      channel_origin: { type: "chat_bot", chat_id: "1" },
+      webhook_type: "repo_host",
     }),
-    {
-      kind: "email",
-      label: "Email",
-      detail: "user@example.com",
-      channel: "email",
-    },
-    "email with from"
-  );
-
-  assertEqual(
-    getTaskSource({
-      channel_origin: { type: "slack", channel_name: "#general" },
-    }),
-    { kind: "slack", label: "Slack", detail: "#general", channel: "slack" },
-    "slack with channel_name"
-  );
-
-  assertEqual(
-    getTaskSource({
-      channel_origin: { type: "discord", channel_name: "general" },
-    }),
-    {
-      kind: "discord",
-      label: "Discord",
-      detail: "general",
-      channel: "discord",
-    },
-    "discord channel"
-  );
-
-  assertEqual(
-    getTaskSource({ channel_origin: { type: "whatsapp" } }),
-    { kind: "channel", label: "whatsapp", channel: "whatsapp" },
-    "unknown channel falls through"
+    { kind: "manual", label: "Manual" },
+    "channel_origin and webhook_type name nothing"
   );
 
   // The key the delegation activity actually writes. This test used to supply
@@ -118,39 +81,8 @@ describe("getTaskSource", () => {
 
   assertEqual(
     getTaskSource({ trigger_type: "cron", trigger_name: "Daily summary" }),
-    {
-      kind: "schedule",
-      label: "Scheduled",
-      detail: "Daily summary",
-      channel: "cron",
-    },
+    { kind: "schedule", label: "Scheduled", detail: "Daily summary" },
     "cron trigger"
-  );
-
-  assertEqual(
-    getTaskSource({ trigger_type: "webhook", trigger_name: "GitHub PR" }),
-    {
-      kind: "webhook",
-      label: "Webhook",
-      detail: "GitHub PR",
-      channel: undefined,
-    },
-    "webhook trigger"
-  );
-
-  assertEqual(
-    getTaskSource({
-      trigger_type: "webhook",
-      trigger_name: "PR opened",
-      webhook_type: "github",
-    }),
-    {
-      kind: "webhook",
-      label: "Webhook",
-      detail: "PR opened",
-      channel: "github",
-    },
-    "webhook carries its channel for the catalog to name"
   );
 
   assertEqual(
@@ -178,28 +110,17 @@ describe("getTaskSource", () => {
 
   assertEqual(
     getTaskSource({
-      trigger_type: "webhook",
-      trigger_name: "GitHub PR",
-      webhook_type: "github",
+      trigger_type: "stream",
+      trigger_name: "Support inbox",
+      source_type: "chat_bot",
       fired_by: "user-42",
     }),
     {
       kind: "manual_run",
       label: "Manual run",
-      detail: "GitHub PR",
+      detail: "Support inbox",
       principalId: "user-42",
     },
-    "manual run of a webhook trigger drops the channel it did not come from"
-  );
-
-  // channel_origin takes priority over trigger_*
-  assertEqual(
-    getTaskSource({
-      channel_origin: { type: "telegram", chat_id: "1" },
-      trigger_type: "webhook",
-      trigger_name: "X",
-    }),
-    { kind: "telegram", label: "Telegram", detail: "1", channel: "telegram" },
-    "channel_origin wins over trigger"
+    "manual run of a stream trigger drops the source it did not come from"
   );
 });

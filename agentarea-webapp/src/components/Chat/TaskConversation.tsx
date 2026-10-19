@@ -9,8 +9,9 @@ import {
 import ActivityGroup from "@/components/Chat/ActivityGroup";
 import {
   buildActivitySegments,
-  lastVisibleAssistantContent,
   shouldRenderConversationFallback,
+  transcriptShowsTerminalMessage,
+  withoutRunInput,
 } from "@/components/Chat/activityView";
 import { ChatInputArea } from "@/components/Chat/componets/ChatInputArea";
 import { UserMessage as UserMessageComponent } from "@/components/Chat/componets/UserMessage";
@@ -56,7 +57,8 @@ export type TaskConversationTask = Pick<TaskWithAgent, "id" | "agent_id"> &
 export interface TaskConversationActivity {
   parts: Part[];
   streamStatus: string;
-  executionStatus: "running" | "waiting" | "finished";
+  /** Null until the event history has told what the run is doing. */
+  executionStatus: "running" | "waiting" | "finished" | null;
   activitySummary: ReturnType<typeof buildActivitySummary>;
   terminalMessage: string | null;
   eventsLoading: boolean;
@@ -98,6 +100,7 @@ export function TaskConversation({
     [task.agent_id, task.id, workspaceSlug]
   );
   const t = useTranslations("Chat.errors");
+  const tc = useTranslations("Chat.conversation");
   const [chatInput, setChatInput] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
@@ -139,22 +142,24 @@ export function TaskConversation({
     [parts]
   );
   const activitySegments = useMemo(
-    () => buildActivitySegments(parts, completedRuns),
-    [completedRuns, parts]
+    () =>
+      buildActivitySegments(
+        task.description ? withoutRunInput(parts) : parts,
+        completedRuns
+      ),
+    [completedRuns, parts, task.description]
   );
   const historyReady = !eventsLoading && !eventsError;
-  const status =
-    historyReady && (parts.length > 0 || timeline.length > 0)
-      ? streamStatus
-      : currentStatus || task.status || "";
+  const streamKnown = historyReady && (parts.length > 0 || timeline.length > 0);
+  const status = streamKnown ? streamStatus : currentStatus || task.status || "";
   const isActive =
     QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
-  const lastAssistantText = lastVisibleAssistantContent(activitySegments);
+  const agentName = task.agent_name || tc("agentFallback");
   const terminalKind = getTaskStatusPresentation(streamStatus).kind;
   const showTerminalMessage =
     streamStatus !== "completed" &&
     !!terminalMessage &&
-    terminalMessage.trim() !== (lastAssistantText ?? "");
+    !transcriptShowsTerminalMessage(activitySegments, terminalMessage);
   const { messagesContainerRef, messagesEndRef, handleScroll } =
     useScrollManagement({
       messagesCount: parts.length + (terminalMessage ? 1 : 0),
@@ -164,7 +169,7 @@ export function TaskConversation({
     onActivityChange?.({
       parts,
       streamStatus: status,
-      executionStatus,
+      executionStatus: streamKnown ? executionStatus : null,
       activitySummary,
       terminalMessage,
       eventsLoading,
@@ -178,6 +183,7 @@ export function TaskConversation({
     onActivityChange,
     parts,
     status,
+    streamKnown,
     terminalMessage,
   ]);
 
@@ -284,16 +290,19 @@ export function TaskConversation({
           {eventsError && !parts.length ? (
             <div className="py-6">
               <EmptyState
-                title="Error Loading Conversation"
+                title={t("errorLoadingConversation")}
                 description={eventsError}
                 iconsType="tasks"
-                additionAction={{ label: "Try Again", onClick: refreshEvents }}
+                additionAction={{
+                  label: tc("tryAgain"),
+                  onClick: refreshEvents,
+                }}
               />
             </div>
           ) : eventsLoading && !parts.length ? (
             <div
               className="space-y-4 py-2"
-              aria-label="Loading conversation history"
+              aria-label={tc("loadingHistory")}
               role="status"
             >
               {Array.from({ length: 5 }).map((_, index) => (
@@ -319,7 +328,7 @@ export function TaskConversation({
             >
               <span>{eventsError}</span>
               <Button size="xs" variant="ghost" onClick={refreshEvents}>
-                Try again
+                {tc("tryAgain")}
               </Button>
             </div>
           )}
@@ -332,6 +341,7 @@ export function TaskConversation({
                 onFormSubmit={handleFormSubmit}
                 isInteractionClosed={isInteractionClosed}
                 onA2UIAction={dispatchA2UIAction}
+                paused={streamStatus === "paused"}
               />
             ) : (
               <PartRenderer
@@ -354,7 +364,7 @@ export function TaskConversation({
             !terminalMessage &&
             !fallback && (
               <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-                No execution events yet.
+                {tc("noExecutionEvents")}
               </div>
             )}
           {!eventsError &&
@@ -407,14 +417,14 @@ export function TaskConversation({
                 isSubmitDisabled={!historyReady}
                 placeholder={
                   isActive
-                    ? `Message ${task.agent_name || "agent"}...`
-                    : `Send a follow-up to ${task.agent_name || "agent"}...`
+                    ? tc("messagePlaceholder", { agent: agentName })
+                    : tc("followUpPlaceholder", { agent: agentName })
                 }
                 selectedFiles={selectedFiles}
                 onRemoveFile={removeFile}
                 onOpenFileDialog={openFileDialog}
                 onFileSelect={handleFileSelect}
-                attachmentNotice={`Files will be sent in a new task with ${task.agent_name || "agent"}.`}
+                attachmentNotice={tc("attachmentNotice", { agent: agentName })}
                 fileInputRef={fileInputRef}
                 textareaRef={textareaRef}
                 variant="centered"
@@ -431,9 +441,7 @@ export function TaskConversation({
                   role="status"
                   className="px-1 pt-1.5 text-[11px] leading-4 text-muted-foreground"
                 >
-                  {eventsError
-                    ? "Conversation history is unavailable. Retry loading before sending."
-                    : "Loading conversation history. You can start writing; sending will be available when it finishes."}
+                  {eventsError ? tc("historyUnavailable") : tc("historyLoading")}
                 </p>
               )}
             </div>

@@ -15,7 +15,7 @@ from agentarea_llm.infrastructure.model_clients import (
     ModelCallError,
     ModelProviderUnavailableError,
 )
-from agentarea_triggers.domain.models import ConditionVerdict, WebhookTrigger
+from agentarea_triggers.domain.models import ConditionVerdict, StreamTrigger
 from agentarea_triggers.failures import TaskNotStartedError, is_permanent, is_transient
 from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
 from agentarea_triggers.logging_utils import TriggerConditionError
@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from temporalio.service import RPCError, RPCStatusCode
 
 
-def _service(trigger: WebhookTrigger) -> TriggerService:
+def _service(trigger: StreamTrigger) -> TriggerService:
     service = TriggerService(repository_factory=MagicMock(), event_broker=AsyncMock())
     service.trigger_repository = AsyncMock()
     service.trigger_repository.get_trigger.return_value = trigger
@@ -35,14 +35,13 @@ def _service(trigger: WebhookTrigger) -> TriggerService:
     return service
 
 
-def _trigger(**overrides) -> WebhookTrigger:
-    return WebhookTrigger(
+def _trigger(**overrides) -> StreamTrigger:
+    return StreamTrigger(
         **{
             "name": "t",
             "agent_id": uuid4(),
             "created_by": "u",
             "workspace_id": "w",
-            "webhook_id": "wh-1234567890abcd",
             "failure_threshold": 1,
             **overrides,
         }

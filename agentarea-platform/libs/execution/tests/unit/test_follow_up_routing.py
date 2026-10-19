@@ -16,7 +16,7 @@ from agentarea_tasks.domain.models import AgentTask, Task
 
 
 def _make_agent_task(agent_id, chat_id, query="hello"):
-    """Create a AgentTask with channel_origin."""
+    """Create an AgentTask in a continued session."""
     return AgentTask(
         title="Test",
         description=query,
@@ -25,7 +25,8 @@ def _make_agent_task(agent_id, chat_id, query="hello"):
         workspace_id="ws-1",
         agent_id=agent_id,
         task_parameters={
-            "channel_origin": {"type": "telegram", "chat_id": str(chat_id)},
+            "trigger_id": "trg-1",
+            "session": {"key": str(chat_id), "continue": True},
         },
     )
 
@@ -38,7 +39,7 @@ def _make_domain_task(agent_id, chat_id, status="running", execution_id=None):
         id=task_id,
         agent_id=agent_id,
         description="previous task",
-        parameters={"channel_origin": {"type": "telegram", "chat_id": str(chat_id)}},
+        parameters={"trigger_id": "trg-1", "session": {"key": str(chat_id), "continue": True}},
         status=status,
         execution_id=execution_id or f"task-{task_id}",
         user_id="user-1",
@@ -58,7 +59,7 @@ def _make_task_service(
     # Mock repository factory
     repo_factory = MagicMock()
     task_repo = AsyncMock()
-    task_repo.find_active_by_agent_and_chat = AsyncMock(return_value=candidates or [])
+    task_repo.find_active_in_session = AsyncMock(return_value=candidates or [])
     repo_factory.create_repository = MagicMock(return_value=task_repo)
 
     # Mock event broker
@@ -134,7 +135,7 @@ class TestRouteOrSubmitTask:
         task = _make_agent_task(agent_id, "99999", query="first message")
         await service.route_or_submit_task(task)
 
-        task_repo.find_active_by_agent_and_chat.assert_called_once()
+        task_repo.find_active_in_session.assert_called_once()
         task_manager.submit_task.assert_called_once()
 
     @pytest.mark.asyncio
@@ -168,13 +169,13 @@ class TestRouteOrSubmitTask:
         task = _make_agent_task(agent_id, "222", query="hello")
         await service.route_or_submit_task(task)
 
-        task_repo.find_active_by_agent_and_chat.assert_called_once_with(agent_id, "222")
+        task_repo.find_active_in_session.assert_called_once_with(agent_id, "trg-1", "222")
         task_manager.temporal_executor.send_workflow_command.assert_not_called()
         task_manager.submit_task.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_no_channel_origin_skips_routing(self):
-        """Tasks without channel_origin go straight to submit_task."""
+    async def test_no_session_skips_routing(self):
+        """Tasks without a session go straight to submit_task."""
         agent_id = uuid4()
 
         service, task_manager, task_repo = _make_task_service()
@@ -186,12 +187,24 @@ class TestRouteOrSubmitTask:
             user_id="user-1",
             workspace_id="ws-1",
             agent_id=agent_id,
-            task_parameters={},  # No channel_origin
+            task_parameters={},
         )
         await service.route_or_submit_task(task)
 
         # Should not even query for candidates
-        task_repo.find_active_by_agent_and_chat.assert_not_called()
+        task_repo.find_active_in_session.assert_not_called()
+        task_manager.submit_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_a_session_that_does_not_continue_starts_its_own_task(self):
+        agent_id = uuid4()
+        service, task_manager, task_repo = _make_task_service()
+        task = _make_agent_task(agent_id, "12345")
+        task.task_parameters["session"]["continue"] = False
+
+        await service.route_or_submit_task(task)
+
+        task_repo.find_active_in_session.assert_not_called()
         task_manager.submit_task.assert_called_once()
 
     @pytest.mark.asyncio
@@ -205,5 +218,5 @@ class TestRouteOrSubmitTask:
         task = _make_agent_task(agent_id, "12345", query="hello")
         await service.route_or_submit_task(task)
 
-        task_repo.find_active_by_agent_and_chat.assert_not_called()
+        task_repo.find_active_in_session.assert_not_called()
         task_manager.submit_task.assert_called_once()

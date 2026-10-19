@@ -10,7 +10,7 @@ from uuid import UUID
 
 
 class S3LogBodyStore:
-    """Bodies as UTF-8 text objects, one per log row, keyed by the row's event id."""
+    """Bodies as UTF-8 text objects, keyed by the row's event id and the part they hold."""
 
     def __init__(self, client: Any, bucket: str):
         self._client = client
@@ -22,8 +22,11 @@ class S3LogBodyStore:
 
         return cls(get_s3_client(), get_aws_settings().BUCKET)
 
-    async def put(self, workspace_id: str, task_id: UUID, event_id: UUID, body: str) -> str:
-        ref = f"tasks/{workspace_id}/{task_id}/log/{event_id}.txt"
+    async def put(
+        self, workspace_id: str, task_id: UUID, event_id: UUID, body: str, *, part: str = "content"
+    ) -> str:
+        name = event_id if part == "content" else f"{event_id}.{part}"
+        ref = f"tasks/{workspace_id}/{task_id}/log/{name}.txt"
         await asyncio.to_thread(
             self._client.put_object,
             Bucket=self._bucket,

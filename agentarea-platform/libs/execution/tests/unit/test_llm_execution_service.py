@@ -755,8 +755,25 @@ def activity_boundary(monkeypatch):
     from agentarea_execution.activities import agent_execution_activities as activities
     from agentarea_execution.activities import dependencies
 
+    from agentarea_execution.activities.agent import llm as llm_activities
+
     # The cached-model route never needs the container's database-backed services.
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", Mock())
+    container = dependencies.ActivityServiceContainer.return_value
+    container._database.async_session_factory.return_value = AsyncMock()
+
+    class _Tasks:
+        def __init__(self, session, user_context):
+            pass
+
+        async def get_task(self, task_id):
+            return SimpleNamespace(id=task_id, agent_id=uuid4())
+
+    async def caps_as_the_run_froze_them(session, user_context, agent_id, run_budget):
+        return run_budget
+
+    monkeypatch.setattr(llm_activities, "TaskRepository", _Tasks)
+    monkeypatch.setattr(llm_activities, "current_budget", caps_as_the_run_froze_them)
     injected = SimpleNamespace(
         settings=SimpleNamespace(app=SimpleNamespace(local_host="127.0.0.1")),
         secret_manager_factory=Mock(
@@ -770,7 +787,9 @@ def activity_boundary(monkeypatch):
 
 
 def _activity_request(**overrides):
-    return _request(task_id="task-1", agent_id="agent-1", execution_id="execution-1", **overrides)
+    return _request(
+        task_id=str(uuid4()), agent_id=str(uuid4()), execution_id="execution-1", **overrides
+    )
 
 
 async def test_activity_maps_missing_usage_to_nonretryable_error_once(provider, activity_boundary):
@@ -894,12 +913,9 @@ CAPPED_AGENT = uuid4()
 @pytest.fixture
 def llm_cap_reached(monkeypatch, activity_boundary):
     """Every monthly LLM cap read reports the cap reached; the reads are recorded."""
-    from agentarea_execution.activities import dependencies
     from agentarea_execution.activities.agent import llm as llm_activities
     from agentarea_tasks.model_spend_caps import SpendCapReachedError
 
-    container = dependencies.ActivityServiceContainer.return_value
-    container._database.async_session_factory.return_value = AsyncMock()
     reads: list = []
 
     class _Tasks:

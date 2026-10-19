@@ -146,14 +146,6 @@ async def _deliver(world, data: dict, *, key: str) -> tuple[_Tasks, StreamEvent,
     return tasks, event, result
 
 
-async def test_a_stream_trigger_never_stores_a_webhook_type(world):
-    async with world.raw() as session:
-        stored = await session.scalar(
-            text("SELECT webhook_type FROM triggers WHERE id = :id"), {"id": world.trigger.id}
-        )
-    assert stored is None
-
-
 async def test_the_runs_first_message_carries_the_order_that_fired_it(world):
     data = {"order": {"id": "A-1003", "total": "42.00", "currency": "EUR"}}
     tasks, event, result = await _deliver(world, data, key="order-A-1003")

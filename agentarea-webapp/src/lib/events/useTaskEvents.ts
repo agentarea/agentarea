@@ -5,7 +5,13 @@ import { useWorkspaceSlug } from "@/hooks/useWorkspaceNavigation";
 import { apiErrorMessage, type ApiResultLike } from "@/lib/api-errors";
 import { withWorkspaceQuery } from "@/lib/workspaces";
 import type { DisplayEvent, EventLevel } from "@/types/events";
-import { canonicalType, EventInput, Part, TERMINAL_TYPES } from "./contract";
+import {
+  canonicalType,
+  EventInput,
+  LIVE_ONLY_TYPES,
+  Part,
+  TERMINAL_TYPES,
+} from "./contract";
 import { loadAllTaskEventPages, TaskEventsHistoryError } from "./history";
 import {
   eventTimestamp,
@@ -176,12 +182,17 @@ export function useTaskEvents(
       if (id) {
         if (seenIds.current.has(id)) return false;
         seenIds.current.add(id);
-        lastIdRef.current = id;
       }
+      // A stream opened again resumes after the last log position folded in.
+      if (typeof data.seq === "number") lastIdRef.current = String(data.seq);
       const next = applyEvent(stateRef.current, event);
       stateRef.current = next;
       setState(next);
-      pushRaw(event.eventType, data);
+      // The raw log is the task's record: live-only signals are never in its
+      // history, so they stay out of it live too.
+      if (!LIVE_ONLY_TYPES.has(canonicalType(event.eventType))) {
+        pushRaw(event.eventType, data);
+      }
       return true;
     },
     [pushRaw]
@@ -299,8 +310,10 @@ export function useTaskEvents(
         // while its event is still only in a local `next` would strand it if
         // this loop threw: applied nowhere, yet skipped forever after.
         const foldedIds: string[] = [];
+        let lastSeq: number | null = null;
         for (const event of historyEvents) {
           const input = normalizeHistory(event);
+          if (typeof input.data.seq === "number") lastSeq = input.data.seq;
           if (isControl(input.eventType)) continue;
           const id = eventIdOf(input.data as RawData);
           if (id) {
@@ -313,9 +326,7 @@ export function useTaskEvents(
           );
         }
         for (const id of foldedIds) seenIds.current.add(id);
-        if (foldedIds.length > 0) {
-          lastIdRef.current = foldedIds[foldedIds.length - 1];
-        }
+        if (lastSeq !== null) lastIdRef.current = String(lastSeq);
         stateRef.current = next;
         rawRef.current = rows;
         rawCountRef.current = rows.length;

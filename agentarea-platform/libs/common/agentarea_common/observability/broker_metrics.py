@@ -75,7 +75,7 @@ def _families() -> tuple[GaugeMetricFamily, ...]:
         ),
         GaugeMetricFamily(
             "agentarea_broker_group_oldest_pending_seconds",
-            "Longest time a pending entry of the consumer group has waited since delivery.",
+            "Age of the oldest entry the consumer group holds pending; a redelivery does not reset it.",
             labels=_GROUP_LABELS,
         ),
         GaugeMetricFamily(
@@ -132,7 +132,7 @@ class BrokerHealthCollector(Collector):
             labels = [group.route.stream, group.route.group]
             lag.add_metric(labels, group.info.lag)
             pending.add_metric(labels, group.pending.count)
-            oldest.add_metric(labels, (group.pending.oldest_idle_ms or 0) / 1000)
+            oldest.add_metric(labels, (group.pending.oldest_age_ms or 0) / 1000)
         for stream, length in health.dead_letters.items():
             dlq.add_metric([stream], length)
         up.add_metric([], 1)
@@ -169,7 +169,7 @@ def start_broker_health_metrics(
     broker = RedisStreamsBroker(settings.broker.REDIS_URL, namespace=settings.streams.NAMESPACE)
     collector = BrokerHealthCollector(
         broker,
-        configured_routes(settings.channel_delivery, settings.streams),
+        configured_routes(settings.streams),
         asyncio.get_running_loop(),
         timeout_seconds=SCRAPE_TIMEOUT_SECONDS,
     )

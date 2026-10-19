@@ -4,6 +4,7 @@ import type { MouseEventHandler } from "react";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { Check, X } from "lucide-react";
 import { InboxEmptyState } from "@/app/w/[workspace]/(main)/inbox/components/InboxEmptyState";
+import { inboxResultPreview } from "@/app/w/[workspace]/(main)/inbox/components/inboxResult";
 import {
   formatRelative,
   isPending,
@@ -63,7 +64,7 @@ export function InboxTaskList({
           ? t("row.request", { tool: task.escalation_tool_name })
           : pending
             ? t("row.waiting")
-            : t(resultPreviewKey(task));
+            : t(inboxResultPreview(status, task));
 
         // Same row as the Skills list: the shared InteractiveListRow with its
         // own dividers, hover hatch and indicator, not a restyled card.
@@ -181,12 +182,4 @@ function ActionIcon({
       <Icon />
     </Button>
   );
-}
-
-function resultPreviewKey(
-  task: InboxTask
-): "row.resultAvailable" | "row.taskFailed" | "row.taskActivity" {
-  if (task.result) return "row.resultAvailable";
-  if (task.error || task.failure_reason) return "row.taskFailed";
-  return "row.taskActivity";
 }

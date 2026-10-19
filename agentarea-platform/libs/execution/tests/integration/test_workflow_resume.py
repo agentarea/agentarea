@@ -247,13 +247,17 @@ async def test_follow_up_after_close_continues_the_same_conversation():
                 snapshot = closing.conversation_resume
                 assert snapshot is not None
                 assert closing.total_cost is not None
-                assert [_log[seq].role for seq in sorted(_log)] == [
+                first_messages = [_log[seq] for seq in sorted(_log) if _log[seq].kind != "event"]
+                assert [entry.role for entry in first_messages] == [
                     "system",
                     "user",
                     "assistant",
                     "tool",
                 ]
-                assert snapshot.next_seq == len(_log)
+                # Only the run's closing events follow the snapshot; the task
+                # service resumes the conversation after them.
+                assert all(_log[seq].kind == "event" for seq in _log if seq >= snapshot.next_seq)
+                snapshot = snapshot.model_copy(update={"next_seq": len(_log)})
                 assert snapshot.current_iteration == 1
 
                 resumed = await _start(
@@ -278,15 +282,16 @@ async def test_follow_up_after_close_continues_the_same_conversation():
     first_window, resumed_window = _model_windows
     assert resumed_window == [
         *first_window,
-        _log[2].as_message(),
-        _log[3].as_message(),
+        first_messages[2].as_message(),
+        first_messages[3].as_message(),
         {"role": "user", "content": "What was the number?"},
     ]
     assert resumed_window[2]["tool_calls"][0]["id"] == resumed_window[3]["tool_call_id"]
     assert result.reasoning_iterations_used == 2
     assert _status_requests[-1].total_cost == Decimal("0.02")
-    assert _status_requests[-1].conversation_resume is not None
-    assert _status_requests[-1].conversation_resume.next_seq == len(_log)
+    resumed_snapshot = _status_requests[-1].conversation_resume
+    assert resumed_snapshot is not None
+    assert all(_log[seq].kind == "event" for seq in _log if seq >= resumed_snapshot.next_seq)
     await _replay(first_history)
     await _replay(resumed_history)
 
@@ -367,7 +372,8 @@ async def test_task_older_than_the_log_resumes_with_a_fresh_system_prompt():
     ]
     # The fresh system prompt is the log's first system row, which the window leads with.
     assert _status_requests[-1].conversation_resume is not None
-    assert [entry.seq for entry in _log.values() if entry.role == "system"] == [2]
+    written = [entry for seq, entry in sorted(_log.items()) if seq > 1 and entry.kind != "event"]
+    assert [entry.seq for entry in _log.values() if entry.role == "system"] == [written[0].seq]
 
 
 @pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)

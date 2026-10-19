@@ -109,3 +109,74 @@ def test_continuation_requires_a_persistable_policy_revision():
     }
     assert instance.state.goal.max_iterations == 3
     assert instance._waiting_for_continuation is True
+
+
+@pytest.mark.asyncio
+async def test_concurrent_continuation_grants_apply_only_the_first(monkeypatch):
+    import asyncio
+
+    from agentarea_execution.models import UpdateTaskGovernanceSnapshotResult
+    from temporalio import workflow
+
+    instance = _workflow()
+    instance._waiting_for_continuation = True
+    instance._continuation_failure_reason = "iteration_limit"
+    persisted = asyncio.Event()
+    calls: list[dict] = []
+
+    async def execute_activity(_name, *, args, **_kwargs):
+        calls.append(args[0].governance_snapshot)
+        await persisted.wait()
+        return UpdateTaskGovernanceSnapshotResult(success=True)
+
+    monkeypatch.setattr(workflow, "patched", lambda _patch_id: True)
+    monkeypatch.setattr(workflow, "execute_activity", execute_activity)
+
+    def grant(extra: int) -> dict:
+        policy = _policy(max_model_turns=3 + extra, run_budget_usd="1.00")
+        return {
+            "additional_iterations": extra,
+            "effective_policy": policy,
+            "governance_snapshot": {"effective_policy": policy, "revision": 2},
+        }
+
+    first = asyncio.ensure_future(instance.continue_execution(grant(3)))
+    await asyncio.sleep(0)
+    second = await instance.continue_execution(grant(1))
+    third = await instance.continue_execution(grant(2))
+    persisted.set()
+    accepted = await first
+
+    assert accepted["accepted"] is True
+    assert second == {"accepted": False, "reason": "not_waiting_for_continuation"}
+    assert third == {"accepted": False, "reason": "not_waiting_for_continuation"}
+    assert len(calls) == 1
+    assert instance.state.goal.max_iterations == 6
+    assert instance._continuation_count == 1
+
+
+@pytest.mark.parametrize(
+    ("ceilings", "fixed"),
+    [
+        ({"iteration_limit": "3"}, True),
+        ({"iteration_limit": "10"}, False),
+        ({}, False),
+    ],
+)
+def test_a_limit_a_policy_already_sets_at_its_ceiling_is_not_waited_on(ceilings, fixed):
+    instance = _workflow()
+    instance._workflow_metadata = {"governance_snapshot": {"limit_ceilings": ceilings}}
+
+    assert instance._limit_at_policy_ceiling("iteration_limit") is fixed
+
+
+def test_the_message_of_a_limit_fixed_by_policy_says_it_cannot_be_raised():
+    instance = _workflow()
+    instance._policy_fixed_limit = "iteration_limit"
+
+    message = instance._termination_message("iteration_limit", "Maximum iterations reached (3)")
+
+    assert message.startswith("Maximum iterations reached (3). A workspace")
+    assert instance._termination_message("token_limit", "Token budget exhausted") == (
+        "Token budget exhausted"
+    )

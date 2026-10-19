@@ -3,30 +3,38 @@
 import asyncio
 import os
 import uuid
+from datetime import timedelta
 
 import pytest
 from agentarea_api.cli import cli
 from agentarea_common.broker import RedisStreamsBroker
+from agentarea_common.broker.topics import INGEST_GROUP, STREAMS_INGEST, dead_letter_topic
 from click.testing import CliRunner
 
 REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
 
 
+# A namespace per run keeps the fixed topic names of one run apart from another's.
+NAMESPACE = f"test-cli-replay-{uuid.uuid4().hex[:12]}"
+
+
 @pytest.fixture()
 def channel(monkeypatch) -> tuple[str, str]:
-    stream = f"test:cli-replay:{uuid.uuid4()}"
     monkeypatch.setenv("AGENTAREA_BROKER", "redis")
     monkeypatch.setenv("AGENTAREA_REDIS_URL", REDIS_URL)
-    monkeypatch.setenv("AGENTAREA_EVENT_NAMESPACE", "test")
-    monkeypatch.setenv("AGENTAREA_CHANNEL_OUT_STREAM", stream)
-    monkeypatch.setenv("AGENTAREA_CHANNEL_OUT_DLQ", f"{stream}.dlq")
-    return stream, f"{stream}.dlq"
+    monkeypatch.setenv("AGENTAREA_EVENT_NAMESPACE", NAMESPACE)
+    return STREAMS_INGEST, dead_letter_topic(STREAMS_INGEST, INGEST_GROUP)
 
 
 async def _seed(dlq: str) -> list[str]:
-    broker = RedisStreamsBroker(REDIS_URL, namespace="test")
+    broker = RedisStreamsBroker(REDIS_URL, namespace=NAMESPACE)
     try:
-        return [await broker.submit(dlq, {"n": str(n), "fatal_reason": "boom"}) for n in range(3)]
+        return [
+            await broker.submit(
+                dlq, {"n": str(n), "fatal_reason": "boom"}, retention=timedelta(hours=1)
+            )
+            for n in range(3)
+        ]
     except Exception as exc:  # noqa: BLE001
         pytest.skip(f"Redis not reachable: {exc}")
     finally:
@@ -34,7 +42,7 @@ async def _seed(dlq: str) -> list[str]:
 
 
 async def _fields(stream: str) -> list[dict[str, str]]:
-    broker = RedisStreamsBroker(REDIS_URL, namespace="test")
+    broker = RedisStreamsBroker(REDIS_URL, namespace=NAMESPACE)
     try:
         return [m.fields for m in await broker.read_range(stream)]
     finally:

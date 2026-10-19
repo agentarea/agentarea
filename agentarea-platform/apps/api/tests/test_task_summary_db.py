@@ -22,6 +22,7 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.base import get_read_repository_factory
 from agentarea_common.base.repository_factory import RepositoryFactory
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from agentarea_tasks.infrastructure.orm import TaskORM
@@ -166,7 +167,8 @@ async def test_a_finished_run_reports_its_times_answer_error_and_current_spend(
         "started_at": "2026-10-07T12:00:00Z",
         "ended_at": "2026-10-07T12:01:30.500000Z",
         "duration_ms": 90500.0,
-        "cost_usd": 0.65,
+        "cost": 0.65,
+        "currency": get_customer_pricing().currency(),
         "final_response": "Half of the notes are written.",
         "last_error": "Model quota exceeded",
     }
@@ -181,7 +183,7 @@ async def test_a_run_not_yet_ended_has_no_end_or_duration(session, client, works
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert (body["ended_at"], body["duration_ms"], body["cost_usd"]) == (None, None, 0.0)
+    assert (body["ended_at"], body["duration_ms"], body["cost"]) == (None, None, 0.0)
     assert (body["final_response"], body["last_error"]) == (None, None)
 
 

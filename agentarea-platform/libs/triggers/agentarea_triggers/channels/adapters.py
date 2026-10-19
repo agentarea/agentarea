@@ -1,13 +1,9 @@
-"""Composable channel adapter factories.
+"""The reply senders, keyed by the name a delivery address or target gives (ADR-0040 §5).
 
-Instead of one class per channel, adapters are assembled from:
-  - A formatter: (event, presentation) → str
-  - A sender:    (channel_config, message) → None
-
-Formatters are built from a markdown flavor config.
-Senders are built from HTTP endpoint config.
-Channels that need truly custom logic (Email/SMTP, Telegram retry)
-provide their own functions and compose normally.
+``http`` is the generic sender a catalog entry's ``reply`` block describes.
+What takes more than one request stays here: the live Telegram message edited in
+place (``telegram_live``), SMTP (``smtp``), and our own protocols, A2A push
+notifications (``a2a_webhook``) and the task webhook (``task_webhook``).
 """
 
 from __future__ import annotations
@@ -15,21 +11,13 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import httpx
 from agentarea_common.events.contract import (
-    APPROVAL_DECIDED,
-    APPROVAL_REQUESTED,
-    COMMAND_RECEIVED,
-    DELEGATION_COMPLETED,
-    DELEGATION_STARTED,
     TASK_CANCELLED,
     TASK_COMPLETED,
     TASK_FAILED,
-    TASK_STARTED,
-    TOOL_CALL,
     canonical_type,
 )
 from agentarea_common.outbound import Destination, outbound_client
@@ -37,6 +25,9 @@ from agentarea_common.outbound import Destination, outbound_client
 from . import register_adapter
 from .email import create_email_adapter
 from .exceptions import FatalError, RetryableError
+from .http_reply import HttpReplyAdapter, raise_for_reply, reply_of
+from .markup import format_event, markup, strip_markup
+from .source_credentials import CredentialReader, credentials_of
 
 if TYPE_CHECKING:
     from .secret_reader import SecretReader
@@ -44,314 +35,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# ── Markdown flavors ──────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class MarkdownFlavor:
-    """How to render bold/italic/quote + emoji map."""
-
-    bold: tuple[str, str]  # (open, close) e.g. ("*", "*") or ("**", "**")
-    italic: tuple[str, str]
-    quote: str  # line prefix for quotes
-    emojis: dict[str, str]  # logical name → rendered emoji
-    escape: Callable[[str], str] | None = None  # optional text escaper
-
-
-SLACK_EMOJIS = {
-    "check": ":white_check_mark:",
-    "cross": ":x:",
-    "stop": ":no_entry_sign:",
-    "question": ":question:",
-    "hourglass": ":hourglass_flowing_sand:",
-    "wrench": ":wrench:",
-    "robot": ":robot_face:",
-    "info": ":information_source:",
-}
-
-UNICODE_EMOJIS = {
-    "check": "\u2705",
-    "cross": "\u274c",
-    "stop": "\u26d4",
-    "question": "\u2753",
-    "hourglass": "\u23f3",
-    "wrench": "\U0001f527",
-    "robot": "\U0001f916",
-    "info": "\u2139\ufe0f",
-}
-
-
-def _telegram_escape(text: str) -> str:
-    """Escape special chars for Telegram MarkdownV2."""
-    special = r"_*[]()~`>#+-=|{}.!\\"
-    return "".join("\\" + c if c in special else c for c in text)
-
-
-SLACK_MD = MarkdownFlavor(
-    bold=("*", "*"),
-    italic=("_", "_"),
-    quote=">",
-    emojis=SLACK_EMOJIS,
-)
-
-DISCORD_MD = MarkdownFlavor(
-    bold=("**", "**"),
-    italic=("*", "*"),
-    quote="> ",
-    emojis=UNICODE_EMOJIS,
-)
-
-TELEGRAM_MD = MarkdownFlavor(
-    bold=("*", "*"),
-    italic=("_", "_"),
-    quote=">",
-    emojis=UNICODE_EMOJIS,
-    escape=_telegram_escape,
-)
-
-
-# ── Formatter factory ─────────────────────────────────────────────
-
-
-def make_formatter(flavor: MarkdownFlavor) -> Callable[[dict[str, Any], str], str]:
-    """Build a format(event, presentation) function from a markdown flavor."""
-    b0, b1 = flavor.bold
-    i0, i1 = flavor.italic
-    e = flavor.emojis
-    esc = flavor.escape or (lambda t: t)
-
-    def fmt(event: dict[str, Any], presentation: str) -> str:
-        raw_et = event.get("event_type", "")
-        et = canonical_type(raw_et)
-        d = event.get("data", {})
-
-        if et == TASK_COMPLETED:
-            return esc(str(d.get("result") or d.get("final_response") or ""))
-        if et == TASK_FAILED:
-            return f"{e['cross']} {b0}Failed{b1} \u2014 {esc(str(d.get('error', 'Unknown error')))}"
-        if et == TASK_CANCELLED:
-            return f"{e['stop']} {esc('Task was cancelled.')}"
-        if et == APPROVAL_REQUESTED:
-            q = esc(str(d.get("question", "Approval needed")))
-            return f"{e['question']} {b0}Needs your input:{b1}\n{flavor.quote}{q}"
-        if et == APPROVAL_DECIDED:
-            approved = d.get("approved")
-            if approved is True:
-                return f"{e['check']} {esc('Approved, continuing...')}"
-            if approved is False:
-                comment = d.get("comment")
-                reason = f" \u2014 {esc(str(comment))}" if comment else ""
-                return f"{e['stop']} {b0}Denied{b1}{reason}"
-            return f"{e['info']} {esc('Approval resolved.')}"
-
-        if presentation == "concise":
-            if et in (TASK_STARTED, COMMAND_RECEIVED):
-                return f"{e['hourglass']} {esc('Working on it...')}"
-            if et == TOOL_CALL:
-                tool = d.get("tool_name", "tool")
-                return f"{e['wrench']} {esc('Using ')}{i0}{esc(tool)}{i1}{esc('...')}"
-            if et in (DELEGATION_STARTED, DELEGATION_COMPLETED):
-                agent = d.get("agent_name", "sub-agent")
-                action = "Delegating to" if et == DELEGATION_STARTED else "Received from"
-                return f"{e['robot']} {action} {i0}{esc(agent)}{i1}"
-
-        return f"{e['info']} {esc(raw_et)}"
-
-    return fmt
-
-
-# ── HTTP sender factory ───────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class HttpSenderConfig:
-    """Config for building an HTTP-based send function."""
-
-    url: str | Callable[[dict[str, Any], str], str]
-    auth_fmt: str  # "Bearer {token}" or "Bot {token}"
-    build_payload: Callable[[dict[str, Any], str], dict[str, Any]]
-    max_length: int = 3000
-    truncation_suffix: str = "\n\n_(truncated)_"
-    validate_response: Callable[[httpx.Response], bool] = lambda r: r.is_success
-    should_retry_plain: Callable[[httpx.Response], bool] = lambda _r: False
-    build_plain_payload: Callable[[dict[str, Any], str], dict[str, Any]] | None = None
-
-
-def make_http_sender(
-    cfg: HttpSenderConfig,
-    secret_reader: SecretReader,
-) -> Callable[[dict[str, Any], str], Awaitable[None]]:
-    """Build an async send(channel_config, message) function."""
-
-    async def send(channel_config: dict[str, Any], message: str) -> None:
-        token = await _resolve_token(secret_reader, channel_config)
-        if not token:
-            # No credentials = fatal misconfiguration; not retryable.
-            raise FatalError("missing channel credentials")
-
-        if len(message) > cfg.max_length:
-            message = message[: cfg.max_length - len(cfg.truncation_suffix)] + cfg.truncation_suffix
-
-        url = cfg.url(channel_config, token) if callable(cfg.url) else cfg.url
-        payload = cfg.build_payload(channel_config, message)
-        auth = cfg.auth_fmt.format(token=token)
-
-        try:
-            async with outbound_client(Destination.VENDOR, timeout=10.0) as client:
-                resp = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Authorization": auth, "Content-Type": "application/json"},
-                )
-                if (
-                    not cfg.validate_response(resp)
-                    and cfg.build_plain_payload
-                    and cfg.should_retry_plain(resp)
-                ):
-                    plain_payload = cfg.build_plain_payload(channel_config, message)
-                    resp = await client.post(
-                        url,
-                        json=plain_payload,
-                        headers={"Authorization": auth, "Content-Type": "application/json"},
-                    )
-                if not cfg.validate_response(resp):
-                    _raise_for_response(resp)
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as exc:
-            raise RetryableError(f"network: {exc}") from exc
-        except httpx.HTTPError as exc:
-            # Other httpx errors (e.g. protocol issues) — treat as transient.
-            raise RetryableError(f"http error: {exc}") from exc
-
-    return send
-
-
-def _raise_for_response(resp: httpx.Response) -> None:
-    """Classify a non-success HTTP response into RetryableError vs FatalError.
-
-    5xx + 429 = transient (broker should redeliver). 4xx = fatal (auth,
-    blocked user, malformed payload — retrying won't fix it).
-    """
-    status = resp.status_code
-    body = resp.text[:200] if resp.text else ""
-    if status == 429:
-        retry_after_hdr = resp.headers.get("Retry-After")
-        retry_after: float | None = None
-        if retry_after_hdr:
-            try:
-                retry_after = float(retry_after_hdr)
-            except ValueError:
-                retry_after = None
-        raise RetryableError(f"rate limited: {body}", retry_after=retry_after)
-    if 500 <= status < 600:
-        raise RetryableError(f"upstream {status}: {body}")
-    raise FatalError(f"upstream {status}: {body}")
-
-
-def _strip_markdown(text: str) -> str:
-    """Remove lightweight markdown/escape markers for plain-text fallback."""
-    for marker in ("\\", "*", "_", "`"):
-        text = text.replace(marker, "")
-    return text
-
-
-async def _resolve_token(
-    secret_reader: SecretReader,
-    channel_config: dict[str, Any],
-) -> str | None:
-    """Resolve bot token from the secret store. Shared by all HTTP senders.
-
-    Returns None when the credential is genuinely absent or unreadable;
-    `make_http_sender` translates that into `FatalError` so the message
-    DLQs cleanly. We never raise from here because the secret reader is
-    required at boot and a None result means "creds missing" — a
-    classification, not a system failure.
-    """
-    trigger_id = channel_config.get("trigger_id")
-    if not trigger_id:
-        logger.error("No trigger_id in channel_config")
-        return None
-
-    ch_type = channel_config.get("type", "unknown")
-    secret_name = f"channel_cred:{ch_type}:{trigger_id}"
-    raw = await secret_reader.get_secret(secret_name)
-    if not raw:
-        logger.error("Credentials not found for %s trigger %s", ch_type, trigger_id)
-        return None
-
-    try:
-        creds = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        # Stored blob is corrupt — caller will surface as FatalError.
-        logger.exception("Corrupt credentials blob for %s trigger %s: %s", ch_type, trigger_id, exc)
-        return None
-    return creds.get("bot_token")
-
-
-# ── Channel definitions (just config) ─────────────────────────────
-
-SLACK_SENDER = HttpSenderConfig(
-    url="https://slack.com/api/chat.postMessage",
-    auth_fmt="Bearer {token}",
-    build_payload=lambda cfg, msg: {
-        "channel": cfg["channel_id"],
-        "text": msg,
-        "mrkdwn": True,
-        **({"thread_ts": cfg["thread_ts"]} if cfg.get("thread_ts") else {}),
-    },
-    max_length=3000,
-    validate_response=lambda r: r.is_success and r.json().get("ok", False),
-)
-
-DISCORD_SENDER = HttpSenderConfig(
-    url=lambda cfg, _token: f"https://discord.com/api/v10/channels/{cfg['channel_id']}/messages",
-    auth_fmt="Bot {token}",
-    build_payload=lambda cfg, msg: {
-        "content": msg,
-        **(
-            {"message_reference": {"message_id": cfg["message_id"]}}
-            if cfg.get("message_id")
-            else {}
-        ),
-    },
-    max_length=2000,
-)
-
-TELEGRAM_SENDER = HttpSenderConfig(
-    url=lambda _cfg, token: f"https://api.telegram.org/bot{token}/sendMessage",
-    auth_fmt="",  # token is in URL, not header
-    build_payload=lambda cfg, msg: {
-        "chat_id": cfg["chat_id"],
-        "text": msg,
-        "parse_mode": "MarkdownV2",
-        **({"reply_to_message_id": cfg["message_id"]} if cfg.get("message_id") else {}),
-    },
-    max_length=4096,
-    truncation_suffix="\n\n_\\(truncated\\)_",
-    should_retry_plain=lambda r: r.status_code == 400 and "parse" in r.text.lower(),
-    build_plain_payload=lambda cfg, msg: {
-        "chat_id": cfg["chat_id"],
-        "text": _strip_markdown(msg),
-        **({"reply_to_message_id": cfg["message_id"]} if cfg.get("message_id") else {}),
-    },
-)
-
-
-# ── Adapter wrapper ───────────────────────────────────────────────
-
-
 class _ComposedAdapter:
     """Wraps a (formatter, sender) pair into the ChannelAdapter protocol."""
 
     def __init__(
         self,
-        formatter: Callable[[dict[str, Any], str], str],
+        formatter: Callable[[dict[str, Any], str, dict[str, Any]], str],
         sender: Callable[[dict[str, Any], str], Awaitable[None]],
     ):
         self._format = formatter
         self._send = sender
 
-    def format(self, event: dict[str, Any], presentation: str) -> str:
-        return self._format(event, presentation)
+    def format(self, event: dict[str, Any], presentation: str, config: dict[str, Any]) -> str:
+        return self._format(event, presentation, config)
 
     async def send(self, channel_config: dict[str, Any], message: str) -> None:
         await self._send(channel_config, message)
@@ -360,7 +56,7 @@ class _ComposedAdapter:
 # ── A2A push webhook adapter ──────────────────────────────────────
 
 
-def _a2a_webhook_format(event: dict[str, Any], presentation: str) -> str:
+def _a2a_webhook_format(event: dict[str, Any], presentation: str, config: dict[str, Any]) -> str:
     """Format a workflow event as an A2A push-notification body (terminal only)."""
     from agentarea_common.utils.a2a_push import build_push_notification_body
 
@@ -426,7 +122,7 @@ def make_a2a_webhook_adapter(secret_reader: SecretReader) -> _ComposedAdapter:
 # ── Task webhook adapter ──────────────────────────────────────────
 
 
-def _task_webhook_format(event: dict[str, Any], presentation: str) -> str:
+def _task_webhook_format(event: dict[str, Any], presentation: str, config: dict[str, Any]) -> str:
     """Format a terminal task event as the task webhook body (terminal only)."""
     from agentarea_common.utils.task_webhook import build_task_webhook_body
 
@@ -501,62 +197,64 @@ def make_task_webhook_adapter(secret_reader: SecretReader) -> _ComposedAdapter:
     )
 
 
-# ── Registration ──────────────────────────────────────────────────
+# ── Telegram live message ─────────────────────────────────────────
 
 
-def make_telegram_streaming_sender(
-    secret_reader: SecretReader,
+def _telegram_live_format(event: dict[str, Any], presentation: str, config: dict[str, Any]) -> str:
+    return format_event(markup(reply_of(config).markup), event, presentation)
+
+
+def make_telegram_live_sender(
+    credentials: CredentialReader,
     redis_url: str,
 ) -> Callable[[dict[str, Any], str], Awaitable[None]]:
     """Telegram sender that streams progress into ONE live message.
 
-    Instead of a fresh message per workflow event (spammy), the first event
-    sends a message and every later event EDITs it, accumulating a Hermes-style
-    activity feed (⏳ working → 🔧 tool calls → final answer). Per-task state
-    (the live message_id + accumulated lines) lives in Redis keyed by task_id,
-    so it survives across independent delivery jobs and worker restarts.
-
-    Falls back to a plain one-shot send when there is no task_id in the config.
+    The first event of a task sends a message and every later one edits it,
+    accumulating the activity feed; the terminal event replaces the feed with
+    the answer. Per-task state (the message id and the feed) lives in Redis
+    keyed by task id, so it survives redeliveries and worker restarts. The chat
+    and the message to answer come from the address's target; the bot token
+    from the source's credentials.
     """
     import redis.asyncio as aioredis
 
     # redis-py types async command results as ResponseT (Awaitable[T] | T), so a
     # precise annotation makes pyright reject the awaits; keep the client loose.
     _redis: Any = aioredis.from_url(redis_url, decode_responses=True)
-    # Canonical terminal types (the vocabulary events now carry directly).
     _terminal = {TASK_COMPLETED, TASK_FAILED, TASK_CANCELLED}
 
     def _api(token: str, method: str) -> str:
         return f"https://api.telegram.org/bot{token}/{method}"
 
-    async def send(channel_config: dict[str, Any], message: str) -> None:
-        token = await _resolve_token(secret_reader, channel_config)
+    async def send(config: dict[str, Any], message: str) -> None:
+        credential_type, credential_key = credentials_of(config)
+        token = (
+            await credentials(
+                workspace_id=str(config["workspace_id"]),
+                owner=str(config["owner"]),
+                credential_type=credential_type,
+                credential_key=credential_key,
+            )
+        ).get("bot_token")
         if not token:
-            raise FatalError("missing channel credentials")
-
-        chat_id = channel_config.get("chat_id")
-        task_id = channel_config.get("task_id")
-        event_type = canonical_type(channel_config.get("event_type", ""))
+            raise FatalError("the source's credentials have no bot_token")
+        target = config.get("target") or {}
+        chat_id = target.get("chat_id")
+        if chat_id is None:
+            raise FatalError("the delivery address has no chat_id")
+        task_id = config.get("task_id")
+        event_type = canonical_type(config.get("event_type", ""))
+        permanent_errors = reply_of(config).permanent_errors
         line = (message or "").strip()
 
-        key = f"tg:live:{task_id}" if task_id else None
-        feed: list[str] = []
-        msg_id: str | None = None
-        if key:
-            state = await _redis.hgetall(key)
-            if state.get("feed"):
-                try:
-                    feed = json.loads(state["feed"])
-                except json.JSONDecodeError:
-                    feed = []
-            msg_id = state.get("message_id")
+        key = f"tg:live:{task_id}"
+        state = await _redis.hgetall(key)
+        feed: list[str] = json.loads(state["feed"]) if state.get("feed") else []
+        msg_id: str | None = state.get("message_id")
 
-        # Accumulate progress lines while the task runs. On a terminal event,
-        # collapse the whole feed into just the final result — the
-        # "⏳ Working on it..." and tool-call lines were interim status, not
-        # the answer, so we replace them rather than pin them above the result.
         if event_type in _terminal:
-            feed = [line] if line else ["✅ Done"]
+            feed = [line] if line else ["Done"]
         elif line and (not feed or feed[-1] != line):
             feed.append(line)
         text = "\n".join(feed) if feed else line
@@ -573,21 +271,19 @@ def make_telegram_streaming_sender(
                         "text": text,
                         "parse_mode": "MarkdownV2",
                     }
-                    reply_to = channel_config.get("message_id")
+                    reply_to = target.get("message_id")
                     if reply_to:
-                        # allow_sending_without_reply: a stale/deleted message_id
-                        # must never fail the whole delivery.
+                        # A stale or deleted message to answer must not fail the reply.
                         payload["reply_to_message_id"] = reply_to
                         payload["allow_sending_without_reply"] = True
                     resp = await client.post(_api(token, "sendMessage"), json=payload)
                     if resp.status_code == 400 and "parse" in resp.text.lower():
-                        payload["text"] = _strip_markdown(text)
+                        payload["text"] = strip_markup(text)
                         payload.pop("parse_mode", None)
                         resp = await client.post(_api(token, "sendMessage"), json=payload)
-                    if not resp.is_success:
-                        _raise_for_response(resp)
+                    raise_for_reply(resp, permanent_errors)
                     new_id = (resp.json().get("result") or {}).get("message_id")
-                    if key and new_id:
+                    if new_id:
                         await _redis.hset(
                             key, mapping={"message_id": str(new_id), "feed": json.dumps(feed)}
                         )
@@ -602,64 +298,46 @@ def make_telegram_streaming_sender(
                     resp = await client.post(_api(token, "editMessageText"), json=payload)
                     body = resp.text.lower()
                     if resp.status_code == 400 and "not modified" in body:
-                        resp = None  # identical text — nothing to do
+                        resp = None
                     elif resp.status_code == 400 and "parse" in body:
-                        payload["text"] = _strip_markdown(text)
+                        payload["text"] = strip_markup(text)
                         payload.pop("parse_mode", None)
                         resp = await client.post(_api(token, "editMessageText"), json=payload)
-                    if resp is not None and not resp.is_success:
-                        _raise_for_response(resp)
-                    if key:
-                        await _redis.hset(key, mapping={"feed": json.dumps(feed)})
-        except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as exc:
+                    if resp is not None:
+                        raise_for_reply(resp, permanent_errors)
+                    await _redis.hset(key, mapping={"feed": json.dumps(feed)})
+        except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise RetryableError(f"network: {exc}") from exc
         except httpx.HTTPError as exc:
             raise RetryableError(f"http error: {exc}") from exc
 
-        if key and event_type in _terminal:
+        if event_type in _terminal:
             await _redis.delete(key)
 
     return send
 
 
-def register_all_adapters(secret_reader: SecretReader, redis_url: str | None = None) -> None:
-    """Register all HTTP-based channel adapters.
+# ── Registration ──────────────────────────────────────────────────
 
-    `secret_reader` is required — channel delivery without a credential
-    store would silently no-op, which is exactly the bug class this whole
-    pipeline rewrite was built to remove. Missing the dep is a boot
-    failure, not a runtime fallback.
 
-    `redis_url`, when provided, switches Telegram to the streaming
-    edit-in-place sender (one live message per task). Without it Telegram
-    falls back to the plain per-event sender.
+def register_all_adapters(
+    secret_reader: SecretReader, credentials: CredentialReader, redis_url: str
+) -> None:
+    """Register every reply sender under the name addresses and targets give.
+
+    ``credentials`` reads a source's credentials for the senders that answer
+    where an event came from; ``secret_reader`` the per-task secrets of A2A
+    push and task webhooks. Both are required: a sender without its store
+    would drop replies.
     """
-    channels = {
-        "slack": (SLACK_MD, SLACK_SENDER),
-        "discord": (DISCORD_MD, DISCORD_SENDER),
-    }
-    for name, (flavor, sender_cfg) in channels.items():
-        adapter = _ComposedAdapter(
-            formatter=make_formatter(flavor),
-            sender=make_http_sender(sender_cfg, secret_reader),
-        )
-        register_adapter(name, adapter)
-
-    telegram_sender = (
-        make_telegram_streaming_sender(secret_reader, redis_url)
-        if redis_url
-        else make_http_sender(TELEGRAM_SENDER, secret_reader)
-    )
+    register_adapter("http", HttpReplyAdapter(credentials))
     register_adapter(
-        "telegram",
-        _ComposedAdapter(formatter=make_formatter(TELEGRAM_MD), sender=telegram_sender),
+        "telegram_live",
+        _ComposedAdapter(
+            formatter=_telegram_live_format,
+            sender=make_telegram_live_sender(credentials, redis_url),
+        ),
     )
-
-    # A2A push notifications: client-supplied webhooks, delivered as A2A events.
+    create_email_adapter(credentials)
     register_adapter("a2a_webhook", make_a2a_webhook_adapter(secret_reader))
-
-    # Task webhooks: the API caller's own URL, told each turn's end and cost.
     register_adapter("task_webhook", make_task_webhook_adapter(secret_reader))
-
-    # Email replies go over SMTP with the origin trigger's stored credentials.
-    create_email_adapter(secret_reader)

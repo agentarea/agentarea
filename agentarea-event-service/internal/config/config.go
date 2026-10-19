@@ -10,19 +10,40 @@ import (
 
 // Config holds all configuration for the Event Service.
 type Config struct {
-	DatabaseURL           string
-	RedisURL              string
-	WorkerID              string
-	Namespace             string
-	InboundStream         string
-	EnableTelegramPolling bool
-	PollInterval          time.Duration
-	MaxPollers            int
-	Port                  string
-	OTelEnabled           bool
+	DatabaseURL string
+	RedisURL    string
+	WorkerID    string
+	Namespace   string
+	// PollInterval is how often the set of sources is read again; each source
+	// polls at the interval its catalog entry names.
+	PollInterval time.Duration
+	MaxPollers   int
+	Port         string
+	OTelEnabled  bool
+	// APIURL is the public base of the API: a source's webhook URL is
+	// {APIURL}/webhooks/{webhook_id}, the address registration hands a provider.
+	APIURL string
+	// SecretKey is the Fernet key the database secret backend encrypts with.
+	SecretKey string
+	Egress    Egress
 }
 
-const otelEnabledEnv = "AGENTAREA_OTEL_ENABLED"
+// Egress is the outbound policy for hosts a member names (a feed URL, a
+// mailbox): only public addresses unless the operator opens private ones.
+type Egress struct {
+	AllowPrivate     bool
+	PrivateAllowlist []string
+}
+
+const (
+	otelEnabledEnv       = "AGENTAREA_OTEL_ENABLED"
+	apiURLEnv            = "AGENTAREA_API_URL"
+	secretBackendEnv     = "AGENTAREA_SECRET_BACKEND"
+	secretKeyEnv         = "AGENTAREA_SECRET_ENCRYPTION_KEY"
+	allowPrivateEnv      = "AGENTAREA_HTTP_ALLOW_PRIVATE"
+	privateAllowlistEnv  = "AGENTAREA_HTTP_PRIVATE_ALLOWLIST"
+	supportedSecretStore = "database"
+)
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() (*Config, error) {
@@ -54,18 +75,6 @@ func Load() (*Config, error) {
 		namespace = "agentarea"
 	}
 
-	inboundStream := os.Getenv("AGENTAREA_EVENT_STREAM")
-	if inboundStream == "" {
-		inboundStream = "channel.inbound"
-	}
-
-	enableTelegramPolling := false
-	if v := os.Getenv("AGENTAREA_EVENT_TELEGRAM_ENABLED"); v != "" {
-		if parsed, err := strconv.ParseBool(v); err == nil {
-			enableTelegramPolling = parsed
-		}
-	}
-
 	otelEnabled := false
 	if v := os.Getenv(otelEnabledEnv); v != "" {
 		parsed, err := strconv.ParseBool(v)
@@ -80,17 +89,45 @@ func Load() (*Config, error) {
 		port = "8002"
 	}
 
+	apiURL := strings.TrimRight(os.Getenv(apiURLEnv), "/")
+	if apiURL == "" {
+		return nil, fmt.Errorf("%s is required: it is the public base of the webhook URLs sources register", apiURLEnv)
+	}
+
+	if backend := os.Getenv(secretBackendEnv); backend != "" && backend != supportedSecretStore {
+		return nil, fmt.Errorf("%s=%q: the event service reads source credentials from the %q backend only", secretBackendEnv, backend, supportedSecretStore)
+	}
+	secretKey := os.Getenv(secretKeyEnv)
+	if secretKey == "" {
+		return nil, fmt.Errorf("%s is required: source credentials are encrypted with it", secretKeyEnv)
+	}
+
+	egress := Egress{}
+	if v := os.Getenv(allowPrivateEnv); v != "" {
+		parsed, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("%s=%q is not a boolean: %w", allowPrivateEnv, v, err)
+		}
+		egress.AllowPrivate = parsed
+	}
+	for _, entry := range strings.Split(os.Getenv(privateAllowlistEnv), ",") {
+		if entry = strings.TrimSpace(entry); entry != "" {
+			egress.PrivateAllowlist = append(egress.PrivateAllowlist, entry)
+		}
+	}
+
 	return &Config{
-		DatabaseURL:           databaseURL(),
-		RedisURL:              os.Getenv("AGENTAREA_REDIS_URL"),
-		WorkerID:              workerID,
-		Namespace:             namespace,
-		InboundStream:         inboundStream,
-		EnableTelegramPolling: enableTelegramPolling,
-		PollInterval:          pollInterval,
-		MaxPollers:            maxPollers,
-		Port:                  port,
-		OTelEnabled:           otelEnabled,
+		DatabaseURL:  databaseURL(),
+		RedisURL:     os.Getenv("AGENTAREA_REDIS_URL"),
+		WorkerID:     workerID,
+		Namespace:    namespace,
+		PollInterval: pollInterval,
+		MaxPollers:   maxPollers,
+		Port:         port,
+		OTelEnabled:  otelEnabled,
+		APIURL:       apiURL,
+		SecretKey:    secretKey,
+		Egress:       egress,
 	}, nil
 }
 

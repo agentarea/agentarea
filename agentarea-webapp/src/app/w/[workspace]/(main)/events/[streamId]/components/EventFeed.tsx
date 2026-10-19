@@ -80,7 +80,7 @@ export default async function EventFeed({
             { header: t("kind"), accessor: "kind" },
             {
               header: t("key"),
-              accessor: "event_key",
+              accessor: "key",
               cellClassName: "max-w-[260px] truncate font-mono text-xs",
             },
             {

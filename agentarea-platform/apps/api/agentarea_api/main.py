@@ -261,6 +261,10 @@ async def app_lifespan(app: FastAPI):
         await stop_events_router()
         await stream_bus.aclose()
 
+        from agentarea_api.api.v1.task_event_feed import close_task_events_hub
+
+        await close_task_events_hub()
+
         if is_reload_mode:
             logger.info("Application shutting down (reload mode - skipping full cleanup)")
         else:

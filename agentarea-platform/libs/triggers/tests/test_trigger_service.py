@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
+from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
 from agentarea_triggers.domain.models import (
     CronTrigger,
+    StreamTrigger,
     TriggerCreate,
     TriggerExecution,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from agentarea_triggers.trigger_service import (
     TriggerExecutionError,
@@ -19,7 +19,6 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
-from agentarea_triggers.webhook_verification import REDACTED_SECRET
 
 from .conftest import make_trigger_repository_factory
 
@@ -115,21 +114,6 @@ class TestTriggerService:
         )
 
     @pytest.fixture
-    def sample_webhook_trigger_data(self, sample_agent_id):
-        """Sample webhook trigger creation data."""
-        return TriggerCreate(
-            name="Webhook Handler",
-            description="Handle incoming webhooks",
-            agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="webhook_123",
-            allowed_methods=["POST"],
-            webhook_type=WebhookType.GENERIC,
-            created_by="test_user",
-            task_parameters={"handler": "generic"},
-        )
-
-    @pytest.fixture
     def sample_cron_trigger(self, sample_agent_id):
         """Sample cron trigger."""
         return CronTrigger(
@@ -144,16 +128,13 @@ class TestTriggerService:
         )
 
     @pytest.fixture
-    def sample_webhook_trigger(self, sample_agent_id):
-        """Sample webhook trigger."""
-        return WebhookTrigger(
+    def sample_stream_trigger(self, sample_agent_id):
+        """Sample stream trigger."""
+        return StreamTrigger(
             id=uuid4(),
-            name="Webhook Handler",
-            description="Handle incoming webhooks",
+            name="Stream Handler",
+            description="Handle stream events",
             agent_id=sample_agent_id,
-            webhook_id="webhook_123",
-            allowed_methods=["POST"],
-            webhook_type=WebhookType.GENERIC,
             created_by="test_user",
             task_parameters={"handler": "generic", "text": "Handle the incoming call"},
         )
@@ -267,28 +248,6 @@ class TestTriggerService:
             )
 
     @pytest.mark.asyncio
-    async def test_a_polling_schedule_may_be_saved_without_a_task(
-        self, trigger_service, mock_agent_repository, mock_trigger_repository, sample_agent_id
-    ):
-        """A mailbox poller works on what it finds, so it needs no standing text."""
-        mock_agent_repository.get.return_value = MagicMock()
-
-        await trigger_service.create_trigger(
-            TriggerCreate(
-                name="Inbox",
-                agent_id=sample_agent_id,
-                trigger_type=TriggerType.CRON,
-                cron_expression="*/5 * * * *",
-                timezone="UTC",
-                created_by="test_user",
-                data_extractor="imap",
-                task_parameters={},
-            )
-        )
-
-        mock_trigger_repository.create_from_model.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_a_schedule_cannot_have_its_task_cleared(
         self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
@@ -313,19 +272,19 @@ class TestTriggerService:
         mock_trigger_repository.update_by_id.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_a_webhook_may_be_saved_without_a_task(
+    async def test_a_stream_trigger_may_be_saved_without_a_task(
         self, trigger_service, mock_agent_repository, mock_trigger_repository, sample_agent_id
     ):
-        """Its text normally arrives with the call, so requiring one up front is wrong."""
+        """Its text normally arrives with the event, so requiring one up front is wrong."""
         mock_agent_repository.get.return_value = MagicMock()
+        trigger_service.stream_service = AsyncMock()
 
         await trigger_service.create_trigger(
             TriggerCreate(
                 name="Inbound",
                 agent_id=sample_agent_id,
-                trigger_type=TriggerType.WEBHOOK,
-                webhook_id="webhook_123",
-                allowed_methods=["POST"],
+                trigger_type=TriggerType.STREAM,
+                stream_id=uuid4(),
                 created_by="test_user",
                 task_parameters={},
             )
@@ -334,19 +293,17 @@ class TestTriggerService:
         mock_trigger_repository.create_from_model.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_trigger_missing_webhook_id(
+    async def test_create_trigger_missing_stream_id(
         self, trigger_service, mock_agent_repository, sample_agent_id
     ):
-        """Test trigger creation fails when webhook ID is missing."""
-        # Setup mocks
-        mock_agent_repository.get.return_value = MagicMock()  # Agent exists
+        """Test trigger creation fails when the stream is missing."""
+        mock_agent_repository.get.return_value = MagicMock()
 
-        # Execute and verify - Pydantic validation should catch this
-        with pytest.raises(ValueError, match="webhook_id is required for WEBHOOK triggers"):
+        with pytest.raises(ValueError, match="stream_id is required for STREAM triggers"):
             TriggerCreate(
-                name="Invalid Webhook",
+                name="Invalid Stream",
                 agent_id=sample_agent_id,
-                trigger_type=TriggerType.WEBHOOK,
+                trigger_type=TriggerType.STREAM,
                 created_by="test_user",
             )
 
@@ -402,90 +359,6 @@ class TestTriggerService:
         mock_trigger_repository.update_by_id.assert_called_once_with(
             sample_cron_trigger.id, trigger_update
         )
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "sent_secret",
-        [
-            pytest.param({}, id="omitted"),
-            pytest.param({"signing_secret": REDACTED_SECRET}, id="masked-as-read"),
-        ],
-    )
-    async def test_an_update_that_does_not_send_the_signing_secret_keeps_it(
-        self, trigger_service, mock_trigger_repository, sample_webhook_trigger, sent_secret
-    ):
-        """Responses mask the secret, so an edit that round-trips them must not wipe it."""
-        sample_webhook_trigger.validation_rules = {
-            "signing_secret": "whsec_stored",  # pragma: allowlist secret
-            "required_headers": ["x-old"],
-        }
-        sample_webhook_trigger.webhook_config = {"bot_token": "stored-token"}
-        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
-        mock_trigger_repository.update_by_id.return_value = sample_webhook_trigger
-
-        await trigger_service.update_trigger(
-            sample_webhook_trigger.id,
-            TriggerUpdate(
-                validation_rules={"required_headers": ["x-new"], **sent_secret},
-                webhook_config={"field_map": {"text": "body"}},
-            ),
-        )
-
-        persisted = mock_trigger_repository.update_by_id.call_args.args[1].dict(
-            exclude_unset=True
-        )
-        assert persisted["validation_rules"] == {
-            "signing_secret": "whsec_stored",  # pragma: allowlist secret
-            "required_headers": ["x-new"],
-        }
-        assert persisted["webhook_config"] == {
-            "bot_token": "stored-token",
-            "field_map": {"text": "body"},
-        }
-
-    @pytest.mark.asyncio
-    async def test_an_update_can_replace_or_clear_the_signing_secret(
-        self, trigger_service, mock_trigger_repository, sample_webhook_trigger
-    ):
-        sample_webhook_trigger.validation_rules = {
-            "signing_secret": "whsec_stored",  # pragma: allowlist secret
-            "webhook_secret": "gh_stored",  # pragma: allowlist secret
-        }
-        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
-        mock_trigger_repository.update_by_id.return_value = sample_webhook_trigger
-
-        await trigger_service.update_trigger(
-            sample_webhook_trigger.id,
-            TriggerUpdate(
-                validation_rules={
-                    "signing_secret": "whsec_rotated",  # pragma: allowlist secret
-                    "webhook_secret": None,
-                }
-            ),
-        )
-
-        persisted = mock_trigger_repository.update_by_id.call_args.args[1].dict(
-            exclude_unset=True
-        )
-        assert persisted["validation_rules"] == {
-            "signing_secret": "whsec_rotated",  # pragma: allowlist secret
-            "webhook_secret": None,
-        }
-
-    @pytest.mark.asyncio
-    async def test_the_mask_is_not_stored_as_a_secret_nothing_was_stored_for(
-        self, trigger_service, mock_trigger_repository, sample_webhook_trigger
-    ):
-        sample_webhook_trigger.validation_rules = {"required_headers": ["x-old"]}
-        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
-        mock_trigger_repository.update_by_id.return_value = sample_webhook_trigger
-
-        with pytest.raises(TriggerValidationError, match="signing_secret"):
-            await trigger_service.update_trigger(
-                sample_webhook_trigger.id,
-                TriggerUpdate(validation_rules={"signing_secret": REDACTED_SECRET}),
-            )
-        mock_trigger_repository.update_by_id.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_update_trigger_not_found(self, trigger_service, mock_trigger_repository):
@@ -564,11 +437,11 @@ class TestTriggerService:
 
     @pytest.mark.asyncio
     async def test_list_triggers_all(
-        self, trigger_service, mock_trigger_repository, sample_cron_trigger, sample_webhook_trigger
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger, sample_stream_trigger
     ):
         """Test listing all triggers."""
         # Setup mocks
-        triggers = [sample_cron_trigger, sample_webhook_trigger]
+        triggers = [sample_cron_trigger, sample_stream_trigger]
         mock_trigger_repository.list_triggers.return_value = triggers
 
         # Execute
@@ -628,9 +501,7 @@ class TestTriggerService:
 
         # Verify
         assert result == triggers
-        mock_trigger_repository.list_triggers.assert_called_once_with(
-            limit=100, is_active=True
-        )
+        mock_trigger_repository.list_triggers.assert_called_once_with(limit=100, is_active=True)
 
     # Test Lifecycle Management
 
@@ -787,36 +658,6 @@ class TestTriggerService:
     # Test Utility Methods
 
     @pytest.mark.asyncio
-    async def test_get_trigger_by_webhook_id(
-        self, trigger_service, mock_trigger_repository, sample_webhook_trigger
-    ):
-        """Test getting trigger by webhook ID."""
-        # Setup mocks
-        mock_trigger_repository.get_by_webhook_id.return_value = sample_webhook_trigger
-
-        # Execute
-        result = await trigger_service.get_trigger_by_webhook_id("webhook_123")
-
-        # Verify
-        assert result == sample_webhook_trigger
-        mock_trigger_repository.get_by_webhook_id.assert_called_once_with("webhook_123")
-
-    @pytest.mark.asyncio
-    async def test_get_trigger_by_webhook_id_not_webhook_trigger(
-        self, trigger_service, mock_trigger_repository, sample_cron_trigger
-    ):
-        """Test getting trigger by webhook ID when trigger is not a webhook trigger."""
-        # Setup mocks - return cron trigger instead of webhook trigger
-        mock_trigger_repository.get_by_webhook_id.return_value = sample_cron_trigger
-
-        # Execute
-        result = await trigger_service.get_trigger_by_webhook_id("webhook_123")
-
-        # Verify
-        assert result is None
-        mock_trigger_repository.get_by_webhook_id.assert_called_once_with("webhook_123")
-
-    @pytest.mark.asyncio
     async def test_list_cron_triggers_due(
         self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
@@ -913,28 +754,6 @@ class TestTriggerService:
 
         # Execute and verify
         with pytest.raises(TriggerValidationError, match="Trigger created_by is required"):
-            await trigger_service.create_trigger(invalid_trigger_data)
-
-    @pytest.mark.asyncio
-    async def test_create_trigger_invalid_http_method(
-        self, trigger_service, mock_agent_repository, sample_agent_id
-    ):
-        """Test trigger creation fails with invalid HTTP method."""
-        # Setup mocks
-        mock_agent_repository.get.return_value = MagicMock()  # Agent exists
-
-        # Create webhook trigger data with invalid HTTP method
-        invalid_trigger_data = TriggerCreate(
-            name="Webhook Trigger",
-            agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="webhook_123",
-            allowed_methods=["INVALID"],  # Invalid HTTP method
-            created_by="test_user",
-        )
-
-        # Execute and verify
-        with pytest.raises(TriggerValidationError, match="Invalid HTTP method: INVALID"):
             await trigger_service.create_trigger(invalid_trigger_data)
 
     @pytest.mark.asyncio
@@ -1240,20 +1059,20 @@ class TestTriggerService:
         mock_trigger_repository,
         mock_trigger_execution_repository,
         mock_task_service,
-        sample_webhook_trigger,
+        sample_stream_trigger,
     ):
         """The instruction is the ask; the event, its text included, is shown after it."""
-        sample_webhook_trigger.task_parameters = {"text": "Standing instruction"}
-        mock_trigger_repository.get_trigger.return_value = sample_webhook_trigger
+        sample_stream_trigger.task_parameters = {"text": "Standing instruction"}
+        mock_trigger_repository.get_trigger.return_value = sample_stream_trigger
         mock_task_service.route_or_submit_task.return_value = MagicMock(
             id=uuid4(), status="submitted"
         )
         mock_trigger_execution_repository.create.return_value = MagicMock(
-            id=uuid4(), trigger_id=sample_webhook_trigger.id, status=ExecutionStatus.SUCCESS
+            id=uuid4(), trigger_id=sample_stream_trigger.id, status=ExecutionStatus.SUCCESS
         )
 
         await trigger_service.execute_trigger(
-            sample_webhook_trigger.id, {"events": [{"text": "PR #12 was opened"}]}
+            sample_stream_trigger.id, {"events": [{"text": "PR #12 was opened"}]}
         )
 
         task = mock_task_service.route_or_submit_task.call_args.args[0]
@@ -1281,7 +1100,7 @@ class TestTriggerService:
         )
 
         result = await trigger_service.execute_trigger(
-            sample_cron_trigger.id, {"events": [], "channel_origin": {}}, fired_by="user-42"
+            sample_cron_trigger.id, {"events": []}, fired_by="user-42"
         )
 
         assert result.task_id is None

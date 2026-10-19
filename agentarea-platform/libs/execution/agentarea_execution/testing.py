@@ -232,8 +232,10 @@ class TaskLogFake:
     def __init__(self) -> None:
         self.rows: dict[str, dict[int, LogRow]] = {}
         self.statuses: list[UpdateTaskStatusRequest] = []
+        self.requests: list[RecordRequest] = []
 
     def append(self, request: RecordRequest) -> None:
+        self.requests.append(request)
         rows = self.rows.setdefault(request.task_id, {})
         for row in request.rows:
             rows.setdefault(row.seq, row)
@@ -283,7 +285,8 @@ def make_record_activity(
     """A record_activity that keeps the rows in ``log``.
 
     It hands the status and the events to a test's own status and publish mocks,
-    in the order the real one writes them.
+    in the order the real one writes them. The events are the event rows and the
+    live-only signals the run sent beside them, in the order they happened.
     """
 
     @activity.defn(name="record_activity")
@@ -292,10 +295,21 @@ def make_record_activity(
             log.append(request)
         if request.status is not None and update_status is not None:
             await update_status(request.status)
-        if request.events_json and publish is not None:
+        events = [
+            {
+                "event_id": row.event_id,
+                "event_type": row.name,
+                "timestamp": row.timestamp,
+                "data": row.meta or {},
+            }
+            for row in request.rows
+            if row.kind == "event" and row.timestamp is not None
+        ] + [json.loads(event) for event in request.events_json]
+        events.sort(key=lambda event: event["timestamp"])
+        if events and publish is not None:
             await publish(
                 WorkflowEventsRequest(
-                    events_json=request.events_json,
+                    events_json=[json.dumps(event) for event in events],
                     workspace_id=request.workspace_id,
                     user_id=request.user_id,
                 )

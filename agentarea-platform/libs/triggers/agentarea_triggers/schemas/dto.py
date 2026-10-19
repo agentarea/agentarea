@@ -18,36 +18,32 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
-from agentarea_common.channel_origin import drop_reserved_parameters, reject_reserved_parameters
+from agentarea_common.reserved_task_parameters import (
+    drop_reserved_parameters,
+    reject_reserved_parameters,
+)
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from agentarea_triggers.domain.channel_events import CHANNEL_EVENTS
-from agentarea_triggers.domain.enums import TriggerType, WebhookType
+from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import (
     TriggerCreate as _DomainTriggerCreate,
 )
+from agentarea_triggers.domain.models import TriggerSession
 from agentarea_triggers.domain.models import (
     TriggerUpdate as _DomainTriggerUpdate,
 )
-from agentarea_triggers.webhook_verification import signature_algorithm_error
 
-TriggerTypeLiteral = Literal["cron", "webhook", "polling", "stream"]
-
-
-def _known_signature_algorithm(rules: dict[str, Any] | None) -> dict[str, Any] | None:
-    if error := signature_algorithm_error(rules):
-        raise ValueError(error)
-    return rules
+TriggerTypeLiteral = Literal["cron", "stream"]
 
 
 class TriggerSpec(BaseModel):
     """Everything about a trigger except the agent it fires.
 
-    A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
-    or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
-    channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
-    ``data_extractor`` configuration. Creating an agent takes a list of these,
-    because the agent does not exist yet when they are written.
+    A trigger fires an agent — on a cron schedule (``trigger_type='cron'``) or on
+    the events of a stream (``trigger_type='stream'``). A webhook or a polled
+    provider is a source of a stream (``streams_create_source``) with a stream
+    trigger on it. Creating an agent takes a list of these, because the agent
+    does not exist yet when they are written.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -64,8 +60,8 @@ class TriggerSpec(BaseModel):
     )
     trigger_type: TriggerTypeLiteral = Field(
         description=(
-            "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, "
-            "'stream' to run on events from an existing stream."
+            "'cron' for scheduled, 'stream' to run on the events of a stream (a webhook or "
+            "a polled provider is a source of a stream)."
         ),
     )
     task_parameters: dict[str, Any] = Field(
@@ -103,45 +99,6 @@ class TriggerSpec(BaseModel):
         default="UTC",
         description="IANA timezone for cron evaluation (e.g. 'UTC', 'America/New_York').",
     )
-    data_extractor: str | None = Field(
-        default=None,
-        description="Polling extractor identifier (e.g. 'imap', 'rss').",
-    )
-    data_extractor_config: dict[str, Any] | None = Field(
-        default=None,
-        description="Connection/auth details for the polling extractor.",
-    )
-
-    # Webhook-specific
-    webhook_id: str | None = Field(
-        default=None,
-        min_length=16,
-        pattern=r"^[A-Za-z0-9_-]+$",
-        description=(
-            "Public webhook path segment. Custom values must be at least 16 URL-safe "
-            "characters; auto-generated if omitted for webhook triggers."
-        ),
-    )
-    allowed_methods: list[str] = Field(
-        default_factory=lambda: ["POST"],
-        description="HTTP methods accepted on the webhook endpoint.",
-    )
-    webhook_type: str = Field(
-        default="generic",
-        description="Channel type: 'generic', 'telegram', 'slack', 'discord', etc.",
-    )
-    validation_rules: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Per-channel validation rules (signature secrets, allowed senders, etc).",
-    )
-    webhook_config: dict[str, Any] | None = Field(
-        default=None,
-        description="Channel-specific configuration (bot tokens, signing keys, etc).",
-    )
-    event_types: list[str] = Field(
-        default_factory=list,
-        description="Event types to filter on (empty list = accept all events).",
-    )
 
     # Stream-specific
     stream_id: UUID | None = Field(
@@ -156,12 +113,12 @@ class TriggerSpec(BaseModel):
         ),
     )
 
-    # Channel credentials — written to the secret store, never returned in responses
-    channel_credentials: dict[str, Any] | None = Field(
+    session: TriggerSession | None = Field(
         default=None,
         description=(
-            "Channel credentials (bot_token, SMTP password, etc). "
-            "Stored encrypted in the secret store. Never returned in responses."
+            'What the next event of the same session does: {"continue": true, '
+            '"idle_timeout": "30m"} joins the running task. Null takes the source '
+            "type's default."
         ),
     )
 
@@ -170,26 +127,13 @@ class TriggerSpec(BaseModel):
     def _normalize_trigger_type(cls, v: Any) -> Any:
         if isinstance(v, str):
             normalized = v.lower()
-            valid = {"cron", "webhook", "polling", "stream"}
+            valid = {"cron", "stream"}
             if normalized not in valid:
-                # Friendly message preserved for REST clients (the Literal
-                # auto-message would otherwise read "Input should be 'cron',
-                # 'webhook' or 'polling'", which leaks Pydantic phrasing).
+                # Friendly message for REST clients instead of the Literal's
+                # auto-message, which leaks Pydantic phrasing.
                 raise ValueError(f"Invalid trigger type: {v!r}. Must be one of: {sorted(valid)}")
             return normalized
         return v
-
-    _check_signature_algorithm = field_validator("validation_rules")(_known_signature_algorithm)
-
-    @field_validator("webhook_type")
-    @classmethod
-    def _validate_webhook_type(cls, v: str) -> str:
-        if not v:
-            return v
-        valid_types = list(CHANNEL_EVENTS.keys())
-        if v.lower() not in valid_types:
-            raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
-        return v.lower()
 
     @model_validator(mode="after")
     def _require_type_fields(self) -> TriggerSpec:
@@ -202,31 +146,12 @@ class TriggerSpec(BaseModel):
     def to_domain_for(
         self, agent_id: UUID, created_by: str, workspace_id: str | None = None
     ) -> _DomainTriggerCreate:
-        """Build the internal domain ``TriggerCreate`` for ``agent_id``.
-
-        The auto-generated ``webhook_id`` (when omitted for webhook triggers)
-        is handled here so callers don't have to repeat the logic.
-        """
-        if self.trigger_type == "cron":
-            domain_type = TriggerType.CRON
-        elif self.trigger_type == "polling":
-            domain_type = TriggerType.POLLING
-        elif self.trigger_type == "stream":
-            domain_type = TriggerType.STREAM
-        else:
-            domain_type = TriggerType.WEBHOOK
-
-        webhook_id = self.webhook_id
-        if domain_type == TriggerType.WEBHOOK and not webhook_id:
-            import secrets
-
-            webhook_id = secrets.token_urlsafe(16)
-
+        """Build the internal domain ``TriggerCreate`` for ``agent_id``."""
         domain_obj = _DomainTriggerCreate(
             name=self.name,
             description=self.description,
             agent_id=agent_id,
-            trigger_type=domain_type,
+            trigger_type=TriggerType(self.trigger_type),
             task_parameters=self.task_parameters,
             conditions=self.conditions,
             created_by=created_by,
@@ -234,16 +159,9 @@ class TriggerSpec(BaseModel):
             failure_threshold=self.failure_threshold,
             cron_expression=self.cron_expression,
             timezone=self.timezone,
-            data_extractor=self.data_extractor,
-            data_extractor_config=self.data_extractor_config,
-            webhook_id=webhook_id,
-            allowed_methods=self.allowed_methods,
-            webhook_type=WebhookType(self.webhook_type),
-            validation_rules=self.validation_rules,
-            webhook_config=self.webhook_config,
-            event_types=self.event_types,
             stream_id=self.stream_id,
             event_filter=self.event_filter,
+            session=self.session,
         )
         # Workspace id is server-assigned and may be ``None`` until auth resolves.
         # Set post-construction so callers can pass through ad-hoc values
@@ -288,33 +206,13 @@ class TriggerUpdate(BaseModel):
     cron_expression: str | None = None
     timezone: str | None = None
 
-    allowed_methods: list[str] | None = None
-    webhook_type: str | None = None
-    validation_rules: dict[str, Any] | None = None
-    webhook_config: dict[str, Any] | None = None
-    event_types: list[str] | None = None
     event_filter: dict[str, Any] | None = None
-
-    channel_credentials: dict[str, Any] | None = Field(
-        default=None,
-        description="Channel credentials to update. Pass to rotate credentials.",
-    )
-
-    _check_signature_algorithm = field_validator("validation_rules")(_known_signature_algorithm)
-
-    @field_validator("webhook_type")
-    @classmethod
-    def _validate_webhook_type(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        valid_types = list(CHANNEL_EVENTS.keys())
-        if v.lower() not in valid_types:
-            raise ValueError(f"Invalid webhook type. Must be one of: {valid_types}")
-        return v.lower()
+    session: TriggerSession | None = None
 
     def to_domain(self) -> _DomainTriggerUpdate:
         """Build the internal domain ``TriggerUpdate`` value object."""
-        webhook_type = WebhookType(self.webhook_type) if self.webhook_type else None
+        # Sent as null, session goes back to the defaults; left out, it stays.
+        session = {"session": self.session} if "session" in self.model_fields_set else {}
         return _DomainTriggerUpdate(
             name=self.name,
             description=self.description,
@@ -325,10 +223,6 @@ class TriggerUpdate(BaseModel):
             failure_threshold=self.failure_threshold,
             cron_expression=self.cron_expression,
             timezone=self.timezone,
-            allowed_methods=self.allowed_methods,
-            webhook_type=webhook_type,
-            validation_rules=self.validation_rules,
-            webhook_config=self.webhook_config,
-            event_types=self.event_types,
             event_filter=self.event_filter,
+            **session,
         )

@@ -154,10 +154,7 @@ export default function TaskDetailsPage() {
               }}
               currentStatus={currentStatus}
               executionStatus={executionStatus}
-              isActive={
-                currentStatus === "running" &&
-                conversationActivity?.executionStatus === "running"
-              }
+              isActive={currentStatus === "running"}
               startTime={startTime}
               endTime={endTime}
               executionTime={executionTime}

@@ -2,13 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { KeyRound, Link2, Loader2, Plus, Settings2 } from "lucide-react";
-import type {
-  StreamSourceTypeResponse,
-  WebhookSourceCreated,
-} from "@/api/client/types.gen";
+import {
+  Braces,
+  KeyRound,
+  Link2,
+  ListChecks,
+  Loader2,
+  Plus,
+  Settings2,
+} from "lucide-react";
+import type { SourceCreated } from "@/api/client/types.gen";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { SecretSelect } from "@/components/SecretSelect";
+import SourceTypeMark from "@/components/SourceTypeMark";
 import {
   OneTimeSecretField,
   SuccessModalContent,
@@ -30,38 +36,43 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
-import { renderTriggerIcon } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { createStreamSourceAction } from "../actions";
 import {
   missingSourceFields,
+  sourceKinds,
+  takesEventTemplates,
+  TEMPLATE_FIELDS,
   toSourceRequest,
   type SourceFormValues,
+  type SourceKind,
 } from "../sourceRequest";
 
-const EMPTY: SourceFormValues = { secrets: {}, settings: {} };
+const EMPTY: SourceFormValues = { secrets: {}, settings: {}, templates: {} };
 
 /**
- * Add a webhook source to a stream: pick its type, point each credential at a
- * workspace secret, then — in the same dialog — the URL to give the sender and
- * any signing secret issued for it, shown once.
+ * Add a source to a stream: pick its type from the catalog, point each
+ * credential at a workspace secret, then — in the same dialog — the URL to give
+ * the sender and any secret issued for it, shown once.
  */
 export default function AddSourceDialog({
   streamId,
   types,
 }: {
   streamId: string;
-  types: StreamSourceTypeResponse[];
+  types: SourceType[];
 }) {
   const t = useTranslations("EventsPage.sources");
   const [open, setOpen] = useState(false);
   const [typeId, setTypeId] = useState("");
   const [values, setValues] = useState<SourceFormValues>(EMPTY);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<WebhookSourceCreated | null>(null);
+  const [created, setCreated] = useState<SourceCreated | null>(null);
   const [pending, startTransition] = useTransition();
   const resources = useAttachableResources({ withSecrets: true });
 
-  const type = types.find((entry) => entry.webhook_type === typeId);
+  const type = sourceTypeBySlug(types, typeId);
+  const kinds = type ? sourceKinds(type) : [];
   const missing = type ? missingSourceFields(type, values) : [];
 
   const reset = () => {
@@ -94,7 +105,7 @@ export default function AddSourceDialog({
   };
 
   const setField = (
-    group: keyof SourceFormValues,
+    group: "secrets" | "settings" | "templates",
     key: string,
     value: string
   ) =>
@@ -124,20 +135,22 @@ export default function AddSourceDialog({
               <CopyableText text={created.webhook_url} />
             </div>
           )}
-          {created.signing_secret && (
+          {Object.entries(created.issued ?? {}).map(([key, value]) => (
             <OneTimeSecretField
-              label={t("created.secretLabel")}
+              key={key}
+              label={
+                type?.credentials.find((field) => field.key === key)?.label ??
+                key
+              }
               icon={KeyRound}
-              value={created.signing_secret}
+              value={value}
               warning={t("created.secretWarning")}
             />
-          )}
-          {created.signature_scheme && (
+          ))}
+          {type?.verification_header && (
             <SuccessModalDetail label={t("signedWith")}>
               <code className="font-mono text-[12px] text-foreground">
-                {created.signature_scheme.header}:{" "}
-                {created.signature_scheme.prefix}
-                {`hex(HMAC-${created.signature_scheme.algorithm.toUpperCase()})`}
+                {type.verification_header}
               </code>
             </SuccessModalDetail>
           )}
@@ -175,13 +188,10 @@ export default function AddSourceDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {types.map((entry) => (
-                    <SelectItem
-                      key={entry.webhook_type}
-                      value={entry.webhook_type}
-                    >
+                    <SelectItem key={entry.slug} value={entry.slug}>
                       <span className="flex items-center gap-2">
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                          {renderTriggerIcon(entry, undefined, "h-4 w-4")}
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          <SourceTypeMark type={entry} inline />
                         </span>
                         {entry.name}
                       </span>
@@ -192,13 +202,41 @@ export default function AddSourceDialog({
               {type && <p className="note">{type.description}</p>}
             </div>
 
+            {kinds.length > 1 && (
+              <div className="space-y-2">
+                <FormLabel htmlFor="source-kind" required>
+                  {t("dialog.kind")}
+                </FormLabel>
+                <Select
+                  value={values.kind ?? kinds[0]}
+                  onValueChange={(value) =>
+                    setValues((previous) => ({
+                      ...previous,
+                      kind: kinds.find((kind) => kind === value),
+                    }))
+                  }
+                >
+                  <SelectTrigger id="source-kind" aria-label={t("dialog.kind")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {kinds.map((kind: SourceKind) => (
+                      <SelectItem key={kind} value={kind}>
+                        {t(`dialog.kinds.${kind}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {type?.credentials.map((field) => (
-              <div key={`${type.webhook_type}:${field.key}`} className="space-y-2">
+              <div key={`${type.slug}:${field.key}`} className="space-y-2">
                 <FormLabel
                   htmlFor={`source-secret-${field.key}`}
                   icon={KeyRound}
-                  required={field.required !== false}
-                  optional={field.required === false}
+                  required={field.required && !field.issued}
+                  optional={!field.required || field.issued}
                 >
                   {field.label}
                 </FormLabel>
@@ -212,7 +250,7 @@ export default function AddSourceDialog({
                   disabled={
                     resources.loading || resources.failed.includes("secrets")
                   }
-                  required={field.required !== false}
+                  required={field.required && !field.issued}
                   placeholder={
                     resources.loading
                       ? t("dialog.loadingSecrets")
@@ -223,8 +261,12 @@ export default function AddSourceDialog({
                   createLabel={t("dialog.newSecret")}
                   onCreated={resources.refresh}
                 />
-                {field.placeholder && (
-                  <p className="note">{field.placeholder}</p>
+                {field.issued ? (
+                  <p className="note">{t("dialog.issuedHint")}</p>
+                ) : (
+                  field.placeholder && (
+                    <p className="note">{field.placeholder}</p>
+                  )
                 )}
               </div>
             ))}
@@ -234,13 +276,13 @@ export default function AddSourceDialog({
               </p>
             )}
 
-            {type?.config?.map((field) => (
-              <div key={`${type.webhook_type}:${field.key}`} className="space-y-2">
+            {type?.config.map((field) => (
+              <div key={`${type.slug}:${field.key}`} className="space-y-2">
                 <FormLabel
                   htmlFor={`source-setting-${field.key}`}
                   icon={Settings2}
-                  required={field.required !== false}
-                  optional={field.required === false}
+                  required={field.required && !field.issued}
+                  optional={!field.required || field.issued}
                 >
                   {field.label}
                 </FormLabel>
@@ -255,6 +297,51 @@ export default function AddSourceDialog({
                 />
               </div>
             ))}
+
+            {type && takesEventTemplates(type) && (
+              <div className="space-y-3">
+                {TEMPLATE_FIELDS.map((field) => (
+                  <div key={field} className="space-y-2">
+                    <FormLabel
+                      htmlFor={`source-template-${field}`}
+                      icon={Braces}
+                      optional
+                    >
+                      {t(`dialog.templates.${field}`)}
+                    </FormLabel>
+                    <Input
+                      id={`source-template-${field}`}
+                      value={values.templates[field] ?? ""}
+                      placeholder={t(`dialog.templates.${field}Placeholder`)}
+                      autoComplete="off"
+                      className="font-mono"
+                      onChange={(event) =>
+                        setField("templates", field, event.target.value)
+                      }
+                    />
+                  </div>
+                ))}
+                <p className="note">{t("dialog.templates.hint")}</p>
+                <p className="note">{t("dialog.templates.noKeyHint")}</p>
+              </div>
+            )}
+
+            {type && type.events.length > 0 && (
+              <div className="space-y-2">
+                <FormLabel icon={ListChecks}>{t("dialog.events")}</FormLabel>
+                <p className="note">{t("dialog.eventsHint")}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {type.events.map((event) => (
+                    <code
+                      key={event}
+                      className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground"
+                    >
+                      {event}
+                    </code>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {error && (
               <p className="form-error" role="alert">

@@ -44,8 +44,8 @@ async def delivery():
             text(
                 "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
                 "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
-                "consecutive_failures, validation_rules, created_at, updated_at) VALUES (:id, "
-                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, '{}', now(), now())"
+                "consecutive_failures, created_at, updated_at) VALUES (:id, "
+                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, now(), now())"
             ),
             {"id": trigger_id, "ws": ws, "a": uuid4()},
         )
@@ -122,7 +122,7 @@ async def test_redelivering_a_routed_event_queues_exactly_one_message(delivery):
         id=uuid4(),
         agent_id=uuid4(),
         description="Chat",
-        parameters={"channel_origin": {"chat_id": "c-1"}},
+        parameters={"trigger_id": "trg-1", "session": {"key": "c-1", "continue": True}},
         status="running",
         execution_id="task-running",
         user_id="u",
@@ -137,7 +137,7 @@ async def test_redelivering_a_routed_event_queues_exactly_one_message(delivery):
         return True
 
     tasks = MagicMock()
-    tasks.find_active_by_agent_and_chat = AsyncMock(return_value=[running])
+    tasks.find_active_in_session = AsyncMock(return_value=[running])
     factory = MagicMock()
     factory.create_repository = MagicMock(
         side_effect=lambda cls: tasks if cls is TaskRepository else MagicMock()
@@ -163,7 +163,10 @@ async def test_redelivering_a_routed_event_queues_exactly_one_message(delivery):
                     user_id="u",
                     workspace_id="w",
                     agent_id=running.agent_id,
-                    task_parameters={"channel_origin": {"chat_id": "c-1"}},
+                    task_parameters={
+                        "trigger_id": "trg-1",
+                        "session": {"key": "c-1", "continue": True},
+                    },
                 ),
                 follow_up_claim=attempt(session),
             )

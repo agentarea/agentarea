@@ -106,7 +106,7 @@ describe("TaskConversation history lifecycle", () => {
 
   it("keeps the composer draft and files mounted from loading to loaded", () => {
     const view = render(<TaskConversation task={task} />);
-    const textarea = screen.getByPlaceholderText("Message Agent...");
+    const textarea = screen.getByPlaceholderText("messagePlaceholder");
     const send = screen.getByRole("button", { name: "Send message" });
 
     expect((textarea as HTMLTextAreaElement).disabled).toBe(false);
@@ -125,7 +125,7 @@ describe("TaskConversation history lifecycle", () => {
 
   it("keeps drafting available on history error while submission stays disabled", () => {
     const view = render(<TaskConversation task={task} />);
-    const textarea = screen.getByPlaceholderText("Message Agent...");
+    const textarea = screen.getByPlaceholderText("messagePlaceholder");
     fireEvent.change(textarea, { target: { value: "Do not lose this" } });
     selectFile(view.container);
 
@@ -146,9 +146,7 @@ describe("TaskConversation history lifecycle", () => {
       ).disabled
     ).toBe(true);
     expect(
-      screen.getByText(
-        "Conversation history is unavailable. Retry loading before sending."
-      )
+      screen.getByText("historyUnavailable")
     ).toBeTruthy();
   });
 });

@@ -241,14 +241,17 @@ async def test_a_webhook_source_shows_its_public_url(client, service, graph, mon
             kind="webhook",
             webhook_id="abc",
             webhook_type="github",
-            allowed_methods=["POST"],
-            validation_rules={},
-            credential_key=None,
+            event_templates={},
+            polled_at=None,
+            poll_error=None,
+            registered_url="https://api.example/webhooks/abc",
             created_at=NOW,
         )
     ]
     response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/sources")
-    assert response.json()[0]["webhook_url"] == "https://api.example/webhooks/abc"
+    (source,) = response.json()
+    assert source["webhook_url"] == "https://api.example/webhooks/abc"
+    assert source["registered"] is True
 
 
 @pytest.mark.asyncio

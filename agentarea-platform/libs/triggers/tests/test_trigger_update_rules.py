@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_triggers.domain.enums import TriggerType
-from agentarea_triggers.domain.models import CronTrigger, Trigger, TriggerUpdate, WebhookTrigger
+from agentarea_triggers.domain.models import CronTrigger, Trigger, TriggerSession, TriggerUpdate
 from agentarea_triggers.infrastructure.repository import TriggerRepository
 from agentarea_triggers.logging_utils import TriggerValidationError
 from agentarea_triggers.trigger_service import TriggerService
@@ -19,16 +19,6 @@ def _service(existing: Trigger) -> TriggerService:
     service.stream_service = AsyncMock()
     service.model_instance_repository = AsyncMock()
     return service
-
-
-def _webhook() -> WebhookTrigger:
-    return WebhookTrigger(
-        name="w",
-        agent_id=uuid4(),
-        created_by="u",
-        workspace_id="ws",
-        webhook_id="wh-1234567890abcd",
-    )
 
 
 def _stream() -> Trigger:
@@ -57,11 +47,11 @@ def _cron() -> CronTrigger:
     [
         (_stream(), TriggerUpdate(event_filter={"kinds": "push"}), "event_filter"),
         (_stream(), TriggerUpdate(event_filter={"unknown": 1}), "event_filter"),
-        (_cron(), TriggerUpdate(event_filter={"kinds": ["push"]}), "webhook and stream"),
+        (_cron(), TriggerUpdate(event_filter={"kinds": ["push"]}), "only to stream triggers"),
         (
-            _webhook(),
-            TriggerUpdate(event_types=["push"], event_filter={"kinds": ["push"]}),
-            "not both",
+            _cron(),
+            TriggerUpdate(session=TriggerSession(idle_timeout="30m")),
+            "session applies only to stream triggers",
         ),
     ],
 )

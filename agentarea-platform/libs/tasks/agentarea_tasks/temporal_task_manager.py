@@ -273,7 +273,7 @@ class TemporalTaskManager(BaseTaskManager):
                 else [],
             ),
         )
-        updated = await self.task_repository.update_status(task.id, "running")
+        updated = await self.task_repository.update_status(task.id, "running", error=None)
         if updated is None:
             raise LookupError(f"Task {task.id} not found")
         logger.info(f"Task {task.id} resumed in workflow {execution_id}")

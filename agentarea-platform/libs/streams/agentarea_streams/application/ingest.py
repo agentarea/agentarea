@@ -2,12 +2,12 @@
 
 The event id is ``uuid5(stream, event key)``, or the id a processor derives for
 its output, so a repeat is the same event and the bus publishes it once. The
-workspace write quota counts what the events read model received in the last
-minute, across every stream of the workspace.
+workspace write quota is counted as each event is admitted, over a sliding
+minute, across every stream of the workspace (``WriteQuota``).
 """
 
-from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -16,11 +16,10 @@ from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..domain.errors import PayloadTooLargeError, StreamNotFoundError, StreamQuotaExceededError
-from ..domain.keys import MAX_EVENT_BYTES, encoded_size, event_id_for
-from ..domain.models import AppendResult, StreamEvent
+from ..domain.errors import StreamNotFoundError, StreamQuotaExceededError
+from ..domain.keys import event_id_for
+from ..domain.models import AppendResult, Attachment, StreamEvent
 from ..infrastructure.bus import StreamBus
-from ..infrastructure.event_repository import StreamEventRepository
 from ..infrastructure.orm import StreamORM
 
 
@@ -52,18 +51,22 @@ class StreamIngest:
         source_id: UUID | None = None,
         depth: int = 0,
         event_id: UUID | None = None,
+        source_type: str | None = None,
+        session_key: str | None = None,
+        sender: str | None = None,
+        attachments: Sequence[Attachment] = (),
     ) -> AppendResult:
         if not event_key.strip():
             raise ValueError("event_key is required: name what distinguishes this event")
-        size = encoded_size(event.data)
-        if size > MAX_EVENT_BYTES:
-            raise PayloadTooLargeError(size)
         await self._require_stream(stream_id)
         received_at = self.clock()
         await self._enforce_quota(received_at)
+        resolved_id = event_id or event_id_for(stream_id, event_key)
         stream_event = StreamEvent(
-            **event.model_dump(exclude={"id"}),
-            id=event_id or event_id_for(stream_id, event_key),
+            **event.model_dump(exclude={"id", "correlation_id"}),
+            id=resolved_id,
+            # An entry event starts the chain everything it causes carries.
+            correlation_id=event.correlation_id or str(resolved_id),
             stream_id=stream_id,
             workspace_id=self.user_context.workspace_id,
             created_by=self.user_context.user_id,
@@ -71,6 +74,10 @@ class StreamIngest:
             received_at=received_at,
             depth=depth,
             source_id=source_id,
+            source_type=source_type,
+            session_key=session_key,
+            sender=sender,
+            attachments=list(attachments),
         )
         appended = await self.bus.publish(stream_event)
         return AppendResult(event_id=stream_event.id, appended=appended)
@@ -85,10 +92,9 @@ class StreamIngest:
             raise StreamNotFoundError(stream_id)
 
     async def _enforce_quota(self, now: datetime) -> None:
-        recent = await StreamEventRepository(self.session, self.user_context).count_since(
-            now - timedelta(minutes=1)
-        )
-        if recent >= self.settings.WRITE_QUOTA:
+        if not await self.bus.quota.take(
+            self.user_context.workspace_id, self.settings.WRITE_QUOTA, now
+        ):
             raise StreamQuotaExceededError(
                 self.user_context.workspace_id, self.settings.WRITE_QUOTA
             )

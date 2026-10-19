@@ -136,6 +136,11 @@ def activity_fns(monkeypatch, wallet_service, audit):
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     monkeypatch.setattr(tool_activities, "_offload_large_activity_output", CancelledAfterTool())
+
+    async def caps_as_the_run_froze_them(session, user_context, agent_id, run_budget):
+        return run_budget
+
+    monkeypatch.setattr(tool_activities, "current_budget", caps_as_the_run_froze_them)
     fns = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
     return ctx, fns["execute_mcp_tool_activity"]
 

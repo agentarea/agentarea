@@ -30,8 +30,10 @@ from .patches import (
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
+    PAID_REPLY_KEPT_AT_LIMIT_PATCH,
     RUN_INPUT_IN_FIRST_MESSAGE_PATCH,
     SPEND_CAP_REACHED_STOPS_RUN_PATCH,
+    SPEND_CAP_REFUSAL_NOT_A_CALL_FAILURE_PATCH,
     THINKING_ONLY_REPLY_PATCH,
     TURN_ABORTED_EVENT_PATCH,
 )
@@ -100,6 +102,8 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
     async def _execute_iteration(self) -> None:
         """Execute a single iteration."""
         iteration = self.state.current_iteration
+        # A completion an earlier turn never got to store is stored by finalization.
+        self._completed_status = None
 
         self._events.add_event(
             EventTypes.TURN_STARTED,
@@ -145,6 +149,9 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     },
                 )
                 self._completion_event_published = True
+            if self._completed_status is not None:
+                completed, self._completed_status = self._completed_status, None
+                await self._persist_task_status(completed)
 
         except asyncio.CancelledError:
             self._abort_turn(iteration, "cancelled")
@@ -333,6 +340,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
+                self._conversation_seeded = True
                 if input_in_first_message:
                     self._refuse_a_head_the_window_cannot_hold(system_prompt)
                     self.state.context_head_seqs = [
@@ -544,6 +552,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 if prompt_tokens > 0:
                     self.state.last_prompt_tokens = prompt_tokens
                     self.context_manager.update_usage(prompt_tokens)
+                    self._note_prompt_tokens(prompt_tokens)
 
             # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
             display_content = content_value
@@ -627,6 +636,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             # this change publish it on their way to the continuation wait.
             if self._is_cancellation(e) or run_limit_reason(e) == "token_limit":
                 raise
+            # A spend cap refusing the call is no failed call: turn.aborted says why.
+            if spend_cap_reached(e) is not None and workflow.patched(
+                SPEND_CAP_REFUSAL_NOT_A_CALL_FAILURE_PATCH
+            ):
+                raise
             error_lower = self._extract_temporal_error_details(e).lower()
             cause = self._failure_cause(e)
             is_provider_quota_block = cause == "provider_out_of_credits" or (
@@ -661,8 +675,36 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             raise
 
         if billed_first:
-            self._enforce_inference_limits("LLM call")
+            try:
+                self._enforce_inference_limits("LLM call")
+            except ApplicationError:
+                if workflow.patched(PAID_REPLY_KEPT_AT_LIMIT_PATCH):
+                    self._keep_reply(reply)
+                raise
         return reply
+
+    def _keep_reply(self, reply: dict[str, Any]) -> None:
+        """Keep a paid reply in the conversation although the run stops at a limit on it.
+
+        Its tool calls are not run; the stop answers them as not executed.
+        """
+        content = reply.get("content") or ""
+        tool_calls = reply.get("tool_calls")
+        if not content.strip() and not tool_calls:
+            return
+        self.state.messages.append(
+            Message(
+                role=reply.get("role") or "assistant",
+                content=content,
+                tool_calls=tool_calls,
+                meta=reply.get("model"),
+            )
+        )
+        self._turn_call_ids = {
+            call["id"]
+            for call in tool_calls or []
+            if isinstance(call, dict) and isinstance(call.get("id"), str)
+        }
 
     async def _process_llm_response(self, response: dict[str, Any]) -> None:
         """Process LLM response and handle tool calls."""

@@ -63,8 +63,8 @@ async def world():
             text(
                 "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
                 "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
-                "consecutive_failures, validation_rules, created_at, updated_at) VALUES (:id, "
-                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, '{}', now(), now())"
+                "consecutive_failures, created_at, updated_at) VALUES (:id, "
+                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, now(), now())"
             ),
             {"id": trigger_id, "ws": ctx.workspace_id, "a": uuid4()},
         )

@@ -21,24 +21,25 @@ from agentarea_common.config import get_settings
 from agentarea_secrets.catalog_service import SecretCatalogService
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import EventFilter, StreamError
-from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
+from agentarea_streams.domain.enums import SourceKind
+from agentarea_streams.domain.source_types import EventOverrides
+from agentarea_streams.schemas import ForwardCreate, SourceCreate, StreamCreate
 from agentarea_triggers.infrastructure.reactions import ReactionRepository
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
 from ..api.v1._stream_sources import (
-    create_webhook_source,
+    create_source,
     delete_stream_with_sources,
-    release_webhook_source,
+    release_source,
 )
-from ..api.v1._trigger_creation import get_channel_webhook_service
 from ..api.v1.streams import (
+    SourceCreated,
+    SourceTypeResponse,
     StreamEventPage,
     StreamResponse,
     StreamSourceResponse,
-    StreamSourceTypeResponse,
     SubscriptionResponse,
-    WebhookSourceCreated,
     _events_with_outcomes,
     _subscription,
     source_response,
@@ -56,7 +57,7 @@ class StreamDeletedOutput(BaseModel):
 
 
 class SourceDeletedOutput(BaseModel):
-    deleted: bool = Field(description="True once the webhook source is removed.")
+    deleted: bool = Field(description="True once the source is removed.")
 
 
 class ForwardDeletedOutput(BaseModel):
@@ -71,7 +72,6 @@ def _secret_ports(session: Any, user_ctx: Any, secret_manager: Any) -> dict[str,
     return {
         "secret_manager": secret_manager,
         "secret_catalog": SecretCatalogService(session, user_ctx, secret_manager),
-        "webhook_service": get_channel_webhook_service(),
     }
 
 
@@ -160,9 +160,9 @@ class StreamsToolset(Toolset):
     async def delete(self, stream_id: StreamId) -> str:
         """Delete a stream and its events, sources and subscriptions.
 
-        Refused while a live webhook trigger's source feeds it or a trigger subscribes
-        to it (delete the trigger first), or while a forward of any stream writes into
-        it (remove that forward with ``streams_delete_forward`` first).
+        Refused while a trigger subscribes to it (delete the trigger first), or while
+        a forward of any stream writes into it (remove that forward with
+        ``streams_delete_forward`` first).
         """
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
@@ -178,12 +178,14 @@ class StreamsToolset(Toolset):
     @tool_method(
         display_name="List stream source types",
         effect="read",
-        output=builtins.list[StreamSourceTypeResponse],
+        output=builtins.list[SourceTypeResponse],
     )
     @unrestricted("platform catalogue data, as GET /v1/streams/source-types serves it")
     async def list_source_types(self) -> str:
-        """Webhook types a source can be, with the credentials and settings each needs."""
-        return json.dumps([t.model_dump(mode="json") for t in source_types()])
+        """Source types of the catalog, with the credentials and settings each needs."""
+        async with platform_read_context() as (_s, _u, repo_factory, _b, _sec):
+            types = await source_types(_service(repo_factory))
+            return json.dumps([t.model_dump(mode="json") for t in types])
 
     @tool_method(
         display_name="List stream sources",
@@ -198,19 +200,28 @@ class StreamsToolset(Toolset):
             return json.dumps([source_response(r).model_dump(mode="json") for r in rows])
 
     @tool_method(
-        display_name="Add webhook source to stream",
+        display_name="Add source to stream",
         effect="write",
         open_world=True,
-        output=WebhookSourceCreated,
+        output=SourceCreated,
     )
     @requires("edit", "stream", id_param="stream_id")
-    async def create_webhook_source(
+    async def create_source(
         self,
         stream_id: StreamId,
-        webhook_type: Annotated[
+        source_type: Annotated[
             str,
-            Field(description="Source type, a `webhook_type` from `streams_list_source_types`."),
+            Field(description="A `slug` from `streams_list_source_types`."),
         ],
+        kind: Annotated[
+            SourceKind,
+            Field(
+                description=(
+                    "webhook: the provider posts to the returned URL; poll: the platform "
+                    "fetches. Must be in the type's `delivery`."
+                )
+            ),
+        ] = SourceKind.WEBHOOK,
         credentials: Annotated[
             dict[str, Any] | None,
             Field(
@@ -225,23 +236,36 @@ class StreamsToolset(Toolset):
             dict[str, str] | None,
             Field(description="The type's `config` fields by key, as strings (e.g. shop_id)."),
         ] = None,
+        event_templates: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    'This source\'s own {"kind", "key", "session_key"} templates, e.g. '
+                    '{"key": "{body:id}"}; for a generic webhook, the key dedups retries.'
+                )
+            ),
+        ] = None,
     ) -> str:
-        """Add a webhook source to a stream, with no trigger; returns its public URL.
+        """Add a webhook or poll source to a stream; a webhook source returns its public URL.
 
-        ``webhook_type`` is one of ``list_source_types``. ``credentials`` holds the
-        type's secret fields, each a value or {"secret_id": ...} of a workspace
-        secret; they are stored by reference and never returned. ``config`` holds
-        its plain settings (``shop_id`` for yookassa).
+        Credentials are stored by reference and never returned; ones the type
+        issues and you left out come back once in ``issued``.
         """
         try:
-            payload = WebhookSourceCreate(
-                webhook_type=webhook_type, credentials=credentials or {}, config=config or {}
+            payload = SourceCreate(
+                source_type=source_type,
+                kind=kind,
+                credentials=credentials or {},
+                config=config or {},
+                event_templates=(
+                    EventOverrides.model_validate(event_templates) if event_templates else None
+                ),
             )
         except ValidationError as error:
             raise ToolError(str(error)) from error
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
-                row, issued = await create_webhook_source(
+                row, issued = await create_source(
                     UUID(stream_id),
                     payload,
                     service=_service(repo_factory),
@@ -252,34 +276,32 @@ class StreamsToolset(Toolset):
                 await session.rollback()
                 detail = error.detail if isinstance(error, HTTPException) else str(error)
                 raise ToolError(detail) from error
-            return WebhookSourceCreated(
-                **source_response(row).model_dump(), signing_secret=issued
+            return SourceCreated(
+                **source_response(row).model_dump(), issued=issued
             ).model_dump_json()
 
     @tool_method(
-        display_name="Remove webhook source",
+        display_name="Remove stream source",
         effect="destructive",
         idempotent=True,
         open_world=True,
         output=SourceDeletedOutput,
     )
     @requires("edit", "stream", id_param="stream_id")
-    async def delete_webhook_source(
+    async def delete_source(
         self,
         stream_id: StreamId,
         source_id: Annotated[
             str, Field(description="Source id (UUID), from `streams_list_sources`.")
         ],
     ) -> str:
-        """Remove a webhook source; one a live trigger owns goes with its trigger instead."""
+        """Remove a source and its credentials; its events stay."""
         async with platform_context() as (session, user_ctx, repo_factory, _b, secret_manager):
             try:
                 source = await _service(repo_factory).delete_source(
                     UUID(stream_id), UUID(source_id)
                 )
-                await release_webhook_source(
-                    source, **_secret_ports(session, user_ctx, secret_manager)
-                )
+                await release_source(source, **_secret_ports(session, user_ctx, secret_manager))
             except StreamError as error:
                 raise ToolError(str(error)) from error
             return json.dumps({"deleted": True})

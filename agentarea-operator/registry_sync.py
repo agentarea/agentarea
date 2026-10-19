@@ -35,6 +35,7 @@ VALID_TYPES = (
     "llm_models",
     "agents",
     "bundles",
+    "source_types",
 )
 
 
@@ -190,9 +191,7 @@ def _parse_standard_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
             pkg_version = pkg.get("version", version)
             if not image:
                 continue
-            env_schema = [
-                ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
-            ]
+            env_schema = [ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)]
             items.append(
                 {
                     "external_id": f"{identifier}/docker",
@@ -234,9 +233,7 @@ def _parse_standard_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
             else:
                 command = "uvx"
                 args = [pkg_name]
-            env_schema = [
-                ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
-            ]
+            env_schema = [ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)]
             items.append(
                 {
                     "external_id": f"{identifier}/command",
@@ -394,9 +391,7 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "cache_creation_input_cost_per_token": entry.get(
                         "cache_creation_input_cost_per_token"
                     ),
-                    "supports_function_calling": entry.get(
-                        "supports_function_calling", False
-                    ),
+                    "supports_function_calling": entry.get("supports_function_calling", False),
                     "is_active": entry.get("is_active", True),
                 },
                 "tags": entry.get("tags", []),
@@ -467,6 +462,26 @@ def _parse_bundles(data: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
+def _parse_source_types(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Event source types (ADR-0040): the whole entry is the spec, its slug the external id."""
+    items: list[dict[str, Any]] = []
+    for entry in data.get("source_types", []):
+        slug = entry.get("slug")
+        if not slug:
+            raise ValueError(f"source type entry {entry.get('name')!r} has no slug")
+        items.append(
+            {
+                "external_id": slug,
+                "name": entry.get("name") or slug,
+                "description": (entry.get("description") or "")[:500],
+                "version": entry.get("version") or "1.0.0",
+                "spec": entry,
+                "tags": [entry.get("delivery")] if entry.get("delivery") else [],
+            }
+        )
+    return items
+
+
 def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         data = {}
@@ -482,6 +497,8 @@ def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
         return _parse_agents(data)
     if registry_type == "bundles":
         return _parse_bundles(data)
+    if registry_type == "source_types":
+        return _parse_source_types(data)
     raise ValueError(f"Unknown registry type: {registry_type}")
 
 
@@ -539,9 +556,7 @@ def reconcile(
                 _resync_model_cache_prices(conn, existing["spec"], item.get("spec") or {})
             entity_id = existing["installed_entity_id"]
             if entity_id:
-                _update_entity(
-                    conn, registry_type, entity_id, item, workspace_id, existing["id"]
-                )
+                _update_entity(conn, registry_type, entity_id, item, workspace_id, existing["id"])
             updated_count += 1
         else:
             item_id = _create_registry_item(conn, registry_id, item, workspace_id)
@@ -649,9 +664,7 @@ def _get_registry_item(conn, registry_id: str, external_id: str) -> dict | None:
     }
 
 
-def _create_registry_item(
-    conn, registry_id: str, item: dict[str, Any], workspace_id: str
-) -> str:
+def _create_registry_item(conn, registry_id: str, item: dict[str, Any], workspace_id: str) -> str:
     item_id = str(uuid.uuid4())
     # registry_type/registry_priority/registry_active are the item's copies of
     # its registry's columns; catalog browsing filters and orders on them.
@@ -748,9 +761,7 @@ def _update_entity(
     _create_entity(conn, registry_type, item, workspace_id, registry_item_id)
 
 
-def _upsert_provider_spec(
-    conn, item: dict[str, Any], workspace_id: str
-) -> str:
+def _upsert_provider_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
     spec = item.get("spec") or {}
     provider_key = spec["provider_key"]
     row = conn.execute(
@@ -813,9 +824,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
     provider_spec_id = str(prow[0])
 
     mrow = conn.execute(
-        _text(
-            "SELECT id FROM model_specs WHERE provider_spec_id = :pid AND model_name = :mn"
-        ),
+        _text("SELECT id FROM model_specs WHERE provider_spec_id = :pid AND model_name = :mn"),
         {"pid": provider_spec_id, "mn": model_name},
     ).fetchone()
     if mrow:
@@ -933,9 +942,7 @@ def _upsert_mcp_server(
             tags.append(tag)
 
     row = conn.execute(
-        _text(
-            "SELECT id FROM mcp_servers WHERE name = :name AND workspace_id = :ws"
-        ),
+        _text("SELECT id FROM mcp_servers WHERE name = :name AND workspace_id = :ws"),
         {"name": item["name"], "ws": workspace_id},
     ).fetchone()
     tags_json = json.dumps(tags)
@@ -1024,8 +1031,7 @@ def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
         return (
             conn.execute(
                 _text(
-                    "SELECT 1 FROM mcp_servers "
-                    "WHERE workspace_id = :ws AND slug = :slug LIMIT 1"
+                    "SELECT 1 FROM mcp_servers WHERE workspace_id = :ws AND slug = :slug LIMIT 1"
                 ),
                 {"ws": workspace_id, "slug": candidate},
             ).fetchone()
@@ -1039,4 +1045,3 @@ def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
         if not _taken(candidate):
             return candidate
     raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
-

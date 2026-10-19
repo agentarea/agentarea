@@ -4,26 +4,26 @@ from .enums import (
     ExecutionStatus,
     TriggerStatus,
     TriggerType,
-    WebhookType,
 )
 from .models import (
     CronTrigger,
+    StreamTrigger,
     Trigger,
     TriggerCreate,
     TriggerExecution,
+    TriggerSession,
     TriggerUpdate,
-    WebhookTrigger,
 )
 
 __all__ = [
     "CronTrigger",
     "ExecutionStatus",
+    "StreamTrigger",
     "Trigger",
     "TriggerCreate",
     "TriggerExecution",
+    "TriggerSession",
     "TriggerStatus",
     "TriggerType",
     "TriggerUpdate",
-    "WebhookTrigger",
-    "WebhookType",
 ]

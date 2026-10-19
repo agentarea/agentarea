@@ -21,7 +21,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-VOCABULARY_VERSION = 3
+VOCABULARY_VERSION = 4
 
 LLM_STARTED = "llm.call.started"
 LLM_COMPLETED = "llm.call.completed"
@@ -75,6 +75,7 @@ RUNTIME_DISCOVERED = "runtime.discovered"
 COMMAND_RECEIVED = "command.received"
 COMMAND_REJECTED = "command.rejected"
 MESSAGE_QUEUED = "message.queued"
+MESSAGE_RECEIVED = "message.received"
 MESSAGE_REMOVED = "message.removed"
 INPUT_SUBMITTED = "input.submitted"
 DELEGATION_STARTED = "delegation.started"
@@ -111,6 +112,7 @@ EVENT_DESCRIPTIONS: dict[str, str] = {
     INPUT_SUBMITTED: "A person's answer to an input request reached the run.",
     INPUT_RESPONSE: "The run took the answer to an input request.",
     MESSAGE_QUEUED: "A message was queued for the agent's next turn.",
+    MESSAGE_RECEIVED: "A person's message entered the conversation: the run's input or a follow-up.",
     MESSAGE_REMOVED: "A queued message was removed before the agent saw it.",
     COMMAND_RECEIVED: "The run accepted a control command.",
     COMMAND_REJECTED: "The run refused a malformed control command.",
@@ -141,6 +143,10 @@ EVENT_DESCRIPTIONS: dict[str, str] = {
 }
 
 EVENT_TYPES: frozenset[str] = frozenset(EVENT_DESCRIPTIONS)
+
+# Signals that matter only while the run is live: broadcast, never stored
+# (ADR-0043 §9). The completed call supersedes them.
+LIVE_ONLY_TYPES: frozenset[str] = frozenset({LLM_STARTED, LLM_CHUNK, TOOL_PROGRESS})
 
 
 class UnknownEventTypeError(ValueError):

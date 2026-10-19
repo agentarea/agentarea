@@ -28,9 +28,9 @@ const preset: AgentPresetResponse = {
   unavailable_skills: ["refunds"],
   triggers: [
     {
-      name: "Telegram",
-      trigger_type: "webhook",
-      webhook_type: "telegram",
+      name: "Support chat",
+      trigger_type: "stream",
+      stream_id: "22222222-2222-4222-8222-222222222222",
       task_parameters: { text: "" },
     },
   ],

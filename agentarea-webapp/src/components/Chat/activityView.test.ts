@@ -10,6 +10,8 @@ import {
   hasVisibleAssistantContent,
   lastVisibleAssistantContent,
   shouldRenderConversationFallback,
+  transcriptShowsTerminalMessage,
+  withoutRunInput,
 } from "./activityView";
 
 const llm = (id: string, content: string): Part => ({
@@ -336,5 +338,96 @@ describe("terminal snapshots", () => {
     });
 
     expect(repeated.completedRuns).toHaveLength(1);
+  });
+});
+
+// A compaction marker sat inside the work group instead of the transcript.
+describe("notice segments", () => {
+  it("shows a compaction notice between work groups", () => {
+    const notice: Part = {
+      partId: "ev-1",
+      kind: "notice",
+      eventType: "context.compacted",
+      data: { messages_compacted: 4 },
+    };
+    const segments = buildActivitySegments(
+      [tool("t1"), notice, tool("t2")],
+      []
+    );
+    expect(segments.map((segment) => segment.kind)).toEqual([
+      "work",
+      "visible",
+      "work",
+    ]);
+  });
+});
+
+// A failed task printed the provider error twice: the failed call and task.failed.
+describe("transcriptShowsTerminalMessage", () => {
+  const failure: Part = {
+    partId: "e:1",
+    kind: "llm",
+    eventType: "llm.call.failed",
+    data: { error: "The model provider rejected the request: bad model" },
+  };
+
+  it("finds the failure already on screen", () => {
+    const segments = buildActivitySegments([failure], []);
+    expect(
+      transcriptShowsTerminalMessage(
+        segments,
+        "The model provider rejected the request: bad model "
+      )
+    ).toBe(true);
+  });
+
+  it("keeps a terminal line the transcript does not show", () => {
+    const segments = buildActivitySegments([failure], []);
+    expect(transcriptShowsTerminalMessage(segments, "Budget exceeded")).toBe(
+      false
+    );
+  });
+
+  it("does not count a failure folded into a work group", () => {
+    const segments = buildActivitySegments([tool("t1"), failure], []);
+    expect(
+      transcriptShowsTerminalMessage(
+        segments,
+        "The model provider rejected the request: bad model"
+      )
+    ).toBe(false);
+  });
+});
+
+describe("withoutRunInput", () => {
+  const message = (id: string): Part => ({
+    partId: id,
+    kind: "message",
+    eventType: "message.received",
+    data: { event_id: id, content: id },
+  });
+  const reply: Part = {
+    partId: "e:1",
+    kind: "llm",
+    eventType: "llm.call.completed",
+    data: { content: "hi" },
+  };
+
+  it("drops only the task's first message and keeps every follow-up in place", () => {
+    expect(
+      withoutRunInput([message("input"), reply, message("follow-up")])
+    ).toEqual([reply, message("follow-up")]);
+  });
+
+  it("shows a follow-up as its own row between the agent's work", () => {
+    const segments = buildActivitySegments(
+      withoutRunInput([message("input"), reply, message("follow-up")]),
+      []
+    );
+    expect(
+      segments.map((segment) =>
+        segment.kind === "work" ? segment.run.id : segment.part.partId
+      )
+    ).toEqual(["e:1", "follow-up"]);
   });
 });

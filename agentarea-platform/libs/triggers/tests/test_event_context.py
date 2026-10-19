@@ -8,7 +8,7 @@ import pytest
 from agentarea_common.trigger_event_file import event_data_json
 from agentarea_streams.domain import StreamEvent
 from agentarea_triggers.domain.enums import TriggerType
-from agentarea_triggers.domain.models import Trigger, WebhookTrigger
+from agentarea_triggers.domain.models import StreamTrigger, Trigger
 from agentarea_triggers.event_context import (
     EVENT_INLINE_LIMIT_BYTES,
     UNTRUSTED_DATA_NOTICE,
@@ -16,8 +16,8 @@ from agentarea_triggers.event_context import (
     TriggerEvent,
     render_event_block,
 )
+from agentarea_triggers.event_scrub import journal_data
 from agentarea_triggers.trigger_service import compose_task_input
-from agentarea_triggers.webhook_intake import journal_data
 
 RECEIVED = datetime(2026, 10, 6, 9, 30, 15, tzinfo=UTC)
 
@@ -164,13 +164,11 @@ def test_a_large_stream_event_stamps_the_file_the_run_must_provision():
 
 
 def test_a_chat_message_with_no_instruction_is_still_the_ask():
-    trigger = WebhookTrigger(
+    trigger = StreamTrigger(
         name="Support bot",
         agent_id=uuid4(),
         created_by="u",
         workspace_id="w",
-        webhook_id="wh-1234567890abcd",
-        webhook_type="telegram",
     )
     data = {"text": "where is my parcel?", "chat_id": 42, "raw_data": {"update_id": 1}}
     task_input = compose_task_input(
@@ -187,12 +185,11 @@ def test_a_chat_message_with_no_instruction_is_still_the_ask():
 
 
 def test_a_webhook_texts_never_displaces_the_trigger_instruction():
-    trigger = WebhookTrigger(
+    trigger = StreamTrigger(
         name="Incidents",
         agent_id=uuid4(),
         created_by="u",
         workspace_id="w",
-        webhook_id="wh-1234567890abcd",
         task_parameters={"text": "Open a ticket for this incident"},
     )
     data = {"body": {"text": "db is down", "severity": "high"}, "text": "db is down"}

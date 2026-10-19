@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +13,6 @@ import pytest_asyncio
 from agentarea_common.broker import RedisStreamsBroker
 from agentarea_common.broker.routes import ConsumerGroupRoute
 from agentarea_common.config.broker import KafkaSettings, RedisSettings
-from agentarea_common.config.channels import ChannelDeliverySettings
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.observability.broker_metrics import (
     BrokerHealthCollector,
@@ -28,7 +28,7 @@ async def broker():
     b = RedisStreamsBroker(REDIS_URL, namespace="test")
     try:
         await b.length(f"test:smoke:{uuid.uuid4()}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(f"Redis not reachable: {exc}")
     yield b
     await b.aclose()
@@ -55,9 +55,9 @@ async def test_scrape_reports_lag_pending_oldest_idle_and_dead_letters(broker):
     route = _route()
     await broker.ensure_group(route.stream, route.group, start="0")
     for n in range(3):
-        await broker.submit(route.stream, {"n": str(n)})
+        await broker.submit(route.stream, {"n": str(n)}, retention=timedelta(hours=1))
     await broker.consume(route.stream, route.group, "c1", count=1, block_ms=100)
-    await broker.submit(route.dlq, {"n": "x", "fatal_reason": "boom"})
+    await broker.submit(route.dlq, {"n": "x", "fatal_reason": "boom"}, retention=timedelta(hours=1))
     await asyncio.sleep(0.1)
     registry = _registry(broker, [route])
     labels = {"stream": route.stream, "group": route.group}
@@ -111,7 +111,6 @@ async def test_startup_registers_every_configured_group_and_close_unregisters():
     registry = CollectorRegistry()
     settings = SimpleNamespace(
         broker=RedisSettings(REDIS_URL=REDIS_URL),
-        channel_delivery=ChannelDeliverySettings(),
         streams=EventStreamSettings(),
     )
 
@@ -125,7 +124,7 @@ async def test_startup_registers_every_configured_group_and_close_unregisters():
 
 
 async def test_startup_refuses_a_broker_without_consumer_groups_to_read():
-    settings = SimpleNamespace(broker=KafkaSettings(), channel_delivery=ChannelDeliverySettings())
+    settings = SimpleNamespace(broker=KafkaSettings(), streams=EventStreamSettings())
 
     with pytest.raises(RuntimeError, match="AGENTAREA_BROKER=redis"):
         start_broker_health_metrics(settings, CollectorRegistry())  # type: ignore[arg-type]

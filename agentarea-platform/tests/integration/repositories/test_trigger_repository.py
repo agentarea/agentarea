@@ -5,13 +5,14 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
+from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
 from agentarea_triggers.domain.models import (
     CronTrigger,
+    StreamTrigger,
     TriggerCreate,
     TriggerExecution,
+    TriggerSession,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from agentarea_triggers.infrastructure.repository import (
     TriggerExecutionRepository,
@@ -47,23 +48,18 @@ class TestTriggerRepository:
         )
 
     @pytest_asyncio.fixture
-    def sample_webhook_trigger(self):
-        """Create a sample webhook trigger."""
-        return WebhookTrigger(
+    def sample_stream_trigger(self):
+        """Create a sample stream trigger."""
+        return StreamTrigger(
             id=uuid4(),
-            name="GitHub Webhook",
+            name="GitHub Pushes",
             description="Handle GitHub push events",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
             is_active=True,
             task_parameters={"action": "process_push"},
             conditions={"branch": "main"},
             created_by="test-user",
-            webhook_id="github-webhook-123",
-            allowed_methods=["POST"],
-            webhook_type=WebhookType.GITHUB,
-            validation_rules={"require_signature": True},
-            webhook_config={"secret": "webhook-secret"},
+            session=TriggerSession(continue_=True, idle_timeout="30m"),
         )
 
     async def test_create_cron_trigger(self, trigger_repository, sample_cron_trigger):
@@ -79,19 +75,16 @@ class TestTriggerRepository:
         assert created_trigger.cron_expression == "0 9 * * *"
         assert created_trigger.timezone == "UTC"
 
-    async def test_create_webhook_trigger(self, trigger_repository, sample_webhook_trigger):
-        """Test creating a webhook trigger."""
-        # Act
-        created_trigger = await trigger_repository.create_trigger(sample_webhook_trigger)
+    async def test_create_stream_trigger(self, trigger_repository, sample_stream_trigger):
+        """A stream trigger keeps its session settings."""
+        await trigger_repository.create_trigger(sample_stream_trigger)
 
-        # Assert
-        assert created_trigger.id == sample_webhook_trigger.id
-        assert created_trigger.name == "GitHub Webhook"
-        assert created_trigger.trigger_type == TriggerType.WEBHOOK
-        assert isinstance(created_trigger, WebhookTrigger)
-        assert created_trigger.webhook_id == "github-webhook-123"
-        assert created_trigger.webhook_type == WebhookType.GITHUB
-        assert created_trigger.allowed_methods == ["POST"]
+        stored = await trigger_repository.get_trigger(sample_stream_trigger.id)
+
+        assert isinstance(stored, StreamTrigger)
+        assert stored.trigger_type == TriggerType.STREAM
+        assert stored.name == "GitHub Pushes"
+        assert stored.session == TriggerSession(continue_=True, idle_timeout="30m")
 
     async def test_get_trigger_by_id(self, trigger_repository, sample_cron_trigger):
         """Test retrieving a trigger by ID."""
@@ -116,12 +109,12 @@ class TestTriggerRepository:
         assert result is None
 
     async def test_list_triggers(
-        self, trigger_repository, sample_cron_trigger, sample_webhook_trigger
+        self, trigger_repository, sample_cron_trigger, sample_stream_trigger
     ):
         """Test listing all triggers."""
         # Arrange
         await trigger_repository.create_trigger(sample_cron_trigger)
-        await trigger_repository.create_trigger(sample_webhook_trigger)
+        await trigger_repository.create_trigger(sample_stream_trigger)
 
         # Act
         triggers = await trigger_repository.list_triggers()
@@ -130,7 +123,7 @@ class TestTriggerRepository:
         assert len(triggers) == 2
         trigger_names = [t.name for t in triggers]
         assert "Daily Report" in trigger_names
-        assert "GitHub Webhook" in trigger_names
+        assert "GitHub Pushes" in trigger_names
 
     async def test_update_trigger(self, trigger_repository, sample_cron_trigger):
         """Test updating a trigger."""
@@ -217,19 +210,6 @@ class TestTriggerRepository:
         assert updated_trigger.name == "Updated Name"
         assert updated_trigger.description == "Updated description"
         assert updated_trigger.is_active is False
-
-    async def test_get_by_webhook_id(self, trigger_repository, sample_webhook_trigger):
-        """Test getting trigger by webhook ID."""
-        # Arrange
-        await trigger_repository.create_trigger(sample_webhook_trigger)
-
-        # Act
-        retrieved_trigger = await trigger_repository.get_by_webhook_id("github-webhook-123")
-
-        # Assert
-        assert retrieved_trigger is not None
-        assert retrieved_trigger.webhook_id == "github-webhook-123"
-        assert isinstance(retrieved_trigger, WebhookTrigger)
 
     async def test_update_execution_tracking(self, trigger_repository, sample_cron_trigger):
         """Test updating trigger execution tracking fields."""

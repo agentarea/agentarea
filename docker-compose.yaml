@@ -31,6 +31,8 @@ services:
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       # Server settings
       - PORT=${PORT:-8000}
+      # The public base of webhook URLs; the event service registers the same one.
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
       - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
       - AGENTAREA_API_WORKERS=${AGENTAREA_API_WORKERS:-1}
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
@@ -575,6 +577,10 @@ services:
       - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_EVENT_POLL_INTERVAL=30s
       - AGENTAREA_EVENT_MAX_POLLERS=10
+      # The public base of /webhooks/{webhook_id}, as the app advertises it.
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
+      # Source credentials are read from the database secret store.
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
     networks:
       - default
     restart: unless-stopped

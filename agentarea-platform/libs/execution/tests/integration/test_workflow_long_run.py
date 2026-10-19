@@ -344,10 +344,22 @@ def _activities(scenario: Scenario) -> list[Any]:
     @activity.defn(name="record_activity")
     async def record(request: RecordRequest) -> RecordResult:
         scenario.record(request.rows)
-        if request.events_json:
+        # The feed sees the event rows and the live signals sent beside them, in order.
+        events = [
+            {
+                "event_id": row.event_id,
+                "event_type": row.name,
+                "timestamp": row.timestamp,
+                "data": row.meta or {},
+            }
+            for row in request.rows
+            if row.kind == "event" and row.timestamp is not None
+        ] + [json.loads(event) for event in request.events_json]
+        events.sort(key=lambda event: event["timestamp"])
+        if events:
             await publish_events(
                 WorkflowEventsRequest(
-                    events_json=request.events_json,
+                    events_json=[json.dumps(event) for event in events],
                     workspace_id=request.workspace_id,
                     user_id=request.user_id,
                 )
@@ -736,8 +748,9 @@ async def test_the_conversation_lives_in_the_log_not_in_payloads(long_run_env):
     log_bytes = sum(len(json.dumps(message)) for message in scenario.log.values())
     assert log_bytes > 900_000
     assert max(scenario.llm_request_bytes) < 200_000
-    assert [scenario.log[seq]["role"] for seq in (0, 1)] == ["system", "user"]
-    assert scenario.log[max(scenario.log)].get("name") == "completion"
+    messages = [m for _, m in sorted(scenario.log.items()) if m.get("kind") != "event"]
+    assert [message["role"] for message in messages[:2]] == ["system", "user"]
+    assert messages[-1].get("name") == "completion"
 
 
 @pytest.mark.asyncio

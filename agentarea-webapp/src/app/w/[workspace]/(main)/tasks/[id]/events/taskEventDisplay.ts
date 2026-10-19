@@ -3,6 +3,10 @@
  * words, and the few facts in its data worth seeing without opening it.
  */
 
+import {
+  isUnavailableToolValue,
+  stripUnavailableToolValues,
+} from "@/components/Chat/utils/toolDetails";
 import { isTaskEventType, type TaskEventType } from "@/lib/events/contract";
 
 export type EventCategory =
@@ -78,6 +82,7 @@ const TYPE_KEYS: Readonly<Record<TaskEventType, string>> = {
   "approval.requested": "approvalRequest",
   "approval.decided": "approvalResponse",
   "message.queued": "messageQueued",
+  "message.received": "messageReceived",
   "message.removed": "messageRemoved",
   "command.received": "commandReceived",
   "command.rejected": "commandRejected",
@@ -116,7 +121,10 @@ export function eventTypeKey(type: string): string | null {
  * scope repeats down the table; what happened is the part to read. A type
  * with no dot is all action.
  */
-export function splitEventType(type: string): { scope: string; action: string } {
+export function splitEventType(type: string): {
+  scope: string;
+  action: string;
+} {
   const dot = type.lastIndexOf(".");
   return dot === -1
     ? { scope: "", action: type }
@@ -140,7 +148,13 @@ export function eventSummary(
 ): string | null {
   for (const key of SUMMARY_KEYS) {
     const value = data?.[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    // A marker standing in for a body the event did not keep is not its words.
+    if (
+      typeof value === "string" &&
+      value.trim() &&
+      !isUnavailableToolValue(value.trim())
+    )
+      return value.trim();
   }
   return null;
 }
@@ -170,6 +184,19 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/**
+ * The model an event names: the one that answered (`model_name`), or for a
+ * change, the old and the new one.
+ */
+function modelOf(data: Record<string, unknown>): string | null {
+  const to = text(record(data.to)?.model_name) ?? text(data.new_model);
+  if (to) {
+    const from = text(record(data.from)?.model_name) ?? text(data.old_model);
+    return from ? `${from} → ${to}` : to;
+  }
+  return text(data.model) ?? text(data.model_name);
+}
+
 /** The facts an event's data carries, in the order they read best. */
 export function eventFacts(
   data: Record<string, unknown> | undefined
@@ -177,7 +204,8 @@ export function eventFacts(
   if (!data) return [];
   const facts: EventFact[] = [];
 
-  const tool = text(data.tool_name) ?? text(data.skill_name) ?? text(data.script_name);
+  const tool =
+    text(data.tool_name) ?? text(data.skill_name) ?? text(data.script_name);
   if (tool) facts.push({ kind: "tool", value: tool });
 
   const args = record(data.arguments);
@@ -185,7 +213,7 @@ export function eventFacts(
     facts.push({ kind: "arguments", value: Object.keys(args) });
   }
 
-  const model = text(data.model);
+  const model = modelOf(data);
   if (model) facts.push({ kind: "model", value: model });
 
   const iteration = count(data.iteration);
@@ -213,4 +241,15 @@ export function eventFacts(
   if (errorType) facts.push({ kind: "errorType", value: errorType });
 
   return facts;
+}
+
+/**
+ * The event's data as the details show it: markers standing in for values the
+ * log did not keep are left out, and null when nothing else is there.
+ */
+export function shownEventData(
+  data: Record<string, unknown> | undefined
+): Record<string, unknown> | null {
+  const kept = record(stripUnavailableToolValues(data));
+  return kept && Object.keys(kept).length > 0 ? kept : null;
 }

@@ -11,7 +11,7 @@ This toolset is constructed per task by ``agent_execution_activities`` with
 ``create_cron`` call defaults to scheduling the calling agent.
 
 Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
-but the source of truth for ``create_cron``/``create_webhook`` is the
+but the source of truth for ``create_cron`` is the
 Pydantic DTO ``TriggerCreate`` in ``agentarea_triggers.schemas.dto``. The
 contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity.
 """
@@ -37,14 +37,13 @@ def _trigger_summary(trigger: Any) -> dict[str, Any]:
         "trigger_type": getattr(trigger.trigger_type, "value", str(trigger.trigger_type)),
         "is_active": trigger.is_active,
         "cron_expression": getattr(trigger, "cron_expression", None),
-        "webhook_id": getattr(trigger, "webhook_id", None),
     }
 
 
 @toolset(
     namespace="agentarea/triggers",
     display_name="Triggers",
-    description="Schedule agents on cron expressions or wire them to webhooks.",
+    description="Schedule agents on cron expressions and manage their triggers.",
     category="platform",
     plane="build",
 )
@@ -229,62 +228,6 @@ class TriggersAgentToolset(Toolset):
         except Exception as exc:
             await session.rollback()
             raise ToolError(f"create_cron failed: {exc}") from exc
-        finally:
-            await session.close()
-
-    @tool_method(effect="write")
-    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
-    async def create_webhook(
-        self,
-        name: str,
-        description: str = "",
-        webhook_id: str = "",
-        webhook_type: str = "generic",
-        agent_id: str = "",
-        allowed_methods: list[str] | None = None,
-        task_parameters: dict[str, Any] | None = None,
-        conditions: dict[str, Any] | None = None,
-        enabled: bool = True,
-        failure_threshold: int = 5,
-        event_types: list[str] | None = None,
-    ) -> str:
-        """Create a webhook trigger that fires the calling agent on inbound HTTP.
-
-        ``agent_id`` defaults to the calling agent. ``webhook_id`` is the
-        public path segment; if empty a URL-safe id is auto-generated.
-        ``webhook_type`` must be a registered channel ('generic', 'telegram',
-        'slack', 'discord', 'github', etc.). ``event_types`` filters which
-        channel events actually fire the trigger (empty = all).
-        """
-        from .schemas.dto import TriggerCreate
-
-        session, _user_ctx, service = await self._open()
-        try:
-            target_agent_id = self._resolve_agent_id(agent_id or None)
-            payload = TriggerCreate(
-                name=name,
-                description=description,
-                agent_id=UUID(target_agent_id),
-                trigger_type="webhook",
-                webhook_id=webhook_id or None,
-                webhook_type=webhook_type,
-                allowed_methods=allowed_methods or ["POST"],
-                task_parameters=task_parameters or {},
-                conditions=conditions or {},
-                enabled=enabled,
-                failure_threshold=failure_threshold,
-                event_types=event_types or [],
-            )
-            trigger = await service.create_trigger_from_payload(
-                payload,
-                created_by=self._require_user_id(),
-                workspace_id=self._require_workspace_id(),
-            )
-            await session.commit()
-            return json.dumps(_trigger_summary(trigger), default=str)
-        except Exception as exc:
-            await session.rollback()
-            raise ToolError(f"create_webhook failed: {exc}") from exc
         finally:
             await session.close()
 

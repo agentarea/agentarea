@@ -13,16 +13,21 @@ and so does this handler: the event is redelivered, and past ``MAX_ATTEMPTS``
 the router records an ``error`` reaction. The event is never dropped silently.
 """
 
+import logging
+
 from agentarea_common.auth.context import UserContext
 from agentarea_common.config.streams import EventStreamSettings
 from agentarea_common.events.ports import IntegrationEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import Verdict
+from ..domain.errors import StreamNotFoundError
 from ..domain.keys import derived_event_id
 from ..domain.models import HandlerResult, StreamEvent, SubscriptionView
 from ..infrastructure.bus import StreamBus
 from .ingest import StreamIngest
+
+logger = logging.getLogger(__name__)
 
 
 class ForwardHandler:
@@ -50,22 +55,33 @@ class ForwardHandler:
             (output, derived_event_id(copy_id, output))
             for output in sorted(subscription.output_stream_ids)
         ]
+        published: list = []
         for output, derived_id in derived:
-            await ingest.append(
-                output,
-                IntegrationEvent(
-                    type=event.type,
-                    source=f"stream:{event.stream_id}",
-                    subject=event.subject,
-                    time=event.time,
-                    correlation_id=event.correlation_id or str(event.id),
-                    causation_id=str(event.id),
-                    data=event.data,
-                ),
-                event_key=f"{event.stream_id}:{event.id}",
-                depth=depth,
-                event_id=derived_id,
-            )
-        return HandlerResult(
-            verdict=Verdict.REACTED, derived_event_ids=[derived_id for _, derived_id in derived]
-        )
+            try:
+                await ingest.append(
+                    output,
+                    IntegrationEvent(
+                        type=event.type,
+                        source=f"stream:{event.stream_id}",
+                        subject=event.subject,
+                        time=event.time,
+                        correlation_id=event.correlation_id or str(event.id),
+                        causation_id=str(event.id),
+                        data=event.data,
+                    ),
+                    event_key=f"{event.stream_id}:{event.id}",
+                    depth=depth,
+                    event_id=derived_id,
+                    source_type=event.source_type,
+                    session_key=event.session_key,
+                    sender=event.sender,
+                    attachments=event.attachments,
+                )
+            except StreamNotFoundError:
+                # An output deleted since the forward was read: nothing can go there.
+                logger.info(
+                    "Forward %s skips output %s, which no longer exists", subscription.id, output
+                )
+                continue
+            published.append(derived_id)
+        return HandlerResult(verdict=Verdict.REACTED, derived_event_ids=published)

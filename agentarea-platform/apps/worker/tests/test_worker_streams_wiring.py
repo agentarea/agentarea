@@ -22,6 +22,11 @@ async def test_partitions_exist_before_the_groups_consume_and_they_stop_first():
     changes.stop = AsyncMock(side_effect=lambda: order.append("stop changes"))
     partitions.stop = AsyncMock(side_effect=lambda: order.append("stop partitions"))
     bus.aclose = AsyncMock(side_effect=lambda: order.append("close bus"))
+    polled, autoclaimer = MagicMock(), MagicMock()
+    polled.start = AsyncMock(side_effect=lambda: order.append("polled"))
+    polled.stop = AsyncMock(side_effect=lambda: order.append("stop polled"))
+    autoclaimer.start = AsyncMock(side_effect=lambda: order.append("autoclaimer"))
+    autoclaimer.stop = AsyncMock(side_effect=lambda: order.append("stop autoclaimer"))
 
     topics = ["streams.events.0", "streams.events.1"]
     runtime = StreamRuntime(
@@ -31,15 +36,21 @@ async def test_partitions_exist_before_the_groups_consume_and_they_stop_first():
         partitions=partitions,
         bus=bus,
         topics=topics,
+        polled=polled,
+        polled_autoclaimer=autoclaimer,
     )
     await runtime.start()
     await runtime.stop()
 
     assert order == [
         "partitions",
+        "polled",
+        "autoclaimer",
         "changes",
         "events-view",
         "router",
+        "stop autoclaimer",
+        "stop polled",
         "stop events-view",
         "stop router",
         "stop changes",

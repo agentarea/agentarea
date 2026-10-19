@@ -62,6 +62,9 @@ class _Conversation:
             return self.logged_up_to
         return max((entry.seq for entry in self.entries), default=-1) + 1
 
+    async def has_messages_from(self, _task_id: UUID, seq: int) -> bool:
+        return any(entry.seq >= seq and entry.kind != "event" for entry in self.entries)
+
     async def write(self, _task_id: UUID, entries: list[ConversationEntry]) -> None:
         self.written.extend(entries)
 
@@ -289,6 +292,29 @@ async def test_snapshot_behind_the_log_is_rebuilt_instead_of_overwriting_it():
 
     [(_, resume, _)] = engine.resumed
     assert resume.snapshot.next_seq == 6
+    assert log.written == []
+
+
+@pytest.mark.asyncio
+async def test_closing_events_after_the_snapshot_resume_it_after_them():
+    task = _task("completed", {"conversation_resume": SNAPSHOT}, result={"response": "Done"})
+    log = _Conversation(
+        [
+            ConversationEntry(seq=3, role="assistant", content="Done"),
+            ConversationEntry(seq=4, kind="event", role="event", content="", name="task.completed"),
+            ConversationEntry(
+                seq=5, kind="event", role="event", content="", name="execution.finished"
+            ),
+        ]
+    )
+    service, engine, _ = _service(
+        task, _Workflows(running=False, execution_status="completed"), log
+    )
+
+    assert await service.queue_follow_up(task.id, "And then?") is True
+
+    [(_, resume, _)] = engine.resumed
+    assert resume.snapshot.model_dump() == {**SNAPSHOT, "next_seq": 6}
     assert log.written == []
 
 

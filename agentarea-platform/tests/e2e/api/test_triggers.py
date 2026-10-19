@@ -31,7 +31,8 @@ def test_trigger_lifecycle(alice_client: httpx.Client) -> None:
             "name": "t-lifecycle",
             "description": "lifecycle test",
             "agent_id": agent_id,
-            "trigger_type": "webhook",
+            "trigger_type": "cron",
+            "cron_expression": "0 0 1 1 *",
         },
     )
     assert created.status_code == 201, created.text[:200]
@@ -55,15 +56,20 @@ def test_trigger_lifecycle(alice_client: httpx.Client) -> None:
 @pytest.mark.integration
 def test_trigger_enable_disable(alice_client: httpx.Client) -> None:
     agent_id = _create_agent(alice_client, "trigger-toggle-host")
-    trigger_id = alice_client.post(
-        f"{alice_client.ws}/triggers/",
-        json={
-            "name": "t-toggle",
-            "description": "toggle",
-            "agent_id": agent_id,
-            "trigger_type": "webhook",
-        },
-    ).raise_for_status().json()["id"]
+    trigger_id = (
+        alice_client.post(
+            f"{alice_client.ws}/triggers/",
+            json={
+                "name": "t-toggle",
+                "description": "toggle",
+                "agent_id": agent_id,
+                "trigger_type": "cron",
+                "cron_expression": "0 0 1 1 *",
+            },
+        )
+        .raise_for_status()
+        .json()["id"]
+    )
 
     disabled = alice_client.post(f"{alice_client.ws}/triggers/{trigger_id}/disable")
     assert disabled.status_code in (200, 204), disabled.text[:200]
@@ -77,19 +83,22 @@ def test_trigger_enable_disable(alice_client: httpx.Client) -> None:
 
 
 @pytest.mark.integration
-def test_trigger_isolation(
-    alice_client: httpx.Client, bob_client: httpx.Client
-) -> None:
+def test_trigger_isolation(alice_client: httpx.Client, bob_client: httpx.Client) -> None:
     alice_agent = _create_agent(alice_client, "alice-trigger-host")
-    alice_trigger_id = alice_client.post(
-        f"{alice_client.ws}/triggers/",
-        json={
-            "name": "alice-secret-trigger",
-            "description": "isolation",
-            "agent_id": alice_agent,
-            "trigger_type": "webhook",
-        },
-    ).raise_for_status().json()["id"]
+    alice_trigger_id = (
+        alice_client.post(
+            f"{alice_client.ws}/triggers/",
+            json={
+                "name": "alice-secret-trigger",
+                "description": "isolation",
+                "agent_id": alice_agent,
+                "trigger_type": "cron",
+                "cron_expression": "0 0 1 1 *",
+            },
+        )
+        .raise_for_status()
+        .json()["id"]
+    )
 
     cross_get = bob_client.get(f"{bob_client.ws}/triggers/{alice_trigger_id}")
     assert cross_get.status_code == 404, cross_get.text[:200]
@@ -115,7 +124,8 @@ def test_trigger_rejects_other_users_agent(
             "name": "bob-attack",
             "description": "should fail",
             "agent_id": alice_agent_id,
-            "trigger_type": "webhook",
+            "trigger_type": "cron",
+            "cron_expression": "0 0 1 1 *",
         },
     )
     assert attack.status_code in (400, 403, 404), (

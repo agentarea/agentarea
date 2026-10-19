@@ -16,14 +16,14 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from agentarea_common.audit import audited
-from agentarea_common.channel_origin import (
+from agentarea_common.config import get_settings
+from agentarea_common.events.base_events import EventEnvelope
+from agentarea_common.events.broker import EventBroker
+from agentarea_common.reserved_task_parameters import (
     FOLLOW_UP_MESSAGE_PARAMETER,
     RESERVED_TASK_PARAMETERS,
     drop_reserved_parameters,
 )
-from agentarea_common.config import get_settings
-from agentarea_common.events.base_events import EventEnvelope
-from agentarea_common.events.broker import EventBroker
 from agentarea_common.trigger_event_file import (
     TRIGGER_EVENT_FILE_PARAMETER,
     TRIGGER_EVENT_PARAMETER,
@@ -31,14 +31,13 @@ from agentarea_common.trigger_event_file import (
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     EventFilter,
-    StreamNameTakenError,
     StreamNotFoundError,
     value_at,
 )
-from agentarea_streams.infrastructure.repository import find_webhook_source
 from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
+from .delivery_address import FiringDelivery
 from .domain.cron import cron_expression_error, timezone_error
 from .domain.enums import ExecutionStatus, TriggerType
 from .domain.models import (
@@ -49,10 +48,9 @@ from .domain.models import (
     TriggerExecution,
     TriggerFiring,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from .event_context import TriggerEvent, render_event_block
-from .failures import TaskNotStartedError, is_permanent
+from .failures import TaskNotStartedError, is_permanent, is_spend_cap_refusal
 from .infrastructure.repository import TriggerExecutionRepository, TriggerRepository
 from .llm_condition_evaluator import (
     LLMConditionEvaluationError,
@@ -73,7 +71,6 @@ from .schemas.dto import TriggerCreate as TriggerCreatePayload
 from .schemas.dto import TriggerUpdate as TriggerUpdatePayload
 from .temporal_schedule_manager import TemporalScheduleManager
 from .trigger_validation import validate_trigger_configuration
-from .webhook_verification import keep_stored_secret_fields
 
 if TYPE_CHECKING:
     from agentarea_tasks.domain.interfaces import FollowUpClaim
@@ -95,22 +92,6 @@ def _only_field_matches(conditions: dict[str, Any]) -> bool:
 # Temporal activity, for schedules and pollers -- and they had drifted apart.
 NO_TASK_TEXT = (
     "Trigger has no task text: nothing arrived with the event and none is set on the trigger"
-)
-
-# Where to send a reply within the trigger's own channel. Anything that picks
-# the channel, the credentials or a delivery target is set from the trigger.
-_ORIGIN_ROUTING_FIELDS = frozenset(
-    {
-        "chat_id",
-        "message_id",
-        "channel_id",
-        "thread_ts",
-        "reply_to",
-        "subject",
-        "references",
-        "user_display_name",
-        "presentation",
-    }
 )
 
 
@@ -338,50 +319,18 @@ class TriggerService:
             ) from None
 
     async def _bind_stream(self, trigger: Trigger, trigger_data: TriggerCreate) -> None:
-        """Give a webhook trigger its own stream, or subscribe a stream trigger to its stream."""
-        if isinstance(trigger, WebhookTrigger):
-            await self.stream_service.create_webhook_stream_for_trigger(
-                trigger_id=trigger.id,
-                trigger_name=trigger.name,
-                webhook_id=trigger.webhook_id,
-                webhook_type=str(trigger.webhook_type),
-                allowed_methods=trigger.allowed_methods,
-                validation_rules=trigger.validation_rules,
-                webhook_config=trigger.webhook_config,
-                event_types=trigger.event_types,
-            )
-        elif trigger_data.trigger_type == TriggerType.STREAM:
-            if trigger_data.stream_id is None:
-                raise TriggerValidationError("stream_id is required for STREAM triggers")
-            await self.stream_service.subscribe_trigger(
-                stream_id=trigger_data.stream_id,
-                trigger_id=trigger.id,
-                event_filter=EventFilter.model_validate(trigger_data.event_filter or {}),
-            )
+        """Subscribe a stream trigger to its stream."""
+        if trigger_data.trigger_type != TriggerType.STREAM:
+            return
+        if trigger_data.stream_id is None:
+            raise TriggerValidationError("stream_id is required for STREAM triggers")
+        await self.stream_service.subscribe_trigger(
+            stream_id=trigger_data.stream_id,
+            trigger_id=trigger.id,
+            event_filter=EventFilter.model_validate(trigger_data.event_filter or {}),
+        )
 
-    async def _sync_stream_binding(
-        self, trigger_id: UUID, trigger: Trigger, trigger_update: TriggerUpdate
-    ) -> None:
-        if isinstance(trigger, WebhookTrigger):
-            fields = {
-                name: value
-                for name, value in (
-                    ("allowed_methods", trigger_update.allowed_methods),
-                    (
-                        "webhook_type",
-                        str(trigger.webhook_type) if trigger_update.webhook_type else None,
-                    ),
-                    ("validation_rules", trigger_update.validation_rules),
-                    ("webhook_config", trigger_update.webhook_config),
-                )
-                if value is not None
-            }
-            if fields:
-                await self.stream_service.sync_trigger_webhook_source(trigger_id, **fields)
-            if trigger_update.event_types is not None:
-                await self.stream_service.update_trigger_filter(
-                    trigger_id, EventFilter.from_trigger_event_types(trigger_update.event_types)
-                )
+    async def _sync_stream_binding(self, trigger_id: UUID, trigger_update: TriggerUpdate) -> None:
         if trigger_update.event_filter is not None:
             await self.stream_service.update_trigger_filter(
                 trigger_id, EventFilter.model_validate(trigger_update.event_filter)
@@ -452,23 +401,12 @@ class TriggerService:
         # Validate update data
         await self._validate_trigger_update(existing_trigger, trigger_update)
 
-        # Credentials are never read back, so an edit that omits one or returns
-        # the mask it was shown must not wipe the stored value.
-        for field in ("validation_rules", "webhook_config"):
-            sent = getattr(trigger_update, field)
-            if sent is not None:
-                try:
-                    kept = keep_stored_secret_fields(sent, getattr(existing_trigger, field, None))
-                except ValueError as exc:
-                    raise TriggerValidationError(f"{field}: {exc}") from exc
-                setattr(trigger_update, field, kept)
-
         # Update the trigger
         updated_trigger = await self.trigger_repository.update_by_id(trigger_id, trigger_update)
 
         if updated_trigger:
             logger.info(f"Updated trigger {trigger_id}")
-            await self._sync_stream_binding(trigger_id, updated_trigger, trigger_update)
+            await self._sync_stream_binding(trigger_id, trigger_update)
 
             # Update schedule if it's a cron trigger
             if updated_trigger.trigger_type == TriggerType.CRON and isinstance(
@@ -521,10 +459,6 @@ class TriggerService:
                 logger.error(
                     f"Failed to delete schedule for cron trigger {trigger_id}: {e}", exc_info=True
                 )
-
-        if isinstance(existing_trigger, WebhookTrigger):
-            # The URL dies with the trigger, as before; the stream and its history stay.
-            await self.stream_service.remove_trigger_webhook_sources(trigger_id)
 
         # Delete the trigger (cascade will handle executions)
         success = await self.trigger_repository.delete(trigger_id)
@@ -1111,25 +1045,6 @@ class TriggerService:
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration; see ``validate_trigger_configuration``."""
         await validate_trigger_configuration(trigger_data, self.model_instance_repository)
-        if (
-            trigger_data.trigger_type == TriggerType.WEBHOOK
-            and trigger_data.webhook_id
-            and await self.trigger_repository.webhook_id_in_use(trigger_data.webhook_id)
-        ):
-            raise TriggerValidationError("Webhook ID is already in use")
-        if (
-            trigger_data.trigger_type == TriggerType.WEBHOOK
-            and trigger_data.webhook_id
-            and await find_webhook_source(self.repository_factory.session, trigger_data.webhook_id)
-        ):
-            raise TriggerValidationError("Webhook ID is already in use")
-        if trigger_data.trigger_type == TriggerType.WEBHOOK and trigger_data.webhook_id:
-            try:
-                await self.stream_service.reusable_webhook_stream(
-                    trigger_data.name, trigger_data.webhook_id
-                )
-            except StreamNameTakenError as error:
-                raise TriggerValidationError(str(error)) from error
         if trigger_data.trigger_type == TriggerType.STREAM and trigger_data.stream_id:
             try:
                 await self.stream_service.get_stream(trigger_data.stream_id)
@@ -1177,17 +1092,15 @@ class TriggerService:
                 if errors:
                     raise TriggerValidationError("; ".join(errors))
 
+        if (
+            trigger_update.session is not None
+            and existing_trigger.trigger_type != TriggerType.STREAM
+        ):
+            raise TriggerValidationError("session applies only to stream triggers")
+
         if trigger_update.event_filter is not None:
-            if not isinstance(existing_trigger, WebhookTrigger) and (
-                existing_trigger.trigger_type != TriggerType.STREAM
-            ):
-                raise TriggerValidationError(
-                    "event_filter applies only to webhook and stream triggers"
-                )
-            if trigger_update.event_types is not None:
-                raise TriggerValidationError(
-                    "Send event_types or event_filter, not both: each replaces the other"
-                )
+            if existing_trigger.trigger_type != TriggerType.STREAM:
+                raise TriggerValidationError("event_filter applies only to stream triggers")
             try:
                 EventFilter.model_validate(trigger_update.event_filter)
             except ValidationError as error:
@@ -1203,36 +1116,12 @@ class TriggerService:
             # Editing a schedule into the state create_trigger refuses is the
             # same mistake, made later. An update that leaves task_parameters
             # alone leaves the existing text alone with it.
-            if trigger_update.task_parameters is not None and not existing_trigger.data_extractor:
+            if trigger_update.task_parameters is not None:
                 task_text = trigger_update.task_parameters.get("text")
                 if not isinstance(task_text, str) or not task_text.strip():
                     raise TriggerValidationError("Task text is required for CRON triggers")
 
-        elif isinstance(existing_trigger, WebhookTrigger):
-            if trigger_update.allowed_methods is not None:
-                if not trigger_update.allowed_methods:
-                    raise TriggerValidationError("At least one HTTP method must be allowed")
-
-                valid_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-                for method in trigger_update.allowed_methods:
-                    if method.upper() not in valid_methods:
-                        raise TriggerValidationError(f"Invalid HTTP method: {method}")
-
     # Utility Methods
-
-    async def get_trigger_by_webhook_id(self, webhook_id: str) -> WebhookTrigger | None:
-        """Get a webhook trigger by webhook ID.
-
-        Args:
-            webhook_id: The webhook ID
-
-        Returns:
-            The webhook trigger if found, None otherwise
-        """
-        trigger = await self.trigger_repository.get_by_webhook_id(webhook_id)
-        if trigger and isinstance(trigger, WebhookTrigger):
-            return trigger
-        return None
 
     async def list_cron_triggers_due(
         self, current_time: datetime | None = None
@@ -1302,6 +1191,7 @@ class TriggerService:
         raise_retryable: bool = False,
         event: TriggerEvent | None = None,
         caller: str | None = None,
+        delivery: FiringDelivery | None = None,
     ) -> TriggerFiring:
         """Run a trigger once and say what happened.
 
@@ -1315,6 +1205,8 @@ class TriggerService:
         workflow, which stores no task. ``provenance`` is stamped on the task
         it creates. ``caller`` is the person a messenger event came from, admitted
         before this call; the task is theirs rather than the trigger owner's.
+        ``delivery`` is where a stream firing's task replies and the session it
+        joins (see ``delivery_address``).
 
         With ``raise_retryable`` only a permanent failure (see
         ``failures.is_permanent``) becomes an ``error`` outcome; anything else --
@@ -1411,7 +1303,7 @@ class TriggerService:
                     )
 
                 task_params = task_input.stamp(
-                    await self._build_task_parameters(trigger, trigger_data, fired_by)
+                    await self._build_task_parameters(trigger, trigger_data, fired_by, delivery)
                 )
 
                 from agentarea_tasks.domain.models import AgentTask, TaskProvenance
@@ -1487,6 +1379,17 @@ class TriggerService:
                 )
                 raise
             execution_time_ms = int((time.time() - start_time) * 1000)
+            if is_spend_cap_refusal(e):
+                # A spend cap or budget turned the firing away; the trigger is not
+                # failing, so the refusal is recorded without counting towards
+                # failure_threshold.
+                logger.info(f"Trigger {trigger_id} refused by a spend cap: {e}")
+                execution = await self._record_execution_skipped(
+                    trigger_id, str(e), trigger_data, fired_by=fired_by
+                )
+                return TriggerFiring(
+                    outcome="skipped", reason=str(e), verdict=verdict, execution=execution
+                )
             logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
             execution = None
             try:
@@ -1586,7 +1489,11 @@ class TriggerService:
         )
 
     async def _build_task_parameters(
-        self, trigger: Trigger, trigger_data: dict[str, Any], fired_by: str | None = None
+        self,
+        trigger: Trigger,
+        trigger_data: dict[str, Any],
+        fired_by: str | None = None,
+        delivery: FiringDelivery | None = None,
     ) -> dict[str, Any]:
         """Build task parameters from trigger and execution data using LLM extraction.
 
@@ -1594,14 +1501,15 @@ class TriggerService:
             trigger: The trigger
             trigger_data: Trigger execution data
             fired_by: Principal who asked for this run, when a person did
+            delivery: Where a stream firing's task replies and the session it joins
 
         Returns:
             Task parameters
         """
         # Start with trigger's task parameters. Reserved keys stored there
-        # predate the create/update check; only _build_channel_origin below
-        # may name the trigger replies are sent through, and only
-        # compose_task_input the event file and the follow-up message.
+        # predate the create/update check; only the firing's delivery below may
+        # name where replies go and the session, and only compose_task_input the
+        # event file and the follow-up message.
         params = dict(drop_reserved_parameters(trigger.task_parameters) or {})
 
         # Add trigger metadata
@@ -1619,20 +1527,12 @@ class TriggerService:
         if fired_by is not None:
             params["fired_by"] = fired_by
 
-        # Which channel the webhook came from. channel_origin carries this only
-        # for the channels that need outbound routing, so without it a GitHub or
-        # Stripe webhook reaches the task listing as an anonymous "webhook".
-        if isinstance(trigger, WebhookTrigger) and trigger.webhook_type:
-            params["webhook_type"] = str(trigger.webhook_type)
-
         # Add trigger data
         if trigger_data:
             params["trigger_data"] = trigger_data
 
-        # Build channel_origin for outbound routing
-        channel_origin = self._build_channel_origin(trigger, trigger_data)
-        if channel_origin:
-            params["channel_origin"] = channel_origin
+        if delivery is not None:
+            delivery.stamp(params)
 
         # Use LLM to extract additional parameters if instruction is provided
         llm_instruction = trigger.task_parameters.get("llm_parameter_extraction")
@@ -1672,101 +1572,6 @@ class TriggerService:
                 # Continue with basic parameters
 
         return params
-
-    def _build_channel_origin(
-        self, trigger: Trigger, trigger_data: dict[str, Any]
-    ) -> dict[str, Any] | None:
-        """Build channel_origin metadata for outbound routing.
-
-        Extracts channel-specific routing info from trigger data so the
-        outbound channel delivery can send responses back to the
-        originating channel.
-
-        Returns:
-            Channel origin dict or None if no outbound routing needed.
-        """
-        trigger_id = str(trigger.id)
-
-        # A supplied origin is event data: only its routing fields are kept.
-        # The channel and the credentials replies are sent with come from the
-        # trigger, so an origin naming another trigger cannot borrow its bot.
-        supplied = trigger_data.get("channel_origin")
-        if supplied and isinstance(supplied, dict):
-            channel = self._reply_channel(trigger)
-            if channel is None:
-                return None
-            channel_type, credential_type = channel
-            return {
-                **{k: v for k, v in supplied.items() if k in _ORIGIN_ROUTING_FIELDS},
-                "type": channel_type,
-                "credential_type": credential_type,
-                "trigger_id": trigger_id,
-            }
-
-        # Build channel_origin from webhook trigger data
-        if isinstance(trigger, WebhookTrigger):
-            webhook_type = trigger.webhook_type
-
-            if webhook_type == "telegram":
-                chat_id = trigger_data.get("chat_id")
-                if chat_id:
-                    return {
-                        "type": "telegram",
-                        "trigger_id": trigger_id,
-                        "chat_id": str(chat_id),
-                        "message_id": trigger_data.get("message_id"),
-                        "user_display_name": trigger_data.get("username", ""),
-                        "presentation": "concise",
-                    }
-
-            elif webhook_type == "slack":
-                channel_id = trigger_data.get("channel") or trigger_data.get("channel_id")
-                if channel_id:
-                    return {
-                        "type": "slack",
-                        "trigger_id": trigger_id,
-                        "channel_id": channel_id,
-                        "thread_ts": trigger_data.get("thread_ts") or trigger_data.get("ts"),
-                        "user_display_name": trigger_data.get("user_name", ""),
-                        "presentation": "concise",
-                    }
-
-            elif webhook_type == "email":
-                from .channels.email_message import build_email_channel_origin
-
-                return build_email_channel_origin(trigger_data, trigger_id=trigger_id)
-
-            elif webhook_type == "discord":
-                channel_id = trigger_data.get("channel_id")
-                if channel_id:
-                    return {
-                        "type": "discord",
-                        "trigger_id": trigger_id,
-                        "channel_id": channel_id,
-                        "message_id": trigger_data.get("id"),
-                        "presentation": "concise",
-                    }
-
-            # Generic webhook — no outbound routing
-            return None
-
-        # Cron triggers without extractors don't have channel_origin
-        return None
-
-    @staticmethod
-    def _reply_channel(trigger: Trigger) -> tuple[str, str] | None:
-        """(channel type, credential type) this trigger's replies go out on, if any."""
-        if isinstance(trigger, WebhookTrigger):
-            webhook_type = str(trigger.webhook_type)
-            if webhook_type == "generic":
-                return None
-            return webhook_type, webhook_type
-        extractor = getattr(trigger, "data_extractor", None)
-        if extractor:
-            from .extractors import reply_channel
-
-            return reply_channel(extractor)
-        return None
 
     async def evaluate_trigger_verdict(
         self, trigger: Trigger, event_data: dict[str, Any]

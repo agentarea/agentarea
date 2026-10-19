@@ -11,6 +11,7 @@ Set TASKS_TEST_DATABASE_URL to a postgresql+asyncpg URL for a disposable,
 already-migrated database.
 """
 
+import json
 import os
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -39,8 +40,10 @@ class _Bodies:
     def __init__(self) -> None:
         self.stored: dict[str, str] = {}
 
-    async def put(self, workspace_id: str, task_id: UUID, event_id: UUID, body: str) -> str:
-        ref = f"tasks/{workspace_id}/{task_id}/log/{event_id}"
+    async def put(
+        self, workspace_id: str, task_id: UUID, event_id: UUID, body: str, *, part: str = "content"
+    ) -> str:
+        ref = f"tasks/{workspace_id}/{task_id}/log/{event_id}.{part}"
         self.stored[ref] = body
         return ref
 
@@ -279,3 +282,78 @@ async def test_a_kind_outside_message_compaction_and_event_is_refused(session):
 
     with pytest.raises(IntegrityError):
         await log.append(task.id, [_row(0, "old", kind="summary")])
+
+
+async def test_a_task_that_runs_again_drops_the_failure_a_stopped_update_keeps_it(session):
+    workspace_id = str(uuid4())
+    task = await _task(session, workspace_id)
+    log = TaskLog(session, _context(workspace_id), _Bodies())
+    repository = TaskRepository(session, _context(workspace_id))
+
+    await log.append(task.id, [], outcome=TaskOutcome(status="failed", error="model 404"))
+    await log.append(task.id, [], outcome=TaskOutcome(status="failed"))
+    kept = await repository.get_task(task.id)
+    assert kept is not None and kept.error == "model 404"
+
+    await log.append(task.id, [], outcome=TaskOutcome(status="running"))
+    resumed = await repository.get_task(task.id)
+    assert resumed is not None and resumed.error is None
+
+    await log.append(task.id, [], outcome=TaskOutcome(status="cancelled", error="Task cancelled"))
+    await log.append(task.id, [], outcome=TaskOutcome(status="completed"))
+    completed = await repository.get_task(task.id)
+    assert completed is not None and completed.error is None
+
+
+async def test_large_tool_call_arguments_are_stored_by_reference_and_read_back(session):
+    workspace_id = str(uuid4())
+    task = await _task(session, workspace_id)
+    bodies = _Bodies()
+    log = TaskLog(session, _context(workspace_id), bodies)
+    big = "x" * (70 * 1024)
+    calls = [
+        {
+            "id": "call-1",
+            "type": "function",
+            "function": {"name": "save_file", "arguments": json.dumps({"content": big})},
+        }
+    ]
+    rows = [
+        _row(0, "system", role="system"),
+        _row(1, "save it"),
+        _row(2, "", role="assistant", tool_calls=calls),
+        _row(3, "saved", role="tool", tool_call_id="call-1", name="save_file"),
+    ]
+
+    await log.append(task.id, rows)
+
+    stored = (
+        await session.execute(
+            text(
+                "SELECT tool_calls IS NULL AS offloaded, meta FROM task_conversation_entries "
+                "WHERE task_id = :task_id AND seq = 2"
+            ),
+            {"task_id": task.id},
+        )
+    ).one()
+    assert stored.offloaded
+    assert stored.meta["tool_calls_ref"] in bodies.stored
+    window = await log.window(task.id, end_seq=4)
+    assert [entry.role for entry in window] == ["system", "user", "assistant", "tool"]
+    assert window[2].tool_calls == calls
+
+
+async def test_non_message_rows_hold_sql_null_not_json_null(session):
+    workspace_id = str(uuid4())
+    task = await _task(session, workspace_id)
+    await TaskLog(session, _context(workspace_id), _Bodies()).append(task.id, [_row(0, "hi")])
+    nulls = (
+        await session.execute(
+            text(
+                "SELECT tool_calls IS NULL AS calls, attachments IS NULL AS files, "
+                "meta IS NULL AS meta FROM task_conversation_entries WHERE task_id = :task_id"
+            ),
+            {"task_id": task.id},
+        )
+    ).one()
+    assert (nulls.calls, nulls.files, nulls.meta) == (True, True, True)

@@ -9,11 +9,12 @@ skipped otherwise.
 
 import asyncio
 import os
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
 from agentarea_common.broker import RedisStreamsBroker
-from agentarea_common.broker.dlq import DEAD_LETTER_SOURCE_FIELD
+from agentarea_common.broker.dlq import DEAD_LETTER_REASON_FIELD, DEAD_LETTER_SOURCE_FIELD
 from agentarea_common.broker.topics import (
     domain_events_topic,
     stream_events_partition,
@@ -24,7 +25,7 @@ from agentarea_common.events.adapters.redis_streams import (
     decode,
     encode,
 )
-from agentarea_common.events.ports import IntegrationEvent
+from agentarea_common.events.ports import IntegrationEvent, UnprocessableEventError
 
 REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
 
@@ -63,7 +64,7 @@ NAMESPACE = f"test{uuid4().hex[:8]}"
 async def broker():
     b = RedisStreamsBroker(REDIS_URL, namespace=NAMESPACE)
     try:
-        await b.submit(f"test.smoke.{uuid4()}", {"smoke": "1"})
+        await b.submit(f"test.smoke.{uuid4()}", {"smoke": "1"}, retention=timedelta(hours=1))
     except Exception as exc:
         pytest.skip(f"Redis not reachable: {exc}")
     yield b
@@ -79,7 +80,7 @@ async def _until(predicate, timeout: float = 10.0) -> None:
 
 
 async def test_publish_goes_to_the_named_topic_under_the_namespace(broker):
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     topic = f"streams.events.{uuid4().hex[:8]}"
     event = IntegrationEvent(type="push", source="test")
     await bus.publish(event, topic=topic)
@@ -90,7 +91,7 @@ async def test_publish_goes_to_the_named_topic_under_the_namespace(broker):
 
 
 async def test_publish_without_a_topic_goes_to_the_domain_events_of_its_type(broker):
-    bus = RedisStreamsEventBus(broker)
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1))
     event = IntegrationEvent(type=f"t{uuid4().hex[:8]}", source="test")
     await bus.publish(event)
     _, messages = await broker.tail(domain_events_topic(event.type), last_id="0", block_ms=100)
@@ -100,7 +101,7 @@ async def test_publish_without_a_topic_goes_to_the_domain_events_of_its_type(bro
 async def test_one_group_reads_every_partition_including_events_from_before_it(broker):
     prefix = f"p{uuid4().hex[:8]}"
     topics = [f"{prefix}.0", f"{prefix}.1"]
-    bus = RedisStreamsEventBus(broker, block_ms=100)
+    bus = RedisStreamsEventBus(broker, block_ms=100, retention=timedelta(hours=1))
     seen: list[str] = []
 
     async def handler(event: IntegrationEvent) -> None:
@@ -130,7 +131,7 @@ async def test_messages_name_the_logical_stream_they_came_from(broker):
     topics = [f"p{uuid4().hex[:8]}.0", f"p{uuid4().hex[:8]}.1"]
     for topic in topics:
         await broker.ensure_group(topic, "g", start="0")
-        await broker.submit(topic, {"n": topic})
+        await broker.submit(topic, {"n": topic}, retention=timedelta(hours=1))
     fresh = await broker.consume_many(topics, "g", "c", block_ms=100)
     assert sorted(m.stream for m in fresh) == sorted(topics)
     assert all(m.fields["n"] == m.stream for m in fresh)
@@ -138,7 +139,7 @@ async def test_messages_name_the_logical_stream_they_came_from(broker):
 
 async def test_a_message_failing_past_the_limit_is_dead_lettered_and_acked(broker):
     prefix = f"p{uuid4().hex[:8]}"
-    bus = RedisStreamsEventBus(broker, block_ms=50, min_idle_ms=10, max_delivery=2)
+    bus = RedisStreamsEventBus(broker, block_ms=50, min_idle_ms=10, max_delivery=2, retention=timedelta(hours=1))
     attempts: list[str] = []
     dead: list[IntegrationEvent] = []
 
@@ -169,3 +170,70 @@ async def test_a_message_failing_past_the_limit_is_dead_lettered_and_acked(broke
     assert letters[0].fields[DEAD_LETTER_SOURCE_FIELD] == f"{prefix}.x"
     pending = await broker.pending_summary(f"{prefix}.x", "router")
     assert pending.count == 0
+
+
+async def test_a_failing_dead_letter_callback_still_dead_letters_with_the_reason(broker):
+    prefix = f"p{uuid4().hex[:8]}"
+    bus = RedisStreamsEventBus(
+        broker, retention=timedelta(hours=1), block_ms=50, min_idle_ms=10, max_delivery=1
+    )
+
+    async def handler(event: IntegrationEvent) -> None:
+        raise RuntimeError("downstream unavailable")
+
+    async def on_dead(event: IntegrationEvent) -> None:
+        raise RuntimeError("cannot record the give-up")
+
+    event = IntegrationEvent(type="poison", source="t")
+    await bus.publish(event, topic=f"{prefix}.x")
+    subscription = await bus.subscribe_many(
+        topics=[f"{prefix}.x"],
+        group="router",
+        handler=handler,
+        dead_letter_topic=f"{prefix}.router.dlq",
+        on_dead_letter=on_dead,
+    )
+    try:
+        await _until_letters(broker, f"{prefix}.router.dlq", 1)
+    finally:
+        await subscription.stop()
+    letters = await broker.read_range(f"{prefix}.router.dlq")
+    assert "dead-letter callback failed" in letters[0].fields[DEAD_LETTER_REASON_FIELD]
+    assert (await broker.pending_summary(f"{prefix}.x", "router")).count == 0
+
+
+async def test_an_unprocessable_message_is_dead_lettered_on_its_first_delivery(broker):
+    prefix = f"p{uuid4().hex[:8]}"
+    bus = RedisStreamsEventBus(broker, retention=timedelta(hours=1), block_ms=50)
+    attempts: list[str] = []
+
+    async def handler(event: IntegrationEvent) -> None:
+        attempts.append(event.type)
+        raise UnprocessableEventError("not a stream event")
+
+    async def on_dead(event: IntegrationEvent) -> None:
+        raise AssertionError("an unprocessable message skips the give-up callback")
+
+    await bus.publish(IntegrationEvent(type="junk", source="t"), topic=f"{prefix}.x")
+    subscription = await bus.subscribe_many(
+        topics=[f"{prefix}.x"],
+        group="router",
+        handler=handler,
+        dead_letter_topic=f"{prefix}.router.dlq",
+        on_dead_letter=on_dead,
+    )
+    try:
+        await _until_letters(broker, f"{prefix}.router.dlq", 1)
+    finally:
+        await subscription.stop()
+    assert attempts == ["junk"]
+    letters = await broker.read_range(f"{prefix}.router.dlq")
+    assert letters[0].fields[DEAD_LETTER_REASON_FIELD].startswith("unprocessable")
+
+
+async def _until_letters(broker, dlq: str, count: int) -> None:
+    for _ in range(200):
+        if await broker.length(dlq) >= count:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"{dlq} never held {count} dead letters")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import uuid
+from datetime import timedelta
 
 import pytest
 import pytest_asyncio
@@ -14,7 +15,6 @@ from agentarea_common.broker.dlq import (
     replay_dead_letters,
 )
 from agentarea_common.broker.routes import ConsumerGroupRoute, configured_routes, routes_for_dlq
-from agentarea_common.config.channels import ChannelDeliverySettings
 from agentarea_common.config.streams import EventStreamSettings
 
 REDIS_URL = os.getenv("AGENTAREA_REDIS_URL", "redis://localhost:6379")
@@ -25,20 +25,20 @@ async def broker():
     b = RedisStreamsBroker(REDIS_URL, namespace="test")
     try:
         await b.length(f"test:smoke:{uuid.uuid4()}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(f"Redis not reachable: {exc}")
     yield b
     await b.aclose()
 
 
-@pytest.fixture()
+@pytest.fixture
 def streams() -> tuple[str, str]:
     source = f"test:replay:{uuid.uuid4()}"
     return source, f"{source}.dlq"
 
 
 async def _dead_letter(broker: RedisStreamsBroker, dlq: str, n: int) -> str:
-    return await broker.submit(dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom"})
+    return await broker.submit(dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom"}, retention=timedelta(hours=1))
 
 
 async def test_replay_moves_every_dead_letter_back_without_the_reason(broker, streams):
@@ -85,7 +85,7 @@ async def test_a_shared_dead_letter_stream_replays_each_letter_to_its_own_partit
     dlq = f"{base}.router.dlq"
     for n, source in enumerate([partitions[1], partitions[0], f"{base}.9"]):
         await broker.submit(
-            dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom", DEAD_LETTER_SOURCE_FIELD: source}
+            dlq, {"n": str(n), DEAD_LETTER_REASON_FIELD: "boom", DEAD_LETTER_SOURCE_FIELD: source}, retention=timedelta(hours=1)
         )
 
     result = await replay_dead_letters(broker, dlq_stream=dlq, targets=partitions)
@@ -97,16 +97,15 @@ async def test_a_shared_dead_letter_stream_replays_each_letter_to_its_own_partit
 
 
 def test_configured_routes_pair_each_group_with_its_dead_letter_stream():
-    settings = ChannelDeliverySettings(
-        IN_STREAM="in", IN_GROUP="ig", IN_DLQ="in.dlq",
-        OUT_STREAM="out", OUT_GROUP="og", OUT_DLQ="out.dlq",
-    )
-
-    routes = configured_routes(settings, EventStreamSettings(PARTITIONS=2))
+    routes = configured_routes(EventStreamSettings(PARTITIONS=2))
 
     assert routes == (
-        ConsumerGroupRoute(stream="in", group="ig", dlq="in.dlq"),
-        ConsumerGroupRoute(stream="out", group="og", dlq="out.dlq"),
+        ConsumerGroupRoute(
+            stream="streams.ingest", group="ingest", dlq="streams.ingest.ingest.dlq"
+        ),
+        ConsumerGroupRoute(
+            stream="tasks.events", group="delivery", dlq="tasks.events.delivery.dlq"
+        ),
         ConsumerGroupRoute(
             stream="streams.events.0", group="router", dlq="streams.events.router.dlq"
         ),
@@ -120,10 +119,12 @@ def test_configured_routes_pair_each_group_with_its_dead_letter_stream():
             stream="streams.events.1", group="events-view", dlq="streams.events.events-view.dlq"
         ),
     )
-    assert [r.stream for r in routes_for_dlq(routes, "out.dlq")] == ["out"]
+    assert [r.stream for r in routes_for_dlq(routes, "tasks.events.delivery.dlq")] == [
+        "tasks.events"
+    ]
     assert [r.stream for r in routes_for_dlq(routes, "streams.events.router.dlq")] == [
         "streams.events.0",
         "streams.events.1",
     ]
-    with pytest.raises(LookupError, match="in.dlq, out.dlq"):
+    with pytest.raises(LookupError, match=r"known: streams\.events\.events-view\.dlq, "):
         routes_for_dlq(routes, "router.dlq")

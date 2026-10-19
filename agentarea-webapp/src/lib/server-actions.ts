@@ -19,6 +19,7 @@ import type {
   ProviderConfigUpdate,
   SecretResponse,
   SkillResponse,
+  TriggerType,
   UpdateWalletRequest,
   UploadPlanEntry,
 } from "@/api/client/types.gen";
@@ -499,7 +500,7 @@ export async function getNetworkTopologyAction() {
 
 export async function listTriggersAction(params?: {
   agent_id?: string;
-  trigger_type?: string;
+  trigger_type?: TriggerType;
   active_only?: boolean;
 }) {
   return await listTriggers(params);

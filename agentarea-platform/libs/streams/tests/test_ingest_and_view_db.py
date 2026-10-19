@@ -20,7 +20,6 @@ from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.application.events_view import EventsView
 from agentarea_streams.application.ingest import StreamIngest
 from agentarea_streams.domain import (
-    PayloadTooLargeError,
     StreamEvent,
     StreamKind,
     StreamNotFoundError,
@@ -95,8 +94,21 @@ def _event(data=None, kind="github.push"):
     return IntegrationEvent(type=kind, source="webhook:test", data=data or {"n": 1})
 
 
+class _Quota:
+    """The sliding-minute quota as Redis keeps it, without the clock: a count per workspace."""
+
+    def __init__(self) -> None:
+        self.counts: dict[str, int] = {}
+
+    async def take(self, workspace_id, limit, now):
+        if self.counts.get(workspace_id, 0) + 1 > limit:
+            return False
+        self.counts[workspace_id] = self.counts.get(workspace_id, 0) + 1
+        return True
+
+
 def _ingest(session, ctx, publisher, dedup, settings=None):
-    bus = StreamBus(publisher=publisher, dedup=dedup, partitions=16)
+    bus = StreamBus(publisher=publisher, dedup=dedup, quota=_Quota(), partitions=16)
     return StreamIngest(session, ctx, settings or EventStreamSettings(), bus)
 
 
@@ -132,24 +144,22 @@ async def test_a_failed_publish_leaves_the_event_free_for_the_sender_s_retry(mak
     assert retried.appended
 
 
-async def test_an_oversized_or_foreign_event_is_refused(maker, ctx):
+async def test_a_large_event_is_carried_and_a_foreign_one_refused(maker, ctx):
     async with maker() as session:
         stream = await _stream(session, ctx)
         ingest = _ingest(session, ctx, _Publisher(), _Dedup())
-        with pytest.raises(PayloadTooLargeError):
-            await ingest.append(stream.id, _event({"blob": "x" * (256 * 1024)}), event_key="b")
+        large = await ingest.append(stream.id, _event({"blob": "x" * (256 * 1024)}), event_key="b")
+        assert large.appended
         with pytest.raises(StreamNotFoundError):
             await ingest.append(uuid4(), _event(), event_key="k")
 
 
-async def test_the_workspace_quota_counts_what_the_view_received_in_the_last_minute(maker, ctx):
+async def test_the_workspace_quota_counts_each_admitted_event_before_the_view_sees_it(maker, ctx):
     async with maker() as session:
         stream = await _stream(session, ctx)
-        view = StreamEventRepository(session, ctx)
-        for key in ("a", "b"):
-            await view.record(_stream_event(stream.id, ctx, key))
-        await session.commit()
         ingest = _ingest(session, ctx, _Publisher(), _Dedup(), EventStreamSettings(WRITE_QUOTA=2))
+        for key in ("a", "b"):
+            await ingest.append(stream.id, _event(), event_key=key)
         with pytest.raises(StreamQuotaExceededError):
             await ingest.append(stream.id, _event(), event_key="c")
 
@@ -212,3 +222,13 @@ async def test_reads_page_by_position_and_by_time(maker, ctx):
         )
         assert [e.event_key for e in paged] == ["k2"]
         assert await repo.last_received_at(stream.id) == oldest_first[-1].received_at
+
+
+async def test_an_entry_event_starts_its_own_chain(maker, ctx):
+    publisher, dedup = _Publisher(), _Dedup()
+    async with maker() as session:
+        stream = await _stream(session, ctx)
+        result = await _ingest(session, ctx, publisher, dedup).append(
+            stream.id, _event(), event_key="entry"
+        )
+    assert publisher.published[-1][1].correlation_id == str(result.event_id)

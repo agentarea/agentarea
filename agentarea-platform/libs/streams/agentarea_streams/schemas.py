@@ -4,7 +4,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .domain.enums import SourceKind
 from .domain.filters import EventFilter
+from .domain.source_types import EventOverrides
 
 
 class StreamCreate(BaseModel):
@@ -22,13 +24,17 @@ class SecretRef(BaseModel):
     secret_id: UUID
 
 
-class WebhookSourceCreate(BaseModel):
-    """A webhook source on an existing stream, with no trigger."""
+class SourceCreate(BaseModel):
+    """A webhook or poll source of a catalog entry on an existing stream."""
 
     model_config = ConfigDict(extra="forbid")
 
-    webhook_type: str = Field(
-        min_length=1, max_length=50, description="One of GET /streams/source-types."
+    source_type: str = Field(
+        min_length=1, max_length=50, description="A slug of GET /streams/source-types."
+    )
+    kind: SourceKind = Field(
+        default=SourceKind.WEBHOOK,
+        description="webhook: the provider posts to the source's URL; poll: the platform fetches.",
     )
     credentials: dict[str, str | SecretRef] = Field(
         default_factory=dict,
@@ -39,6 +45,14 @@ class WebhookSourceCreate(BaseModel):
     )
     config: dict[str, str] = Field(
         default_factory=dict, description="The type's plain settings, e.g. shop_id."
+    )
+    event_templates: EventOverrides | None = Field(
+        default=None,
+        description=(
+            "This source's own kind, key and session_key templates ({body:a.b}, "
+            "{header:x}, {first_key:a|b}), in place of the type's. Without a key "
+            "nothing is deduplicated."
+        ),
     )
 
 

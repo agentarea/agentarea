@@ -182,6 +182,40 @@ Check the Job explicitly.
     partitions, so stop intake and let the `router` group drain first.
   </Step>
 
+  <Step title="Existing cluster: task events move to one topic and a delivery group">
+    From this release a run publishes each event of its task once, to
+    `<namespace>.tasks.events`, after the task log stores it. Replies to chats,
+    mail, task webhooks and A2A push configs are sent by the `delivery` consumer
+    group on that topic, which reads each task's reply targets. Live-only signals
+    (a call started, reply chunks, tool progress) go over pub/sub
+    `<namespace>.tasks.live.<task id>` and are never kept.
+
+    | Before | After |
+    |---|---|
+    | `agentarea.tasks.events.<task id>` (one stream per task) | `agentarea.tasks.events` (one stream; the task id is each entry's subject) |
+    | `agentarea.channel.outbound`, `agentarea.channel.outbound.dlq` | removed; group `delivery` on `agentarea.tasks.events`, dead letters in `agentarea.tasks.events.delivery.dlq` |
+
+    Before you upgrade, let `agentarea.channel.outbound` drain: a reply still on it
+    is not sent after the upgrade. Check its pending count is 0
+    (`XPENDING agentarea.channel.outbound delivery`), then delete it and the
+    per-task streams:
+
+    ```bash
+    valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL agentarea.channel.outbound agentarea.channel.outbound.dlq
+    valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern 'agentarea.tasks.events.*' \
+      | grep -v '\.delivery\.dlq$' | xargs -r valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL
+    ```
+
+    Remove `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP` and
+    `AGENTAREA_CHANNEL_OUT_DLQ` if you set them; nothing reads them.
+
+    The task page, A2A and the CLI read a task's history from its log and resume
+    by its position (`seq`). An open task page loses its live tail at the switch
+    and picks it up again on reload. Every topic is now trimmed by age as it is
+    written: `streams.events` by `AGENTAREA_EVENT_RETENTION`, `tasks.events` and
+    `channel.inbound` after 72 hours, dead-letter topics after 14 days.
+  </Step>
+
   <Step title="Upgrade on Kubernetes">
     ```bash
     helm repo update

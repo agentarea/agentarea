@@ -1,13 +1,14 @@
-"""Email channel adapter for outbound message delivery via SMTP."""
+"""The ``smtp`` reply sender: a task answers the mail that started it."""
 
 from __future__ import annotations
 
-import json
 import logging
 import socket
 from collections.abc import Awaitable, Callable
+from email.errors import HeaderParseError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import getaddresses
 from typing import TYPE_CHECKING, Any
 
 import aiosmtplib
@@ -16,9 +17,10 @@ from agentarea_common.utils.url_safety import UnsafeUrlError
 
 from . import register_adapter
 from .exceptions import FatalError, RetryableError
+from .source_credentials import credentials_of
 
 if TYPE_CHECKING:
-    from .secret_reader import SecretReader
+    from .source_credentials import CredentialReader
 
 logger = logging.getLogger(__name__)
 
@@ -26,23 +28,21 @@ Connect = Callable[[str, int], Awaitable[socket.socket]]
 
 
 class EmailAdapter:
-    """Send messages via SMTP.
+    """Send a task's events as HTML mail to whoever wrote the mail that started it.
 
-    Inbound is handled by data extractors (e.g. IMAP).
-    This adapter handles outbound: formatting events as HTML emails.
-
-    Credentials (smtp_host, smtp_port, username, password, from_address, use_tls)
-    are resolved from the secret store via channel_config["secret_key"].
-    The secret store holds a JSON blob with these fields.
+    The address's target carries whom to answer (``to``: the incoming mail's
+    ``Reply-To`` or ``From``), its ``subject``, ``message_id`` and ``references``; the source's credentials carry
+    ``smtp_host``, ``smtp_port``, ``username``, ``password``, ``from_address``
+    and ``use_tls``.
     """
 
-    def __init__(self, secret_reader: SecretReader, connect: Connect = member_connection):
-        self._secret_reader = secret_reader
+    def __init__(self, credentials: CredentialReader, connect: Connect = member_connection):
+        self._credentials = credentials
         # The SMTP host is the member's: the connection goes to the address it
         # was vetted at (a test seam otherwise).
         self._connect = connect
 
-    def format(self, event: dict[str, Any], presentation: str) -> str:
+    def format(self, event: dict[str, Any], presentation: str, config: dict[str, Any]) -> str:
         """Format a workflow event as HTML for email.
 
         In summary mode, only result/interaction events come through.
@@ -51,7 +51,7 @@ class EmailAdapter:
         data = event.get("data", {})
 
         if event_type == "task.completed":
-            result = data.get("result", "Task completed successfully.")
+            result = data.get("final_response") or data.get("result") or "Task completed."
             return _html_wrap(
                 subject="Task Complete",
                 body=f"<p>{_escape_html(str(result))}</p>",
@@ -117,10 +117,7 @@ class EmailAdapter:
         )
 
     async def send(self, channel_config: dict[str, Any], message: str) -> None:
-        """Send email via SMTP.
-
-        Resolves SMTP credentials from the secret store using
-        channel_config["secret_key"].
+        """Send the reply over SMTP, threaded under the mail it answers.
 
         Failures are raised, never swallowed, so the delivery consumer can act
         on them: misconfiguration (no reply_to / unresolvable credentials / SMTP
@@ -128,29 +125,37 @@ class EmailAdapter:
         transient transport failures (connect/timeout/disconnect) raise
         ``RetryableError`` so the broker redelivers.
         """
-        reply_to = channel_config.get("reply_to")
-        if not reply_to:
-            raise FatalError("email channel: no reply_to address in channel config")
+        target = channel_config.get("target") or {}
+        to_address = reply_address(target.get("to"))
+        if to_address is None:
+            raise FatalError(f"email channel: {target.get('to')!r} has no address to reply to")
 
-        # Raises FatalError if credentials cannot be resolved.
-        smtp_creds = await self._resolve_smtp_credentials(channel_config)
+        credential_type, credential_key = credentials_of(channel_config)
+        smtp_creds = await self._credentials(
+            workspace_id=str(channel_config["workspace_id"]),
+            owner=str(channel_config["owner"]),
+            credential_type=credential_type,
+            credential_key=credential_key,
+        )
 
-        subject = channel_config.get("subject", "Agent Update")
+        subject = reply_subject(target.get("subject"))
         from_addr = smtp_creds.get("from_address", "agent@agentarea.local")
 
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = from_addr
-        msg["To"] = reply_to
+        try:
+            msg["Subject"] = subject
+            msg["From"] = from_addr
+            msg["To"] = to_address
+        except (HeaderParseError, ValueError) as exc:
+            # A header that cannot be written now never can be.
+            raise FatalError(f"email channel: invalid header: {exc}") from exc
 
         # Thread the reply. Clients thread on References, so the whole chain
         # goes back out; the parent alone would start a sibling thread.
-        original_message_id = channel_config.get("message_id")
+        original_message_id = target.get("message_id")
         if original_message_id:
             msg["In-Reply-To"] = original_message_id
-        references = channel_config.get("references") or (
-            [original_message_id] if original_message_id else []
-        )
+        references = reply_references(target.get("references"), original_message_id)
         if references:
             msg["References"] = " ".join(references)
 
@@ -179,6 +184,8 @@ class EmailAdapter:
 
         try:
             await aiosmtplib.send(msg, **smtp_kwargs)
+        except (HeaderParseError, ValueError) as exc:
+            raise FatalError(f"email channel: the message cannot be sent: {exc}") from exc
         except aiosmtplib.SMTPAuthenticationError as exc:
             # Bad/rejected credentials — retrying with the same secret won't help.
             raise FatalError(f"email channel: SMTP authentication failed: {exc}") from exc
@@ -197,35 +204,38 @@ class EmailAdapter:
         finally:
             sock.close()
 
-        logger.info("Email sent to %s: %s", reply_to, subject)
+        logger.info("Email sent to %s: %s", to_address, subject)
 
-    async def _resolve_smtp_credentials(self, channel_config: dict[str, Any]) -> dict[str, Any]:
-        """Resolve SMTP credentials from the secret store.
 
-        Secret name is derived: channel_cred:{type}:{trigger_id}
+def reply_subject(subject: str | None) -> str:
+    """The reply's subject on one line: a line break in the sender's subject is not a header."""
+    subject = " ".join((subject or "").split())
+    if not subject:
+        return "Re: (no subject)"
+    return subject if subject.lower().startswith("re:") else f"Re: {subject}"
 
-        Raises ``FatalError`` when credentials cannot be resolved — a
-        misconfigured channel won't be fixed by redelivery.
-        """
-        trigger_id = channel_config.get("trigger_id")
-        if not trigger_id:
-            raise FatalError(
-                "email channel: no trigger_id in channel_config — cannot resolve credentials"
-            )
 
-        # A polled mailbox keeps one credential blob covering both IMAP and
-        # SMTP, so the origin says which one to read instead of assuming the
-        # secret is named after the outbound channel.
-        cred_type = channel_config.get("credential_type") or channel_config.get("type", "email")
-        secret_name = f"channel_cred:{cred_type}:{trigger_id}"
-        raw = await self._secret_reader.get_secret(secret_name)
-        if not raw:
-            raise FatalError(
-                f"email channel: credentials not found for trigger {trigger_id} "
-                f"(secret {secret_name!r})"
-            )
+def reply_address(sender: str | None) -> str | None:
+    """The one address a reply goes to: the first in the sender's ``Reply-To`` or ``From``."""
+    if not sender:
+        return None
+    for _, address in getaddresses([str(sender)]):
+        if "@" in address:
+            return address
+    return None
 
-        return json.loads(raw)
+
+def reply_references(references: Any, message_id: str | None) -> list[str]:
+    """The whole chain plus the mail answered: clients thread on ``References``."""
+    if isinstance(references, str):
+        chain = references.split()
+    elif isinstance(references, list):
+        chain = [str(reference) for reference in references]
+    else:
+        chain = []
+    if message_id and message_id not in chain:
+        chain.append(message_id)
+    return chain
 
 
 def _escape_html(text: str) -> str:
@@ -262,8 +272,8 @@ def _html_to_plain(html: str) -> str:
     return text.strip()
 
 
-def create_email_adapter(secret_reader: SecretReader) -> EmailAdapter:
-    """Create and register an email adapter."""
-    adapter = EmailAdapter(secret_reader=secret_reader)
-    register_adapter("email", adapter)
+def create_email_adapter(credentials: CredentialReader) -> EmailAdapter:
+    """Create the SMTP reply sender and register it."""
+    adapter = EmailAdapter(credentials=credentials)
+    register_adapter("smtp", adapter)
     return adapter

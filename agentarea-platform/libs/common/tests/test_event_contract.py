@@ -357,3 +357,11 @@ class TestPart:
         part = Part(part_id="p1", kind="tool", event_type="tool.call", data={})
         with pytest.raises(FrozenInstanceError):
             part.part_id = "p2"  # type: ignore[misc]
+
+
+def test_a_persons_message_and_the_live_only_signals_are_in_the_vocabulary():
+    from agentarea_common.events.contract import LIVE_ONLY_TYPES
+
+    assert "message.received" in EVENT_TYPES
+    assert {"llm.call.started", "llm.call.chunk", "tool.progress"} == LIVE_ONLY_TYPES
+    assert LIVE_ONLY_TYPES <= EVENT_TYPES

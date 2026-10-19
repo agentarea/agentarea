@@ -46,6 +46,8 @@ class StreamORM(BaseModel, WorkspaceScopedMixin):
 
 
 class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
+    """A webhook or poll source of a catalog entry; ``webhook_type`` is the entry's slug."""
+
     __tablename__ = "stream_sources"
     __table_args__ = (
         CheckConstraint(
@@ -54,6 +56,13 @@ class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
                 + "AND credential_key IS NOT NULL)"
             ),
             name="ck_stream_sources_webhook",
+        ),
+        CheckConstraint(
+            (
+                "kind <> 'poll' OR (webhook_id IS NULL AND webhook_type IS NOT NULL "
+                + "AND credential_key IS NOT NULL)"
+            ),
+            name="ck_stream_sources_poll",
         ),
     )
 
@@ -66,10 +75,15 @@ class StreamSourceORM(BaseModel, WorkspaceScopedMixin):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     webhook_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     webhook_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    allowed_methods: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    validation_rules: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     webhook_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     credential_key: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    #: The source's own kind / key / session_key templates, in place of its entry's.
+    event_templates: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Written by the Go event-service only.
+    poll_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    poll_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    registered_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class StreamEventORM(JournalBase, WorkspaceScopedMixin):
@@ -106,8 +120,13 @@ class StreamEventORM(JournalBase, WorkspaceScopedMixin):
     correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    source_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    session_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    sender: Mapped[str | None] = mapped_column(String(512), nullable=True)
     depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    # The migration gives it the server default '[]'.
+    attachments: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class StreamSubscriptionORM(BaseModel, WorkspaceScopedMixin):

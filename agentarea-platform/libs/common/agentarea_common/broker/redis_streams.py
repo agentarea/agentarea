@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
-from collections.abc import Awaitable
+import time
+from collections.abc import Awaitable, Mapping
+from datetime import timedelta
 from typing import Any, cast
 
 import redis.asyncio as redis
 from redis.exceptions import ResponseError
 
-from .interface import BrokerMessage, GroupInfo, PendingSummary
+from .interface import BrokerMessage, GroupInfo, LiveChannels, PendingSummary
 
 logger = logging.getLogger(__name__)
 
-_PENDING_PAGE = 1000
+
+def _min_id(retention: timedelta) -> str:
+    """The stream id below which entries are older than `retention`."""
+    return f"{int((time.time() - retention.total_seconds()) * 1000)}-0"
+
+
 _LAG_PAGE = 1000
 
 # Delete first: a second mover of the same id finds nothing to delete and
@@ -69,23 +78,15 @@ class RedisStreamsBroker:
         stream: str,
         fields: dict[str, str],
         *,
-        maxlen: int | None = None,
-        ttl_seconds: int | None = None,
+        retention: timedelta,
     ) -> str:
         client = await self._get_client()
-        kwargs: dict[str, Any] = {}
-        if maxlen is not None:
-            kwargs["maxlen"] = maxlen
-            kwargs["approximate"] = True
-        if ttl_seconds is None:
-            msg_id: str = await client.xadd(
-                self._key(stream), fields=cast(Any, dict(fields)), **kwargs
-            )
-            return msg_id
-        async with client.pipeline(transaction=True) as pipe:
-            pipe.xadd(self._key(stream), fields=cast(Any, dict(fields)), **kwargs)
-            pipe.expire(self._key(stream), ttl_seconds)
-            msg_id, _ = await pipe.execute()
+        msg_id: str = await client.xadd(
+            self._key(stream),
+            fields=cast(Any, dict(fields)),
+            minid=_min_id(retention),
+            approximate=True,
+        )
         return msg_id
 
     async def ensure_group(self, stream: str, group: str, start: str = "$") -> None:
@@ -221,19 +222,11 @@ class RedisStreamsBroker:
         summary: Any = await client.xpending(self._key(stream), group)
         count = int(summary["pending"])
         if count == 0:
-            return PendingSummary(count=0, oldest_idle_ms=None)
-        oldest = 0
-        start = "-"
-        while True:
-            page: Any = await client.xpending_range(
-                self._key(stream), group, min=start, max="+", count=_PENDING_PAGE
-            )
-            for entry in page:
-                oldest = max(oldest, int(entry["time_since_delivered"]))
-            if len(page) < _PENDING_PAGE:
-                break
-            start = f"({page[-1]['message_id']}"
-        return PendingSummary(count=count, oldest_idle_ms=oldest)
+            return PendingSummary(count=0, oldest_age_ms=None)
+        appended_ms = int(str(summary["min"]).split("-", 1)[0])
+        return PendingSummary(
+            count=count, oldest_age_ms=max(0, int(time.time() * 1000) - appended_ms)
+        )
 
     async def length(self, stream: str) -> int:
         client = await self._get_client()
@@ -245,6 +238,34 @@ class RedisStreamsBroker:
         client = await self._get_client()
         entries: Any = await client.xrange(self._key(stream), min=start, max=end, count=count)
         return [BrokerMessage(id=mid, fields=fields, stream=stream) for mid, fields in entries]
+
+    async def last_id(self, stream: str) -> str:
+        client = await self._get_client()
+        newest: Any = await client.xrevrange(self._key(stream), max="+", min="-", count=1)
+        return newest[0][0] if newest else "0-0"
+
+    async def prune_consumers(self, stream: str, group: str, *, idle_ms: int) -> int:
+        client = await self._get_client()
+        try:
+            consumers: Any = await client.xinfo_consumers(self._key(stream), group)
+        except ResponseError as exc:
+            if "no such key" in str(exc) or "NOGROUP" in str(exc):
+                return 0
+            raise
+        removed = 0
+        for consumer in consumers:
+            if int(consumer["pending"]) == 0 and int(consumer["idle"]) > idle_ms:
+                await client.xgroup_delconsumer(self._key(stream), group, consumer["name"])
+                removed += 1
+        return removed
+
+    async def notify(self, channel: str, fields: Mapping[str, str]) -> None:
+        client = await self._get_client()
+        await client.publish(self._key(channel), json.dumps(dict(fields)))
+
+    async def open_live(self) -> LiveChannels:
+        client = await self._get_client()
+        return _RedisLiveChannels(client.pubsub(ignore_subscribe_messages=True), self)
 
     async def move(
         self, source: str, message_id: str, target: str, fields: dict[str, str]
@@ -275,41 +296,34 @@ class RedisStreamsBroker:
         group: str,
         msgs: list[BrokerMessage],
     ) -> list[BrokerMessage]:
-        """Backfill `delivery_count` on each message via a single
-        `XPENDING ... IDLE 0 min max count` over the claimed batch.
+        """Set each claimed message's `delivery_count` from its own pending entry.
 
-        Redis Streams tracks delivery_count per pending entry; the count
-        only exists once XREADGROUP/XAUTOCLAIM has claimed the entry, so
-        we read it right after the claim. One round-trip per batch.
+        One ``XPENDING <stream> <group> <id> <id> 1`` per message, pipelined: a
+        range over the batch would also count other pending entries between
+        them and leave the later claimed ones uncounted, which let a message
+        outlive the delivery cap.
         """
         if not msgs:
             return msgs
-        ids = [m.id for m in msgs]
-        try:
-            # XPENDING <stream> <group> IDLE 0 <min> <max> <count> bounded
-            # by the batch range. redis-py returns dicts:
-            # [{"message_id", "consumer", "time_since_delivered", "times_delivered"}, ...]
-            pending: Any = await client.xpending_range(
-                self._key(stream),
-                group,
-                min=ids[0],
-                max=ids[-1],
-                count=len(ids),
+        async with client.pipeline(transaction=False) as pipe:
+            for msg in msgs:
+                pipe.xpending_range(self._key(stream), group, min=msg.id, max=msg.id, count=1)
+            pending: list[Any] = await pipe.execute()
+        counted: list[BrokerMessage] = []
+        for msg, entries in zip(msgs, pending, strict=True):
+            if not entries:
+                raise RuntimeError(
+                    f"message {msg.id} on {stream} was just claimed by {group} but is not pending"
+                )
+            counted.append(
+                BrokerMessage(
+                    id=msg.id,
+                    fields=msg.fields,
+                    delivery_count=int(entries[0]["times_delivered"]),
+                    stream=msg.stream,
+                )
             )
-        except Exception as exc:
-            logger.debug("XPENDING enrich failed, defaulting delivery_count=1: %s", exc)
-            return msgs
-
-        by_id = {p["message_id"]: int(p["times_delivered"]) for p in (pending or [])}
-        return [
-            BrokerMessage(
-                id=m.id,
-                fields=m.fields,
-                delivery_count=by_id.get(m.id, m.delivery_count),
-                stream=m.stream,
-            )
-            for m in msgs
-        ]
+        return counted
 
     def _flatten_xread(self, response: Any) -> list[BrokerMessage]:
         """Normalize XREADGROUP output into a flat list of BrokerMessage.
@@ -326,3 +340,29 @@ class RedisStreamsBroker:
                     BrokerMessage(id=msg_id, fields=fields, stream=self._logical(stream_key))
                 )
         return out
+
+
+class _RedisLiveChannels:
+    """Redis pub/sub on one connection; channels carry the broker's namespace."""
+
+    def __init__(self, pubsub: Any, broker: RedisStreamsBroker) -> None:
+        self._pubsub = pubsub
+        self._broker = broker
+
+    async def subscribe(self, channel: str) -> None:
+        await self._pubsub.subscribe(self._broker._key(channel))
+
+    async def unsubscribe(self, channel: str) -> None:
+        await self._pubsub.unsubscribe(self._broker._key(channel))
+
+    async def next_message(self, timeout_seconds: float) -> tuple[str, dict[str, str]] | None:
+        if not self._pubsub.subscribed:
+            await asyncio.sleep(timeout_seconds)
+            return None
+        message = await self._pubsub.get_message(timeout=timeout_seconds)
+        if message is None or message.get("type") != "message":
+            return None
+        return self._broker._logical(message["channel"]), json.loads(message["data"])
+
+    async def aclose(self) -> None:
+        await self._pubsub.aclose()

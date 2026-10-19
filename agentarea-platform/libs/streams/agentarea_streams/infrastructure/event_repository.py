@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.errors import StreamNotFoundError
-from ..domain.models import RecordedEvent, StreamEvent
+from ..domain.models import Attachment, RecordedEvent, StreamEvent
 from .orm import StreamEventORM, StreamORM
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,10 @@ def to_recorded(row: StreamEventORM) -> RecordedEvent:
         received_at=row.received_at,
         depth=row.depth,
         source_id=row.source_id,
+        source_type=row.source_type,
+        session_key=row.session_key,
+        sender=row.sender,
+        attachments=[Attachment.model_validate(a) for a in row.attachments],
     )
 
 
@@ -82,8 +86,12 @@ class StreamEventRepository:
                         correlation_id=event.correlation_id,
                         causation_id=event.causation_id,
                         source_id=event.source_id,
+                        source_type=event.source_type,
+                        session_key=event.session_key,
+                        sender=event.sender,
                         depth=event.depth,
                         data=event.data,
+                        attachments=[a.model_dump(mode="json") for a in event.attachments],
                         workspace_id=event.workspace_id,
                         created_by=event.created_by,
                     )
@@ -99,14 +107,15 @@ class StreamEventRepository:
             )
             return False
 
-    async def count_since(self, since: datetime) -> int:
-        """Events this workspace's streams received after ``since``, for the write quota."""
+    async def read_by_id(self, event_id: UUID) -> RecordedEvent | None:
+        """The event with this id in this workspace, whichever stream holds it."""
         result = await self.session.execute(
-            select(func.count())
-            .select_from(StreamEventORM)
-            .where(self._in_workspace(), StreamEventORM.received_at > since)
+            select(StreamEventORM)
+            .where(StreamEventORM.event_id == event_id, self._in_workspace())
+            .limit(1)
         )
-        return result.scalar_one()
+        row = result.scalar_one_or_none()
+        return to_recorded(row) if row is not None else None
 
     async def read_after(self, stream_id: UUID, after: int, limit: int) -> list[RecordedEvent]:
         result = await self.session.execute(

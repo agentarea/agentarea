@@ -221,6 +221,7 @@ dependencies = [
     { name = "agentarea-common" },
     { name = "agentarea-governance" },
     { name = "agentarea-mcp" },
+    { name = "agentarea-streams" },
     { name = "agentarea-triggers" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -232,6 +233,7 @@ requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
     { name = "agentarea-governance", editable = "libs/governance" },
     { name = "agentarea-mcp", editable = "libs/mcp" },
+    { name = "agentarea-streams", editable = "libs/streams" },
     { name = "agentarea-triggers", editable = "libs/triggers" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -512,6 +514,7 @@ version = "0.1.1"
 source = { editable = "libs/streams" }
 dependencies = [
     { name = "agentarea-common" },
+    { name = "cryptography" },
     { name = "pydantic" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["asyncio"] },
@@ -520,6 +523,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "agentarea-common", editable = "libs/common" },
+    { name = "cryptography", specifier = ">=50.0.0" },
     { name = "pydantic", specifier = ">=2.4.2" },
     { name = "redis", specifier = ">=5.0.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.23" },

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -19,7 +20,7 @@ import (
 // Client is the broker abstraction. Methods are independent of the underlying
 // broker implementation.
 type Client interface {
-	Submit(ctx context.Context, stream string, fields map[string]string) (string, error)
+	Submit(ctx context.Context, stream string, fields map[string]string, retention time.Duration) (string, error)
 	EnsureGroup(ctx context.Context, stream, group, start string) error
 }
 
@@ -39,8 +40,12 @@ func (r *RedisStreams) key(stream string) string { return r.prefix + stream }
 
 // Submit appends `fields` to `stream` and returns the broker-assigned id.
 // XADD with "*" lets Redis assign the timestamp-based id; dedup is the
-// consumer's job (it owns the dedup cache).
-func (r *RedisStreams) Submit(ctx context.Context, stream string, fields map[string]string) (string, error) {
+// consumer's job (it owns the dedup cache). Entries older than `retention` are
+// trimmed as it appends (XADD MINID ~), so no stream grows without bound.
+func (r *RedisStreams) Submit(ctx context.Context, stream string, fields map[string]string, retention time.Duration) (string, error) {
+	if retention <= 0 {
+		return "", fmt.Errorf("XADD %s: retention must be positive", stream)
+	}
 	values := make(map[string]any, len(fields))
 	for k, v := range fields {
 		values[k] = v
@@ -48,6 +53,8 @@ func (r *RedisStreams) Submit(ctx context.Context, stream string, fields map[str
 	id, err := r.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: r.key(stream),
 		Values: values,
+		MinID:  MinID(time.Now(), retention),
+		Approx: true,
 	}).Result()
 	if err != nil {
 		return "", fmt.Errorf("XADD %s: %w", stream, err)
@@ -69,4 +76,9 @@ func (r *RedisStreams) EnsureGroup(ctx context.Context, stream, group, start str
 		return nil
 	}
 	return fmt.Errorf("XGROUP CREATE %s %s: %w", stream, group, err)
+}
+
+// MinID is the stream id below which entries are older than retention at now.
+func MinID(now time.Time, retention time.Duration) string {
+	return fmt.Sprintf("%d-0", now.Add(-retention).UnixMilli())
 }

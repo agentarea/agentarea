@@ -1,7 +1,7 @@
 """Workspace-scoped repositories for streams, their sources and subscriptions."""
 
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import unscoped
@@ -9,17 +9,13 @@ from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRep
 from sqlalchemy import CursorResult, delete, select, update
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.exc import IntegrityError, NoResultFound
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus
 from ..domain.errors import StreamNameTakenError
 from ..domain.filters import EventFilter
 from .orm import StreamORM, StreamSourceORM, StreamSubscriptionORM
-
-WEBHOOK_FIELDS = frozenset(
-    {"webhook_type", "allowed_methods", "validation_rules", "webhook_config", "credential_key"}
-)
 
 
 async def find_webhook_source(session: AsyncSession, webhook_id: str) -> StreamSourceORM | None:
@@ -98,28 +94,27 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, StreamSourceORM, user_context)
 
-    async def add_webhook_source(
+    async def add_source(
         self,
         *,
+        source_id: UUID,
         stream_id: UUID,
-        webhook_id: str,
-        webhook_type: str,
-        allowed_methods: list[str],
-        validation_rules: dict[str, Any],
-        webhook_config: dict[str, Any] | None,
-        credential_key: UUID,
-        source_id: UUID | None = None,
+        kind: SourceKind,
+        source_type: str,
+        webhook_id: str | None,
+        webhook_config: dict[str, Any],
+        event_templates: dict[str, Any] | None,
     ) -> StreamSourceORM:
+        """A source keys its credentials by its own id."""
         source = StreamSourceORM(
-            id=source_id or uuid4(),
+            id=source_id,
             stream_id=stream_id,
-            kind=SourceKind.WEBHOOK.value,
+            kind=kind.value,
             webhook_id=webhook_id,
-            webhook_type=webhook_type,
-            allowed_methods=allowed_methods,
-            validation_rules=validation_rules,
+            webhook_type=source_type,
             webhook_config=webhook_config,
-            credential_key=credential_key,
+            credential_key=source_id,
+            event_templates=event_templates,
             workspace_id=self.user_context.workspace_id,
             created_by=self.user_context.user_id,
         )
@@ -152,41 +147,6 @@ class StreamSourceRepository(WorkspaceScopedRepository[StreamSourceORM]):
             )
         )
         return cast(CursorResult[Any], result).rowcount == 1
-
-    async def find_by_credential_key(self, key: UUID) -> list[StreamSourceORM]:
-        result = await self.session.execute(
-            select(StreamSourceORM).where(
-                StreamSourceORM.credential_key == key, self._get_workspace_filter()
-            )
-        )
-        return list(result.scalars().all())
-
-    async def find_by_credential_keys(self, keys: list[UUID]) -> list[StreamSourceORM]:
-        result = await self.session.execute(
-            select(StreamSourceORM).where(
-                StreamSourceORM.credential_key.in_(keys), self._get_workspace_filter()
-            )
-        )
-        return list(result.scalars().all())
-
-    async def delete_by_credential_key(self, key: UUID) -> None:
-        await self.session.execute(
-            delete(StreamSourceORM).where(
-                StreamSourceORM.credential_key == key, self._get_workspace_filter()
-            )
-        )
-
-    async def update_webhook_fields(self, source_id: UUID, **fields: Any) -> None:
-        unknown = sorted(set(fields) - WEBHOOK_FIELDS)
-        if unknown:
-            raise ValueError(f"Not webhook fields of a stream source: {', '.join(unknown)}")
-        result = await self.session.execute(
-            update(StreamSourceORM)
-            .where(StreamSourceORM.id == source_id, self._get_workspace_filter())
-            .values(**fields)
-        )
-        if cast(CursorResult[Any], result).rowcount != 1:
-            raise NoResultFound(f"Stream source {source_id} not found in workspace")
 
 
 class StreamSubscriptionRepository(WorkspaceScopedRepository[StreamSubscriptionORM]):

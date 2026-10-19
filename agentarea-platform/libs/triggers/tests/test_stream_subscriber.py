@@ -14,7 +14,7 @@ from agentarea_streams.domain import (
 )
 from agentarea_streams.domain.keys import task_id_for
 from agentarea_triggers.channels.sender_admission import Admitted, Refused
-from agentarea_triggers.domain.models import ConditionVerdict, TriggerFiring, WebhookTrigger
+from agentarea_triggers.domain.models import ConditionVerdict, StreamTrigger, TriggerFiring
 from agentarea_triggers.infrastructure.reactions import CausedExecutionRepository
 from agentarea_triggers.stream_subscriber import (
     ConfigurerAuthority,
@@ -50,12 +50,11 @@ def _event():
 
 
 def _trigger(**kw):
-    return WebhookTrigger(
+    return StreamTrigger(
         name="t",
         agent_id=uuid4(),
         created_by="owner",
         workspace_id="w",
-        webhook_id="wh-1234567890abcd",
         **kw,
     )
 
@@ -232,39 +231,49 @@ class _Admission:
     def __init__(self, decision):
         self.decision = decision
 
-    async def admit(self, _session, _trigger, _data):
+    async def admit(self, _session, _trigger, _event, _door):
         return self.decision
 
 
+def _telegram_door():
+    return patch(
+        "agentarea_triggers.stream_subscriber.event_admission",
+        AsyncMock(return_value=MagicMock()),
+    )
+
+
 async def test_a_refused_telegram_sender_never_fires_the_agent():
-    trigger = _trigger(webhook_type="telegram")
+    trigger = _trigger()
     service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     handler = _handler(service, sender_admission=_Admission(Refused("not linked")))
-    result = await handler.handle(_sub(trigger.id), _event(), AsyncMock())
+    with _telegram_door():
+        result = await handler.handle(_sub(trigger.id), _event(), AsyncMock())
     assert (result.verdict, result.reason) == (Verdict.SKIPPED, "not linked")
     service.fire.assert_not_awaited()
 
 
 async def test_an_admitted_telegram_sender_runs_the_agent_as_themselves():
-    trigger = _trigger(webhook_type="telegram")
+    trigger = _trigger()
     service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock(return_value=TriggerFiring(outcome="reacted", task_id=uuid4()))
     contexts: list = []
     handler = _handler(service, sender_admission=_Admission(Admitted("alice")), contexts=contexts)
-    await handler.handle(_sub(trigger.id), _event(), AsyncMock())
+    with _telegram_door():
+        await handler.handle(_sub(trigger.id), _event(), AsyncMock())
     assert service.fire.await_args.kwargs["caller"] == "alice"
     # The service the task is created through acts for the sender, not the trigger owner.
     assert contexts[-1].user_id == "alice"
 
 
 async def test_a_telegram_trigger_without_admission_lets_nobody_through():
-    trigger = _trigger(webhook_type="telegram")
+    trigger = _trigger()
     service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
-    result = await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
+    with _telegram_door():
+        result = await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
     assert result.verdict == Verdict.ERROR
     service.fire.assert_not_awaited()

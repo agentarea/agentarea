@@ -53,14 +53,19 @@ def surviving_task() -> AgentTask:
 
 
 def _event_record():
-    record = MagicMock()
-    record.id = uuid4()
-    record.task_id = TASK_ID
-    record.timestamp = datetime.now(UTC)
-    record.event_type = "task.completed"
-    record.data = {"message": "done", "execution_id": "exec-1"}
-    record.metadata = {}
-    return record
+    from agentarea_tasks.domain.models import ConversationEntry
+
+    return ConversationEntry(
+        seq=3,
+        kind="event",
+        role="event",
+        content="",
+        name="task.completed",
+        meta={"message": "done", "execution_id": "exec-1"},
+        event_id=uuid4(),
+        execution_id="exec-1",
+        occurred_at=datetime.now(UTC),
+    )
 
 
 @pytest.fixture
@@ -77,10 +82,11 @@ def override_dependencies(task_service, monkeypatch):
     agent_service = AsyncMock()
     agent_service.get.return_value = None
 
-    event_repository = AsyncMock()
-    event_repository.list_for_task.return_value = ([_event_record()], 1)
+    feed = MagicMock()
+    feed.return_value.page = AsyncMock(return_value=([_event_record()], 1))
+    feed.return_value.bodies = AsyncMock(return_value=None)
+    monkeypatch.setattr("agentarea_api.api.v1.agents_tasks.TaskFeedReader", feed)
     repository_factory = MagicMock()
-    repository_factory.create_repository.return_value = event_repository
 
     workflow_service = AsyncMock()
     workflow_service.get_workflow_status.return_value = {"status": "completed"}

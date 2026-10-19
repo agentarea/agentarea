@@ -43,6 +43,9 @@ LLM_RETRY_MAX_INTERVAL: Final[timedelta] = timedelta(seconds=60)
 
 # Context window management
 CONTEXT_COMPACT_THRESHOLD: Final[float] = 0.75  # Compact at 75% of context window
+# A compaction runs again only once the prompt grew by this share of the usable
+# window since the last one; less would not free room worth a paid summary.
+CONTEXT_MIN_COMPACTION_GAIN: Final[float] = 0.1
 CONTEXT_WARNING_THRESHOLD: Final[float] = 0.60  # Warn at 60%
 CONTEXT_RESERVE_FOR_OUTPUT: Final[float] = 0.15  # Reserve 15% for model output
 MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 turns)

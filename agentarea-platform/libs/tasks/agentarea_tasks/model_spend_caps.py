@@ -87,6 +87,40 @@ async def refuse_model_call_at_spend_cap(
     )
 
 
+async def current_budget(
+    session: Any,
+    user_context: UserContext,
+    agent_id: UUID | None,
+    run_budget: BudgetPolicy | None,
+) -> BudgetPolicy | None:
+    """A run's budget with its monthly caps as the workspace and agent set them now.
+
+    ``run_budget`` is the budget frozen in the run's policy; its per-run limits stay.
+    The monthly caps are resolved again, so a cap added, lowered or raised while the
+    run goes applies at its next check.
+    """
+    live = (
+        await GovernancePolicyResolver(RepositoryFactory(session, user_context)).resolve(
+            workspace_id=str(user_context.workspace_id),
+            agent_id=agent_id,
+            user_id=user_context.user_id,
+        )
+    ).budget
+    run_caps = [
+        cap for cap in (run_budget.spend_caps or [] if run_budget else []) if cap.period == "run"
+    ]
+    monthly_caps = [cap for cap in (live.spend_caps or [] if live else []) if cap.period != "run"]
+    if live is None and run_budget is None:
+        return None
+    return BudgetPolicy(
+        monthly_spend_cap_usd=live.monthly_spend_cap_usd if live else None,
+        agent_monthly_spend_cap_usd=live.agent_monthly_spend_cap_usd if live else None,
+        run_budget_usd=run_budget.run_budget_usd if run_budget else None,
+        service_budget_usd=run_budget.service_budget_usd if run_budget else None,
+        spend_caps=run_caps + monthly_caps or None,
+    )
+
+
 async def refuse_workspace_model_call_at_spend_cap(
     session: Any, user_context: UserContext, agent_id: UUID | None
 ) -> None:

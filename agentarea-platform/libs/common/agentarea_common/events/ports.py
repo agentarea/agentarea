@@ -64,6 +64,13 @@ class IntegrationEvent(BaseModel):
 Handler = Callable[[IntegrationEvent], Awaitable[None]]
 
 
+class UnprocessableEventError(Exception):
+    """A handler can never process this message: redelivery would fail the same way.
+
+    The adapter dead-letters it at once instead of redelivering it to the limit.
+    """
+
+
 @runtime_checkable
 class Subscription(Protocol):
     """Handle to a running subscription."""

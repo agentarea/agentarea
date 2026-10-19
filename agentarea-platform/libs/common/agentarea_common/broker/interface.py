@@ -8,7 +8,9 @@ broker swap without leaking broker-specific ID schemes.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Protocol
 
 
@@ -51,7 +53,26 @@ class PendingSummary:
     """Messages delivered to a group and not yet acknowledged."""
 
     count: int
-    oldest_idle_ms: int | None  # longest time since delivery; None when nothing is pending
+    # How long the oldest pending message has existed, from its id; a redelivery
+    # does not reset it. None when nothing is pending.
+    oldest_age_ms: int | None
+
+
+class LiveChannels(Protocol):
+    """Broadcast channels one connection listens on; at-most-once, nothing kept."""
+
+    async def subscribe(self, channel: str) -> None:
+        raise NotImplementedError
+
+    async def unsubscribe(self, channel: str) -> None:
+        raise NotImplementedError
+
+    async def next_message(self, timeout_seconds: float) -> tuple[str, dict[str, str]] | None:
+        """The next broadcast as ``(channel, fields)``, or None after `timeout_seconds`."""
+        raise NotImplementedError
+
+    async def aclose(self) -> None:
+        raise NotImplementedError
 
 
 class BrokerClient(Protocol):
@@ -62,15 +83,12 @@ class BrokerClient(Protocol):
         stream: str,
         fields: dict[str, str],
         *,
-        maxlen: int | None = None,
-        ttl_seconds: int | None = None,
+        retention: timedelta,
     ) -> str:
         """Append a message to `stream`. Returns the broker-assigned message id.
 
-        `maxlen` caps stream length with approximate trimming (the channel's
-        retention policy for bounded buffers, e.g. live-tail streams). `None`
-        leaves the stream unbounded (durable log). `ttl_seconds` expires the
-        whole stream that long after its latest append; `None` never expires it.
+        Entries older than `retention` are trimmed as this one is appended (Redis:
+        ``XADD MINID ~``), so no topic grows without bound.
         """
         raise NotImplementedError
 
@@ -165,6 +183,29 @@ class BrokerClient(Protocol):
         ``"-"`` and ``"+"`` are the stream's ends; a ``"("`` prefix makes a bound
         exclusive. No group, no ACK.
         """
+        raise NotImplementedError
+
+    async def last_id(self, stream: str) -> str:
+        """The id of the newest entry of `stream`, or ``"0-0"`` when it has none.
+
+        A tail started from it misses nothing appended after this call.
+        """
+        raise NotImplementedError
+
+    async def prune_consumers(self, stream: str, group: str, *, idle_ms: int) -> int:
+        """Remove the group's consumers that hold nothing and were idle past `idle_ms`.
+
+        Every process start joins with a new consumer name; without this the
+        names of stopped processes pile up. Returns how many were removed.
+        """
+        raise NotImplementedError
+
+    async def notify(self, channel: str, fields: Mapping[str, str]) -> None:
+        """Broadcast `fields` to whoever listens on `channel` now; nothing is kept."""
+        raise NotImplementedError
+
+    async def open_live(self) -> LiveChannels:
+        """A connection that receives the broadcasts of the channels it subscribes to."""
         raise NotImplementedError
 
     async def move(

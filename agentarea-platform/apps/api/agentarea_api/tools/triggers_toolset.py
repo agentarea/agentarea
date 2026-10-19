@@ -1,7 +1,7 @@
-"""TriggersToolset — manage cron, webhook and stream triggers.
+"""TriggersToolset — manage cron and stream triggers.
 
 Tool method signatures are explicit kwargs (MCP-idiomatic flat wire schema)
-but the source of truth for ``create_cron``/``create_webhook``/``create_stream`` is the
+but the source of truth for ``create_cron``/``create_stream`` is the
 Pydantic DTO ``TriggerCreate`` in ``agentarea_triggers.schemas.dto``. The
 contract test in ``tests/unit/test_mcp_rest_parity.py`` enforces parity
 between toolset kwargs and DTO fields.
@@ -19,11 +19,12 @@ from agentarea_agents_sdk.tools.tool_authz import requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_streams.domain.models import TriggerBinding
 from agentarea_triggers.domain.enums import ExecutionStatus
+from agentarea_triggers.domain.models import TriggerSession
 from agentarea_triggers.schemas.dto import TriggerCreate, TriggerTypeLiteral
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from ..api.v1._trigger_creation import public_webhook_url, require_stream_readable
+from ..api.v1._trigger_creation import require_stream_readable
 from ..api.v1.triggers import TriggerStatus, trigger_status
 from .base import platform_context, platform_read_context
 
@@ -68,12 +69,9 @@ class TriggerSummaryOutput(BaseModel):
     name: str = Field(description="Trigger name.")
     description: str = Field(description="What the trigger is for.")
     agent_id: str = Field(description="Id (UUID) of the agent it runs.")
-    trigger_type: TriggerTypeLiteral = Field(description="cron, webhook, polling or stream.")
+    trigger_type: TriggerTypeLiteral = Field(description="cron or stream.")
     is_active: bool = Field(description="Whether it fires now.")
     cron_expression: str | None = Field(default=None, description="Schedule of a cron trigger.")
-    webhook_id: str | None = Field(
-        default=None, description="Path segment of a webhook trigger's URL."
-    )
     status: TriggerStatus = Field(
         description="active, inactive, or needs_owner when it stopped for its owner's lost access."
     )
@@ -84,7 +82,10 @@ class TriggerSummaryOutput(BaseModel):
     event_filter: dict[str, Any] | None = Field(
         default=None, description="Which of the stream's events fire it; {} fires on all."
     )
-    webhook_url: str | None = Field(default=None, description="Public URL senders post to.")
+    session: dict[str, Any] | None = Field(
+        default=None,
+        description='A stream trigger\'s {"continue", "idle_timeout"}; null takes the defaults.',
+    )
     last_event_at: datetime | None = Field(
         default=None, description="When an event last reached it."
     )
@@ -150,13 +151,14 @@ def _trigger_summary(trigger: Any, binding: TriggerBinding | None) -> dict[str, 
         "trigger_type": getattr(trigger.trigger_type, "value", str(trigger.trigger_type)),
         "is_active": trigger.is_active,
         "cron_expression": getattr(trigger, "cron_expression", None),
-        "webhook_id": getattr(trigger, "webhook_id", None),
         "status": status,
         "needs_new_owner": status == "needs_owner",
         "stream_id": binding.stream_id if binding else None,
         "event_filter": binding.event_filter if binding else None,
-        "webhook_url": (
-            public_webhook_url(binding.webhook_id) if binding and binding.webhook_id else None
+        "session": (
+            trigger.session.model_dump(by_alias=True, exclude_none=True)
+            if getattr(trigger, "session", None)
+            else None
         ),
         "last_event_at": binding.last_event_at if binding else None,
     }
@@ -170,7 +172,7 @@ async def _summary(service: Any, trigger: Any) -> dict[str, Any]:
 @toolset(
     namespace="agentarea/triggers",
     display_name="Triggers",
-    description="Schedule agents on cron expressions or wire them to webhooks.",
+    description="Schedule agents on cron expressions or run them on the events of a stream.",
     category="platform",
     plane="build",
     # Shares namespace with TriggersAgentToolset (agent self-management). The
@@ -180,7 +182,7 @@ async def _summary(service: Any, trigger: Any) -> dict[str, Any]:
     register=False,
 )
 class TriggersToolset(Toolset):
-    """Manage triggers: list, get, create cron/webhook/stream, delete, enable/disable, history."""
+    """Manage triggers: list, get, create cron/stream, delete, enable/disable, history."""
 
     open_world = False
 
@@ -273,71 +275,6 @@ class TriggersToolset(Toolset):
             )
             return json.dumps(await _summary(service, trigger), default=str)
 
-    @tool_method(display_name="Create webhook trigger", effect="write", output=TriggerSummaryOutput)
-    @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
-    async def create_webhook(
-        self,
-        name: TriggerName,
-        agent_id: AgentId,
-        webhook_id: Annotated[
-            str,
-            Field(
-                description=(
-                    "Path segment of the URL, at least 16 of A-Z a-z 0-9 _ -; empty to "
-                    "have one generated."
-                )
-            ),
-        ] = "",
-        description: TriggerDescription = "",
-        webhook_type: Annotated[
-            str,
-            Field(
-                description="Channel the requests come from: 'generic', 'telegram', 'slack', 'github', ..."
-            ),
-        ] = "generic",
-        allowed_methods: Annotated[
-            builtins.list[str] | None,
-            Field(description="HTTP methods the URL accepts; null for POST only."),
-        ] = None,
-        task_parameters: TaskParameters = None,
-        conditions: Conditions = None,
-        enabled: Enabled = True,
-        failure_threshold: FailureThreshold = 5,
-        event_types: Annotated[
-            builtins.list[str] | None,
-            Field(description="Channel event kinds that fire it, e.g. ['push']; null for all."),
-        ] = None,
-    ) -> str:
-        """Create a webhook trigger. Inbound webhook URL becomes /webhooks/{webhook_id}.
-
-        If ``webhook_id`` is empty, a URL-safe id is auto-generated server-side.
-        ``webhook_type`` must be a registered channel ('generic', 'telegram',
-        'slack', 'discord', 'github', etc.). ``event_types`` filters which
-        channel events fire the trigger (empty = all events).
-        """
-        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
-            service = await _build_trigger_service(repo_factory, broker, secret)
-            payload = TriggerCreate(
-                name=name,
-                description=description,
-                agent_id=UUID(agent_id),
-                trigger_type="webhook",
-                webhook_id=webhook_id or None,
-                webhook_type=webhook_type,
-                allowed_methods=allowed_methods or ["POST"],
-                task_parameters=task_parameters or {},
-                conditions=conditions or {},
-                enabled=enabled,
-                failure_threshold=failure_threshold,
-                event_types=event_types or [],
-            )
-            trigger = await service.create_trigger_from_payload(
-                payload,
-                created_by=user_ctx.user_id,
-                workspace_id=user_ctx.workspace_id,
-            )
-            return json.dumps(await _summary(service, trigger), default=str)
-
     @tool_method(display_name="Create stream trigger", effect="write", output=TriggerSummaryOutput)
     @unrestricted("any member may create a trigger, as POST /v1/triggers allows")
     async def create_stream(
@@ -362,10 +299,21 @@ class TriggersToolset(Toolset):
         conditions: Conditions = None,
         enabled: Enabled = True,
         failure_threshold: FailureThreshold = 5,
+        session: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    '{"continue": true, "idle_timeout": "30m"}: the next event of the same '
+                    "session joins the running task; null takes the source type's default."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Create a trigger that fires the agent on events of an existing stream.
 
-        ``event_filter`` picks events: {"kinds": ["push"], "fields": {"raw_data.action":
+        A webhook or a polled provider is a source of a stream
+        (``streams_create_source``); this is what runs the agent on its events.
+        ``event_filter`` picks events: {"kinds": ["push"], "fields": {"body.action":
         "opened"}}; empty fires on every event. Only events that arrive after the
         trigger is created fire it.
         """
@@ -382,6 +330,7 @@ class TriggersToolset(Toolset):
                 trigger_type="stream",
                 stream_id=UUID(stream_id),
                 event_filter=event_filter,
+                session=TriggerSession.model_validate(session) if session else None,
                 task_parameters=task_parameters or {},
                 conditions=conditions or {},
                 enabled=enabled,

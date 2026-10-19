@@ -15,7 +15,8 @@ from uuid import UUID, uuid4
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_streams.domain import HandlerResult, StreamEvent, SubscriptionView, Verdict
-from sqlalchemy import delete, func, select
+from agentarea_streams.domain.enums import GAVE_UP_REASON
+from sqlalchemy import ColumnElement, and_, delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,13 @@ _VERDICT = {
     ExecutionStatus.SKIPPED.value: Verdict.SKIPPED,
 }
 _UNIQUE = "uq_trigger_executions_subscription_event"
+
+
+def _given_up() -> ColumnElement[bool]:
+    return and_(
+        TriggerExecutionORM.verdict == Verdict.ERROR.value,
+        TriggerExecutionORM.reason == GAVE_UP_REASON,
+    )
 
 
 def verdict_of_status(status: str) -> Verdict:
@@ -76,14 +84,26 @@ class ReactionRepository(WorkspaceScopedRepository[TriggerExecutionORM]):
         super().__init__(session, TriggerExecutionORM, user_context)
 
     async def recorded_subscriptions(self, event_id: UUID) -> set[UUID]:
+        """The subscriptions with a reaction to the event, leaving out the given-up ones."""
         result = await self.session.execute(
             select(TriggerExecutionORM.subscription_id).where(
                 TriggerExecutionORM.event_id == event_id,
                 TriggerExecutionORM.subscription_id.is_not(None),
+                ~_given_up(),
                 self._get_workspace_filter(),
             )
         )
         return {s for s in result.scalars().all() if s is not None}
+
+    async def forget_given_up(self, subscription_id: UUID, event_id: UUID) -> None:
+        await self.session.execute(
+            delete(TriggerExecutionORM).where(
+                TriggerExecutionORM.subscription_id == subscription_id,
+                TriggerExecutionORM.event_id == event_id,
+                _given_up(),
+                self._get_workspace_filter(),
+            )
+        )
 
     def _row(self, cause: StreamCause, values: dict[str, Any], now: datetime) -> dict[str, Any]:
         return {
@@ -259,3 +279,10 @@ class TriggerExecutionReactionLog:
         await self._reactions(session, subscription.workspace_id, subscription.created_by).record(
             StreamCause.of(subscription, event), result, now=self._clock()
         )
+
+    async def forget_given_up(
+        self, session: AsyncSession, subscription: SubscriptionView, event: StreamEvent
+    ) -> None:
+        await self._reactions(
+            session, subscription.workspace_id, subscription.created_by
+        ).forget_given_up(subscription.id, event.id)

@@ -1,10 +1,11 @@
-"""The workflow-event activity: the DB row first, then the live stream, and a
-failure anywhere fails the activity so Temporal retries the whole batch.
+"""The workflow-event activity of runs from before the task log: the DB row first,
+then ``tasks.events``, and a failure anywhere fails the activity so Temporal
+retries the whole batch.
 
 Every step must be safe to repeat, because a retry replays events that already
-went through: the row is keyed by the workflow's event id, the stream carries
-that same id for the read side to dedup, and channel deliveries carry a dedup
-key derived from it.
+went through: the row is keyed by the workflow's event id and the topic carries
+that same id for readers to dedup. Who gets each event is the delivery group's
+business, not the activity's.
 """
 
 from __future__ import annotations
@@ -17,14 +18,11 @@ from uuid import UUID, uuid4
 
 import pytest
 from agentarea_common.events.adapters.redis_streams import decode
-from agentarea_execution.activities.agent import events as events_module
 from agentarea_execution.activities.agent.events import make_events_activities
 from agentarea_execution.models import WorkflowEventsRequest
-from agentarea_triggers.channels import register_adapter
 
 _WORKSPACE = "ws-events"
 _USER = "user-events"
-_OUTBOUND = "channels:outbound"
 
 
 class _Session:
@@ -101,20 +99,15 @@ class _Broker:
         self._fail_stream = fail_stream
         self.submits: list[tuple[str, dict]] = []
 
-    async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
-        if self._fail_stream and stream.startswith("tasks.events."):
+    async def submit(self, stream, fields, *, retention):
+        if self._fail_stream and stream == "tasks.events":
             raise ConnectionError("redis down")
         self.submits.append((stream, dict(fields)))
         self._log.append(("xadd", stream, fields.get("ce_id")))
         return f"{len(self.submits)}-0"
 
-
-class _Adapter:
-    def format(self, event, presentation):
-        return f"{event['event_type']}:{event['event_id']}"
-
-    async def send(self, config, message):
-        raise AssertionError("delivery happens in the consumer, not the activity")
+    async def notify(self, channel, fields):
+        self._log.append(("notify", channel, fields.get("ce_id")))
 
 
 def _event(task_id: str, event_type: str = "tool.result", **data) -> dict:
@@ -137,13 +130,11 @@ def _activity(
     service: _EventService,
     session: _Session,
     broker: _Broker | None,
-    channels: bool = False,
     audit: _Audit | None = None,
 ):
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=broker,
-        channel_delivery_settings=SimpleNamespace(OUT_STREAM=_OUTBOUND) if channels else None,
     )
     [activity_fn] = make_events_activities(
         dependencies, _Container(service, session, audit or _Audit())
@@ -166,10 +157,24 @@ async def test_event_is_stored_with_the_workflow_identity_before_it_is_streamed(
     assert log == [
         ("db", event["event_id"]),
         ("commit",),
-        ("xadd", f"tasks.events.{task_id}", event["event_id"]),
+        ("xadd", "tasks.events", event["event_id"]),
     ]
     streamed = decode(broker.submits[0][1])
     assert streamed.time == datetime.fromisoformat(event["timestamp"])
+    assert (streamed.subject, streamed.extensions["workspace"]) == (task_id, _WORKSPACE)
+
+
+async def test_a_live_only_signal_is_broadcast_not_put_on_tasks_events():
+    log: list = []
+    broker = _Broker(log)
+    publish, _ = _activity(service=_EventService(log), session=_Session(log), broker=broker)
+    task_id = str(uuid4())
+    started = _event(task_id, "llm.call.started")
+
+    await publish(_request(started))
+
+    assert broker.submits == []
+    assert log[-1] == ("notify", f"tasks.live.{task_id}", started["event_id"])
 
 
 async def test_stream_failure_fails_the_activity_after_the_row_is_committed():
@@ -224,60 +229,6 @@ async def test_workflow_events_are_not_published_to_pubsub():
     await publish(_request(_event(str(uuid4()))))
 
     dependencies.event_broker.publish.assert_not_awaited()
-
-
-async def test_a_retried_batch_repeats_channel_deliveries_under_the_same_dedup_keys(monkeypatch):
-    monkeypatch.setattr(events_module, "load_task_parameters", AsyncMock(return_value={}))
-    register_adapter("events-activity-test", _Adapter())
-    task_id = str(uuid4())
-    origin = {"type": "events-activity-test", "presentation": "verbose"}
-    batch = _request(
-        _event(task_id, "task.completed", channel_origin=origin, result="done"),
-        _event(task_id, "task.failed", channel_origin=origin, error="boom"),
-    )
-
-    def _channel_activity():
-        log: list = []
-        broker = _Broker(log)
-        publish, _ = _activity(
-            service=_EventService(log), session=_Session(log), broker=broker, channels=True
-        )
-        return broker, publish
-
-    first_broker, first = _channel_activity()
-    await first(batch)
-    retry_broker, retry = _channel_activity()
-    await retry(batch)
-
-    def keys(broker: _Broker) -> list[str]:
-        return [fields["dedup_key"] for stream, fields in broker.submits if stream == _OUTBOUND]
-
-    assert len(keys(first_broker)) == 2
-    assert keys(first_broker) == keys(retry_broker)
-    events = [json.loads(e) for e in batch.events_json]
-    assert [key.rsplit(":", 1)[-1] for key in keys(first_broker)] == [e["event_id"] for e in events]
-
-
-async def test_an_outbound_stream_failure_fails_the_activity(monkeypatch):
-    monkeypatch.setattr(events_module, "load_task_parameters", AsyncMock(return_value={}))
-    register_adapter("events-activity-test", _Adapter())
-    log: list = []
-    broker = _Broker(log)
-    publish, _ = _activity(
-        service=_EventService(log), session=_Session(log), broker=broker, channels=True
-    )
-    origin = {"type": "events-activity-test", "presentation": "verbose"}
-    submit = broker.submit
-
-    async def failing_outbound(stream, fields, **kwargs):
-        if stream == _OUTBOUND:
-            raise ConnectionError("outbound stream down")
-        return await submit(stream, fields, **kwargs)
-
-    broker.submit = failing_outbound
-
-    with pytest.raises(ConnectionError, match="outbound stream down"):
-        await publish(_request(_event(str(uuid4()), "task.completed", channel_origin=origin)))
 
 
 def _tool_event(task_id: str, agent_id: str, event_type: str, **data) -> dict:
@@ -379,45 +330,3 @@ async def test_a_decision_less_approval_response_is_not_a_second_decision():
     )
 
     assert audit.rows == {}
-
-
-async def test_a_task_webhook_gets_each_terminal_event_with_the_callers_end_user(monkeypatch):
-    from agentarea_triggers.channels.adapters import make_task_webhook_adapter
-
-    class _NoSecrets:
-        async def get_secret(self, name):
-            return None
-
-    route = {
-        "url": "https://app.example/hook",
-        "signed": True,
-        "end_user_id": "eu-7",
-        "app_metadata": {"chatId": "c-1"},
-    }
-    monkeypatch.setattr(
-        events_module,
-        "load_task_parameters",
-        AsyncMock(return_value={events_module._WEBHOOK_ROUTE_KEY: route}),
-    )
-    register_adapter("task_webhook", make_task_webhook_adapter(_NoSecrets()))
-    log: list = []
-    broker = _Broker(log)
-    publish, _ = _activity(
-        service=_EventService(log), session=_Session(log), broker=broker, channels=True
-    )
-    task_id = str(uuid4())
-
-    await publish(
-        _request(
-            _event(task_id, "tool.call"),
-            _event(task_id, "task.completed", total_cost="0.02", tokens_used=900),
-        )
-    )
-
-    [(stream, fields)] = [s for s in broker.submits if s[0] == _OUTBOUND]
-    assert fields["channel_type"] == "task_webhook"
-    assert json.loads(fields["channel_config"])["signed"] is True
-    body = json.loads(fields["message"])
-    assert body["type"] == "task.completed"
-    assert (body["total_cost"], body["tokens_used"]) == ("0.02", 900)
-    assert (body["end_user_id"], body["metadata"]) == ("eu-7", {"chatId": "c-1"})

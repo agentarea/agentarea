@@ -1,9 +1,10 @@
 """A task's model conversation in its log: reading the window, compaction input, pending entries."""
 
+import re
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from agentarea_agents_sdk.skills import SkillContextGuard
+from agentarea_agents_sdk.skills.skill_context_guard import SKILL_CONTENT_TAG
 from agentarea_common.auth.context import UserContext
 from agentarea_tasks.domain.models import ConversationEntry
 from agentarea_tasks.infrastructure.repository import TaskConversationRepository
@@ -13,6 +14,8 @@ from ...models import ConversationWindow
 
 if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
+
+_SKILL_NAME = re.compile(r'<skill_content name="([^"]+)"')
 
 
 def pending_entries(first_seq: int, messages: list[dict[str, Any]]) -> list[ConversationEntry]:
@@ -123,12 +126,22 @@ def compaction_input(
     )
     for entry in replaced:
         message = entry.as_message()
-        if SkillContextGuard.is_protected(message):
+        if SKILL_CONTENT_TAG in entry.content:
             if entry.content not in skills:
                 skills.append(entry.content)
-            continue
+            message = {**message, "content": _skill_stand_in(entry.content)}
         to_summarize.append(message)
     return to_summarize, skills, replaced
+
+
+def _skill_stand_in(content: str) -> str:
+    """What the summarizer reads for a loaded skill, whose text is carried verbatim."""
+    match = _SKILL_NAME.search(content)
+    name = f" '{match.group(1)}'" if match else ""
+    return (
+        f"[Skill{name} activated. It stays active: its full instructions are kept "
+        "verbatim right after the summary.]"
+    )
 
 
 def compaction_prompt(messages: list[dict[str, Any]]) -> str:
@@ -159,7 +172,8 @@ def compaction_prompt(messages: list[dict[str, Any]]) -> str:
         "4. Errors and how they were handled.\n"
         "5. Still open: questions, requirements or problems not yet resolved.\n"
         "6. Work in progress: what was being done when the conversation was cut, and "
-        "how far it got.\n"
+        "how far it got. Name every skill marked activated as active; it need not be "
+        "activated again.\n"
         "7. Next step: the next action to take.\n\n"
         "Be concise but complete; use bullet points for facts.\n\n"
         f"Conversation to summarize:\n{conversation_text}"

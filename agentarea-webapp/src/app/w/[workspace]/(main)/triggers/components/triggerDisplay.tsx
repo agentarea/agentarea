@@ -1,24 +1,12 @@
 import { createElement } from "react";
-import { Clock, Zap } from "lucide-react";
+import { Clock } from "lucide-react";
 import type { TriggerResponse } from "@/api/client/types.gen";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { getValidTimestamp } from "@/utils/dateUtils";
-
-export interface TriggerCatalogEntry {
-  id?: string;
-  name?: string;
-  /** Asset id kept for reference; render `icon_url`, not this. */
-  icon?: string;
-  /** Resolved by the API — the only thing the UI needs to draw a channel. */
-  icon_url?: string | null;
-  description?: string;
-  kind?: string;
-  webhook_type?: string;
-  data_extractor?: string;
-}
 
 export type EnrichedTrigger = TriggerResponse & {
   agent_name?: string;
@@ -27,159 +15,65 @@ export type EnrichedTrigger = TriggerResponse & {
 
 export interface TriggerLike {
   trigger_type?: string;
-  webhook_type?: string | null;
-  data_extractor?: string | null;
   cron_expression?: string | null;
+  session?: { continue?: boolean | null } | null;
   is_active?: boolean;
   status?: string;
   consecutive_failures?: number;
   failure_threshold?: number;
-  config?: {
-    webhook_type?: string | null;
-    cron_expression?: string | null;
-  } | null;
-}
-
-export function findTriggerCatalogEntry(
-  trigger: TriggerLike,
-  catalog: TriggerCatalogEntry[]
-) {
-  if (trigger.data_extractor) {
-    const match = catalog.find(
-      (entry) => entry.data_extractor === trigger.data_extractor
-    );
-    if (match) return match;
-  }
-
-  if (trigger.trigger_type === "cron") {
-    return catalog.find((entry) => entry.id === "cron");
-  }
-
-  if (trigger.trigger_type === "stream") {
-    return catalog.find((entry) => entry.id === "stream");
-  }
-
-  const webhookType = trigger.webhook_type || trigger.config?.webhook_type;
-  return (
-    catalog.find((entry) => entry.webhook_type === webhookType) ||
-    catalog.find((entry) => entry.id === "webhook")
-  );
 }
 
 /**
- * What kind of thing starts this automation, which is the distinction that
- * matters when reading the list: a channel you have to stand up end to end
- * (Telegram, Slack), something else's event reaching us (GitHub, Stripe), or
- * the clock. "cron vs webhook" is the transport underneath and says nothing
- * about which of those three you are looking at.
+ * What starts this automation, which is the distinction that matters when
+ * reading the list: a conversation whose next message joins the same task, an
+ * event that each starts its own, or the clock. A trigger is a schedule or a
+ * subscription to a stream; which providers feed the stream is the catalog's
+ * business and never decides the lane.
  */
 export type TriggerLane = "channel" | "event" | "schedule";
 
-export function getTriggerLane(
-  trigger: TriggerLike,
-  entry?: TriggerCatalogEntry | null
-): TriggerLane {
-  // The catalog is the authority on which lane a source belongs to; it grows by
-  // configuration, so nothing here may switch on the channel by name.
-  if (entry?.kind === "messaging") return "channel";
-  if (entry?.kind === "event") return "event";
-  if (entry?.kind === "schedule") return "schedule";
-
-  // Without a catalog entry, fall back to the model's own columns. An extractor
-  // means something parsed an inbound message for us, which is what a channel
-  // does; on a cron trigger it means a poller, which is still the clock.
+export function getTriggerLane(trigger: TriggerLike): TriggerLane {
   if (trigger.trigger_type === "cron") return "schedule";
-  return trigger.data_extractor ? "channel" : "event";
+  return trigger.session?.continue ? "channel" : "event";
 }
 
-// webhook_type only means anything for webhook triggers — the backend stores a
-// "generic" default on cron triggers too, which must not mask the schedule.
-function effectiveWebhookType(trigger?: TriggerLike) {
-  if (!trigger || trigger.trigger_type === "cron") return "";
-  return (
-    trigger.webhook_type ||
-    trigger.config?.webhook_type ||
-    ""
-  ).toLowerCase();
-}
-
-// For webhook triggers the trigger's own webhook_type wins over the catalog
-// entry: channels missing from the catalog (e.g. github) fall back to the
-// generic "webhook" entry, which must not mask the real event source.
-export function getTriggerSourceKey(
-  entry?: TriggerCatalogEntry | null,
-  trigger?: TriggerLike
-) {
-  return (
-    effectiveWebhookType(trigger) ||
-    entry?.id ||
-    entry?.webhook_type ||
-    trigger?.trigger_type ||
-    "webhook"
-  ).toLowerCase();
-}
-
-/**
- * The catalog owns both the artwork and the name of a channel — which channels
- * exist grows by configuration, so nothing here may switch on the channel. The
- * API hands us a resolved `icon_url`; we draw it and ask no questions, and only
- * when it has none do we fall back to a glyph for the trigger's kind.
- */
-export function renderTriggerIcon(
-  entry?: TriggerCatalogEntry | null,
-  trigger?: TriggerLike,
-  className = "h-5 w-5"
-) {
-  if (entry?.icon_url) {
-    return createElement("img", {
-      src: entry.icon_url,
-      alt: "",
+/** The glyph of what fires the trigger: the clock, or the stream it listens to. */
+export function renderTriggerIcon(trigger?: TriggerLike, className = "h-5 w-5") {
+  return createElement(
+    trigger?.trigger_type === "cron" ? Clock : ENTITY_ICONS.stream,
+    {
       "aria-hidden": true,
-      className: cn("shrink-0 object-contain", className),
-    });
-  }
-  // A channel the catalog ships no artwork for still has to show *something* —
-  // returning nothing left an empty tinted tile with no mark in it at all. The
-  // split is on `trigger_type`, a column on the model, not on which channel it
-  // is: that stays catalog-driven.
-  return createElement(trigger?.trigger_type === "cron" ? Clock : Zap, {
-    "aria-hidden": true,
-    strokeWidth: 1.85,
-    className: cn("shrink-0", className),
-  });
+      strokeWidth: 1.85,
+      className: cn("shrink-0", className),
+    }
+  );
 }
 
-/**
- * The event source a trigger listens to, as a tile: the channel's own logo when
- * the catalog has one, else the kind's glyph, on a graphite tile hued by the
- * source key. Every non-cron trigger used to share one violet tint, so a list
- * of GitHub, Slack and Stripe hooks read as one repeated mark.
- */
+/** What fires the trigger, as a graphite tile hued by its type. */
 export function TriggerSourceMark({
-  entry,
   trigger,
   size = 28,
 }: {
-  entry?: TriggerCatalogEntry | null;
   trigger?: TriggerLike;
   size?: number;
 }) {
   return (
     <EntityAvatar
       size={size}
-      hue={deterministicHue(getTriggerSourceKey(entry, trigger))}
-      icon={renderTriggerIcon(entry, trigger, "h-full w-full")}
-      iconScale={entry?.icon_url ? 0.68 : 0.5}
+      hue={deterministicHue(trigger?.trigger_type ?? "stream")}
+      icon={renderTriggerIcon(trigger, "h-full w-full")}
+      iconScale={0.5}
       aria-hidden
     />
   );
 }
 
+/** The trigger's type in the active locale: `typeLabel` resolves `TriggersPage.type.<trigger_type>`. */
 export function getTriggerDisplayName(
   trigger: TriggerLike,
-  entry?: TriggerCatalogEntry | null
+  typeLabel: (type: string) => string
 ) {
-  return entry?.name ?? trigger.trigger_type ?? "";
+  return trigger.trigger_type ? typeLabel(trigger.trigger_type) : "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -269,40 +163,9 @@ export function describeCronExpression(expr?: string | null): string {
   return expr;
 }
 
-const WEBHOOK_SCHEDULE_LABEL: Record<string, string> = {
-  slack: "On Slack event",
-  telegram: "On Telegram message",
-  discord: "On Discord message",
-  github: "On GitHub event",
-  gmail: "On new email",
-  email: "On new email",
-  stripe: "On Stripe event",
-  linear: "On Linear event",
-  teams: "On Teams message",
-  generic: "On incoming request",
-};
-
-/**
- * Human description of when a trigger fires, shown in the listing. Does not
- * cover stream triggers: that phrase is translated, and this module has no
- * translator to call, so a caller that may see one resolves it itself from
- * `TriggersPage.onStreamEvents`.
- */
+/** When a schedule fires, in words; a stream trigger's phrase is translated by its caller. */
 export function describeTriggerSchedule(trigger: TriggerLike): string {
-  if (trigger?.trigger_type === "cron") {
-    return describeCronExpression(
-      trigger.cron_expression ?? trigger.config?.cron_expression
-    );
-  }
-  if (trigger?.trigger_type === "polling") {
-    return "Polls for updates";
-  }
-  const webhookType = (
-    trigger?.webhook_type ||
-    trigger?.config?.webhook_type ||
-    ""
-  ).toLowerCase();
-  return WEBHOOK_SCHEDULE_LABEL[webhookType] || "On incoming request";
+  return describeCronExpression(trigger.cron_expression);
 }
 
 export type TriggerHealth = "active" | "paused" | "error" | "needs_owner";

@@ -30,6 +30,9 @@ from agentarea_streams.domain import (
     SubscriptionKind,
     Verdict,
 )
+from agentarea_common.events.ports import IntegrationEvent, UnprocessableEventError
+from agentarea_streams.domain.enums import GAVE_UP_REASON
+from agentarea_streams.infrastructure.orm import StreamSubscriptionORM
 from agentarea_streams.domain.keys import derived_event_id, event_id_for
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -46,10 +49,19 @@ class _Reactions:
         self.rows: dict[tuple[UUID, UUID], HandlerResult] = {}
 
     async def recorded(self, session, event):
-        return {sub for sub, event_id in self.rows if event_id == event.id}
+        return {
+            sub
+            for (sub, event_id), result in self.rows.items()
+            if event_id == event.id and result.reason != GAVE_UP_REASON
+        }
 
     async def record(self, session, subscription, event, result):
         self.rows[(subscription.id, event.id)] = result
+
+    async def forget_given_up(self, session, subscription, event):
+        key = (subscription.id, event.id)
+        if key in self.rows and self.rows[key].reason == GAVE_UP_REASON:
+            del self.rows[key]
 
 
 class _Triggers:
@@ -64,9 +76,15 @@ class _Triggers:
         return HandlerResult(verdict=Verdict.REACTED, task_id=uuid4())
 
 
+class _Quota:
+    async def take(self, workspace_id, limit, now):
+        return True
+
+
 class _Bus:
     def __init__(self):
         self.published: list[StreamEvent] = []
+        self.quota = _Quota()
 
     async def publish(self, event):
         if any(e.id == event.id for e in self.published):
@@ -93,8 +111,8 @@ async def world():
             text(
                 "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
                 "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
-                "consecutive_failures, validation_rules, created_at, updated_at) VALUES (:id, "
-                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, '{}', now(), now())"
+                "consecutive_failures, created_at, updated_at) VALUES (:id, "
+                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, now(), now())"
             ),
             {"id": trigger_id, "ws": ctx.workspace_id, "a": uuid4()},
         )
@@ -147,7 +165,10 @@ async def world():
     await engine.dispose()
 
 
-def _event(world, *, kind="push", depth=0, key="e1") -> StreamEvent:
+_EARLIER = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def _event(world, *, kind="push", depth=0, key="e1", received_at=None) -> StreamEvent:
     return StreamEvent(
         id=event_id_for(world.source.id, key),
         type=kind,
@@ -157,7 +178,7 @@ def _event(world, *, kind="push", depth=0, key="e1") -> StreamEvent:
         workspace_id=world.ctx.workspace_id,
         created_by="u",
         event_key=key,
-        received_at=datetime.now(UTC),
+        received_at=received_at or datetime.now(UTC),
         depth=depth,
     )
 
@@ -218,6 +239,30 @@ async def test_past_the_delivery_limit_the_rest_are_recorded_as_errors(world):
     assert reactions.rows[(world.s2.id, event.id)].verdict is Verdict.REACTED
 
 
+async def test_a_replayed_dead_letter_runs_the_given_up_reactions_again(world):
+    triggers, reactions = _Triggers(failing={world.t1}), _Reactions()
+    router = _router(world, triggers, reactions)
+    event = _event(world)
+    with pytest.raises(ReactionsFailedError):
+        await router.handle(event.to_bus())
+    await router.give_up(event.to_bus())
+
+    triggers.failing.clear()
+    triggers.calls.clear()
+    await router.handle(event.to_bus())
+    assert triggers.calls == [world.t1]
+    assert reactions.rows[(world.s1.id, event.id)].verdict is Verdict.REACTED
+
+
+async def test_a_message_that_is_no_stream_event_is_unprocessable(world):
+    router = _router(world, _Triggers(), _Reactions())
+    message = IntegrationEvent(type="push", source="test", data={"n": 1})
+    with pytest.raises(UnprocessableEventError):
+        await router.handle(message)
+    with pytest.raises(UnprocessableEventError):
+        await router.give_up(message)
+
+
 async def test_a_stale_cache_never_fires_a_deleted_or_paused_subscription(world):
     triggers, reactions = _Triggers(), _Reactions()
     router = _router(world, triggers, reactions)
@@ -251,7 +296,8 @@ async def test_a_new_subscription_is_seen_once_its_stream_is_invalidated(world):
         )
         await session.commit()
     triggers.calls.clear()
-    await router.handle(_event(world, kind="issue", key="cached").to_bus())
+    # Received before the cache was read: served from it.
+    await router.handle(_event(world, kind="issue", key="cached", received_at=_EARLIER).to_bus())
     assert world.t3 in triggers.calls
     router.invalidate(world.source.id)
     triggers.calls.clear()
@@ -280,3 +326,38 @@ async def test_subscription_changes_are_announced_on_the_domain_path(world):
         )
         announced = [r[0] for r in rows.all()]
     assert announced.count(str(world.source.id)) == 4
+
+
+async def test_a_forward_skips_an_output_deleted_since_it_was_read(world):
+    from agentarea_streams.application.router import subscription_view
+
+    bus = _Bus()
+    event = _event(world)
+    async with world.maker() as session:
+        with workspace_scope(world.ctx.workspace_id):
+            view = subscription_view(await session.get(StreamSubscriptionORM, world.fwd.id))
+            gone = uuid4()
+            view = view.model_copy(update={"output_stream_ids": [*view.output_stream_ids, gone]})
+            result = await ForwardHandler(EventStreamSettings(), bus).handle(view, event, session)
+
+    assert result.verdict is Verdict.REACTED
+    assert sorted(e.stream_id for e in bus.published) == sorted(o.id for o in world.outputs)
+    assert len(result.derived_event_ids) == len(world.outputs)
+
+
+async def test_a_subscription_created_after_the_cache_was_read_gets_the_next_event(world):
+    triggers, reactions = _Triggers(), _Reactions()
+    router = _router(world, triggers, reactions, cache_ttl_s=3600)
+    await router.handle(_event(world, kind="issue", key="first").to_bus())
+    async with world.raw() as session:
+        await session.execute(
+            text("UPDATE stream_subscriptions SET filter = :f WHERE id = :s"),
+            {"f": '{"kinds": ["nothing"], "fields": {}}', "s": world.s3.id},
+        )
+        await session.commit()
+    triggers.calls.clear()
+
+    # No change notice has arrived; the event came after the cache was read.
+    await router.handle(_event(world, kind="issue", key="after").to_bus())
+
+    assert world.t3 not in triggers.calls

@@ -7,7 +7,7 @@ prerequisites:
 related:
   - /concepts/open-core
   - /guides/tasks/start-a-task
-last_updated: 2026-09-16
+last_updated: 2026-10-16
 ---
 
 # Let an agent receive email
@@ -113,8 +113,41 @@ Field paths support nesting (`FromFull.Email`) and lists
 
 ## Connect a mailbox you already have
 
-Polling is a cron trigger with the `imap` extractor. The credential goes to the
-secret store, never into the trigger's config column.
+A mailbox is a poll source on a stream, and the agent reacts through an ordinary
+stream trigger. The event service reads the mailbox over IMAP and hands each new
+message to the stream; the credentials go to the secret store, never into the
+source's config.
+
+### 1. Add an IMAP source to a stream
+
+```bash
+curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/streams/$STREAM_ID/sources" \
+  -H "Authorization: Bearer $AGENTAREA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_type": "imap",
+    "kind": "poll",
+    "config": {
+      "host": "imap.example.com",
+      "port": "993",
+      "use_ssl": "true",
+      "mailbox": "INBOX"
+    },
+    "credentials": {
+      "username": "me@example.com",
+      "password": "...",
+      "smtp_host": "smtp.example.com",
+      "smtp_port": "587",
+      "from_address": "me@example.com"
+    }
+  }'
+```
+
+One credential set covers both directions: IMAP to read, SMTP to reply. For
+Gmail and similar, that is an app password, not the account password. A
+credential can also name a workspace secret instead of carrying the value.
+
+### 2. Fire the agent on the stream
 
 ```bash
 curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/" \
@@ -123,35 +156,23 @@ curl -s -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/triggers/" \
   -d '{
     "name": "My inbox",
     "agent_id": "'"$AGENT_ID"'",
-    "trigger_type": "cron",
-    "cron_expression": "*/2 * * * *",
-    "data_extractor": "imap",
-    "data_extractor_config": {
-      "host": "imap.example.com",
-      "port": 993,
-      "use_ssl": true,
-      "mailbox": "INBOX"
-    },
-    "channel_credentials": {
-      "username": "me@example.com",
-      "password": "...",
-      "smtp_host": "smtp.example.com",
-      "smtp_port": 587,
-      "from_address": "me@example.com",
-      "use_tls": true
-    }
+    "trigger_type": "stream",
+    "stream_id": "'"$STREAM_ID"'"
   }'
 ```
 
-One credential blob covers both directions: IMAP to read, SMTP to reply. For
-Gmail and similar, that is an app password, not the account password.
-
-Two behaviours worth knowing before you point it at a real mailbox:
+Behaviours worth knowing before you point it at a real mailbox:
 
 - **Your mail is not touched.** The mailbox is opened read-only and progress is
   tracked by UID, so nothing is marked as read behind your back.
 - **History is not replayed.** The first poll records where the mailbox is and
   emits nothing. Only mail arriving afterwards reaches the agent.
+- **A renumbered mailbox is reported, not skipped.** When the server changes the
+  mailbox's `UIDVALIDITY`, the stream gets a `source.gap` event and polling starts
+  again from the mailbox's present.
+- **The poll result is on the source.** `GET .../streams/$STREAM_ID/sources`
+  shows when the mailbox was last polled and the last error (a refused login,
+  an unreachable host).
 
 ## How the reply threads
 
@@ -197,12 +218,10 @@ the whole message.
 
 ## Limits
 
-- **One message per poll.** A trigger execution becomes one task with one reply
-  address, so an IMAP poll emits the oldest unread message and reports the rest
-  as `pending` in its state; they drain on following ticks. Match the cron
-  interval to the volume you expect.
+- **Polled every minute.** The catalog entry polls each mailbox every 60
+  seconds and reads at most 25 new messages a poll; each becomes its own event.
 - **`webhook_type: "gmail"` is a different thing.** Gmail's Pub/Sub push
   notifies you that *something* changed and carries no message, so an agent
   cannot read the mail from it. Use `imap` against Gmail instead.
-- **Attachments are not extracted.** The message text reaches the agent;
-  attachments stay in the raw payload.
+- **Attachments of a polled message are stored as workspace files**, up to 10 MB
+  each; the event lists them with their name, type and size.

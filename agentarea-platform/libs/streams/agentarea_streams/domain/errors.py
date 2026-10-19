@@ -1,19 +1,8 @@
 from uuid import UUID
 
-from .keys import MAX_EVENT_BYTES
-
 
 class StreamError(Exception):
     """Base for stream failures a caller can act on."""
-
-
-class PayloadTooLargeError(StreamError):
-    def __init__(self, size: int):
-        super().__init__(
-            f"Event data is {size} bytes; the limit is {MAX_EVENT_BYTES}. "
-            "Attach large content as a workspace file and send its reference."
-        )
-        self.size = size
 
 
 class StreamQuotaExceededError(StreamError):
@@ -29,6 +18,10 @@ class StreamNotFoundError(StreamError):
         self.stream_id = stream_id
 
 
+class StreamEventNotFoundError(StreamError):
+    """No stream of the workspace holds an event with this id (or it aged out)."""
+
+
 class StreamNameTakenError(StreamError):
     """Another stream in the workspace already has this name."""
 
@@ -41,17 +34,6 @@ class StreamSourceNotFoundError(StreamError):
     def __init__(self, source_id: UUID | str):
         super().__init__(f"Source {source_id} not found in this stream")
         self.source_id = source_id
-
-
-class SourceFedByTriggerError(StreamError):
-    """A live webhook trigger owns the source; deleting it would silence the trigger."""
-
-    def __init__(self, what: str, trigger_ids: list[UUID]):
-        listed = ", ".join(str(t) for t in trigger_ids)
-        super().__init__(
-            f"{what} is fed by the webhook of trigger {listed}; delete the trigger first"
-        )
-        self.trigger_ids = trigger_ids
 
 
 class StreamInUseError(StreamError):

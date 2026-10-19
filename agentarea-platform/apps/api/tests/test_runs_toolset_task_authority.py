@@ -40,7 +40,7 @@ class FakeTaskService:
         self.recorder = recorder
 
     async def get_task(self, task_id):
-        return SimpleNamespace(id=task_id, user_id=STARTER, status="running")
+        return SimpleNamespace(id=task_id, user_id=STARTER, status="running", execution_id=None)
 
     async def cancel_task(self, task_id):
         return self.recorder.record("cancel_task", True)
@@ -64,6 +64,9 @@ class FakeWorkflowService:
 
     async def send_workflow_command(self, execution_id, command, body):
         return self.recorder.record(command, True)
+
+    async def get_pending_escalations(self, execution_id):
+        return [{"escalation_id": "esc-1", "approvers": []}]
 
     async def resolve_escalation(self, execution_id, *args, **kwargs):
         return self.recorder.record("resolve_escalation", True)
@@ -114,10 +117,13 @@ ACTIONS = {
 @pytest.mark.parametrize("action", ACTIONS)
 async def test_a_member_who_did_not_start_the_run_cannot_act_on_it(monkeypatch, action):
     recorder = _harness(monkeypatch, OTHER_MEMBER)
+    refusal = (
+        "You are not an approver of this escalation"
+        if action == "resolve_escalation"
+        else "Only a workspace admin may perform this action"
+    )
 
-    with pytest.raises(
-        ToolError, match=re.escape("Only a workspace admin may perform this action")
-    ):
+    with pytest.raises(ToolError, match=re.escape(refusal)):
         await ACTIONS[action](RunsToolset())
 
     assert recorder.calls == []

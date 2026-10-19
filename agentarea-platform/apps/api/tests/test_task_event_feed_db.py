@@ -1,10 +1,10 @@
-"""The SSE catch-up read against the migrated ``task_events`` table.
+"""The feed's catch-up read against the migrated task log.
 
-A day-long task has tens of thousands of rows, and every reconnect used to
-fetch all of them in one query. The snapshot is now read through the repository in
-bounded keyset batches ordered by ``(timestamp, id)``, and a reconnecting client resumes after
-the last event it saw. Keyset order and the row comparison are Postgres
-semantics a mocked session cannot check.
+A day-long task has tens of thousands of rows, and every reconnect used to fetch
+all of them in one query. The snapshot reads the log's feed rows (event rows and
+the messages a person sent) in bounded batches in ``seq`` order, and a
+reconnecting client resumes after the last ``seq`` it saw. Ordering and the
+workspace filter are Postgres semantics a mocked session cannot check.
 
 Set TASKS_TEST_DATABASE_URL to a postgresql+asyncpg URL for a disposable,
 already-migrated database.
@@ -49,27 +49,42 @@ async def db(monkeypatch):
     finally:
         async with maker() as session:
             await session.execute(
-                text("DELETE FROM task_events WHERE workspace_id = ANY(:ws)"),
+                text("DELETE FROM task_conversation_entries WHERE workspace_id = ANY(:ws)"),
                 {"ws": [workspace_id, f"other-{workspace_id}"]},
             )
             await session.commit()
         await engine.dispose()
 
 
-async def _insert(maker, *, workspace_id: str, task_id: str, event_id: UUID, seconds: int) -> str:
+async def _insert(
+    maker,
+    *,
+    workspace_id: str,
+    task_id: str,
+    seq: int,
+    kind: str = "event",
+    role: str = "event",
+    name: str | None = "tool.result",
+) -> str:
+    event_id = uuid4()
     async with maker() as session:
         await session.execute(
             text(
-                "INSERT INTO task_events "
-                "(id, task_id, event_type, timestamp, data, event_metadata, workspace_id, "
-                "created_by) VALUES (:id, :task_id, 'tool.result', :ts, "
-                "CAST(:data AS jsonb), '{}'::jsonb, :ws, 'writer')"
+                "INSERT INTO task_conversation_entries "
+                "(id, task_id, seq, event_id, kind, role, content, name, meta, created_at, "
+                "workspace_id, created_by) VALUES (gen_random_uuid(), :task_id, :seq, :event_id, "
+                ":kind, :role, :content, :name, CAST(:meta AS jsonb), :ts, :ws, 'writer')"
             ),
             {
-                "id": event_id,
                 "task_id": UUID(task_id),
-                "ts": _T0 + timedelta(seconds=seconds),
-                "data": json.dumps({"n": seconds}),
+                "seq": seq,
+                "event_id": event_id,
+                "kind": kind,
+                "role": role,
+                "content": f"text {seq}",
+                "name": name,
+                "meta": json.dumps({"n": seq}),
+                "ts": _T0 + timedelta(seconds=seq),
                 "ws": workspace_id,
             },
         )
@@ -85,67 +100,70 @@ async def _ids(snapshot) -> list[str]:
     return [env.event_id async for env in snapshot]
 
 
-async def test_snapshot_is_read_in_bounded_batches_in_keyset_order(db):
+async def test_snapshot_is_the_feed_rows_in_bounded_batches_in_seq_order(db):
     maker, workspace_id, task_id, opened = db
-    # Two rows share a timestamp: the id breaks the tie so no row is skipped
-    # or repeated at a batch boundary.
-    tie_ids = sorted([uuid4(), uuid4()], key=str)
     expected = [
+        await _insert(maker, workspace_id=workspace_id, task_id=task_id, seq=0),
         await _insert(
-            maker, workspace_id=workspace_id, task_id=task_id, event_id=uuid4(), seconds=s
-        )
-        for s in range(3)
+            maker,
+            workspace_id=workspace_id,
+            task_id=task_id,
+            seq=1,
+            kind="message",
+            role="user",
+            name=None,
+        ),
     ]
-    for event_id in tie_ids:
-        expected.append(
-            await _insert(
-                maker, workspace_id=workspace_id, task_id=task_id, event_id=event_id, seconds=3
-            )
-        )
-    expected.append(
-        await _insert(
-            maker, workspace_id=workspace_id, task_id=task_id, event_id=uuid4(), seconds=4
-        )
-    )
     await _insert(
-        maker, workspace_id=f"other-{workspace_id}", task_id=task_id, event_id=uuid4(), seconds=1
+        maker,
+        workspace_id=workspace_id,
+        task_id=task_id,
+        seq=2,
+        kind="message",
+        role="assistant",
+        name=None,
     )
+    expected += [
+        await _insert(maker, workspace_id=workspace_id, task_id=task_id, seq=seq)
+        for seq in (3, 4, 5)
+    ]
+    await _insert(maker, workspace_id=f"other-{workspace_id}", task_id=task_id, seq=6)
     opened.clear()
 
-    ids = await _ids(task_event_feed._iter_snapshot(task_id, _reader(workspace_id), batch_size=2))
-
-    assert ids == expected
-    # Three full batches, then the empty read that ends the snapshot.
-    assert len(opened) == 4
-
-
-async def test_resumed_snapshot_starts_after_the_last_event_seen(db):
-    maker, workspace_id, task_id, _ = db
-    tie_ids = sorted([uuid4(), uuid4()], key=str)
-    first = await _insert(
-        maker, workspace_id=workspace_id, task_id=task_id, event_id=uuid4(), seconds=0
-    )
-    tied = [
-        await _insert(maker, workspace_id=workspace_id, task_id=task_id, event_id=e, seconds=1)
-        for e in tie_ids
+    snapshot = [
+        env
+        async for env in task_event_feed._iter_snapshot(
+            task_id, _reader(workspace_id), batch_size=2
+        )
     ]
-    last = await _insert(
-        maker, workspace_id=workspace_id, task_id=task_id, event_id=uuid4(), seconds=2
+
+    assert [env.event_id for env in snapshot] == expected
+    assert [env.event_type for env in snapshot][:2] == ["tool.result", "message.received"]
+    assert snapshot[1].data["content"] == "text 1"
+    # Two full batches, then the short one that ends the snapshot.
+    assert len(opened) == 3
+
+
+async def test_resumed_snapshot_starts_after_the_position_seen(db):
+    maker, workspace_id, task_id, _ = db
+    ids = [
+        await _insert(maker, workspace_id=workspace_id, task_id=task_id, seq=seq)
+        for seq in range(4)
+    ]
+
+    cursor = await task_event_feed._load_cursor(task_id, _reader(workspace_id), "1")
+    assert cursor is not None
+    assert cursor.seq == 1
+    resumed = await _ids(
+        task_event_feed._iter_snapshot(task_id, _reader(workspace_id), cursor, batch_size=1)
     )
 
-    cursor = await task_event_feed._load_cursor(task_id, _reader(workspace_id), tied[0])
-    assert cursor is not None
-    ids = await _ids(task_event_feed._iter_snapshot(task_id, _reader(workspace_id), cursor, batch_size=1))
-
-    assert first not in ids
-    assert ids == [tied[1], last]
+    assert resumed == ids[2:]
 
 
 async def test_a_cursor_from_another_workspace_or_malformed_is_not_found(db):
     maker, workspace_id, task_id, _ = db
-    foreign = await _insert(
-        maker, workspace_id=f"other-{workspace_id}", task_id=task_id, event_id=uuid4(), seconds=0
-    )
+    await _insert(maker, workspace_id=f"other-{workspace_id}", task_id=task_id, seq=0)
 
-    assert await task_event_feed._load_cursor(task_id, _reader(workspace_id), foreign) is None
-    assert await task_event_feed._load_cursor(task_id, _reader(workspace_id), "not-a-uuid") is None
+    assert await task_event_feed._load_cursor(task_id, _reader(workspace_id), "0") is None
+    assert await task_event_feed._load_cursor(task_id, _reader(workspace_id), "not-a-seq") is None

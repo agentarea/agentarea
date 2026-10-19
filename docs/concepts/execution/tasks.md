@@ -47,7 +47,7 @@ different set of defaults.
 | `agent_id` | The agent that runs it. Tasks are addressed under the agent: `/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}`. |
 | `workspace_id`, `user_id` | Tenancy and audit. Both are required; a task missing either is rejected at the manager boundary. |
 | `query`, `description` | What the agent is asked to do. |
-| `parameters` | Caller input, including `channel_origin` and `success_criteria`. |
+| `parameters` | Caller input, including `success_criteria`. A task a stream trigger starts also carries `delivery_address` (where its replies go) and `session` (the conversation it joins and how long it waits for the next message); callers cannot set either. |
 | `metadata` | Server-side facts such as `created_via`, `agent_name`, `requires_human_approval`, and `project_id`. Sandbox provider and runtime policy are deliberately absent. |
 | `execution_id` | The Temporal workflow id, always `task-{task_id}`. |
 

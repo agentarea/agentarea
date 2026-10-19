@@ -376,8 +376,8 @@ both, the same way as the secret manager settings just above.
 
 These share the `EVENT` domain with `AGENTAREA_EVENT_POLL_INTERVAL` and
 `AGENTAREA_EVENT_MAX_POLLERS` just below, but are unrelated settings: those
-two configure the channel-inbound poller; the five above configure the event
-bus. See [Event streams](/concepts/integration/event-streams).
+two configure the event service's poll sources; the five above configure the
+event bus. See [Event streams](/concepts/integration/event-streams).
 
 Stream events travel on Redis Streams (the partitions of `streams.events`, see
 the Redis group above), so the API and the worker both refuse to start unless `AGENTAREA_BROKER=redis`
@@ -388,13 +388,25 @@ the Redis group above), so the API and the worker both refuse to start unless `A
 | Setting | Helm value | Default |
 |---|---|---|
 | Port | `eventService.port` | `8002` |
-| Poll interval | `eventService.pollInterval` | `30s` |
-| Max pollers | `eventService.maxPollers` | `10` |
-| Inbound stream | `eventService.inboundStream` | `channel.inbound` (under the namespace) |
-| Telegram long-polling | `eventService.telegramPolling.enabled` | `false` |
+| Source reload interval (`AGENTAREA_EVENT_POLL_INTERVAL`) | `eventService.pollInterval` | `30s` |
+| Max pollers (`AGENTAREA_EVENT_MAX_POLLERS`) | `eventService.maxPollers` | `10` |
 
-Telegram long-polling is a development fallback. Production Telegram ingress
-uses webhooks.
+The event service polls every stream source of kind `poll` at the interval its
+catalog entry names, and registers the webhook of every webhook source whose
+entry has a `registration` block (Telegram `setWebhook`). It publishes the raw
+items to the `streams.ingest` topic, which the worker's `ingest` group turns into
+stream events. `pollInterval` is how often it reads the set of sources again.
+
+It also reads, from the groups above:
+
+- `AGENTAREA_API_URL`: the public base of `/webhooks/{webhook_id}`, the URL it
+  registers with a provider. Required; the chart sets the backend's own value.
+- `AGENTAREA_SECRET_ENCRYPTION_KEY`: source credentials are read from the
+  `database` secret backend. Required; the event service refuses to start with
+  any other `AGENTAREA_SECRET_BACKEND`.
+- `AGENTAREA_HTTP_ALLOW_PRIVATE`, `AGENTAREA_HTTP_PRIVATE_ALLOWLIST`: a host the
+  member names (a feed URL, a mailbox) may reach only public addresses unless
+  these open private ones, as for the backend.
 
 ### Sandbox runner (`mcpSandboxRunner`)
 
