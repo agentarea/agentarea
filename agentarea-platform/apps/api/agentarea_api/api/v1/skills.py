@@ -223,16 +223,10 @@ class SkillMemberResponse(BaseModel):
 
 
 @contextmanager
-def _catalog_fetch_errors() -> Iterator[None]:
-    """Answer a failed install or update of a catalog skill with what went wrong."""
+def _source_errors() -> Iterator[None]:
+    """Answer a failed fetch of a catalog skill's source with what went wrong."""
     try:
         yield
-    except SkillCustomizedError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
-    except SkillNotFromCatalogError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail="Skill not found") from e
     except GitHubSourceGoneError as e:
         raise HTTPException(status_code=410, detail=str(e)) from e
     except GitHubRateLimitError as e:
@@ -241,6 +235,20 @@ def _catalog_fetch_errors() -> Iterator[None]:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except GitHubSkillImporterError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@contextmanager
+def _catalog_fetch_errors() -> Iterator[None]:
+    """Answer a failed install or update of a catalog skill with what went wrong."""
+    try:
+        with _source_errors():
+            yield
+    except SkillCustomizedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except SkillNotFromCatalogError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail="Skill not found") from e
     except SkillFrontmatterError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     except ValueError as e:
@@ -431,9 +439,7 @@ async def update_installed_skill(
 ):
     """Move an installed catalog skill to its catalog item's current version."""
     with _catalog_fetch_errors():
-        result = await skill_service.update_from_catalog(
-            skill_id, discard_changes=discard_changes
-        )
+        result = await skill_service.update_from_catalog(skill_id, discard_changes=discard_changes)
     if result.skill is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     return SkillResponse.from_skill(result.skill)
@@ -484,11 +490,9 @@ async def get_skill_content(
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
 
-    return SkillContentResponse(
-        id=str(skill.id),
-        name=skill.name,
-        content=await skill_service.read_skill_md(skill),
-    )
+    with _source_errors():
+        content = await skill_service.read_skill_md(skill)
+    return SkillContentResponse(id=str(skill.id), name=skill.name, content=content)
 
 
 @router.get(
@@ -505,7 +509,8 @@ async def list_skill_files(
 ):
     """List all files in a skill package."""
     try:
-        files = await skill_service.get_skill_files(skill_id, include_urls=include_urls)
+        with _source_errors():
+            files = await skill_service.get_skill_files(skill_id, include_urls=include_urls)
         return SkillFilesResponse(
             skill_id=str(skill_id),
             files=[SkillFileResponse(path=f.path, size=f.size, url=f.url) for f in files],
@@ -532,7 +537,8 @@ async def get_skill_file(
     Set redirect=false to get the presigned URL in the response body.
     """
     try:
-        url = await skill_service.get_skill_file_url(skill_id, path)
+        with _source_errors():
+            url = await skill_service.get_skill_file_url(skill_id, path)
 
         if redirect:
             return RedirectResponse(url=url)

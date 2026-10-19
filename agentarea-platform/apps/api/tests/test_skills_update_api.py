@@ -177,3 +177,25 @@ def test_a_skill_response_says_whether_the_workspace_edited_it():
     assert response.json()["customized"] is True
     assert response.json()["update_available"] is True
     service.flag_outdated_forks.assert_awaited_once_with([customized])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        f"/v1/workspaces/acme/skills/{SKILL_ID}/content",
+        f"/v1/workspaces/acme/skills/{SKILL_ID}/files",
+        f"/v1/workspaces/acme/skills/{SKILL_ID}/files/SKILL.md",
+    ],
+)
+def test_reading_a_catalog_skill_whose_source_is_gone_is_gone(path):
+    client, service = _client(_member())
+    service.get_with_catalog.return_value = _skill(is_catalog=True)
+    gone = GitHubSourceGoneError("The skill was removed upstream: o/r/pdf")
+    service.read_skill_md.side_effect = gone
+    service.get_skill_files.side_effect = gone
+    service.get_skill_file_url.side_effect = gone
+
+    response = client.get(path)
+
+    assert response.status_code == 410
+    assert "removed upstream" in response.json()["detail"]
