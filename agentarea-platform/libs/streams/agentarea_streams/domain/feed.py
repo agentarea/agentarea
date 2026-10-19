@@ -22,6 +22,8 @@ class FeedFilter(BaseModel):
     since: datetime | None = None
     until: datetime | None = None
     event_id: UUID | None = None
+    #: False leaves out the platform's own events (source type ``platform``).
+    platform: bool = True
 
     def kind_prefix(self) -> str | None:
         if self.kind is None or not self.kind.endswith(_WILDCARD):

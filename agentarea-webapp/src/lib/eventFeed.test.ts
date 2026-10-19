@@ -10,8 +10,10 @@ import {
   matchesResult,
   neighbourEvent,
   parseFeedState,
+  platformForced,
   processingProgress,
   shortAge,
+  showsPlatform,
 } from "./eventFeed";
 
 function processing(over: Partial<Processing> = {}): Processing {
@@ -77,6 +79,14 @@ describe("the feed's URL state", () => {
     expect(parseFeedState({ result: "maybe" })).toEqual({});
   });
 
+  it("reads the platform switch only as 1", () => {
+    expect(parseFeedState({ platform: "1" })).toEqual({ platform: "1" });
+    expect(parseFeedState({ platform: "true" })).toEqual({});
+    expect(feedHref({ platform: "1" }, { stream: "s1" })).toBe(
+      "/events?stream=s1&platform=1"
+    );
+  });
+
   it("writes a link, a patch replacing or removing values", () => {
     const state = { stream: "s1", result: "error" as const, event: "e1" };
     expect(feedHref(state)).toBe("/events?stream=s1&result=error&event=e1");
@@ -96,17 +106,43 @@ describe("the feed's URL state", () => {
       sender: "bob",
       event: "e1",
     };
-    expect(feedApiQuery(state)).toEqual({
+    expect(feedApiQuery(state, true)).toEqual({
       stream_id: "s1",
       source_type: "mail",
       kind: "order.*",
       result: "handled",
       session_key: "x",
       sender: "bob",
+      platform: undefined,
     });
-    expect(liveQuery(state)).toBe(
+    expect(liveQuery(state, true)).toBe(
       "stream_id=s1&source_type=mail&kind=order.*&session_key=x&sender=bob"
     );
+  });
+
+  it("asks without the platform's events unless they are shown, live too", () => {
+    expect(feedApiQuery({}, false)).toMatchObject({ platform: false });
+    expect(liveQuery({ kind: "order.*" }, false)).toBe(
+      "kind=order.*&platform=false"
+    );
+  });
+});
+
+describe("the platform's own events", () => {
+  const platformStreams = ["p1"];
+
+  it("are left out unless the switch is on", () => {
+    expect(showsPlatform({}, platformStreams)).toBe(false);
+    expect(showsPlatform({ stream: "s1" }, platformStreams)).toBe(false);
+    expect(showsPlatform({ platform: "1" }, platformStreams)).toBe(true);
+  });
+
+  it("are shown whatever the switch says when the view is the platform's", () => {
+    for (const state of [{ stream: "p1" }, { source_type: "platform" }]) {
+      expect(platformForced(state, platformStreams)).toBe(true);
+      expect(showsPlatform(state, platformStreams)).toBe(true);
+    }
+    expect(platformForced({ platform: "1" }, platformStreams)).toBe(false);
   });
 });
 

@@ -1,8 +1,8 @@
 """The workspace feed against the migrated schema.
 
 Every event of the streams the caller may read, newest first, filtered by
-stream, provider, kind (exact or ``prefix.*``), sender, session, time and by
-what the platform did with it; the SQL result filter agrees with the status the
+stream, provider, kind (exact or ``prefix.*``), sender, session, time, by
+what the platform did with it and with or without the platform's own events; the SQL result filter agrees with the status the
 API reports for each row. Set STREAMS_TEST_DATABASE_URL.
 """
 
@@ -203,3 +203,38 @@ async def test_one_event_with_its_routing(world):
         routed = await StreamEventRepository(session, world.ctx).read_routed(world.ids["error"])
     assert routed is not None
     assert (routed.subscribers, routed.reacted, routed.errors) == (3, 2, 1)
+
+
+async def _record(world, key, source_type, minutes):
+    stream = world.streams["orders"]
+    event = StreamEvent(
+        id=event_id_for(stream.id, key),
+        type="task.completed",
+        source="test",
+        data={},
+        stream_id=stream.id,
+        workspace_id=world.ctx.workspace_id,
+        created_by="u",
+        event_key=key,
+        received_at=world.base + timedelta(minutes=minutes),
+        source_type=source_type,
+    )
+    async with world.maker() as session:
+        await StreamEventRepository(session, world.ctx).record(event)
+        await session.commit()
+    world.ids[key] = event.id
+
+
+async def test_platform_false_leaves_out_the_platforms_own_events_but_not_their_counts(world):
+    await _record(world, "platform", "platform", 20)
+    await _record(world, "sourceless", None, 21)
+    keys, _ = await _keys(world)
+    assert keys[:2] == ["sourceless", "platform"]
+    keys, _ = await _keys(world, FeedFilter(platform=False))
+    assert keys == ["sourceless", *reversed(_EVENTS)]
+    async with world.maker() as session:
+        facets = await StreamEventRepository(session, world.ctx).feed_facets(
+            FeedFilter(platform=False), _readable(world)
+        )
+    assert facets.source_types["platform"] == 1
+    assert facets.streams[world.streams["orders"].id] == 5

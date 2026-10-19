@@ -26,7 +26,12 @@ export interface FeedState {
   event?: string;
   /** An older page: the sequence it starts before. */
   before?: string;
+  /** `1` shows the platform's own events, which the feed leaves out by default. */
+  platform?: "1";
 }
+
+/** The source type of the events the platform writes about its own tasks. */
+export const PLATFORM_SOURCE_TYPE = "platform";
 
 const KEYS = [
   "stream",
@@ -37,6 +42,7 @@ const KEYS = [
   "sender",
   "event",
   "before",
+  "platform",
 ] as const;
 
 export function parseFeedState(
@@ -49,6 +55,8 @@ export function parseFeedState(
     if (key === "result") {
       const result = PROCESSING_RESULTS.find((r) => r === value);
       if (result) state.result = result;
+    } else if (key === "platform") {
+      if (value === "1") state.platform = value;
     } else {
       state[key] = value;
     }
@@ -68,8 +76,27 @@ export function feedHref(state: FeedState, patch: Partial<FeedState> = {}) {
   return `/events${query ? `?${query}` : ""}`;
 }
 
+/** The view is the platform's own: its stream or its provider is the filter. */
+export function platformForced(
+  state: FeedState,
+  platformStreams: readonly string[]
+): boolean {
+  return (
+    state.source_type === PLATFORM_SOURCE_TYPE ||
+    (state.stream !== undefined && platformStreams.includes(state.stream))
+  );
+}
+
+/** Whether the feed shows the platform's own events. */
+export function showsPlatform(
+  state: FeedState,
+  platformStreams: readonly string[]
+): boolean {
+  return state.platform === "1" || platformForced(state, platformStreams);
+}
+
 /** The feed's filters as the API names them. */
-export function feedApiQuery(state: FeedState) {
+export function feedApiQuery(state: FeedState, showPlatform: boolean) {
   return {
     stream_id: state.stream,
     source_type: state.source_type,
@@ -77,6 +104,7 @@ export function feedApiQuery(state: FeedState) {
     result: state.result,
     session_key: state.session,
     sender: state.sender,
+    platform: showPlatform ? undefined : false,
   };
 }
 
@@ -84,13 +112,16 @@ export function feedApiQuery(state: FeedState) {
  * The live tail's query: the feed's filters but the result, which changes as
  * an event is handled and is applied here instead (`matchesResult`).
  */
-export function liveQuery(state: FeedState): string {
-  const { result: _result, ...rest } = feedApiQuery(state);
+export function liveQuery(state: FeedState, showPlatform: boolean): string {
+  const { result: _result, ...rest } = feedApiQuery(state, showPlatform);
   return Object.entries(rest)
-    .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    .filter(
+      (entry): entry is [string, string | boolean] =>
+        entry[1] !== undefined && entry[1] !== ""
+    )
     .map(
       ([key, value]) =>
-        `${key}=${encodeURIComponent(value).replace(/%2A/g, "*")}`
+        `${key}=${encodeURIComponent(String(value)).replace(/%2A/g, "*")}`
     )
     .join("&");
 }

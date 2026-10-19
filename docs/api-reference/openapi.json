@@ -35854,6 +35854,18 @@
               "description": "Received before.",
               "title": "Until"
             }
+          },
+          {
+            "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+              "title": "Platform",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -36050,6 +36062,18 @@
               ],
               "description": "Received before.",
               "title": "Until"
+            }
+          },
+          {
+            "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+              "title": "Platform",
+              "type": "boolean"
             }
           }
         ],

@@ -493,6 +493,11 @@ def feed_filter(
     result: ProcessingStatus | None = Query(None, description="What the platform did with it."),
     since: UtcDatetime | None = Query(None, description="Received at or after."),
     until: UtcDatetime | None = Query(None, description="Received before."),
+    platform: bool = Query(
+        True,
+        description="False leaves out the platform's own events (source type platform); "
+        + "the first page's counts still include them.",
+    ),
 ) -> FeedFilter:
     return FeedFilter(
         stream_id=stream_id,
@@ -503,6 +508,7 @@ def feed_filter(
         result=result,
         since=since,
         until=until,
+        platform=platform,
     )
 
 

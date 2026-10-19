@@ -1,5 +1,11 @@
 import { listWorkspaceEvents } from "@/lib/api";
-import { feedApiQuery, type FeedState } from "@/lib/eventFeed";
+import {
+  feedApiQuery,
+  PLATFORM_SOURCE_TYPE,
+  platformForced,
+  showsPlatform,
+  type FeedState,
+} from "@/lib/eventFeed";
 import { requireApiData } from "@/lib/server-resource";
 import type { SourceType } from "@/lib/sourceTypes";
 import FeedFilters from "./FeedFilters";
@@ -11,18 +17,25 @@ const PAGE = 50;
 export default async function FeedContent({
   state,
   streams,
+  platformStreams,
   sourceTypes,
 }: {
   state: FeedState;
-  streams: { id: string; name: string; kind: string }[];
+  streams: { id: string; name: string }[];
+  platformStreams: string[];
   sourceTypes: SourceType[];
 }) {
+  const showPlatform = showsPlatform(state, platformStreams);
   const before =
     state.before && /^\d+$/.test(state.before)
       ? Number(state.before)
       : undefined;
   const page = requireApiData(
-    await listWorkspaceEvents({ ...feedApiQuery(state), before, limit: PAGE }),
+    await listWorkspaceEvents({
+      ...feedApiQuery(state, showPlatform),
+      before,
+      limit: PAGE,
+    }),
     "workspace events"
   );
   return (
@@ -32,6 +45,10 @@ export default async function FeedContent({
         facets={page.facets ?? null}
         streams={streams}
         sourceTypes={sourceTypes}
+        platform={{
+          shown: showPlatform,
+          forced: platformForced(state, platformStreams),
+        }}
       />
       <FeedList
         initial={page.events}
@@ -39,6 +56,10 @@ export default async function FeedContent({
         state={state}
         streams={streams}
         sourceTypes={sourceTypes}
+        hidesPlatform={
+          !showPlatform &&
+          (page.facets?.source_types[PLATFORM_SOURCE_TYPE] ?? 0) > 0
+        }
       />
     </>
   );

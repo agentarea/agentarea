@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { SlidersHorizontal, X } from "lucide-react";
 import type { FeedFacetsResponse } from "@/api/client/types.gen";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { MenuRow, MenuSectionLabel } from "@/components/ui/menu-row";
 import {
   Sheet,
@@ -15,6 +16,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { Switch } from "@/components/ui/switch";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { EntityIcon } from "@/lib/entity-icons";
 import { feedHref, PROCESSING_RESULTS, type FeedState } from "@/lib/eventFeed";
@@ -26,6 +28,8 @@ interface FiltersProps {
   facets: FeedFacetsResponse | null;
   streams: { id: string; name: string }[];
   sourceTypes: SourceType[];
+  /** Whether the platform's own events are shown, and whether the view's filter decides it. */
+  platform: { shown: boolean; forced: boolean };
 }
 
 function Count({ value }: { value: number | undefined }) {
@@ -68,10 +72,12 @@ function Filters({
   facets,
   streams,
   sourceTypes,
+  platform,
   onNavigate,
 }: FiltersProps & { onNavigate?: () => void }) {
   const t = useTranslations("EventsPage");
   const router = useWorkspaceRouter();
+  const platformSwitch = useId();
   const [kind, setKind] = useState(state.kind ?? "");
   const go = (patch: Partial<FeedState>) => {
     router.push(
@@ -103,6 +109,21 @@ function Filters({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 px-2">
+        <Label
+          htmlFor={platformSwitch}
+          className="text-[12.5px] font-normal text-foreground/80"
+        >
+          {t("list.showPlatform")}
+        </Label>
+        <Switch
+          id={platformSwitch}
+          size="xs"
+          checked={platform.shown}
+          disabled={platform.forced}
+          onCheckedChange={(on) => go({ platform: on ? "1" : undefined })}
+        />
+      </div>
       {(state.session || state.sender) && (
         <div className="space-y-1.5">
           {state.session && (
@@ -225,7 +246,9 @@ function Filters({
           className="px-2"
           onClick={() => {
             setKind("");
-            router.push("/events", { scroll: false });
+            router.push(feedHref({ platform: state.platform }), {
+              scroll: false,
+            });
             onNavigate?.();
           }}
         >

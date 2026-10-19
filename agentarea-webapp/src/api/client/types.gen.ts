@@ -18810,6 +18810,12 @@ export type ListWorkspaceEventsV1StreamsEventsGetData = {
      * Received before.
      */
     until?: string | null;
+    /**
+     * Platform
+     *
+     * False leaves out the platform's own events (source type platform); the first page's counts still include them.
+     */
+    platform?: boolean;
   };
   url: "/v1/workspaces/{workspace}/streams/events";
 };
@@ -18878,6 +18884,12 @@ export type StreamWorkspaceEventsV1StreamsEventsLiveGetData = {
      * Received before.
      */
     until?: string | null;
+    /**
+     * Platform
+     *
+     * False leaves out the platform's own events (source type platform); the first page's counts still include them.
+     */
+    platform?: boolean;
   };
   url: "/v1/workspaces/{workspace}/streams/events/live";
 };

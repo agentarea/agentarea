@@ -6948,6 +6948,7 @@ export const zListWorkspaceEventsV1StreamsEventsGetQuery = z.object({
   result: zProcessingStatus.nullish(),
   since: z.string().datetime().nullish(),
   until: z.string().datetime().nullish(),
+  platform: z.boolean().optional().default(true),
 });
 
 /**
@@ -6965,6 +6966,7 @@ export const zStreamWorkspaceEventsV1StreamsEventsLiveGetQuery = z.object({
   result: zProcessingStatus.nullish(),
   since: z.string().datetime().nullish(),
   until: z.string().datetime().nullish(),
+  platform: z.boolean().optional().default(true),
 });
 
 export const zGetEventByIdV1StreamsEventsEventIdGetPath = z.object({

@@ -2385,8 +2385,7 @@
       "skippedOf": "пропущено {done}/{total}",
       "filterSession": "Показать всю сессию",
       "unknownStream": "Удалённый поток",
-      "platformRun": "{count, plural, one {# событие платформы} few {# события платформы} many {# событий платформы} other {# события платформы}}",
-      "ofTotal": "{count} из {total}"
+      "showPlatform": "Показывать события платформы"
     },
     "panel": {
       "handlers": "Обработчики",

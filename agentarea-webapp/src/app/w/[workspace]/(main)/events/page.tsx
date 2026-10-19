@@ -3,7 +3,13 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { listStreams, listStreamSourceTypes } from "@/lib/api";
-import { feedHref, liveQuery, parseFeedState } from "@/lib/eventFeed";
+import {
+  feedHref,
+  liveQuery,
+  parseFeedState,
+  showsPlatform,
+} from "@/lib/eventFeed";
+import { isPlatformStream } from "@/lib/platformStream";
 import { requireApiData } from "@/lib/server-resource";
 import FeedContent from "./components/feed/FeedContent";
 import FeedEventPanel from "./components/feed/FeedEventPanel";
@@ -37,11 +43,14 @@ export default async function EventsPage({
     kind: s.kind,
   }));
   const sourceTypes = requireApiData(typesResult, "stream source types");
+  const platformStreams = streams.filter(isPlatformStream).map((s) => s.id);
   const { event, ...filters } = state;
   const filterKey = feedHref(filters);
 
   return (
-    <FeedLiveProvider query={liveQuery(state)}>
+    <FeedLiveProvider
+      query={liveQuery(state, showsPlatform(state, platformStreams))}
+    >
       <FeedSelectionProvider>
         <ContentBlock
           className="flex overflow-hidden p-0"
@@ -62,6 +71,7 @@ export default async function EventsPage({
                 <FeedContent
                   state={state}
                   streams={streams}
+                  platformStreams={platformStreams}
                   sourceTypes={sourceTypes}
                 />
               </Suspense>

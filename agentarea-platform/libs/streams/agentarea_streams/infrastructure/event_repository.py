@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..domain.errors import StreamNotFoundError
 from ..domain.feed import FeedFacets, FeedFilter, RoutedEvent
 from ..domain.models import Attachment, ReactionTally, RecordedEvent, StreamEvent
+from ..domain.platform import PLATFORM_SOURCE_TYPE
 from ..domain.processing import ProcessingStatus
 from .orm import StreamEventORM, StreamORM
 
@@ -94,13 +95,19 @@ _RESULT: dict[ProcessingStatus, ColumnElement[bool]] = {
 def _feed_conditions(
     feed_filter: FeedFilter, *, facet: str | None = None
 ) -> list[ColumnElement[bool]]:
-    """The filter as conditions; a facet's own filter is left out of its counts."""
+    """The filter as conditions; a facet's own filter is left out of its counts.
+
+    The counts include the platform's own events either way, so a view without
+    them still says how many there are.
+    """
     f = feed_filter
     conditions: list[ColumnElement[bool]] = []
     if f.stream_id is not None and facet != "stream":
         conditions.append(_E.stream_id == f.stream_id)
     if f.source_type is not None and facet != "source_type":
         conditions.append(_E.source_type == f.source_type)
+    if not f.platform and facet is None:
+        conditions.append(_E.source_type.is_distinct_from(PLATFORM_SOURCE_TYPE))
     if (exact := f.exact_kind()) is not None:
         conditions.append(_E.kind == exact)
     if (prefix := f.kind_prefix()) is not None:
