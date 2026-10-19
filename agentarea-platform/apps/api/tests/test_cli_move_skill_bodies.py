@@ -9,6 +9,8 @@ from click.testing import CliRunner
 
 @pytest.fixture
 def mover(monkeypatch):
+    monkeypatch.setenv("AGENTAREA_S3_ACCESS_KEY", "key")
+    monkeypatch.setenv("AGENTAREA_S3_SECRET_KEY", "secret")
     from agentarea_agents.application import skill_packages
 
     move = AsyncMock()
@@ -33,3 +35,13 @@ def test_a_body_that_did_not_move_fails_the_command(mover):
     result = CliRunner().invoke(cli.cli, ["skills", "move-bodies-to-packages"])
 
     assert result.exit_code == 1
+
+
+def test_no_object_storage_stops_the_command_before_any_move(mover, monkeypatch):
+    monkeypatch.delenv("AGENTAREA_S3_SECRET_KEY")
+
+    result = CliRunner().invoke(cli.cli, ["skills", "move-bodies-to-packages"])
+
+    assert result.exit_code == 1
+    assert "AGENTAREA_S3_SECRET_KEY" in result.output
+    mover.assert_not_awaited()

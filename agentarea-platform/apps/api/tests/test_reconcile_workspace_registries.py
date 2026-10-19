@@ -3,7 +3,9 @@
 Each is synced as its own workspace (the tenant scope and the repositories'
 context are the owner's, so its credentials resolve from that workspace's
 secrets) with a store for a mirror registry's content; one failing does not
-stop the rest, and the run reports it.
+stop the rest. A tenant's broken source is the tenant's: it is recorded on
+the registry and reported apart, and the run, which the platform's sources
+decide, still succeeds.
 """
 
 from contextlib import asynccontextmanager
@@ -12,11 +14,10 @@ from uuid import uuid4
 
 import agentarea_registry.application.service as registry_service
 import agentarea_registry.infrastructure.repository as registry_repository
-import pytest
 from agentarea_api import cli
 
 
-async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch):
+async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch, capsys):
     acme = SimpleNamespace(id=uuid4(), name="skills", workspace_id="acme")
     globex = SimpleNamespace(id=uuid4(), name="broken", workspace_id="globex")
     synced: list[tuple] = []
@@ -63,8 +64,61 @@ async def test_every_workspace_registry_is_synced_as_its_workspace(monkeypatch):
     monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
     monkeypatch.setattr(registry_service, "RegistryService", _RegistryService)
 
+    await cli._reconcile(None, (), None, force=True, workspace_registries=True)
+
+    assert synced == [(acme.id, "acme", True)]
+    out = capsys.readouterr().out
+    assert "Workspace registries: 1 synced, 1 failed" in out
+    assert "Reconcile complete: 0 succeeded, 0 failed (out of 0)" in out
+
+
+async def test_a_failed_platform_source_still_fails_the_run(monkeypatch):
+    import pytest
+
+    platform = SimpleNamespace(
+        id=uuid4(), recommendation_priority=None, mode="mirror", trust="official"
+    )
+
+    class _Session:
+        async def commit(self) -> None:
+            pass
+
+    class _Database:
+        def __init__(self, *_args) -> None:
+            pass
+
+        @asynccontextmanager
+        async def async_session_factory(self):
+            yield _Session()
+
+    class _RegistryRepository:
+        def __init__(self, _session, user_context=None) -> None:
+            pass
+
+        async def get_platform_by_name(self, _name):
+            return platform
+
+        async def list_active_workspace_registries(self):
+            return []
+
+    class _RegistryService:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def sync_registry(self, registry_id, force=False):
+            raise RuntimeError("the source answered HTTP 500")
+
+    async def register() -> object:
+        return object()
+
+    monkeypatch.setattr(cli, "_register_graph_client", register)
+    monkeypatch.setattr(cli, "Database", _Database)
+    monkeypatch.setattr(cli, "get_db_settings", lambda: None)
+    monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
+    monkeypatch.setattr(registry_service, "RegistryService", _RegistryService)
+    config = '[{"name": "system-skills-curated", "source_url": "https://x/skills.json"}]'
+
     with pytest.raises(SystemExit) as exited:
-        await cli._reconcile(None, (), None, force=True, workspace_registries=True)
+        await cli._reconcile(config, (), None, workspace_registries=True)
 
     assert exited.value.code == 1
-    assert synced == [(acme.id, "acme", True)]

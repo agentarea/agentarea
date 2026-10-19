@@ -9,7 +9,12 @@ GitHub source is read with the token the registry's credentials resolve to.
 from agentarea_agents.application.skill_packages import CatalogMirror
 from agentarea_agents.infrastructure.github_skill_importer import GitHubSkillImporter
 from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
-from agentarea_registry.application.service import ContentMirror, ItemContentMirror
+from agentarea_common.config.aws import ObjectStorageNotConfiguredError, require_s3_credentials
+from agentarea_registry.application.service import (
+    ContentMirror,
+    ItemContentMirror,
+    RegistryConfigurationError,
+)
 from agentarea_registry.domain.models import Registry
 
 
@@ -17,6 +22,13 @@ def registry_content_mirror(storage: SkillStorageService | None = None) -> Conte
     store = storage or SkillStorageService()
 
     def open_mirror(registry: Registry, token: str | None) -> ItemContentMirror:
+        if storage is None:
+            try:
+                require_s3_credentials()
+            except ObjectStorageNotConfiguredError as e:
+                raise RegistryConfigurationError(
+                    f"a mirror registry stores its content in object storage, and {e}"
+                ) from e
         return CatalogMirror(
             store,
             GitHubSkillImporter(github_token=token),

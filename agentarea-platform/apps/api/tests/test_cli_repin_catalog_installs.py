@@ -14,6 +14,8 @@ from click.testing import CliRunner
 def repin(monkeypatch):
     from agentarea_agents.application import skill_service
 
+    monkeypatch.setenv("AGENTAREA_S3_ACCESS_KEY", "key")
+    monkeypatch.setenv("AGENTAREA_S3_SECRET_KEY", "secret")
     run = AsyncMock()
     monkeypatch.setattr(skill_service, "repin_all_catalog_installs", run)
     monkeypatch.setattr(cli, "Database", MagicMock())

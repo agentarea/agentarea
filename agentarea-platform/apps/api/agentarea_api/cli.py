@@ -311,10 +311,24 @@ def move_bodies_to_packages():
     asyncio.run(_move_bodies_to_packages())
 
 
+def _require_object_storage() -> None:
+    from agentarea_common.config.aws import (
+        ObjectStorageNotConfiguredError,
+        require_s3_credentials,
+    )
+
+    try:
+        require_s3_credentials()
+    except ObjectStorageNotConfiguredError as e:
+        click.echo(f"Skill packages live in object storage, and {e}", err=True)
+        sys.exit(1)
+
+
 async def _move_bodies_to_packages() -> None:
     from agentarea_agents.application.skill_packages import move_all_bodies_to_packages
     from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
 
+    _require_object_storage()
     db = Database(get_db_settings())
     moved, failed = await move_all_bodies_to_packages(
         db.async_session_factory, SkillStorageService()
@@ -345,6 +359,7 @@ async def _repin_catalog_installs(*, dry_run: bool) -> None:
     from agentarea_agents.application import skill_service
     from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
 
+    _require_object_storage()
     db = Database(get_db_settings())
     results = await skill_service.repin_all_catalog_installs(
         db.async_session_factory, SkillStorageService(), dry_run=dry_run
@@ -612,15 +627,17 @@ async def _reconcile(
             click.echo(f"Reconcile failed for {registry_name}: {e}", err=True)
             failed.append((registry_name, str(e)))
 
-    total = len(configs)
     if workspace_registries:
+        # A tenant's broken source is recorded on its registry and reported
+        # here; it does not fail the run the platform's sources decide.
         synced, broken = await _reconcile_workspace_registries(db, force=force)
-        succeeded.extend(synced)
-        failed.extend(broken)
-        total += len(synced) + len(broken)
+        click.echo(f"\nWorkspace registries: {len(synced)} synced, {len(broken)} failed")
+        for name, err in broken:
+            click.echo(f"  - {name}: {err}", err=True)
 
     click.echo(
-        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed (out of {total})"
+        f"\nReconcile complete: {len(succeeded)} succeeded, {len(failed)} failed "
+        f"(out of {len(configs)})"
     )
     if failed:
         for name, err in failed:

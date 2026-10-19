@@ -22,3 +22,20 @@ async def test_each_registry_is_mirrored_into_its_own_area_with_its_token(monkey
     open_mirror(SimpleNamespace(scope="platform", workspace_id=None), None)
 
     assert opened == [(storage, "ghp_secret", "ws-1"), (storage, None, None)]
+
+
+def test_a_mirror_without_object_storage_fails_the_sync_by_name(monkeypatch):
+    import pytest
+    from agentarea_registry.application.service import (
+        RegistryConfigurationError,
+        sync_error_message,
+    )
+
+    for name in ("AGENTAREA_S3_ACCESS_KEY", "AGENTAREA_S3_SECRET_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    open_mirror = registry_content.registry_content_mirror()
+
+    with pytest.raises(RegistryConfigurationError) as refused:
+        open_mirror(SimpleNamespace(scope="platform", workspace_id=None), None)
+
+    assert "AGENTAREA_S3_ACCESS_KEY" in sync_error_message(refused.value)

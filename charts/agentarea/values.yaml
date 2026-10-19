@@ -1218,13 +1218,21 @@ jobs:
 # Disable to bring your own catalog or start empty.
 registryReconcile:
   enabled: true
+  # -- Also sync every active registry a workspace admin added (`--workspace-registries`).
+  # A tenant's failing source is recorded on its registry and does not fail the Job.
+  workspaceRegistries: false
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. `recommendation_priority` (lower first, default
-  # 100) weights a whole source in the /explore "Recommended" order. The
-  # built-in curated sources below take 10, so any registry added without one
-  # -- a custom catalog, or the ~123k community mirror, which stays opt-in and
-  # must not drive first-run picks -- lands after them instead of interleaving
-  # its first entries with the curated front page.
+  # from the fetched payload unless `type` names it. `recommendation_priority`
+  # (lower first, default 100) weights a whole source in the /explore
+  # "Recommended" order. The built-in curated sources below take 10, so any
+  # registry added without one -- a custom catalog, or the community skill
+  # index, which stays opt-in and must not drive first-run picks -- lands after
+  # them instead of interleaving its first entries with the curated front page.
+  # `mode` is `mirror` (the default: a skills registry's content is copied into
+  # object storage at sync, so the Job needs the storage credentials) or
+  # `upstream` (content is fetched on first install); `trust` is `official`
+  # (default), `verified` or `community`. An entry with `active: false` and no
+  # `source_url` retires that registry: what nothing uses is deleted.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
