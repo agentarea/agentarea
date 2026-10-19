@@ -57,6 +57,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     text-to-uuid join on its spec, unioned with OpenAPI connections.
 #   skill list: the catalog half, its total and the fork update check are
 #     served by the partial browse indexes and the primary key, never a scan.
+#   skill packages: an update's check joins the workspace's install row and
+#     moves the pin by upserting on its (item, workspace) key; moving bodies
+#     out of rows reads every workspace's skills and rewrites each in its own.
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
 #   task events and conversation: a retried publish batch stores each event once
@@ -114,6 +117,7 @@ PY_SUITES=(
   libs/mcp/tests/test_mcp_spec_list_db.py
   apps/api/tests/test_catalog_connections_db.py
   libs/agents/tests/test_catalog_skill_list_db.py
+  libs/agents/tests/test_skill_packages_db.py
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
   libs/tasks/tests/test_task_conversation_db.py

@@ -6,7 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Literal
 from uuid import UUID
 
 from agentarea_common.audit import audited
@@ -56,6 +56,25 @@ def _checked_skill_name(name: str) -> str:
             "or pass a shorter name."
         )
     return name
+
+
+class SkillCustomizedError(Exception):
+    """The workspace edited this installed skill; an update would discard the edit."""
+
+
+class SkillNotFromCatalogError(ValueError):
+    """The skill was not installed from a catalog item that still exists."""
+
+
+@dataclass
+class SkillUpdateResult:
+    """What updating one installed skill to its catalog item's current version did."""
+
+    skill_id: str
+    name: str
+    status: Literal["updated", "up_to_date", "customized", "failed"]
+    skill: Skill | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -607,7 +626,7 @@ class SkillService:
             from_registry=from_registry,
             ids=ids,
         )
-        await self._flag_outdated_forks(tenant_page)
+        await self.flag_outdated_forks(tenant_page)
 
         # Catalog items are registry-backed by definition, so an explicit
         # "not from a registry" filter excludes the whole catalog half.
@@ -625,7 +644,7 @@ class SkillService:
         page = [*tenant_page, *(_project_catalog_summary(row) for row in catalog_rows)]
         return page, tenant_total + catalog_total
 
-    async def _flag_outdated_forks(self, skills: list[Skill]) -> None:
+    async def flag_outdated_forks(self, skills: list[Skill]) -> None:
         """Mark forked skills on this page whose catalog item moved on."""
         forked = {str(s.registry_item_id) for s in skills if getattr(s, "registry_item_id", None)}
         if not forked:
@@ -716,6 +735,106 @@ class SkillService:
             return forked
 
         return await self._fork_catalog_skill(item)
+
+    async def update_from_catalog(
+        self, skill_id: UUID | str, *, discard_changes: bool = False
+    ) -> SkillUpdateResult:
+        """Move an installed skill to its catalog item's current version.
+
+        Raises:
+            NotFoundError: No such skill in this workspace.
+            SkillNotFromCatalogError: It was not installed from a catalog item,
+                or that item is gone.
+            SkillCustomizedError: The workspace edited it and
+                ``discard_changes`` is not set.
+        """
+        skill = await self.get(skill_id)
+        if skill is None:
+            raise NotFoundError("Skill not found")
+        if skill.registry_item_id is None:
+            raise SkillNotFromCatalogError(f"Skill {skill.id} was not installed from a catalog")
+        item = await self._get_catalog_repository().get_item(str(skill.registry_item_id))
+        if item is None:
+            raise SkillNotFromCatalogError(
+                f"The catalog item skill {skill.id} was installed from is no longer listed"
+            )
+        return await self._apply_catalog_version(skill.id, skill, item, discard_changes)
+
+    async def update_all_from_catalog(self) -> list[SkillUpdateResult]:
+        """Update every installed skill whose catalog item has a newer version.
+
+        A customized skill is reported and left alone; a skill whose update
+        fails is reported with the reason and the rest still update.
+        """
+        installed = await self._get_repository().list_from_catalog()
+        versions = await self._get_catalog_repository().versions_for(
+            {str(s.registry_item_id) for s in installed}
+        )
+        results: list[SkillUpdateResult] = []
+        for skill in installed:
+            current, pinned = versions.get(str(skill.registry_item_id), (None, None))
+            if not current or current == pinned:
+                continue
+            if is_customized(skill):
+                results.append(SkillUpdateResult(str(skill.id), skill.name, "customized", skill))
+                continue
+            try:
+                results.append(await self.update_from_catalog(skill.id))
+            except Exception as exc:
+                logger.warning(
+                    "Updating skill %s from its catalog item failed", skill.id, exc_info=True
+                )
+                results.append(
+                    SkillUpdateResult(str(skill.id), skill.name, "failed", error=str(exc))
+                )
+        return results
+
+    @audited("skill.update", resource_type="skill", resource_id_param="skill_id")
+    async def _apply_catalog_version(
+        self,
+        skill_id: UUID,
+        skill: Skill,
+        item: CatalogSkillItem,
+        discard_changes: bool,
+    ) -> SkillUpdateResult:
+        customized = is_customized(skill)
+        if customized and not discard_changes:
+            raise SkillCustomizedError(
+                f"Skill {skill_id} was edited in this workspace; updating it would discard "
+                "the edit. Pass discard_changes to update anyway."
+            )
+        if not customized and item.version == item.installed_version:
+            return SkillUpdateResult(str(skill_id), skill.name, "up_to_date", skill)
+        own_prefix = skill.s3_path if customized else None
+        package = await self.packages.store_catalog_item(item.spec)
+        await self._get_catalog_repository().mark_installed(item.id, str(skill_id), item.version)
+        updated = await self._get_repository().update(
+            str(skill_id),
+            s3_path=package.s3_path,
+            content=None,
+            source_url=package.source_url or (item.spec or {}).get("source_url"),
+        )
+        if updated is None:
+            raise NotFoundError("Skill not found")
+        if own_prefix:
+            # The update is done; a copy left behind only costs storage.
+            try:
+                await self.storage_service.delete_package(own_prefix)
+            except Exception:
+                logger.warning(
+                    "Failed to remove the discarded copy %s of skill %s",
+                    own_prefix,
+                    skill_id,
+                    exc_info=True,
+                )
+        logger.info(
+            "Updated skill %s to catalog item %s version %s (%s)",
+            skill_id,
+            item.id,
+            item.version,
+            package.s3_path,
+        )
+        return SkillUpdateResult(str(skill_id), updated.name, "updated", updated)
 
     async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
         """Resolve a skill id to an editable tenant row, forking if needed.

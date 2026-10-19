@@ -2,11 +2,17 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from agentarea_agents.application.skill_parser import SkillFrontmatterError
-from agentarea_agents.application.skill_service import SkillService
+from agentarea_agents.application.skill_service import (
+    SkillCustomizedError,
+    SkillNotFromCatalogError,
+    SkillService,
+    SkillUpdateResult,
+    is_customized,
+)
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubNotFoundError,
@@ -23,9 +29,15 @@ from agentarea_agents.schemas.skills_dto import (
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
-from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
+from agentarea_common.auth.route_authz import (
+    enforced_in_handler,
+    requires,
+    requires_workspace_admin,
+    unrestricted,
+)
 from agentarea_common.base import RepositoryFactoryDep
 from agentarea_common.base.pagination import PaginatedResponse, PaginationParams
+from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.types import utc_isoformat
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import RedirectResponse
@@ -103,7 +115,10 @@ class SkillResponse(BaseModel):
     # skill that has not been forked into the workspace yet.
     is_catalog: bool = False
     registry_item_id: str | None = None
+    # The catalog item moved past the version this install is pinned to.
     update_available: bool = False
+    # The workspace edited this installed skill; an update would discard that.
+    customized: bool = False
 
     @classmethod
     def from_skill(cls, skill: Skill) -> "SkillResponse":
@@ -127,7 +142,34 @@ class SkillResponse(BaseModel):
             is_catalog=bool(getattr(skill, "is_catalog", False)),
             registry_item_id=str(registry_item_id) if registry_item_id else None,
             update_available=bool(getattr(skill, "update_available", False)),
+            customized=is_customized(skill),
         )
+
+
+class SkillUpdateResultResponse(BaseModel):
+    """What updating one installed skill did."""
+
+    skill_id: str
+    name: str
+    status: Literal["updated", "up_to_date", "customized", "failed"]
+    error: str | None = None
+    skill: SkillResponse | None = None
+
+    @classmethod
+    def from_result(cls, result: SkillUpdateResult) -> "SkillUpdateResultResponse":
+        return cls(
+            skill_id=result.skill_id,
+            name=result.name,
+            status=result.status,
+            error=result.error,
+            skill=SkillResponse.from_skill(result.skill) if result.skill else None,
+        )
+
+
+class SkillUpdateAllResponse(BaseModel):
+    """One result per installed skill that had an update."""
+
+    results: list[SkillUpdateResultResponse]
 
 
 class SkillContentResponse(BaseModel):
@@ -182,9 +224,15 @@ class SkillMemberResponse(BaseModel):
 
 @contextmanager
 def _catalog_fetch_errors() -> Iterator[None]:
-    """Answer a failed install of a catalog skill with what went wrong."""
+    """Answer a failed install or update of a catalog skill with what went wrong."""
     try:
         yield
+    except SkillCustomizedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except SkillNotFromCatalogError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail="Skill not found") from e
     except GitHubSourceGoneError as e:
         raise HTTPException(status_code=410, detail=str(e)) from e
     except GitHubRateLimitError as e:
@@ -352,7 +400,43 @@ async def get_skill(
         # A tenant row; the catalog projection beside it is platform data and
         # carries no ownership tuples to check.
         await require_permission("read", "skill", str(skill_id), user_context.user_id)
+        await skill_service.flag_outdated_forks([skill])
     return SkillResponse.from_skill(skill)
+
+
+@router.post(
+    "/update-all",
+    response_model=SkillUpdateAllResponse,
+    dependencies=[requires_workspace_admin()],
+)
+async def update_all_skills(skill_service: SkillServiceDep):
+    """Update every installed catalog skill that has an update and was not edited here."""
+    results = await skill_service.update_all_from_catalog()
+    return SkillUpdateAllResponse(
+        results=[SkillUpdateResultResponse.from_result(r) for r in results]
+    )
+
+
+@router.post(
+    "/{skill_id}/update",
+    response_model=SkillResponse,
+    dependencies=[requires_workspace_admin()],
+)
+async def update_installed_skill(
+    skill_id: UUID,
+    skill_service: SkillServiceDep,
+    discard_changes: bool = Query(
+        False, description="Update a skill edited in this workspace, discarding the edit"
+    ),
+):
+    """Move an installed catalog skill to its catalog item's current version."""
+    with _catalog_fetch_errors():
+        result = await skill_service.update_from_catalog(
+            skill_id, discard_changes=discard_changes
+        )
+    if result.skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return SkillResponse.from_skill(result.skill)
 
 
 @router.post(

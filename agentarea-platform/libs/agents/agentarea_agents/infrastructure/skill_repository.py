@@ -77,6 +77,17 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         result = await self.session.execute(query)
         return [str(row) for row in result.scalars().all()]
 
+    async def list_from_catalog(self) -> list[Skill]:
+        """The workspace's skills installed from a catalog item."""
+        query = (
+            select(self.model_class)
+            .where(self.model_class.registry_item_id.is_not(None))
+            .where(self._get_workspace_filter())
+            .order_by(self.model_class.name)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
     async def get_with_agents(self, skill_id: UUID | str) -> Skill | None:
         """Get a skill with its associated agents loaded.
 
