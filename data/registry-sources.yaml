@@ -63,6 +63,10 @@
   description: Built-in bundle catalog — installable agentic setups (skills + agents + MCPs)
   recommendation_priority: 10
 
+- name: system-source-types
+  source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json
+  description: Event source types (ADR-0040) — how each provider's webhook or poll is verified and parsed; a stream source whose type is missing refuses every request
+
 # Extended skill catalog (full scrape, metadata stubs; large file, slow sync).
 # Uncomment to install everything. It keeps the default priority, so the
 # scraped stubs land after the curated sources rather than among them.
