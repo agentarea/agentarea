@@ -528,7 +528,10 @@ class RegistryService:
             source_url = source_url or "managed://catalog"
         elif not source_url:
             raise ValueError("source_url is required for synchronized registries")
-        validate_registry_source(
+        # In a thread: a workspace index's host is resolved, and a slow name
+        # server would hold up the event loop.
+        await asyncio.to_thread(
+            validate_registry_source,
             registry_type=registry_type,
             source_type=source_type,
             source_url=source_url,
@@ -581,7 +584,8 @@ class RegistryService:
             current = await self.registry_repo.get_by_id(registry_id)
             if current is None:
                 return None
-            validate_registry_source(
+            await asyncio.to_thread(
+                validate_registry_source,
                 registry_type=current.registry_type,
                 source_type=current.source_type,
                 source_url=fields.get("source_url", current.source_url),

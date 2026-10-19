@@ -343,3 +343,45 @@ async def test_a_yaml_index_over_the_node_budget_is_refused(db_session, monkeypa
     _, registry = await _sync_error(db_session, _serving(_yaml_index(100)))
 
     assert registry.last_sync_error == "the source is not a valid JSON or YAML index"
+
+
+async def test_checking_an_index_host_resolves_it_off_the_event_loop(db_session, monkeypatch):
+    # A member's host may sit behind deliberately slow DNS; create and patch
+    # must not stall every other request while it answers.
+    import socket
+    import time
+
+    def slow_dns(host, port, *_args, **_kwargs):
+        time.sleep(0.4)
+        return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", port))]
+
+    monkeypatch.setattr(socket, "getaddrinfo", slow_dns)
+    service = _service(db_session, _serving(b"{}"))
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+
+    async def tick() -> float:
+        await asyncio.sleep(0.05)
+        return loop.time() - started
+
+    ticked, registry = await asyncio.gather(
+        tick(),
+        service.create_registry(
+            name="slow-dns",
+            registry_type="skills",
+            source_type="url",
+            source_url=INDEX,
+            scope="workspace",
+            workspace_id="acme",
+            mode="upstream",
+            trust="private",
+        ),
+    )
+    assert ticked < 0.3
+    assert registry.source_url == INDEX
+
+    started = loop.time()
+    ticked, _ = await asyncio.gather(
+        tick(), service.update_registry(registry.id, source_url="https://other.example/i.json")
+    )
+    assert ticked < 0.3
