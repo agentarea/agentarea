@@ -3704,6 +3704,24 @@
     "modes": {
       "mirror": "Mirrored",
       "upstream": "Fetched on install"
+    },
+    "workspaceSection": {
+      "title": "Workspace registries",
+      "description": "Sources this workspace's admins added. Only this workspace sees them."
+    },
+    "platformSection": {
+      "title": "Platform registries",
+      "description": "Every workspace sees these. The platform operator manages them in the deployment configuration, so they can't be changed here.",
+      "empty": "The platform has no registries of its own.",
+      "loadFailed": "Couldn't load the platform registries"
+    },
+    "types": {
+      "mcp_servers": "MCP servers",
+      "skills": "Skills",
+      "llm_providers": "LLM providers",
+      "llm_models": "LLM models",
+      "agents": "Agents",
+      "bundles": "Bundles"
     }
   },
   "CatalogFetchErrors": {
