@@ -1,5 +1,5 @@
-import ConnectionListSkeleton from "../ConnectionListSkeleton";
+import ToolsTabSkeleton from "./ToolsTabSkeleton";
 
 export default function Loading() {
-  return <ConnectionListSkeleton toolbar />;
+  return <ToolsTabSkeleton />;
 }

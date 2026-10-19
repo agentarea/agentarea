@@ -882,11 +882,6 @@
       "connectAnother": "Connect another account"
     },
     "instanceDetail": {
-      "activity": {
-        "empty": "No changes recorded for this connection yet.",
-        "unavailable": "The activity log isn't available right now.",
-        "emptyDescription": "Every change to this connection, by whom and when, is recorded here."
-      },
       "header": {
         "label": "Instance",
         "untitled": "Untitled instance"
@@ -2747,7 +2742,8 @@
       "resource": "Resource",
       "actor": "Actor",
       "ip": "IP",
-      "when": "When"
+      "when": "When",
+      "details": "Details"
     },
     "loadFailed": "Couldn't load the audit log",
     "noMatches": "No events match these filters.",
