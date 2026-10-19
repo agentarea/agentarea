@@ -88,7 +88,7 @@ MAX_SOURCE_REDIRECTS = 5
 # each from GitHub, whose budget every tenant shares.
 MAX_WORKSPACE_GITHUB_SKILLS = 200
 # A whole sync of one workspace registry, so one cannot hold up the next.
-WORKSPACE_SYNC_DEADLINE_SECONDS = 300.0
+WORKSPACE_SYNC_DEADLINE_SECONDS = 120.0
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",

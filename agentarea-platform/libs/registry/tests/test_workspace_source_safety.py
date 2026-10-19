@@ -250,3 +250,38 @@ def test_inline_source_urls_are_https_only():
     )
 
     assert [item["spec"].get("source_url") for item in items] == [None, "https://github.com/o/r"]
+
+
+async def test_a_workspace_sync_has_a_deadline_of_its_own(db_session, monkeypatch):
+    # The reconcile syncs every workspace's registries one after another; one
+    # that never finishes must not hold up the rest.
+    monkeypatch.setattr(service_module, "WORKSPACE_SYNC_DEADLINE_SECONDS", 0.2)
+
+    class Stalled:
+        async def head(self, repo, ref):
+            await asyncio.sleep(5)
+
+    registry = Registry(
+        name="acme-repo",
+        registry_type="skills",
+        source_type="github",
+        source_url="acme/skills",
+        scope="workspace",
+        workspace_id="acme",
+        mode="upstream",
+        trust="private",
+    )
+    db_session.add(registry)
+    await db_session.commit()
+    context = UserContext(user_id="u", workspace_id="acme")
+    service = RegistryService(
+        RegistryRepository(db_session, context),
+        RegistryItemRepository(db_session, context),
+        server_repo=None,  # type: ignore[arg-type]
+        github_source_factory=lambda _token: Stalled(),  # type: ignore[arg-type,return-value]
+    )
+
+    with pytest.raises(service_module.RegistrySyncError, match="longer than 0.2 s"):
+        await service.sync_registry(registry.id)
+    await db_session.refresh(registry)
+    assert registry.last_sync_error == "the sync took longer than 0.2 s"
