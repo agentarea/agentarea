@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
+import type { RegistryResponse } from "@/api/client/types.gen";
 import { AdminOnlyState } from "@/components/AdminOnlyState";
 import ContentBlock from "@/components/ContentBlock/ContentBlock";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
@@ -9,6 +10,7 @@ import {
   listMCPServers,
   listOpenAPIConnections,
   listPolicies,
+  listRegistries,
   listWorkspaceMembers,
   type WorkspaceMember,
 } from "@/lib/api";
@@ -52,6 +54,13 @@ interface AgentLike {
   } | null;
 }
 
+type RegistryLike = Pick<
+  RegistryResponse,
+  "id" | "name" | "trust" | "registry_type"
+>;
+
+const INSTALLABLE_TYPES = new Set(["skills", "agents"]);
+
 interface PolicyEditorPageDataProps {
   policyId?: string;
 }
@@ -85,6 +94,7 @@ export async function PolicyEditorPageData({
   let mcpServers: McpServer[] = [];
   let openapiConnections: OpenAPIConnectionLike[] = [];
   let members: MemberLike[] = [];
+  let registries: RegistryLike[] = [];
   const authContext = await getAuthContext();
 
   const [
@@ -94,6 +104,7 @@ export async function PolicyEditorPageData({
     mcpServersRes,
     openapiConnectionsRes,
     membersRes,
+    registriesRes,
   ] = await Promise.all([
     listPolicies().catch((reason) => ({
       data: null,
@@ -111,6 +122,7 @@ export async function PolicyEditorPageData({
       error: reason,
     })),
     listWorkspaceMembers().catch((reason) => ({ data: null, error: reason })),
+    listRegistries().catch((reason) => ({ data: null, error: reason })),
   ]);
 
   if (policiesRes.error) {
@@ -196,6 +208,24 @@ export async function PolicyEditorPageData({
     }));
   }
 
+  if (registriesRes.error) {
+    console.error(
+      "Failed to load registries for policy editor:",
+      registriesRes.error
+    );
+  } else {
+    // Install rules decide skill and agent installs; those are the
+    // registries a rule can name.
+    registries = (registriesRes.data ?? [])
+      .filter((registry) => INSTALLABLE_TYPES.has(registry.registry_type))
+      .map(({ id, name, trust, registry_type }) => ({
+        id,
+        name,
+        trust,
+        registry_type,
+      }));
+  }
+
   if (
     authContext.userId &&
     !members.some((member) => member.user_id === authContext.userId)
@@ -224,6 +254,7 @@ export async function PolicyEditorPageData({
           mcpServers={mcpServers}
           openapiConnections={openapiConnections}
           members={members}
+          registries={registries}
           workspaceId={authContext.workspaceId}
         />
       </div>

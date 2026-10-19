@@ -1,5 +1,6 @@
 import {
   CheckCircle2,
+  PackageCheck,
   ShieldCheck,
   UserCheck,
   Wallet,
@@ -40,3 +41,11 @@ export const EFFECT_STYLES: Record<
     chip: "bg-muted text-foreground/70",
   },
 };
+
+// Catalog install rules are allow/deny rules on a registry; the editor shows
+// them as a kind of their own.
+export const INSTALL_RULE_STYLE = {
+  label: "Installs",
+  icon: PackageCheck,
+  chip: "bg-muted text-foreground/70",
+} satisfies (typeof EFFECT_STYLES)[PolicyEffect];

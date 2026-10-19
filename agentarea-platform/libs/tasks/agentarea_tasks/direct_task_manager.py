@@ -364,12 +364,13 @@ class DirectTaskManager(BaseTaskManager):
         # Resolve skills
         skills_data = []
         if hasattr(agent, "skills") and agent.skills:
+            skill_service, _ = await cast(Any, container).get_skill_service(user_context)
             for skill in agent.skills:
                 skills_data.append(
                     {
                         "name": skill.name,
                         "description": skill.description or "",
-                        "content": skill.content or "",
+                        "content": await skill_service.read_skill_md(skill),
                         "files": [],
                     }
                 )

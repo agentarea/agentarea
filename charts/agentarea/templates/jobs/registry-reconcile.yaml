@@ -63,6 +63,9 @@ spec:
           command:
             - agentarea-api
             - reconcile
+            {{- if .Values.registryReconcile.workspaceRegistries }}
+            - --workspace-registries
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "agentarea.fullname" . }}-env-databasejobs
@@ -78,6 +81,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.global.secrets.postgresql }}
                   key: password
+            # A mirror registry stores its packages in object storage, and a
+            # registry read with credentials resolves them from the encrypted
+            # secret store, as the backend does.
+            {{- include "agentarea.storage.envs" . | nindent 12 }}
+            {{- include "agentarea.storage.secrets.envs" . | nindent 12 }}
+            {{- include "agentarea.application.secrets.envs" . | nindent 12 }}
             # Registry definitions consumed by `agentarea-api reconcile`
             # (JSON array; bound to the --registries-config option via envvar).
             - name: REGISTRIES_CONFIG

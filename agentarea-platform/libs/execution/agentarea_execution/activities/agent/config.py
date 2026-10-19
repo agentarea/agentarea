@@ -10,8 +10,13 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_agents.domain.config_hash import compute_agent_config_hash
+from agentarea_agents.infrastructure.github_skill_importer import (
+    GitHubSourceGoneError,
+    GitHubTreeMismatchError,
+)
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
@@ -41,6 +46,12 @@ if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
 
 logger = logging.getLogger(__name__)
+
+# Every SKILL.md rides in this activity's result, a Temporal payload (2 MB warns,
+# 4 MB fails the workflow task): one large body, or many, must fail the run
+# here with the reason rather than as an opaque payload error.
+MAX_SKILL_CONTENT_BYTES = 256 * 1024
+MAX_SKILLS_CONTENT_BYTES = 1024 * 1024
 
 
 def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
@@ -113,7 +124,10 @@ async def _resolve_task_resources(
         for skill_id in skill_ids:
             if any(str(skill.id) == str(skill_id) for skill in skills):
                 continue
-            skill = await skill_service.get_with_catalog(skill_id)
+            try:
+                skill = await skill_service.get_with_catalog(skill_id, to_run=True)
+            except CatalogInstallRefusedError as exc:
+                raise ApplicationError(str(exc), non_retryable=True) from exc
             if skill is None:
                 raise ApplicationError("Selected task skill is unavailable", non_retryable=True)
             if any(existing.name == skill.name for existing in skills):
@@ -362,7 +376,10 @@ def make_config_activities(
             # tenant agent for this id.
             agent = await agent_service.get_with_skills(request.agent_id)
             if not agent:
-                agent = await agent_service.get_with_catalog(request.agent_id)
+                try:
+                    agent = await agent_service.get_with_catalog(request.agent_id, to_run=True)
+                except CatalogInstallRefusedError as exc:
+                    raise ApplicationError(str(exc), non_retryable=True) from exc
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
@@ -372,21 +389,38 @@ def make_config_activities(
             # Build skill information
             skills_info = []
             if skills:
+                skill_service = await ctx.get_skill_service()
+                total_bytes = 0
                 for skill in skills:
-                    # Get file list for multi-file skills
-                    files = []
-                    if skill.s3_path:
-                        # For multi-file skills, we would list files from S3
-                        # For now, just note it has additional files
-                        files = ["(additional files available)"]
-
+                    try:
+                        content = await skill_service.read_skill_md(skill)
+                        paths = await skill_service.packages.list_paths(skill)
+                    except (GitHubSourceGoneError, GitHubTreeMismatchError) as exc:
+                        # Retrying cannot bring an upstream folder back.
+                        raise ApplicationError(
+                            f"Skill '{skill.name}' cannot be read: {exc}", non_retryable=True
+                        ) from exc
+                    size = len(content.encode("utf-8"))
+                    total_bytes += size
+                    if size > MAX_SKILL_CONTENT_BYTES:
+                        raise ApplicationError(
+                            f"Skill '{skill.name}' has a SKILL.md of {size} bytes; a run takes "
+                            f"at most {MAX_SKILL_CONTENT_BYTES} per skill",
+                            non_retryable=True,
+                        )
+                    if total_bytes > MAX_SKILLS_CONTENT_BYTES:
+                        raise ApplicationError(
+                            f"The SKILL.md files of this run's skills together exceed "
+                            f"{MAX_SKILLS_CONTENT_BYTES} bytes",
+                            non_retryable=True,
+                        )
                     skills_info.append(
                         SkillInfo(
                             id=str(skill.id),
                             name=skill.name,
                             description=skill.description or "",
-                            content=skill.content or "",
-                            files=files,
+                            content=content,
+                            files=["(additional files available)"] if len(paths) > 1 else [],
                         )
                     )
 

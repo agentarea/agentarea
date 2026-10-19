@@ -42,7 +42,7 @@ async def test_reconcile_resolves_the_graph_client_without_temporal_settings(
     assert isinstance(resolve_graph_client(), OpenFGAClient)
 
 
-async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing(
+async def test_a_retired_manifest_entry_retires_its_registry_without_syncing(
     monkeypatch,
 ) -> None:
     from contextlib import asynccontextmanager
@@ -52,6 +52,10 @@ async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing
     import agentarea_registry.application.service as registry_service
     import agentarea_registry.infrastructure.repository as registry_repository
     from agentarea_api import cli
+
+    @asynccontextmanager
+    async def _always_held(_db, _key):
+        yield True
 
     live = SimpleNamespace(id=uuid4(), name="system-openapi-connections", is_active=True)
     calls: list[tuple] = []
@@ -72,15 +76,16 @@ async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing
         def __init__(self, *_args) -> None:
             pass
 
-        async def list_all(self):
-            return [live]
+        async def get_platform_by_name(self, name):
+            return live if name == live.name else None
 
     class _RegistryService:
         def __init__(self, *_args, **_kwargs) -> None:
             pass
 
-        async def update_registry(self, registry_id, **fields):
-            calls.append(("update", registry_id, fields))
+        async def retire_registry(self, registry_id, replacements=()):
+            calls.append(("retire", registry_id))
+            return 0
 
         async def sync_registry(self, registry_id):
             calls.append(("sync", registry_id))
@@ -91,15 +96,17 @@ async def test_a_retired_manifest_entry_deactivates_its_registry_without_syncing
 
     monkeypatch.setattr(cli, "_register_graph_client", register)
     monkeypatch.setattr(cli, "Database", _Database)
+    monkeypatch.setattr(cli, "_registry_sync_lock", _always_held)
     monkeypatch.setattr(cli, "get_db_settings", lambda: None)
     monkeypatch.setattr(registry_repository, "RegistryRepository", _RegistryRepository)
     monkeypatch.setattr(registry_service, "RegistryService", _RegistryService)
 
     retired = '[{"name": "system-openapi-connections", "active": false}]'
     await cli._reconcile(retired, (), None)
-    assert calls == [("update", live.id, {"is_active": False})]
+    assert calls == [("retire", live.id)]
 
+    # Retiring again is how items a later release stops using get cleaned.
     live.is_active = False
     calls.clear()
     await cli._reconcile(retired, (), None)
-    assert calls == []
+    assert calls == [("retire", live.id)]

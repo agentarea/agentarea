@@ -3,10 +3,12 @@
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
 )
+from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -17,6 +19,32 @@ from agentarea_agents.domain.skill_models import (
     agent_skills_table,
     skill_members_table,
 )
+
+
+async def list_pre_package_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
+    """``(id, workspace_id)`` of every skill whose body is still in its row.
+
+    The platform workspace's rows are stub copies of catalog skills that the
+    reconcile deletes; a package written for one would be left behind.
+    """
+    with unscoped("moving pre-package skill bodies into packages spans every workspace"):
+        result = await session.execute(
+            select(Skill.id, Skill.workspace_id)
+            .where(Skill.content.is_not(None), Skill.workspace_id != PLATFORM_WORKSPACE_ID)
+            .order_by(Skill.workspace_id, Skill.id)
+        )
+        return [(row.id, row.workspace_id) for row in result.all()]
+
+
+async def list_catalog_installs(session: AsyncSession) -> list[tuple[UUID, str]]:
+    """``(id, workspace_id)`` of every skill installed from a catalog item."""
+    with unscoped("repinning catalog installs made before packages spans every workspace"):
+        result = await session.execute(
+            select(Skill.id, Skill.workspace_id)
+            .where(Skill.registry_item_id.is_not(None))
+            .order_by(Skill.workspace_id, Skill.id)
+        )
+        return [(row.id, row.workspace_id) for row in result.all()]
 
 
 class SkillRepository(WorkspaceScopedRepository[Skill]):
@@ -76,6 +104,17 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         )
         result = await self.session.execute(query)
         return [str(row) for row in result.scalars().all()]
+
+    async def list_from_catalog(self) -> list[Skill]:
+        """The workspace's skills installed from a catalog item."""
+        query = (
+            select(self.model_class)
+            .where(self.model_class.registry_item_id.is_not(None))
+            .where(self._get_workspace_filter())
+            .order_by(self.model_class.name)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
 
     async def get_with_agents(self, skill_id: UUID | str) -> Skill | None:
         """Get a skill with its associated agents loaded.

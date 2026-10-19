@@ -19,6 +19,7 @@ import {
   MenuSectionLabel,
   MenuSeparator,
 } from "@/components/ui/menu-row";
+import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { listSkillsAction } from "@/lib/server-actions";
 import type { PaginatedSkills, Skill } from "@/types/skill";
 import { setCookie } from "@/utils/cookies";
@@ -28,6 +29,11 @@ import SkillRow from "./SkillRow";
 import SkillsCard from "./SkillsCard";
 import SkillsContentSkeleton from "./SkillsContentSkeleton";
 import { SCOPE_META, SCOPE_ORDER, scopeMeta } from "./skillsMeta";
+import {
+  UpdateAllSkillsButton,
+  UpdateAllSkillsResults,
+  useUpdateAllSkills,
+} from "./UpdateAllSkills";
 
 type GroupKey = "scope" | "none";
 type OrderKey = "name" | "created";
@@ -76,6 +82,7 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
   const pathname = useWorkspacePathname();
   const searchParams = useSearchParams();
   const t = useTranslations("SkillsPage");
+  const { canAdminister } = useViewerCapabilities();
 
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,6 +112,13 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
       active = false;
     };
   }, []);
+
+  const updateAll = useUpdateAllSkills(() => {
+    fetchAllSkills()
+      .then(setSkills)
+      .catch(() => setError(true));
+  });
+  const hasUpdates = skills.some((s) => s.update_available);
 
   // Sync the shareable bits of state into the URL without a navigation.
   const syncUrl = useCallback(
@@ -212,7 +226,17 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     <ContentBlock
       header={{
         breadcrumb: [{ label: t("title") }],
-        controls: <CreateSkillButton />,
+        controls: (
+          <div className="flex items-center gap-2">
+            {canAdminister && hasUpdates && (
+              <UpdateAllSkillsButton
+                state={updateAll.state}
+                onRun={updateAll.run}
+              />
+            )}
+            <CreateSkillButton />
+          </div>
+        ),
       }}
       subheader={
         <SubheaderToolbar
@@ -295,6 +319,15 @@ export default function SkillsView({ initial }: { initial: InitialState }) {
     >
       {/* The size container lets the rows drop columns as the panel narrows. */}
       <div className="skills-cq">
+        {(updateAll.state.phase === "done" ||
+          updateAll.state.phase === "failed") && (
+          <div className="px-4 pt-4">
+            <UpdateAllSkillsResults
+              state={updateAll.state}
+              onDismiss={updateAll.dismiss}
+            />
+          </div>
+        )}
         {/* Keep Skills' collapsible groups and row/card actions local; the shared view contract does not model that combination. */}
         {isLoading ? (
           <SkillsContentSkeleton view={view} />

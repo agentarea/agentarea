@@ -268,6 +268,7 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
     except ValueError:
         return None
 
+    from agentarea_agents.application.skill_service import SkillService
     from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_common.base.repository_factory import RepositoryFactory
@@ -321,11 +322,12 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
             ]
             skills = {str(s.id): s for s in client.skills}
 
+            skill_service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill_registry = {
                 s.name: SkillEntry(
                     name=s.name,
                     description=s.description or "",
-                    content=s.content or "",
+                    content=await skill_service.read_skill_md(s),
                     files=[],
                 )
                 for s in skills.values()

@@ -66,6 +66,7 @@ from . import (
     wallet,
     workspace_config,
     workspace_invitations,
+    workspace_registries,
     workspace_secrets,
     workspaces,
 )
@@ -207,6 +208,8 @@ workspace_v1_router.include_router(workspace_secrets.router)
 # repositories installs land in, and writing the global catalog means acting
 # in the platform workspace (require_platform_catalog_write).
 workspace_v1_router.include_router(registries.router)
+# The workspace's own registries, written by its admins (ADR-0044).
+workspace_v1_router.include_router(workspace_registries.router)
 
 # OpenAPI connections
 workspace_v1_router.include_router(openapi_connections.router)

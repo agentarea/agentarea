@@ -68,6 +68,33 @@ class Skill(BaseModel, WorkspaceScopedMixin):
         object.__setattr__(self, "_is_catalog", value)
 
     @property
+    def catalog_spec(self) -> dict[str, Any] | None:
+        """The catalog item's spec a projection was made from; packages are built from it."""
+        return getattr(self, "_catalog_spec", None)
+
+    @catalog_spec.setter
+    def catalog_spec(self, value: dict[str, Any] | None) -> None:
+        object.__setattr__(self, "_catalog_spec", value)
+
+    @property
+    def catalog_workspace_id(self) -> str | None:
+        """The owner of the workspace registry a projection's item is from, if any."""
+        return getattr(self, "_catalog_workspace_id", None)
+
+    @catalog_workspace_id.setter
+    def catalog_workspace_id(self, value: str | None) -> None:
+        object.__setattr__(self, "_catalog_workspace_id", value)
+
+    @property
+    def catalog_provenance(self) -> Any:
+        """The registry an installed skill's item comes from (a ``CatalogProvenance``)."""
+        return getattr(self, "_catalog_provenance", None)
+
+    @catalog_provenance.setter
+    def catalog_provenance(self, value: Any) -> None:
+        object.__setattr__(self, "_catalog_provenance", value)
+
+    @property
     def update_available(self) -> bool:
         return bool(getattr(self, "_update_available", False))
 
@@ -85,7 +112,9 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     source_url: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # GitHub URL or original source
-    content: Mapped[str | None] = mapped_column(Text, nullable=True)  # Main skill markdown content
+    # Pre-package bodies only (ADR-0044): nothing writes it any more, and a row
+    # that still has one is moved into its package on first read.
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_path: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # S3 path for multi-file packages

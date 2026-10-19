@@ -539,7 +539,8 @@ async def install_agent(
     """Add a built-in catalog agent to the workspace (copy-on-write fork).
 
     Resolves a catalog agent by UUID or slug and materializes a tenant copy.
-    Idempotent: returns the existing workspace copy if already installed.
+    Idempotent: returns the existing workspace copy if already installed. A
+    policy rule refusing the item's registry answers 403.
     """
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:

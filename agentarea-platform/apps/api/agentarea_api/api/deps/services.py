@@ -246,13 +246,22 @@ async def get_registry_service(
 ) -> RegistryService:
     """Get a RegistryService instance for the current request."""
     from agentarea_agents.infrastructure.skill_repository import SkillRepository
+    from agentarea_api.registry_content import registry_content_mirror
+    from agentarea_api.registry_credentials import registry_credentials_resolver
     from agentarea_mcp.infrastructure.repository import MCPServerRepository
 
     registry_repo = RegistryRepository(db_session, user_context)
     item_repo = RegistryItemRepository(db_session, user_context)
     server_repo = MCPServerRepository(db_session, user_context)
     skill_repo = SkillRepository(db_session, user_context)
-    return RegistryService(registry_repo, item_repo, server_repo, skill_repo)
+    return RegistryService(
+        registry_repo,
+        item_repo,
+        server_repo,
+        skill_repo,
+        credentials_resolver=registry_credentials_resolver(db_session),
+        content_mirror=registry_content_mirror(),
+    )
 
 
 async def get_mcp_server_instance_service(

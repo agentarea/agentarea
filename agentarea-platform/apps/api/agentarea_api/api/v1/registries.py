@@ -4,7 +4,8 @@ Sync auto-creates entities for new items. Version updates are manual.
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
+from typing import cast as type_cast
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_registry_service
@@ -35,6 +36,8 @@ from agentarea_registry.application.service import (
     CatalogItemNotFoundError,
     RegistryNotFoundError,
     RegistryService,
+    RegistrySyncRefusedError,
+    sync_error_message,
 )
 from agentarea_registry.domain.models import Registry, RegistryItem
 from agentarea_registry.infrastructure.repository import CATALOG_SORTS
@@ -45,6 +48,11 @@ router = APIRouter(prefix="/registries", tags=["registries"])
 
 
 # ── Schemas ──
+
+
+RegistryScope = Literal["platform", "workspace"]
+RegistryMode = Literal["mirror", "upstream"]
+RegistryTrust = Literal["official", "verified", "community", "private"]
 
 
 class RegistryCreate(BaseModel):
@@ -72,6 +80,17 @@ class RegistryCreate(BaseModel):
             "Omit to take the platform default."
         ),
     )
+    mode: RegistryMode = Field(
+        "mirror",
+        description="'mirror' copies content at sync; 'upstream' keeps only the index",
+    )
+    trust: RegistryTrust = Field("official", description="Trust label on every catalog card")
+    source_ref: str | None = Field(
+        None, max_length=255, description="GitHub sources: branch, tag or commit to read"
+    )
+    source_path: str | None = Field(
+        None, description="GitHub sources: the folder whose skill folders are indexed"
+    )
 
 
 class RegistryUpdate(BaseModel):
@@ -81,6 +100,8 @@ class RegistryUpdate(BaseModel):
     sync_mode: str | None = None
     is_active: bool | None = None
     recommendation_priority: int | None = Field(None, ge=0)
+    mode: RegistryMode | None = None
+    trust: RegistryTrust | None = None
 
 
 class RegistryResponse(BaseModel):
@@ -90,8 +111,17 @@ class RegistryResponse(BaseModel):
     registry_type: str
     source_type: str
     source_url: str
+    source_ref: str | None = None
+    source_path: str | None = None
     sync_mode: str
     is_active: bool
+    scope: RegistryScope
+    # The owning workspace of a workspace registry; null for the platform's.
+    workspace_id: str | None = None
+    mode: RegistryMode
+    trust: RegistryTrust
+    # The secret the sync authenticates with, by id; its value is never returned.
+    credentials_secret_id: UUID | None = None
     last_synced_at: UtcDatetime | None
     last_sync_error: str | None
     item_count: int
@@ -108,8 +138,15 @@ class RegistryResponse(BaseModel):
             registry_type=r.registry_type,
             source_type=r.source_type,
             source_url=r.source_url,
+            source_ref=r.source_ref,
+            source_path=r.source_path,
             sync_mode=r.sync_mode,
             is_active=r.is_active,
+            scope=type_cast(RegistryScope, r.scope),
+            workspace_id=r.workspace_id,
+            mode=type_cast(RegistryMode, r.mode),
+            trust=type_cast(RegistryTrust, r.trust),
+            credentials_secret_id=r.credentials_secret_ref,
             last_synced_at=r.last_synced_at,
             last_sync_error=r.last_sync_error,
             item_count=r.item_count,
@@ -207,6 +244,11 @@ class RegistryItemResponse(BaseModel):
     workspace_connections: list[CatalogConnection] | None = None
     # Connections catalog only; None where it was not looked up.
     pricing: CatalogItemPricingResponse | None = None
+    # The source the card is labelled with (ADR-0044).
+    registry_name: str | None = None
+    registry_scope: RegistryScope | None = None
+    registry_mode: RegistryMode | None = None
+    registry_trust: RegistryTrust
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -216,8 +258,13 @@ class RegistryItemResponse(BaseModel):
         item: RegistryItem,
         workspace_connections: list[CatalogConnection] | None = None,
         pricing: CatalogItemPricing | None = None,
+        registry: Registry | None = None,
     ) -> "RegistryItemResponse":
         return cls(
+            registry_name=registry.name if registry else None,
+            registry_scope=type_cast(RegistryScope, registry.scope) if registry else None,
+            registry_mode=type_cast(RegistryMode, registry.mode) if registry else None,
+            registry_trust=type_cast(RegistryTrust, item.registry_trust),
             id=item.id,
             registry_id=UUID(str(item.registry_id)),
             external_id=item.external_id,
@@ -340,6 +387,10 @@ async def create_registry(
             description=data.description,
             sync_mode=data.sync_mode,
             recommendation_priority=data.recommendation_priority,
+            mode=data.mode,
+            trust=data.trust,
+            source_ref=data.source_ref,
+            source_path=data.source_path,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -349,15 +400,20 @@ async def create_registry(
 @router.get(
     "/",
     response_model=list[RegistryResponse],
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        unrestricted("the platform's registries and this workspace's own; never another's")
+    ],
 )
 async def list_registries(
     user_context: UserContextDep,
     active_only: bool = Query(False),
     registry_type: str | None = Query(None),
+    scope: RegistryScope | None = Query(None),
     service: RegistryService = Depends(get_registry_service),
 ):
-    registries = await service.list_registries(active_only=active_only, registry_type=registry_type)
+    registries = await service.list_visible_registries(
+        active_only=active_only, registry_type=registry_type, scope=scope
+    )
     return [RegistryResponse.from_domain(r) for r in registries]
 
 
@@ -480,12 +536,14 @@ async def browse_catalog(
         if registry_type == PROTOCOL_REGISTRY_TYPE and items
         else None
     )
+    sources = await service.registries_by_id({str(i.registry_id) for i in items})
     return CatalogBrowseResponse(
         items=[
             RegistryItemResponse.from_domain(
                 i,
                 None if found is None else found.get(str(i.id), []),
                 await price_catalog_item(i),
+                sources.get(str(i.registry_id)),
             )
             for i in items
         ],
@@ -500,7 +558,9 @@ async def browse_catalog(
 @router.get(
     "/catalog/search",
     response_model=list[RegistryItemResponse],
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        unrestricted("the platform's catalogue and this workspace's registries; never another's")
+    ],
 )
 async def search_catalog(
     user_context: UserContextDep,
@@ -519,20 +579,25 @@ async def search_catalog(
         limit=limit,
         offset=offset,
     )
-    return [RegistryItemResponse.from_domain(i) for i in items]
+    sources = await service.registries_by_id({str(i.registry_id) for i in items})
+    return [
+        RegistryItemResponse.from_domain(i, registry=sources.get(str(i.registry_id))) for i in items
+    ]
 
 
 @router.get(
     "/{registry_id}",
     response_model=RegistryResponse,
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        unrestricted("the platform's registries and this workspace's own; never another's")
+    ],
 )
 async def get_registry(
     registry_id: UUID,
     user_context: UserContextDep,
     service: RegistryService = Depends(get_registry_service),
 ):
-    registry = await service.get_registry(registry_id)
+    registry = await service.get_visible_registry(registry_id)
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
     return RegistryResponse.from_domain(registry)
@@ -552,7 +617,12 @@ async def update_registry(
     fields = data.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(status_code=400, detail="No fields to update")
-    registry = await service.update_registry(registry_id, **fields)
+    if await service.get_platform_registry(registry_id) is None:
+        raise HTTPException(status_code=404, detail="Registry not found")
+    try:
+        registry = await service.update_registry(registry_id, **fields)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if not registry:
         raise HTTPException(status_code=404, detail="Registry not found")
     return RegistryResponse.from_domain(registry)
@@ -567,6 +637,8 @@ async def delete_registry(
     user_context: UserContextDep,
     service: RegistryService = Depends(get_registry_service),
 ):
+    if await service.get_platform_registry(registry_id) is None:
+        raise HTTPException(status_code=404, detail="Registry not found")
     success = await service.delete_registry(registry_id)
     if not success:
         raise HTTPException(status_code=404, detail="Registry not found")
@@ -587,15 +659,17 @@ async def sync_registry(
     service: RegistryService = Depends(get_registry_service),
 ):
     """Sync: fetch source, auto-create entities for new items, flag version updates."""
+    if await service.get_platform_registry(registry_id) is None:
+        raise HTTPException(status_code=404, detail="Registry not found")
     try:
         stats = await service.sync_registry(registry_id)
         return SyncResponse(**stats)
     except RegistryNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    except ValueError as e:
+    except RegistrySyncRefusedError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Sync failed: {e}") from e
+        raise HTTPException(status_code=502, detail=f"Sync failed: {sync_error_message(e)}") from e
 
 
 # ── Catalog items ──
@@ -604,7 +678,9 @@ async def sync_registry(
 @router.get(
     "/{registry_id}/items",
     response_model=list[RegistryItemResponse],
-    dependencies=[unrestricted("platform catalogue data, identical for every workspace")],
+    dependencies=[
+        unrestricted("the platform's registries and this workspace's own; never another's")
+    ],
 )
 async def list_registry_items(
     registry_id: UUID,
@@ -613,8 +689,11 @@ async def list_registry_items(
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
     service: RegistryService = Depends(get_registry_service),
 ):
+    registry = await service.get_visible_registry(registry_id)
+    if registry is None:
+        raise HTTPException(status_code=404, detail="Registry not found")
     items = await service.list_items(registry_id, limit=limit, offset=offset)
-    return [RegistryItemResponse.from_domain(i) for i in items]
+    return [RegistryItemResponse.from_domain(i, registry=registry) for i in items]
 
 
 @router.post(
@@ -663,11 +742,12 @@ async def get_catalog_item(
     item = await service.get_item(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Catalog item not found")
+    registry = await service.get_visible_registry(UUID(str(item.registry_id)))
     if item.registry_type != PROTOCOL_REGISTRY_TYPE:
-        return RegistryItemResponse.from_domain(item)
+        return RegistryItemResponse.from_domain(item, registry=registry)
     found = await connections_of([item.id])
     return RegistryItemResponse.from_domain(
-        item, found.get(str(item.id), []), await price_catalog_item(item)
+        item, found.get(str(item.id), []), await price_catalog_item(item), registry
     )
 
 

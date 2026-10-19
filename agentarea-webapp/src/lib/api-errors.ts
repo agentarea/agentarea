@@ -100,3 +100,45 @@ export function apiErrorDetail(result: ApiResultLike, label: string) {
     ? detail
     : apiErrorMessage(result, label);
 }
+
+/** The machine-readable `code` of a problem+json error body, when it has one. */
+export function apiErrorCode(result: ApiResultLike): string | null {
+  const error = result?.error;
+  if (!error || typeof error !== "object") return null;
+  const code = (error as Record<string, unknown>).code;
+  return typeof code === "string" && code ? code : null;
+}
+
+/**
+ * Why installing or updating a catalog item was refused (ADR-0044), read from
+ * the problem `code` the API sends: the workspace edited the skill, it was not
+ * installed from the catalog, its folder no longer matches the pinned tree,
+ * the source dropped it, GitHub throttled or could not be reached. A policy
+ * refusal is a plain 403 whose detail names the rule. Anything else is an
+ * ordinary failure.
+ */
+export type CatalogFetchFailure =
+  | "customized"
+  | "notFromCatalog"
+  | "moved"
+  | "removedUpstream"
+  | "rateLimited"
+  | "sourceUnreachable"
+  | "refusedByPolicy";
+
+const CATALOG_FETCH_CODES: Record<string, CatalogFetchFailure> = {
+  skill_customized: "customized",
+  skill_not_from_catalog: "notFromCatalog",
+  skill_tree_mismatch: "moved",
+  skill_source_gone: "removedUpstream",
+  github_rate_limited: "rateLimited",
+  skill_source_unreachable: "sourceUnreachable",
+};
+
+export function catalogFetchFailure(
+  result: ApiResultLike
+): CatalogFetchFailure | null {
+  const code = apiErrorCode(result);
+  if (code && CATALOG_FETCH_CODES[code]) return CATALOG_FETCH_CODES[code];
+  return getApiStatus(result) === 403 ? "refusedByPolicy" : null;
+}

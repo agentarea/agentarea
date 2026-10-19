@@ -14,6 +14,7 @@ from agentarea_common.base.service import BaseCrudService
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.exceptions.errors import NotFoundError
 from agentarea_common.utils.slug import generate_slug
+from agentarea_governance.application.catalog_install import CatalogInstallGuard
 from agentarea_llm.domain.models import ModelKind
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 
@@ -126,6 +127,7 @@ class AgentService(BaseCrudService[Agent]):
         repository_factory: RepositoryFactory,
         event_broker: EventBroker,
         authorization_service: AuthorizationService,
+        install_guard: CatalogInstallGuard | None = None,
     ):
         repository = repository_factory.create_repository(AgentRepository)
         super().__init__(repository)
@@ -133,6 +135,16 @@ class AgentService(BaseCrudService[Agent]):
         self.event_broker = event_broker
         self._user_context = repository_factory.user_context
         self._authz = authorization_service
+        self._install_guard = install_guard
+
+    @property
+    def install_guard(self) -> CatalogInstallGuard:
+        """The policy check before a catalog item becomes this workspace's own."""
+        if self._install_guard is None:
+            self._install_guard = CatalogInstallGuard(
+                self.repository_factory.session, self._user_context
+            )
+        return self._install_guard
 
     async def _check_write_access(self, agent: Agent) -> None:
         """Check if the current user can mutate this agent.
@@ -155,7 +167,9 @@ class AgentService(BaseCrudService[Agent]):
         name catalog skills directly. Anything else is refused.
         """
         repo = self.repository_factory.create_repository(SkillRepository)
-        skills = SkillService(self.repository_factory, self._user_context)
+        skills = SkillService(
+            self.repository_factory, self._user_context, install_guard=self.install_guard
+        )
         resolved: list[UUID] = []
         for skill_id in skill_ids or []:
             if await repo.get_by_id(skill_id) is not None:
@@ -367,17 +381,25 @@ class AgentService(BaseCrudService[Agent]):
                 result.append(_project_catalog_item(item))
         return result
 
-    async def get_with_catalog(self, id: UUID) -> Agent | None:
+    async def get_with_catalog(self, id: UUID, *, to_run: bool = False) -> Agent | None:
         """Get a tenant agent by id, falling back to a catalog projection.
 
         Returns the tenant ``agents`` row if present; otherwise projects the
         matching catalog ``registry_item`` (read-only). No DB row is created.
+        A catalog agent runs from its definition without being installed, so
+        with ``to_run`` the install policy decides first.
         """
         agent = await self.get(id)
         if agent is not None:
             return agent
         item = await self._get_catalog_repository().get_item(str(id))
-        return _project_catalog_item(item) if item else None
+        if item is None:
+            return None
+        if to_run:
+            await self.install_guard.require_allowed(
+                registry_id=item.registry_id, trust=item.registry_trust
+            )
+        return _project_catalog_item(item)
 
     async def _resolve_unique_slug(self, name: str) -> str:
         """Generate a workspace-unique slug from ``name``.
@@ -452,8 +474,12 @@ class AgentService(BaseCrudService[Agent]):
         Creates a real, owned agent (workspace_id/created_by come from the
         repository's UserContext — never ``platform``), links it back to the
         catalog item via ``registry_item_id``, and records workspace-scoped
-        install state for that catalog item.
+        install state for that catalog item. Install and edit both fork through
+        here, so this is where the install policy is asked.
         """
+        await self.install_guard.require_allowed(
+            registry_id=item.registry_id, trust=item.registry_trust
+        )
         spec = item.spec or {}
         tools = spec.get("tools")
         if not isinstance(tools, list):
