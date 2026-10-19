@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CredentialEncryptionNote } from "@/app/w/[workspace]/(main)/connections/components/CredentialFields";
 import { OAuthConnectPanel } from "@/app/w/[workspace]/(main)/connections/OAuthConnectPanel";
 import { FocusCard, FocusHeader, FocusStep } from "@/components/FocusCard";
@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/button";
 import Link from "@/components/WorkspaceLink";
 import { getCatalogItem } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
-import { existingConnectionsHref } from "@/lib/catalog-connections";
+import {
+  catalogServerSetupHref,
+  existingConnectionsHref,
+  isCatalogApi,
+} from "@/lib/catalog-connections";
 import { firstIconSrc, openApiIdentity } from "@/lib/entity-identity";
 import { getWorkspaces } from "@/lib/workspace-context";
 import { workspacePath } from "@/lib/workspace-routes";
@@ -56,6 +60,9 @@ export default async function CatalogConnectLinkPage({
         </FormError>
       </FocusCard>
     );
+  }
+  if (!isCatalogApi(item.spec)) {
+    redirect(workspacePath(workspace, catalogServerSetupHref(itemId)));
   }
 
   const spec = (item.spec ?? {}) as {

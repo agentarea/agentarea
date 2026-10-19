@@ -8,6 +8,8 @@ from uuid import UUID
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from sqlalchemy import (
     JSON,
+    Boolean,
+    CheckConstraint,
     DateTime,
     Index,
     Integer,
@@ -61,6 +63,8 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     parent_task_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), nullable=True, index=True
     )
+    # The causation depth of the event that started the task; 0 when none did.
+    depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
 
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
@@ -113,6 +117,9 @@ class CostEntryORM(EventBaseModel, WorkspaceScopedMixin):
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     supersedes_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    estimate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 Index(
@@ -127,6 +134,11 @@ Index(
     postgresql_where=CostEntryORM.payer == "platform",
 )
 Index(
+    "ix_cost_entries_unsettled",
+    CostEntryORM.occurred_at,
+    postgresql_where=CostEntryORM.evidence.has_key("settle"),
+)
+Index(
     "ix_cost_entries_client_occurred",
     CostEntryORM.workspace_id,
     CostEntryORM.client_id,
@@ -136,17 +148,24 @@ Index(
 
 
 class TaskConversationEntryORM(EventBaseModel, WorkspaceScopedMixin):
-    """One entry of the conversation a task's model sees, in order.
+    """One row of a task's log, in order: a ``message``, a ``compaction`` or an ``event``.
 
-    The workflow writes each entry at a sequence number it assigns, so a retried
-    write lands on the same row instead of adding one.
+    The workflow assigns each row its sequence number and ``event_id``, so a
+    retried append lands on the same row instead of adding one.
     """
 
     __tablename__ = "task_conversation_entries"
-    __table_args__ = (UniqueConstraint("task_id", "seq", name="uq_task_conversation_entries_seq"),)
+    __table_args__ = (
+        UniqueConstraint("task_id", "seq", name="uq_task_conversation_entries_seq"),
+        UniqueConstraint("task_id", "event_id", name="uq_task_conversation_entries_event"),
+        CheckConstraint(
+            "kind IN ('message', 'compaction', 'event')", name="ck_task_conversation_entries_kind"
+        ),
+    )
 
     task_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -154,6 +173,12 @@ class TaskConversationEntryORM(EventBaseModel, WorkspaceScopedMixin):
     tool_call_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     attachments: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    execution_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    iteration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    meta: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    body_ref: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

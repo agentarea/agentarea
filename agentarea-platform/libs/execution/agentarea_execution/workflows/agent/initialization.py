@@ -38,6 +38,7 @@ from ...models import (
     ResolveModelRequest,
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
+    UpdateTaskStatusRequest,
 )
 from ..constants import (
     ACTIVITY_TIMEOUT,
@@ -56,7 +57,12 @@ from .builtin_tools import (
 )
 from .continue_as_new import ContinueAsNewMixin
 from .delegation import DelegationMixin
-from .patches import INTERACTION_CONTRACT_PATCH, WAIT_TOOL_PATCH
+from .patches import (
+    INTERACTION_CONTRACT_PATCH,
+    RESUME_POSITION_BEFORE_FIRST_RECORD_PATCH,
+    UNSTARTED_TASK_MARKED_RUNNING_PATCH,
+    WAIT_TOOL_PATCH,
+)
 
 
 class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
@@ -79,6 +85,13 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         self.state.task_id = str(request.task_id)
         self.state.user_id = request.user_id
         self.state.workspace_id = request.workspace_id  # Add workspace_id from request
+        # The principal every activity runs as. Set before the first await: a stop
+        # can land there (a run booked for later is woken by it), and the closing
+        # status update still has to say whose task it is.
+        self.state.user_context_data = {
+            "user_id": self.state.user_id,
+            "workspace_id": self.state.workspace_id,
+        }
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING
         # Single source of truth: the loop-level PEP (BudgetTracker) enforces the
@@ -108,13 +121,35 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             },
         )
 
+        resumed_before_record = request.resume is not None and workflow.patched(
+            RESUME_POSITION_BEFORE_FIRST_RECORD_PATCH
+        )
+        if resumed_before_record and request.resume is not None:
+            self._adopt_resume(request.resume)
+
         # Publish immediately
         await self._publish_events_immediately()
+
+        if (
+            request.resume is None
+            and (self._workflow_metadata.get("scheduled_at") or self._is_delegation_child())
+            and workflow.patched(UNSTARTED_TASK_MARKED_RUNNING_PATCH)
+        ):
+            # Nothing marked the task running: a booked run waited for its time,
+            # a delegated one was created by its parent.
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
+            )
 
         # Initialize agent configuration
         await self._initialize_agent_config()
 
-        if request.resume is not None:
+        if request.resume is not None and not resumed_before_record:
             self._adopt_resume(request.resume)
             if request.resume.retry:
                 await self._publish_events_immediately()
@@ -153,13 +188,6 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
     async def _initialize_agent_config(self) -> None:
         """Initialize agent configuration and available tools."""
         workflow.logger.info("Initializing agent configuration")
-
-        # Prepare user context data for activities
-        # Use actual user_id and workspace_id from the request
-        self.state.user_context_data = {
-            "user_id": self.state.user_id,
-            "workspace_id": self.state.workspace_id,
-        }
 
         # Build agent config using Pydantic request model
         agent_config_request = AgentConfigRequest(

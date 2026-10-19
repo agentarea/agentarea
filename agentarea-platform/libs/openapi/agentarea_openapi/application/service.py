@@ -513,6 +513,19 @@ class OpenAPIConnectionService:
         )
         return catalog_id or manual_connector(conn.id)
 
+    async def catalog_spec(self, conn: OpenAPIConnection) -> dict[str, Any] | None:
+        """The spec the catalog holds for a connection: the one that declares what it costs.
+
+        The platform's own connection is the catalog's; one made from a catalog item
+        reads the item, since its members may edit the connection's spec; one made
+        by hand has none.
+        """
+        if conn.managed_by == MANAGED_BY_PLATFORM:
+            return conn.spec_content
+        if conn.registry_item_id is None:
+            return None
+        return await self._repo.catalog_spec_content(conn.registry_item_id)
+
     async def get_connection(self, connection_id: UUID) -> OpenAPIConnection | None:
         return await self._repo.get_by_id(str(connection_id))
 

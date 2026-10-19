@@ -24,6 +24,9 @@ import {
 /**
  * A tool price per call, or per the unit it is metered in: "0,04 / вызов" for
  * a chip whose icon names the currency, "0,04 ₽ / вызов" read out in full.
+ * The vendor's own cost, shown where there is no price of ours (no billing, or
+ * billing could not be asked), says so: in full always, on the chip when our
+ * price was expected and is unavailable.
  */
 export function usePriceLabel() {
   const t = useTranslations("CatalogPage.pricing");
@@ -32,9 +35,13 @@ export function usePriceLabel() {
     const amount = full
       ? formatMoney(price.amount, price.currency, locale)
       : formatPriceNumber(price.amount, locale);
-    return isPerCall(price)
+    const label = isPerCall(price)
       ? t("perCall", { price: amount })
       : t("perUnit", { price: amount, unit: price.unit });
+    if (price.unavailable) return t("priceUnavailable", { price: label });
+    return full && price.basis === "vendor_cost"
+      ? t("vendorCost", { price: label })
+      : label;
   };
 }
 

@@ -5,7 +5,19 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.base.models import AuditMixin, BaseModel, WorkspaceScopedMixin
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    column,
+)
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,22 +52,10 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     cron_expression: Mapped[str | None] = mapped_column(String(255), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(100), nullable=True, default="UTC")
 
-    # Data extraction for poll-based channels
-    data_extractor: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    data_extractor_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    data_extractor_state: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Webhook-specific fields
-    webhook_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    allowed_methods: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    webhook_type: Mapped[str | None] = mapped_column(String(50), nullable=True, default="generic")
-    validation_rules: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-
-    # Generic webhook configuration - supports any webhook type
-    webhook_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-
-    # Event type filtering - empty list means accept all events
-    event_types: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    #: ``{"continue": bool, "idle_timeout": "30m"}`` for a stream trigger; null = the defaults.
+    session: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: ``{"window": "1h", "max_events": 50}`` for a stream trigger that fires per batch; null = per event.
+    batch: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Relationship to executions
     executions: Mapped[list["TriggerExecutionORM"]] = relationship(
@@ -75,9 +75,22 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
 
     __tablename__ = "trigger_executions"
 
-    # Basic execution fields
-    trigger_id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("triggers.id", ondelete="CASCADE"), nullable=False
+    __table_args__ = (
+        UniqueConstraint(
+            "subscription_id", "event_id", name="uq_trigger_executions_subscription_event"
+        ),
+        Index("ix_trigger_executions_stream_event", "stream_id", "event_id"),
+        Index("ix_trigger_executions_correlation", "correlation_id"),
+        Index(
+            "ix_trigger_executions_batched",
+            "trigger_id",
+            postgresql_where=column("verdict") == "batched",
+        ),
+    )
+
+    # Basic execution fields. A forward's reaction to a stream event has no trigger.
+    trigger_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("triggers.id", ondelete="CASCADE"), nullable=True
     )
     executed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -94,6 +107,19 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
     # trigger fired itself. created_by cannot answer this: it is filled for every
     # execution, including the ones the scheduler writes.
     fired_by: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+
+    # A reaction of a stream subscription to a bus event: one per (subscription,
+    # event). The FK to stream_subscriptions (ON DELETE CASCADE) exists in the
+    # migration only, as stream_subscriptions' FK to triggers does.
+    subscription_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    stream_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    event_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    verdict: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    derived_event_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    correlation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationship to trigger
     trigger: Mapped["TriggerORM"] = relationship("TriggerORM", back_populates="executions")

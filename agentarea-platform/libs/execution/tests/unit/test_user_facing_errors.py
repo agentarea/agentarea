@@ -10,6 +10,7 @@ _handle_workflow_error → publish_workflow_events_activity called with
 sanitized payload.
 """
 
+import asyncio
 import concurrent.futures
 import json
 import uuid
@@ -26,6 +27,7 @@ from agentarea_execution.models import (
     ToolDiscoveryResult,
     WorkflowEventsRequest,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
@@ -234,6 +236,7 @@ class TestWorkflowErrorSanitization:
 
             activities = _base_activities(build_agent_config_fn=failing_build)
             activities.append(capture_events)
+            activities.append(make_record_activity(publish=capture_events))
 
             task_queue = str(uuid.uuid4())
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -281,6 +284,7 @@ class TestWorkflowErrorSanitization:
 
             activities = _base_activities(call_llm_fn=failing_llm)
             activities.append(capture_events)
+            activities.append(make_record_activity(publish=capture_events))
 
             task_queue = str(uuid.uuid4())
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -332,6 +336,7 @@ class TestWorkflowErrorSanitization:
 
             activities = _base_activities(build_agent_config_fn=failing_build)
             activities.append(capture_events)
+            activities.append(make_record_activity(publish=capture_events))
 
             task_queue = str(uuid.uuid4())
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -360,3 +365,42 @@ class TestWorkflowErrorSanitization:
             assert len(error_msg) < 200, (
                 f"Error message too long ({len(error_msg)} chars): {error_msg}"
             )
+
+
+class TestFailureBeforeInitialization:
+    @pytest.mark.asyncio
+    async def test_policy_error_before_event_manager_fails_task_cleanly(self):
+        """A run refused before its event manager exists still records the task as failed."""
+        env = await WorkflowEnvironment.start_time_skipping()
+        async with env:
+            statuses: list[str] = []
+
+            async def capture_status(request: Any) -> None:
+                statuses.append(request.status)
+
+            activities = _base_activities()
+            activities.append(make_record_activity(update_status=capture_status))
+
+            task_queue = str(uuid.uuid4())
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                worker = Worker(
+                    env.client,
+                    task_queue=task_queue,
+                    workflows=[AgentExecutionWorkflow],
+                    activities=activities,
+                    activity_executor=executor,
+                )
+                async with worker:
+                    handle = await env.client.start_workflow(
+                        AgentExecutionWorkflow.run,
+                        _make_request(effective_policy={"budget": {"run_budget_usd": "1.00"}}),
+                        id=str(uuid.uuid4()),
+                        task_queue=task_queue,
+                        execution_timeout=timedelta(minutes=1),
+                    )
+                    async with asyncio.timeout(20):
+                        while not statuses:
+                            await asyncio.sleep(0.1)
+                    await handle.terminate()
+
+            assert statuses == ["failed"]

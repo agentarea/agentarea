@@ -34,10 +34,12 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent.patches import MONTHLY_CAP_AT_START_PATCH
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity, workflow
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Replayer, Worker
 
@@ -48,6 +50,7 @@ _cap_checks: list[MonthlySpendCapRequest] = []
 _cap_reached = False
 _llm_calls = 0
 _llm_script: list[str] = []
+_LLM_CAP_REACHED = "Workspace monthly LLM spend cap reached (2 USD/2 USD)"
 
 
 @activity.defn(name="build_agent_config_activity")
@@ -86,11 +89,18 @@ async def _mock_resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 
 @activity.defn(name="call_llm_activity")
 def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
-    """Follow ``_llm_script`` ("probe" or "complete"), blocking until released."""
+    """Follow ``_llm_script`` ("probe", "refused" or "complete"), blocking until released."""
     global _llm_calls
     _llm_release.wait(timeout=30)
     _llm_calls += 1
     step = _llm_script[_llm_calls - 1] if _llm_calls <= len(_llm_script) else "complete"
+    if step == "refused":
+        raise ApplicationError(
+            _LLM_CAP_REACHED,
+            {"code": "spend_cap_reached"},
+            type="SpendCapReachedError",
+            non_retryable=True,
+        )
     if step == "probe":
         tool_call = {
             "id": f"call_probe_{_llm_calls}",
@@ -153,6 +163,9 @@ async def _mock_check_monthly_cap(request: MonthlySpendCapRequest) -> MonthlySpe
     )
 
 
+_RECORD = make_record_activity(publish=_mock_publish_events, update_status=_mock_update_status)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -160,6 +173,7 @@ _ALL_ACTIVITIES = [
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
     _mock_validate_artifacts,
     _mock_check_monthly_cap,
@@ -321,7 +335,7 @@ async def test_resume_after_pause_is_refused_once_the_cap_is_reached():
         _llm_release.set()
 
         async def parked_on_pause() -> bool:
-            if not any(e.get("event_type") == "IterationCompleted" for e in _published):
+            if not any(e.get("event_type") == "turn.completed" for e in _published):
                 return False
             description = await handle.describe()
             return not description.raw_description.pending_activities
@@ -362,6 +376,28 @@ async def test_follow_up_after_the_cap_is_reached_is_refused():
     _assert_ended_on_monthly_cap(result)
     assert _llm_calls == 1
     assert len(_cap_checks) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_cap_reached_mid_run_stops_the_next_model_call():
+    """The cap is reached after the run started: its next model call is refused and
+    the run ends on the cap, as one that starts over the cap does, without a grant."""
+    _llm_script.extend(["probe", "refused"])
+    _llm_release.set()
+
+    async def drive(_handle) -> None:
+        return None
+
+    result = await _run(_make_request(), drive)
+
+    assert result.success is False
+    assert result.failure_reason == "monthly_spend_cap_exceeded"
+    assert result.error_message == _LLM_CAP_REACHED
+    assert _llm_calls == 2
+    assert len(_cap_checks) == 1
+    assert "waiting_for_continuation" not in _status_updates
+    assert _status_updates[-1] == "failed"
+    assert _failed_event()["data"]["failure_reason"] == "monthly_spend_cap_exceeded"
 
 
 @pytest.mark.asyncio

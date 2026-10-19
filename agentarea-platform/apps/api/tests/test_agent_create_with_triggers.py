@@ -12,18 +12,11 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.domain.models import Agent
-from agentarea_api.api.deps.services import (
-    get_agent_service,
-    get_secret_catalog_service,
-    get_secret_manager,
-    get_trigger_service,
-)
+from agentarea_api.api.deps.services import get_agent_service, get_trigger_service
 from agentarea_api.api.v1 import _trigger_creation, agents
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.config.database import get_db_session
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
-from agentarea_secrets.catalog_service import SecretCatalogService
 from agentarea_triggers.trigger_service import TriggerService, TriggerValidationError
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -35,16 +28,19 @@ _HEARTBEAT = {
     "timezone": "UTC",
     "task_parameters": {"text": "Work through HEARTBEAT.md."},
 }
-_TELEGRAM = {
-    "name": "Telegram",
-    "trigger_type": "webhook",
-    "webhook_type": "telegram",
-    "channel_credentials": {"bot_token": "123:abc"},
+_ON_MESSAGES = {
+    "name": "On messages",
+    "trigger_type": "stream",
+    "stream_id": str(uuid4()),
     "task_parameters": {"text": "Reply to the message."},
 }
 
 
-_CHAT_MODEL, _DECISION_MODEL, _IMAGE_MODEL = str(uuid4()), str(uuid4()), str(uuid4())
+_CHAT_MODEL, _DECISION_MODEL, _IMAGE_MODEL = (
+    "0d8dab44-fb4b-42f4-8a96-f9f249effe99",
+    "66101e51-ae3d-4213-8c3c-31e2e229a1cd",
+    "4c1c180a-aba4-4cf2-b124-06c07469e415",
+)
 
 
 class _ModelInstances:
@@ -60,9 +56,6 @@ class _ModelInstances:
 async def _real_validation(trigger_data):
     # The route's pre-check runs the service's real configuration rules.
     service = object.__new__(TriggerService)
-    service.trigger_repository = SimpleNamespace(
-        webhook_id_in_use=AsyncMock(return_value=False)
-    )
     service.model_instance_repository = _ModelInstances()
     service.repository_factory = SimpleNamespace(session=None)
     service.stream_service = AsyncMock()
@@ -87,8 +80,7 @@ def harness(monkeypatch):
         trigger = SimpleNamespace(
             id=uuid4(),
             agent_id=trigger_data.agent_id,
-            webhook_type=trigger_data.webhook_type,
-            webhook_id=trigger_data.webhook_id,
+            stream_id=trigger_data.stream_id,
             is_active=trigger_data.is_active,
         )
         created.append(trigger)
@@ -98,9 +90,6 @@ def harness(monkeypatch):
     trigger_service.validate_configuration.side_effect = _real_validation
     trigger_service.create_trigger.side_effect = create_trigger
 
-    secret_manager = AsyncMock(spec=BaseSecretManager)
-    webhook_service = AsyncMock()
-
     app = FastAPI()
     app.include_router(agents.router, prefix="/v1")
     app.dependency_overrides[get_user_context] = lambda: UserContext(
@@ -108,17 +97,8 @@ def harness(monkeypatch):
     )
     app.dependency_overrides[get_agent_service] = lambda: agent_service
     app.dependency_overrides[get_trigger_service] = lambda: trigger_service
-    app.dependency_overrides[get_secret_manager] = lambda: secret_manager
-    app.dependency_overrides[get_secret_catalog_service] = lambda: AsyncMock(
-        spec=SecretCatalogService
-    )
-    app.dependency_overrides[_trigger_creation.get_channel_webhook_service] = lambda: (
-        webhook_service
-    )
     app.dependency_overrides[get_db_session] = lambda: None
-    monkeypatch.setattr(
-        "agentarea_triggers.trigger_service.find_webhook_source", AsyncMock(return_value=None)
-    )
+    monkeypatch.setattr(_trigger_creation, "require_permission", AsyncMock())
     monkeypatch.setattr(agents, "_grant_agent_owner", AsyncMock())
     monkeypatch.setattr(agents, "_overlay_approval_flags", AsyncMock())
 
@@ -127,8 +107,6 @@ def harness(monkeypatch):
         agent=agent,
         agent_service=agent_service,
         trigger_service=trigger_service,
-        secret_manager=secret_manager,
-        webhook_service=webhook_service,
         created=created,
     )
 
@@ -141,15 +119,17 @@ async def _post(harness, body):
 
 async def test_agent_and_its_triggers_are_created_together(harness):
     response = await _post(
-        harness, {"name": "Claw", "tools": [], "triggers": [_HEARTBEAT, _TELEGRAM]}
+        harness, {"name": "Claw", "tools": [], "triggers": [_HEARTBEAT, _ON_MESSAGES]}
     )
 
     assert response.status_code == 200, response.text
     payload = harness.agent_service.create_agent.await_args.args[0]
     assert not hasattr(payload, "triggers")
     assert [t.agent_id for t in harness.created] == [harness.agent.id, harness.agent.id]
-    harness.secret_manager.set_secret.assert_awaited_once()
-    harness.webhook_service.register.assert_awaited_once()
+    assert str(harness.created[1].stream_id) == _ON_MESSAGES["stream_id"]
+    _trigger_creation.require_permission.assert_awaited_once_with(
+        "read", "stream", _ON_MESSAGES["stream_id"], "user-a"
+    )
 
 
 async def test_tools_must_be_given_explicitly(harness):
@@ -162,7 +142,7 @@ async def test_tools_must_be_given_explicitly(harness):
 async def test_a_bad_trigger_is_refused_before_the_agent_exists(harness):
     bad = {**_HEARTBEAT, "cron_expression": "*/30 * *"}
 
-    response = await _post(harness, {"name": "Claw", "tools": [], "triggers": [_TELEGRAM, bad]})
+    response = await _post(harness, {"name": "Claw", "tools": [], "triggers": [_ON_MESSAGES, bad]})
 
     assert response.status_code == 400
     assert "Heartbeat" in response.json()["detail"]
@@ -181,7 +161,7 @@ async def test_a_trigger_failing_on_create_takes_the_agent_with_it(harness):
     harness.trigger_service.create_trigger.side_effect = fail_second
 
     response = await _post(
-        harness, {"name": "Claw", "tools": [], "triggers": [_HEARTBEAT, _TELEGRAM]}
+        harness, {"name": "Claw", "tools": [], "triggers": [_HEARTBEAT, _ON_MESSAGES]}
     )
 
     assert response.status_code == 400

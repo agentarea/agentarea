@@ -14,12 +14,16 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/agentarea/event-service/internal/broker"
-	"github.com/agentarea/event-service/internal/channels"
-	"github.com/agentarea/event-service/internal/channels/telegram"
 	"github.com/agentarea/event-service/internal/claim"
 	"github.com/agentarea/event-service/internal/config"
+	"github.com/agentarea/event-service/internal/egress"
+	"github.com/agentarea/event-service/internal/ingest"
+	"github.com/agentarea/event-service/internal/mcpevents"
 	"github.com/agentarea/event-service/internal/polling"
-	"github.com/agentarea/event-service/internal/submit"
+	"github.com/agentarea/event-service/internal/secrets"
+	"github.com/agentarea/event-service/internal/source"
+	"github.com/agentarea/event-service/internal/tracing"
+	"github.com/agentarea/event-service/internal/transport"
 )
 
 const version = "0.1.1"
@@ -30,16 +34,19 @@ func main() {
 		Level: slog.LevelInfo,
 	})))
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	slog.Info("event-service starting",
 		"version", version,
 		"worker_id", cfg.WorkerID,
-		"inbound_stream", cfg.InboundStream,
-		"enable_telegram_polling", cfg.EnableTelegramPolling,
 		"poll_interval", cfg.PollInterval,
 		"max_pollers", cfg.MaxPollers,
 		"port", cfg.Port,
+		"otel_enabled", cfg.OTelEnabled,
 	)
 
 	if cfg.DatabaseURL == "" {
@@ -57,6 +64,19 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	shutdownTracing, err := tracing.Setup(ctx, cfg.OTelEnabled)
+	if err != nil {
+		slog.Error("failed to set up tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer flushCancel()
+		if err := shutdownTracing(flushCtx); err != nil {
+			slog.Error("tracing shutdown failed", "error", err)
+		}
+	}()
 
 	if err := db.PingContext(ctx); err != nil {
 		slog.Error("failed to ping database", "error", err)
@@ -79,22 +99,33 @@ func main() {
 	}
 	slog.Info("redis connected")
 
-	// Register dev-only polling channel adapters.
-	if cfg.EnableTelegramPolling {
-		channels.Register("telegram_polling", telegram.NewPoller)
-		slog.Info("telegram getUpdates polling enabled")
-	} else {
-		slog.Info("telegram getUpdates polling disabled")
+	fernet, err := secrets.NewFernet(cfg.SecretKey)
+	if err != nil {
+		slog.Error("invalid AGENTAREA_SECRET_ENCRYPTION_KEY", "error", err)
+		os.Exit(1)
+	}
+	policy, err := egress.NewPolicy(cfg.Egress.AllowPrivate, cfg.Egress.PrivateAllowlist)
+	if err != nil {
+		slog.Error("invalid AGENTAREA_HTTP_PRIVATE_ALLOWLIST", "error", err)
+		os.Exit(1)
 	}
 
-	// Build dependencies
-	streamBroker := broker.NewRedisStreams(redisClient)
-	submitter := submit.NewStreamSubmitter(streamBroker, cfg.InboundStream)
-	claimer := claim.NewRedisClaimer(redisClient, cfg.WorkerID)
+	// Go fetches and publishes raw items to streams.ingest; the platform's
+	// ingest names, keys and dedups them.
+	mcp := mcpevents.NewClient(cfg.MCPManagerURL, cfg.MCPGatewaySecret)
+	mgr := polling.NewManager(polling.Deps{
+		Sources:    source.NewStore(db),
+		Secrets:    secrets.NewStore(db, fernet),
+		Transports: transport.NewSet(policy, mcp),
+		Publisher:  ingest.NewPublisher(broker.NewRedisStreams(redisClient, cfg.Namespace)),
+		Caller:     transport.NewCaller(policy),
+		MCP:        mcp,
+		Claimer:    claim.NewRedisClaimer(redisClient, cfg.WorkerID),
+		APIURL:     cfg.APIURL,
+		Interval:   cfg.PollInterval,
+		MaxPollers: cfg.MaxPollers,
+	})
 
-	mgr := polling.NewManager(db, submitter, claimer, cfg.PollInterval, cfg.MaxPollers)
-
-	// Run polling manager (outbound delivery handled by Python worker)
 	errCh := make(chan error, 1)
 
 	healthServer := newHealthServer(cfg.Port)

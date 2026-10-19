@@ -25,9 +25,10 @@ from .workspace import (
 MAX_UPLOADS_PER_PLAN = 100
 
 # ``staging/`` holds half-finished attachment uploads, ``tasks/`` is the
-# task-owned surface reached through committed manifests, and ``.trash/`` holds
-# archived files that only the restore endpoint may resurrect.
-RESERVED_PREFIXES = frozenset({"tasks", "staging", TRASH_PREFIX.rstrip("/")})
+# task-owned surface reached through committed manifests, ``events/`` holds the
+# large bodies and attachments of stream events (reached from the event itself),
+# and ``.trash/`` holds archived files that only the restore endpoint may resurrect.
+RESERVED_PREFIXES = frozenset({"tasks", "staging", "events", TRASH_PREFIX.rstrip("/")})
 
 # ``apps/{instance_id}/`` is written only by the MCP app that owns it, through
 # the manager's app storage API and its conditional writes. It stays listed and

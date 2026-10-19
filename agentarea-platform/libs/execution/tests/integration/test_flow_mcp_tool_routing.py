@@ -27,6 +27,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
@@ -134,6 +135,14 @@ async def _validate_artifacts(request: ArtifactValidationRequest) -> ArtifactVal
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=_publish_events,
+    update_status=_update_task_status,
+    log=_TASK_LOG,
+)
+
+
 async def _run(tool_name: str) -> None:
     _llm_calls.clear()
     _tool_requests.clear()
@@ -154,6 +163,7 @@ async def _run(tool_name: str) -> None:
                     _call_llm,
                     _execute_tool,
                     _publish_events,
+                    _RECORD,
                     _update_task_status,
                     _validate_artifacts,
                 ],
@@ -207,5 +217,5 @@ async def test_tool_the_model_was_not_offered_never_reaches_a_server():
     await _run("mcp__github__delete_repo")
 
     assert _tool_requests == []
-    tool_replies = [m for m in _llm_calls[1].messages if m.get("role") == "tool"]
+    tool_replies = [m for m in _TASK_LOG.messages(_llm_calls[1]) if m.get("role") == "tool"]
     assert any("not available to this agent" in (m.get("content") or "") for m in tool_replies)

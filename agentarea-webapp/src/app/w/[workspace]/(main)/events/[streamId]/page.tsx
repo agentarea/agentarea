@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { getStream, listStreamSourceTypes } from "@/lib/api";
+import { isPlatformStream, memberSourceTypes } from "@/lib/platformStream";
 import { requireApiData } from "@/lib/server-resource";
 import type { DispositionFilter as Filter } from "@/lib/streamOutcome";
 import AddSourceDialog from "./components/AddSourceDialog";
@@ -10,6 +11,7 @@ import DispositionFilter from "./components/DispositionFilter";
 import EventDetail from "./components/EventDetail";
 import EventFeed from "./components/EventFeed";
 import EventFeedSkeleton from "./components/EventFeedSkeleton";
+import StreamProcessors from "./components/StreamProcessors";
 import StreamSources, {
   StreamSourcesSkeleton,
 } from "./components/StreamSources";
@@ -43,16 +45,24 @@ export default async function StreamEventsPage({
   const outcome = FILTERS.find((f) => f === query.outcome) ?? "all";
   const before = sequenceParam(query.before);
   const selected = sequenceParam(query.event);
+  const platform = isPlatformStream(stream);
 
   return (
     <ContentBlock
       header={{
         breadcrumb: [
           { label: t("title"), href: "/events" },
-          { label: stream.name },
+          { label: platform ? t("streams.platformName") : stream.name },
         ],
-        description: stream.description || undefined,
-        controls: <AddSourceDialog streamId={streamId} types={sourceTypes} />,
+        description: platform
+          ? t("streams.platformDescription")
+          : stream.description || undefined,
+        controls: platform ? undefined : (
+          <AddSourceDialog
+            streamId={streamId}
+            types={memberSourceTypes(sourceTypes)}
+          />
+        ),
       }}
       subheader={
         <SubheaderToolbar controls={<DispositionFilter current={outcome} />} />
@@ -60,6 +70,9 @@ export default async function StreamEventsPage({
     >
       <Suspense fallback={<StreamSourcesSkeleton />}>
         <StreamSources streamId={streamId} types={sourceTypes} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <StreamProcessors streamId={streamId} />
       </Suspense>
       <div
         className={
@@ -83,6 +96,7 @@ export default async function StreamEventsPage({
               sequence={selected}
               outcome={outcome}
               before={before}
+              sourceTypes={sourceTypes}
             />
           </Suspense>
         )}

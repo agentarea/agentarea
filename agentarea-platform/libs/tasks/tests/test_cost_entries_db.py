@@ -17,7 +17,7 @@ from uuid import uuid4
 import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
-from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository, SpendScope
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -158,3 +158,29 @@ async def test_a_line_with_no_task_counts_for_its_workspace_and_no_agent(session
     assert stored == [(None, client_id)]
     assert await repo.sum_since(MONTH_START, currency="USD") == Decimal("1.00")
     assert await repo.sum_since(MONTH_START, currency="USD", agent_id=agent_id) == Decimal("0.26")
+
+
+async def test_the_estimated_part_of_spend_is_its_current_lines_not_yet_final(session):
+    workspace_id = str(uuid4())
+    repo = _repo(session, workspace_id)
+    held = _entry(workspace_id, None, "0.64", estimate=True)
+    await repo.record(
+        [
+            held,
+            _entry(workspace_id, None, "1.00"),
+            _entry(workspace_id, None, "0.30", estimate=True),
+            _entry(workspace_id, None, "0.66", supersedes_id=None, estimate=False),
+        ]
+    )
+    [held_id] = (
+        await session.execute(
+            text("SELECT id FROM cost_entries WHERE event_id = :e"), {"e": held.event_id}
+        )
+    ).scalars()
+    await repo.record([_entry(workspace_id, None, "0.66", supersedes_id=held_id)])
+
+    estimated = await repo.sum_since(MONTH_START, currency="USD", scope=SpendScope(estimate=True))
+    exact = await repo.sum_since(MONTH_START, currency="USD", scope=SpendScope(estimate=False))
+
+    assert estimated == Decimal("0.30")
+    assert exact == Decimal("1.00") + Decimal("0.66") + Decimal("0.66")

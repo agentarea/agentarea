@@ -120,6 +120,22 @@ def _tokens(value: Any) -> int:
     return max(int(value), 0)
 
 
+def provider_reported_cost(raw: Any) -> Decimal | None:
+    """What the provider says the call cost, in USD (OpenRouter's ``usage.cost``).
+
+    The actual charge, which the declared per-token prices only approximate: a
+    provider may bill differently (peak hours, another host). None when not reported.
+    """
+    value = _fields(raw).get("cost")
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return None
+    try:
+        cost = Decimal(str(value))
+    except ArithmeticError:
+        return None
+    return cost if cost.is_finite() and cost >= 0 else None
+
+
 def usage_from_provider(raw: Any) -> LLMUsage:
     """Read a provider's usage block, in OpenAI, Anthropic or LiteLLM shape.
 
@@ -175,6 +191,7 @@ class LLMModel:
         output_cost_per_token: Decimal | None = None,
         cached_input_cost_per_token: Decimal | None = None,
         endpoint_policy: "OutboundPolicy | None" = None,
+        cache_creation_input_cost_per_token: Decimal | None = None,
     ):
         """Initialize LLM model with explicit parameters.
 
@@ -187,6 +204,8 @@ class LLMModel:
             output_cost_per_token: Persisted output-token price; zero means explicitly free.
             cached_input_cost_per_token: Price of a prompt token read from the provider's
                 cache; None prices cached tokens as any other input token.
+            cache_creation_input_cost_per_token: Price of a prompt token written to the
+                provider's cache; None prices it as any other input token.
             endpoint_policy: Set when ``endpoint_url`` came from someone other than
                 whoever runs this process (a workspace member): every call to it is
                 refused unless the address passes this policy. None calls it as given.
@@ -198,6 +217,7 @@ class LLMModel:
         self.input_cost_per_token = input_cost_per_token
         self.output_cost_per_token = output_cost_per_token
         self.cached_input_cost_per_token = cached_input_cost_per_token
+        self.cache_creation_input_cost_per_token = cache_creation_input_cost_per_token
         self.endpoint_policy = endpoint_policy
 
     def _configured_cost(self, usage: LLMUsage) -> Decimal:
@@ -215,9 +235,18 @@ class LLMModel:
             else 0
         )
         cached_rate = Decimal(str(self.cached_input_cost_per_token)) if cached else Decimal(0)
+        written = (
+            min(usage.cache_creation_tokens, usage.prompt_tokens - cached)
+            if self.cache_creation_input_cost_per_token is not None
+            else 0
+        )
+        written_rate = (
+            Decimal(str(self.cache_creation_input_cost_per_token)) if written else Decimal(0)
+        )
         return (
-            (usage.prompt_tokens - cached) * input_rate
+            (usage.prompt_tokens - cached - written) * input_rate
             + cached * cached_rate
+            + written * written_rate
             + usage.completion_tokens * Decimal(str(self.output_cost_per_token))
         )
 
@@ -477,6 +506,7 @@ class LLMModel:
 
         tool_calls_buffer: dict[int, dict[str, Any]] = {}
         final_usage: LLMUsage | None = None
+        final_cost = Decimal(0)
 
         async with self._http_client(httpx.Timeout(300.0)) as client:
             # Try with thinking enabled first; fall back without if provider rejects it
@@ -511,6 +541,10 @@ class LLMModel:
                     usage_data = chunk.get("usage")
                     if usage_data:
                         final_usage = usage_from_provider(usage_data)
+                        reported = provider_reported_cost(usage_data)
+                        final_cost = (
+                            reported if reported is not None else self._configured_cost(final_usage)
+                        )
 
                     choices = chunk.get("choices", [])
                     if not choices:
@@ -518,7 +552,7 @@ class LLMModel:
                             yield LLMResponse(
                                 content="",
                                 role="assistant",
-                                cost=self._configured_cost(final_usage),
+                                cost=final_cost,
                                 usage=final_usage,
                             )
                         continue
@@ -567,9 +601,7 @@ class LLMModel:
                             role="assistant",
                             tool_calls=delta_tool_calls,
                             reasoning_content=delta_reasoning,
-                            cost=self._configured_cost(usage_delta)
-                            if usage_delta is not None
-                            else Decimal(0),
+                            cost=final_cost if usage_delta is not None else Decimal(0),
                             usage=usage_delta,
                         )
             finally:
@@ -627,13 +659,17 @@ class LLMModel:
             # Update usage statistics
             usage = usage_from_provider(response_usage)
 
-            # litellm includes cost calculation in some cases
-            if hasattr(response_usage, "completion_tokens_cost"):
-                cost += Decimal(str(getattr(response_usage, "completion_tokens_cost", 0.0)))
-            if hasattr(response_usage, "prompt_tokens_cost"):
-                cost += Decimal(str(getattr(response_usage, "prompt_tokens_cost", 0.0)))
-            if cost == 0.0:
-                cost = self._configured_cost(usage)
+            reported = provider_reported_cost(response_usage)
+            if reported is not None:
+                cost = reported
+            else:
+                # litellm includes cost calculation in some cases
+                if hasattr(response_usage, "completion_tokens_cost"):
+                    cost += Decimal(str(getattr(response_usage, "completion_tokens_cost", 0.0)))
+                if hasattr(response_usage, "prompt_tokens_cost"):
+                    cost += Decimal(str(getattr(response_usage, "prompt_tokens_cost", 0.0)))
+                if cost == 0.0:
+                    cost = self._configured_cost(usage)
 
         # Follow OpenAI standard: when tool_calls are present, content should be minimal
         content = message.content or ""
@@ -652,13 +688,17 @@ class LLMModel:
             ),
         )
 
-    async def _complete_through_pinned_client(self, request: LLMRequest) -> LLMResponse:
+    async def _complete_through_pinned_client(
+        self, request: LLMRequest, event_publisher: Any = None
+    ) -> LLMResponse:
         content: list[str] = []
         reasoning: list[str] = []
         tool_calls: list[dict[str, Any]] | None = None
         usage: LLMUsage | None = None
         cost = Decimal(0)
         async for chunk in self._stream_openai_compatible(request):
+            if event_publisher and chunk.content:
+                await event_publisher(chunk.content, len(content), False)
             content.append(chunk.content)
             reasoning.append(chunk.reasoning_content)
             if chunk.tool_calls:
@@ -666,6 +706,8 @@ class LLMModel:
             if chunk.usage is not None:
                 usage = chunk.usage
                 cost = chunk.cost
+        if event_publisher:
+            await event_publisher("", len(content), True)
         return LLMResponse(
             content="".join(content),
             role="assistant",
@@ -715,6 +757,9 @@ class LLMModel:
     ) -> LLMResponse:
         """Call LLM with streaming and emit chunk events."""
         try:
+            if self._pins_endpoint():
+                return await self._complete_through_pinned_client(request, event_publisher)
+
             # Build parameters for streaming
             params = self._build_litellm_params(request)
             params["stream"] = True
@@ -860,7 +905,10 @@ class LLMModel:
                 # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-                    if cost == 0.0:
+                    reported = provider_reported_cost(usage_info)
+                    if reported is not None:
+                        cost = reported
+                    elif cost == 0.0:
                         if hasattr(usage_info, "completion_tokens_cost"):
                             cost += Decimal(str(getattr(usage_info, "completion_tokens_cost", 0.0)))
                             if hasattr(usage_info, "prompt_tokens_cost"):
@@ -1148,7 +1196,10 @@ class LLMModel:
                 # Extract usage from final chunk if available
                 if hasattr(chunk, "usage") and chunk.usage:
                     usage_info = chunk.usage
-                    if cost == 0.0:
+                    reported = provider_reported_cost(usage_info)
+                    if reported is not None:
+                        cost = reported
+                    elif cost == 0.0:
                         if hasattr(usage_info, "completion_tokens_cost"):
                             cost += Decimal(str(getattr(usage_info, "completion_tokens_cost", 0.0)))
                             if hasattr(usage_info, "prompt_tokens_cost"):

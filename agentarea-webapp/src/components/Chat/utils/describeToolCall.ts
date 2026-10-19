@@ -167,7 +167,7 @@ export function describeToolCall(
  * ("Read 5 files, ran 11 commands, edited 2 files"). Mirrors the branching in
  * describeToolCall but collapses everything to a single verb category.
  */
-type ToolCategory =
+export type ToolCategory =
   | "read"
   | "edited"
   | "wrote"
@@ -198,42 +198,18 @@ function toolCategory(toolName: string): ToolCategory {
   return "other";
 }
 
-const CATEGORY_WORDS: Record<ToolCategory, [verb: string, noun: string]> = {
-  read: ["read", "file"],
-  edited: ["edited", "file"],
-  wrote: ["wrote", "file"],
-  ran: ["ran", "command"],
-  searched: ["searched", "search"],
-  fetched: ["fetched", "page"],
-  queried: ["ran", "query"],
-  listed: ["listed", "directory"],
-  sent: ["sent", "message"],
-  skill: ["used", "skill"],
-  delegated: ["delegated to", "agent"],
-  other: ["ran", "tool"],
-};
-
-function pluralize(noun: string, n: number): string {
-  if (n === 1) return noun;
-  if (/(s|sh|ch|x|z)$/.test(noun)) return `${noun}es`;
-  if (/[^aeiou]y$/.test(noun)) return `${noun.slice(0, -1)}ies`;
-  return `${noun}s`;
-}
-
 /**
- * Build a single-line summary of a tool group, e.g. "Read 5 files, ran 11
- * commands, edited 2 files". Categories appear in order of first occurrence.
+ * Count a tool group by action category, in order of first occurrence, for a
+ * summary line like "Read 5 files, ran 11 commands". The caller words it in
+ * the active locale (`Chat.ActivityGroup.toolGroup.<category>`).
  */
-export function summarizeToolGroup(toolNames: string[]): string {
+export function summarizeToolGroup(
+  toolNames: string[]
+): { category: ToolCategory; count: number }[] {
   const counts = new Map<ToolCategory, number>();
   for (const name of toolNames) {
     const cat = toolCategory(name);
     counts.set(cat, (counts.get(cat) || 0) + 1);
   }
-  const parts = [...counts].map(([cat, n]) => {
-    const [verb, noun] = CATEGORY_WORDS[cat];
-    return `${verb} ${n} ${pluralize(noun, n)}`;
-  });
-  if (parts.length) parts[0] = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
-  return parts.join(", ");
+  return [...counts].map(([category, count]) => ({ category, count }));
 }

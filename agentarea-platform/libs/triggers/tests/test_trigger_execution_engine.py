@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_triggers.domain.enums import ExecutionStatus
-from agentarea_triggers.domain.models import CronTrigger, TriggerExecution, WebhookTrigger
+from agentarea_triggers.domain.models import CronTrigger, StreamTrigger, TriggerExecution
 from agentarea_triggers.trigger_service import (
     TriggerConditionError,
     TriggerNotFoundError,
@@ -78,16 +78,14 @@ class TestTriggerExecutionEngine:
         )
 
     @pytest.fixture
-    def sample_webhook_trigger(self):
-        """Create a sample webhook trigger."""
-        return WebhookTrigger(
+    def sample_stream_trigger(self):
+        """Create a sample stream trigger."""
+        return StreamTrigger(
             id=uuid4(),
-            name="Test Webhook Trigger",
-            description="Test webhook trigger for unit tests",
+            name="Test Stream Trigger",
+            description="Test stream trigger for unit tests",
             agent_id=uuid4(),
-            webhook_id="test_webhook_123",
-            allowed_methods=["POST"],
-            task_parameters={"webhook_param": "webhook_value", "text": "Handle the call"},
+            task_parameters={"stream_param": "stream_value", "text": "Handle the call"},
             conditions={"field_matches": {"request.body.type": "test"}},
             created_by="test_user",
             is_active=True,
@@ -236,25 +234,25 @@ class TestTriggerExecutionEngine:
         assert result is True
 
     async def test_evaluate_trigger_conditions_field_matches(
-        self, trigger_service, sample_webhook_trigger
+        self, trigger_service, sample_stream_trigger
     ):
         """Test condition evaluation with field matching."""
         event_data = {"request": {"body": {"type": "test", "message": "Hello world"}}}
 
         result = await trigger_service._evaluate_simple_conditions(
-            sample_webhook_trigger.conditions, event_data
+            sample_stream_trigger.conditions, event_data
         )
 
         assert result.met is True
 
     async def test_evaluate_trigger_conditions_field_mismatch(
-        self, trigger_service, sample_webhook_trigger
+        self, trigger_service, sample_stream_trigger
     ):
         """Test condition evaluation with field mismatch."""
         event_data = {"request": {"body": {"type": "other", "message": "Hello world"}}}
 
         result = await trigger_service._evaluate_simple_conditions(
-            sample_webhook_trigger.conditions, event_data
+            sample_stream_trigger.conditions, event_data
         )
 
         assert result.met is False
@@ -347,5 +345,3 @@ class TestTriggerExecutionEngine:
 
         with pytest.raises(TriggerConditionError):
             await trigger_service._evaluate_simple_conditions(sample_cron_trigger.conditions, {})
-
-

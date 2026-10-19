@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
-import httpx
 import pytest
 from agentarea_api.api.v1 import mcp_server_instances
+from agentarea_common import outbound as outbound_module
 from agentarea_mcp.application import validation_service
 
 
@@ -42,7 +42,9 @@ def _settings():
 async def test_api_configuration_check_sends_manager_bearer(monkeypatch):
     requests = []
     monkeypatch.setattr(mcp_server_instances, "get_settings", _settings)
-    monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: _Client(requests))
+    monkeypatch.setattr(
+        outbound_module, "outbound_client", lambda *args, **kwargs: _Client(requests)
+    )
 
     result = await mcp_server_instances.check_mcp_server_instance_configuration(
         {"json_spec": {"type": "docker"}},
@@ -60,8 +62,8 @@ async def test_library_configuration_validation_sends_manager_bearer(monkeypatch
     requests = []
     monkeypatch.setattr(validation_service, "get_settings", _settings)
     monkeypatch.setattr(
-        validation_service.httpx,
-        "AsyncClient",
+        validation_service,
+        "outbound_client",
         lambda *args, **kwargs: _Client(requests),
     )
 

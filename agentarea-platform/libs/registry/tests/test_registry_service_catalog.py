@@ -30,6 +30,9 @@ class TestValidTypes:
     def test_includes_bundles(self):
         assert "bundles" in VALID_REGISTRY_TYPES
 
+    def test_includes_source_types(self):
+        assert "source_types" in VALID_REGISTRY_TYPES
+
 
 class TestDetectType:
     @pytest.mark.parametrize(("key", "expected"), list(TYPE_BY_TOPLEVEL_KEY.items()))
@@ -60,6 +63,7 @@ class TestDetectType:
             "llm_providers": {"providers": [{"provider_key": "x", "name": "X"}]},
             "llm_models": {"models": [{"provider_key": "x", "model_name": "m"}]},
             "agents": {"agents": [{"name": "x"}]},
+            "source_types": {"source_types": [{"slug": "x", "name": "X"}]},
         }
         for rtype, data in sentinels.items():
             assert RegistryService._detect_type(data) == rtype
@@ -863,3 +867,20 @@ class TestRecommendationRank:
         ):
             items = RegistryService._parse_source(registry_type, data)
             assert items[0]["recommendation_rank"] == 0, registry_type
+
+
+class TestSourceTypeParser:
+    def test_the_entry_is_the_spec_and_its_slug_the_external_id(self):
+        entry = {"slug": "sentry", "name": "Sentry", "delivery": "webhook", "event": {"kind": "x"}}
+        (item,) = RegistryService._parse_source("source_types", {"source_types": [entry]})
+        assert (item["external_id"], item["name"], item["spec"]) == ("sentry", "Sentry", entry)
+        assert item["recommendation_rank"] == 0
+
+    def test_an_entry_without_a_slug_stops_the_reconcile(self):
+        with pytest.raises(ValueError, match="no slug"):
+            RegistryService._parse_source("source_types", {"source_types": [{"name": "X"}]})
+
+    async def test_nothing_is_materialized_for_a_source_type(self):
+        service = RegistryService.__new__(RegistryService)
+        assert await service._create_entity("source_types", MagicMock()) is None
+        assert await service._update_entity("source_types", MagicMock()) is None

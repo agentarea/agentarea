@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
-import { listTriggerCatalog } from "@/lib/api";
+import { listStreamSourceTypes } from "@/lib/api";
 import { fetchTasksPage, type TasksQuery } from "../actions";
 import TasksInfiniteList from "./TasksInfiniteList";
 
@@ -18,14 +17,17 @@ export async function TasksData({
   const t = await getTranslations("TasksPage");
   const tCommon = await getTranslations("Common");
 
-  // The catalog names and draws the channel a task came from. Fetched here so
-  // the listing never has to know which channels exist; an empty one only
-  // costs the chip its artwork.
-  const [firstPage, catalogResponse] = await Promise.all([
+  // The source-types catalog names and draws the provider a task's event came
+  // from. Fetched here so the listing never has to know which providers exist;
+  // a failed load only costs the chip its name and artwork.
+  const [firstPage, typesResponse] = await Promise.all([
     fetchTasksPage(query, 1),
-    listTriggerCatalog().catch(() => null),
+    listStreamSourceTypes(),
   ]);
-  const catalog = (catalogResponse?.data ?? []) as TriggerCatalogEntry[];
+  if (typesResponse.error) {
+    console.error("Failed to load source types:", typesResponse.error);
+  }
+  const sourceTypes = typesResponse.data ?? [];
 
   // Checked before the empty branches: reporting a failed load as "no tasks
   // yet" hid every backend failure behind a new-workspace message.
@@ -84,7 +86,7 @@ export async function TasksData({
       firstPage={firstPage}
       query={query}
       viewMode={viewMode}
-      catalog={catalog}
+      sourceTypes={sourceTypes}
     />
   );
 }

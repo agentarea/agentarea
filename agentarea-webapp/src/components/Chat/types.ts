@@ -216,7 +216,7 @@ export interface ApprovalRequestData extends BaseMessageData {
   ) => void;
 }
 
-// User message from follow-up (MessageQueued event)
+// User message from follow-up (message.queued event)
 export interface UserMessageData extends BaseMessageData {
   content: string;
 }

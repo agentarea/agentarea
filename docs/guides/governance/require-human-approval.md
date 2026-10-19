@@ -137,7 +137,7 @@ There are two routes to the same enforcement. Both end as an agent-scoped
       | python3 -c '
     import json,sys
     for e in json.load(sys.stdin)["events"]:
-        if e["event_type"] == "approval.request":
+        if e["event_type"] == "approval.requested":
             m = e["metadata"]
             print(m["escalation_id"], m["tool_name"], m["approvers"])'
     ```
@@ -184,7 +184,7 @@ The `status` field is the persisted task's lifecycle state, which the workflow
 updates when it pauses. `execution_status` in the same response is the live
 Temporal view and still reads as running.
 
-**After resolving**, an `approval.response` event carries the outcome and the
+**After resolving**, an `approval.decided` event carries the outcome and the
 approver. Approve and deny share that one event type; the decision is in the
 payload:
 
@@ -194,7 +194,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   | python3 -c '
 import json,sys
 for e in json.load(sys.stdin)["events"]:
-    if e["event_type"] == "approval.response":
+    if e["event_type"] == "approval.decided":
         m = e["metadata"]
         print(m["tool_name"], "approved:", m["approved"], "by:", m.get("approved_by"))'
 ```
@@ -249,7 +249,7 @@ Once no escalations remain pending the task status returns to `running`.
     until you cancel it with `DELETE /v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}` .
   </Accordion>
   <Accordion title="No notification arrived">
-    Core emits the `approval.request` event and updates the task row; it does
+    Core emits the `approval.requested` event and updates the task row; it does
     not send mail, post to a channel or page anyone. Consume the event stream if
     you need to notify approvers.
   </Accordion>

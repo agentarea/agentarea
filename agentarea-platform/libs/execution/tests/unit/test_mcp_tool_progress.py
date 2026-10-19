@@ -1,7 +1,7 @@
 """A tool activity hands an MCP call its context and relays the server's progress.
 
-Progress becomes ``tool.progress`` task events (stored, then streamed), at most
-two a second per call; the call's ``structuredContent`` comes back on the result.
+Progress becomes ``tool.progress`` live signals on the task's channel (never stored),
+at most two a second per call; the call's ``structuredContent`` comes back on the result.
 """
 
 from types import SimpleNamespace
@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.broker.topics import task_live_channel
+from agentarea_common.events.adapters.redis_streams import decode
 from agentarea_execution.activities import agent_execution_activities as activities
 from agentarea_execution.activities.agent import tools as tool_activities
 from agentarea_execution.activities.agent.tool_progress import make_tool_progress_relay
@@ -18,23 +20,13 @@ from agentarea_execution.workflows.agent.tools import structured_content_field
 from temporalio.testing import ActivityEnvironment
 
 
-class FakeTaskEvents:
-    def __init__(self) -> None:
-        self.stored: list[dict[str, Any]] = []
-
-    async def create_workflow_event(self, **fields: Any) -> None:
-        self.stored.append(fields)
-
-
 @pytest.fixture
 def harness(monkeypatch):
     from agentarea_execution.activities import dependencies
 
-    events = FakeTaskEvents()
     ctx = MagicMock()
     ctx.__aenter__ = AsyncMock(return_value=ctx)
     ctx.__aexit__ = AsyncMock(return_value=False)
-    ctx.get_task_event_service = AsyncMock(return_value=events)
     ctx.get_mcp_server_instance_service = AsyncMock()
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
@@ -43,11 +35,16 @@ def harness(monkeypatch):
         return kwargs["content"]
 
     monkeypatch.setattr(tool_activities, "_offload_large_activity_output", offload)
-    broker = MagicMock(submit=AsyncMock())
+
+    async def caps_as_the_run_froze_them(session, user_context, agent_id, run_budget):
+        return run_budget
+
+    monkeypatch.setattr(tool_activities, "current_budget", caps_as_the_run_froze_them)
+    broker = MagicMock(submit=AsyncMock(), notify=AsyncMock())
     deps = MagicMock(broker_client=broker)
     fns = {fn.__name__: fn for fn in activities.make_agent_activities(deps)}
     return SimpleNamespace(
-        ctx=ctx, events=events, broker=broker, activity=fns["execute_mcp_tool_activity"]
+        ctx=ctx, broker=broker, activity=fns["execute_mcp_tool_activity"]
     )
 
 
@@ -71,7 +68,7 @@ async def test_activity_passes_context_and_relays_progress(harness):
 
     mcp_service = harness.ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
-    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
     task_id = str(uuid4())
     request = MCPToolRequest(
@@ -104,10 +101,13 @@ async def test_activity_passes_context_and_relays_progress(harness):
     assert context.metadata == {"chatId": "c"}
 
     # Three notifications inside one window: the first and the finishing one.
-    assert [e["event_type"] for e in harness.events.stored] == ["tool.progress"] * 2
-    assert [e["data"]["progress"] for e in harness.events.stored] == [1, 3]
-    first = harness.events.stored[0]
-    assert first["data"] == {
+    channels = [call.args[0] for call in harness.broker.notify.await_args_list]
+    signals = [decode(call.args[1]) for call in harness.broker.notify.await_args_list]
+    assert channels == [task_live_channel(task_id)] * 2
+    assert [signal.type for signal in signals] == ["tool.progress"] * 2
+    assert [signal.data["progress"] for signal in signals] == [1, 3]
+    first = signals[0]
+    assert first.data == {
         "task_id": task_id,
         "tool_name": "app__import_sheet",
         "tool_call_id": "call-1",
@@ -115,8 +115,8 @@ async def test_activity_passes_context_and_relays_progress(harness):
         "total": 3,
         "message": "step 1",
     }
-    assert first["workspace_id"] == "ws-1"
-    assert harness.broker.submit.await_count == 2
+    assert first.extensions["workspace"] == "ws-1"
+    harness.broker.submit.assert_not_awaited()
 
 
 @pytest.mark.asyncio

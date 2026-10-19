@@ -38,9 +38,6 @@ def harness(monkeypatch):
     monkeypatch.setattr(triggers_toolset, "platform_context", ctx)
     monkeypatch.setattr(triggers_toolset, "platform_read_context", ctx)
     monkeypatch.setattr(triggers_toolset, "_build_trigger_service", AsyncMock(return_value=service))
-    monkeypatch.setattr(
-        triggers_toolset, "public_webhook_url", lambda wid: f"https://api.example/webhooks/{wid}"
-    )
     monkeypatch.setattr(triggers_toolset, "require_stream_readable", AsyncMock())
     return service
 
@@ -49,7 +46,7 @@ async def test_create_stream_then_get_and_list_report_the_bound_stream(harness):
     trigger = _stream_trigger()
     stream_id = uuid4()
     binding = TriggerBinding(
-        stream_id=stream_id, event_filter={"kinds": ["push"]}, webhook_id=None, last_event_at=None
+        stream_id=stream_id, event_filter={"kinds": ["push"]}, last_event_at=None
     )
     harness.create_trigger_from_payload.return_value = trigger
     harness.get_trigger.return_value = trigger
@@ -81,20 +78,17 @@ async def test_list_resolves_every_binding_in_one_call(harness):
     assert [s["stream_id"] for s in summaries] == [None, None]
 
 
-async def test_a_webhook_trigger_reports_its_public_url_and_a_lost_owner(harness):
+async def test_a_trigger_stopped_for_its_owner_reports_needs_owner(harness):
     trigger = _stream_trigger(
         is_active=False, needs_new_owner_at=datetime(2026, 10, 6, tzinfo=UTC).replace(tzinfo=None)
     )
     harness.get_trigger.return_value = trigger
     harness.stream_service.trigger_bindings.return_value = {
-        trigger.id: TriggerBinding(
-            stream_id=uuid4(), event_filter={}, webhook_id="abc123", last_event_at=None
-        )
+        trigger.id: TriggerBinding(stream_id=uuid4(), event_filter={}, last_event_at=None)
     }
 
     summary = json.loads(await TriggersToolset().get(trigger_id=str(trigger.id)))
 
-    assert summary["webhook_url"] == "https://api.example/webhooks/abc123"
     assert summary["status"] == "needs_owner"
     assert summary["needs_new_owner"] is True
 
@@ -113,3 +107,26 @@ async def test_create_stream_refuses_a_stream_the_caller_may_not_read(harness, m
 
     check.assert_awaited_once_with(stream_id, "u")
     harness.create_trigger_from_payload.assert_not_called()
+
+
+async def test_create_stream_takes_a_batch_window_and_reports_it(harness):
+    from agentarea_triggers.domain.models import StreamTrigger, TriggerBatchWindow
+
+    batch = TriggerBatchWindow(window="60s", max_events=3)
+    trigger = StreamTrigger(
+        name="digest", agent_id=uuid4(), created_by="u", workspace_id="w", batch=batch
+    )
+    harness.create_trigger_from_payload.return_value = trigger
+    harness.stream_service.trigger_bindings.return_value = {}
+    created = json.loads(
+        await TriggersToolset().create_stream(
+            name="digest",
+            agent_id=str(uuid4()),
+            stream_id=str(uuid4()),
+            task_parameters={"text": "Summarise"},
+            batch={"window": "60s", "max_events": 3},
+        )
+    )
+    payload = harness.create_trigger_from_payload.await_args.args[0]
+    assert payload.batch == batch
+    assert created["batch"] == {"window": "60s", "max_events": 3}

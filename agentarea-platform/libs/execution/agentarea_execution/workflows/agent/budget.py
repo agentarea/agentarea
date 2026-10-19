@@ -13,7 +13,7 @@ from ...models import MonthlySpendCapRequest, MonthlySpendCapResult
 from ..constants import ACTIVITY_TIMEOUT, Activities, EventTypes
 from ..retry import bookkeeping_retry_policy
 from .base import AgentWorkflowBase
-from .patches import MONTHLY_CAP_AT_START_PATCH
+from .patches import CURRENT_SPEND_CAPS_PATCH, MONTHLY_CAP_AT_START_PATCH
 
 MONTHLY_CAP_FAILURE_REASON = "monthly_spend_cap_exceeded"
 LLM_RUN_CAP_FAILURE_REASON = "llm_run_cap_exceeded"
@@ -177,8 +177,11 @@ class BudgetMixin(AgentWorkflowBase):
         """
         if self._agent_spend_baseline is None or self._monthly_cap_message:
             return
-        budget = effective_policy_from_json(self.state.effective_policy).budget
-        cap = budget.agent_monthly_spend_cap_usd if budget else None
+        if self._agent_cap_read_current:
+            cap = self._current_agent_cap
+        else:
+            budget = effective_policy_from_json(self.state.effective_policy).budget
+            cap = budget.agent_monthly_spend_cap_usd if budget else None
         if cap is None:
             return
         spent = self._agent_spend_baseline + (self._agent_run_spend - self._agent_spend_mark)
@@ -197,6 +200,7 @@ class BudgetMixin(AgentWorkflowBase):
         """
         if not workflow.patched(MONTHLY_CAP_AT_START_PATCH):
             return
+        current = workflow.patched(CURRENT_SPEND_CAPS_PATCH)
         budget = effective_policy_from_json(self.state.effective_policy).budget
         cap = budget.monthly_spend_cap_usd if budget else None
         agent_cap = budget.agent_monthly_spend_cap_usd if budget else None
@@ -205,6 +209,9 @@ class BudgetMixin(AgentWorkflowBase):
             for spend_cap in (budget.spend_caps or [] if budget else [])
             if spend_cap.category == "llm" and spend_cap.period is None
         ]
+        # A run whose policy froze no monthly cap skips this check; a cap added
+        # since is enforced by the model-call and tool-call gates, which read the
+        # current caps on every call.
         if cap is None and agent_cap is None and not llm_caps:
             return
         result: MonthlySpendCapResult = await workflow.execute_activity(
@@ -214,15 +221,23 @@ class BudgetMixin(AgentWorkflowBase):
                     workspace_id=self.state.workspace_id,
                     cap_usd=cap,
                     user_context_data=self.state.user_context_data,
-                    agent_id=self.state.agent_id if agent_cap is not None or llm_caps else None,
+                    agent_id=(
+                        self.state.agent_id
+                        if current or agent_cap is not None or llm_caps
+                        else None
+                    ),
                     agent_cap_usd=agent_cap,
                     llm_caps=llm_caps,
+                    current_caps=current,
                 )
             ],
             result_type=MonthlySpendCapResult,
             start_to_close_timeout=ACTIVITY_TIMEOUT,
             retry_policy=bookkeeping_retry_policy(),
         )
+        if current:
+            self._agent_cap_read_current = True
+            self._current_agent_cap = result.agent_cap_usd
         if result.agent_month_to_date_usd is not None:
             self._agent_cap_currency = result.currency
             # Wallet payments are recorded in USD and only count where USD is

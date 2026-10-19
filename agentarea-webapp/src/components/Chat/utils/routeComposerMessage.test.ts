@@ -72,7 +72,7 @@ describe("routeComposerMessage", () => {
     const state = reduceState([
       started("task-a"),
       {
-        eventType: "approval.request",
+        eventType: "approval.requested",
         data: { escalation_id: "ap-1", tool_name: "delete_repo" },
       },
     ]);

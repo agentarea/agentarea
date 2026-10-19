@@ -43,9 +43,10 @@ one item whose loss cannot be recovered from — the secret encryption key.
     | Kubernetes Secrets | Database and object-store credentials, the Kratos JWKS, sandbox HMAC secrets | Recoverable by regenerating, except the encryption key |
 
     Valkey holds Redis Streams for sandbox execution requests and channel inbound
-    traffic. It is working state, not a system of record. `valkey.dataStorage` is
-    disabled by default in the chart. Losing it drops in-flight stream entries; it
-    does not lose committed data.
+    traffic. It is working state, not a system of record. The chart keeps it on a
+    PVC with AOF (`appendfsync everysec`) and `maxmemory-policy noeviction`, so a
+    restart loses at most the last second of writes. Losing the volume drops
+    in-flight stream entries; it does not lose committed data.
   </Step>
 
   <Step title="Back up the encryption key first, and separately">

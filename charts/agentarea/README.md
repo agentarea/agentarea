@@ -97,6 +97,8 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.ssl | bool | `false` |  |
 | global.redis.maxConnections | int | `50` |  |
 | global.redis.connectionTimeout | string | `"5s"` |  |
+| global.events.namespace | string | `"agentarea"` |  |
+| global.events.partitions | int | `16` |  |
 | global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
 | global.storage.publicEndpoint | string | `""` |  |
@@ -286,8 +288,6 @@ The following table lists configurable parameters of the chart and their default
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
-| eventService.inboundStream | string | `"agentarea.channel.inbound"` |  |
-| eventService.telegramPolling.enabled | bool | `false` |  |
 | eventService.resources | object | `{}` |  |
 | eventService.podAnnotations | object | `{}` |  |
 | eventService.podLabels | object | `{}` |  |
@@ -305,6 +305,9 @@ The following table lists configurable parameters of the chart and their default
 | eventService.readinessProbe.timeoutSeconds | int | `3` |  |
 | eventService.readinessProbe.failureThreshold | int | `3` |  |
 | eventService.extraEnv | list | `[]` |  |
+| platformNetworkPolicy.enabled | bool | `false` |  |
+| platformNetworkPolicy.blockedEgressCIDRs[0] | string | `"169.254.0.0/16"` |  |
+| platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
 | mcpManager.image.repository | string | `"agentarea/agentarea-mcp-manager"` |  |
@@ -339,6 +342,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.instanceNetworkPolicy.probeIngressCIDRs[1] | string | `"172.16.0.0/12"` |  |
 | mcpManager.instanceNetworkPolicy.probeIngressCIDRs[2] | string | `"192.168.0.0/16"` |  |
 | mcpManager.instanceNetworkPolicy.extraEgress | list | `[]` |  |
+| mcpManager.instanceNetworkPolicy.egressProxy | object | `{}` |  |
 | mcpManager.instancePod.labels | object | `{}` |  |
 | mcpManager.instancePod.annotations | object | `{}` |  |
 | mcpManager.instancePod.nodeSelector | object | `{}` |  |
@@ -473,12 +477,15 @@ The following table lists configurable parameters of the chart and their default
 | valkey.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
 | valkey.auth.aclUsers.default.passwordKey | string | `"redis-password"` |  |
 | valkey.replica.enabled | bool | `false` |  |
-| valkey.dataStorage.enabled | bool | `false` |  |
-| valkey.dataStorage.requestedSize | string | `"1Gi"` |  |
-| valkey.resources.limits.cpu | string | `"250m"` |  |
-| valkey.resources.limits.memory | string | `"256Mi"` |  |
+| valkey.deploymentStrategy | string | `"Recreate"` |  |
+| valkey.dataStorage.enabled | bool | `true` |  |
+| valkey.dataStorage.requestedSize | string | `"4Gi"` |  |
+| valkey.dataStorage.className | string | `""` |  |
+| valkey.valkeyConfig | string | `"appendonly yes\nappendfsync everysec\nmaxmemory 768mb\nmaxmemory-policy noeviction\n"` |  |
+| valkey.resources.limits.cpu | string | `"500m"` |  |
+| valkey.resources.limits.memory | string | `"1Gi"` |  |
 | valkey.resources.requests.cpu | string | `"100m"` |  |
-| valkey.resources.requests.memory | string | `"128Mi"` |  |
+| valkey.resources.requests.memory | string | `"1Gi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
 | rustfs.image.tag | string | `"latest"` |  |
@@ -518,6 +525,9 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[4].name | string | `"system-agents"` |  |
 | registryReconcile.registries[4].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"` |  |
 | registryReconcile.registries[4].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[5].name | string | `"system-source-types"` |  |
+| registryReconcile.registries[5].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
+| registryReconcile.registries[5].recommendation_priority | int | `10` |  |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |

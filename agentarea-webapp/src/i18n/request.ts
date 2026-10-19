@@ -1,7 +1,14 @@
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 
-export default getRequestConfig(async () => {
+export default getRequestConfig(async () => ({
+  ...(await localeAndMessages()),
+  // One "now" per request, handed to the client provider, so a relative time
+  // ("14 seconds ago") hydrates with the text the server rendered.
+  now: new Date(),
+}));
+
+async function localeAndMessages() {
   // First try to get locale from cookies
   const cookieStore = await cookies();
   const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
@@ -33,4 +40,4 @@ export default getRequestConfig(async () => {
     locale: cookieLocale,
     messages: (await import(`../../messages/${cookieLocale}.json`)).default,
   };
-});
+}

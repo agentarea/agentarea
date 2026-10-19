@@ -2,11 +2,34 @@
 
 from collections.abc import Collection
 from functools import cache
-from typing import cast
+from importlib.metadata import version
+from typing import Any, cast
 
 from agentarea_agents_sdk.mcp_server import ToolsetMCPServer, create_mcp_server
+from agentarea_common.config.app import get_app_settings
+from mcp.types import Icon
 
-DESCRIPTION = "AgentArea platform — agents, runs, MCP servers, providers, models, secrets"
+INSTRUCTIONS = "AgentArea platform — agents, runs, MCP servers, providers, models, secrets"
+
+DESCRIPTION = (
+    "Build, run and govern AI agents on AgentArea: create agents and skills, start and "
+    "steer runs, connect MCP servers and OpenAPI tools, wire triggers and event streams, "
+    "and manage providers, models, secrets, members and policies across your workspaces."
+)
+
+WEBSITE_URL = "https://docs.agentarea.ai"
+
+
+def server_identity() -> dict[str, Any]:
+    """What every AgentArea MCP endpoint reports about itself on ``initialize``."""
+    icon = f"{get_app_settings().API_URL.rstrip('/')}/static/icons/agentarea.svg"
+    return {
+        "title": "AgentArea",
+        "description": DESCRIPTION,
+        "version": version("agentarea-api"),
+        "website_url": WEBSITE_URL,
+        "icons": [Icon(src=icon, mime_type="image/svg+xml", sizes=["any"])],
+    }
 
 
 def create_platform_mcp_server(*, spanning: bool) -> ToolsetMCPServer:
@@ -19,16 +42,24 @@ def create_platform_mcp_server(*, spanning: bool) -> ToolsetMCPServer:
     from agentarea_agents_sdk.tools.base_tool import BaseTool
     from agentarea_agents_sdk.tools.decorator_tool import Toolset
 
+    from .mcp_events import PinnedScope, SpanningScope, install_mcp_events
+
     # Imported here: the toolsets themselves import this module.
     from .tools import get_platform_tools, get_spanning_mcp_tools
 
     toolsets = get_spanning_mcp_tools() if spanning else get_platform_tools()
-    return create_mcp_server(
+    server = create_mcp_server(
         toolsets=cast(list[Toolset | BaseTool], toolsets),
         name="AgentArea",
-        description=DESCRIPTION,
+        instructions=INSTRUCTIONS,
         workspace_argument=spanning,
+        **server_identity(),
     )
+    install_mcp_events(
+        server._lowlevel_server,  # pyright: ignore[reportPrivateUsage]
+        SpanningScope() if spanning else PinnedScope(),
+    )
+    return server
 
 
 @cache

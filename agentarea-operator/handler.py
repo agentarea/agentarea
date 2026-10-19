@@ -490,6 +490,10 @@ def sync_provider_config(
                         "context_window": em.get("contextWindow", 4096),
                         "input_cost_per_token": em.get("inputCostPerToken"),
                         "output_cost_per_token": em.get("outputCostPerToken"),
+                        "cached_input_cost_per_token": em.get("cachedInputCostPerToken"),
+                        "cache_creation_input_cost_per_token": em.get(
+                            "cacheCreationInputCostPerToken"
+                        ),
                         # Always written, an omitted list as []: the resource is
                         # the whole truth about a model's tags, so taking
                         # "default" off in git takes it off the model.
@@ -538,6 +542,9 @@ def _upsert_model_spec_and_instance(
                 "context_window = :cw, "
                 "input_cost_per_token = COALESCE(:icpt, input_cost_per_token), "
                 "output_cost_per_token = COALESCE(:ocpt, output_cost_per_token), "
+                "cached_input_cost_per_token = COALESCE(:cicpt, cached_input_cost_per_token), "
+                "cache_creation_input_cost_per_token = "
+                "COALESCE(:ccicpt, cache_creation_input_cost_per_token), "
                 "updated_at = now() WHERE id = :id AND workspace_id = :ws"
             ),
             {
@@ -546,6 +553,8 @@ def _upsert_model_spec_and_instance(
                 "cw": model.get("context_window", 4096),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
+                "cicpt": model.get("cached_input_cost_per_token"),
+                "ccicpt": model.get("cache_creation_input_cost_per_token"),
                 "ws": workspace_id,
             },
         )
@@ -556,10 +565,11 @@ def _upsert_model_spec_and_instance(
                 "INSERT INTO model_specs "
                 "(id, provider_spec_id, model_name, display_name, description, "
                 "context_window, input_cost_per_token, output_cost_per_token, "
+                "cached_input_cost_per_token, cache_creation_input_cost_per_token, "
                 "is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
-                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, true, "
-                ":ws, :created_by, now(), now())"
+                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, :cicpt, :ccicpt, "
+                "true, :ws, :created_by, now(), now())"
             ),
             {
                 "id": model_spec_id,
@@ -570,6 +580,8 @@ def _upsert_model_spec_and_instance(
                 "cw": model.get("context_window", 4096),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
+                "cicpt": model.get("cached_input_cost_per_token"),
+                "ccicpt": model.get("cache_creation_input_cost_per_token"),
                 "ws": workspace_id,
                 "created_by": PLATFORM_PRINCIPAL_ID,
             },

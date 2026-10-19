@@ -42,7 +42,7 @@ Every variable AgentArea reads is `AGENTAREA_<DOMAIN>_<KEY>`, at most 40
 characters, with at most three segments after the domain. The domain comes from
 a closed list: `DB` `S3` `AUTH` `AUTHZ` `SECRET` `MCP` `SANDBOX` `TEMPORAL`
 `WORKER` `TASK` `TRIGGER` `CHANNEL` `EVENT` `CORS` `LOG` `REDIS` `KAFKA` `TOOL` `K8S`
-`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A`. Domains are whole words; only
+`API` `HTTP` `OTEL` `BILLING` `METRICS` `A2A` `SPEND`. Domains are whole words; only
 established acronyms are abbreviated. A handful of
 app-level names carry no domain — `AGENTAREA_ENV`, `AGENTAREA_API_URL`,
 `AGENTAREA_APP_URL`, `AGENTAREA_EDITION`.
@@ -100,6 +100,18 @@ refuses it. Deploy with `log`, clear the warnings, then switch to `enforce`.
 | `AGENTAREA_REDIS_PORT` | `global.redis.port` | `6379` |
 | `AGENTAREA_REDIS_PASSWORD` | Secret `global.secrets.redis`, key `redis-password` | generated |
 | `AGENTAREA_REDIS_URL` | see precedence below | derived |
+| `AGENTAREA_EVENT_NAMESPACE` | `global.events.namespace` | `agentarea` |
+| `AGENTAREA_EVENT_PARTITIONS` | `global.events.partitions` | `16` |
+
+Every broker topic and broker key is `<namespace>.<domain>.<dataset>`, for
+example `agentarea.channel.inbound` or `agentarea.streams.events.3`.
+`AGENTAREA_EVENT_NAMESPACE` is that first segment (lowercase letters, digits
+and `-`); the broker adapters of every service put it in front, so two
+deployments sharing one Redis need different namespaces. Stream events travel
+on `AGENTAREA_EVENT_PARTITIONS` partitions of `streams.events`, each stream on
+one of them. The API and the worker must agree on it, and changing it moves
+streams to other partitions: let the `router` and `events-view` groups drain
+first.
 
 `AGENTAREA_REDIS_URL` is emitted by `templates/_redis-url.tpl`, not by the `redis` group,
 in this order:
@@ -349,44 +361,67 @@ Read by `SecretManagerSettings` in the platform. On Kubernetes, set these throug
 ### Event streams (not in `config.yaml`)
 
 Read by `EventStreamSettings` inside both the backend (webhook intake, the
-`/streams` routes) and the worker (the dispatcher and the partition
-maintainer). Not wired into any Helm group yet — set these through
-`backend.extraEnv` and `worker.extraEnv`, matching values on both, the same
-way as the secret manager settings just above.
+`/streams` routes) and the worker (the `router` and `events-view` consumer
+groups and the partition maintainer). Not wired into any Helm group yet — set
+these through `backend.extraEnv` and `worker.extraEnv`, matching values on
+both, the same way as the secret manager settings just above.
 
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `AGENTAREA_EVENT_WRITE_QUOTA` | integer | `600` | Events one workspace may append per rolling minute, counted across every stream it owns. Exceeding it answers a webhook `429`. |
-| `AGENTAREA_EVENT_RETENTION` | duration | `30d` | Age past which a whole daily journal partition is dropped; the floor under every stream's own `retention_days`. |
-| `AGENTAREA_EVENT_PARTITIONS_AHEAD` | integer | `7` | Daily journal partitions kept created ahead of today. |
-| `AGENTAREA_EVENT_DISPATCH_EVERY` | duration | `2s` | How often the dispatcher polls when no Redis wake signal arrives. |
-| `AGENTAREA_EVENT_DISPATCH_BATCH` | integer | `50` | Events one subscription is handed per lease. |
-| `AGENTAREA_EVENT_FORWARD_DEPTH` | integer | `8` | Longest causation chain a forward may extend. |
-| `AGENTAREA_EVENT_MAX_ATTEMPTS` | integer | `10` | Retries of one event before its outcome is recorded `error`. |
-| `AGENTAREA_EVENT_LEASE` | duration | `5m` | How long the dispatcher holds a subscription before another instance may take it over. |
+| `AGENTAREA_EVENT_RETENTION` | duration | `7d` | How long the events read model (`stream_events`) keeps a day: an older daily partition is dropped whole. One setting for every stream. |
+| `AGENTAREA_EVENT_ARCHIVE` | boolean | `false` | Before an expired day is dropped, write its events to the object store (`AGENTAREA_S3_BUCKET`) as gzipped JSONL, one object per workspace at `event-archive/<workspace>/<YYYY-MM-DD>.jsonl.gz`. A day the store does not take is kept, logged as an error, and tried again on the next pass. |
+| `AGENTAREA_EVENT_PARTITIONS_AHEAD` | integer | `7` | Daily read-model partitions kept created ahead of today. |
+| `AGENTAREA_EVENT_FORWARD_DEPTH` | integer | `8` | Longest causation chain a forward or a trigger firing may extend: past it a forward records an error and a trigger skips the event. A task started by an event is at that event's depth, and its outcome in the platform stream one deeper. |
+| `AGENTAREA_EVENT_MAX_ATTEMPTS` | integer | `10` | Deliveries of one bus event before the router records the reactions still missing as `error` and moves the event to `streams.events.router.dlq`. |
 
 These share the `EVENT` domain with `AGENTAREA_EVENT_POLL_INTERVAL` and
 `AGENTAREA_EVENT_MAX_POLLERS` just below, but are unrelated settings: those
-two configure the channel-inbound poller; the eight above configure the
-event-stream journal and its dispatcher. See [Event
-streams](/concepts/integration/event-streams).
+two configure the event service's poll sources; the five above configure the
+event bus. See [Event streams](/concepts/integration/event-streams).
 
-The API and the worker wake the dispatcher over Redis, so both refuse to start
-unless `AGENTAREA_BROKER=redis` (the default, and what every chart and Compose
-file sets).
+Stream events travel on Redis Streams (the partitions of `streams.events`, see
+the Redis group above), so the API and the worker both refuse to start unless `AGENTAREA_BROKER=redis`
+(the default, and what every chart and Compose file sets).
+
+### Trigger batches (not in `config.yaml`)
+
+Read by `TriggerSettings` in the backend (it refuses a trigger whose batch asks
+for more) and in the worker (the router's trigger handler). Set the same value
+on both through `backend.extraEnv` and `worker.extraEnv`.
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS` | integer | `100` | The most events one batch of a windowed stream trigger holds. A batch that reaches it fires at once, also before its window has passed; a trigger's own `max_events` may not exceed it. |
 
 ### Event service (group `eventService` values, chart keys only)
 
 | Setting | Helm value | Default |
 |---|---|---|
 | Port | `eventService.port` | `8002` |
-| Poll interval | `eventService.pollInterval` | `30s` |
-| Max pollers | `eventService.maxPollers` | `10` |
-| Inbound stream | `eventService.inboundStream` | `agentarea.channel.inbound` |
-| Telegram long-polling | `eventService.telegramPolling.enabled` | `false` |
+| Source reload interval (`AGENTAREA_EVENT_POLL_INTERVAL`) | `eventService.pollInterval` | `30s` |
+| Max pollers (`AGENTAREA_EVENT_MAX_POLLERS`) | `eventService.maxPollers` | `10` |
 
-Telegram long-polling is a development fallback. Production Telegram ingress
-uses webhooks.
+The event service polls every stream source of kind `poll` at the interval its
+catalog entry names, and registers the webhook of every webhook source whose
+entry has a `registration` block (Telegram `setWebhook`). It publishes the raw
+items to the `streams.ingest` topic, which the worker's `ingest` group turns into
+stream events. `pollInterval` is how often it reads the set of sources again.
+
+It also reads, from the groups above:
+
+- `AGENTAREA_API_URL`: the public base of `/webhooks/{webhook_id}`, the URL it
+  registers with a provider. Required; the chart sets the backend's own value.
+- `AGENTAREA_SECRET_ENCRYPTION_KEY`: source credentials are read from the
+  `database` secret backend. Required; the event service refuses to start with
+  any other `AGENTAREA_SECRET_BACKEND`.
+- `AGENTAREA_HTTP_ALLOW_PRIVATE`, `AGENTAREA_HTTP_PRIVATE_ALLOWLIST`: a host the
+  member names (a feed URL, a mailbox) may reach only public addresses unless
+  these open private ones, as for the backend.
+- `AGENTAREA_MCP_MANAGER_URL`, `AGENTAREA_MCP_GATEWAY_SECRET`: MCP Events
+  sources are polled and subscribed through the MCP manager's gateway, which
+  adds the MCP server's credentials. Required; the chart sets both, the secret
+  from the same Secret the backend reads.
 
 ### Sandbox runner (`mcpSandboxRunner`)
 
@@ -431,7 +466,8 @@ API and the worker at startup.
 
 ### Outbound URL policy (not in `config.yaml`)
 
-Read by `HttpSettings` in the backend and the worker.
+Read by `HttpSettings` in the backend and the worker, by the event service, and
+by the MCP manager for URL MCP servers reached through its gateway.
 
 | Variable | Helm value | Default |
 |---|---|---|
@@ -451,6 +487,35 @@ CIDR lets every member reach every in-cluster service, the platform's own
 included. `AGENTAREA_HTTP_ALLOW_PRIVATE=true` admits every private address and
 belongs only on a single-tenant install. `docker-compose.dev.yaml` allows
 `localhost,host.docker.internal`; `docker-compose.yaml` allows nothing.
+
+### LiteLLM price map (set in the images)
+
+Read by LiteLLM itself, in the backend and the worker.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `LITELLM_LOCAL_MODEL_COST_MAP` | none (set in the API and worker images) | `True` |
+
+Without it, LiteLLM downloads its model price map from GitHub every time it is
+imported: a request at every start, up to 5 s of delay when the network blocks
+it, and prices that change without a release. The images set it, so LiteLLM uses
+the map bundled in the version the image ships. The platform prices a call from
+the provider's reported cost or the model catalog first; this map is the last
+resort for a model the catalog has no price for.
+
+### Spend currency (not in `config.yaml`)
+
+Read by `SpendSettings` in the backend and the worker.
+
+| Variable | Helm value | Default |
+|---|---|---|
+| `AGENTAREA_SPEND_CURRENCY` | none (set it in the env values) | `USD` |
+
+The one currency spend caps count and tool costs are declared in, as an ISO 4217
+code. Nothing converts other currencies: a tool cost declared in another currency is
+recorded in that currency and shown as not covered by caps. With the enterprise
+billing extension installed, billing's ledger currency is the source of truth and
+this must name it, or the backend and the worker refuse to start.
 
 ### Docker Compose variables
 

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
+from agentarea_common.events.contract import require_known_type
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,8 @@ class TaskProvenance(BaseModel):
     correlation_id: str | None = None
     causation_id: str | None = None
     parent_task_id: UUID | None = None
+    #: The causation depth of the event that started the task; 0 when none did.
+    depth: int = 0
 
 
 class Task(BaseModel):
@@ -332,12 +335,13 @@ class TaskEvent(BaseModel):
         """Create a workflow event with the identity the workflow minted.
 
         ``event_id`` and ``timestamp`` come from the workflow, so a retried
-        publish of the same event maps to the same row.
+        publish of the same event maps to the same row. A type outside the
+        closed vocabulary raises ``UnknownEventTypeError``.
         """
         return cls(
             id=event_id,
             task_id=task_id,
-            event_type=event_type,
+            event_type=require_known_type(event_type),
             timestamp=timestamp,
             data=data,
             metadata={"source": "workflow", "created_at": datetime.now(UTC).isoformat()},
@@ -347,10 +351,16 @@ class TaskEvent(BaseModel):
 
 
 class ConversationEntry(BaseModel):
-    """One entry of a task's model conversation at its position in the log."""
+    """One row of a task's log at its position: a message, a compaction or an event.
+
+    A ``compaction`` holds the summary of everything before it and, in
+    ``meta["skills"]``, the text of the skills loaded so far. An ``event`` is a
+    moment the feed shows (its type in ``name``, details in ``meta``) and the
+    model never sees.
+    """
 
     seq: int
-    kind: str = "message"  # "message" or "summary"
+    kind: str = "message"
     role: str
     content: str
     tool_calls: list[dict[str, Any]] | None = None
@@ -358,10 +368,23 @@ class ConversationEntry(BaseModel):
     name: str | None = None
     # Images a tool returned, by reference: ``{"id", "mime_type", "size"}`` each.
     attachments: list[dict[str, Any]] | None = None
+    event_id: UUID | None = None
+    execution_id: str | None = None
+    iteration: int | None = None
+    meta: dict[str, Any] | None = None
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    # Where the body of a row too large to keep inline is stored; content is then empty.
+    body_ref: str | None = None
+    # When the row's moment happened; the store's clock when None.
+    occurred_at: datetime | None = None
 
     def as_message(self) -> dict[str, Any]:
         """The entry as a chat message, without the fields it does not set."""
-        message: dict[str, Any] = {"role": self.role, "content": self.content}
+        content = self.content
+        if self.kind == "compaction":
+            content = "\n\n".join([content, *((self.meta or {}).get("skills") or [])])
+        message: dict[str, Any] = {"role": self.role, "content": content}
         for key in ("tool_call_id", "name", "tool_calls", "attachments"):
             value = getattr(self, key)
             if value is not None:

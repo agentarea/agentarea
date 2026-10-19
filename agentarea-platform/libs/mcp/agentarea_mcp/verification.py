@@ -11,6 +11,7 @@ path.
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -28,6 +29,7 @@ from agentarea_mcp.domain.verification_types import (
     VerificationError,
     VerificationPayload,
 )
+from agentarea_mcp.mcp_events import events_record, events_settings, list_event_types
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
 from agentarea_mcp.transport_spec import instance_transport_spec
 
@@ -188,7 +190,15 @@ def mcp_transport_candidates(
     return [url, f"{url}/mcp"], f"{url}/sse"
 
 
-async def _list_tools(
+@dataclass(frozen=True)
+class Discovery:
+    """What verification learns from a server: its tools and what it offers as MCP Events."""
+
+    tools: list[dict]
+    events: dict | None
+
+
+async def _discover(
     endpoint_url: str,
     headers: dict | None = None,
     transport: str | None = None,
@@ -196,8 +206,8 @@ async def _list_tools(
     verdict_key: str | None = None,
     verdict_store=None,
     httpx_client_factory,
-) -> list[dict]:
-    """Connect to an MCP server and list tools through the shared v2 client."""
+) -> Discovery:
+    """List tools and, when the server advertises the events extension, its event types."""
     from agentarea_mcp.application.mcp_client import connected_mcp_client
 
     custom_headers = dict(headers) if headers else None
@@ -211,7 +221,21 @@ async def _list_tools(
         httpx_client_factory=httpx_client_factory,
     ) as client:
         result = await client.list_tools()
-    return [serialize_mcp_tool(tool) for tool in result.tools]
+        tools = [serialize_mcp_tool(tool) for tool in result.tools]
+        settings = events_settings(client.server_capabilities)
+        if settings is None:
+            return Discovery(tools=tools, events=None)
+        try:
+            event_types = await list_event_types(client.session)
+        except (MCPError, ValueError) as error:
+            logger.warning("verify: events/list failed: %s", error, exc_info=True)
+            return Discovery(
+                tools=tools,
+                events=events_record(settings, [], client.protocol_version, error=str(error)),
+            )
+        return Discovery(
+            tools=tools, events=events_record(settings, event_types, client.protocol_version)
+        )
 
 
 def _in_progress_is_stale(verification: dict) -> bool:
@@ -388,7 +412,7 @@ async def verify(
             try:
                 async with asyncio.timeout(_LIST_TOOLS_ATTEMPT_TIMEOUT):
                     if _list_tools_fn is None:
-                        tools = await _list_tools(
+                        discovery = await _discover(
                             endpoint_url,
                             headers or None,
                             remote_transport,
@@ -397,7 +421,13 @@ async def verify(
                             httpx_client_factory=client_factory,
                         )
                     else:
-                        tools = await _list_tools_fn(endpoint_url, headers or None)
+                        found = await _list_tools_fn(endpoint_url, headers or None)
+                        discovery = (
+                            found
+                            if isinstance(found, Discovery)
+                            else Discovery(tools=found, events=None)
+                        )
+                tools = discovery.tools
 
                 payload = _make_payload("succeeded")
                 async with db.async_session_factory() as save_sess:
@@ -409,6 +439,7 @@ async def verify(
                         ).scalar_one()
                         row.verification = dict(payload)
                         row.tools = tools
+                        row.events = discovery.events
 
                 logger.info(
                     "verify: succeeded",

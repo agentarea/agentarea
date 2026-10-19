@@ -80,6 +80,11 @@ export function SpendCard({
             />
             <span>{t("vsPrevDay")}</span>
           </div>
+          {spend.mtd_estimate_usd && Number(spend.mtd_estimate_usd) > 0 && (
+            <div className="mt-1 text-[11.5px] tabular-nums text-muted-foreground">
+              {t("estimatePart", { amount: fmt(spend.mtd_estimate_usd) })}
+            </div>
+          )}
         </div>
 
         <div className={cn("ml-auto text-right", compact ? "pt-0" : "pt-0.5")}>

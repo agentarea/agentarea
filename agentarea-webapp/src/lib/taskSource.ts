@@ -1,12 +1,7 @@
 export type TaskSourceKind =
-  | "telegram"
-  | "email"
-  | "slack"
-  | "discord"
-  | "channel"
+  | "event"
   | "delegation"
   | "schedule"
-  | "webhook"
   | "trigger"
   | "a2a"
   | "manual_run"
@@ -17,11 +12,11 @@ export interface TaskSource {
   label: string;
   detail?: string;
   /**
-   * The channel id as the backend spells it (`webhook_type`). Open set — new
-   * channels arrive by configuration, so resolve the name and icon through the
-   * trigger catalog rather than matching on this here.
+   * The catalog slug of the event that started the task (`source_type`). An
+   * open set: the name and icon come from the source-types catalog, never from
+   * matching on this here.
    */
-  channel?: string;
+  sourceType?: string;
   /**
    * A principal id the caller should resolve into a name via GET /v1/principals
    * — the delegating agent, for a task another agent started. Deliberately an
@@ -42,21 +37,12 @@ function getString(obj: unknown, key: string): string | undefined {
   return undefined;
 }
 
-function getObject(obj: unknown, key: string): Record<string, unknown> | undefined {
-  if (obj && typeof obj === "object" && key in (obj as Record<string, unknown>)) {
-    const v = (obj as Record<string, unknown>)[key];
-    return v && typeof v === "object" ? (v as Record<string, unknown>) : undefined;
-  }
-  return undefined;
-}
-
 export function getTaskSource(parameters: Params): TaskSource {
   // Someone pressed "run now" on a trigger. The backend writes fired_by on that
   // path and nowhere else, so it settles what caused this run before anything
-  // else gets a say — including channel_origin, which a manual run of a channel
-  // trigger still carries because the reply routes back to that chat. Where the
-  // answer goes is not what started it. The trigger is still named: which one
-  // was run is the next question.
+  // else gets a say — including source_type, which a manual run of a stream
+  // trigger may still carry. Where the answer goes is not what started it. The
+  // trigger is still named: which one was run is the next question.
   const firedBy = getString(parameters, "fired_by");
   if (firedBy) {
     return {
@@ -67,36 +53,16 @@ export function getTaskSource(parameters: Params): TaskSource {
     };
   }
 
-  const channelOrigin = getObject(parameters, "channel_origin");
-  const channelType = channelOrigin && getString(channelOrigin, "type");
-
-  if (channelOrigin && channelType === "telegram") {
-    const detail =
-      getString(channelOrigin, "chat_title") ||
-      getString(channelOrigin, "username") ||
-      getString(channelOrigin, "from") ||
-      getString(channelOrigin, "chat_id");
-    return { kind: "telegram", label: "Telegram", detail, channel: "telegram" };
-  }
-  if (channelOrigin && channelType === "email") {
-    const detail =
-      getString(channelOrigin, "from") || getString(channelOrigin, "address");
-    return { kind: "email", label: "Email", detail, channel: "email" };
-  }
-  if (channelOrigin && channelType === "slack") {
-    const detail =
-      getString(channelOrigin, "channel_name") ||
-      getString(channelOrigin, "channel_id");
-    return { kind: "slack", label: "Slack", detail, channel: "slack" };
-  }
-  if (channelOrigin && channelType === "discord") {
-    const detail =
-      getString(channelOrigin, "channel_name") ||
-      getString(channelOrigin, "channel_id");
-    return { kind: "discord", label: "Discord", detail, channel: "discord" };
-  }
-  if (channelType) {
-    return { kind: "channel", label: channelType, channel: channelType };
+  // A stream trigger fired on an event: the catalog entry it came through
+  // names the provider.
+  const sourceType = getString(parameters, "source_type");
+  if (sourceType) {
+    return {
+      kind: "event",
+      label: "Event",
+      detail: getString(parameters, "trigger_name"),
+      sourceType,
+    };
   }
 
   const src = getString(parameters, "source");
@@ -119,23 +85,7 @@ export function getTaskSource(parameters: Params): TaskSource {
   const triggerName = getString(parameters, "trigger_name");
 
   if (triggerType === "cron") {
-    return {
-      kind: "schedule",
-      label: "Scheduled",
-      detail: triggerName,
-      channel: "cron",
-    };
-  }
-  if (triggerType === "webhook") {
-    // The channel goes out raw: which channels exist is the catalog's business
-    // (GET /v1/triggers/catalog), not this module's. channel_origin above only
-    // covers the channels we route replies back to.
-    return {
-      kind: "webhook",
-      label: "Webhook",
-      detail: triggerName,
-      channel: getString(parameters, "webhook_type"),
-    };
+    return { kind: "schedule", label: "Scheduled", detail: triggerName };
   }
   if (triggerName || triggerType) {
     return {

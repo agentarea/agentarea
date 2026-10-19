@@ -92,6 +92,7 @@
               "concepts/integration/mcp",
               "concepts/integration/triggers",
               "concepts/integration/event-streams",
+              "concepts/integration/event-bus",
               "concepts/integration/bundles",
               "concepts/integration/registry-and-catalog"
             ]
@@ -138,7 +139,9 @@
             "pages": [
               "guides/triggers/schedule-an-agent",
               "guides/triggers/trigger-from-a-webhook",
-              "guides/triggers/collect-events-into-a-stream"
+              "guides/triggers/collect-events-into-a-stream",
+              "guides/triggers/subscribe-to-a-stream-over-mcp-events",
+              "guides/triggers/transform-a-stream-with-a-processor"
             ]
           },
           {

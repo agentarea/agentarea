@@ -25,8 +25,8 @@ from agentarea_governance.infrastructure.orm import PolicyRuleORM
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-REGISTRY = str(uuid4())
-OTHER_REGISTRY = str(uuid4())
+REGISTRY = "0b6f3c1e-5d2a-4f8e-9a71-3c4d5e6f7a81"
+OTHER_REGISTRY = "7e2d9a40-1b3c-4e5f-8a6b-9c0d1e2f3a4b"
 
 
 def _rule(

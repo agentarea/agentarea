@@ -40,7 +40,7 @@ import {
 
 const CATEGORY_ICONS: Record<EventCategory, LucideIcon> = {
   task: Flag,
-  iteration: Repeat,
+  turn: Repeat,
   llm: Sparkles,
   tool: Wrench,
   input: MessageSquareText,

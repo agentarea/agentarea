@@ -99,11 +99,12 @@ async def _resolve(host: str, _port: int) -> list[str]:
     return [HOSTS[host]]
 
 
-def _transport(handler):
-    def make() -> httpx.AsyncBaseTransport:
-        return SafeOutboundTransport(
+def _client(handler):
+    def make(**kwargs) -> httpx.AsyncClient:
+        transport = SafeOutboundTransport(
             OutboundPolicy(), resolve=_resolve, inner=lambda **_: httpx.MockTransport(handler)
         )
+        return httpx.AsyncClient(transport=transport, **kwargs)
 
     return make
 
@@ -130,7 +131,7 @@ def _service(db_session, handler) -> RegistryService:
         RegistryRepository(db_session, context),
         RegistryItemRepository(db_session, context),
         server_repo=None,  # type: ignore[arg-type]
-        untrusted_transport=_transport(handler),
+        untrusted_client=_client(handler),
     )
 
 

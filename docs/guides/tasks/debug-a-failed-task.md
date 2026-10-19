@@ -82,28 +82,15 @@ failure code eliminates most of them in one request.
       "started_at": "2026-07-29T10:15:04.912004+00:00",
       "ended_at": "2026-07-29T10:19:41.220118+00:00",
       "duration_ms": 276308.114,
-      "iterations": 10,
-      "llm_calls": 10,
-      "llm_calls_failed": 0,
-      "tools_called": 23,
-      "tools_failed": 7,
-      "delegations_started": 0,
-      "delegations_completed": 0,
-      "delegations_failed": 0,
       "cost_usd": 0.4312,
       "final_response": null,
       "last_error": "bash: command not found: pandoc"
     }
     ```
 
-    Read it as a triage table:
-
-    - `tools_failed` high relative to `tools_called` — the agent is fighting its
-      tools. Go to the tool events.
-    - `llm_calls_failed` above zero — a provider problem. Go to the LLM events.
-    - `iterations` equal to the cap with `tools_failed` at zero — the agent is
-      looping without progress. Read the conversation.
-    - `last_error` is usually the single most useful field on the page.
+    The times, answer and error come from the task row; `cost_usd` sums the
+    task's spend ledger lines in the billing currency. `last_error` is usually
+    the single most useful field on the page.
   </Step>
 
   <Step title="Find the failing event">
@@ -122,7 +109,7 @@ failure code eliminates most of them in one request.
     | `tool.result` | Which tool call failed, with its exit code. |
     | `llm.call.failed` | Provider errors, with the retryable flag. |
     | `artifact.validation.completed` | Which artifact failed validation and why. |
-    | `approval.request` | Whether the run stalled waiting on a human. |
+    | `approval.requested` | Whether the run stalled waiting on a human. |
     | `task.failed` | The terminal message and reason. |
 
     The full history is paginated; `has_next` tells you when to advance `page`.
@@ -176,9 +163,8 @@ reconciled from the workflow after the event was written — trust the task row.
     started, and `error` will carry the submission error instead.
   </Accordion>
   <Accordion title="404 from `/summary` on a task that `GET .../tasks/{task_id}` returns">
-    The rollup is backed by the `task_summary` view, which is keyed on task,
-    workspace, and agent together. A task fetched with the wrong `agent_id` in
-    the path 404s here even though the task exists.
+    The rollup checks the task's workspace and agent together. A task fetched
+    with the wrong `agent_id` in the path 404s here even though the task exists.
   </Accordion>
   <Accordion title="The event log is empty but the task ran">
     Events are written by an activity that records its own database failures
@@ -199,7 +185,7 @@ reconciled from the workflow after the event was written — trust the task row.
   <Accordion title="Cost reads zero on a task that clearly called a model">
     `total_cost` is written at terminal status. A task killed before
     finalization keeps the last persisted value; use `cost_usd` from the rollup,
-    which is derived from the event log.
+    which sums the spend ledger.
   </Accordion>
 </AccordionGroup>
 

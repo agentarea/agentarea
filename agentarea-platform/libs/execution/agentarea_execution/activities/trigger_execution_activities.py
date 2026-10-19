@@ -190,8 +190,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         error_msg, trigger_id=str(trigger_id), original_error=str(e)
                     ) from None
 
-                # Checked before the extractor runs, so a switched-off poller
-                # does not consume what it would have fetched.
                 if not trigger.is_active:
                     logger.info(
                         "Trigger is inactive, skipping execution",
@@ -205,72 +203,6 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         execution_time_ms=0,
                         trigger_data=execution_data,
                     )
-
-                # Run data extractor if configured (poll-based channels like email)
-                data_extractor = getattr(trigger, "data_extractor", None)
-                if data_extractor:
-                    try:
-                        from agentarea_triggers.extractors import get_extractor
-
-                        extractor_cls = get_extractor(data_extractor)
-                        if extractor_cls:
-                            extractor = extractor_cls()
-                            # The id travels with the config because an extractor
-                            # resolves its credentials from the secret store per
-                            # trigger; passwords never live in the config column.
-                            extractor_config = {
-                                **(getattr(trigger, "data_extractor_config", None) or {}),
-                                "trigger_id": str(trigger_id),
-                            }
-                            extraction_result = await extractor.extract(
-                                extractor_config,
-                                getattr(trigger, "data_extractor_state", None),
-                            )
-
-                            if not extraction_result.has_new_data:
-                                logger.info(
-                                    "Data extractor found no new data, skipping",
-                                    trigger_id=trigger_id,
-                                    extractor=data_extractor,
-                                )
-                                return ExecuteTriggerResult(
-                                    trigger_id=trigger_id,
-                                    status=TriggerOutcome.SKIPPED,
-                                    reason=TriggerSkipReason.NO_NEW_DATA,
-                                    execution_time_ms=int(
-                                        (datetime.utcnow() - start_time).total_seconds() * 1000
-                                    ),
-                                    trigger_data=execution_data,
-                                )
-
-                            # Enrich execution_data with extracted content
-                            execution_data["extracted_events"] = extraction_result.events
-                            if extraction_result.channel_origin:
-                                execution_data["channel_origin"] = extraction_result.channel_origin
-
-                            # Persist updated extractor state
-                            await trigger_service.trigger_repository.update_extractor_state(
-                                trigger_id, extraction_result.updated_state
-                            )
-                            await session.commit()
-
-                            logger.info(
-                                f"Data extractor found {len(extraction_result.events)} new events",
-                                trigger_id=trigger_id,
-                                extractor=data_extractor,
-                            )
-                        else:
-                            logger.warning(
-                                f"Unknown extractor type: {data_extractor}",
-                                trigger_id=trigger_id,
-                            )
-                    except Exception as extractor_error:
-                        logger.error(
-                            f"Data extractor failed: {extractor_error}",
-                            trigger_id=trigger_id,
-                            exc_info=True,
-                        )
-                        # Continue without extracted data
 
                 # The one path every trigger kind starts its task through: it
                 # evaluates the conditions, stamps provenance, records the

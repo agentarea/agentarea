@@ -197,6 +197,7 @@ class TemporalTaskManager(BaseTaskManager):
                 task_queue=self.task_queue,
                 retry_attempts=1,
                 start_delay=start_delay,
+                start_once=True,
             )
 
             # Debug: Log args_dict to verify workspace_id is present
@@ -272,7 +273,7 @@ class TemporalTaskManager(BaseTaskManager):
                 else [],
             ),
         )
-        updated = await self.task_repository.update_status(task.id, "running")
+        updated = await self.task_repository.update_status(task.id, "running", error=None)
         if updated is None:
             raise LookupError(f"Task {task.id} not found")
         logger.info(f"Task {task.id} resumed in workflow {execution_id}")

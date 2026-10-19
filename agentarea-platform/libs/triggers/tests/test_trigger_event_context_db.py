@@ -1,14 +1,16 @@
 """A stream trigger's run is told what event started it, end to end against the schema.
 
-The event goes into the journal, is read back the way the dispatcher reads it,
-and the real subscription handler and trigger service fire on it; only the task
-service at the end is a stand-in that keeps what it was handed. The trigger is
-created through the repository, so its stored row is checked too.
+The event arrives as the router takes it off the bus, and the real subscription
+handler and trigger service fire on it; only the task service at the end is a
+stand-in that keeps what it was handed. The trigger is created through the
+repository, so its stored row is checked too, and the firing's row is the
+subscription's reaction to the event.
 Set STREAMS_TEST_DATABASE_URL.
 """
 
 import json
 import os
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
@@ -19,14 +21,12 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import tenant_scoped_session_class, workspace_scope
 from agentarea_common.config.database import TenantScopeMode
 from agentarea_common.config.streams import EventStreamSettings
-from agentarea_common.events.ports import IntegrationEvent
 from agentarea_execution.activities.agent import config as config_activities
 from agentarea_execution.models import AgentConfigRequest
-from agentarea_streams.application.dispatcher import _view
+from agentarea_streams.application.router import subscription_view
 from agentarea_streams.application.stream_service import StreamService
-from agentarea_streams.domain import EventFilter, HandlerResult, JournaledEvent, Verdict
-from agentarea_streams.domain.keys import task_id_for
-from agentarea_streams.infrastructure.journal_repository import StreamJournal
+from agentarea_streams.domain import EventFilter, HandlerResult, StreamEvent, Verdict
+from agentarea_streams.domain.keys import event_id_for, task_id_for
 from agentarea_streams.infrastructure.orm import StreamSubscriptionORM
 from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import TriggerCreate
@@ -73,9 +73,7 @@ async def world():
     with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
         async with maker() as session:
             streams = StreamService(RepositoryFactory(session, ctx), settings)
-            stream = await streams.create_stream(
-                name="shop orders", description="", retention_days=7
-            )
+            stream = await streams.create_stream(name="shop orders", description="")
             trigger = await TriggerRepository(session, ctx).create_from_model(
                 TriggerCreate(
                     name="Order paid",
@@ -101,7 +99,7 @@ async def world():
         subscription_id=subscription.id,
     )
     async with raw() as session:
-        for table in ("trigger_executions", "triggers", "streams"):
+        for table in ("trigger_executions", "triggers", "streams", "event_outbox"):
             await session.execute(
                 text(f"DELETE FROM {table} WHERE workspace_id = :ws"), {"ws": ctx.workspace_id}
             )
@@ -109,8 +107,8 @@ async def world():
     await engine.dispose()
 
 
-async def _deliver(world, data: dict, *, key: str) -> tuple[_Tasks, JournaledEvent, HandlerResult]:
-    """Journal one order.paid event and hand it to the trigger as the dispatcher would."""
+async def _deliver(world, data: dict, *, key: str) -> tuple[_Tasks, StreamEvent, HandlerResult]:
+    """Hand one order.paid event to the trigger as the router would."""
     tasks = _Tasks()
     authority = MagicMock()
     authority.may_run = AsyncMock(return_value=True)
@@ -119,37 +117,36 @@ async def _deliver(world, data: dict, *, key: str) -> tuple[_Tasks, JournaledEve
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
         authority=authority,
+        max_depth=8,
         trigger_service_factory=lambda session, context: TriggerService(
             repository_factory=RepositoryFactory(session, context),
             event_broker=AsyncMock(),
             task_service=tasks,
         ),
+        batches=AsyncMock(),
+        batch_cap=100,
+    )
+    event = StreamEvent.from_bus(
+        StreamEvent(
+            id=event_id_for(world.stream.id, key),
+            type="order.paid",
+            source="webhook:generic",
+            data=data,
+            stream_id=world.stream.id,
+            workspace_id=world.ctx.workspace_id,
+            created_by="u",
+            event_key=key,
+            received_at=datetime.now(UTC),
+        ).to_bus()
     )
     with workspace_scope(world.ctx.workspace_id):
         async with world.maker() as session:
-            receipt = await StreamJournal(session, world.ctx, world.settings).append(
-                world.stream.id,
-                IntegrationEvent(type="order.paid", source="webhook:generic", data=data),
-                event_key=key,
-            )
-            await session.commit()
-        async with world.maker() as session:
-            event = await StreamJournal(session, world.ctx, world.settings).get(
-                world.stream.id, receipt.sequence
-            )
-            assert event is not None
-            view = _view(await session.get(StreamSubscriptionORM, world.subscription_id))
+            row = await session.get(StreamSubscriptionORM, world.subscription_id)
+            assert row is not None
+            view = subscription_view(row)
             result = await handler.handle(view, event, session)
             await session.commit()
     return tasks, event, result
-
-
-async def test_a_stream_trigger_never_stores_a_webhook_type(world):
-    async with world.raw() as session:
-        stored = await session.scalar(
-            text("SELECT webhook_type FROM triggers WHERE id = :id"), {"id": world.trigger.id}
-        )
-    assert stored is None
 
 
 async def test_the_runs_first_message_carries_the_order_that_fired_it(world):
@@ -158,7 +155,7 @@ async def test_the_runs_first_message_carries_the_order_that_fired_it(world):
 
     assert result.verdict == Verdict.REACTED
     [task] = tasks.submitted
-    assert task.id == task_id_for(world.subscription_id, event.sequence)
+    assert task.id == task_id_for(world.subscription_id, event.id)
     assert task.description == INSTRUCTION
     assert task.query.startswith(f"{INSTRUCTION}\n\n## What started this run")
     assert "A-1003" in task.query
@@ -166,8 +163,21 @@ async def test_the_runs_first_message_carries_the_order_that_fired_it(world):
     assert "- Stream: shop orders" in task.query
     assert '- Event kind: "order.paid"' in task.query
     assert '- Event key: "order-A-1003"' in task.query
-    assert f"- Stream sequence: {event.sequence}" in task.query
     assert "trigger_event_file" not in task.task_parameters
+    async with world.raw() as session:
+        reactions = (
+            await session.execute(
+                text(
+                    "SELECT trigger_id, verdict, task_id, stream_id, correlation_id "
+                    "FROM trigger_executions WHERE subscription_id = :s AND event_id = :e"
+                ),
+                {"s": world.subscription_id, "e": event.id},
+            )
+        ).all()
+    assert [(r.trigger_id, r.verdict, r.task_id, r.stream_id) for r in reactions] == [
+        (world.trigger.id, "reacted", task.id, world.stream.id)
+    ]
+    assert reactions[0].correlation_id == str(event.id)
 
 
 async def test_a_large_order_reaches_the_run_as_a_task_input_file(world, monkeypatch):
@@ -181,7 +191,7 @@ async def test_a_large_order_reaches_the_run_as_a_task_input_file(world, monkeyp
 
     assert result.verdict == Verdict.REACTED
     [task] = tasks.submitted
-    filename = f"trigger-event-{event.sequence}.json"
+    filename = "trigger-event.json"
     assert task.task_parameters["trigger_event_file"] == filename
     assert f"`inputs/attachments/{filename}`" in task.query
     assert "SKU-79" not in task.query

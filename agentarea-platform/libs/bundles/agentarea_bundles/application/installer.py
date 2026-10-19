@@ -472,19 +472,27 @@ class BundleInstaller:
         agent_ids: dict[str, UUID],
         result: InstallResult,
     ) -> None:
-        """Provision messaging channels (e.g. Telegram) as inbound triggers.
+        """Provision messaging channels (e.g. Telegram) as a stream, its webhook source and a trigger.
 
-        A channel becomes a webhook trigger bound to its agent: a message to the
-        bot creates a task, and the reply is delivered back on the same chat. The
-        bot token is resolved from setup and stored encrypted under the exact key
-        the outbound delivery adapter reads — ``channel_cred:{type}:{trigger_id}``
-        (see channels/adapters.py ``_resolve_token``). Imported disabled by
-        default; the user activates after pointing the bot at the webhook URL.
+        A channel becomes a stream named after it, fed by a webhook source of the
+        channel's catalog type, with a stream trigger running its agent: a
+        message to the bot creates a task, and the reply goes back on the same
+        chat. The source's credentials are stored at
+        ``channel_cred:{type}:{source_id}``; credentials the catalog entry
+        issues are generated. Imported disabled by default.
         """
         import json
+        import secrets
 
+        from agentarea_streams.application.source_credentials import credential_secret_name
+        from agentarea_streams.domain.enums import SourceKind
+        from agentarea_streams.infrastructure.catalog_source_types import (
+            CatalogSourceTypeRepository,
+        )
         from agentarea_triggers.schemas.dto import TriggerCreate
 
+        streams = self._trigger_service.stream_service
+        catalog = CatalogSourceTypeRepository(streams.repository_factory.session)
         existing_names = {t.name for t in await self._trigger_repository.list_all()}
         for channel in package.channels:
             trigger_name = f"{package.name}:{channel.key}"
@@ -510,18 +518,41 @@ class BundleInstaller:
                     )
                 )
                 continue
+            slug = "generic_webhook" if channel.type == "generic" else channel.type
+            entry = await catalog.get(slug)
+            if entry is None:
+                raise BundleInstallError(f"channel type {channel.type!r} is not in the catalog")
 
-            credentials = {
+            credentials: dict[str, Any] = {
                 name: resolve_placeholders(ref, setup_values)
                 for name, ref in channel.bindings.items()
             }
+            for field in entry.credentials:
+                if field.issued and field.key not in credentials:
+                    credentials[field.key] = secrets.token_urlsafe(32)
+
+            stream = await streams.create_stream(name=trigger_name, description=channel.name)
+            source = await streams.add_source(
+                stream_id=stream.id,
+                kind=SourceKind.WEBHOOK,
+                source_type=entry.slug,
+                webhook_config={},
+                event_templates=None,
+            )
+            if self._secret_manager is not None:
+                secret_name = credential_secret_name(entry.slug, source.id)
+                await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
+                self._track(
+                    f"channel credential of '{trigger_name}'",
+                    lambda name=secret_name, store=self._secret_manager: store.delete_secret(name),
+                )
 
             dto = TriggerCreate(
                 name=trigger_name,
                 description=channel.name,
                 agent_id=agent_id,
-                trigger_type="webhook",
-                webhook_type=channel.type,
+                trigger_type="stream",
+                stream_id=stream.id,
                 # Under "text", not "prompt": this is the standing instruction
                 # used when an inbound message carries none of its own, and
                 # "text" is the key the execution path reads.
@@ -537,15 +568,6 @@ class BundleInstaller:
                 f"channel trigger '{trigger_name}'",
                 lambda trigger_id=trigger.id: self._trigger_service.delete_trigger(trigger_id),
             )
-
-            # Store credentials where the outbound delivery adapter looks them up.
-            if credentials and self._secret_manager is not None:
-                secret_name = f"channel_cred:{channel.type}:{trigger.id}"
-                await self._secret_manager.set_secret(secret_name, json.dumps(credentials))
-                self._track(
-                    f"channel credential of '{trigger_name}'",
-                    lambda name=secret_name, store=self._secret_manager: store.delete_secret(name),
-                )
 
             result.entities.append(
                 InstalledEntity(

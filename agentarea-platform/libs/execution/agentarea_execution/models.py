@@ -42,6 +42,7 @@ class ResolvedModelInfo(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cache_creation_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     # The model spec says the model reads images; None in states resolved before.
@@ -86,9 +87,12 @@ class ChangeModelPayload(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cache_creation_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
+    # Who asked for the change; recorded on the task log, not part of the model.
+    changed_by: str | None = None
 
 
 class BudgetUpdatePayload(BaseModel):
@@ -111,12 +115,13 @@ class ContinueExecutionPayload(BaseModel):
 class ConversationResumeSnapshot(BaseModel):
     """Where a completed task's conversation stands, so a later run can continue it.
 
-    The cursors are a ``ConversationWindow`` without the task; the counters are the
-    run's totals, which a resumed run carries on instead of starting from zero.
+    ``next_seq`` is where the log ends; the counters are the run's totals, which a
+    resumed run carries on instead of starting from zero. The window cursors
+    are only set by runs recorded before the window was read from the log.
     """
 
-    head_seqs: list[int]
-    tail_start: int = Field(ge=0)
+    head_seqs: list[int] = Field(default_factory=list)
+    tail_start: int = Field(default=0, ge=0)
     next_seq: int = Field(ge=0)
     current_iteration: int = Field(ge=1)
     tool_calls_used: int = Field(default=0, ge=0)
@@ -515,15 +520,16 @@ class ToolDiscoveryResult(BaseModel):
 class ConversationWindow(BaseModel):
     """Where a task's conversation lives in its log and which part the model sees.
 
-    The model sees the ``head_seqs`` entries in that order (system prompt,
-    carried skills, the latest summary), then every other entry from
-    ``tail_start`` on. ``next_seq`` is where the messages a request carries
-    that are not written yet go.
+    The model sees the log's system prompt, its latest compaction and every
+    message after it, up to ``next_seq``: where the messages a request carries
+    that are not written yet go. Runs recorded before that rule carry the window
+    as cursors: the ``head_seqs`` entries in that order, then every other entry
+    from ``tail_start`` on.
     """
 
     task_id: str
-    head_seqs: list[int]
-    tail_start: int
+    head_seqs: list[int] | None = None
+    tail_start: int | None = None
     next_seq: int
 
 
@@ -564,6 +570,11 @@ class LLMUsage(BaseModel):
     total_tokens: int = 0
     cached_prompt_tokens: int = 0
     cache_creation_tokens: int = 0
+    # How the call's spend line is settled (wiki ADR-0038 rev 2): its amount and
+    # currency as billing said them, the vendor cost, and the hold still to capture.
+    # Rides inside ``usage`` so the event carries it with no workflow change. None on
+    # calls recorded before it existed.
+    billing: dict[str, Any] | None = None
 
 
 class LLMCallResult(BaseModel):
@@ -643,6 +654,12 @@ class MCPToolResult(BaseModel):
     # in the billing currency; it counts toward the run budget and task total the
     # way an LLM call's cost does.
     model_cost: Money = ZERO
+    # The rest of that model call's spend line (ModelCharge.as_billing(): currency,
+    # the hold to capture, who pays). None in older histories.
+    model_billing: dict[str, Any] | None = None
+    # The tool ran a model and paid for it, but no cost was reported: a held call
+    # comes to its held amount; otherwise the ledger records it at no amount.
+    cost_unknown: bool = False
     # What the call's connector declares it cost, as the tool-call layer metered it
     # and wrote its ledger lines: ``cost`` in the billing currency (wallet payments
     # aside, which are ``service_cost``), on whose key (``payer``). Like an LLM
@@ -749,6 +766,8 @@ class UpdateTaskStatusRequest(BaseModel):
     status: str  # completed, failed, cancelled
     result: str | None = None
     error_message: str | None = None
+    # The stable code of why the run stopped (iteration_limit, provider_out_of_credits...).
+    failure_reason: str | None = None
     workspace_id: str
     total_cost: Money | None = None
     own_cost: Money | None = None
@@ -760,6 +779,53 @@ class UpdateTaskStatusRequest(BaseModel):
     conversation_pending: list[dict[str, Any]] = Field(default_factory=list)
     # Set when a conversation ends completed, so a later message can continue it.
     conversation_resume: ConversationResumeSnapshot | None = None
+
+
+class LogRow(BaseModel):
+    """One row a run appends to its task's log, at the position and id the workflow gave it.
+
+    ``kind`` is ``message``, ``compaction`` or ``event``; an event's type is its
+    ``name`` and its details its ``meta``.
+    """
+
+    seq: int
+    event_id: str
+    kind: str = "message"
+    role: str
+    content: str = ""
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+    meta: dict[str, Any] | None = None
+    iteration: int | None = None
+    # When an event row's moment happened (ISO 8601); None for the store's clock.
+    timestamp: str | None = None
+
+
+class RecordRequest(BaseModel):
+    """What a run records at once: log rows, the task's status, then the events it publishes.
+
+    The rows, the status and the spend and audit lines the events stand for are
+    written in one transaction; every event row and every person's message is
+    then published to ``tasks.events``. ``events_json`` carries the live-only
+    signals to broadcast, and, from a run that predates event rows, its events.
+    """
+
+    task_id: str
+    workspace_id: str
+    user_id: str
+    execution_id: str | None = None
+    rows: list[LogRow] = Field(default_factory=list)
+    events_json: list[str] = Field(default_factory=list)
+    status: UpdateTaskStatusRequest | None = None
+
+
+class RecordResult(BaseModel):
+    """How many rows and events a record call carried."""
+
+    rows: int
+    events: int
 
 
 class UpdateTaskStatusResult(BaseModel):
@@ -783,12 +849,24 @@ class UpdateTaskGovernanceSnapshotResult(BaseModel):
     error: str | None = None
 
 
+class DelegatedSpendRequest(BaseModel):
+    """What a delegated agent's task spent, read from the spend ledger."""
+
+    task_id: UUID
+    user_context_data: dict[str, Any]
+
+
+class DelegatedSpendResult(BaseModel):
+    spent: Money = Field(ge=ZERO)
+
+
 class MonthlySpendCapRequest(BaseModel):
     """Compare month-to-date spend with the run's monthly caps.
 
     ``cap_usd`` is the workspace cap; ``agent_cap_usd`` the cap on ``agent_id``'s
     own spend; ``llm_caps`` the monthly caps on LLM spend, as the policy's
-    ``budget.spend_caps`` entries. At least one is set.
+    ``budget.spend_caps`` entries. With ``current_caps`` those fields are ignored
+    and the caps the workspace and agent set now are read instead.
     """
 
     workspace_id: str
@@ -797,6 +875,7 @@ class MonthlySpendCapRequest(BaseModel):
     agent_id: str | None = None
     agent_cap_usd: Money | None = None
     llm_caps: list[dict[str, Any]] = Field(default_factory=list)
+    current_caps: bool = False
 
 
 class MonthlySpendCapResult(BaseModel):
@@ -836,12 +915,16 @@ class CompactMessagesRequest(BaseModel):
 class CompactMessagesResult(BaseModel):
     """The conversation window after compaction.
 
-    ``original_message_count`` is 0 when nothing could be compacted; the
-    pending entries are written either way, so ``conversation`` is current.
+    ``original_message_count`` is 0 when nothing could be compacted. A window
+    read from the log (no cursors) is not written by the activity: the run
+    appends the compaction row, ``summary`` plus the ``skills`` loaded so far.
+    A cursor window has its pending entries and summary written, and
+    ``conversation`` is current.
     """
 
-    conversation: ConversationWindow
+    conversation: ConversationWindow | None = None
     summary: str
+    skills: list[str] = Field(default_factory=list)
     original_message_count: int
     estimated_tokens_saved: int
     # Estimated prompt tokens of the new window, so the run does not compact
@@ -939,6 +1022,8 @@ class CreateDelegationTaskRequest(BaseModel):
     # provide it and the activity rejects its absence.
     parent_effective_policy: dict[str, Any] | None = None
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    # The child's workflow id, recorded on its task row so the run can be acted on.
+    execution_id: str | None = None
 
 
 class CreateDelegationTaskResult(BaseModel):

@@ -48,7 +48,7 @@ class TestCreateEventPersistsMetadata:
     async def test_event_metadata_column_receives_the_event_metadata(self):
         event = TaskEvent(
             task_id=uuid4(),
-            event_type="LLMCallCompleted",
+            event_type="llm.call.completed",
             timestamp=datetime.now(UTC),
             data={},
             metadata={"tool": "search"},
@@ -68,7 +68,7 @@ class TestCreateEventPersistsMetadata:
         """Regression guard: a `metadata=` kwarg must never reach the insert."""
         event = TaskEvent(
             task_id=uuid4(),
-            event_type="LLMCallCompleted",
+            event_type="llm.call.completed",
             timestamp=datetime.now(UTC),
             data={},
             metadata={"tool": "search"},

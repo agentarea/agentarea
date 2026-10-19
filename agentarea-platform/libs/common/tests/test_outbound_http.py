@@ -260,3 +260,49 @@ async def test_two_names_on_one_address_never_share_a_connection_pool():
 def test_an_invalid_allowlist_entry_fails_loudly():
     with pytest.raises(ValueError):
         OutboundPolicy(private_allowlist=("10.0.0.0/33",))
+
+
+def _refusing(refused: set[str], seen: list[str]):
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.host)
+        if request.url.host in refused:
+            raise httpx.ConnectError("connection refused", request=request)
+        return httpx.Response(200)
+
+    return handler
+
+
+async def test_a_refused_connection_moves_on_to_the_next_vetted_address():
+    seen: list[str] = []
+    policy = OutboundPolicy(private_allowlist=("localhost",))
+    async with _client(
+        {"localhost": ["::1", "127.0.0.1"]}, _refusing({"::1"}, seen), policy=policy
+    ) as client:
+        response = await client.post("http://localhost:8000/webhooks/x", content=b"{}")
+
+    assert response.status_code == 200
+    assert seen == ["::1", "127.0.0.1"]
+
+
+async def test_every_address_refusing_is_a_connect_error():
+    seen: list[str] = []
+    async with _client(
+        {"api.example.com": ["93.184.216.34", "93.184.216.35"]},
+        _refusing({"93.184.216.34", "93.184.216.35"}, seen),
+    ) as client:
+        with pytest.raises(httpx.ConnectError):
+            await client.get("https://api.example.com/")
+    assert seen == ["93.184.216.34", "93.184.216.35"]
+
+
+async def test_a_request_that_reached_an_address_is_never_sent_to_another():
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.host)
+        raise httpx.ReadTimeout("no answer", request=request)
+
+    async with _client({"api.example.com": ["93.184.216.34", "93.184.216.35"]}, handler) as client:
+        with pytest.raises(httpx.ReadTimeout):
+            await client.post("https://api.example.com/", content=b"{}")
+    assert seen == ["93.184.216.34"]

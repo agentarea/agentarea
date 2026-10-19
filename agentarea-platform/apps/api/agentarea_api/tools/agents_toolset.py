@@ -8,7 +8,7 @@ in ``agentarea_agents.schemas.dto``. The contract test in
 
 import builtins
 import json
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_agents.application.agent_service import AgentService
@@ -22,12 +22,42 @@ from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
 from fastapi import HTTPException
-from pydantic import TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 
 from ..api.v1._agent_tools import validate_code_tool_names
 from .base import platform_context, platform_read_context
 
 _TOOL_LIST = TypeAdapter(list[ToolConfig])
+
+_AGENT_ID = "Agent id (UUID), from `agents_list` or `agents_create`."
+_TOOLS = (
+    'Tool configs, each {"type": "code"|"mcp"|"agent"|"openapi", "name": str, '
+    '"settings"?: object}. Built-in toolsets are {"type": "code", "name": "agentarea/shell"}; '
+    "an MCP server is its instance name with type mcp."
+)
+
+
+class AgentSummaryOutput(BaseModel):
+    id: str = Field(description="Agent id (UUID).")
+    name: str = Field(description="Agent name.")
+    description: str | None = Field(default=None, description="Short summary of the agent.")
+
+
+class AgentDetailOutput(AgentSummaryOutput):
+    model_id: str | None = Field(
+        default=None, description="Model instance id the agent runs on; null when none is bound."
+    )
+    instruction: str | None = Field(default=None, description="The agent's system prompt.")
+    agent_type: str = Field(description="stateless or stateful.")
+
+
+class AgentRefOutput(BaseModel):
+    id: str = Field(description="Agent id (UUID).")
+    name: str = Field(description="Agent name.")
+
+
+class AgentDeletedOutput(BaseModel):
+    deleted: bool = Field(description="False when no such agent existed.")
 
 
 def _build_service(repo_factory, event_broker) -> AgentService:
@@ -45,9 +75,17 @@ def _build_service(repo_factory, event_broker) -> AgentService:
 class AgentsToolset(Toolset):
     """Manage agents: list, get, create, update, delete."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(
+        display_name="List agents", effect="read", output=builtins.list[AgentSummaryOutput]
+    )
     @enforced_in_handler("rows the graph says this caller may read; see readable_resource_ids")
-    async def list(self, limit: int = 50, offset: int = 0) -> str:
+    async def list(
+        self,
+        limit: Annotated[int, Field(description="Maximum number of agents to return.")] = 50,
+        offset: Annotated[int, Field(description="Number of agents to skip, for paging.")] = 0,
+    ) -> str:
         """List all agents in the workspace."""
         async with platform_read_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
@@ -62,9 +100,9 @@ class AgentsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get agent", effect="read", output=AgentDetailOutput)
     @requires("read", "agent", id_param="agent_id")
-    async def get(self, agent_id: str) -> str:
+    async def get(self, agent_id: Annotated[str, Field(description=_AGENT_ID)]) -> str:
         """Get agent details by ID."""
         async with platform_read_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
@@ -83,16 +121,35 @@ class AgentsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create agent", effect="write", output=AgentRefOutput)
     @unrestricted("any member may create an agent, as POST /v1/agents allows")
     async def create(
         self,
-        name: str,
-        model_id: str,
-        tools: builtins.list[dict[str, Any]],
-        description: str = "",
-        instruction: str = "",
-        agent_type: AgentTypeLiteral = "stateless",
+        name: Annotated[
+            str, Field(description="Agent name, 1-255 characters, unique in the workspace.")
+        ],
+        model_id: Annotated[
+            str,
+            Field(
+                description="Model instance id (UUID) the agent runs on, from `models_list_instances`."
+            ),
+        ],
+        tools: Annotated[
+            builtins.list[dict[str, Any]], Field(description=f"{_TOOLS} Pass [] for none.")
+        ],
+        description: Annotated[
+            str, Field(description="Short summary of what the agent does, at most 1000 characters.")
+        ] = "",
+        instruction: Annotated[
+            str, Field(description="System prompt for the agent, at most 20000 characters.")
+        ] = "",
+        agent_type: Annotated[
+            AgentTypeLiteral,
+            Field(
+                description="stateful keeps conversation context across runs; "
+                "stateless treats each run independently."
+            ),
+        ] = "stateless",
     ) -> str:
         """Create a new agent.
 
@@ -117,16 +174,32 @@ class AgentsToolset(Toolset):
             agent = await service.create_agent(payload)
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Update agent", effect="write", idempotent=True, output=AgentRefOutput
+    )
     @requires("edit", "agent", id_param="agent_id")
     async def update(
         self,
-        agent_id: str,
-        name: str | None = None,
-        description: str | None = None,
-        instruction: str | None = None,
-        model_id: str | None = None,
-        tools: builtins.list[dict[str, Any]] | None = None,
+        agent_id: Annotated[str, Field(description=_AGENT_ID)],
+        name: Annotated[
+            str | None, Field(description="New agent name; omit to keep the current one.")
+        ] = None,
+        description: Annotated[
+            str | None, Field(description="New summary; omit to keep the current one.")
+        ] = None,
+        instruction: Annotated[
+            str | None, Field(description="New system prompt; omit to keep the current one.")
+        ] = None,
+        model_id: Annotated[
+            str | None,
+            Field(
+                description="New model instance id, from `models_list_instances`; omit to keep it."
+            ),
+        ] = None,
+        tools: Annotated[
+            builtins.list[dict[str, Any]] | None,
+            Field(description=f"{_TOOLS} Replaces the whole list; omit to keep the current tools."),
+        ] = None,
     ) -> str:
         """Update an existing agent.
 
@@ -157,9 +230,14 @@ class AgentsToolset(Toolset):
                 raise ToolError("Agent not found")
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete agent",
+        effect="destructive",
+        idempotent=True,
+        output=AgentDeletedOutput,
+    )
     @requires("delete", "agent", id_param="agent_id")
-    async def delete(self, agent_id: str) -> str:
+    async def delete(self, agent_id: Annotated[str, Field(description=_AGENT_ID)]) -> str:
         """Delete an agent by ID."""
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)

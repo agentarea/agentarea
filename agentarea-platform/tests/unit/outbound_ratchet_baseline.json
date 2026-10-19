@@ -1,0 +1,21 @@
+{
+  "http": {
+    "apps/api/agentarea_api/api/v1/agents_tasks.py": 2,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 1,
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/tools/a2a_agent_tool.py": 1,
+    "libs/common/agentarea_common/auth/identity_directory.py": 2,
+    "libs/execution/agentarea_execution/activities/mcp_payment_httpx.py": 1,
+    "libs/execution/agentarea_execution/activities/runtime_discovery.py": 1,
+    "libs/llm/agentarea_llm/application/model_discovery_service.py": 1,
+    "libs/llm/agentarea_llm/application/model_service.py": 1,
+    "libs/mcp/agentarea_mcp/application/mcp_client.py": 2,
+    "libs/registry/agentarea_registry/application/service.py": 2
+  },
+  "litellm": {
+    "libs/agentarea-agents-sdk/agentarea_agents_sdk/models/llm_model.py": 3,
+    "libs/llm/agentarea_llm/infrastructure/model_clients.py": 2
+  },
+  "mail": {
+    "libs/triggers/agentarea_triggers/channels/email.py": 1
+  }
+}

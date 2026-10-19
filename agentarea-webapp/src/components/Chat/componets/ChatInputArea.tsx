@@ -7,6 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import {
   ArrowUp,
+  CalendarClock,
   FolderKanban,
   Loader2,
   Paperclip,
@@ -27,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { MentionMenu } from "../MentionMenu";
 import { ContextSelect } from "./ContextSelect";
+import { ScheduleChip } from "./ScheduleChip";
 
 const NO_PROJECT_VALUE = "__no_project__";
 const DEFAULT_TASK_POLICY_VALUE = "__default_task_policy__";
@@ -260,6 +262,13 @@ export interface ChatInputAreaProps {
   onTaskSkillsChange?: (next: TaskResourceRef[]) => void;
 
   /**
+   * When a new task runs: null for now, a moment for later. Present only where
+   * a new task is being composed; absent leaves the control out.
+   */
+  scheduledAt?: Date | null;
+  onScheduledAtChange?: (next: Date | null) => void;
+
+  /**
    * Shown at the start of the bottom row, before the agent/project/policy
    * selectors — e.g. a locked placeholder while no agent exists yet.
    */
@@ -358,6 +367,8 @@ export function ChatInputArea({
   taskSkills,
   onTaskMcpsChange,
   onTaskSkillsChange,
+  scheduledAt = null,
+  onScheduledAtChange,
   leadingControls,
   onStop,
   onResume,
@@ -366,12 +377,17 @@ export function ChatInputArea({
   canResume = false,
 }: ChatInputAreaProps) {
   const t = useTranslations("Chat.inputControls");
-  const SendIcon = sendButtonIcon === "arrow" ? ArrowUp : Send;
+  const SendIcon = scheduledAt
+    ? CalendarClock
+    : sendButtonIcon === "arrow"
+      ? ArrowUp
+      : Send;
   const showContextControls =
     Boolean(leadingControls) ||
     Boolean(currentAgent && availableAgents?.length && onAgentChange) ||
     Boolean(availableProjects?.length && onProjectChange) ||
-    Boolean(availableTaskPolicies?.length && onTaskPolicyChange);
+    Boolean(availableTaskPolicies?.length && onTaskPolicyChange) ||
+    Boolean(onScheduledAtChange);
 
   return (
     <div ref={containerRef} className={cn("w-full", containerClassName)}>
@@ -513,6 +529,14 @@ export function ChatInputArea({
                     disabled={isLoading}
                   />
                 ) : null}
+
+                {onScheduledAtChange ? (
+                  <ScheduleChip
+                    value={scheduledAt}
+                    onChange={onScheduledAtChange}
+                    disabled={isLoading}
+                  />
+                ) : null}
               </div>
             ) : (
               <div className="flex-1" />
@@ -568,7 +592,9 @@ export function ChatInputArea({
                     <Button
                       type="submit"
                       size="icon"
-                      aria-label="Send message"
+                      aria-label={
+                        scheduledAt ? t("scheduleTask") : "Send message"
+                      }
                       disabled={
                         isLoading ||
                         isSubmitDisabled ||

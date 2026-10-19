@@ -10,7 +10,7 @@ toolset kwargs and DTO fields.
 
 import builtins
 import json
-from typing import Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server.elicitation import url_elicitation
@@ -30,11 +30,130 @@ from agentarea_mcp.schemas.dto import (
 )
 from fastapi import HTTPException
 from mcp.types import InputRequiredResult
+from pydantic import BaseModel, Field
 
 from ..api.v1 import _catalog_connections
 from ..api.v1._catalog_connections import with_existing_connections
 from ..oauth_connect.pages import connect_page_url
+from ..repositories.catalog_connection_repository import CatalogConnection
 from .base import platform_context, platform_read_context
+
+_SPEC_ID = "MCP server spec id, from `mcp_servers_list_specs` or `mcp_servers_create_spec`."
+_INSTANCE_ID = "MCP server instance id, from `mcp_servers_list` or `mcp_servers_create`."
+
+
+class ConnectAction(BaseModel):
+    """A link a person must open before the connection can be used."""
+
+    type: Literal["connect"] = Field(description="Always 'connect'.")
+    url: str = Field(description="Page where a person signs in or enters the missing key.")
+    message: str = Field(description="Text to show the user, naming the connection and the link.")
+    existing_connections: builtins.list[CatalogConnection] | None = Field(
+        default=None,
+        description="The caller's other connections made from the same catalog item, if any.",
+    )
+
+
+class VerificationErrorOutput(BaseModel):
+    code: str | None = Field(
+        default=None,
+        description="Machine-readable reason, e.g. 'auth_required', 'oauth_reauth_required'.",
+    )
+    message: str | None = Field(default=None, description="Human-readable reason.")
+    detail: str | dict[str, Any] | None = Field(default=None, description="Extra context.")
+
+
+class VerificationOutput(BaseModel):
+    schema_version: int | None = Field(default=None, description="Version of this payload's shape.")
+    status: Literal["never_attempted", "in_progress", "succeeded", "failed"] = Field(
+        description="Outcome of the last verification; only 'succeeded' instances are usable."
+    )
+    at: str | None = Field(default=None, description="ISO 8601 time of the last verification.")
+    error: VerificationErrorOutput | None = Field(
+        default=None, description="Why the last verification failed."
+    )
+
+
+class LastDispatchOutput(BaseModel):
+    schema_version: int | None = Field(default=None, description="Version of this payload's shape.")
+    status: Literal["succeeded", "failed"] = Field(description="Outcome of the last tool call.")
+    at: str = Field(description="ISO 8601 time of the last tool call.")
+    error: str | None = Field(default=None, description="Why the last tool call failed.")
+
+
+class MCPServerSpecOutput(BaseModel):
+    id: str = Field(description="Spec id.")
+    name: str = Field(description="Human-readable spec name.")
+    description: str = Field(description="What this MCP server provides.")
+    version: str = Field(description="Version of the spec.")
+    tags: builtins.list[str] = Field(description="Tags for search and categorization.")
+    is_public: bool = Field(description="Whether the spec is visible across workspaces.")
+    remote_url: str | None = Field(description="Endpoint of an HTTP-based server.")
+    docker_image_url: str | None = Field(description="Image of a container-based server.")
+    status: str = Field(description="Lifecycle status, e.g. 'draft', 'active'.")
+
+
+class MCPServerSpecDetailOutput(MCPServerSpecOutput):
+    env_schema: builtins.list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Variables an instance must provide: name, description, isSecret, isRequired.",
+    )
+    registry_url: str | None = Field(
+        default=None, description="Registry the spec was imported from."
+    )
+
+
+class MCPServerSpecPage(BaseModel):
+    items: builtins.list[MCPServerSpecOutput] = Field(description="Specs on this page.")
+    total: int = Field(description="Specs matching the filters across all pages.")
+
+
+class MCPServerInstanceOutput(BaseModel):
+    id: str = Field(description="Instance id.")
+    name: str = Field(description="Display name.")
+    description: str | None = Field(description="Human-readable description.")
+    verification: VerificationOutput = Field(description="Result of the last verification.")
+    server_spec_id: str = Field(description="Id of the spec the instance was made from.")
+
+
+class MCPServerInstanceSavedOutput(MCPServerInstanceOutput):
+    action_required: ConnectAction | None = Field(
+        default=None, description="Present while the instance waits on a sign-in or key."
+    )
+
+
+class ToolDetailOutput(BaseModel):
+    name: str = Field(description="Tool name.")
+    description: str | None = Field(description="What the tool does.")
+    annotations: dict[str, Any] | None = Field(
+        default=None, description="The tool's MCP annotations, e.g. readOnlyHint."
+    )
+
+
+class MCPServerInstanceDetailOutput(MCPServerInstanceSavedOutput):
+    last_dispatch: LastDispatchOutput | None = Field(
+        description="The last tool call made through the instance."
+    )
+    tools: builtins.list[str] = Field(
+        description="Tool names, suffixed ' (read-only)' or ' (destructive)' when so marked."
+    )
+    tool_count: int = Field(description="Number of tools.")
+    tool_details: builtins.list[ToolDetailOutput] | None = Field(
+        default=None, description="Details of the tools named in the `tools` argument."
+    )
+    unknown_tools: builtins.list[str] | None = Field(
+        default=None, description="Requested tool names the instance does not have."
+    )
+
+
+class VerifyOutput(VerificationOutput):
+    action_required: ConnectAction | None = Field(
+        default=None, description="Present while the instance waits on a sign-in or key."
+    )
+
+
+class DeleteOutput(BaseModel):
+    deleted: bool = Field(description="True if something was deleted; false if it was not found.")
 
 
 def _serialize_server(server: Any) -> dict:
@@ -146,6 +265,8 @@ async def _connect_action(
 class MCPServersToolset(Toolset):
     """Manage MCP server specs (templates) and instances."""
 
+    open_world = False
+
     @property
     def name(self) -> str:
         return "mcp_servers"
@@ -154,21 +275,63 @@ class MCPServersToolset(Toolset):
     # Specs (catalog templates)
     # ------------------------------------------------------------------
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create MCP server spec", effect="write", output=MCPServerSpecOutput)
     @unrestricted("any member may add a spec, as POST /v1/mcp-servers allows")
     async def create_spec(
         self,
-        name: str,
-        description: str,
-        docker_image_url: str | None = None,
-        remote_url: str | None = None,
-        version: str = "1.0.0",
-        tags: list[str] | None = None,
-        is_public: bool = False,
-        env_schema_json: str = "",
-        cmd_json: str = "",
-        json_spec_json: str = "",
-        registry_url: str | None = None,
+        name: Annotated[
+            str,
+            Field(description="Human-readable spec name, 1-255 characters, unique per workspace."),
+        ],
+        description: Annotated[
+            str, Field(description="Short summary of what this MCP server provides.")
+        ],
+        docker_image_url: Annotated[
+            str | None,
+            Field(
+                description="Docker image reference for a container-based server, "
+                "e.g. 'ghcr.io/org/server:1.2'. Give this or remote_url."
+            ),
+        ] = None,
+        remote_url: Annotated[
+            str | None,
+            Field(
+                description="Endpoint URL of an HTTP-based server, e.g. "
+                "'https://mcp.example.com/mcp'. Give this or docker_image_url."
+            ),
+        ] = None,
+        version: Annotated[str, Field(description="Semantic version of the spec.")] = "1.0.0",
+        tags: Annotated[
+            list[str] | None, Field(description="Tags used for search and categorization.")
+        ] = None,
+        is_public: Annotated[
+            bool, Field(description="True makes the spec visible across workspaces.")
+        ] = False,
+        env_schema_json: Annotated[
+            str,
+            Field(
+                description="JSON array of the variables an instance must provide, each "
+                '{"name": "API_KEY", "description": "...", "isSecret": true, '
+                '"isRequired": true}; secrets are stored in the secret manager. Empty for none.'
+            ),
+        ] = "",
+        cmd_json: Annotated[
+            str,
+            Field(
+                description="JSON array of strings overriding the container CMD, e.g. "
+                '["node", "server.js", "--stdio"]. Empty keeps the image default.'
+            ),
+        ] = "",
+        json_spec_json: Annotated[
+            str,
+            Field(
+                description="JSON object: the raw ServerJSON spec as the MCP registry "
+                "publishes it. Empty for none."
+            ),
+        ] = "",
+        registry_url: Annotated[
+            str | None, Field(description="URL of the registry the spec was imported from.")
+        ] = None,
     ) -> str:
         """Create a new MCP server spec (catalog template).
 
@@ -220,23 +383,57 @@ class MCPServersToolset(Toolset):
             server = await service.create_mcp_server(payload)
             return json.dumps(_serialize_server(server), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Update MCP server spec",
+        effect="write",
+        idempotent=True,
+        output=MCPServerSpecOutput,
+    )
     @requires("edit", "mcp_server", id_param="spec_id")
     async def update_spec(
         self,
-        spec_id: str,
-        name: str | None = None,
-        description: str | None = None,
-        docker_image_url: str | None = None,
-        remote_url: str | None = None,
-        version: str | None = None,
-        tags: list[str] | None = None,
-        is_public: bool | None = None,
-        status: str | None = None,
-        env_schema_json: str = "",
-        cmd_json: str = "",
-        json_spec_json: str = "",
-        registry_url: str | None = None,
+        spec_id: Annotated[str, Field(description=_SPEC_ID)],
+        name: Annotated[
+            str | None, Field(description="New spec name, 1-255 characters; omit to keep.")
+        ] = None,
+        description: Annotated[str | None, Field(description="New summary; omit to keep.")] = None,
+        docker_image_url: Annotated[
+            str | None, Field(description="New Docker image reference; omit to keep.")
+        ] = None,
+        remote_url: Annotated[
+            str | None, Field(description="New endpoint URL of an HTTP server; omit to keep.")
+        ] = None,
+        version: Annotated[
+            str | None, Field(description="New semantic version; omit to keep.")
+        ] = None,
+        tags: Annotated[
+            list[str] | None, Field(description="Replacement tag list; omit to keep.")
+        ] = None,
+        is_public: Annotated[
+            bool | None, Field(description="True shares the spec across workspaces; omit to keep.")
+        ] = None,
+        status: Annotated[
+            str | None,
+            Field(description="Lifecycle status, e.g. 'active' or 'deprecated'; omit to keep."),
+        ] = None,
+        env_schema_json: Annotated[
+            str,
+            Field(
+                description="JSON array replacing the variable schema, each "
+                '{"name", "description", "isSecret", "isRequired"}. Empty keeps it.'
+            ),
+        ] = "",
+        cmd_json: Annotated[
+            str,
+            Field(description="JSON array of strings replacing the container CMD. Empty keeps it."),
+        ] = "",
+        json_spec_json: Annotated[
+            str,
+            Field(description="JSON object replacing the raw ServerJSON spec. Empty keeps it."),
+        ] = "",
+        registry_url: Annotated[
+            str | None, Field(description="New source registry URL; omit to keep.")
+        ] = None,
     ) -> str:
         """Update fields on an existing MCP server spec. Only fields explicitly
         set are written; pass ``None`` to leave a field untouched.
@@ -290,17 +487,21 @@ class MCPServersToolset(Toolset):
                 raise ToolError("MCP server spec not found")
             return json.dumps(_serialize_server(server), default=str)
 
-    @tool_method(effect="read")
+    @tool_method(display_name="List MCP server specs", effect="read", output=MCPServerSpecPage)
     @enforced_in_handler(
         "tenant specs are narrowed to what the graph says is readable; the catalog is not"
     )
     async def list_specs(
         self,
-        is_public: bool = False,
-        tag: str = "",
-        search: str = "",
-        limit: int = 100,
-        offset: int = 0,
+        is_public: Annotated[
+            bool, Field(description="True lists only specs shared across workspaces.")
+        ] = False,
+        tag: Annotated[str, Field(description="Only specs carrying this tag; empty for any.")] = "",
+        search: Annotated[
+            str, Field(description="Text to match in spec names and descriptions; empty for all.")
+        ] = "",
+        limit: Annotated[int, Field(description="Page size, 1-100.")] = 100,
+        offset: Annotated[int, Field(description="Specs to skip, for paging; 0 or more.")] = 0,
     ) -> str:
         """List MCP server specs (templates) available in the workspace.
 
@@ -339,9 +540,11 @@ class MCPServersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="Get MCP server spec", effect="read", output=MCPServerSpecDetailOutput
+    )
     @enforced_in_handler("the PDP decides for a tenant spec; a catalog projection is platform data")
-    async def get_spec(self, spec_id: str) -> str:
+    async def get_spec(self, spec_id: Annotated[str, Field(description=_SPEC_ID)]) -> str:
         """Get an MCP server spec (template) by ID."""
         async with platform_read_context() as (
             _session,
@@ -369,9 +572,14 @@ class MCPServersToolset(Toolset):
             payload["registry_url"] = server.registry_url
             return json.dumps(payload, default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete MCP server spec",
+        effect="destructive",
+        idempotent=True,
+        output=DeleteOutput,
+    )
     @requires("delete", "mcp_server", id_param="spec_id")
-    async def delete_spec(self, spec_id: str) -> str:
+    async def delete_spec(self, spec_id: Annotated[str, Field(description=_SPEC_ID)]) -> str:
         """Delete an MCP server spec (template) by ID."""
         async with platform_context() as (
             _session,
@@ -393,15 +601,39 @@ class MCPServersToolset(Toolset):
     # Instances (configured deployments of a spec)
     # ------------------------------------------------------------------
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Create MCP server instance",
+        effect="write",
+        open_world=True,
+        output=MCPServerInstanceSavedOutput,
+    )
     @unrestricted("any member may add an instance, as POST /v1/mcp-server-instances allows")
     async def create(
         self,
-        name: str,
-        json_spec_json: str,
-        server_spec_id: str,
-        description: str | None = None,
-        auth_config_id: str | None = None,
+        name: Annotated[
+            str, Field(description="Display name, 1-255 characters, unique per workspace.")
+        ],
+        json_spec_json: Annotated[
+            str,
+            Field(
+                description="JSON object with the instance configuration: "
+                '{"environment": {"API_KEY": "..."}, "env_vars": ["API_KEY"]} for a '
+                'container, {"headers": {"Authorization": "Bearer ..."}} for a URL server. '
+                "Variable names come from the spec's env_schema (`mcp_servers_get_spec`). "
+                "Transport keys such as 'type' are ignored. Empty for {}."
+            ),
+        ],
+        server_spec_id: Annotated[
+            str,
+            Field(description=f"UUID of the spec to deploy. {_SPEC_ID}"),
+        ],
+        description: Annotated[
+            str | None, Field(description="Optional human-readable description.")
+        ] = None,
+        auth_config_id: Annotated[
+            str | None,
+            Field(description="Id of an MCP auth config (OAuth or credentials) to attach."),
+        ] = None,
     ) -> str:
         """Create a new MCP server instance.
 
@@ -450,16 +682,44 @@ class MCPServersToolset(Toolset):
                 result["action_required"] = action
             return json.dumps(result, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Update MCP server instance",
+        effect="write",
+        open_world=True,
+        output=MCPServerInstanceSavedOutput,
+    )
     @requires("edit", "mcp_instance", id_param="instance_id")
     async def update(
         self,
-        instance_id: str,
-        name: str | None = None,
-        description: str | None = None,
-        json_spec_json: str = "",
+        instance_id: Annotated[str, Field(description=_INSTANCE_ID)],
+        name: Annotated[
+            str | None, Field(description="New display name, 1-255 characters; omit to keep.")
+        ] = None,
+        description: Annotated[
+            str | None, Field(description="New description; omit to keep.")
+        ] = None,
+        json_spec_json: Annotated[
+            str,
+            Field(
+                description='JSON object replacing the instance configuration ("environment", '
+                '"env_vars", "headers"); transport keys are refused. Empty keeps it.'
+            ),
+        ] = "",
+        cost_json: Annotated[
+            str,
+            Field(
+                description='JSON object with the per-call cost, e.g. {"source": "rate", '
+                '"rate": {"amount": "0.01", "currency": "USD"}}; the JSON null restores '
+                "the catalog's own. Empty keeps it."
+            ),
+        ] = "",
     ) -> str:
-        """Update fields on an existing MCP server instance."""
+        """Update fields on an existing MCP server instance.
+
+        ``cost_json`` sets what a call costs on a connection the workspace pays for,
+        e.g. ``{"source": "rate", "rate": {"amount": "0.01", "currency": "USD"}}``;
+        ``null`` restores the catalog's own.
+        """
         patch: dict[str, Any] = {}
         if name is not None:
             patch["name"] = name
@@ -467,6 +727,8 @@ class MCPServersToolset(Toolset):
             patch["description"] = description
         if json_spec_json:
             patch["json_spec"] = json.loads(json_spec_json)
+        if cost_json:
+            patch["cost"] = json.loads(cost_json)
 
         if not patch:
             raise ToolError("no fields to update")
@@ -496,7 +758,11 @@ class MCPServersToolset(Toolset):
                 result["action_required"] = action
             return json.dumps(result, default=str)
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List MCP server instances",
+        effect="read",
+        output=list[MCPServerInstanceOutput],
+    )
     @unrestricted("instances in the caller's workspace, as the REST listing returns them")
     async def list(self) -> str:
         """List all MCP server instances in the workspace."""
@@ -520,10 +786,23 @@ class MCPServersToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="Get MCP server instance",
+        effect="read",
+        output=MCPServerInstanceDetailOutput,
+    )
     @unrestricted("an instance in the caller's workspace, as the REST detail returns it")
     async def get(
-        self, instance_id: str, tools: builtins.list[str] | None = None
+        self,
+        instance_id: Annotated[str, Field(description=_INSTANCE_ID)],
+        tools: Annotated[
+            builtins.list[str] | None,
+            Field(
+                description="Tool names to return in full (description and annotations), "
+                "as listed in this tool's `tools` output without the ' (read-only)' or "
+                "' (destructive)' suffix. Omit for names only."
+            ),
+        ] = None,
     ) -> str | InputRequiredResult:
         """Get details of an MCP server instance.
 
@@ -579,9 +858,16 @@ class MCPServersToolset(Toolset):
                 payload["action_required"] = action
             return json.dumps(payload, default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete MCP server instance",
+        effect="destructive",
+        idempotent=True,
+        output=DeleteOutput,
+    )
     @requires("delete", "mcp_instance", id_param="instance_id")
-    async def delete_instance(self, instance_id: str) -> str:
+    async def delete_instance(
+        self, instance_id: Annotated[str, Field(description=_INSTANCE_ID)]
+    ) -> str:
         """Delete an MCP server instance."""
         async with platform_context() as (
             _session,
@@ -600,9 +886,16 @@ class MCPServersToolset(Toolset):
             deleted = await service.delete_instance(UUID(instance_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Verify MCP server instance",
+        effect="write",
+        open_world=True,
+        output=VerifyOutput,
+    )
     @requires("edit", "mcp_instance", id_param="instance_id")
-    async def verify(self, instance_id: str) -> str | InputRequiredResult:
+    async def verify(
+        self, instance_id: Annotated[str, Field(description=_INSTANCE_ID)]
+    ) -> str | InputRequiredResult:
         """Run end-to-end verification on an MCP server instance.
 
         Provisions (if needed), waits for readiness, and lists tools.

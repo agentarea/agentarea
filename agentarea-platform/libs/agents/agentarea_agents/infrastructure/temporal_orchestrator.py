@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.tool_authorization import caller_can_approve
+from temporalio.client import WorkflowExecutionStatus
 from temporalio.service import RPCError, RPCStatusCode
 
 from ..application.execution_service import (
@@ -342,12 +343,18 @@ class TemporalWorkflowOrchestrator(WorkflowOrchestratorInterface):
     async def get_workflow_pending_escalations(self, execution_id: str) -> list[dict[str, Any]]:
         """The workflow's unresolved escalations, with the arguments awaiting a decision.
 
+        A closed workflow waits on nothing, so it is not queried: a query on a
+        closed run replays its whole history on a worker, or never returns.
+
         Raises:
             WorkflowNotFoundError: No workflow exists for ``execution_id``.
         """
         client = await self._get_client()
         handle = client.get_workflow_handle(execution_id)
         try:
+            description = await handle.describe()
+            if description.status != WorkflowExecutionStatus.RUNNING:
+                return []
             return await handle.query("get_pending_escalations")
         except RPCError as e:
             if e.status == RPCStatusCode.NOT_FOUND:

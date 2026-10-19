@@ -35,6 +35,7 @@ VALID_TYPES = (
     "llm_models",
     "agents",
     "bundles",
+    "source_types",
 )
 
 
@@ -190,9 +191,7 @@ def _parse_standard_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
             pkg_version = pkg.get("version", version)
             if not image:
                 continue
-            env_schema = [
-                ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
-            ]
+            env_schema = [ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)]
             items.append(
                 {
                     "external_id": f"{identifier}/docker",
@@ -234,9 +233,7 @@ def _parse_standard_mcp(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
             else:
                 command = "uvx"
                 args = [pkg_name]
-            env_schema = [
-                ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)
-            ]
+            env_schema = [ev for ev in pkg.get("environmentVariables", []) if isinstance(ev, dict)]
             items.append(
                 {
                     "external_id": f"{identifier}/command",
@@ -391,9 +388,10 @@ def _parse_llm_models(data: dict[str, Any]) -> list[dict[str, Any]]:
                     "input_cost_per_token": entry.get("input_cost_per_token"),
                     "output_cost_per_token": entry.get("output_cost_per_token"),
                     "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
-                    "supports_function_calling": entry.get(
-                        "supports_function_calling", False
+                    "cache_creation_input_cost_per_token": entry.get(
+                        "cache_creation_input_cost_per_token"
                     ),
+                    "supports_function_calling": entry.get("supports_function_calling", False),
                     "is_active": entry.get("is_active", True),
                 },
                 "tags": entry.get("tags", []),
@@ -464,6 +462,26 @@ def _parse_bundles(data: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
+def _parse_source_types(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Event source types (ADR-0040): the whole entry is the spec, its slug the external id."""
+    items: list[dict[str, Any]] = []
+    for entry in data.get("source_types", []):
+        slug = entry.get("slug")
+        if not slug:
+            raise ValueError(f"source type entry {entry.get('name')!r} has no slug")
+        items.append(
+            {
+                "external_id": slug,
+                "name": entry.get("name") or slug,
+                "description": (entry.get("description") or "")[:500],
+                "version": entry.get("version") or "1.0.0",
+                "spec": entry,
+                "tags": [entry.get("delivery")] if entry.get("delivery") else [],
+            }
+        )
+    return items
+
+
 def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         data = {}
@@ -479,6 +497,8 @@ def parse_source(registry_type: str, data: Any) -> list[dict[str, Any]]:
         return _parse_agents(data)
     if registry_type == "bundles":
         return _parse_bundles(data)
+    if registry_type == "source_types":
+        return _parse_source_types(data)
     raise ValueError(f"Unknown registry type: {registry_type}")
 
 
@@ -532,11 +552,11 @@ def reconcile(
         existing = _get_registry_item(conn, registry_id, item["external_id"])
         if existing:
             _update_registry_item(conn, existing["id"], item)
+            if registry_type == "llm_models":
+                _resync_model_cache_prices(conn, existing["spec"], item.get("spec") or {})
             entity_id = existing["installed_entity_id"]
             if entity_id:
-                _update_entity(
-                    conn, registry_type, entity_id, item, workspace_id, existing["id"]
-                )
+                _update_entity(conn, registry_type, entity_id, item, workspace_id, existing["id"])
             updated_count += 1
         else:
             item_id = _create_registry_item(conn, registry_id, item, workspace_id)
@@ -629,7 +649,7 @@ def _upsert_registry(
 def _get_registry_item(conn, registry_id: str, external_id: str) -> dict | None:
     row = conn.execute(
         _text(
-            "SELECT id, installed_entity_id, installed_version FROM registry_items "
+            "SELECT id, installed_entity_id, installed_version, spec FROM registry_items "
             "WHERE registry_id = :rid AND external_id = :ext"
         ),
         {"rid": registry_id, "ext": external_id},
@@ -640,12 +660,11 @@ def _get_registry_item(conn, registry_id: str, external_id: str) -> dict | None:
         "id": str(row[0]),
         "installed_entity_id": str(row[1]) if row[1] else None,
         "installed_version": row[2],
+        "spec": row[3] or {},
     }
 
 
-def _create_registry_item(
-    conn, registry_id: str, item: dict[str, Any], workspace_id: str
-) -> str:
+def _create_registry_item(conn, registry_id: str, item: dict[str, Any], workspace_id: str) -> str:
     item_id = str(uuid.uuid4())
     # registry_type/registry_priority/registry_active are the item's copies of
     # its registry's columns; catalog browsing filters and orders on them.
@@ -742,9 +761,7 @@ def _update_entity(
     _create_entity(conn, registry_type, item, workspace_id, registry_item_id)
 
 
-def _upsert_provider_spec(
-    conn, item: dict[str, Any], workspace_id: str
-) -> str:
+def _upsert_provider_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
     spec = item.get("spec") or {}
     provider_key = spec["provider_key"]
     row = conn.execute(
@@ -807,9 +824,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
     provider_spec_id = str(prow[0])
 
     mrow = conn.execute(
-        _text(
-            "SELECT id FROM model_specs WHERE provider_spec_id = :pid AND model_name = :mn"
-        ),
+        _text("SELECT id FROM model_specs WHERE provider_spec_id = :pid AND model_name = :mn"),
         {"pid": provider_spec_id, "mn": model_name},
     ).fetchone()
     if mrow:
@@ -820,6 +835,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
                 "context_window = :cw, max_output_tokens = :mot, "
                 "input_cost_per_token = :icpt, output_cost_per_token = :ocpt, "
                 "cached_input_cost_per_token = :cicpt, "
+                "cache_creation_input_cost_per_token = :ccicpt, "
                 "supports_function_calling = :sfc, is_active = :active, updated_at = now() "
                 "WHERE id = :id"
             ),
@@ -832,6 +848,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
                 "icpt": spec.get("input_cost_per_token"),
                 "ocpt": spec.get("output_cost_per_token"),
                 "cicpt": spec.get("cached_input_cost_per_token"),
+                "ccicpt": spec.get("cache_creation_input_cost_per_token"),
                 "sfc": spec.get("supports_function_calling", False),
                 "active": spec.get("is_active", True),
             },
@@ -842,10 +859,11 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         _text(
             "INSERT INTO model_specs (id, provider_spec_id, model_name, display_name, "
             "description, context_window, max_output_tokens, input_cost_per_token, "
-            "output_cost_per_token, cached_input_cost_per_token, supports_function_calling, "
+            "output_cost_per_token, cached_input_cost_per_token, "
+            "cache_creation_input_cost_per_token, supports_function_calling, "
             "is_active, workspace_id, created_by, created_at, updated_at) "
             "VALUES (:id, :pid, :mn, :dn, :desc, :cw, "
-            ":mot, :icpt, :ocpt, :cicpt, :sfc, :active, :ws, :created_by, now(), now())"
+            ":mot, :icpt, :ocpt, :cicpt, :ccicpt, :sfc, :active, :ws, :created_by, now(), now())"
         ),
         {
             "id": mid,
@@ -858,6 +876,7 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
             "icpt": spec.get("input_cost_per_token"),
             "ocpt": spec.get("output_cost_per_token"),
             "cicpt": spec.get("cached_input_cost_per_token"),
+            "ccicpt": spec.get("cache_creation_input_cost_per_token"),
             "sfc": spec.get("supports_function_calling", False),
             "active": spec.get("is_active", True),
             "ws": workspace_id,
@@ -865,6 +884,39 @@ def _upsert_model_spec(conn, item: dict[str, Any], workspace_id: str) -> str:
         },
     )
     return mid
+
+
+# Prices the catalog carries that a workspace's copy of a model did not get when added.
+CACHE_PRICE_COLUMNS = ("cached_input_cost_per_token", "cache_creation_input_cost_per_token")
+
+
+def _resync_model_cache_prices(conn, previous: dict[str, Any], spec: dict[str, Any]) -> None:
+    """Carry a model's catalog cache prices into every workspace's copy of it.
+
+    A copy freezes the catalog's prices when it is first added, so a cache price the
+    catalog gained later never reached it. A copy whose price is unset, or still the
+    catalog's previous one, takes the current one; a workspace's own price stays.
+    """
+    prow = conn.execute(
+        _text("SELECT id FROM provider_specs WHERE provider_key = :pk"),
+        {"pk": spec.get("provider_key")},
+    ).fetchone()
+    if not prow or not spec.get("model_name"):
+        return
+    for column in CACHE_PRICE_COLUMNS:
+        new = spec.get(column)
+        if new is None:
+            continue
+        old = previous.get(column)
+        conn.execute(
+            _text(
+                f"UPDATE model_specs SET {column} = :new, updated_at = now() "
+                "WHERE provider_spec_id = :pid AND model_name = :mn "
+                f"AND ({column} IS NULL OR {column} = :old) "
+                f"AND {column} IS DISTINCT FROM :new"
+            ),
+            {"new": new, "old": old, "pid": str(prow[0]), "mn": spec["model_name"]},
+        )
 
 
 def _upsert_mcp_server(
@@ -890,9 +942,7 @@ def _upsert_mcp_server(
             tags.append(tag)
 
     row = conn.execute(
-        _text(
-            "SELECT id FROM mcp_servers WHERE name = :name AND workspace_id = :ws"
-        ),
+        _text("SELECT id FROM mcp_servers WHERE name = :name AND workspace_id = :ws"),
         {"name": item["name"], "ws": workspace_id},
     ).fetchone()
     tags_json = json.dumps(tags)
@@ -981,8 +1031,7 @@ def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
         return (
             conn.execute(
                 _text(
-                    "SELECT 1 FROM mcp_servers "
-                    "WHERE workspace_id = :ws AND slug = :slug LIMIT 1"
+                    "SELECT 1 FROM mcp_servers WHERE workspace_id = :ws AND slug = :slug LIMIT 1"
                 ),
                 {"ws": workspace_id, "slug": candidate},
             ).fetchone()
@@ -996,4 +1045,3 @@ def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
         if not _taken(candidate):
             return candidate
     raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
-

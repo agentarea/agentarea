@@ -5,6 +5,7 @@ import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews"
 import { listStreams } from "@/lib/api";
 import { EntityIcon } from "@/lib/entity-icons";
 import { requireApiData } from "@/lib/server-resource";
+import { isPlatformStream } from "@/lib/platformStream";
 import { formatDate } from "@/utils/dateUtils";
 
 export default async function StreamsContent({
@@ -21,7 +22,17 @@ export default async function StreamsContent({
     getLocale(),
     listStreams(),
   ]);
-  const streams = requireApiData(streamsResult, "streams");
+  const streams = requireApiData(streamsResult, "streams").map((stream) =>
+    isPlatformStream(stream)
+      ? {
+          ...stream,
+          name: t("streams.platformName"),
+          description: t("streams.platformDescription"),
+        }
+      : stream
+  );
+  const icon = (stream?: StreamResponse) =>
+    stream && isPlatformStream(stream) ? "platformStream" : "stream";
   const query = search.trim().toLowerCase();
   const shown = query
     ? streams.filter(
@@ -51,7 +62,7 @@ export default async function StreamsContent({
         <EmptyState
           title={t("noMatchingStreams")}
           iconsType="triggers"
-          action={{ label: tCommon("clearSearch"), href: "/events" }}
+          action={{ label: tCommon("clearSearch"), href: "/events/streams" }}
         />
       }
       columns={[
@@ -61,9 +72,14 @@ export default async function StreamsContent({
           rowLink: true,
           render: (name: unknown, stream?: StreamResponse) => (
             <div className="flex items-center gap-2">
-              <EntityIcon kind="stream" className="text-primary" />
+              <EntityIcon kind={icon(stream)} className="text-primary" />
               <div>
                 <div className="font-medium">{String(name)}</div>
+                {stream && isPlatformStream(stream) && (
+                  <div className="text-xs text-muted-foreground">
+                    {t("streams.platformLabel")}
+                  </div>
+                )}
                 {stream?.description && (
                   <div className="mt-1 line-clamp-1 max-w-md text-xs text-muted-foreground">
                     {stream.description}
@@ -74,13 +90,6 @@ export default async function StreamsContent({
           ),
         },
         {
-          header: t("streams.retention"),
-          accessor: "retention_days",
-          cellClassName: "tabular-nums",
-          render: (days: unknown) =>
-            t("streams.retentionDays", { count: Number(days) }),
-        },
-        {
           header: t("streams.created"),
           accessor: "created_at",
           render: (value: unknown) => formatDate(String(value), locale),
@@ -89,7 +98,7 @@ export default async function StreamsContent({
       cardContent={(stream: StreamResponse) => (
         <div className="flex h-full flex-col gap-2">
           <div className="flex items-center gap-2">
-            <EntityIcon kind="stream" className="text-primary" />
+            <EntityIcon kind={icon(stream)} className="text-primary" />
             <div className="truncate text-[16px] font-[500]">{stream.name}</div>
           </div>
           {stream.description && (
@@ -98,7 +107,7 @@ export default async function StreamsContent({
             </div>
           )}
           <div className="mt-auto text-xs tabular-nums text-muted-foreground">
-            {t("streams.retentionDays", { count: stream.retention_days })}
+            {formatDate(stream.created_at, locale)}
           </div>
         </div>
       )}

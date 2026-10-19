@@ -3,6 +3,8 @@
 from datetime import timedelta
 from typing import Final
 
+from agentarea_common.events import contract
+
 # Warning threshold is behavior, not a resource entitlement. Resource ceilings
 # live in persisted governance policy and are required at workflow start.
 BUDGET_WARNING_THRESHOLD: Final[float] = 0.8  # 80% of budget
@@ -41,6 +43,9 @@ LLM_RETRY_MAX_INTERVAL: Final[timedelta] = timedelta(seconds=60)
 
 # Context window management
 CONTEXT_COMPACT_THRESHOLD: Final[float] = 0.75  # Compact at 75% of context window
+# A compaction runs again only once the prompt grew by this share of the usable
+# window since the last one; less would not free room worth a paid summary.
+CONTEXT_MIN_COMPACTION_GAIN: Final[float] = 0.1
 CONTEXT_WARNING_THRESHOLD: Final[float] = 0.60  # Warn at 60%
 CONTEXT_RESERVE_FOR_OUTPUT: Final[float] = 0.15  # Reserve 15% for model output
 MIN_RECENT_MESSAGES_TO_KEEP: Final[int] = 6  # Always keep last 6 messages (3 turns)
@@ -60,79 +65,78 @@ HISTORY_SEARCH_MAX_RESULTS: Final[int] = 20
 
 # Event types
 class EventTypes:
-    """Workflow event type constants.
+    """Workflow event type constants, all from agentarea_common.events.contract."""
 
-    Semantic part-taxonomy events hold the canonical dotted names directly (the
-    wire vocabulary — see agentarea_common.events.contract). Timeline/system
-    events that are NOT part of that taxonomy keep their bare names.
-    """
+    WORKFLOW_STARTED: Final[str] = contract.TASK_STARTED
+    WORKFLOW_COMPLETED: Final[str] = contract.TASK_COMPLETED
+    WORKFLOW_FAILED: Final[str] = contract.TASK_FAILED
+    WORKFLOW_CANCELLED: Final[str] = contract.TASK_CANCELLED
+    EXECUTION_FINISHED: Final[str] = contract.EXECUTION_FINISHED
+    WORKFLOW_AWAITING_FOLLOW_UP: Final[str] = contract.TASK_AWAITING_FOLLOW_UP
+    WORKFLOW_AWAITING_CONTINUATION: Final[str] = contract.TASK_AWAITING_CONTINUATION
+    WORKFLOW_CONTINUED: Final[str] = contract.TASK_CONTINUED
+    WORKFLOW_RETRIED: Final[str] = contract.TASK_RETRIED
+    CONTINUED_AS_NEW: Final[str] = contract.EXECUTION_CONTINUED_AS_NEW
+    EXECUTION_PAUSED: Final[str] = contract.EXECUTION_PAUSED
+    EXECUTION_RESUMED: Final[str] = contract.EXECUTION_RESUMED
+    VALIDATION_STARTED: Final[str] = contract.ARTIFACT_VALIDATION_STARTED
+    VALIDATION_COMPLETED: Final[str] = contract.ARTIFACT_VALIDATION_COMPLETED
 
-    # Task lifecycle (canonical dotted).
-    WORKFLOW_STARTED: Final[str] = "task.started"
-    WORKFLOW_COMPLETED: Final[str] = "task.completed"
-    WORKFLOW_FAILED: Final[str] = "task.failed"
-    WORKFLOW_CANCELLED: Final[str] = "task.cancelled"
-    EXECUTION_FINISHED: Final[str] = "execution.finished"
-    WORKFLOW_AWAITING_FOLLOW_UP: Final[str] = "task.awaiting_follow_up"
-    WORKFLOW_AWAITING_CONTINUATION: Final[str] = "task.awaiting_continuation"
-    WORKFLOW_CONTINUED: Final[str] = "task.continued"
-    WORKFLOW_RETRIED: Final[str] = "task.retried"
-    VALIDATION_STARTED: Final[str] = "artifact.validation.started"
-    VALIDATION_COMPLETED: Final[str] = "artifact.validation.completed"
+    TURN_STARTED: Final[str] = contract.TURN_STARTED
+    TURN_COMPLETED: Final[str] = contract.TURN_COMPLETED
+    TURN_ABORTED: Final[str] = contract.TURN_ABORTED
 
-    # Timeline/system — not in the part taxonomy, kept bare.
-    ITERATION_STARTED: Final[str] = "IterationStarted"
-    ITERATION_COMPLETED: Final[str] = "IterationCompleted"
+    LLM_CALL_STARTED: Final[str] = contract.LLM_STARTED
+    LLM_CALL_CHUNK: Final[str] = contract.LLM_CHUNK
+    LLM_CALL_COMPLETED: Final[str] = contract.LLM_COMPLETED
+    LLM_CALL_FAILED: Final[str] = contract.LLM_FAILED
 
-    # LLM part (canonical dotted).
-    LLM_CALL_STARTED: Final[str] = "llm.call.started"
-    LLM_CALL_CHUNK: Final[str] = "llm.call.chunk"
-    LLM_CALL_COMPLETED: Final[str] = "llm.call.completed"
-    LLM_CALL_FAILED: Final[str] = "llm.call.failed"
-
-    # Tool part (canonical dotted). Failed is a tool.result whose data carries
-    # ``error`` (no ``success``); the constant names stay distinct so callers can
-    # branch pre-emit, even though both collapse to the same wire type.
-    TOOL_CALL_STARTED: Final[str] = "tool.call"
-    TOOL_CALL_COMPLETED: Final[str] = "tool.result"
-    TOOL_CALL_FAILED: Final[str] = "tool.result"
+    # Failed is a tool.result whose data carries ``error`` (no ``success``); the
+    # constant names stay distinct so callers can branch pre-emit.
+    TOOL_CALL_STARTED: Final[str] = contract.TOOL_CALL
+    TOOL_CALL_COMPLETED: Final[str] = contract.TOOL_RESULT
+    TOOL_CALL_FAILED: Final[str] = contract.TOOL_RESULT
     # Recorded by the tool activity itself while a call runs (see tool_progress).
-    TOOL_PROGRESS: Final[str] = "tool.progress"
+    TOOL_PROGRESS: Final[str] = contract.TOOL_PROGRESS
 
-    # Timeline/system — not in the part taxonomy, kept bare.
-    BUDGET_WARNING: Final[str] = "BudgetWarning"
-    BUDGET_EXCEEDED: Final[str] = "BudgetExceeded"
+    BUDGET_WARNING: Final[str] = contract.BUDGET_WARNING
+    BUDGET_EXCEEDED: Final[str] = contract.BUDGET_EXCEEDED
+    BUDGET_UPDATED: Final[str] = contract.BUDGET_UPDATED
 
-    SERVICE_PAYMENT: Final[str] = "ServicePayment"
-    SERVICE_BUDGET_WARNING: Final[str] = "ServiceBudgetWarning"
-    SERVICE_BUDGET_EXCEEDED: Final[str] = "ServiceBudgetExceeded"
+    SERVICE_PAYMENT: Final[str] = contract.SERVICE_PAYMENT
+    SERVICE_BUDGET_WARNING: Final[str] = contract.SERVICE_BUDGET_WARNING
+    SERVICE_BUDGET_EXCEEDED: Final[str] = contract.SERVICE_BUDGET_EXCEEDED
 
-    CONTEXT_COMPACTED: Final[str] = "ContextCompacted"
+    CONTEXT_COMPACTED: Final[str] = contract.CONTEXT_COMPACTED
+    CONTEXT_WARNING: Final[str] = contract.CONTEXT_WARNING
     # The final answer's check found leaks; data says which and whether it was rewritten.
-    ANSWER_CHECKED: Final[str] = "AnswerChecked"
-    CONTEXT_WARNING: Final[str] = "ContextWarning"
+    ANSWER_CHECKED: Final[str] = contract.ANSWER_CHECKED
 
-    WORKFLOW_CONTINUED_AS_NEW: Final[str] = "WorkflowContinuedAsNew"
+    DELEGATION_STARTED: Final[str] = contract.DELEGATION_STARTED
+    DELEGATION_COMPLETED: Final[str] = contract.DELEGATION_COMPLETED
+    DELEGATION_FAILED: Final[str] = contract.DELEGATION_FAILED
 
-    AGENT_DELEGATION_STARTED: Final[str] = "AgentDelegationStarted"
-    AGENT_DELEGATION_COMPLETED: Final[str] = "AgentDelegationCompleted"
-    AGENT_DELEGATION_FAILED: Final[str] = "AgentDelegationFailed"
+    # Approval received/denied both map to ``approval.decided`` (the decision
+    # lives in the data payload).
+    HUMAN_APPROVAL_REQUESTED: Final[str] = contract.APPROVAL_REQUESTED
+    HUMAN_APPROVAL_RECEIVED: Final[str] = contract.APPROVAL_DECIDED
+    HUMAN_APPROVAL_DENIED: Final[str] = contract.APPROVAL_DECIDED
+    # Event rows of the task log (the feed shows them, the model never sees them).
+    APPROVAL_REQUESTED: Final[str] = contract.APPROVAL_REQUESTED
+    APPROVAL_DECIDED: Final[str] = contract.APPROVAL_DECIDED
+    HUMAN_INPUT_REQUESTED: Final[str] = contract.INPUT_REQUEST
+    HUMAN_INPUT_SUBMITTED: Final[str] = contract.INPUT_SUBMITTED
+    HUMAN_INPUT_RECEIVED: Final[str] = contract.INPUT_RESPONSE
 
-    # Human-in-the-loop parts (canonical dotted). Approval received/denied both
-    # map to ``approval.response`` (the decision lives in the data payload).
-    HUMAN_APPROVAL_REQUESTED: Final[str] = "approval.request"
-    HUMAN_APPROVAL_RECEIVED: Final[str] = "approval.response"
-    HUMAN_APPROVAL_DENIED: Final[str] = "approval.response"
-    HUMAN_INPUT_REQUESTED: Final[str] = "input.request"
-    HUMAN_INPUT_RECEIVED: Final[str] = "input.response"
+    MESSAGE_QUEUED: Final[str] = contract.MESSAGE_QUEUED
+    MESSAGE_REMOVED: Final[str] = contract.MESSAGE_REMOVED
 
-    # Timeline/system — not in the part taxonomy, kept bare.
-    MODEL_CHANGED: Final[str] = "ModelChanged"
-    MODEL_RESOLUTION_FALLBACK: Final[str] = "ModelResolutionFallback"
-    MODEL_UNAVAILABLE: Final[str] = "ModelUnavailable"
-    RUNTIME_DISCOVERED: Final[str] = "RuntimeDiscovered"
-    WORKFLOW_COMMAND_RECEIVED: Final[str] = "WorkflowCommandReceived"
-    WORKFLOW_COMMAND_REJECTED: Final[str] = "WorkflowCommandRejected"
+    MODEL_CHANGED: Final[str] = contract.MODEL_CHANGED
+    MODEL_FALLBACK: Final[str] = contract.MODEL_FALLBACK
+    MODEL_UNAVAILABLE: Final[str] = contract.MODEL_UNAVAILABLE
+    RUNTIME_DISCOVERED: Final[str] = contract.RUNTIME_DISCOVERED
+    COMMAND_RECEIVED: Final[str] = contract.COMMAND_RECEIVED
+    COMMAND_REJECTED: Final[str] = contract.COMMAND_REJECTED
 
 
 # Activity names
@@ -148,6 +152,7 @@ class Activities:
     CREATE_EXECUTION_PLAN: Final[str] = "create_execution_plan_activity"
     EVALUATE_GOAL_PROGRESS: Final[str] = "evaluate_goal_progress_activity"
     PUBLISH_WORKFLOW_EVENTS: Final[str] = "publish_workflow_events_activity"
+    RECORD: Final[str] = "record_activity"
     COMPACT_MESSAGES: Final[str] = "compact_messages_activity"
     RESOLVE_AGENT_TOOLS: Final[str] = "resolve_agent_tools_activity"
     RECALL_HISTORY: Final[str] = "recall_history_activity"
@@ -163,6 +168,7 @@ class Activities:
     SEARCH_HISTORY: Final[str] = "search_history"
     # Delegation
     CREATE_DELEGATION_TASK: Final[str] = "create_delegation_task_activity"
+    DELEGATED_TASK_SPEND: Final[str] = "delegated_task_spend_activity"
     # Model resolution
     RESOLVE_MODEL: Final[str] = "resolve_model_activity"
 

@@ -5,7 +5,7 @@ A catalog MCP server declares, in its metadata, the payers it allows
 ``{"default": <declaration>, "tools": {<tool>: <declaration>}}``, see
 ``agentarea_common.tool_cost``). A connection with no catalog server behind it
 declares nothing: its calls cost an unknown amount, and on the platform's key it is
-refused.
+refused. A cost a member set on the connection wins over the catalog's.
 """
 
 from typing import Any
@@ -27,7 +27,8 @@ def mcp_tool_connection(
 ) -> ToolConnection:
     """The connection a call of ``tool_name`` on ``instance`` runs on.
 
-    ``server_spec`` is the catalog server JSON the instance was made from, or None.
+    ``server_spec`` is the catalog server JSON the instance was made from
+    (``MCPServerRepository.catalog_json_spec``), or None.
     A malformed declaration raises ``ToolCostError``.
     """
     metadata = (server_spec or {}).get("metadata") or {}
@@ -46,4 +47,6 @@ def mcp_tool_connection(
         platform_managed=getattr(instance, "managed_by", None) == MANAGED_BY_PLATFORM,
         payers=metadata.get(META_PAYERS),
         cost=own if own is not None else (cost or {}).get("default"),
+        override=getattr(instance, "cost", None),
+        from_catalog=server_spec is not None,
     )

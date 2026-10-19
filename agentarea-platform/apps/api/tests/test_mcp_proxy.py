@@ -399,8 +399,8 @@ async def test_the_upstream_receives_the_connections_stored_secret_header(monkey
 
     monkeypatch.setattr(
         mcp_proxy,
-        "safe_async_client",
-        lambda *, policy, **kwargs: httpx.AsyncClient(
+        "outbound_client",
+        lambda _destination, *, policy=None, **kwargs: httpx.AsyncClient(
             transport=httpx.MockTransport(upstream), **kwargs
         ),
     )
@@ -428,3 +428,86 @@ async def test_the_upstream_receives_the_connections_stored_secret_header(monkey
 
     (sent,) = received
     assert sent.headers["x-api-key"] == "canary"
+
+
+# ----- MCP Events through the proxy -----
+
+
+def _events_call(method: str, *, request_id: int = 3) -> bytes:
+    params = {"name": "ticket.created", "arguments": {"queue": "q"}}
+    if method == "events/subscribe":
+        params["delivery"] = {"mode": "webhook", "url": "https://evil.example/hook", "secret": "x"}
+    if method == "events/unsubscribe":
+        params["delivery"] = {"url": "https://evil.example/hook"}
+    import json
+
+    return json.dumps(
+        {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+    ).encode()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["events/subscribe", "events/unsubscribe"])
+async def test_subscribing_through_the_proxy_is_denied_by_default(monkeypatch, method):
+    _install_policy(monkeypatch, EffectivePolicy())
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            _events_call(method),
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+            headers={"Mcp-Method": method, "Mcp-Name": "ticket.created"},
+        )
+    assert exc.value.status_code == 403
+    assert method in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_a_subscribe_hidden_in_a_batch_is_denied(monkeypatch):
+    _install_policy(monkeypatch, EffectivePolicy())
+    body = b"[" + _events_call("events/list") + b"," + _events_call("events/subscribe") + b"]"
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            body, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=_INSTANCE
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["events/list", "events/poll"])
+async def test_listing_and_polling_events_go_through_the_tool_policy(monkeypatch, method):
+    user = SimpleNamespace(user_id="u1", workspace_id="ws1")
+    headers = {"Mcp-Method": method}
+    if method == "events/poll":
+        headers["Mcp-Name"] = "ticket.created"
+    _install_policy(monkeypatch, EffectivePolicy())
+    await _authorize_mcp_tool_calls(
+        _events_call(method), user, object(), instance_id=_INSTANCE, headers=headers
+    )
+
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(denied=[method])))
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            _events_call(method), user, object(), instance_id=_INSTANCE, headers=headers
+        )
+    assert exc.value.status_code == 403
+
+    _install_policy(
+        monkeypatch, EffectivePolicy(tools=ToolsPolicy(denied=[f"mcp:{_INSTANCE}:{method}"]))
+    )
+    with pytest.raises(HTTPException):
+        await _authorize_mcp_tool_calls(_events_call(method), user, object(), instance_id=_INSTANCE)
+
+
+@pytest.mark.asyncio
+async def test_an_events_poll_name_header_is_held_to_the_body():
+    with pytest.raises(_MCPHeaderMismatchError):
+        await _authorize_mcp_tool_calls(
+            _events_call("events/poll"),
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+            headers={"Mcp-Method": "events/poll", "Mcp-Name": "other.event"},
+        )

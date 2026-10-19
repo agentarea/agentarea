@@ -87,14 +87,6 @@ PRESETS: list[dict[str, Any]] = [
         """,
         tools=_code(*_SANDBOX, "agentarea/web", "agentarea/context"),
         skills=["brainstorming--obra-superpowers", "writing-plans--obra-superpowers"],
-        triggers=[
-            {
-                "name": "Telegram",
-                "trigger_type": "webhook",
-                "webhook_type": "telegram",
-                "task_parameters": {"text": "Reply to the Telegram message you received."},
-            },
-        ],
         tags=["preset", "assistant"],
     ),
     _agent(

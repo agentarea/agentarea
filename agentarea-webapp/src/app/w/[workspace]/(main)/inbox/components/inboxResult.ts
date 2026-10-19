@@ -86,3 +86,20 @@ export function extractInboxResult(result: unknown): InboxResultView {
     value: payload,
   };
 }
+
+/**
+ * The one-line preview of a finished inbox task. A failed run is a failure
+ * even when its result carries the accounting every run persists.
+ */
+export function inboxResultPreview(
+  status: string,
+  task: { result?: unknown; error?: string | null; failure_reason?: string | null }
+): "row.resultAvailable" | "row.taskFailed" | "row.taskActivity" {
+  if (status === "failed" || task.error || task.failure_reason) {
+    return "row.taskFailed";
+  }
+  if (extractInboxResult(task.result).kind !== "empty") {
+    return "row.resultAvailable";
+  }
+  return "row.taskActivity";
+}

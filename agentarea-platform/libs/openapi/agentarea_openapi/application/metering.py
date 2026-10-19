@@ -1,7 +1,10 @@
 """What a call of an OpenAPI connection's operation costs, as its spec declares it.
 
 The curated spec carries ``x-agentarea-payers`` at its root and ``x-agentarea-cost``
-at its root (the default) or on an operation; see ``agentarea_common.tool_cost``.
+at its root (the default) or on an operation; see ``agentarea_common.tool_cost``. A
+cost a member set on the connection wins over both. A connection made from a catalog
+item is metered by the catalog's spec, since its own may be edited; any other by its
+own spec, which may not declare a settled cost.
 """
 
 from typing import Any
@@ -12,9 +15,11 @@ from agentarea_common.tool_cost import ToolConnection, tool_connection
 from .spec_parser import parse_openapi_operations
 
 
-def openapi_tool_connection(connection: Any, connector: str, operation_name: str) -> ToolConnection:
+def openapi_tool_connection(
+    connection: Any, connector: str, operation_name: str, *, catalog_spec: dict[str, Any] | None
+) -> ToolConnection:
     """The connection a call of ``operation_name`` runs on; a malformed declaration raises."""
-    spec = connection.spec_content or {}
+    spec = catalog_spec if catalog_spec is not None else connection.spec_content or {}
     configured = {p["name"] for p in connection.custom_query_params or []}
     cost = next(
         (
@@ -31,4 +36,6 @@ def openapi_tool_connection(connection: Any, connector: str, operation_name: str
         platform_managed=connection.managed_by == MANAGED_BY_PLATFORM,
         payers=spec.get("x-agentarea-payers"),
         cost=cost,
+        override=getattr(connection, "cost", None),
+        from_catalog=catalog_spec is not None,
     )

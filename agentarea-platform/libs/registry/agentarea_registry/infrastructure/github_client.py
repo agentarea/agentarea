@@ -4,7 +4,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-from agentarea_common.utils.outbound_tls import outbound_ssl_context
+from agentarea_common.outbound import Destination, outbound_client
 
 GITHUB_API = "https://api.github.com"
 GITHUB_RAW = "https://raw.githubusercontent.com"
@@ -35,10 +35,10 @@ class HttpGitHubSource:
             self._headers["Authorization"] = f"Bearer {token}"
 
     async def _get(self, path: str, **params: Any) -> Any:
-        async with httpx.AsyncClient(
+        async with outbound_client(
+            Destination.VENDOR,
             base_url=GITHUB_API,
             timeout=TIMEOUT_SECONDS,
-            verify=outbound_ssl_context(),
             transport=self._transport,
         ) as client:
             response = await client.get(path, headers=self._headers, params=params)
@@ -64,8 +64,8 @@ class HttpGitHubSource:
             headers["Authorization"] = self._headers["Authorization"]
         url = f"{GITHUB_RAW}/{repo}/{commit}/{quote(path)}"
         body = bytearray()
-        async with httpx.AsyncClient(
-            timeout=TIMEOUT_SECONDS, verify=outbound_ssl_context(), transport=self._transport
+        async with outbound_client(
+            Destination.VENDOR, timeout=TIMEOUT_SECONDS, transport=self._transport
         ) as c:
             async with c.stream("GET", url, headers=headers) as response:
                 if response.status_code != 200:

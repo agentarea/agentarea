@@ -17,6 +17,8 @@ on:
       - "charts/agentarea-dataplane/**"
       - "scripts/generate_env_tpls.py"
       - "scripts/test-dataplane-helm.sh"
+      - "scripts/test-mcp-egress-label-helm.sh"
+      - "scripts/test-platform-egress-helm.sh"
       - ".github/workflows/validate-helm.yml"
   pull_request:
     branches: ["main"]
@@ -25,6 +27,8 @@ on:
       - "charts/agentarea-dataplane/**"
       - "scripts/generate_env_tpls.py"
       - "scripts/test-dataplane-helm.sh"
+      - "scripts/test-mcp-egress-label-helm.sh"
+      - "scripts/test-platform-egress-helm.sh"
       - ".github/workflows/validate-helm.yml"
   workflow_call: {}
 
@@ -140,3 +144,9 @@ jobs:
 
       - name: Verify data-plane chart guards
         run: scripts/test-dataplane-helm.sh
+
+      - name: Verify labelled MCP pods get exactly one egress policy
+        run: scripts/test-mcp-egress-label-helm.sh
+
+      - name: Verify the platform egress policy selects only backend, worker and event-service
+        run: scripts/test-platform-egress-helm.sh

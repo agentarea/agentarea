@@ -134,10 +134,17 @@ def _value(column: Column, unique: str) -> Any:
     return unique
 
 
+# Columns a CHECK constraint holds to a closed set: any other sample is refused.
+CHECKED_COLUMN_SAMPLES = {("task_conversation_entries", "kind"): "message"}
+
+
 def _row(table: Table, **given: Any) -> dict[str, Any]:
     row = dict(given)
     for column in table.columns:
         if column.name in row:
+            continue
+        if (table.name, column.name) in CHECKED_COLUMN_SAMPLES:
+            row[column.name] = CHECKED_COLUMN_SAMPLES[(table.name, column.name)]
             continue
         if column.primary_key and column.name == "id":
             row["id"] = uuid.uuid4()

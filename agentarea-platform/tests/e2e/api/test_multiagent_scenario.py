@@ -140,10 +140,10 @@ def test_coordinator_fans_out_to_three_specialists(
 
     # The coordinator's LLM must have actually invoked all 3 delegations.
     delegation_started = [
-        e for e in events if e["event_type"] == "AgentDelegationStarted"
+        e for e in events if e["event_type"] == "delegation.started"
     ]
     delegation_completed = [
-        e for e in events if e["event_type"] == "AgentDelegationCompleted"
+        e for e in events if e["event_type"] == "delegation.completed"
     ]
     assert len(delegation_started) == 3, (
         f"expected 3 delegations, got {len(delegation_started)}; types={types}"
@@ -285,7 +285,7 @@ def test_specialist_writes_artifact_via_delegation(
         alice_client, coord_id, task_id, timeout=120.0
     )
 
-    completed = [e for e in events if e["event_type"] == "AgentDelegationCompleted"]
+    completed = [e for e in events if e["event_type"] == "delegation.completed"]
     assert len(completed) == 1, (
         f"expected 1 delegation completed, got {len(completed)}: "
         f"{[e['event_type'] for e in events]}"
@@ -309,15 +309,13 @@ def test_specialist_writes_artifact_via_delegation(
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_task_summary_endpoint_reflects_event_log(
+def test_task_summary_endpoint_reflects_the_run(
     alice_client: httpx.Client, llm_model: str
 ) -> None:
-    """GET /tasks/{id}/summary returns derived counts from task_summary view.
+    """GET /tasks/{id}/summary reads the run from the task row and the spend ledger.
 
-    Locks the contract that's about to back the agent-facing
-    get_task_summary tool: status, iterations, llm_calls, tools_called,
-    cost, final_response. Uses a single specialist that writes one file —
-    deterministic enough to count tool calls.
+    Status, run times, cost and final_response of a single specialist that
+    writes one file.
     """
     suffix = int(time.time())
     writer_id = create_agent(
@@ -339,8 +337,8 @@ def test_task_summary_endpoint_reflects_event_log(
         timeout=30.0,
     ).raise_for_status().json()["id"]
 
-    # Wait for completion before reading the summary; otherwise counters
-    # will reflect a partial run.
+    # Wait for completion before reading the summary; otherwise it reflects a
+    # partial run.
     wait_for_workflow(alice_client, writer_id, task_id, timeout=90.0)
 
     summary = alice_client.get(
@@ -350,13 +348,7 @@ def test_task_summary_endpoint_reflects_event_log(
     assert summary["task_id"] == task_id
     assert summary["agent_id"] == writer_id
     assert summary["status"] == "completed", summary
-    # Agent must have called save_file at least once. ``completion`` is a
-    # control-plane sentinel, not a real tool call, so it doesn't count.
-    assert summary["tools_called"] >= 1, summary
-    assert summary["tools_failed"] == 0, summary
-    assert summary["iterations"] >= 1, summary
-    assert summary["llm_calls"] >= 1, summary
-    assert summary["delegations_started"] == 0, summary
+    assert summary["duration_ms"] is not None and summary["duration_ms"] >= 0, summary
     # Final response is set by the completion tool — agent's narrative.
     assert summary["final_response"], summary
     # Cost may be 0 on a free local proxy but the field must be present
@@ -455,9 +447,9 @@ def test_fanout_partial_failure_completes_siblings(
     types = [e["event_type"] for e in events]
 
     # Both delegations must have been attempted.
-    assert sum(1 for e in events if e["event_type"] == "AgentDelegationStarted") == 2, types
+    assert sum(1 for e in events if e["event_type"] == "delegation.started") == 2, types
     # The good one must have succeeded.
-    completed = [e for e in events if e["event_type"] == "AgentDelegationCompleted"]
+    completed = [e for e in events if e["event_type"] == "delegation.completed"]
     assert any(
         e["metadata"]["target_agent_name"] == good["name"]
         and e["metadata"]["success"] is True
@@ -534,53 +526,3 @@ def test_agent_can_read_back_file_it_wrote(
     assert body == "alpha-bravo-charlie", body[:200]
 
     alice_client.delete(f"{alice_client.ws}/agents/{agent_id}/tasks/{task_id}")
-
-
-@pytest.mark.integration
-@pytest.mark.slow
-def test_summary_reflects_delegation_counts(
-    alice_client: httpx.Client, llm_model: str
-) -> None:
-    """task_summary view's delegation counters update from real fan-out.
-
-    Exercises that the projection logic correctly counts the
-    AgentDelegationStarted/Completed events the workflow emits — same
-    code path the UI's task tree will rely on.
-    """
-    suffix = int(time.time())
-    child_id = create_agent(
-        alice_client, llm_model, name=f"sum-child-{suffix}",
-        instruction="Reply with the word 'ok' then call completion.",
-    )
-    child = alice_client.get(f"{alice_client.ws}/agents/{child_id}").raise_for_status().json()
-
-    coord_id = create_agent(
-        alice_client, llm_model, name=f"sum-coord-{suffix}",
-        instruction=(
-            f"Call delegate_to_{child['name'].replace('-','_')} once with "
-            "the message 'reply ok'. When it returns, call completion with "
-            "a single short sentence."
-        ),
-        tools=[{"type": "agent", "name": child["name"]}],
-    )
-    task_id = alice_client.post(
-        f"{alice_client.ws}/agents/{coord_id}/tasks/sync",
-        json={
-            "description": "Delegate once.",
-            "task_policy": ALLOW_ALL_TOOLS_TASK_POLICY,
-        },
-        timeout=30.0,
-    ).raise_for_status().json()["id"]
-
-    wait_for_workflow(alice_client, coord_id, task_id, timeout=120.0)
-
-    summary = alice_client.get(
-        f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}/summary"
-    ).raise_for_status().json()
-
-    assert summary["status"] == "completed", summary
-    assert summary["delegations_started"] == 1, summary
-    assert summary["delegations_completed"] == 1, summary
-    assert summary["delegations_failed"] == 0, summary
-
-    alice_client.delete(f"{alice_client.ws}/agents/{coord_id}/tasks/{task_id}")

@@ -1,7 +1,11 @@
 """Supported human return routes, independent of workflow and model runtimes."""
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, Literal
+
+#: How long a web chat's completed turn waits for the next message.
+DEFAULT_FOLLOW_UP_WINDOW = timedelta(minutes=30)
 
 
 @dataclass(frozen=True)
@@ -21,11 +25,11 @@ def resolve_interaction_capabilities(
     interaction = task_parameters.get("interaction") or {}
     if not isinstance(interaction, dict):
         interaction = {"channel": "none"}
-    origin = task_parameters.get("channel_origin")
     if "channel" in interaction:
         web = interaction["channel"] == "web"
-    elif origin:
-        web = isinstance(origin, dict) and origin.get("type") == "web"
+    elif task_parameters.get("delivery_address"):
+        # Its replies go where the event came from, not to a person on the web.
+        web = False
     else:
         sources = (
             task_parameters.get("source"),
@@ -46,3 +50,22 @@ def resolve_interaction_capabilities(
         allow_approvals=web and interaction.get("allow_approvals", True) is True,
         allow_a2ui=web and a2ui_enabled and interaction.get("allow_a2ui", True) is True,
     )
+
+
+def follow_up_window(
+    task_parameters: dict[str, Any], capabilities: InteractionCapabilities
+) -> timedelta | None:
+    """How long a completed turn waits for the next message, or None when it ends.
+
+    A task in a session (one an event started) waits when the session continues,
+    for its idle timeout; any other task waits when a person can answer it on the web.
+    """
+    session = task_parameters.get("session")
+    if isinstance(session, dict):
+        if session.get("continue") is not True:
+            return None
+        seconds = session.get("idle_timeout_seconds")
+        if isinstance(seconds, int) and not isinstance(seconds, bool) and seconds > 0:
+            return timedelta(seconds=seconds)
+        return DEFAULT_FOLLOW_UP_WINDOW
+    return DEFAULT_FOLLOW_UP_WINDOW if capabilities.channel == "web" else None

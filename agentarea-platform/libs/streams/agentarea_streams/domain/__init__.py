@@ -1,12 +1,11 @@
 from .enums import SourceKind, StreamKind, SubscriptionKind, SubscriptionStatus, Verdict
 from .errors import (
     ForwardLoopError,
-    LeaseLostError,
     NotAForwardError,
-    PayloadTooLargeError,
-    SourceFedByTriggerError,
     StreamError,
+    StreamEventNotFoundError,
     StreamInUseError,
+    StreamManagedByPlatformError,
     StreamNameTakenError,
     StreamNotFoundError,
     StreamQuotaExceededError,
@@ -16,28 +15,34 @@ from .errors import (
 )
 from .filters import EventFilter, value_at
 from .models import (
+    ENVELOPE_VERSION,
     AppendResult,
+    Attachment,
     HandlerResult,
-    JournaledEvent,
+    ReactionTally,
+    RecordedEvent,
+    StreamEvent,
     SubscriptionView,
     TriggerBinding,
-    WebhookSourceSpec,
 )
 
 __all__ = [
+    "ENVELOPE_VERSION",
     "AppendResult",
+    "Attachment",
     "EventFilter",
     "ForwardLoopError",
     "HandlerResult",
-    "JournaledEvent",
-    "LeaseLostError",
     "NotAForwardError",
-    "PayloadTooLargeError",
-    "SourceFedByTriggerError",
+    "ReactionTally",
+    "RecordedEvent",
     "SourceKind",
     "StreamError",
+    "StreamEvent",
+    "StreamEventNotFoundError",
     "StreamInUseError",
     "StreamKind",
+    "StreamManagedByPlatformError",
     "StreamNameTakenError",
     "StreamNotFoundError",
     "StreamQuotaExceededError",
@@ -49,6 +54,5 @@ __all__ = [
     "TriggerBinding",
     "TriggerSubscriptionNotFoundError",
     "Verdict",
-    "WebhookSourceSpec",
     "value_at",
 ]

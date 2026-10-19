@@ -31,6 +31,7 @@ services:
       # MCP settings
       - AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:80
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_SANDBOX_FILE_SECRET=${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
@@ -40,6 +41,8 @@ services:
       # OpenAI-compatible router). localhost is what a config stores; calls
       # rewrite it to host.docker.internal.
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
       # Hydra OAuth2 AS
       - AGENTAREA_AUTH_HYDRA_URL=http://hydra:4444
       - AGENTAREA_AUTH_HYDRA_ADMIN_URL=http://hydra:4445
@@ -173,6 +176,7 @@ services:
       - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
     volumes:
       - ./agentarea-platform/libs:/app/libs
+      - ./data/catalog:/app/data/catalog:ro
     depends_on:
       app:
         condition: service_healthy
@@ -188,6 +192,8 @@ services:
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json}",
         "--source",
         "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json}",
+        "--source",
+        "/app/data/catalog/source-types.json",
       ]
     working_dir: /app/apps/api
     restart: "no"
@@ -308,7 +314,8 @@ services:
     # containers on mcp-network must not be able to reach it.
     networks:
       - default
-    command: ["valkey-server", "--save", "", "--appendonly", "no"] # Disable persistence for dev
+    # A store for the event bus, not a cache: AOF on, nothing evicted.
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   traefik:
     image: traefik:v3.3
@@ -367,6 +374,7 @@ services:
       PORT: 80
       AGENTAREA_MCP_NETWORK: agentarea_mcp-network
       AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_EVENT_NAMESPACE: agentarea
       AGENTAREA_API_URL: http://agentarea-backend:8000
       AGENTAREA_MCP_RUNTIME: docker
       # Where MCP servers and agent sandboxes run.
@@ -407,6 +415,8 @@ services:
       # instance would fail to create with a bare "exit status 125"; this dev
       # stack runs them at standard, on the host kernel.
       AGENTAREA_MCP_ISOLATION: ${AGENTAREA_MCP_ISOLATION:-standard}
+      # URL MCP servers reached through the gateway may be on the host, as for the app.
+      AGENTAREA_HTTP_PRIVATE_ALLOWLIST: ${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       AGENTAREA_SANDBOX_EMBEDDED_RUNNER: "true"
@@ -568,6 +578,8 @@ services:
       - LLM_DOCKER_HOST=host.docker.internal
       # Same host model servers as the app (see AGENTAREA_HTTP_PRIVATE_ALLOWLIST there).
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
 
       # S3 / RustFS (file tool artifacts land here, keyed by workspace+task)
       - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
@@ -580,6 +592,7 @@ services:
 
       # Redis
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       # Links the worker sends out (the Telegram account-link reply)
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
       # PEM file of CA certificates trusted on outbound TLS on top of the public
@@ -621,6 +634,7 @@ services:
       - mcp-network
     volumes:
       - ./agentarea-platform/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
+      - ./agentarea-platform/apps/api/agentarea_api:/app/apps/api/agentarea_api
       - ./agentarea-platform/libs:/app/libs
     restart: unless-stopped
     command: ["agentarea-worker", "dev"]
@@ -666,8 +680,17 @@ services:
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_SSLMODE=disable
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_EVENT_POLL_INTERVAL=30s
       - AGENTAREA_EVENT_MAX_POLLERS=10
+      # The public base of /webhooks/{webhook_id}, as the app advertises it.
+      - AGENTAREA_API_URL=http://localhost:8000
+      # Source credentials are read from the database secret store.
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # MCP Events sources are polled and subscribed through the manager's gateway.
+      - AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:80
+      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
     volumes:
       - ./agentarea-event-service:/app
     networks:

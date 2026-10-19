@@ -26,6 +26,10 @@ class Message(BaseModel):
     tool_calls: list[dict[str, Any]] | None = None
     # Images a tool returned, by reference to the task's offloaded context.
     attachments: list[dict[str, Any]] | None = None
+    # The task log row kind: "message", "compaction" or "event" (never sent to the model).
+    kind: str = "message"
+    # Attributes the task log keeps with the row (the answering model, a tool's exit code).
+    meta: dict[str, Any] | None = None
 
 
 class AgentGoal(BaseModel):

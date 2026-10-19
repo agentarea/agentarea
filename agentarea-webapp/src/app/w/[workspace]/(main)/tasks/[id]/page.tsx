@@ -10,6 +10,7 @@ import EmptyState from "@/components/EmptyState";
 import TaskInfoPanel from "@/components/TaskInfoPanel/TaskInfoPanel";
 import TaskInfoPanelDock from "@/components/TaskInfoPanel/TaskInfoPanelDock";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScheduledRunNotice } from "./components/ScheduledRunNotice";
 import { useTaskContext } from "./TaskContext";
 
 export default function TaskDetailsPage() {
@@ -109,7 +110,10 @@ export default function TaskDetailsPage() {
   ) {
     executionTime = t("executionAwaitingFollowUp");
   }
-  const startTime = taskStatus?.start_time || task.created_at || "";
+  const startTime =
+    currentStatus === "scheduled" && task.scheduled_at
+      ? task.scheduled_at
+      : taskStatus?.start_time || task.created_at || "";
   const endTime = taskStatus?.end_time;
   const rawCost =
     (taskStatus?.result as Record<string, unknown> | undefined)?.total_cost ??
@@ -127,6 +131,9 @@ export default function TaskDetailsPage() {
     <>
       <div className="flex h-full w-full">
         <div className="flex h-full min-w-0 flex-1 flex-col">
+          {currentStatus === "scheduled" && task.scheduled_at ? (
+            <ScheduledRunNotice at={task.scheduled_at} />
+          ) : null}
           <TaskConversation
             key={task.id}
             task={task}
@@ -154,10 +161,7 @@ export default function TaskDetailsPage() {
               }}
               currentStatus={currentStatus}
               executionStatus={executionStatus}
-              isActive={
-                currentStatus === "running" &&
-                conversationActivity?.executionStatus === "running"
-              }
+              isActive={currentStatus === "running"}
               startTime={startTime}
               endTime={endTime}
               executionTime={executionTime}

@@ -39,6 +39,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
@@ -157,6 +158,9 @@ async def _mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_RECORD = make_record_activity(publish=_mock_publish_events, update_status=_mock_update_status)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -164,6 +168,7 @@ _ALL_ACTIVITIES = [
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
     _mock_update_governance_snapshot,
     _mock_validate_artifacts,

@@ -6,6 +6,7 @@ used across the AgentArea API endpoints.
 
 import logging
 from datetime import datetime
+from functools import partial
 from typing import Annotated, Final
 
 from agentarea_agents.application.agent_service import AgentService
@@ -431,6 +432,8 @@ async def get_trigger_service(
             from agentarea_common.config.secrets import get_secret_manager_settings
             from agentarea_llm.application.model_service import build_model_service
             from agentarea_secrets.secret_manager_factory import SecretManagerFactory
+            from agentarea_tasks.infrastructure.cost_repository import record_cost_lines
+            from agentarea_tasks.model_spend_caps import refuse_workspace_model_call_at_spend_cap
 
             llm_condition_evaluator = LLMConditionEvaluator(
                 model_instance_service=model_instance_service,
@@ -439,6 +442,13 @@ async def get_trigger_service(
                     session=repository_factory.session,
                     user_context=repository_factory.user_context,
                     secret_manager_factory=SecretManagerFactory(get_secret_manager_settings()),
+                ),
+                user_context=repository_factory.user_context,
+                record_costs=partial(record_cost_lines, repository_factory.user_context),
+                refuse_at_spend_cap=partial(
+                    refuse_workspace_model_call_at_spend_cap,
+                    repository_factory.session,
+                    repository_factory.user_context,
                 ),
             )
         except Exception as e:
@@ -463,10 +473,7 @@ async def get_trigger_service(
     )
 
 
-async def get_public_webhook_manager(
-    db_session: DatabaseSessionDep,
-    event_broker: EventBrokerDep,
-):
+async def get_public_webhook_manager():
     """Get a WebhookManager instance for PUBLIC webhook endpoints (no auth required).
 
     This creates a webhook manager without requiring UserContext, since external
@@ -488,18 +495,18 @@ async def get_public_webhook_manager(
         return MockWebhookManager()
 
     from agentarea_api.api.v1._webhook_intake import WebhookSourceIntake
+    from agentarea_common.artifacts import ArtifactService
     from agentarea_common.config.database import get_database
     from agentarea_common.di.container import resolve
-    from agentarea_streams.domain.ports import StreamWaker
+    from agentarea_streams.infrastructure.bus import StreamBus
 
     return WebhookSourceIntake(
-        lookup_session=db_session,
         session_scope=get_database().session,
         secret_reader_for=lambda session, context: get_real_secret_manager(
             session=session, user_context=context
         ),
-        waker=resolve(StreamWaker),
-        event_broker=event_broker,
+        bus=resolve(StreamBus),
+        files=ArtifactService(),
         settings=get_settings(),
     )
 
@@ -531,7 +538,7 @@ async def get_trigger_health_check(
 
     trigger_repository = repository_factory.create_repository(TriggerRepository)
     trigger_execution_repository = repository_factory.create_repository(TriggerExecutionRepository)
-    webhook_manager = await get_public_webhook_manager(repository_factory.session, event_broker)
+    webhook_manager = await get_public_webhook_manager()
 
     # Get temporal schedule manager
     temporal_schedule_manager = None

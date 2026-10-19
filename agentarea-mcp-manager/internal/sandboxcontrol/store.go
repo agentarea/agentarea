@@ -99,6 +99,17 @@ func (s *RedisStore) MaxExecutionTimeoutSeconds() int {
 	return s.policy.MaxTimeoutSeconds
 }
 
+// trimmedAdd appends one transition and drops entries older than an execution
+// record lives: past its TTL nothing can act on them, and the stream stays bounded.
+func (s *RedisStore) trimmedAdd(stream, payload string) *redis.XAddArgs {
+	return &redis.XAddArgs{
+		Stream: stream,
+		Values: map[string]any{"event": payload},
+		MinID:  fmt.Sprintf("%d-0", time.Now().Add(-s.ttl).UnixMilli()),
+		Approx: true,
+	}
+}
+
 func (s *RedisStore) ExecutionPolicy() ExecutionPolicy {
 	if s == nil {
 		return ExecutionPolicy{}
@@ -120,7 +131,7 @@ func (s *RedisStore) CreateExecution(ctx context.Context, record *ExecutionRecor
 		}
 		_, pipeErr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, key, data, s.ttl)
-			pipe.XAdd(ctx, &redis.XAddArgs{Stream: s.requestStream, Values: map[string]any{"event": payload}})
+			pipe.XAdd(ctx, s.trimmedAdd(s.requestStream, payload))
 			pipe.Publish(ctx, s.requestStream, payload)
 			return nil
 		})
@@ -155,7 +166,7 @@ func (s *RedisStore) UpdateExecution(ctx context.Context, expectedRevision int64
 		}
 		_, pipeErr := tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 			pipe.Set(ctx, key, data, s.ttl)
-			pipe.XAdd(ctx, &redis.XAddArgs{Stream: s.eventStream, Values: map[string]any{"event": payload}})
+			pipe.XAdd(ctx, s.trimmedAdd(s.eventStream, payload))
 			pipe.Publish(ctx, s.eventStream, payload)
 			return nil
 		})

@@ -14,7 +14,9 @@ from agentarea_agents_sdk.models import LLMModel
 from agentarea_api.api.v1 import model_instances
 from agentarea_api.api.v1.model_instances import ModelInstanceTestRequest
 from agentarea_common.auth.context import UserContext
+from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_llm.domain.models import ModelKind
+from fastapi import HTTPException
 
 MEMBER = UserContext(user_id="user-member", workspace_id="ws-acme", admin_workspaces=[])
 
@@ -76,3 +78,17 @@ async def test_the_provider_answer_is_never_echoed(monkeypatch):
     assert result.success is False
     assert "INTERNAL-BODY" not in result.message
     assert "404" in result.message
+
+
+@pytest.mark.asyncio
+async def test_a_platform_model_is_never_called_by_a_test(monkeypatch):
+    called = AsyncMock()
+    monkeypatch.setattr(LLMModel, "complete", called)
+    service = _service("https://llm-gateway.internal/v1", managed_by=MANAGED_BY_PLATFORM)
+
+    with pytest.raises(HTTPException) as refused:
+        await model_instances.validate_model_instance(_request(), MEMBER, service)
+
+    assert refused.value.status_code == 403
+    called.assert_not_called()
+    service.secret_manager.get_secret.assert_not_called()

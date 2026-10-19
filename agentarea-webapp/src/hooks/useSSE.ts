@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { EVENT_TYPES } from "@/lib/events/contract";
 
 interface SSEEvent {
   type: string;
@@ -15,59 +16,11 @@ interface UseSSEOptions {
   headers?: Record<string, string>;
 }
 
-// Part/lifecycle names are canonical; timeline and transport events keep their wire names.
-const eventTypes = [
-  "task.started",
-  "task.completed",
-  "task.failed",
-  "task.cancelled",
-  "task.awaiting_follow_up",
-  "task.awaiting_continuation",
-  "task.continued",
-  "execution.finished",
-  "llm.call.started",
-  "llm.call.chunk",
-  "llm.call.completed",
-  "llm.call.failed",
-  "tool.call",
-  "tool.result",
-  "input.request",
-  "input.response",
-  "approval.request",
-  "approval.response",
-  "artifact.created",
-  "artifact.updated",
-  "artifact.validation.started",
-  "artifact.validation.completed",
-  "a2ui.create",
-  "a2ui.update.components",
-  "a2ui.update.data",
-  "a2ui.delete",
-  "IterationStarted",
-  "IterationCompleted",
-  "BudgetWarning",
-  "BudgetExceeded",
-  "ServicePayment",
-  "ServiceBudgetWarning",
-  "ServiceBudgetExceeded",
-  "ContextCompacted",
-  "ContextWarning",
-  "WorkflowContinuedAsNew",
-  "AgentDelegationStarted",
-  "AgentDelegationCompleted",
-  "AgentDelegationFailed",
-  "ModelChanged",
-  "ModelResolutionFallback",
-  "ModelUnavailable",
-  "RuntimeDiscovered",
-  "WorkflowCommandReceived",
-  "MessageQueued",
-  "MessageRemoved",
-  "MessageProcessed",
+// Every task-event type, plus the transport frames the stream sends around them.
+const eventTypes: readonly string[] = [
+  ...EVENT_TYPES,
   "connected",
   "task_created",
-  "execution_paused",
-  "execution_resumed",
   "error",
 ];
 

@@ -794,3 +794,88 @@ func TestWarmRequestKeepsInstanceReadyAndGeneration(t *testing.T) {
 			generationAfterColdStart, generationAfterWarmCalls)
 	}
 }
+
+// TestLoadTargetReadsAURLInstanceInOneQuery pins the columns the gateway needs
+// to reach a URL server on the member's behalf: the merged endpoint, the plain
+// headers, the secret names, and the two facts that make it refuse.
+func TestLoadTargetReadsAURLInstanceInOneQuery(t *testing.T) {
+	repository := openRepository(t)
+	db := openRawDB(t)
+	ctx := context.Background()
+	instanceID := uuidAt("aaaaaaaa", 60)
+	authConfigID := uuidAt("cccccccc", 60)
+	seedInstance(t, db, instanceID, "url")
+	if _, err := db.ExecContext(ctx, `
+UPDATE mcp_server_instances
+SET json_spec = '{"headers":{"X-Region":"eu"},"env_vars":["X-Api-Key"]}'::jsonb, managed_by = 'platform'
+WHERE id = $1::uuid`, instanceID); err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := repository.LoadTarget(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("LoadTarget() error = %v", err)
+	}
+	if target.Container != nil || target.URL == nil {
+		t.Fatalf("LoadTarget() = %+v, want a URL target", target)
+	}
+	if target.InstanceID != instanceID || target.WorkspaceID != "ws-test" {
+		t.Fatalf("target identity = %q/%q", target.InstanceID, target.WorkspaceID)
+	}
+	want := URLServer{
+		EndpointURL: "https://remote.example/mcp",
+		Headers:     map[string]string{"X-Region": "eu"},
+		EnvVars:     []string{"X-Api-Key"},
+		ManagedBy:   "platform",
+	}
+	if fmt.Sprint(*target.URL) != fmt.Sprint(want) {
+		t.Fatalf("URL target = %+v, want %+v", *target.URL, want)
+	}
+
+	if _, err := db.ExecContext(ctx, `
+INSERT INTO mcp_auth_configs (id, workspace_id, created_by, auth_type, name, mcp_instance_id)
+VALUES ($1::uuid, 'ws-test', 'user-test', 'oauth2', 'gateway test', $2::uuid)`, authConfigID, instanceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`UPDATE mcp_server_instances SET auth_config_id = $2::uuid, managed_by = NULL WHERE id = $1::uuid`,
+		instanceID, authConfigID); err != nil {
+		t.Fatal(err)
+	}
+	target, err = repository.LoadTarget(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("LoadTarget() error = %v", err)
+	}
+	if target.URL.AuthConfigID != authConfigID || target.URL.ManagedBy != "" {
+		t.Fatalf("auth_config_id = %q managed_by = %q", target.URL.AuthConfigID, target.URL.ManagedBy)
+	}
+
+	// The lifecycle paths never see a URL instance: they would try to start or
+	// delete a workload that does not exist.
+	if _, err := repository.LoadInstance(ctx, instanceID); err == nil {
+		t.Fatal("LoadInstance() accepted a URL instance")
+	}
+}
+
+func TestLoadTargetReturnsAContainerInstanceAsLoadInstanceDoes(t *testing.T) {
+	repository := openRepository(t)
+	db := openRawDB(t)
+	ctx := context.Background()
+	instanceID := uuidAt("aaaaaaaa", 61)
+	seedInstance(t, db, instanceID, "docker")
+
+	target, err := repository.LoadTarget(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("LoadTarget() error = %v", err)
+	}
+	instance, err := repository.LoadInstance(ctx, instanceID)
+	if err != nil {
+		t.Fatalf("LoadInstance() error = %v", err)
+	}
+	if target.URL != nil || target.Container == nil {
+		t.Fatalf("LoadTarget() = %+v, want a container target", target)
+	}
+	if fmt.Sprint(*target.Container) != fmt.Sprint(*instance) || target.WorkspaceID != instance.WorkspaceID {
+		t.Fatalf("LoadTarget() container = %+v, LoadInstance() = %+v", *target.Container, *instance)
+	}
+}

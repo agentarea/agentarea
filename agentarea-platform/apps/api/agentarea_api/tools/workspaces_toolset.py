@@ -7,6 +7,7 @@ The toolset itself acts on no single workspace, so it opts out of that argument.
 
 import json
 from dataclasses import replace
+from typing import Annotated
 
 from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -26,6 +27,7 @@ from agentarea_common.workspaces.logo import (
     WorkspaceLogoStore,
 )
 from fastapi import HTTPException
+from pydantic import Field
 
 from agentarea_api.api.v1.workspaces import (
     WorkspaceResponse,
@@ -34,6 +36,10 @@ from agentarea_api.api.v1.workspaces import (
     get_workspace_service,
     list_reachable_workspaces,
 )
+
+
+class WorkspaceOutput(WorkspaceResponse):
+    mcp_url: str = Field(description="MCP endpoint serving the platform tools for this workspace.")
 
 
 def _describe(workspace: WorkspaceResponse) -> dict:
@@ -52,10 +58,20 @@ class WorkspacesToolset(Toolset):
     """List the workspaces you can reach, create new ones, and update their settings."""
 
     workspace_scoped = False
+    open_world = False
 
-    @tool_method(effect="read")
+    @tool_method(display_name="List workspaces", effect="read", output=list[WorkspaceOutput])
     @unrestricted("returns only the workspaces the caller already reaches, as GET /v1/workspaces")
-    async def list(self, query: str | None = None) -> str:
+    async def list(
+        self,
+        query: Annotated[
+            str | None,
+            Field(
+                description="Case-insensitive substring of the workspace name or slug; "
+                "omit to list every reachable workspace."
+            ),
+        ] = None,
+    ) -> str:
         """List the workspaces you can reach, optionally filtered by a name or slug substring.
 
         Pass a returned ``slug`` as the ``workspace`` argument of other tools.
@@ -72,9 +88,14 @@ class WorkspacesToolset(Toolset):
             ]
         return json.dumps([_describe(w) for w in await describe_workspaces(user_ctx, workspaces)])
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create workspace", effect="write", output=WorkspaceOutput)
     @unrestricted("anyone may create a workspace; they become its owner, as POST /v1/workspaces")
-    async def create(self, name: str) -> str:
+    async def create(
+        self,
+        name: Annotated[
+            str, Field(description="Display name of the new workspace, 1-255 characters.")
+        ],
+    ) -> str:
         """Create a shared workspace owned by you and return it."""
         name = name.strip()
         if not name:
@@ -94,10 +115,30 @@ class WorkspacesToolset(Toolset):
         [described] = await describe_workspaces(creator, [workspace])
         return json.dumps(_describe(described))
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Update workspace settings",
+        effect="write",
+        idempotent=True,
+        output=WorkspaceOutput,
+    )
     @enforced_in_handler("admin of the named workspace, as PUT and DELETE .../logo require")
     async def update(
-        self, workspace: str, logo_path: str | None = None, clear_logo: bool = False
+        self,
+        workspace: Annotated[
+            str,
+            Field(description="Slug (or id) of the workspace to update, from `workspaces_list`."),
+        ],
+        logo_path: Annotated[
+            str | None,
+            Field(
+                description="Path of a PNG, JPEG or WebP image of at most 1 MB in that "
+                "workspace's files, uploaded via `workspace_files_upload_urls`; becomes the logo."
+            ),
+        ] = None,
+        clear_logo: Annotated[
+            bool,
+            Field(description="True removes the current logo; cannot be combined with logo_path."),
+        ] = False,
     ) -> str:
         """Update a workspace's settings and return it; only the settings passed change.
 

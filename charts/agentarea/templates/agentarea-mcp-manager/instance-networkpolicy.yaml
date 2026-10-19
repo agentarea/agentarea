@@ -19,7 +19,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "agentarea.fullname" . }}-mcp-instances-egress
+  name: {{ include "agentarea.fullname" . }}-mcp-instances-ingress
   labels:
     {{- include "agentarea.labels" . | nindent 4 }}
     app.kubernetes.io/component: mcp-manager
@@ -30,7 +30,6 @@ spec:
       app.kubernetes.io/component: mcp-server
   policyTypes:
     - Ingress
-    - Egress
   ingress:
     - from:
         - podSelector:
@@ -52,6 +51,25 @@ spec:
             cidr: {{ . | quote }}
         {{- end }}
     {{- end }}
+---
+# Pods labelled agentarea.io/egress get the policy below instead.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-mcp-instances-egress
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: mcp-manager
+      app.kubernetes.io/component: mcp-server
+    matchExpressions:
+      - key: agentarea.io/egress
+        operator: DoesNotExist
+  policyTypes:
+    - Egress
   egress:
     # DNS resolution (CoreDNS/kube-dns).
     - to:
@@ -73,5 +91,46 @@ spec:
               {{- end }}
     {{- with .Values.mcpManager.instanceNetworkPolicy.extraEgress }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
+---
+# Pods labelled agentarea.io/egress reach DNS and the configured egress proxy,
+# nothing else. Without a proxy configured they reach DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-mcp-instances-egress-proxy-only
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-manager
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: mcp-manager
+      app.kubernetes.io/component: mcp-server
+    matchExpressions:
+      - key: agentarea.io/egress
+        operator: Exists
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.mcpManager.instanceNetworkPolicy.dnsNamespace | quote }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- with .Values.mcpManager.instanceNetworkPolicy.egressProxy }}
+    {{- $peer := pick . "namespaceSelector" "podSelector" }}
+    {{- if or (not $peer) (not .port) }}
+    {{- fail "mcpManager.instanceNetworkPolicy.egressProxy needs port and namespaceSelector or podSelector" }}
+    {{- end }}
+    - to:
+        - {{ toYaml $peer | nindent 10 | trim }}
+      ports:
+        - protocol: TCP
+          port: {{ .port }}
     {{- end }}
 {{- end }}

@@ -25,6 +25,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_governance.bridges.temporal_bridge import _verdict_failure
 from agentarea_governance.domain.enums import InterceptorAction, Phase
@@ -95,12 +96,16 @@ async def _mock_update_status(request: UpdateTaskStatusRequest) -> bool:
     return True
 
 
+_RECORD = make_record_activity(publish=_mock_publish_events, update_status=_mock_update_status)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
     _mock_resolve_model,
     _mock_call_llm,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
 ]
 

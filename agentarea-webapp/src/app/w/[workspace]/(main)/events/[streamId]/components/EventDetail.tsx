@@ -11,42 +11,53 @@ import {
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { optionalApiData } from "@/lib/server-resource";
+import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
 import { getStreamOutcomeStatusPresentation } from "@/lib/status";
 import {
-  resolveForwardSource,
   sortedForwardTargets,
   type DispositionFilter,
 } from "@/lib/streamOutcome";
 import { formatDateTime } from "@/utils/dateUtils";
-import { eventRowId, feedHref } from "../feedHref";
+import { eventHref, eventRowId, feedHref } from "../feedHref";
+import { EventEnvelope, EventPayload } from "./EventEnvelope";
 import FocusOnMount from "./FocusOnMount";
 
 const PANEL_ID = "event-detail";
 const TITLE_ID = "event-detail-title";
 
-type Translator = Awaited<ReturnType<typeof getTranslations>>;
+export type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 export default async function EventDetail({
   streamId,
   sequence,
   outcome,
   before,
+  sourceTypes,
 }: {
   streamId: string;
   sequence: number;
   outcome: DispositionFilter;
   before?: number;
+  /** Names and draws the provider the event came from. */
+  sourceTypes: SourceType[];
 }) {
-  const [t, tFilter, locale, eventResult, triggersResult, subscriptionsResult, streamsResult] =
-    await Promise.all([
-      getTranslations("EventsPage.detail"),
-      getTranslations("EventsPage.filter"),
-      getLocale(),
-      getStreamEvent(streamId, sequence),
-      listTriggers(),
-      listStreamSubscriptions(streamId),
-      listStreams(),
-    ]);
+  const [
+    t,
+    tFilter,
+    locale,
+    eventResult,
+    triggersResult,
+    subscriptionsResult,
+    streamsResult,
+  ] = await Promise.all([
+    getTranslations("EventsPage.detail"),
+    getTranslations("EventsPage.filter"),
+    getLocale(),
+    getStreamEvent(streamId, sequence),
+    listTriggers(),
+    listStreamSubscriptions(streamId),
+    listStreams(),
+  ]);
   // Gone past retention, or never existed: the feed is still there, so only
   // this panel says so.
   const event = optionalApiData(eventResult, "stream event");
@@ -91,7 +102,7 @@ export default async function EventDetail({
                 {event.kind}
               </span>
               {" · "}
-              <span className="font-mono">{event.event_key}</span>
+              <span className="font-mono">{event.key}</span>
               {" · "}
               {formatDateTime(event.received_at, locale)}
             </p>
@@ -107,6 +118,8 @@ export default async function EventDetail({
       {event ? (
         <EventBody
           event={event}
+          sourceType={sourceTypeBySlug(sourceTypes, event.source_type)}
+          locale={locale}
           t={t}
           tFilter={tFilter}
           triggerNames={
@@ -138,6 +151,8 @@ export default async function EventDetail({
 
 function EventBody({
   event,
+  sourceType,
+  locale,
   t,
   tFilter,
   triggerNames,
@@ -148,6 +163,8 @@ function EventBody({
   streamNames,
 }: {
   event: StreamEventResponse;
+  sourceType: SourceType | undefined;
+  locale: string;
   t: Translator;
   tFilter: Translator;
   triggerNames: Map<string, string>;
@@ -157,15 +174,22 @@ function EventBody({
   forwardTargets: Map<string, string[]>;
   streamNames: Map<string, string>;
 }) {
-  const causedBy = resolveForwardSource(event);
   return (
     <div className="space-y-4 p-4">
+      <EventEnvelope
+        event={event}
+        sourceType={sourceType}
+        locale={locale}
+        t={t}
+      />
       <div>
         <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
           {t("subscribers")}
         </h3>
         {triggersError && <SectionLoadError message={triggersError} />}
-        {subscriptionsError && <SectionLoadError message={subscriptionsError} />}
+        {subscriptionsError && (
+          <SectionLoadError message={subscriptionsError} />
+        )}
         {streamsError && <SectionLoadError message={streamsError} />}
         {event.outcomes.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
@@ -178,7 +202,7 @@ function EventBody({
                 o.verdict
               );
               // Only a forward's own targets, in append order — a derived
-              // sequence pairs with the target stream at the same index.
+              // event pairs with the target stream at the same index.
               const targets = forwardTargets.get(o.subscription_id) ?? [];
               return (
                 <li
@@ -195,7 +219,9 @@ function EventBody({
                       </WorkspaceLink>
                     ) : (
                       <span className="truncate font-medium">
-                        {t("forward")}
+                        {o.subscription_kind === "processor"
+                          ? t("processor")
+                          : t("forward")}
                         {targets.length > 0 && (
                           <>
                             {": "}
@@ -244,27 +270,32 @@ function EventBody({
                         {t("task")}
                       </WorkspaceLink>
                     )}
-                    {o.derived_sequences.length > 0 && (
-                      <span className="flex items-center gap-1 tabular-nums">
+                    {o.derived_event_ids.length > 0 && (
+                      <span className="flex items-center gap-1">
                         {t("derived")}:{" "}
-                        {o.derived_sequences.map((sequence, index) => {
-                          const targetId = targets[index];
+                        {o.derived_event_ids.map((eventId, index) => {
+                          // A processor's code picks each event's stream, so
+                          // only a forward pairs its events with its targets.
+                          const targetId =
+                            o.subscription_kind === "forward"
+                              ? targets[index]
+                              : undefined;
                           return (
-                            <span key={sequence}>
+                            <span
+                              key={eventId}
+                              className="font-mono"
+                              title={eventId}
+                            >
                               {index > 0 && ", "}
-                              {targetId ? (
-                                <WorkspaceLink
-                                  href={feedHref(targetId, {
-                                    outcome: "all",
-                                    event: sequence,
-                                  })}
-                                  className="text-primary hover:underline"
-                                >
-                                  {sequence}
-                                </WorkspaceLink>
-                              ) : (
-                                sequence
-                              )}
+                              <WorkspaceLink
+                                href={eventHref(eventId)}
+                                className="text-primary hover:underline"
+                              >
+                                {targetId
+                                  ? `${streamNames.get(targetId) ?? targetId} · `
+                                  : ""}
+                                {eventId.slice(0, 8)}
+                              </WorkspaceLink>
                             </span>
                           );
                         })}
@@ -280,31 +311,16 @@ function EventBody({
       {event.causation_id && (
         <div className="text-xs text-muted-foreground">
           {t("causedBy")}:{" "}
-          {causedBy ? (
-            <WorkspaceLink
-              href={feedHref(causedBy.streamId, {
-                outcome: "all",
-                event: causedBy.sequence,
-              })}
-              className="text-primary hover:underline"
-            >
-              {streamNames.get(causedBy.streamId)
-                ? `${streamNames.get(causedBy.streamId)} · ${t("title", { sequence: causedBy.sequence })}`
-                : t("title", { sequence: causedBy.sequence })}
-            </WorkspaceLink>
-          ) : (
-            <span className="break-all font-mono">{event.causation_id}</span>
-          )}
+          <WorkspaceLink
+            href={eventHref(event.causation_id)}
+            className="font-mono text-primary hover:underline"
+            title={event.causation_id}
+          >
+            {event.causation_id.slice(0, 8)}
+          </WorkspaceLink>
         </div>
       )}
-      <div>
-        <h3 className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
-          {t("data")}
-        </h3>
-        <pre className="max-h-96 overflow-auto rounded-md bg-muted/50 p-3 text-xs">
-          {JSON.stringify(event.data, null, 2)}
-        </pre>
-      </div>
+      <EventPayload event={event} t={t} />
     </div>
   );
 }

@@ -39,6 +39,7 @@ import {
 import { ToolsTable } from "../components/ToolsTable";
 import { CredentialFields } from "../components/CredentialFields";
 import { remoteHeaderFields } from "../credential-fields";
+import { ConnectionCostSection } from "../components/ConnectionCostSection";
 import { ConsumersSection } from "./ConsumersSection";
 import { InstanceActivitySection } from "./InstanceActivitySection";
 import { MCPInstance, MCPServer } from "../types";
@@ -741,6 +742,18 @@ export default function MCPInstanceDetail({
             )}
 
             <InstanceActivitySection instanceId={instance.id} />
+
+            <ConnectionCostSection
+              cost={instance.cost}
+              managedBy={instance.managed_by}
+              onSave={async (cost) => {
+                const { updateMCPServerInstanceAction } = await import(
+                  "@/lib/server-actions"
+                );
+                return updateMCPServerInstanceAction(instance.id, { cost });
+              }}
+              onSaved={() => router.refresh()}
+            />
 
             {Object.keys(envVars).length > 0 && (
               <div className="space-y-3">

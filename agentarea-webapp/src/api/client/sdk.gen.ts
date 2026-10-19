@@ -40,6 +40,9 @@ import type {
   AddSkillToProjectV1ProjectsProjectIdSkillsPostData,
   AddSkillToProjectV1ProjectsProjectIdSkillsPostErrors,
   AddSkillToProjectV1ProjectsProjectIdSkillsPostResponses,
+  AddSourceV1StreamsStreamIdSourcesPostData,
+  AddSourceV1StreamsStreamIdSourcesPostErrors,
+  AddSourceV1StreamsStreamIdSourcesPostResponses,
   AnalyzeBundleV1BundlesAnalyzePostData,
   AnalyzeBundleV1BundlesAnalyzePostErrors,
   AnalyzeBundleV1BundlesAnalyzePostResponses,
@@ -115,6 +118,9 @@ import type {
   CreatePolicyRuleV1PoliciesPostData,
   CreatePolicyRuleV1PoliciesPostErrors,
   CreatePolicyRuleV1PoliciesPostResponses,
+  CreateProcessorV1StreamsStreamIdProcessorsPostData,
+  CreateProcessorV1StreamsStreamIdProcessorsPostErrors,
+  CreateProcessorV1StreamsStreamIdProcessorsPostResponses,
   CreateProjectV1ProjectsPostData,
   CreateProjectV1ProjectsPostErrors,
   CreateProjectV1ProjectsPostResponses,
@@ -133,9 +139,6 @@ import type {
   CreateSkillV1SkillsPostData,
   CreateSkillV1SkillsPostErrors,
   CreateSkillV1SkillsPostResponses,
-  CreateSourceV1StreamsStreamIdSourcesPostData,
-  CreateSourceV1StreamsStreamIdSourcesPostErrors,
-  CreateSourceV1StreamsStreamIdSourcesPostResponses,
   CreateStreamV1StreamsPostData,
   CreateStreamV1StreamsPostErrors,
   CreateStreamV1StreamsPostResponses,
@@ -199,6 +202,9 @@ import type {
   DeletePolicyRuleV1PoliciesRuleIdDeleteData,
   DeletePolicyRuleV1PoliciesRuleIdDeleteErrors,
   DeletePolicyRuleV1PoliciesRuleIdDeleteResponses,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteData,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses,
   DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteData,
   DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteErrors,
   DeleteProjectFileV1ProjectsProjectIdFilesFilePathDeleteResponses,
@@ -319,12 +325,6 @@ import type {
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
-  GetCatalogV1TriggersCatalogGetData,
-  GetCatalogV1TriggersCatalogGetErrors,
-  GetCatalogV1TriggersCatalogGetResponses,
-  GetChannelEventsV1TriggersChannelsEventsGetData,
-  GetChannelEventsV1TriggersChannelsEventsGetErrors,
-  GetChannelEventsV1TriggersChannelsEventsGetResponses,
   GetClientV1ClientsClientIdGetData,
   GetClientV1ClientsClientIdGetErrors,
   GetClientV1ClientsClientIdGetResponses,
@@ -340,6 +340,9 @@ import type {
   GetDashboardV1DashboardGetData,
   GetDashboardV1DashboardGetErrors,
   GetDashboardV1DashboardGetResponses,
+  GetEventByIdV1StreamsEventsEventIdGetData,
+  GetEventByIdV1StreamsEventsEventIdGetErrors,
+  GetEventByIdV1StreamsEventsEventIdGetResponses,
   GetEventV1StreamsStreamIdEventsSequenceGetData,
   GetEventV1StreamsStreamIdEventsSequenceGetErrors,
   GetEventV1StreamsStreamIdEventsSequenceGetResponses,
@@ -468,27 +471,9 @@ import type {
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostData,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostErrors,
   HandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostResponses,
-  HandleWebhookWebhooksWebhookIdDeleteData,
-  HandleWebhookWebhooksWebhookIdDeleteErrors,
-  HandleWebhookWebhooksWebhookIdDeleteResponses,
-  HandleWebhookWebhooksWebhookIdGetData,
-  HandleWebhookWebhooksWebhookIdGetErrors,
-  HandleWebhookWebhooksWebhookIdGetResponses,
-  HandleWebhookWebhooksWebhookIdHeadData,
-  HandleWebhookWebhooksWebhookIdHeadErrors,
-  HandleWebhookWebhooksWebhookIdHeadResponses,
-  HandleWebhookWebhooksWebhookIdOptionsData,
-  HandleWebhookWebhooksWebhookIdOptionsErrors,
-  HandleWebhookWebhooksWebhookIdOptionsResponses,
-  HandleWebhookWebhooksWebhookIdPatchData,
-  HandleWebhookWebhooksWebhookIdPatchErrors,
-  HandleWebhookWebhooksWebhookIdPatchResponses,
   HandleWebhookWebhooksWebhookIdPostData,
   HandleWebhookWebhooksWebhookIdPostErrors,
   HandleWebhookWebhooksWebhookIdPostResponses,
-  HandleWebhookWebhooksWebhookIdPutData,
-  HandleWebhookWebhooksWebhookIdPutErrors,
-  HandleWebhookWebhooksWebhookIdPutResponses,
   HealthHealthGetData,
   HealthHealthGetResponses,
   HydraAuthRedirectOauth2AuthGetData,
@@ -667,6 +652,9 @@ import type {
   ListTriggersV1TriggersGetData,
   ListTriggersV1TriggersGetErrors,
   ListTriggersV1TriggersGetResponses,
+  ListWorkspaceEventsV1StreamsEventsGetData,
+  ListWorkspaceEventsV1StreamsEventsGetErrors,
+  ListWorkspaceEventsV1StreamsEventsGetResponses,
   ListWorkspaceFilesV1FilesGetData,
   ListWorkspaceFilesV1FilesGetErrors,
   ListWorkspaceFilesV1FilesGetResponses,
@@ -793,9 +781,6 @@ import type {
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
-  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData,
-  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
-  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -823,6 +808,9 @@ import type {
   StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetData,
   StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetErrors,
   StreamTaskEventsV1AgentsAgentIdTasksTaskIdEventsStreamGetResponses,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetData,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetErrors,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetResponses,
   StreamWorkspaceFileV1FilesDownloadFilePathGetData,
   StreamWorkspaceFileV1FilesDownloadFilePathGetErrors,
   StreamWorkspaceFileV1FilesDownloadFilePathGetResponses,
@@ -886,6 +874,9 @@ import type {
   UpdatePolicyRuleV1PoliciesRuleIdPatchData,
   UpdatePolicyRuleV1PoliciesRuleIdPatchErrors,
   UpdatePolicyRuleV1PoliciesRuleIdPatchResponses,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchData,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses,
   UpdateProjectV1ProjectsProjectIdPatchData,
   UpdateProjectV1ProjectsProjectIdPatchErrors,
   UpdateProjectV1ProjectsProjectIdPatchResponses,
@@ -2930,7 +2921,7 @@ export const listPendingEscalationsV1AgentsAgentIdTasksTaskIdEscalationsGet = <
 /**
  * Get Task Events
  *
- * Get paginated task execution events for the specified task from database.
+ * One page of the task's feed from its log: event rows and the messages a person sent.
  */
 export const getTaskEventsV1AgentsAgentIdTasksTaskIdEventsGet = <
   ThrowOnError extends boolean = false,
@@ -3273,9 +3264,9 @@ export const getAgentTaskStatusV1AgentsAgentIdTasksTaskIdStatusGet = <
 /**
  * Get Task Summary
  *
- * Per-task rollup derived from the event log via the ``task_summary`` view.
+ * Per-task rollup from the task row and the spend ledger.
  *
- * Workspace-scoped: the row must belong to the caller's workspace and
+ * Workspace-scoped: the task must belong to the caller's workspace and
  * the agent must match, or we return 404 (same shape as other task
  * endpoints — no information leak).
  */
@@ -4709,7 +4700,8 @@ export const getTaskPolicySnapshotV1GovernanceTaskPolicySnapshotsTaskIdGet = <
  * List tasks requiring user attention.
  *
  * Returns tasks with actionable statuses (waiting_for_approval, completed, failed),
- * ordered by most recently updated first. Includes total count for badge/pagination.
+ * newest call for attention first: when an ended run ended, when a waiting task
+ * began to wait. Includes total count for badge/pagination.
  */
 export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
   options?: Options<GetInboxItemsV1InboxGetData, ThrowOnError>
@@ -4738,6 +4730,8 @@ export const getInboxItemsV1InboxGet = <ThrowOnError extends boolean = false>(
  * List Approval Decisions
  *
  * Answered approval requests, newest first: who decided what, and when.
+ *
+ * Read from the audit trail, where the tool audit records every decision.
  */
 export const listApprovalDecisionsV1InboxDecisionsGet = <
   ThrowOnError extends boolean = false,
@@ -9702,9 +9696,107 @@ export const createStreamV1StreamsPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Workspace Events
+ *
+ * Every event of the workspace's streams the caller may read, newest first.
+ *
+ * Each carries what the platform did with it (``processing``); bodies are
+ * left out, the event's own endpoint has them.
+ */
+export const listWorkspaceEventsV1StreamsEventsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListWorkspaceEventsV1StreamsEventsGetData, ThrowOnError>
+): RequestResult<
+  ListWorkspaceEventsV1StreamsEventsGetResponses,
+  ListWorkspaceEventsV1StreamsEventsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListWorkspaceEventsV1StreamsEventsGetResponses,
+    ListWorkspaceEventsV1StreamsEventsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/events",
+    ...options,
+  });
+
+/**
+ * Stream Workspace Events
+ *
+ * SSE: ``event.recorded`` (a feed item) as an event arrives, ``event.processing``
+ * ({event_id, processing}) as the platform acts on it. The filters are the feed's;
+ * ``result`` is not applied here, since an event's result changes as it is handled.
+ */
+export const streamWorkspaceEventsV1StreamsEventsLiveGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<
+    StreamWorkspaceEventsV1StreamsEventsLiveGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  StreamWorkspaceEventsV1StreamsEventsLiveGetResponses,
+  StreamWorkspaceEventsV1StreamsEventsLiveGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    StreamWorkspaceEventsV1StreamsEventsLiveGetResponses,
+    StreamWorkspaceEventsV1StreamsEventsLiveGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/events/live",
+    ...options,
+  });
+
+/**
+ * Get Event By Id
+ *
+ * One event by its id, whichever stream holds it: what a forward or a cause points at.
+ */
+export const getEventByIdV1StreamsEventsEventIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<GetEventByIdV1StreamsEventsEventIdGetData, ThrowOnError>
+): RequestResult<
+  GetEventByIdV1StreamsEventsEventIdGetResponses,
+  GetEventByIdV1StreamsEventsEventIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetEventByIdV1StreamsEventsEventIdGetResponses,
+    GetEventByIdV1StreamsEventsEventIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/events/{event_id}",
+    ...options,
+  });
+
+/**
  * List Source Types
  *
- * Webhook types a source can be, with the credentials and settings each needs.
+ * Source types of the catalog, with the credentials and settings each needs.
  */
 export const listSourceTypesV1StreamsSourceTypesGet = <
   ThrowOnError extends boolean = false,
@@ -9736,9 +9828,9 @@ export const listSourceTypesV1StreamsSourceTypesGet = <
  *
  * Delete a stream with its events, sources and subscriptions.
  *
- * Refused with 409 while a live webhook trigger's source feeds the stream,
- * while a trigger subscribes to it (delete the trigger first), or while a
- * forward of any stream writes into it (remove that forward first).
+ * Refused with 409 while a trigger subscribes to it (delete the trigger
+ * first), or while a forward of any stream writes into it (remove that
+ * forward first).
  */
 export const deleteStreamV1StreamsStreamIdDelete = <
   ThrowOnError extends boolean = false,
@@ -9882,6 +9974,118 @@ export const createForwardV1StreamsStreamIdForwardsPost = <
   });
 
 /**
+ * Create Processor
+ *
+ * Run code over every matching event of the stream; it writes into the output streams.
+ *
+ * The caller must be able to edit every output stream. The code runs in the
+ * sandbox, one call per event, and gets no secrets.
+ */
+export const createProcessorV1StreamsStreamIdProcessorsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    CreateProcessorV1StreamsStreamIdProcessorsPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  CreateProcessorV1StreamsStreamIdProcessorsPostResponses,
+  CreateProcessorV1StreamsStreamIdProcessorsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateProcessorV1StreamsStreamIdProcessorsPostResponses,
+    CreateProcessorV1StreamsStreamIdProcessorsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/processors",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Processor
+ *
+ * Remove a processor; the events it wrote stay. The caller must be able to edit its outputs.
+ */
+export const deleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses,
+  DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses,
+    DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}",
+    ...options,
+  });
+
+/**
+ * Update Processor
+ *
+ * Change a processor's code, outputs or filter; the next event runs the change.
+ *
+ * The caller must be able to edit every output stream it has and is given.
+ */
+export const updateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatch = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses,
+  UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).patch<
+    UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses,
+    UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * List Sources
  */
 export const listSourcesV1StreamsStreamIdSourcesGet = <
@@ -9910,25 +10114,25 @@ export const listSourcesV1StreamsStreamIdSourcesGet = <
   });
 
 /**
- * Create Source
+ * Add Source
  *
- * Add a webhook source to the stream, with no trigger.
+ * Add a webhook or poll source of a catalog entry to the stream.
  *
- * Credentials are write-only and held by reference; the response carries the
- * public URL to give the sender.
+ * Credentials are write-only and held by reference; a webhook source's
+ * response carries the public URL to give the provider.
  */
-export const createSourceV1StreamsStreamIdSourcesPost = <
+export const addSourceV1StreamsStreamIdSourcesPost = <
   ThrowOnError extends boolean = false,
 >(
-  options: Options<CreateSourceV1StreamsStreamIdSourcesPostData, ThrowOnError>
+  options: Options<AddSourceV1StreamsStreamIdSourcesPostData, ThrowOnError>
 ): RequestResult<
-  CreateSourceV1StreamsStreamIdSourcesPostResponses,
-  CreateSourceV1StreamsStreamIdSourcesPostErrors,
+  AddSourceV1StreamsStreamIdSourcesPostResponses,
+  AddSourceV1StreamsStreamIdSourcesPostErrors,
   ThrowOnError
 > =>
   (options.client ?? client).post<
-    CreateSourceV1StreamsStreamIdSourcesPostResponses,
-    CreateSourceV1StreamsStreamIdSourcesPostErrors,
+    AddSourceV1StreamsStreamIdSourcesPostResponses,
+    AddSourceV1StreamsStreamIdSourcesPostErrors,
     ThrowOnError
   >({
     security: [
@@ -9949,7 +10153,7 @@ export const createSourceV1StreamsStreamIdSourcesPost = <
 /**
  * Delete Source
  *
- * Remove a webhook source; one a live trigger owns is refused with 409.
+ * Remove a source and its credentials; its events stay.
  */
 export const deleteSourceV1StreamsStreamIdSourcesSourceIdDelete = <
   ThrowOnError extends boolean = false,
@@ -10280,26 +10484,7 @@ export const decideToolCallApprovalV1ToolCallApprovalsApprovalIdDecidePost = <
 /**
  * List Triggers
  *
- * List triggers with optional filtering.
- *
- * Returns a list of triggers that match the specified criteria. Supports
- * filtering by agent ID, trigger type, and active status.
- *
- * Access Control:
- * Returns all triggers within the current user's workspace (workspace isolation).
- * All users in the same workspace can see all workspace triggers.
- *
- * Args:
- * secret_manager: Injected secret manager (to resolve credential presence)
- * agent_id: Optional agent ID filter
- * trigger_type: Optional trigger type filter
- * active_only: Whether to only return active triggers
- * limit: Maximum number of triggers to return
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * List of triggers matching the criteria
+ * List the workspace's triggers, by agent, type and active state.
  */
 export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
   options?: Options<ListTriggersV1TriggersGetData, ThrowOnError>
@@ -10327,31 +10512,10 @@ export const listTriggersV1TriggersGet = <ThrowOnError extends boolean = false>(
 /**
  * Create Trigger
  *
- * Create a new trigger.
+ * Create a cron trigger (scheduled at once) or a stream trigger (subscribed to its stream).
  *
- * Creates a new trigger with the specified configuration. The trigger will be
- * validated and, if it's a cron trigger, automatically scheduled.
- *
- * If channel_credentials are provided, they are stored encrypted in the secret
- * store under key ``channel_cred:{webhook_type}:{trigger_id}``.
- *
- * A generic webhook created without a signing secret gets a generated one,
- * returned once in ``signing_secret``; requests must then be signed as
- * ``signature_scheme`` describes.
- *
- * Args:
- * payload: Trigger creation DTO (single source of truth shared with MCP toolset).
- * user_context: Authentication context.
- * trigger_service: Injected trigger service.
- * secret_manager: Injected secret manager for credential storage.
- * secret_catalog: Workspace-scoped catalog for selected credential references.
- * webhook_service: Injected service that registers the channel webhook.
- *
- * Returns:
- * The created trigger.
- *
- * Raises:
- * HTTPException: If validation fails or creation errors occur.
+ * A webhook or a polled provider is a source of a stream; its events fire a
+ * stream trigger on that stream.
  */
 export const createTriggerV1TriggersPost = <
   ThrowOnError extends boolean = false,
@@ -10383,74 +10547,6 @@ export const createTriggerV1TriggersPost = <
   });
 
 /**
- * Get Catalog
- *
- * Get the trigger catalog — available trigger types with metadata and events.
- *
- * ``icon`` is stored as data (an asset id or a full URL); it is resolved here
- * into ``icon_url`` so the frontend renders whatever it is handed and never
- * carries a table of which channels exist.
- */
-export const getCatalogV1TriggersCatalogGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<GetCatalogV1TriggersCatalogGetData, ThrowOnError>
-): RequestResult<
-  GetCatalogV1TriggersCatalogGetResponses,
-  GetCatalogV1TriggersCatalogGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetCatalogV1TriggersCatalogGetResponses,
-    GetCatalogV1TriggersCatalogGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/triggers/catalog",
-    ...options,
-  });
-
-/**
- * Get Channel Events
- *
- * Get supported event types for all channels.
- * Returns a mapping of channel type to list of event types.
- */
-export const getChannelEventsV1TriggersChannelsEventsGet = <
-  ThrowOnError extends boolean = false,
->(
-  options?: Options<
-    GetChannelEventsV1TriggersChannelsEventsGetData,
-    ThrowOnError
-  >
-): RequestResult<
-  GetChannelEventsV1TriggersChannelsEventsGetResponses,
-  GetChannelEventsV1TriggersChannelsEventsGetErrors,
-  ThrowOnError
-> =>
-  (options?.client ?? client).get<
-    GetChannelEventsV1TriggersChannelsEventsGetResponses,
-    GetChannelEventsV1TriggersChannelsEventsGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/triggers/channels/events",
-    ...options,
-  });
-
-/**
  * Triggers Health Check
  *
  * Comprehensive health check endpoint for trigger system.
@@ -10458,7 +10554,7 @@ export const getChannelEventsV1TriggersChannelsEventsGet = <
  * Checks all trigger system components including:
  * - Database connectivity
  * - Temporal schedule manager
- * - Webhook manager
+ * - Webhook intake
  * - Execution metrics
  *
  * Returns:
@@ -10492,20 +10588,9 @@ export const triggersHealthCheckV1TriggersHealthGet = <
 /**
  * Delete Trigger
  *
- * Delete a trigger.
+ * Delete a trigger with its execution history; a cron trigger's schedule goes with it.
  *
- * Permanently deletes the specified trigger and all its execution history.
- * If it's a cron trigger, the schedule will also be removed.
- *
- * Args:
- * secret_manager: Injected secret manager, used to read channel credentials.
- * trigger_id: The unique identifier of the trigger
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- * webhook_service: Injected service that clears the channel webhook.
- *
- * Raises:
- * HTTPException: If trigger not found
+ * A stream trigger's stream and its sources stay.
  */
 export const deleteTriggerV1TriggersTriggerIdDelete = <
   ThrowOnError extends boolean = false,
@@ -10536,18 +10621,6 @@ export const deleteTriggerV1TriggersTriggerIdDelete = <
  * Get Trigger
  *
  * Get a specific trigger by ID.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger
- * secret_manager: Injected secret manager (to resolve credential presence)
- * user_context: Authentication context
- * trigger_service: Injected trigger service
- *
- * Returns:
- * The trigger data
- *
- * Raises:
- * HTTPException: If trigger not found
  */
 export const getTriggerV1TriggersTriggerIdGet = <
   ThrowOnError extends boolean = false,
@@ -10577,31 +10650,12 @@ export const getTriggerV1TriggersTriggerIdGet = <
 /**
  * Update Trigger
  *
- * Update an existing trigger.
- *
- * Updates the specified trigger with the provided data. Only non-null fields
- * in the request will be updated. Secret selections preserve unselected
- * credential fields; legacy raw credentials replace the stored bundle, except
- * the Telegram secret token, which is kept. A channel webhook is registered
- * with its provider before anything is saved; if the provider refuses, the
- * call fails with 502 and nothing changes.
- *
- * Args:
- * trigger_id: The unique identifier of the trigger.
- * payload: Trigger update DTO (single source of truth shared with MCP toolset).
- * user_context: Authentication context.
- * trigger_service: Injected trigger service.
- * secret_manager: Injected secret manager for credential storage.
- * secret_catalog: Workspace-scoped catalog for selected credential references.
- * webhook_service: Injected service that registers the channel webhook.
- *
- * Returns:
- * The updated trigger.
+ * Update an existing trigger; only the fields sent change.
  *
  * Raises:
- * HTTPException: If trigger not found or validation fails; 409 if the
- * update changes the filter of a trigger that has no stream
- * subscription left.
+ * HTTPException: 404 if the trigger does not exist; 400 if validation
+ * fails; 409 if the update changes the filter of a trigger that has no
+ * stream subscription left.
  */
 export const updateTriggerV1TriggersTriggerIdPut = <
   ThrowOnError extends boolean = false,
@@ -10788,7 +10842,7 @@ export const enableTriggerV1TriggersTriggerIdEnablePost = <
  *
  * Args:
  * trigger_id: The unique identifier of the trigger
- * request: Events and channel origin data
+ * request: The events to run the trigger on
  * trigger_service: Injected trigger service
  *
  * Returns:
@@ -10973,49 +11027,6 @@ export const runTriggerNowV1TriggersTriggerIdRunPost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/run",
-    ...options,
-  });
-
-/**
- * Rotate Signing Secret
- *
- * Generate a new signing secret for a generic webhook and return it once.
- *
- * Signs an unsigned webhook, or replaces the secret of a signed one: from
- * this call on, requests signed with any previous secret, or not signed, are
- * refused. The secret is in ``signing_secret`` of this response only.
- *
- * Raises:
- * HTTPException: 404 if the trigger does not exist; 400 if it is not a
- * generic webhook (other channels are signed with their provider's
- * secret); 409 if its secret is set inline in ``validation_rules`` or
- * ``webhook_config``, which this call cannot replace.
- */
-export const rotateSigningSecretV1TriggersTriggerIdSigningSecretPost = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<
-    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData,
-    ThrowOnError
-  >
-): RequestResult<
-  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
-  RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses,
-    RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "HTTPBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret",
     ...options,
   });
 
@@ -11346,156 +11357,6 @@ export const webhookHealthCheckWebhooksHealthGet = <
  *
  * Record an incoming webhook in its stream
  */
-export const handleWebhookWebhooksWebhookIdDelete = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdDeleteData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdDeleteResponses,
-  HandleWebhookWebhooksWebhookIdDeleteErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).delete<
-    HandleWebhookWebhooksWebhookIdDeleteResponses,
-    HandleWebhookWebhooksWebhookIdDeleteErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Record an incoming webhook in its stream
- */
-export const handleWebhookWebhooksWebhookIdGet = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdGetData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdGetResponses,
-  HandleWebhookWebhooksWebhookIdGetErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    HandleWebhookWebhooksWebhookIdGetResponses,
-    HandleWebhookWebhooksWebhookIdGetErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Record an incoming webhook in its stream
- */
-export const handleWebhookWebhooksWebhookIdHead = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdHeadData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdHeadResponses,
-  HandleWebhookWebhooksWebhookIdHeadErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).head<
-    HandleWebhookWebhooksWebhookIdHeadResponses,
-    HandleWebhookWebhooksWebhookIdHeadErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Record an incoming webhook in its stream
- */
-export const handleWebhookWebhooksWebhookIdOptions = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdOptionsData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdOptionsResponses,
-  HandleWebhookWebhooksWebhookIdOptionsErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).options<
-    HandleWebhookWebhooksWebhookIdOptionsResponses,
-    HandleWebhookWebhooksWebhookIdOptionsErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Record an incoming webhook in its stream
- */
-export const handleWebhookWebhooksWebhookIdPatch = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPatchData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPatchResponses,
-  HandleWebhookWebhooksWebhookIdPatchErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).patch<
-    HandleWebhookWebhooksWebhookIdPatchResponses,
-    HandleWebhookWebhooksWebhookIdPatchErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Record an incoming webhook in its stream
- */
 export const handleWebhookWebhooksWebhookIdPost = <
   ThrowOnError extends boolean = false,
 >(
@@ -11508,36 +11369,6 @@ export const handleWebhookWebhooksWebhookIdPost = <
   (options.client ?? client).post<
     HandleWebhookWebhooksWebhookIdPostResponses,
     HandleWebhookWebhooksWebhookIdPostErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        key: "bearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/webhooks/{webhook_id}",
-    ...options,
-  });
-
-/**
- * Handle webhook requests
- *
- * Record an incoming webhook in its stream
- */
-export const handleWebhookWebhooksWebhookIdPut = <
-  ThrowOnError extends boolean = false,
->(
-  options: Options<HandleWebhookWebhooksWebhookIdPutData, ThrowOnError>
-): RequestResult<
-  HandleWebhookWebhooksWebhookIdPutResponses,
-  HandleWebhookWebhooksWebhookIdPutErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).put<
-    HandleWebhookWebhooksWebhookIdPutResponses,
-    HandleWebhookWebhooksWebhookIdPutErrors,
     ThrowOnError
   >({
     security: [

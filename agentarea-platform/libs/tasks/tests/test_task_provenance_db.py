@@ -43,3 +43,56 @@ async def test_provenance_round_trips():
         assert again.provenance.parent_task_id == parent
         assert again.provenance.origin_type == "agent"
     await engine.dispose()
+
+
+async def test_a_task_no_event_started_begins_its_own_chain_and_its_spend_carries_it():
+    from decimal import Decimal
+
+    from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
+    from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+    from sqlalchemy import text
+
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    ws = str(uuid4())
+    async with maker() as session:
+        context = UserContext(user_id="u", workspace_id=ws)
+        now = datetime.now(UTC)
+        task = await TaskRepository(session, context).create_task(
+            Task(
+                id=uuid4(),
+                agent_id=uuid4(),
+                description="from the API",
+                parameters={},
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await CostEntryRepository(session, context).record(
+            [
+                CostEntry(
+                    workspace_id=ws,
+                    created_by="u",
+                    event_id=uuid4(),
+                    category=CostCategory.MODEL,
+                    task_id=task.id,
+                    agent_id=task.agent_id,
+                    subject_type=CostSubjectType.MODEL_INSTANCE,
+                    subject_id=None,
+                    subject_name="m",
+                    call_ref=None,
+                    amount=Decimal("0.01"),
+                    currency="USD",
+                    source=CostSource.TOKEN_PRICING,
+                    occurred_at=now,
+                )
+            ]
+        )
+        stored = await session.scalar(
+            text("SELECT correlation_id FROM cost_entries WHERE task_id = :t"), {"t": task.id}
+        )
+        await session.rollback()
+    assert task.provenance.correlation_id == str(task.id)
+    assert stored == str(task.id)
+    await engine.dispose()

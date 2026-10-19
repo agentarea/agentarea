@@ -2,12 +2,13 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
+from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
 from agentarea_common.exceptions.errors import AppError
 from agentarea_common.money import to_optional_money
 from fastapi import status
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -17,6 +18,9 @@ from agentarea_llm.infrastructure.catalog_model_spec_repository import (
     CatalogModelSpecItem,
     CatalogModelSpecRepository,
 )
+
+# Prices the catalog carries that a workspace's copy did not get when it was added.
+CACHE_PRICE_COLUMNS = ("cached_input_cost_per_token", "cache_creation_input_cost_per_token")
 
 
 class ModelPricingNotConfiguredError(AppError):
@@ -53,6 +57,9 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
         input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
         output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
         cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
+        cache_creation_input_cost_per_token=to_optional_money(
+            spec.get("cache_creation_input_cost_per_token")
+        ),
         supports_function_calling=spec.get("supports_function_calling", False),
         is_active=spec.get("is_active", True),
     )
@@ -150,7 +157,6 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         kind: str | None = None,
     ) -> list[ModelSpec]:
         """List model specs with filtering and relationships."""
@@ -162,7 +168,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         if kind is not None:
             filters["kind"] = kind
 
-        specs = await self.list_all(creator_scoped=creator_scoped, **filters)
+        specs = await self.list_all(**filters)
 
         # Load relationships for each tenant spec
         spec_ids = [spec.id for spec in specs]
@@ -294,6 +300,7 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 input_cost_per_token=preferred.input_cost_per_token,
                 output_cost_per_token=preferred.output_cost_per_token,
                 cached_input_cost_per_token=preferred.cached_input_cost_per_token,
+                cache_creation_input_cost_per_token=preferred.cache_creation_input_cost_per_token,
                 supports_function_calling=preferred.supports_function_calling,
                 is_active=preferred.is_active,
             )
@@ -301,6 +308,43 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
         )
         await self.session.commit()
         return await self.find_one_by(provider_spec_id=provider_spec_id, model_name=model_name)
+
+    async def resync_cache_prices(
+        self,
+        *,
+        provider_spec_id: UUID,
+        model_name: str,
+        previous: dict[str, Any],
+        current: dict[str, Any],
+    ) -> int:
+        """Carry the catalog's cache prices into every workspace's copy of the model.
+
+        A copy freezes the catalog's prices when it is first added, so a cache price
+        the catalog gained later never reached it. A copy whose price is unset, or
+        still the catalog's previous one, takes the catalog's current price; a price a
+        workspace set itself is left alone. Returns how many prices changed.
+        """
+        changed = 0
+        with unscoped("the catalog's cache prices reach every workspace's copy of a model"):
+            for column in CACHE_PRICE_COLUMNS:
+                new = to_optional_money(current.get(column))
+                if new is None:
+                    continue
+                old = to_optional_money(previous.get(column))
+                field = getattr(ModelSpec, column)
+                stale = field.is_(None) if old is None else or_(field.is_(None), field == old)
+                result = await self.session.execute(
+                    update(ModelSpec)
+                    .where(
+                        ModelSpec.provider_spec_id == provider_spec_id,
+                        ModelSpec.model_name == model_name,
+                        stale,
+                        field.is_distinct_from(new),
+                    )
+                    .values({column: new})
+                )
+                changed += getattr(result, "rowcount", 0) or 0
+        return changed
 
     async def upsert_by_provider_and_model_kwargs(self, **kwargs) -> ModelSpec:
         """Upsert this workspace's spec keyed on ``(provider_spec_id, model_name)``.

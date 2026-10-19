@@ -16,7 +16,7 @@ only whoever started the run, or a workspace admin, may act on it.
 """
 
 import json
-from typing import Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_agents.application.execution_service import (
@@ -33,23 +33,33 @@ from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.infrastructure.model_instance_repository import ModelInstanceRepository
 from agentarea_tasks.domain.exceptions import BudgetCapExceededError, RunStillClosingError
-from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from agentarea_tasks.domain.feed import feed_event
+from agentarea_tasks.domain.models import TaskProvenance
+from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.infrastructure.task_log import TaskFeedReader
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from fastapi import HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 
 from agentarea_api.api.deps.services import (
     _create_task_manager,
     get_temporal_workflow_service,
 )
-from agentarea_api.api.v1._task_authority import assert_may_act_on_task
+from agentarea_api.api.v1._task_authority import (
+    assert_may_act_on_task,
+    caller_may_act_on_task,
+    may_resolve_escalation,
+)
 from agentarea_api.api.v1.agents_tasks import (
     ContinueTaskPayload,
     EscalationResolution,
+    PendingEscalationResponse,
     TaskCommandPayload,
     TaskInputSubmission,
     _resolve_model_info,
     escalations_caller_may_resolve,
+    task_execution_id,
 )
 
 from .base import platform_context, platform_read_context
@@ -57,6 +67,10 @@ from .base import platform_context, platform_read_context
 RUN_NOT_FOUND = "Run not found"
 RUN_STILL_CLOSING = "The run is still stopping; try again in a few seconds"
 RUN_AUTHORITY = "whoever started the run, or a workspace admin; _ensure_may_act loads the run first"
+ESCALATION_AUTHORITY = (
+    "an escalation's named approvers, else whoever started the run or a workspace admin; "
+    "_escalation_authority loads the run first"
+)
 
 _FAILURE_FIELDS = (
     "error",
@@ -70,12 +84,133 @@ _TERMINAL_FIELDS = ("status", "success", "error", "error_type", "failure_reason"
 _TERMINAL_TYPES = {"task.completed", "task.failed", "task.cancelled", "execution.finished"}
 _TOOL_RESULT_FIELDS = ("tool_name", "tool_call_id", "success", "replayed", "error", "exit_code")
 _MODEL_CALL_FIELDS = ("model_id", "model_name", "cost", "provider_cost_usd")
+_INPUT_REQUEST_FIELDS = (
+    "input_request_id",
+    "tool_call_id",
+    "question",
+    "questions",
+    "allow_custom_response",
+    "input_mode",
+)
+_INPUT_RESPONSE_FIELDS = ("input_request_id", "tool_call_id", "answer_keys", "secret_keys")
+
+#: GET /v1/tasks takes at most this many.
+MAX_RUNS_LISTED = 1000
+
+RunId = Annotated[str, Field(description="Run id, from `runs_list` or `runs_start`.")]
 
 
-def _event_projection(event_type: str, data: dict[str, Any]) -> dict[str, Any]:
-    """The facts of one event worth reading over MCP, without results or content."""
+class RunStarted(BaseModel):
+    run_id: str = Field(description="Id of the new run.")
+    status: str = Field(description="Status the run was submitted with.")
+    scheduled_at: str | None = Field(
+        description="When a deferred run fires, with its UTC offset; null for a run started now."
+    )
+
+
+class RunSummary(BaseModel):
+    run_id: str = Field(description="Run id.")
+    title: str = Field(description="Run title.")
+    status: str = Field(description="Run status, e.g. running, completed, failed.")
+    agent_id: str | None = Field(description="Agent executing the run.")
+
+
+class RunDetail(RunSummary):
+    query: str = Field(description="The message the run was started with.")
+    provenance: TaskProvenance = Field(description="Who or what started the run, and why.")
+
+
+class RunCancelled(BaseModel):
+    cancelled: bool = Field(description="Whether the run's execution was cancelled.")
+
+
+class RunRetried(BaseModel):
+    retried: bool = Field(description="Always true; a run that cannot be retried is an error.")
+    run_id: str = Field(description="The run being retried.")
+
+
+class RunPaused(BaseModel):
+    paused: bool = Field(description="Whether the pause reached the running execution.")
+
+
+class RunResumed(BaseModel):
+    resumed: bool = Field(description="Whether the resume reached the paused execution.")
+
+
+class InputDelivered(BaseModel):
+    delivered: bool = Field(description="Whether the answers reached the running execution.")
+    input_request_id: str = Field(description="The input request answered.")
+
+
+class CommandDelivered(BaseModel):
+    delivered: bool = Field(description="Whether the command reached the run.")
+    command: str = Field(description="The command sent.")
+
+
+class EscalationResolved(BaseModel):
+    resolved: bool = Field(description="Whether the decision reached the run.")
+    approved: bool = Field(description="The decision sent: true approves, false denies.")
+
+
+class ContinuationResult(BaseModel):
+    accepted: bool = Field(description="Whether the run took the grant and continues.")
+    reason: str | None = Field(
+        default=None,
+        description="Why the grant was refused, e.g. not_waiting_for_continuation, "
+        "policy_ceiling, additional_budget_required; absent when accepted.",
+    )
+    continuation_count: int | None = Field(
+        default=None, description="How many times the run has been continued, when accepted."
+    )
+    max_iterations: int | None = Field(
+        default=None, description="The run's new iteration limit, when accepted."
+    )
+    budget_usd: str | None = Field(
+        default=None, description="The run's new budget in USD, decimal string, when accepted."
+    )
+
+
+class RunEvent(BaseModel):
+    """One persisted event, with the facts its type carries as further keys."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = Field(description="Event id.")
+    seq: int = Field(description="The event's position in the task log.")
+    event_type: str = Field(description="Event type, e.g. tool.call, task.failed.")
+    timestamp: str = Field(description="When the event happened.")
+    message: str | None = Field(default=None, description="Human-readable summary, when set.")
+    input_request_id: str | None = Field(
+        default=None,
+        description="On input.request and input.response: the id `runs_send_input` answers.",
+    )
+    questions: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="On input.request: each question's id (the key of its answer), "
+        "question, type, whether it is required, and its options when it has them.",
+    )
+
+
+PendingEscalations = list[PendingEscalationResponse]
+
+
+class RunEventsPage(BaseModel):
+    total: int = Field(description="Events matching the filter across all pages.")
+    events: list[RunEvent] = Field(description="Events on this page, oldest first.")
+
+
+def _event_projection(
+    event_type: str, data: dict[str, Any], *, revealed: bool = False
+) -> dict[str, Any]:
+    """The facts of one event worth reading over MCP, without results or content.
+
+    ``revealed``: the caller holds the task's authority, so a tool call also
+    carries its arguments and result, secrets masked (``FeedBodies``).
+    """
     fields: tuple[str, ...] = ()
     extra: dict[str, Any] = {}
+    if revealed and event_type in ("tool.call", "tool.result"):
+        extra = {key: data[key] for key in ("arguments", "result") if key in data}
     if event_type in _TERMINAL_TYPES or event_type.startswith("task.awaiting_"):
         fields = _TERMINAL_FIELDS
     elif event_type.endswith(".failed"):
@@ -87,6 +222,10 @@ def _event_projection(event_type: str, data: dict[str, Any]) -> dict[str, Any]:
             extra["argument_names"] = list(arguments)
     elif event_type == "tool.result":
         fields = _TOOL_RESULT_FIELDS
+    elif event_type == "input.request":
+        fields = _INPUT_REQUEST_FIELDS
+    elif event_type == "input.response":
+        fields = _INPUT_RESPONSE_FIELDS
     elif event_type == "llm.call.completed":
         fields = _MODEL_CALL_FIELDS
         usage = (data.get("usage") or {}).get("usage")
@@ -108,8 +247,18 @@ async def _build_task_service(repo_factory, event_broker) -> TaskService:
     )
 
 
-async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserContext) -> None:
-    """Refuse unless the caller started this run or administers the workspace."""
+async def _escalation_authority(
+    service: TaskService, run_id: str, user_ctx: UserContext
+) -> tuple[Any, bool]:
+    """The run, and whether the caller may act on it; deciding an escalation is narrower."""
+    task = await service.get_task(UUID(run_id))
+    if not task:
+        raise ToolError(RUN_NOT_FOUND)
+    return task, await caller_may_act_on_task(task, user_ctx)
+
+
+async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserContext) -> Any:
+    """The run, unless the caller neither started it nor administers the workspace."""
     task = await service.get_task(UUID(run_id))
     if not task:
         raise ToolError(RUN_NOT_FOUND)
@@ -117,11 +266,7 @@ async def _ensure_may_act(service: TaskService, run_id: str, user_ctx: UserConte
         await assert_may_act_on_task(task, user_ctx)
     except HTTPException as exc:
         raise ToolError(exc.detail) from exc
-
-
-def _execution_id(run_id: str) -> str:
-    """Workflow id for a run, matching ``api/v1/agents_tasks.py``."""
-    return f"task-{run_id}"
+    return task
 
 
 async def _model_switch_body(model_instance_id: str, session, user_ctx, broker, secret_mgr) -> dict:
@@ -144,16 +289,40 @@ async def _model_switch_body(model_instance_id: str, session, user_ctx, broker, 
 class RunsToolset(Toolset):
     """Start, list, get, and cancel agent runs."""
 
-    @tool_method(effect="write")
+    open_world = False
+
+    @tool_method(display_name="Start run", effect="write", output=RunStarted)
     @unrestricted("any member may start a run, as POST /v1/agents/{id}/tasks allows")
     async def start(
         self,
-        agent_id: str,
-        description: str,
-        parameters: dict[str, Any] | None = None,
-        requires_human_approval: bool = False,
-        project_id: str | None = None,
-        scheduled_at: str | None = None,
+        agent_id: Annotated[str, Field(description="Agent id (UUID), from `agents_list`.")],
+        description: Annotated[
+            str,
+            Field(
+                description="The message handed to the agent, 1-20000 characters; also the "
+                "run title."
+            ),
+        ],
+        parameters: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description='Free-form task parameters, e.g. {"model_override": "<model id>"} '
+                "plus any agent-specific context. delivery_address and session are reserved and rejected."
+            ),
+        ] = None,
+        requires_human_approval: Annotated[
+            bool, Field(description="Hold the run for a person's approval before tool calls.")
+        ] = False,
+        project_id: Annotated[
+            str | None, Field(description="Project id to scope the run to, from `projects_list`.")
+        ] = None,
+        scheduled_at: Annotated[
+            str | None,
+            Field(
+                description="Run once at this future time instead of now: ISO 8601 with a UTC "
+                "offset, e.g. 2026-09-01T09:00:00+03:00."
+            ),
+        ] = None,
     ) -> str:
         """Start a new agent run, now or once at a future moment.
 
@@ -203,35 +372,42 @@ class RunsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
-    @unrestricted("lists the caller's own runs, as GET /v1/tasks does")
-    async def list(self, agent_id: str = "", limit: int = 20) -> str:
-        """List recent runs, optionally filtered by agent ID."""
-        async with platform_read_context() as (
-            _session,
-            user_ctx,
-            repo_factory,
-            event_broker,
-            _,
-        ):
-            service = await _build_task_service(repo_factory, event_broker)
-            tasks = await service.list_tasks(user_id=user_ctx.user_id, limit=limit)
+    @tool_method(display_name="List runs", effect="read", output=list[RunSummary])
+    @unrestricted("the workspace's runs, as GET /v1/tasks lists them")
+    async def list(
+        self,
+        agent_id: Annotated[
+            str, Field(description="Only runs of this agent id, from `agents_list`; empty for any.")
+        ] = "",
+        limit: Annotated[
+            int, Field(ge=1, le=MAX_RUNS_LISTED, description="Most runs to return, newest first.")
+        ] = 20,
+    ) -> str:
+        """List the workspace's recent runs, newest first, optionally filtered by agent ID."""
+        # MCP arguments are not validated against the schema before the call.
+        if not 1 <= limit <= MAX_RUNS_LISTED:
+            raise ToolError(f"limit must be between 1 and {MAX_RUNS_LISTED}, got {limit}")
+        async with platform_read_context() as (_s, _user_ctx, repo_factory, _broker, _):
+            records = await repo_factory.create_repository(TaskRepository).list_page(
+                limit=limit,
+                offset=0,
+                agent_id=UUID(agent_id) if agent_id else None,
+            )
             return json.dumps(
                 [
                     {
-                        "run_id": str(t.id),
-                        "title": t.title,
-                        "status": t.status,
-                        "agent_id": str(t.agent_id) if t.agent_id else None,
+                        "run_id": str(r.id),
+                        "title": r.description,
+                        "status": r.status,
+                        "agent_id": str(r.agent_id) if r.agent_id else None,
                     }
-                    for t in tasks
-                ],
-                default=str,
+                    for r in records
+                ]
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get run", effect="read", output=RunDetail)
     @unrestricted("a run in the caller's workspace, as GET /v1/tasks/{id} returns it")
-    async def get(self, run_id: str) -> str:
+    async def get(self, run_id: RunId) -> str:
         """Get status and details of a specific run."""
         async with platform_read_context() as (
             _session,
@@ -256,9 +432,11 @@ class RunsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Cancel run", effect="destructive", idempotent=True, output=RunCancelled
+    )
     @enforced_in_handler(RUN_AUTHORITY)
-    async def cancel(self, run_id: str) -> str:
+    async def cancel(self, run_id: RunId) -> str:
         """Cancel a running agent execution."""
         async with platform_context() as (
             _session,
@@ -272,9 +450,9 @@ class RunsToolset(Toolset):
             cancelled = await service.cancel_task(UUID(run_id))
             return json.dumps({"cancelled": cancelled})
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Retry failed run", effect="write", output=RunRetried)
     @enforced_in_handler(RUN_AUTHORITY)
-    async def retry(self, run_id: str) -> str:
+    async def retry(self, run_id: RunId) -> str:
         """Re-run the turn a failed run ended on, on the same conversation, with no new message."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
@@ -287,35 +465,47 @@ class RunsToolset(Toolset):
                 raise ToolError("Only a failed run whose execution has finished can be retried")
             return json.dumps({"retried": True, "run_id": run_id})
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Pause run", effect="write", idempotent=True, output=RunPaused)
     @enforced_in_handler(RUN_AUTHORITY)
-    async def pause(self, run_id: str) -> str:
+    async def pause(self, run_id: RunId) -> str:
         """Pause a running agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
-            paused = await workflow.pause_task(_execution_id(run_id))
+            paused = await workflow.pause_task(task_execution_id(task))
             return json.dumps({"paused": paused})
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Resume run", effect="write", idempotent=True, output=RunResumed)
     @enforced_in_handler(RUN_AUTHORITY)
-    async def resume(self, run_id: str) -> str:
+    async def resume(self, run_id: RunId) -> str:
         """Resume a paused agent execution."""
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
-            resumed = await workflow.resume_task(_execution_id(run_id))
+            resumed = await workflow.resume_task(task_execution_id(task))
             return json.dumps({"resumed": resumed})
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Answer run input request", effect="write", output=InputDelivered)
     @enforced_in_handler(RUN_AUTHORITY)
     async def send_input(
         self,
-        run_id: str,
-        input_request_id: str,
-        answers: dict[str, Any] | None = None,
+        run_id: RunId,
+        input_request_id: Annotated[
+            str,
+            Field(
+                description="Id of the pending request, from the run's input.request event; "
+                "1-128 characters."
+            ),
+        ],
+        answers: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description="Answers keyed by the question ids of the request, e.g. "
+                '{"<question id>": "yes"}. Secret answers are not accepted.'
+            ),
+        ] = None,
     ) -> str:
         """Answer a run that is waiting on request_user_input.
 
@@ -330,10 +520,10 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             delivered = await workflow.send_workflow_command(
-                _execution_id(run_id),
+                task_execution_id(task),
                 "submit_user_input",
                 {
                     "input_request_id": submission.input_request_id,
@@ -346,16 +536,37 @@ class RunsToolset(Toolset):
                 {"delivered": delivered, "input_request_id": submission.input_request_id}
             )
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Send run command", effect="write", output=CommandDelivered)
     @enforced_in_handler(RUN_AUTHORITY)
     async def send_command(
         self,
-        run_id: str,
-        command: str,
-        message: str | None = None,
-        message_id: str | None = None,
-        model_instance_id: str | None = None,
-        budget_usd: str | None = None,
+        run_id: RunId,
+        command: Annotated[
+            Literal["queue_message", "remove_message", "change_model", "update_budget"],
+            Field(
+                description="What to do: queue_message takes `message`, remove_message "
+                "`message_id`, change_model `model_instance_id`, update_budget `budget_usd`."
+            ),
+        ],
+        message: Annotated[
+            str | None,
+            Field(
+                description="For queue_message: the message for the agent's next turn. A "
+                "finished run continues its conversation with it."
+            ),
+        ] = None,
+        message_id: Annotated[
+            str | None,
+            Field(description="For remove_message: id of a queued message to drop."),
+        ] = None,
+        model_instance_id: Annotated[
+            str | None,
+            Field(description="For change_model: model instance id, from `models_list_instances`."),
+        ] = None,
+        budget_usd: Annotated[
+            str | None,
+            Field(description='For update_budget: the run\'s new budget in USD, e.g. "5.00".'),
+        ] = None,
     ) -> str:
         """Steer a running execution: queue_message, remove_message, change_model, update_budget."""
         payload = TaskCommandPayload.model_validate(
@@ -375,7 +586,7 @@ class RunsToolset(Toolset):
             secret_mgr,
         ):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task = await _ensure_may_act(service, run_id, user_ctx)
 
             if payload.command == "queue_message":
                 if not payload.message:
@@ -398,6 +609,7 @@ class RunsToolset(Toolset):
                     )
                 except HTTPException as exc:
                     raise ToolError(exc.detail) from exc
+                body["changed_by"] = user_ctx.user_id
             else:
                 raise ToolError(f"Unknown command: {payload.command}")
 
@@ -411,18 +623,30 @@ class RunsToolset(Toolset):
             else:
                 workflow = await get_temporal_workflow_service()
                 delivered = await workflow.send_workflow_command(
-                    _execution_id(run_id), payload.command, body
+                    task_execution_id(task), payload.command, body
                 )
             return json.dumps({"delivered": delivered, "command": payload.command}, default=str)
 
-    @tool_method(effect="privileged")
-    @enforced_in_handler(RUN_AUTHORITY)
+    @tool_method(
+        display_name="Resolve run escalation",
+        effect="privileged",
+        idempotent=True,
+        output=EscalationResolved,
+    )
+    @enforced_in_handler(ESCALATION_AUTHORITY)
     async def resolve_escalation(
         self,
-        run_id: str,
-        escalation_id: str,
-        approved: bool,
-        comment: str = "",
+        run_id: RunId,
+        escalation_id: Annotated[
+            str,
+            Field(description="Escalation id, from `runs_list_pending_escalations`."),
+        ],
+        approved: Annotated[
+            bool, Field(description="True runs the held tool call; false denies it.")
+        ],
+        comment: Annotated[
+            str, Field(description="Note recorded with the decision; may be empty.")
+        ] = "",
     ) -> str:
         """Approve or deny a tool escalation a run is blocked on."""
         resolution = EscalationResolution(
@@ -430,11 +654,26 @@ class RunsToolset(Toolset):
         )
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task, may_act = await _escalation_authority(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
+            execution_id = task_execution_id(task)
+            if not may_act:
+                try:
+                    pending = await workflow.get_pending_escalations(execution_id)
+                except WorkflowNotFoundError:
+                    raise ToolError("Escalation not found or no longer pending") from None
+                escalation = next(
+                    (e for e in pending if e["escalation_id"] == resolution.escalation_id), None
+                )
+                if escalation is None:
+                    raise ToolError("Escalation not found or no longer pending")
+                if not may_resolve_escalation(
+                    escalation["approvers"], str(user_ctx.user_id), may_act_on_run=False
+                ):
+                    raise ToolError("You are not an approver of this escalation")
             try:
                 resolved = await workflow.resolve_escalation(
-                    _execution_id(run_id),
+                    execution_id,
                     resolution.escalation_id,
                     resolution.approved,
                     resolution.comment,
@@ -446,40 +685,53 @@ class RunsToolset(Toolset):
                 raise ToolError("You are not an approver of this escalation") from None
             return json.dumps({"resolved": resolved, "approved": resolution.approved})
 
-    @tool_method(effect="read")
-    @enforced_in_handler(RUN_AUTHORITY)
-    async def list_pending_escalations(self, run_id: str) -> str:
+    @tool_method(
+        display_name="List pending escalations",
+        effect="read",
+        output=PendingEscalations,
+    )
+    @enforced_in_handler(ESCALATION_AUTHORITY)
+    async def list_pending_escalations(self, run_id: RunId) -> str:
         """List the escalations a run is blocked on that you may resolve.
 
         Each carries the exact tool arguments awaiting a decision. Run events
         redact them, since a command can carry an inline secret, so only a
-        caller who may act on the run and is one of the escalation's approvers
-        sees them.
+        caller who may decide an escalation sees it: its named approvers, else
+        whoever may act on the run.
         """
         async with platform_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = await _build_task_service(repo_factory, event_broker)
-            await _ensure_may_act(service, run_id, user_ctx)
+            task, may_act = await _escalation_authority(service, run_id, user_ctx)
             workflow = await get_temporal_workflow_service()
             try:
-                pending = await workflow.get_pending_escalations(_execution_id(run_id))
+                pending = await workflow.get_pending_escalations(task_execution_id(task))
             except WorkflowNotFoundError:
                 raise ToolError("Run has no workflow to read escalations from") from None
-            return json.dumps(
-                [
-                    escalation.model_dump()
-                    for escalation in escalations_caller_may_resolve(pending, str(user_ctx.user_id))
-                ]
+            shown = escalations_caller_may_resolve(
+                pending, str(user_ctx.user_id), may_act_on_run=may_act
             )
+            if not may_act and not shown:
+                raise ToolError("You may not act on this run")
+            return json.dumps([escalation.model_dump() for escalation in shown])
 
-    @tool_method(effect="privileged")
+    @tool_method(display_name="Continue run", effect="privileged", output=ContinuationResult)
     @enforced_in_handler(RUN_AUTHORITY)
     async def continue_run(
         self,
-        run_id: str,
-        additional_iterations: int = 0,
-        additional_budget_usd: str | None = None,
-        additional_tokens: int = 0,
-        additional_tool_calls: int = 0,
+        run_id: RunId,
+        additional_iterations: Annotated[
+            int, Field(description="Extra model turns to grant, 0-1000.")
+        ] = 0,
+        additional_budget_usd: Annotated[
+            str | None,
+            Field(description='Extra budget in USD, a positive decimal string, e.g. "2.50".'),
+        ] = None,
+        additional_tokens: Annotated[
+            int, Field(description="Extra tokens to grant, 0-10000000.")
+        ] = 0,
+        additional_tool_calls: Annotated[
+            int, Field(description="Extra tool calls to grant, 0-10000.")
+        ] = 0,
     ) -> str:
         """Grant more iterations, budget, tokens or tool calls to a run waiting for continuation."""
         payload = ContinueTaskPayload.model_validate(
@@ -502,14 +754,19 @@ class RunsToolset(Toolset):
             )
             return json.dumps(result, default=str)
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get run events", effect="read", output=RunEventsPage)
     @unrestricted("persisted run events, as GET /v1/agents/{id}/tasks/{id}/events serves them")
     async def get_events(
         self,
-        run_id: str,
-        limit: int = 50,
-        offset: int = 0,
-        event_type: str | None = None,
+        run_id: RunId,
+        limit: Annotated[int, Field(description="Most events to return.")] = 50,
+        offset: Annotated[
+            int, Field(description="Events to skip from the oldest; total-limit reads the latest.")
+        ] = 0,
+        event_type: Annotated[
+            str | None,
+            Field(description="Only events of this type, e.g. tool.result or task.failed."),
+        ] = None,
     ) -> str:
         """Read a run's persisted execution events, oldest first.
 
@@ -518,23 +775,31 @@ class RunsToolset(Toolset):
         status of a terminal event. For the latest events, page from
         offset=total-limit.
         """
-        async with platform_read_context() as (_s, _user_ctx, repo_factory, _broker, _):
-            event_repository = repo_factory.create_repository(TaskEventRepository)
-            records, total = await event_repository.list_for_task(
+        async with platform_read_context() as (_s, user_ctx, repo_factory, _broker, _):
+            reader = TaskFeedReader(repo_factory.session, repo_factory.user_context)
+            entries, total = await reader.page(
                 UUID(run_id), event_type=event_type, limit=limit, offset=offset
             )
-            return json.dumps(
-                {
-                    "total": total,
-                    "events": [
-                        {
-                            "id": str(r.id),
-                            "event_type": r.event_type,
-                            "timestamp": r.timestamp,
-                            **_event_projection(r.event_type, r.data or {}),
-                        }
-                        for r in records
-                    ],
-                },
-                default=str,
-            )
+            revealed = False
+            bodies = None
+            if any(entry.name in ("tool.call", "tool.result") for entry in entries):
+                task = await repo_factory.create_repository(TaskRepository).get_task(UUID(run_id))
+                revealed = task is not None and await caller_may_act_on_task(task, user_ctx)
+            if revealed:
+                bodies = await reader.bodies(UUID(run_id), entries, revealed=True)
+            events = []
+            for entry in entries:
+                shown = feed_event(entry, bodies)
+                if shown is None:
+                    continue
+                shown_type, data = shown
+                events.append(
+                    {
+                        "id": str(entry.event_id),
+                        "seq": entry.seq,
+                        "event_type": shown_type,
+                        "timestamp": entry.occurred_at,
+                        **_event_projection(shown_type, data, revealed=revealed),
+                    }
+                )
+            return json.dumps({"total": total, "events": events}, default=str)

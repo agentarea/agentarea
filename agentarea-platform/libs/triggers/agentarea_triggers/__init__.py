@@ -1,22 +1,22 @@
 """AgentArea Triggers Library.
 
 This library provides trigger system functionality for automated agent execution
-based on scheduled events and external webhooks.
+based on schedules and the events of streams.
 """
 
 from .domain.enums import (
     ExecutionStatus,
     TriggerStatus,
     TriggerType,
-    WebhookType,
 )
 from .domain.models import (
     CronTrigger,
+    StreamTrigger,
     Trigger,
     TriggerCreate,
     TriggerExecution,
+    TriggerSession,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from .infrastructure.repository import (
     TriggerExecutionRepository,
@@ -31,6 +31,7 @@ from .trigger_service import (
 __all__ = [
     "CronTrigger",
     "ExecutionStatus",
+    "StreamTrigger",
     "Trigger",
     "TriggerCreate",
     "TriggerExecution",
@@ -38,10 +39,9 @@ __all__ = [
     "TriggerNotFoundError",
     "TriggerRepository",
     "TriggerService",
+    "TriggerSession",
     "TriggerStatus",
     "TriggerType",
     "TriggerUpdate",
     "TriggerValidationError",
-    "WebhookTrigger",
-    "WebhookType",
 ]

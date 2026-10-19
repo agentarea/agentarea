@@ -31,9 +31,9 @@ class TestWorkspaceModelRepository(WorkspaceScopedRepository[TestWorkspaceModel]
     def __init__(self, session, user_context):
         super().__init__(session, TestWorkspaceModel, user_context)
 
-    async def find_by_category(self, category: str, creator_scoped: bool = False):
+    async def find_by_category(self, category: str):
         """Custom method to find by category."""
-        return await self.find_by(creator_scoped=creator_scoped, category=category)
+        return await self.find_by(category=category)
 
 
 @pytest.fixture

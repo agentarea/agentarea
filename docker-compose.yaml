@@ -25,11 +25,14 @@ services:
       # MCP settings
       - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       # Server settings
       - PORT=${PORT:-8000}
+      # The public base of webhook URLs; the event service registers the same one.
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
       - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
       - AGENTAREA_API_WORKERS=${AGENTAREA_API_WORKERS:-1}
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
@@ -55,6 +58,8 @@ services:
       # PEM file of CA certificates trusted on outbound TLS on top of the public
       # roots; a path inside the container, mounted by an override file.
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
@@ -277,6 +282,8 @@ services:
     # containers on mcp-network must not be able to reach it.
     networks:
       - default
+    # A store for the event bus, not a cache: AOF on, nothing evicted.
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   agentarea-mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
@@ -301,6 +308,7 @@ services:
       # project default, which also carries the database and Redis.
       AGENTAREA_MCP_NETWORK: agentarea_mcp-network
       AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_EVENT_NAMESPACE: agentarea
       AGENTAREA_API_URL: http://app:8000
       # Demand gateway: MCP workloads start on the first call and are reclaimed
       # after AGENTAREA_MCP_IDLE_TIMEOUT (0 keeps them running once started). All four are
@@ -471,11 +479,14 @@ services:
 
       # Redis
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       # Links the worker sends out (the Telegram account-link reply)
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
       # PEM file of CA certificates trusted on outbound TLS on top of the public
       # roots; a path inside the container, mounted by an override file.
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
 
       # Temporal
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
@@ -490,6 +501,7 @@ services:
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       - AGENTAREA_SANDBOX_CLEANUP_SECRET=${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
@@ -563,8 +575,16 @@ services:
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_SSLMODE=disable
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_EVENT_POLL_INTERVAL=30s
       - AGENTAREA_EVENT_MAX_POLLERS=10
+      # The public base of /webhooks/{webhook_id}, as the app advertises it.
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
+      # Source credentials are read from the database secret store.
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      # MCP Events sources are polled and subscribed through the manager's gateway.
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
     networks:
       - default
     restart: unless-stopped

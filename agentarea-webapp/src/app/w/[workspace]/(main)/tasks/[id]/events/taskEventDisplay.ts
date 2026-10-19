@@ -3,9 +3,15 @@
  * words, and the few facts in its data worth seeing without opening it.
  */
 
+import {
+  isUnavailableToolValue,
+  stripUnavailableToolValues,
+} from "@/components/Chat/utils/toolDetails";
+import { isTaskEventType, type TaskEventType } from "@/lib/events/contract";
+
 export type EventCategory =
   | "task"
-  | "iteration"
+  | "turn"
   | "llm"
   | "tool"
   | "input"
@@ -17,39 +23,37 @@ export type EventCategory =
   | "runtime"
   | "other";
 
-/** Checked in order against the lower-cased type; the first match wins. */
-const CATEGORY_PREFIXES: readonly [string, EventCategory][] = [
-  ["llm.", "llm"],
-  ["tool.", "tool"],
-  ["input.", "input"],
-  ["approval.", "approval"],
-  ["humanapproval", "approval"],
-  ["artifact.", "artifact"],
-  ["a2ui.", "ui"],
-  ["task.", "task"],
-  ["execution.", "task"],
-  ["workflow", "task"],
-  ["iteration", "iteration"],
-  ["budget", "budget"],
-  ["context", "context"],
-  ["runtime", "runtime"],
-];
+/** Category of each scope, the part of the type before its first dot. */
+const CATEGORY_BY_SCOPE: Readonly<Record<string, EventCategory>> = {
+  task: "task",
+  execution: "task",
+  command: "task",
+  delegation: "task",
+  turn: "turn",
+  llm: "llm",
+  model: "llm",
+  answer: "llm",
+  tool: "tool",
+  input: "input",
+  message: "input",
+  approval: "approval",
+  artifact: "artifact",
+  a2ui: "ui",
+  budget: "budget",
+  service: "budget",
+  context: "context",
+  runtime: "runtime",
+};
 
 export function eventCategory(type: string): EventCategory {
-  const lower = type.toLowerCase();
-  return (
-    CATEGORY_PREFIXES.find(([prefix]) => lower.startsWith(prefix))?.[1] ??
-    "other"
-  );
+  return CATEGORY_BY_SCOPE[type.split(".", 1)[0]] ?? "other";
 }
 
 /**
- * Catalog key (under `TaskEventsPage.types`) of the name a known type reads
- * as. The backend vocabulary is fixed (agentarea_common/events/contract.py
- * plus the workflow's own CamelCase events); a type missing here keeps its
- * raw name.
+ * Catalog key (under `TaskEventsPage.types`) of the name each type of the
+ * closed vocabulary (lib/events/contract.ts) reads as.
  */
-const TYPE_KEYS: Readonly<Record<string, string>> = {
+const TYPE_KEYS: Readonly<Record<TaskEventType, string>> = {
   "task.started": "taskStarted",
   "task.completed": "taskCompleted",
   "task.failed": "taskFailed",
@@ -57,43 +61,59 @@ const TYPE_KEYS: Readonly<Record<string, string>> = {
   "task.awaiting_follow_up": "taskAwaitingFollowUp",
   "task.awaiting_continuation": "taskAwaitingContinuation",
   "task.continued": "taskContinued",
+  "task.retried": "taskRetried",
   "execution.finished": "executionFinished",
+  "execution.continued_as_new": "executionContinuedAsNew",
+  "execution.paused": "executionPaused",
+  "execution.resumed": "executionResumed",
+  "turn.started": "turnStarted",
+  "turn.completed": "turnCompleted",
+  "turn.aborted": "turnAborted",
   "llm.call.started": "llmCallStarted",
   "llm.call.completed": "llmCallCompleted",
   "llm.call.failed": "llmCallFailed",
   "llm.call.chunk": "llmCallChunk",
   "tool.call": "toolCall",
   "tool.result": "toolResult",
+  "tool.progress": "toolProgress",
   "input.request": "inputRequest",
+  "input.submitted": "inputSubmitted",
   "input.response": "inputResponse",
-  "approval.request": "approvalRequest",
-  "approval.response": "approvalResponse",
-  HumanApprovalRequested: "approvalRequest",
+  "approval.requested": "approvalRequest",
+  "approval.decided": "approvalResponse",
+  "message.queued": "messageQueued",
+  "message.received": "messageReceived",
+  "message.removed": "messageRemoved",
+  "command.received": "commandReceived",
+  "command.rejected": "commandRejected",
+  "budget.warning": "budgetWarning",
+  "budget.exceeded": "budgetExceeded",
+  "budget.updated": "budgetUpdated",
+  "service.payment": "servicePayment",
+  "service.budget_warning": "serviceBudgetWarning",
+  "service.budget_exceeded": "serviceBudgetExceeded",
+  "context.warning": "contextWarning",
+  "context.compacted": "contextCompacted",
+  "answer.checked": "answerChecked",
+  "model.changed": "modelChanged",
+  "model.fallback": "modelFallback",
+  "model.unavailable": "modelUnavailable",
+  "runtime.discovered": "runtimeDiscovered",
+  "delegation.started": "delegationStarted",
+  "delegation.completed": "delegationCompleted",
+  "delegation.failed": "delegationFailed",
+  "artifact.validation.started": "artifactValidationStarted",
+  "artifact.validation.completed": "artifactValidationCompleted",
   "artifact.created": "artifactCreated",
   "artifact.updated": "artifactUpdated",
   "a2ui.create": "uiCreated",
   "a2ui.update.components": "uiUpdated",
   "a2ui.update.data": "uiUpdated",
   "a2ui.delete": "uiDeleted",
-  IterationStarted: "iterationStarted",
-  IterationCompleted: "iterationCompleted",
-  BudgetWarning: "budgetWarning",
-  BudgetExceeded: "budgetExceeded",
-  ContextCompacted: "contextCompacted",
-  ContextWindowExceeded: "contextWindowExceeded",
-  RuntimeDiscovered: "runtimeDiscovered",
-  RuntimeError: "runtimeError",
-  WorkflowStarted: "workflowStarted",
-  WorkflowCompleted: "workflowCompleted",
-  WorkflowFailed: "workflowFailed",
-  WorkflowCancelled: "workflowCancelled",
-  WorkflowContinuedAsNew: "workflowContinuedAsNew",
-  WorkflowCommandReceived: "commandReceived",
-  WorkflowCommandRejected: "commandRejected",
 };
 
 export function eventTypeKey(type: string): string | null {
-  return TYPE_KEYS[type] ?? null;
+  return isTaskEventType(type) ? TYPE_KEYS[type] : null;
 }
 
 /**
@@ -101,7 +121,10 @@ export function eventTypeKey(type: string): string | null {
  * scope repeats down the table; what happened is the part to read. A type
  * with no dot is all action.
  */
-export function splitEventType(type: string): { scope: string; action: string } {
+export function splitEventType(type: string): {
+  scope: string;
+  action: string;
+} {
   const dot = type.lastIndexOf(".");
   return dot === -1
     ? { scope: "", action: type }
@@ -125,7 +148,13 @@ export function eventSummary(
 ): string | null {
   for (const key of SUMMARY_KEYS) {
     const value = data?.[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    // A marker standing in for a body the event did not keep is not its words.
+    if (
+      typeof value === "string" &&
+      value.trim() &&
+      !isUnavailableToolValue(value.trim())
+    )
+      return value.trim();
   }
   return null;
 }
@@ -155,6 +184,19 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+/**
+ * The model an event names: the one that answered (`model_name`), or for a
+ * change, the old and the new one.
+ */
+function modelOf(data: Record<string, unknown>): string | null {
+  const to = text(record(data.to)?.model_name) ?? text(data.new_model);
+  if (to) {
+    const from = text(record(data.from)?.model_name) ?? text(data.old_model);
+    return from ? `${from} → ${to}` : to;
+  }
+  return text(data.model) ?? text(data.model_name);
+}
+
 /** The facts an event's data carries, in the order they read best. */
 export function eventFacts(
   data: Record<string, unknown> | undefined
@@ -162,7 +204,8 @@ export function eventFacts(
   if (!data) return [];
   const facts: EventFact[] = [];
 
-  const tool = text(data.tool_name) ?? text(data.skill_name) ?? text(data.script_name);
+  const tool =
+    text(data.tool_name) ?? text(data.skill_name) ?? text(data.script_name);
   if (tool) facts.push({ kind: "tool", value: tool });
 
   const args = record(data.arguments);
@@ -170,7 +213,7 @@ export function eventFacts(
     facts.push({ kind: "arguments", value: Object.keys(args) });
   }
 
-  const model = text(data.model);
+  const model = modelOf(data);
   if (model) facts.push({ kind: "model", value: model });
 
   const iteration = count(data.iteration);
@@ -198,4 +241,15 @@ export function eventFacts(
   if (errorType) facts.push({ kind: "errorType", value: errorType });
 
   return facts;
+}
+
+/**
+ * The event's data as the details show it: markers standing in for values the
+ * log did not keep are left out, and null when nothing else is there.
+ */
+export function shownEventData(
+  data: Record<string, unknown> | undefined
+): Record<string, unknown> | null {
+  const kept = record(stripUnavailableToolValues(data));
+  return kept && Object.keys(kept).length > 0 ? kept : null;
 }

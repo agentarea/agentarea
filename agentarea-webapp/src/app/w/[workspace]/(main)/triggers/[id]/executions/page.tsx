@@ -3,6 +3,7 @@ import type { ExecutionHistoryResponse } from "@/api/client/types.gen";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import OffsetPagination from "@/components/OffsetPagination";
 import { getTriggerExecutions, resolvePrincipals } from "@/lib/api";
+import { getPricingCurrency } from "@/lib/api-dashboard";
 import { pageHref, parsePageParam } from "@/lib/offsetPage";
 import ExecutionsTable from "./ExecutionsTable";
 
@@ -36,10 +37,13 @@ export default async function TriggerExecutionsPage({
     );
   }
 
-  const { data, error } = await getTriggerExecutions(id, {
-    page,
-    page_size: EXECUTIONS_PAGE_SIZE,
-  });
+  const [{ data, error }, pricingCurrency] = await Promise.all([
+    getTriggerExecutions(id, {
+      page,
+      page_size: EXECUTIONS_PAGE_SIZE,
+    }),
+    getPricingCurrency(),
+  ]);
 
   if (error || !data) {
     return (
@@ -102,6 +106,7 @@ export default async function TriggerExecutionsPage({
       <ExecutionsTable
         executions={executions}
         principalNames={principalNames}
+        currency={pricingCurrency.ok ? pricingCurrency.currency : null}
       />
       <OffsetPagination
         path={path}

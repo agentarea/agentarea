@@ -8,9 +8,7 @@ from tests.e2e.api.conftest import create_agent
 
 @pytest.mark.integration
 @pytest.mark.slow
-def test_trigger_execute_public_creates_task(
-    alice_client: httpx.Client, llm_model: str
-) -> None:
+def test_trigger_execute_public_creates_task(alice_client: httpx.Client, llm_model: str) -> None:
     agent_id = create_agent(
         alice_client,
         llm_model,
@@ -18,15 +16,20 @@ def test_trigger_execute_public_creates_task(
         instruction="Reply with exactly one lowercase word and nothing else.",
     )
 
-    trigger = alice_client.post(
-        f"{alice_client.ws}/triggers/",
-        json={
-            "name": "exec-trigger",
-            "description": "e2e execute test",
-            "agent_id": agent_id,
-            "trigger_type": "webhook",
-        },
-    ).raise_for_status().json()
+    trigger = (
+        alice_client.post(
+            f"{alice_client.ws}/triggers/",
+            json={
+                "name": "exec-trigger",
+                "description": "e2e execute test",
+                "agent_id": agent_id,
+                "trigger_type": "cron",
+                "cron_expression": "0 0 1 1 *",
+            },
+        )
+        .raise_for_status()
+        .json()
+    )
     trigger_id = trigger["id"]
 
     execute_resp = alice_client.post(
@@ -60,14 +63,19 @@ def test_trigger_execute_disabled_trigger_rejected(
         instruction="ok.",
     )
 
-    trigger = alice_client.post(
-        f"{alice_client.ws}/triggers/",
-        json={
-            "name": "disabled-trigger",
-            "agent_id": agent_id,
-            "trigger_type": "webhook",
-        },
-    ).raise_for_status().json()
+    trigger = (
+        alice_client.post(
+            f"{alice_client.ws}/triggers/",
+            json={
+                "name": "disabled-trigger",
+                "agent_id": agent_id,
+                "trigger_type": "cron",
+                "cron_expression": "0 0 1 1 *",
+            },
+        )
+        .raise_for_status()
+        .json()
+    )
 
     alice_client.post(f"{alice_client.ws}/triggers/{trigger['id']}/disable").raise_for_status()
 
@@ -75,8 +83,6 @@ def test_trigger_execute_disabled_trigger_rejected(
         f"{alice_client.ws}/triggers/{trigger['id']}/execute",
         json={"payload": {}},
     )
-    assert resp.status_code in (400, 403, 409, 200), (
-        f"Got {resp.status_code}: {resp.text[:200]}"
-    )
+    assert resp.status_code in (400, 403, 409, 200), f"Got {resp.status_code}: {resp.text[:200]}"
     if resp.status_code == 200:
         pytest.xfail("BUG: disabled trigger still executes and returns 200")

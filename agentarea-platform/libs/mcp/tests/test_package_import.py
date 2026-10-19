@@ -101,10 +101,10 @@ def _patch_http(monkeypatch, handler):
     transport = httpx.MockTransport(handler)
     real_client = httpx.AsyncClient
 
-    def factory(**kwargs):
+    def factory(*_args, **kwargs):
         return real_client(transport=transport, **kwargs)
 
-    monkeypatch.setattr("agentarea_mcp.package_import.httpx.AsyncClient", factory)
+    monkeypatch.setattr("agentarea_mcp.package_import.outbound_client", factory)
     monkeypatch.setattr(
         "agentarea_mcp.package_import.get_settings", lambda: SimpleNamespace(mcp=_Settings())
     )

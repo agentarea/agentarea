@@ -10,6 +10,7 @@ import httpx
 import yaml
 
 from agentarea_common.config.openfga import OpenFGASettings
+from agentarea_common.outbound import Destination, outbound_client
 
 from .openfga_client import OpenFGAError, OpenFGAUnavailableError
 
@@ -35,7 +36,7 @@ async def bootstrap_openfga(
     headers = {"Authorization": f"Bearer {settings.API_TOKEN}"} if settings.API_TOKEN else {}
     owns_client = client is None
     if client is None:
-        client = httpx.AsyncClient(timeout=timeout)
+        client = outbound_client(Destination.INTERNAL, timeout=timeout)
     try:
         store_id = settings.STORE_ID.strip()
         if not store_id:

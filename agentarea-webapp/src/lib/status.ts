@@ -261,6 +261,8 @@ export function getStreamOutcomeStatusPresentation(
       return { label: "Error", labelKey: "error", kind: "failed" };
     case "unheard":
       return { label: "Nobody listened", labelKey: "unheard", kind: "draft" };
+    case "batched":
+      return { label: "In a batch", labelKey: "batched", kind: "scheduled" };
     default:
       return {
         label: "Unknown outcome",
@@ -271,25 +273,27 @@ export function getStreamOutcomeStatusPresentation(
 }
 
 /**
- * What protects a webhook URL. Only "signed" is a healthy state: the other two
- * accept a request from anyone who knows the URL.
+ * What the platform did with one event (the workspace feed's status): queued
+ * until the router matched it, in flight until every subscriber reacted.
  */
-export function getWebhookSigningPresentation(
+export function getEventProcessingStatusPresentation(
   status: string
 ): StatusPresentation {
   switch (normalizeStatus(status)) {
-    case "signed":
-      return { label: "Signed", labelKey: "signed", kind: "active" };
-    case "unsigned":
-      return { label: "Unsigned", labelKey: "unsigned", kind: "attention" };
-    case "unsupported":
-      return {
-        label: "Not verified",
-        labelKey: "unsupported",
-        kind: "attention",
-      };
+    case "queued":
+      return { label: "Queued", labelKey: "queued", kind: "queued" };
+    case "processing":
+      return { label: "Processing", labelKey: "processing", kind: "running" };
+    case "handled":
+      return { label: "Handled", labelKey: "handled", kind: "done" };
+    case "error":
+      return { label: "Error", labelKey: "error", kind: "failed" };
+    case "no_handlers":
+      return { label: "No handlers", labelKey: "no_handlers", kind: "off" };
+    case "skipped":
+      return { label: "Skipped", labelKey: "skipped", kind: "cancelled" };
     default:
-      return fallbackStatusPresentation(status);
+      return { label: "Unknown", labelKey: "unknown", kind: "attention" };
   }
 }
 
@@ -316,6 +320,8 @@ export function getTriggerExecutionStatusPresentation(
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     case "skipped":
       return { label: "Skipped", labelKey: "skipped", kind: "off" };
+    case "batched":
+      return { label: "In a batch", labelKey: "batched", kind: "scheduled" };
     default:
       return fallbackStatusPresentation(status);
   }

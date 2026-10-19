@@ -36,6 +36,7 @@ spec:
                     - llm_models
                     - agents
                     - bundles
+                    - source_types
                   description: "Registry item type to sync."
                 source:
                   type: object

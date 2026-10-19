@@ -1,9 +1,12 @@
 """Reusable mock activities and helpers for workflow integration tests."""
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity
 
 from agentarea_execution.models import (
@@ -11,7 +14,10 @@ from agentarea_execution.models import (
     ArtifactValidationRequest,
     ArtifactValidationResult,
     LLMCallRequest,
+    LogRow,
     MCPToolRequest,
+    RecordRequest,
+    RecordResult,
     ResolveModelRequest,
     ToolDiscoveryRequest,
     UpdateTaskStatusRequest,
@@ -133,6 +139,10 @@ class EventCapture:
 
         return mock_publish_events
 
+    def make_record_activity(self):
+        """Create a record_activity that captures the events it records."""
+        return make_record_activity(publish=self.make_activity())
+
 
 # ---------------------------------------------------------------------------
 # Run policy
@@ -205,3 +215,105 @@ async def mock_validate_artifacts(
     request: ArtifactValidationRequest,
 ) -> ArtifactValidationResult:
     return ArtifactValidationResult(state="passed", generation=0)
+
+
+# ---------------------------------------------------------------------------
+# Task log
+# ---------------------------------------------------------------------------
+
+
+class TaskLogFake:
+    """An in-memory task log: the record activity writes it, model calls read it.
+
+    Rows are kept once per task and position, as the real append keeps them once
+    per id.
+    """
+
+    def __init__(self) -> None:
+        self.rows: dict[str, dict[int, LogRow]] = {}
+        self.statuses: list[UpdateTaskStatusRequest] = []
+        self.requests: list[RecordRequest] = []
+
+    def append(self, request: RecordRequest) -> None:
+        self.requests.append(request)
+        rows = self.rows.setdefault(request.task_id, {})
+        for row in request.rows:
+            rows.setdefault(row.seq, row)
+        if request.status is not None:
+            self.statuses.append(request.status)
+
+    def entries(self, task_id: str | None = None) -> list[ConversationEntry]:
+        """One task's rows in order; without ``task_id``, the only task's."""
+        if task_id is None:
+            [task_id] = self.rows
+        rows = self.rows.get(task_id, {})
+        return [_entry(rows[seq]) for seq in sorted(rows)]
+
+    def window(self, conversation: Any, pending: list[dict[str, Any]]) -> list[ConversationEntry]:
+        """What a model call or compaction on ``conversation`` reads.
+
+        The log's window, then the pending messages it carries.
+        """
+        logged = [
+            entry
+            for entry in self.entries(conversation.task_id)
+            if entry.seq < conversation.next_seq
+        ]
+        unwritten = [
+            ConversationEntry(seq=conversation.next_seq + offset, **message)
+            for offset, message in enumerate(pending)
+        ]
+        return [*model_window(logged), *(e for e in unwritten if e.kind != "event")]
+
+    def messages(self, request: LLMCallRequest) -> list[dict[str, Any]]:
+        """The messages the model call of ``request`` sends; a call without a log its own."""
+        if request.conversation is None:
+            return request.messages
+        return [entry.as_message() for entry in self.window(request.conversation, request.messages)]
+
+
+def _entry(row: LogRow) -> ConversationEntry:
+    return ConversationEntry(**row.model_dump(exclude={"event_id"}), event_id=UUID(row.event_id))
+
+
+def make_record_activity(
+    *,
+    publish: Callable[[WorkflowEventsRequest], Awaitable[Any]] | None = None,
+    update_status: Callable[[UpdateTaskStatusRequest], Awaitable[Any]] | None = None,
+    log: TaskLogFake | None = None,
+):
+    """A record_activity that keeps the rows in ``log``.
+
+    It hands the status and the events to a test's own status and publish mocks,
+    in the order the real one writes them. The events are the event rows and the
+    live-only signals the run sent beside them, in the order they happened.
+    """
+
+    @activity.defn(name="record_activity")
+    async def record(request: RecordRequest) -> RecordResult:
+        if log is not None:
+            log.append(request)
+        if request.status is not None and update_status is not None:
+            await update_status(request.status)
+        events = [
+            {
+                "event_id": row.event_id,
+                "event_type": row.name,
+                "timestamp": row.timestamp,
+                "data": row.meta or {},
+            }
+            for row in request.rows
+            if row.kind == "event" and row.timestamp is not None
+        ] + [json.loads(event) for event in request.events_json]
+        events.sort(key=lambda event: event["timestamp"])
+        if events and publish is not None:
+            await publish(
+                WorkflowEventsRequest(
+                    events_json=[json.dumps(event) for event in events],
+                    workspace_id=request.workspace_id,
+                    user_id=request.user_id,
+                )
+            )
+        return RecordResult(rows=len(request.rows), events=len(request.events_json))
+
+    return record

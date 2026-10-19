@@ -75,13 +75,7 @@ def test_multi_method_proxy_operation_ids_remain_stable() -> None:
             "delete": "hydra_oauth2_proxy_oauth2__path__delete",
         },
         "/webhooks/{webhook_id}": {
-            "get": "handle_webhook_webhooks__webhook_id__get",
             "post": "handle_webhook_webhooks__webhook_id__post",
-            "put": "handle_webhook_webhooks__webhook_id__put",
-            "patch": "handle_webhook_webhooks__webhook_id__patch",
-            "delete": "handle_webhook_webhooks__webhook_id__delete",
-            "head": "handle_webhook_webhooks__webhook_id__head",
-            "options": "handle_webhook_webhooks__webhook_id__options",
         },
         "/v1/mcp/{instance_id}/mcp": {
             "get": "proxy_instance_v1_mcp__instance_id__mcp_get",

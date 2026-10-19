@@ -1,6 +1,7 @@
 """InboxToolset — read tasks and held tool calls that need user attention."""
 
 import json
+from typing import Annotated, Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -10,10 +11,41 @@ from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_governance.application.tool_call_approvals import ToolCallApprovalService
 from agentarea_governance.domain.tool_call_approvals import ToolCallApprovalStatus
-from agentarea_tasks.domain.statuses import INBOX_STATUSES
+from agentarea_tasks.domain.statuses import INBOX_STATUSES, InboxStatus
+from pydantic import BaseModel, Field
 
 from ..api.v1.tool_call_approvals import approval_page_url
 from .base import platform_read_context
+
+
+class InboxItemOutput(BaseModel):
+    id: str = Field(description="Run id; pass it to `runs_get` or the other runs tools.")
+    agent_id: str | None = Field(description="Agent the run belongs to.")
+    description: str = Field(description="What the run was asked to do.")
+    status: str = Field(description="Run status, one of the inbox statuses.")
+    created_at: str | None = Field(description="When the run was created, ISO 8601.")
+
+
+class HeldToolCallOutput(BaseModel):
+    id: str = Field(description="Tool call approval id.")
+    connector: str = Field(description="Connector the held call targets.")
+    tool: str = Field(description="Tool the held call invokes.")
+    requested_by: str = Field(description="Id of whoever made the call.")
+    client_name: str | None = Field(description="Client that made the call, when known.")
+    url: str = Field(description="Page where an approver approves or rejects the call.")
+    created_at: str = Field(description="When the call was held, ISO 8601.")
+    expires_at: str = Field(description="Deadline to decide, ISO 8601.")
+
+
+class InboxPage(BaseModel):
+    items: list[InboxItemOutput] = Field(description="Runs on this page.")
+    total: int = Field(description="Runs matching the filters across all pages.")
+    page: int = Field(description="Page number returned, from 1.")
+    page_size: int = Field(description="Runs per page.")
+    tool_call_approvals: list[HeldToolCallOutput] = Field(
+        description="Client tool calls waiting on a person's approval; empty unless status is "
+        "empty or waiting_for_approval."
+    )
 
 
 @toolset(
@@ -26,14 +58,21 @@ from .base import platform_read_context
 class InboxToolset(Toolset):
     """List tasks awaiting user action (waiting_for_approval, waiting_for_input, completed, failed)."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List inbox items", effect="read", output=InboxPage)
     @unrestricted("the caller's own inbox, as GET /v1/inbox serves it")
     async def list(
         self,
-        status: str = "",
-        agent_id: str = "",
-        page: int = 1,
-        page_size: int = 50,
+        status: Annotated[
+            InboxStatus | Literal[""],
+            Field(description="Only runs in this status; empty for every inbox status."),
+        ] = "",
+        agent_id: Annotated[
+            str, Field(description="Only runs of this agent id, from `agents_list`; empty for any.")
+        ] = "",
+        page: Annotated[int, Field(description="Page number, from 1.")] = 1,
+        page_size: Annotated[int, Field(description="Runs per page.")] = 50,
     ) -> str:
         """List inbox items, optionally filtered by status or agent.
 

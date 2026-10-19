@@ -19,7 +19,6 @@ from agentarea_agents.application.execution_service import (
 from agentarea_agents.application.temporal_workflow_service import (
     TemporalWorkflowService,
 )
-from agentarea_api.api.deps.database import ReadDatabaseSessionDep
 from agentarea_api.api.deps.services import (
     BaseSecretManagerDep,
     get_agent_service,
@@ -32,21 +31,21 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import unrestricted
-from agentarea_common.auth.tool_authorization import caller_can_approve
+from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
-from agentarea_common.channel_origin import reject_reserved_parameters
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import (
     EXECUTION_FINISHED,
-    LLM_CHUNK,
     TASK_CANCELLED,
     TASK_COMPLETED,
     TASK_FAILED,
-    canonical_type,
+    TOOL_CALL,
+    TOOL_RESULT,
 )
+from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import ZERO, Money, serialize_money
+from agentarea_common.reserved_task_parameters import reject_reserved_parameters
 from agentarea_common.utils.task_webhook import TASK_WEBHOOK_KEY, webhook_secret_name
 from agentarea_common.utils.types import UtcDatetime, utc_isoformat
 from agentarea_common.utils.url_safety import OutboundPolicy
@@ -64,18 +63,23 @@ from agentarea_tasks.domain.exceptions import (
     RunStillClosingError,
     SchedulingNotSupportedError,
 )
+from agentarea_tasks.domain.feed import feed_event
 from agentarea_tasks.domain.models import TaskProvenance
-from agentarea_tasks.domain.statuses import TaskStatus
-from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from agentarea_tasks.domain.statuses import ENDED_TASK_STATUSES, TaskStatus
+from agentarea_tasks.infrastructure.repository import TaskRepository
+from agentarea_tasks.infrastructure.task_log import TaskFeedReader
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig, require_future_instant
 from agentarea_tasks.task_service import TaskService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-from sqlalchemy import text
 
-from ._task_authority import requires_task_authority
+from ._task_authority import (
+    caller_may_act_on_task,
+    may_resolve_escalation,
+    requires_task_authority,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -446,12 +450,11 @@ def _default_input_secret_name(task_id: UUID, field_name: str) -> str:
     return f"task-input/{task_id}/{sanitized}"
 
 
-def _failure_reason_from_result(result: Any) -> str | None:
-    """Extract the stable failure code the workflow persisted into the result."""
-    if isinstance(result, dict):
-        value = result.get("failure_reason")
-        if value:
-            return str(value)
+def _failure_reason_from_result(result: Any, metadata: Any = None) -> str | None:
+    """The stable failure code the workflow stored: in the task's metadata, or in a result."""
+    for source in (metadata, result):
+        if isinstance(source, dict) and source.get("failure_reason"):
+            return str(source["failure_reason"])
     return None
 
 
@@ -517,7 +520,7 @@ class TaskResponse(BaseModel):
             status=task.status,
             result=task.result,
             error=task.error_message,
-            failure_reason=_failure_reason_from_result(task.result),
+            failure_reason=_failure_reason_from_result(task.result, task.metadata),
             created_at=task.created_at,
             execution_id=task.execution_id,
             scheduled_at=task.scheduled_at,
@@ -673,7 +676,7 @@ async def get_all_tasks(
                     status=task.status,
                     result=task.result,
                     error=task.error,
-                    failure_reason=_failure_reason_from_result(task.result),
+                    failure_reason=_failure_reason_from_result(task.result, task.metadata),
                     created_at=task.created_at,
                     scheduled_at=task.scheduled_at,
                     execution_id=task.execution_id,
@@ -720,7 +723,7 @@ async def get_task_by_id(
             status=task.status,
             result=task.result,
             error=task.error,
-            failure_reason=_failure_reason_from_result(task.result),
+            failure_reason=_failure_reason_from_result(task.result, task.metadata),
             created_at=task.created_at,
             scheduled_at=task.scheduled_at,
             execution_id=task.execution_id,
@@ -750,6 +753,8 @@ class TaskEvent(BaseModel):
     message: str | None = None
     # Same as `id`; the name the live stream uses.
     event_id: str | None = None
+    # The entry's position in the task log; the SSE id a reconnect resumes after.
+    seq: int | None = None
     # The event payload, shaped exactly like `data` on the live stream.
     data: dict[str, Any] = {}
     # Deprecated alias: the stored payload before the live stream's flattening.
@@ -789,26 +794,22 @@ async def _tail_task_events_sse(
     execution_id: str | None,
     *,
     user_context: UserContext,
+    revealed: bool,
     emit_connected: bool = True,
     include_chunks: bool = True,
     last_event_id: str | None = None,
     follow_execution: bool = True,
 ) -> AsyncGenerator[str, None]:
-    """Stream a task's events as SSE: catch-up (DB) then live (Redis stream).
+    """Stream a task's feed as SSE: its log, then the ``tasks.events`` tail (ADR-0043 §8).
 
-    This is a CQRS read side (ADR-0018), not a poll of the write model. The
-    history is replayed from the durable ``task_events`` table (catch-up),
-    then new events are tailed live from the per-task Redis stream the worker
-    XADDs to. Dedup by event id makes the catch-up->live hand-off race-free, so
-    a fast task whose events land before the reader attaches loses nothing
-    (the old reason this used DB polling) — without the 0.25s poll.
-
-    Durable events carry their stored id as the SSE ``id``, so a reconnecting
-    EventSource sends it back as ``Last-Event-ID`` and resumes after it. Chunks
-    are stream-only and carry none.
+    Each stored entry carries its log ``seq`` as the SSE ``id``, so a
+    reconnecting EventSource sends it back as ``Last-Event-ID`` and resumes
+    after it. Live-only signals (chunks, a call started, progress) carry none.
 
     ``follow_execution`` keeps the stream open past a ``task.completed`` that
     leaves the execution waiting for a follow-up; without it that event ends it.
+    ``revealed``: the caller holds the task's authority, decided once per
+    connection; its tool calls show their command and output, secrets masked.
     """
     from agentarea_api.api.v1.task_event_feed import open_task_event_feed
 
@@ -834,6 +835,7 @@ async def _tail_task_events_sse(
         include_chunks=include_chunks,
         follow_execution=follow_execution,
         last_event_id=last_event_id,
+        revealed=revealed,
     ):
         sse_event = {
             "event_type": env.event_type,
@@ -841,9 +843,10 @@ async def _tail_task_events_sse(
             "timestamp": env.timestamp,
             "data": _filter_domain_fields(dict(env.data)),
         }
-        durable = canonical_type(env.event_type) != LLM_CHUNK
+        if env.seq is not None:
+            sse_event["seq"] = env.seq
         yield _format_sse_event(
-            env.event_type, sse_event, event_id=env.event_id if durable else None
+            env.event_type, sse_event, event_id=str(env.seq) if env.seq is not None else None
         )
 
 
@@ -1087,6 +1090,7 @@ async def create_task_for_agent_with_stream(
                     agent_id,
                     task.execution_id,
                     user_context=user_context,
+                    revealed=True,
                     emit_connected=False,
                     follow_execution=follow,
                 ):
@@ -1353,7 +1357,6 @@ async def list_agent_tasks(
             limit=limit,
             offset=offset,
             status=status.lower() if status else None,
-            creator_scoped=False,
         )
 
         logger.info(f"Returning {len(agent_tasks)} tasks for agent {agent_id} ({agent.name})")
@@ -1669,6 +1672,14 @@ async def _verify_task_for_agent(task_service: TaskService, agent_id: UUID, task
     return task
 
 
+def task_execution_id(task: Any) -> str:
+    """The workflow of a task's run: the one its row records, else the one its start uses.
+
+    A delegated child runs under its parent's id for it, never ``task-<id>``.
+    """
+    return task.execution_id or f"task-{task.id}"
+
+
 @router.get(
     "/{task_id}/artifacts",
     response_model=list[TaskArtifactItem],
@@ -1814,13 +1825,11 @@ async def read_task_sandbox_file(
 
 
 class TaskSummary(BaseModel):
-    """Headline rollup for a single task, derived from the event log.
+    """Headline rollup for a single task: its run times, answer, error and spend.
 
-    Backed by the ``task_summary`` Postgres view. Stable contract — when
-    the view's implementation moves to a materialized view or projection
-    table, this shape stays the same. Per-tool breakdowns and per-artifact
-    lists are deliberately not here; they live in their own endpoints so
-    this stays small and additive.
+    Read from the task row and the spend ledger. ``cost`` sums the task's current
+    ledger lines in ``currency``, the billing currency. ``duration_ms`` runs from the
+    task's first start to its last end, idle waits between turns included.
     """
 
     task_id: UUID
@@ -1830,15 +1839,8 @@ class TaskSummary(BaseModel):
     started_at: UtcDatetime | None = None
     ended_at: UtcDatetime | None = None
     duration_ms: float | None = None
-    iterations: int = 0
-    llm_calls: int = 0
-    llm_calls_failed: int = 0
-    tools_called: int = 0
-    tools_failed: int = 0
-    delegations_started: int = 0
-    delegations_completed: int = 0
-    delegations_failed: int = 0
-    cost_usd: float = 0.0
+    cost: float = 0.0
+    currency: str
     final_response: str | None = None
     last_error: str | None = None
 
@@ -1854,38 +1856,41 @@ async def get_task_summary(
     agent_id: UUID,
     task_id: UUID,
     user_context: UserContextDep,
-    session: ReadDatabaseSessionDep,
+    repository_factory: ReadRepositoryFactoryDep,
 ) -> TaskSummary:
-    """Per-task rollup derived from the event log via the ``task_summary`` view.
+    """Per-task rollup from the task row and the spend ledger.
 
-    Workspace-scoped: the row must belong to the caller's workspace and
+    Workspace-scoped: the task must belong to the caller's workspace and
     the agent must match, or we return 404 (same shape as other task
     endpoints — no information leak).
     """
-    row = (
-        (
-            await session.execute(
-                text(
-                    "SELECT * FROM task_summary "
-                    "WHERE task_id = :task_id "
-                    "AND workspace_id = :workspace_id "
-                    "AND agent_id = :agent_id"
-                ),
-                {
-                    "task_id": str(task_id),
-                    "workspace_id": user_context.workspace_id,
-                    "agent_id": str(agent_id),
-                },
-            )
-        )
-        .mappings()
-        .first()
-    )
-
-    if not row:
+    tasks = repository_factory.create_repository(TaskRepository)
+    task = await tasks.get_task(task_id)
+    if task is None or task.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    return TaskSummary(**dict(row))
+    ended_at = task.completed_at if task.status in ENDED_TASK_STATUSES else None
+    response = task.result.get("response") if isinstance(task.result, dict) else None
+    return TaskSummary(
+        task_id=task.id,
+        agent_id=task.agent_id,
+        workspace_id=user_context.workspace_id,
+        status=task.status,
+        started_at=task.started_at,
+        ended_at=ended_at,
+        duration_ms=(ended_at - task.started_at).total_seconds() * 1000
+        if ended_at and task.started_at
+        else None,
+        cost=float(await tasks.sum_task_spend(task.id)),
+        currency=get_customer_pricing().currency(),
+        final_response=response if isinstance(response, str) else None,
+        last_error=task.error,
+    )
+
+
+# Ended for good. A completed task can still have a workflow waiting for a
+# follow-up, which a cancel ends.
+_ENDED_UNCANCELLABLE_STATUSES = frozenset({"failed", "blocked", "cancelled"})
 
 
 @router.delete(
@@ -1908,12 +1913,21 @@ async def cancel_agent_task(
 
     # The Temporal handle below is addressed by bare task_id, so owning any agent
     # would otherwise be enough to act on any workspace's task.
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
+    # A run that already ended has nothing to cancel; saying "cancelled" would
+    # contradict the status it keeps.
+    if task.status in _ENDED_UNCANCELLABLE_STATUSES:
+        raise HTTPException(status_code=409, detail=f"Task already ended: {task.status}")
 
     try:
-        # Cancel the workflow using the execution ID pattern
-        execution_id = f"task-{task_id}"
-        success = await workflow_task_service.cancel_task(execution_id)
+        execution_id = task_execution_id(task)
+        # A run booked for later has not started, so no workflow code will ever
+        # record the cancellation: the task manager cancels and records it. A
+        # started run records its own cancellation.
+        if task.status == "scheduled":
+            success = await task_service.cancel_task(task_id)
+        else:
+            success = await workflow_task_service.cancel_task(execution_id)
 
         if success:
             return {"status": "cancelled", "task_id": str(task_id), "execution_id": execution_id}
@@ -1923,6 +1937,7 @@ async def cancel_agent_task(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error("Failed to cancel task %s", task_id, exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -1958,11 +1973,11 @@ async def pause_agent_task(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         # Get current task status to validate it can be paused
-        execution_id = f"task-{task_id}"
+        execution_id = task_execution_id(task)
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # Check if task exists
@@ -2020,11 +2035,11 @@ async def resume_agent_task(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
         # Get current task status to validate it can be resumed
-        execution_id = f"task-{task_id}"
+        execution_id = task_execution_id(task)
         status = await workflow_task_service.get_workflow_status(execution_id)
 
         # Check if task exists
@@ -2035,14 +2050,17 @@ async def resume_agent_task(
         # Temporal's external status to "paused" (the workflow keeps the
         # "running" execution status while its internal handler waits on
         # the pause flag), so gating on "paused/blocked" here would 400
-        # every legitimate resume right after a pause. The resume signal
-        # is itself a no-op on workflows that aren't paused, so accepting
-        # it from "running" is safe.
+        # every legitimate resume right after a pause. The workflow's own
+        # state says whether it is paused.
         current_status = status.get("status", "").lower()
         if current_status in _FINISHED_WORKFLOW_STATES:
             raise HTTPException(
                 status_code=400, detail=f"Cannot resume task in '{current_status}' state"
             )
+
+        live_state = await workflow_task_service.get_live_state(execution_id)
+        if live_state is not None and not live_state.get("paused"):
+            raise HTTPException(status_code=400, detail="Task is not paused")
 
         # Resume the workflow
         success = await workflow_task_service.resume_task(execution_id)
@@ -2136,7 +2154,7 @@ async def send_a2ui_action(
     task = await _verify_task_for_agent(task_service, agent_id, task_id)
 
     try:
-        execution_id = task.execution_id or f"task-{task_id}"
+        execution_id = task_execution_id(task)
         status = await workflow_task_service.get_workflow_status(execution_id)
         current_status = status.get("execution_status", status.get("status", "")).lower()
 
@@ -2186,13 +2204,13 @@ async def submit_task_input(
     Secret values are written to the workspace secret manager at the API boundary.
     Only secret refs are sent to Temporal/LLM context.
     """
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
 
     agent = await agent_service.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    execution_id = f"task-{task_id}"
+    execution_id = task_execution_id(task)
 
     try:
         status = await workflow_task_service.get_workflow_status(execution_id)
@@ -2309,6 +2327,7 @@ async def _resolve_model_info(
         "input_cost_per_token": model_spec.input_cost_per_token,
         "output_cost_per_token": model_spec.output_cost_per_token,
         "cached_input_cost_per_token": model_spec.cached_input_cost_per_token,
+        "cache_creation_input_cost_per_token": model_spec.cache_creation_input_cost_per_token,
         "display_name": model_spec.display_name,
         "provider_display_name": provider_spec.name,
         "supports_vision": model_spec.supports_vision,
@@ -2336,9 +2355,9 @@ async def send_task_command(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
 
-    execution_id = f"task-{task_id}"
+    execution_id = task_execution_id(task)
 
     try:
         if payload.command == "change_model":
@@ -2348,7 +2367,7 @@ async def send_task_command(
                 )
             resolved = await _resolve_model_info(payload.model_instance_id, model_instance_service)
             delivered = await workflow_task_service.send_workflow_command(
-                execution_id, "change_model", resolved
+                execution_id, "change_model", {**resolved, "changed_by": user_context.user_id}
             )
 
         elif payload.command == "queue_message":
@@ -2409,7 +2428,12 @@ async def send_task_command(
 
 @router.post(
     "/{task_id}/resolve-escalation",
-    dependencies=[requires_task_authority()],
+    dependencies=[
+        enforced_in_handler(
+            "an escalation's named approvers, else whoever may act on the run; "
+            "checked in the handler against the workflow's pending escalation"
+        )
+    ],
 )
 async def resolve_task_escalation(
     agent_id: UUID,
@@ -2426,10 +2450,26 @@ async def resolve_task_escalation(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
+    execution_id = task_execution_id(task)
+    if not await caller_may_act_on_task(task, user_context):
+        try:
+            pending = await workflow_task_service.get_pending_escalations(execution_id)
+        except WorkflowNotFoundError as e:
+            raise HTTPException(
+                status_code=404, detail="Escalation not found or no longer pending"
+            ) from e
+        escalation = next((e for e in pending if e["escalation_id"] == data.escalation_id), None)
+        if escalation is None:
+            raise HTTPException(status_code=404, detail="Escalation not found or no longer pending")
+        if not may_resolve_escalation(
+            escalation["approvers"], str(user_context.user_id), may_act_on_run=False
+        ):
+            raise HTTPException(
+                status_code=403, detail="You are not an approver of this escalation"
+            )
 
     try:
-        execution_id = f"task-{task_id}"
         success = await workflow_task_service.resolve_escalation(
             execution_id,
             data.escalation_id,
@@ -2480,7 +2520,7 @@ async def get_task_events(
     event_type: str | None = Query(None, description="Filter by event type"),
     task_service: TaskService = Depends(get_read_task_service),
 ):
-    """Get paginated task execution events for the specified task from database."""
+    """One page of the task's feed from its log: event rows and the messages a person sent."""
     # Gate on the task, not the agent. Requiring `agent_id` to still resolve
     # gated a task's history on its agent existing — deleting an agent silently
     # took the Events tab of every task it ever ran down with it. The workspace
@@ -2492,29 +2532,44 @@ async def get_task_events(
         raise HTTPException(status_code=404, detail="Task not found")
 
     try:
-        event_repository = repository_factory.create_repository(TaskEventRepository)
-        records, total_events = await event_repository.list_for_task(
+        reader = TaskFeedReader(repository_factory.session, repository_factory.user_context)
+        entries, total_events = await reader.page(
             task_id,
             event_type=event_type,
             limit=page_size,
             offset=(page - 1) * page_size,
         )
+        shows_tools = any(entry.name in (TOOL_CALL, TOOL_RESULT) for entry in entries)
+        bodies = await reader.bodies(
+            task_id,
+            entries,
+            revealed=shows_tools
+            and await caller_may_act_on_task(task, repository_factory.user_context),
+        )
 
-        events = [
-            TaskEvent(
-                id=str(record.id),
-                task_id=str(record.task_id),
-                agent_id=str(agent_id),
-                execution_id=record.data.get("execution_id") or record.metadata.get("execution_id"),
-                timestamp=record.timestamp,
-                event_type=record.event_type,
-                message=record.data.get("message"),
-                event_id=str(record.id),
-                data=_filter_domain_fields(dict(record.data)) if record.data else {},
-                metadata=dict(record.data) if record.data else {},
+        events = []
+        for entry in entries:
+            shown = feed_event(entry, bodies)
+            if shown is None:
+                continue
+            shown_type, data = shown
+            if entry.occurred_at is None:
+                raise RuntimeError(f"task {task_id} log row {entry.seq} was read without its time")
+            events.append(
+                TaskEvent(
+                    id=str(entry.event_id),
+                    task_id=str(task_id),
+                    agent_id=str(agent_id),
+                    execution_id=entry.execution_id or data.get("execution_id"),
+                    timestamp=entry.occurred_at,
+                    event_type=shown_type,
+                    message=data.get("message"),
+                    event_id=str(entry.event_id),
+                    seq=entry.seq,
+                    data=_filter_domain_fields(dict(data)),
+                    metadata=dict(data),
+                )
             )
-            for record in records
-        ]
 
         return TaskEventResponse(
             events=events,
@@ -2537,9 +2592,9 @@ class PendingEscalationResponse(BaseModel):
 
 
 def escalations_caller_may_resolve(
-    pending: list[dict[str, Any]], user_id: str
+    pending: list[dict[str, Any]], user_id: str, *, may_act_on_run: bool
 ) -> list[PendingEscalationResponse]:
-    """The pending escalations this caller is an approver of, with their arguments."""
+    """The pending escalations this caller may decide, with their arguments."""
     return [
         PendingEscalationResponse(
             escalation_id=escalation["escalation_id"],
@@ -2548,14 +2603,19 @@ def escalations_caller_may_resolve(
             tool_args=escalation["tool_args"],
         )
         for escalation in pending
-        if caller_can_approve(escalation["approvers"], user_id)
+        if may_resolve_escalation(escalation["approvers"], user_id, may_act_on_run=may_act_on_run)
     ]
 
 
 @router.get(
     "/{task_id}/escalations",
     response_model=list[PendingEscalationResponse],
-    dependencies=[requires_task_authority()],
+    dependencies=[
+        enforced_in_handler(
+            "an escalation's named approvers, else whoever may act on the run; "
+            "the handler shows each caller only the escalations they may decide"
+        )
+    ],
 )
 async def list_pending_escalations(
     agent_id: UUID,
@@ -2569,12 +2629,18 @@ async def list_pending_escalations(
     The event log redacts tool arguments, since a command can carry an inline
     secret; the caller reads them here only where they may resolve the escalation.
     """
-    await _verify_task_for_agent(task_service, agent_id, task_id)
+    task = await _verify_task_for_agent(task_service, agent_id, task_id)
+    may_act = await caller_may_act_on_task(task, user_context)
     try:
-        pending = await workflow_task_service.get_pending_escalations(f"task-{task_id}")
+        pending = await workflow_task_service.get_pending_escalations(task_execution_id(task))
     except WorkflowNotFoundError as e:
         raise HTTPException(status_code=404, detail="Task has no workflow") from e
-    return escalations_caller_may_resolve(pending, str(user_context.user_id))
+    shown = escalations_caller_may_resolve(
+        pending, str(user_context.user_id), may_act_on_run=may_act
+    )
+    if not may_act and not shown:
+        raise HTTPException(status_code=403, detail="You may not act on this task")
+    return shown
 
 
 @router.get(
@@ -2602,6 +2668,7 @@ async def stream_task_events(
         task = await task_service.get_task(task_id)
         if not task or str(task.agent_id) != str(agent_id):
             raise HTTPException(status_code=404, detail="Task not found")
+        revealed = await caller_may_act_on_task(task, user_context)
 
         # Create SSE stream by tailing the task_events table (single source of
         # truth, no pub/sub race) via the shared helper.
@@ -2612,6 +2679,7 @@ async def stream_task_events(
                     agent_id,
                     task.execution_id,
                     user_context=user_context,
+                    revealed=revealed,
                     include_chunks=include_chunks,
                     last_event_id=request.headers.get("last-event-id"),
                 ):

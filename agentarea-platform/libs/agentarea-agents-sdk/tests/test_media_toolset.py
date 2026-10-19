@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -14,13 +15,16 @@ from agentarea_agents_sdk.tools.file_toolset import InMemoryStorage
 from agentarea_agents_sdk.tools.media_toolset import MediaToolset
 
 WORKSPACE = "ws-1"
+HELD = {"amount": "150", "currency": "EUR", "hold_id": "hold-1", "settle": "capture"}
 
 
 @dataclass
 class _File:
     content: bytes
     media_type: str
-    cost: Decimal | None = None
+    cost: Decimal = Decimal(0)
+    billing: dict[str, Any] = field(default_factory=dict)
+    cost_unknown: bool = False
 
 
 @dataclass
@@ -37,17 +41,25 @@ class _Check:
     video: _File | None = None
     cost_usd: Decimal | None = None
     cost: Decimal | None = None
+    billing: dict[str, Any] | None = None
     file_path: str | None = None
+    cost_unknown: bool = False
 
 
 class _Backend:
-    def __init__(self, check: _Check | None = None):
+    def __init__(self, check: _Check | None = None, image: _File | None = None):
         self.check = check
+        self.image = image or _File(
+            content=b"\x89PNG....",
+            media_type="image/png",
+            cost=Decimal("4.00"),
+            billing={"amount": "4.00", "currency": "EUR", "hold_id": "hold-1"},
+        )
         self.saved: list = []
         self.submitted: list = []
 
     async def generate_image(self, prompt, *, size=None):
-        return _File(content=b"\x89PNG....", media_type="image/png", cost=Decimal("4.00"))
+        return self.image
 
     async def submit_video(self, prompt, **options):
         self.submitted.append((prompt, options))
@@ -56,9 +68,9 @@ class _Backend:
     async def check_video(self, job_id):
         return self.check
 
-    async def record_video_saved(self, job_id, file_path, cost_usd, cost):
+    async def record_video_saved(self, job_id, file_path, cost_usd, cost, billing):
         first = not self.saved
-        self.saved.append((job_id, file_path, cost_usd, cost))
+        self.saved.append((job_id, file_path, cost_usd, cost, billing))
         return first
 
 
@@ -76,6 +88,8 @@ async def test_generate_image_saves_the_file_and_reports_path_and_cost():
     [path] = result["artifact_paths"]
     assert path.startswith("media/image-") and path.endswith(".png")
     assert result["model_cost"] == "4.00"
+    assert result["model_billing"]["hold_id"] == "hold-1"
+    assert "cost_unknown" not in result
     assert (await storage.get(WORKSPACE, path)) == (b"\x89PNG....", "image/png")
     assert json.loads(result["result"])["file_path"] == path
 
@@ -110,6 +124,7 @@ async def test_a_finished_video_is_saved_and_billed_once():
             video=video,
             cost_usd=Decimal("1.5"),
             cost=Decimal("150"),
+            billing=HELD,
         )
     )
     storage = InMemoryStorage()
@@ -119,9 +134,55 @@ async def test_a_finished_video_is_saved_and_billed_once():
     second = await media.execute(action="get_video", job_id="j")
 
     assert first["artifact_paths"] == ["media/video-j.mp4"]
-    assert first["model_cost"] == "150"
-    assert second["model_cost"] == "0"
-    assert backend.saved[0] == ("j", "media/video-j.mp4", Decimal("1.5"), Decimal("150"))
+    assert (first["model_cost"], first["model_billing"]) == ("150", HELD)
+    assert second["artifact_paths"] == ["media/video-j.mp4"]
+    assert "model_cost" not in second and "model_billing" not in second
+    assert backend.saved[0] == ("j", "media/video-j.mp4", Decimal("1.5"), Decimal("150"), HELD)
+    assert (await storage.get(WORKSPACE, "media/video-j.mp4")) == (b"mp4", "video/mp4")
+
+
+async def test_an_image_of_unknown_cost_is_saved_and_says_its_cost_is_unknown():
+    image = _File(
+        content=b"\x89PNG....",
+        media_type="image/png",
+        cost=Decimal("150"),
+        billing={**HELD, "cost_unknown": True},
+        cost_unknown=True,
+    )
+    storage = InMemoryStorage()
+    result = await _media(_Backend(image=image), storage).execute(
+        action="generate_image", prompt="a cat"
+    )
+
+    assert result["success"] is True
+    [path] = result["artifact_paths"]
+    assert (await storage.get(WORKSPACE, path)) == (b"\x89PNG....", "image/png")
+    assert result["cost_unknown"] is True
+    assert result["model_cost"] == "150"
+    assert result["model_billing"]["hold_id"] == "hold-1"
+
+
+async def test_a_finished_video_of_unknown_cost_is_saved_and_says_so():
+    video = _File(content=b"mp4", media_type="video/mp4")
+    billing = {"amount": "0", "currency": "USD", "cost_unknown": True}
+    backend = _Backend(
+        _Check(
+            job_id="j",
+            status="completed",
+            video=video,
+            cost=Decimal(0),
+            billing=billing,
+            cost_unknown=True,
+        )
+    )
+    storage = InMemoryStorage()
+
+    result = await _media(backend, storage).execute(action="get_video", job_id="j")
+
+    assert result["artifact_paths"] == ["media/video-j.mp4"]
+    assert result["cost_unknown"] is True
+    assert (result["model_cost"], result["model_billing"]) == ("0", billing)
+    assert backend.saved == [("j", "media/video-j.mp4", None, Decimal(0), billing)]
     assert (await storage.get(WORKSPACE, "media/video-j.mp4")) == (b"mp4", "video/mp4")
 
 
@@ -134,11 +195,26 @@ async def test_an_image_that_cannot_be_saved_still_reports_its_cost():
 
     assert result["success"] is False
     assert result["model_cost"] == "4.00"
+    assert result["model_billing"]["hold_id"] == "hold-1"
     assert "disk full" in result["error"]
 
 
+async def test_a_finished_video_without_a_spend_line_is_not_saved():
+    video = _File(content=b"mp4", media_type="video/mp4")
+    backend = _Backend(_Check(job_id="j", status="completed", video=video, cost_usd=Decimal("1.5")))
+    storage = InMemoryStorage()
+
+    result = await _media(backend, storage).execute(action="get_video", job_id="j")
+
+    assert result["success"] is False
+    assert "spend line" in result["error"]
+    assert backend.saved == []
+
+
 async def test_a_saved_video_reports_the_cost_only_to_its_billing_call():
-    billed = _Check(job_id="j", status="completed", file_path="media/v.mp4", cost=Decimal("150"))
+    billed = _Check(
+        job_id="j", status="completed", file_path="media/v.mp4", cost=Decimal("150"), billing=HELD
+    )
     not_billed = _Check(job_id="j", status="completed", file_path="media/v.mp4")
 
     retry = await _media(_Backend(billed), InMemoryStorage()).execute(action="get_video", job_id="j")
@@ -146,8 +222,8 @@ async def test_a_saved_video_reports_the_cost_only_to_its_billing_call():
         action="get_video", job_id="j"
     )
 
-    assert retry["model_cost"] == "150"
-    assert "model_cost" not in other
+    assert (retry["model_cost"], retry["model_billing"]) == ("150", HELD)
+    assert "model_cost" not in other and "model_billing" not in other
 
 
 async def test_a_failed_video_is_a_failed_tool_result():

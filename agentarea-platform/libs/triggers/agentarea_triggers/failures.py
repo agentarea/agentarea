@@ -124,3 +124,14 @@ def is_transient(error: BaseException) -> bool:
             if sqlstate and sqlstate.startswith(_TRANSIENT_SQLSTATE_PREFIXES):
                 return True
     return False
+
+
+def is_spend_cap_refusal(error: BaseException) -> bool:
+    """Whether ``error`` is a spend cap refusal, not a trigger failure."""
+    from agentarea_tasks.domain.exceptions import BudgetCapExceededError
+    from agentarea_tasks.model_spend_caps import SpendCapReachedError
+
+    for link in _chain(error):
+        if isinstance(link, (BudgetCapExceededError, SpendCapReachedError)):
+            return True
+    return False

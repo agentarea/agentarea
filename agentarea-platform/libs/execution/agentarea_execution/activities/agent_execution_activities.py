@@ -18,6 +18,7 @@ from .agent.context import make_context_activities
 from .agent.events import make_events_activities
 from .agent.files import make_files_activities
 from .agent.llm import make_llm_activities
+from .agent.record import make_record_activities
 from .agent.task_state import make_task_state_activities
 from .agent.tools import make_tools_activities
 
@@ -42,6 +43,7 @@ def make_agent_activities(dependencies: ActivityDependencies):
         *make_llm_activities(dependencies, container),
         *make_tools_activities(dependencies, container),
         *make_events_activities(dependencies, container),
+        *make_record_activities(dependencies, container),
         *make_task_state_activities(dependencies, container),
         *make_context_activities(dependencies, container),
     ]

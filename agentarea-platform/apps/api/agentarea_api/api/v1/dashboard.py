@@ -3,7 +3,8 @@
 Single round-trip aggregate that powers the post-login `/dashboard` page:
 spend (today / MTD / cap / projection), org blockers (HITL, runs waiting to
 continue, blocked and failed runs in the last 24h, exhausted wallets),
-running and recently finished tasks, and the cron schedule for the weeks ahead.
+running and recently finished tasks, and the schedule for the weeks ahead
+(cron triggers and tasks booked for a later moment).
 
 All data is workspace-scoped via UserContext. Live computation against
 existing `tasks` and `wallets` tables — no rollup tables in v1. Money fields
@@ -35,7 +36,7 @@ from agentarea_governance.domain.rules import (
 )
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.domain.statuses import TASK_STATUSES, TaskStatus
-from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository, SpendScope
 from agentarea_tasks.infrastructure.orm import TaskORM
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.spend_gate import spend_not_covered, workspace_cap_currencies
@@ -57,13 +58,13 @@ MAX_LISTED_RUNS_PER_DAY = 3
 # Where each stored status shows up on the dashboard. Keyed by the canonical
 # vocabulary: a status added there fails this import instead of silently
 # vanishing from every panel.
-_DashboardPlace = Literal["active", "hitl", "continuation", "blocked", "finished", "unlisted"]
+_DashboardPlace = Literal["active", "hitl", "continuation", "blocked", "finished", "schedule"]
 _STATUS_PLACE: dict[TaskStatus, _DashboardPlace] = {
     "submitted": "active",
     "pending": "active",
     "preparing": "active",
     # Booked for a later moment; not work in flight yet.
-    "scheduled": "unlisted",
+    "scheduled": "schedule",
     "running": "active",
     "working": "active",
     "waiting_for_input": "hitl",
@@ -88,6 +89,7 @@ CONTINUATION_TASK_STATUSES = _statuses("continuation")
 BLOCKED_TASK_STATUSES = _statuses("blocked")
 # A blocked run has ended too, so it is also listed among the finished ones.
 FINISHED_TASK_STATUSES = _statuses("finished", "blocked")
+SCHEDULED_TASK_STATUSES = _statuses("schedule")
 TASK_LIST_LIMIT = 10
 BLOCKER_LIST_LIMIT = 20
 
@@ -109,6 +111,9 @@ class SpendCard(BaseModel):
     # Month-to-date spend in a currency no workspace monthly cap is in: never
     # converted, never blocked. Empty when the workspace has no such cap.
     not_covered: list[CurrencySpend] = Field(default_factory=list)
+    # The part of ``mtd_usd`` that is an estimate (a public rate, a held amount not
+    # captured yet, a cost the vendor has still to settle); the rest is exact.
+    mtd_estimate_usd: Money = Decimal(0)
 
 
 class HitlBlocker(BaseModel):
@@ -169,8 +174,14 @@ class DashboardTask(BaseModel):
 
 
 class ScheduledRun(BaseModel):
+    """One upcoming run: a cron trigger firing or a task booked for later.
+
+    Exactly one of `trigger_id` and `task_id` is set.
+    """
+
     fires_at: UtcDatetime
-    trigger_id: UUID
+    trigger_id: UUID | None = None
+    task_id: UUID | None = None
     agent_id: UUID
     agent_name: str | None = None
     title: str
@@ -310,7 +321,10 @@ def _expand_schedule(
 
 
 async def _build_schedule(
-    db_session: AsyncSession, workspace_id: str, agent_names: dict[UUID, str]
+    db_session: AsyncSession,
+    task_repo: TaskRepository,
+    workspace_id: str,
+    agent_names: dict[UUID, str],
 ) -> Schedule:
     triggers_q = (
         select(
@@ -328,9 +342,29 @@ async def _build_schedule(
         (row.id, row.name, row.agent_id, row.cron_expression, row.timezone)
         for row in (await db_session.execute(triggers_q)).all()
     ]
-    if not trigger_rows:
-        return Schedule(horizon_days=SCHEDULE_HORIZON_DAYS, runs=[], frequent=[])
-    return await asyncio.to_thread(_expand_schedule, trigger_rows, agent_names, datetime.now(UTC))
+    now = datetime.now(UTC)
+    booked = await task_repo.list_scheduled_until(
+        SCHEDULED_TASK_STATUSES, now + timedelta(days=SCHEDULE_HORIZON_DAYS)
+    )
+    task_runs = [
+        ScheduledRun(
+            # Naive means UTC, as for every stored timestamp.
+            fires_at=scheduled_at if scheduled_at.tzinfo else scheduled_at.replace(tzinfo=UTC),
+            task_id=task_id,
+            agent_id=agent_id,
+            agent_name=agent_names.get(agent_id),
+            title=(description or "")[:200],
+        )
+        for task_id, agent_id, description, scheduled_at in booked
+    ]
+    schedule = (
+        await asyncio.to_thread(_expand_schedule, trigger_rows, agent_names, now)
+        if trigger_rows
+        else Schedule(horizon_days=SCHEDULE_HORIZON_DAYS, runs=[], frequent=[])
+    )
+    if task_runs:
+        schedule.runs = sorted([*schedule.runs, *task_runs], key=lambda run: run.fires_at)
+    return schedule
 
 
 async def _workspace_cap_currencies(
@@ -394,8 +428,11 @@ async def get_dashboard(
     billing_currency = get_customer_pricing().currency()
     covered = await _workspace_cap_currencies(factory, workspace_id, billing_currency)
     now = datetime.now(UTC)
-    by_currency = await factory.create_repository(CostEntryRepository).sum_by_currency_since(
-        datetime(now.year, now.month, 1, tzinfo=UTC)
+    month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
+    cost_lines = factory.create_repository(CostEntryRepository)
+    by_currency = await cost_lines.sum_by_currency_since(month_start)
+    mtd_estimate = await cost_lines.sum_since(
+        month_start, currency=billing_currency, scope=SpendScope(estimate=True)
     )
     spend = SpendCard(
         today_usd=today_usd,
@@ -407,6 +444,7 @@ async def get_dashboard(
             CurrencySpend(currency=currency, amount=amount)
             for currency, amount in spend_not_covered(by_currency, covered).items()
         ],
+        mtd_estimate_usd=to_money(mtd_estimate),
     )
 
     # ----- agent name lookup (single query) -----
@@ -519,7 +557,7 @@ async def get_dashboard(
         for t in (await db_session.execute(recent_q)).scalars().all()
     ]
 
-    schedule = await _build_schedule(db_session, workspace_id, agent_name_by_id)
+    schedule = await _build_schedule(db_session, task_repo, workspace_id, agent_name_by_id)
 
     # ----- daily spend (last 30 days, UTC) -----
     spend_since = datetime.now(UTC) - timedelta(days=29)

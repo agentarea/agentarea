@@ -6,7 +6,6 @@ import type { TriggerExecutionResponse } from "@/api/client/types.gen";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { useCurrency } from "@/hooks/useCurrency";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
 import { parseUtcTimestamp } from "@/utils/dateUtils";
 import { formatTriggerCost } from "../../components/triggerDisplay";
@@ -15,15 +14,17 @@ interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
   /** Principal id -> display name, resolved by the page via GET /v1/principals. */
   principalNames?: Record<string, string>;
+  /** The workspace's billing currency, loaded by the page as the overview does. */
+  currency: string | null;
 }
 
 export default function ExecutionsTable({
   executions,
   principalNames = {},
+  currency,
 }: ExecutionsTableProps) {
   const t = useTranslations("TriggersPage.detail");
   const locale = useLocale();
-  const { currency } = useCurrency();
   const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
   const columns = [
     {

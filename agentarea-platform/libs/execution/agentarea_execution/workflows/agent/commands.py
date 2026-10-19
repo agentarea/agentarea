@@ -22,8 +22,21 @@ class CommandsMixin(BudgetMixin):
         """Handle a change_model command: update cached model info and agent config."""
         info = ChangeModelPayload(**payload)
         old = self.state.resolved_model
-        self.state.resolved_model = info.model_dump()
+        previous_model_id = self.state.agent_config.get("model_id")
+        self.state.resolved_model = info.model_dump(exclude={"changed_by"})
         self.state.agent_config["model_id"] = info.model_id
+        if self._task_log_on() and not self._events_in_log():
+            self._log_event(
+                EventTypes.MODEL_CHANGED,
+                {
+                    "from": {
+                        "model_id": previous_model_id,
+                        "model_name": old.get("model_name") if old else None,
+                    },
+                    "to": {"model_id": info.model_id, "model_name": info.model_name},
+                    "by": info.changed_by,
+                },
+            )
         if info.context_window != self.state.context_window:
             self.state.context_window = info.context_window
             if self.context_manager:
@@ -35,6 +48,12 @@ class CommandsMixin(BudgetMixin):
                     "old_model": old.get("model_name") if old else None,
                     "new_model": info.model_name,
                     "new_model_id": info.model_id,
+                    "from": {
+                        "model_id": previous_model_id,
+                        "model_name": old.get("model_name") if old else None,
+                    },
+                    "to": {"model_id": info.model_id, "model_name": info.model_name},
+                    "by": info.changed_by,
                 },
             )
         workflow.logger.info(
@@ -58,7 +77,7 @@ class CommandsMixin(BudgetMixin):
         self.state.budget_usd = self._budget.budget_limit
         if self.event_manager:
             self.event_manager.add_event(
-                "BudgetUpdated",
+                EventTypes.BUDGET_UPDATED,
                 {
                     "old_limit": serialize_money(old_limit),
                     "new_limit": serialize_money(self._budget.budget_limit),
@@ -214,7 +233,7 @@ class CommandsMixin(BudgetMixin):
         self._message_queue.append({"id": msg_id, "content": text})
         if self.event_manager:
             self.event_manager.add_event(
-                "MessageQueued",
+                EventTypes.MESSAGE_QUEUED,
                 {
                     "message_id": msg_id,
                     "content_length": len(text),
@@ -285,7 +304,7 @@ class CommandsMixin(BudgetMixin):
         pending["submission"] = {"answers": answers, "secret_refs": secret_refs}
         if self.event_manager:
             self.event_manager.add_event(
-                "UserInputSubmitted",
+                EventTypes.HUMAN_INPUT_SUBMITTED,
                 {
                     "input_request_id": input_request_id,
                     "answer_keys": sorted(answers.keys()),
@@ -300,7 +319,7 @@ class CommandsMixin(BudgetMixin):
         self._message_queue = [m for m in self._message_queue if m["id"] != msg_id]
         if self.event_manager:
             self.event_manager.add_event(
-                "MessageRemoved",
+                EventTypes.MESSAGE_REMOVED,
                 {"message_id": msg_id},
             )
         workflow.logger.info(f"Message removed from queue: {msg_id}")

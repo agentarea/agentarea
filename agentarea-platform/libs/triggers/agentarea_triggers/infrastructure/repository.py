@@ -6,9 +6,8 @@ from typing import Any, cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from sqlalchemy import and_, desc, func, literal_column, null, select, update
+from sqlalchemy import ColumnElement, and_, desc, func, literal_column, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,36 +15,30 @@ from ..domain.enums import ExecutionStatus, TriggerType
 from ..domain.models import (
     RECONSTITUTING,
     CronTrigger,
+    StreamTrigger,
     Trigger,
+    TriggerBatchWindow,
     TriggerCreate,
     TriggerExecution,
+    TriggerSession,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from .orm import TriggerExecutionORM, TriggerORM
+
+# A trigger's firing; a forward's reaction to a stream event has no trigger.
+_A_FIRING = TriggerExecutionORM.trigger_id.is_not(None)
 
 
 def _value(value: Any) -> Any:
     return value.value if isinstance(value, Enum) else value
 
 
-async def find_trigger_by_webhook_id(session: AsyncSession, webhook_id: str) -> TriggerORM | None:
-    """Find a trigger before any tenant is known.
+def _session(session: TriggerSession | None) -> dict[str, Any] | None:
+    return session.model_dump(by_alias=True, exclude_none=True) if session else None
 
-    Deliberately unscoped: an inbound webhook carries no session, and the
-    webhook id is itself the discriminator. The caller builds the real
-    workspace context from what this returns.
 
-    Lives outside ``TriggerRepository`` on purpose. Reaching this query through
-    the repository used to require inventing a ``UserContext(user_id="system",
-    workspace_id="system")`` just to satisfy the constructor, which then sat in
-    scope for the rest of the request.
-    """
-    with unscoped("an inbound webhook names a trigger, not a workspace; the trigger's decides"):
-        result = await session.execute(
-            select(TriggerORM).where(TriggerORM.webhook_id == webhook_id)
-        )
-    return result.scalar_one_or_none()
+def _batch(batch: TriggerBatchWindow | None) -> dict[str, Any] | None:
+    return batch.model_dump(exclude_none=True) if batch else None
 
 
 class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
@@ -54,9 +47,15 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, TriggerORM, user_context)
 
-    async def webhook_id_in_use(self, webhook_id: str) -> bool:
-        """Whether any trigger, in any workspace, already answers on ``webhook_id``."""
-        return await find_trigger_by_webhook_id(self.session, webhook_id) is not None
+    async def names(self, ids: list[UUID]) -> dict[UUID, str]:
+        if not ids:
+            return {}
+        result = await self.session.execute(
+            select(TriggerORM.id, TriggerORM.name).where(
+                TriggerORM.id.in_(ids), self._get_workspace_filter()
+            )
+        )
+        return dict(result.tuples().all())
 
     async def get_trigger(self, id: UUID) -> Trigger | None:
         """Get a trigger by ID and convert to domain model."""
@@ -66,12 +65,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return self._orm_to_domain(trigger_orm)
 
     async def list_triggers(
-        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+        self, limit: int = 100, offset: int = 0, **filters: Any
     ) -> list[Trigger]:
-        """List all triggers in workspace and convert to domain models."""
-        trigger_orms = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset
-        )
+        """List the workspace's triggers matching ``filters``, as domain models."""
+        trigger_orms = await self.list_all(limit=limit, offset=offset, **filters)
         return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
 
     async def create_trigger(self, entity: Trigger) -> Trigger:
@@ -94,24 +91,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         # Add type-specific fields
         if isinstance(entity, CronTrigger):
             trigger_data.update(
-                {
-                    "cron_expression": entity.cron_expression,
-                    "timezone": entity.timezone,
-                    "data_extractor": entity.data_extractor,
-                    "data_extractor_config": entity.data_extractor_config,
-                    "data_extractor_state": entity.data_extractor_state,
-                }
+                {"cron_expression": entity.cron_expression, "timezone": entity.timezone}
             )
-        elif isinstance(entity, WebhookTrigger):
-            trigger_data.update(
-                {
-                    "webhook_id": entity.webhook_id,
-                    "allowed_methods": entity.allowed_methods,
-                    "webhook_type": _value(entity.webhook_type),
-                    "validation_rules": entity.validation_rules,
-                    "webhook_config": entity.webhook_config,
-                }
-            )
+        elif isinstance(entity, StreamTrigger):
+            trigger_data["session"] = _session(entity.session)
 
         # Remove None values and system fields that will be auto-populated
         trigger_data = {k: v for k, v in trigger_data.items() if v is not None}
@@ -140,24 +123,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         # Add type-specific fields
         if isinstance(entity, CronTrigger):
             trigger_data.update(
-                {
-                    "cron_expression": entity.cron_expression,
-                    "timezone": entity.timezone,
-                    "data_extractor": entity.data_extractor,
-                    "data_extractor_config": entity.data_extractor_config,
-                    "data_extractor_state": entity.data_extractor_state,
-                }
+                {"cron_expression": entity.cron_expression, "timezone": entity.timezone}
             )
-        elif isinstance(entity, WebhookTrigger):
-            trigger_data.update(
-                {
-                    "webhook_id": entity.webhook_id,
-                    "allowed_methods": entity.allowed_methods,
-                    "webhook_type": _value(entity.webhook_type),
-                    "validation_rules": entity.validation_rules,
-                    "webhook_config": entity.webhook_config,
-                }
-            )
+        elif isinstance(entity, StreamTrigger):
+            trigger_data["session"] = _session(entity.session)
 
         # Remove None values
         trigger_data = {k: v for k, v in trigger_data.items() if v is not None}
@@ -186,22 +155,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             workspace_id=getattr(trigger_data, "workspace_id", None),
             is_active=trigger_data.is_active,
             failure_threshold=trigger_data.failure_threshold,
-            # Cron-specific fields
             cron_expression=trigger_data.cron_expression,
             timezone=trigger_data.timezone,
-            data_extractor=trigger_data.data_extractor,
-            data_extractor_config=trigger_data.data_extractor_config,
-            # Webhook-specific fields
-            webhook_id=trigger_data.webhook_id,
-            allowed_methods=trigger_data.allowed_methods,
-            # A stream trigger has no intake of its own, so no channel type; a bare
-            # None would let the column's "generic" default fill it in.
-            webhook_type=null()
-            if trigger_data.trigger_type == TriggerType.STREAM
-            else (_value(trigger_data.webhook_type) if trigger_data.webhook_type else None),
-            validation_rules=trigger_data.validation_rules,
-            webhook_config=trigger_data.webhook_config,
-            event_types=trigger_data.event_types,
+            session=_session(trigger_data.session),
+            batch=_batch(trigger_data.batch),
         )
 
         self.session.add(trigger_orm)
@@ -218,14 +175,15 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         # Build update dict excluding None values
         update_data = {}
         # event_filter lives on the trigger's stream subscription, not on the row.
-        for field, value in trigger_update.dict(
-            exclude_unset=True, exclude={"event_filter"}
+        for field, value in trigger_update.model_dump(
+            exclude_unset=True, exclude={"event_filter", "session", "batch"}
         ).items():
             if value is not None:
-                if field == "webhook_type" and hasattr(value, "value"):
-                    update_data[field] = value.value
-                else:
-                    update_data[field] = value
+                update_data[field] = value
+        if "session" in trigger_update.model_fields_set:
+            update_data["session"] = _session(trigger_update.session)
+        if "batch" in trigger_update.model_fields_set:
+            update_data["batch"] = _batch(trigger_update.batch)
 
         if not update_data:
             return await self.get_trigger(trigger_id)
@@ -244,98 +202,9 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         return await self.get_trigger(trigger_id)
 
-    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> list[Trigger]:
-        """List triggers for an agent."""
-        stmt = (
-            select(TriggerORM)
-            .where(TriggerORM.agent_id == agent_id)
-            .order_by(TriggerORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-
-    async def list_by_type(self, trigger_type: TriggerType, limit: int = 100) -> list[Trigger]:
-        """List triggers by type."""
-        stmt = (
-            select(TriggerORM)
-            .where(TriggerORM.trigger_type == trigger_type.value)
-            .order_by(TriggerORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-
-    async def list_active_triggers(self, limit: int = 100) -> list[Trigger]:
-        """List active triggers."""
-        stmt = (
-            select(TriggerORM)
-            .where(TriggerORM.is_active.is_(True))
-            .order_by(TriggerORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        return [self._orm_to_domain(trigger_orm) for trigger_orm in trigger_orms]
-
     async def count_all(self) -> int:
         """Count all triggers visible in the current workspace."""
         return await self.count()
-
-    async def get_by_webhook_id(self, webhook_id: str) -> Trigger | None:
-        """Get trigger by webhook ID."""
-        stmt = select(TriggerORM).where(TriggerORM.webhook_id == webhook_id)
-        result = await self.session.execute(stmt)
-        trigger_orm = result.scalar_one_or_none()
-
-        if not trigger_orm:
-            return None
-
-        return self._orm_to_domain(trigger_orm)
-
-    async def list_cron_triggers_with_extractors(
-        self, extractor_type: str | None = None
-    ) -> list[CronTrigger]:
-        """List active cron triggers that have data extractors configured.
-
-        Temporal handles cron scheduling; this finds triggers that need
-        poll-based data extraction (email, RSS, etc.).
-        """
-        conditions = [
-            TriggerORM.trigger_type == TriggerType.CRON.value,
-            TriggerORM.is_active.is_(True),
-            TriggerORM.data_extractor.isnot(None),
-        ]
-        if extractor_type:
-            conditions.append(TriggerORM.data_extractor == extractor_type)
-
-        stmt = select(TriggerORM).where(and_(*conditions)).order_by(TriggerORM.created_at.desc())
-        result = await self.session.execute(stmt)
-        trigger_orms = result.scalars().all()
-
-        triggers = []
-        for trigger_orm in trigger_orms:
-            trigger = self._orm_to_domain(trigger_orm)
-            if isinstance(trigger, CronTrigger):
-                triggers.append(trigger)
-
-        return triggers
-
-    async def update_extractor_state(self, trigger_id: UUID, state: dict[str, Any]) -> bool:
-        """Update the data extractor state (cursor/checkpoint) for a trigger."""
-        stmt = (
-            update(TriggerORM)
-            .where(TriggerORM.id == trigger_id)
-            .values(data_extractor_state=state, updated_at=datetime.utcnow())
-        )
-        result = await self.session.execute(stmt)
-        await self.session.flush()
-        return cast(CursorResult[Any], result).rowcount > 0
 
     async def update_execution_tracking(
         self, trigger_id: UUID, last_execution_at: datetime, consecutive_failures: int = 0
@@ -400,6 +269,10 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
     def _orm_to_domain(self, trigger_orm: TriggerORM) -> Trigger:
         """Convert ORM model to domain model."""
+        if trigger_orm.trigger_type not in {t.value for t in TriggerType}:
+            raise ValueError(
+                f"trigger {trigger_orm.id} has unknown type {trigger_orm.trigger_type!r}"
+            )
         base_data = {
             "id": trigger_orm.id,
             "name": trigger_orm.name,
@@ -425,32 +298,13 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
                     **base_data,
                     "cron_expression": trigger_orm.cron_expression or "",
                     "timezone": trigger_orm.timezone or "UTC",
-                    "data_extractor": trigger_orm.data_extractor,
-                    "data_extractor_config": trigger_orm.data_extractor_config,
-                    "data_extractor_state": trigger_orm.data_extractor_state,
                 },
                 context=RECONSTITUTING,
             )
-        elif trigger_orm.trigger_type == TriggerType.WEBHOOK.value:
-            from ..domain.enums import WebhookType
-
-            return WebhookTrigger.model_validate(
-                {
-                    **base_data,
-                    "webhook_id": trigger_orm.webhook_id or "",
-                    "allowed_methods": trigger_orm.allowed_methods or ["POST"],
-                    "webhook_type": WebhookType(trigger_orm.webhook_type)
-                    if trigger_orm.webhook_type
-                    else WebhookType.GENERIC,
-                    "validation_rules": trigger_orm.validation_rules or {},
-                    "webhook_config": trigger_orm.webhook_config,
-                    "event_types": trigger_orm.event_types or [],
-                },
-                context=RECONSTITUTING,
-            )
-        else:
-            # Fallback to base Trigger
-            return Trigger.model_validate(base_data, context=RECONSTITUTING)
+        return StreamTrigger.model_validate(
+            {**base_data, "session": trigger_orm.session, "batch": trigger_orm.batch},
+            context=RECONSTITUTING,
+        )
 
     def _domain_to_orm(self, trigger: Trigger) -> TriggerORM:
         """Convert domain model to ORM model."""
@@ -474,24 +328,11 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         if isinstance(trigger, CronTrigger):
             orm_data.update(
-                {
-                    "cron_expression": trigger.cron_expression,
-                    "timezone": trigger.timezone,
-                    "data_extractor": trigger.data_extractor,
-                    "data_extractor_config": trigger.data_extractor_config,
-                    "data_extractor_state": trigger.data_extractor_state,
-                }
+                {"cron_expression": trigger.cron_expression, "timezone": trigger.timezone}
             )
-        elif isinstance(trigger, WebhookTrigger):
-            orm_data.update(
-                {
-                    "webhook_id": trigger.webhook_id,
-                    "allowed_methods": trigger.allowed_methods,
-                    "webhook_type": _value(trigger.webhook_type),
-                    "validation_rules": trigger.validation_rules,
-                    "webhook_config": trigger.webhook_config,
-                }
-            )
+        elif isinstance(trigger, StreamTrigger):
+            orm_data["session"] = _session(trigger.session)
+            orm_data["batch"] = _batch(trigger.batch)
 
         return TriggerORM(**orm_data)
 
@@ -509,13 +350,9 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
             return None
         return self._orm_to_domain(execution_orm)
 
-    async def list_executions(
-        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
-    ) -> list[TriggerExecution]:
+    async def list_executions(self, limit: int = 100, offset: int = 0) -> list[TriggerExecution]:
         """List all trigger executions in workspace and convert to domain models."""
-        execution_orms = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset
-        )
+        execution_orms = await self.list_all(limit=limit, offset=offset)
         return [self._orm_to_domain(execution_orm) for execution_orm in execution_orms]
 
     async def create_execution(self, entity: TriggerExecution) -> TriggerExecution:
@@ -593,7 +430,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         """List executions by status."""
         stmt = (
             select(TriggerExecutionORM)
-            .where(TriggerExecutionORM.status == status.value)
+            .where(TriggerExecutionORM.status == status.value, _A_FIRING)
             .order_by(desc(TriggerExecutionORM.executed_at))
             .limit(limit)
         )
@@ -655,7 +492,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         stmt = select(TriggerExecutionORM)
 
         # Apply filters
-        conditions = []
+        conditions: list[ColumnElement[bool]] = [_A_FIRING]
         if trigger_id:
             conditions.append(TriggerExecutionORM.trigger_id == trigger_id)
         if status:
@@ -686,7 +523,7 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
         stmt = select(func.count(TriggerExecutionORM.id))
 
         # Apply filters
-        conditions = []
+        conditions: list[ColumnElement[bool]] = [_A_FIRING]
         if trigger_id:
             conditions.append(TriggerExecutionORM.trigger_id == trigger_id)
         if status:
@@ -879,6 +716,10 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
 
     def _orm_to_domain(self, execution_orm: TriggerExecutionORM) -> TriggerExecution:
         """Convert ORM model to domain model."""
+        if execution_orm.trigger_id is None:
+            raise ValueError(
+                f"trigger execution {execution_orm.id} is a forward's reaction, not a firing"
+            )
         return TriggerExecution(
             id=cast(UUID, execution_orm.id),
             trigger_id=execution_orm.trigger_id,

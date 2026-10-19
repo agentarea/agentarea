@@ -1,18 +1,13 @@
 from agentarea_execution.models import ConversationResumeSnapshot
 from agentarea_tasks.conversation_resume import reconstruct_conversation
 from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.task_log import model_window
 
 
 def _window(entries: list[ConversationEntry], snapshot: ConversationResumeSnapshot) -> list[dict]:
     """The messages a resumed run's first model call sees, read the way the log reads them."""
-    by_seq = {entry.seq: entry for entry in entries}
-    head = [by_seq[seq] for seq in snapshot.head_seqs]
-    tail = [
-        by_seq[seq]
-        for seq in sorted(by_seq)
-        if snapshot.tail_start <= seq < snapshot.next_seq and seq not in snapshot.head_seqs
-    ]
-    return [entry.as_message() for entry in (*head, *tail)]
+    logged = [entry for entry in entries if entry.seq < snapshot.next_seq]
+    return [entry.as_message() for entry in model_window(logged)]
 
 
 def _assert_valid_chat(messages: list[dict]) -> None:
@@ -63,11 +58,11 @@ def test_legacy_log_drops_broken_tool_turns_and_restores_the_final_answer():
     ]
 
 
-def test_log_ending_in_the_answer_resumes_after_the_latest_summary():
+def test_log_ending_in_the_answer_resumes_after_the_latest_compaction():
     entries = [
         ConversationEntry(seq=0, role="system", content="Agent instructions"),
         ConversationEntry(seq=1, role="user", content="Compacted away"),
-        ConversationEntry(seq=2, kind="summary", role="user", content="Summary so far"),
+        ConversationEntry(seq=2, kind="compaction", role="user", content="Summary so far"),
         ConversationEntry(seq=3, role="user", content="Next question"),
         ConversationEntry(seq=4, role="assistant", content="Answer"),
     ]
@@ -75,8 +70,6 @@ def test_log_ending_in_the_answer_resumes_after_the_latest_summary():
     rebuilt = reconstruct_conversation(entries, query="Compacted away", response="Answer")
 
     assert rebuilt.appended == []
-    assert rebuilt.snapshot.head_seqs == [0, 2]
-    assert rebuilt.snapshot.tail_start == 3
     assert rebuilt.snapshot.next_seq == 5
     assert [message["content"] for message in _window(entries, rebuilt.snapshot)] == [
         "Agent instructions",
@@ -94,7 +87,16 @@ def test_task_older_than_the_log_gets_its_request_and_answer_logged():
         (1, "assistant", "Here they are"),
     ]
     assert rebuilt.system_prompt_missing is True
-    assert rebuilt.snapshot.head_seqs == []
-    assert rebuilt.snapshot.tail_start == 0
     assert rebuilt.snapshot.next_seq == 2
     assert rebuilt.snapshot.current_iteration == 1
+
+
+def test_the_snapshot_carries_no_window_cursors():
+    rebuilt = reconstruct_conversation(
+        [ConversationEntry(seq=0, role="system", content="Agent instructions")],
+        query="q",
+        response="a",
+    )
+
+    assert "head_seqs" not in rebuilt.snapshot.model_fields_set
+    assert "tail_start" not in rebuilt.snapshot.model_fields_set

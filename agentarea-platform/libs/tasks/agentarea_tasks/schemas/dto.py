@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from agentarea_common.channel_origin import reject_reserved_parameters
+from agentarea_common.reserved_task_parameters import reject_reserved_parameters
 from agentarea_governance.domain.policies import PolicyDocument
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -74,8 +74,8 @@ class RunCreate(BaseModel):
         description=(
             "Free-form task parameters. Recognized keys: "
             "``model_override`` (per-run model id), and any agent-specific "
-            "context the workflow should see. ``channel_origin`` is reserved "
-            "for runs a channel trigger starts and is rejected."
+            "context the workflow should see. ``delivery_address`` and ``session`` "
+            "are reserved for runs a stream trigger starts and are rejected."
         ),
     )
     execution: RunExecutionConfig | None = Field(

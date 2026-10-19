@@ -31,7 +31,7 @@ def _make_service(temporal_executor=None):
     """Build a TaskService with mocked deps. Returns (service, mocks)."""
     task_repo = MagicMock()
     task_repo.create_task = AsyncMock(side_effect=lambda t: t)
-    task_repo.find_active_by_agent_and_chat = AsyncMock(return_value=[])
+    task_repo.find_active_in_session = AsyncMock(return_value=[])
 
     agent_stub = MagicMock(id=uuid4())
     agent_stub.name = "stub-agent"  # MagicMock(name=...) is the mock's own name, not a field
@@ -141,7 +141,11 @@ async def test_submit_task_preserves_caller_provided_id_metadata_and_parameters(
     pre_id = uuid4()
     task = _build_task(
         id=pre_id,
-        task_parameters={"channel_origin": {"chat_id": "c-99"}, "tone": "warm"},
+        task_parameters={
+            "trigger_id": "trg-1",
+            "session": {"key": "c-99", "continue": True},
+            "tone": "warm",
+        },
         metadata={"task_source": "a2a_protocol", "request_id": "req-7"},
     )
 
@@ -150,7 +154,8 @@ async def test_submit_task_preserves_caller_provided_id_metadata_and_parameters(
     submitted_arg = mocks["task_manager"].submit_task.await_args.args[0]
     assert submitted_arg.id == pre_id
     assert submitted_arg.task_parameters == {
-        "channel_origin": {"chat_id": "c-99"},
+        "trigger_id": "trg-1",
+        "session": {"key": "c-99", "continue": True},
         "tone": "warm",
     }
     # Caller metadata preserved AND merged with canonical defaults
@@ -316,8 +321,8 @@ def test_run_contract_has_no_sandbox_policy_toggle() -> None:
 
 
 @pytest.mark.asyncio
-async def test_submit_task_routes_to_active_workflow_when_chat_id_present():
-    """submit_task with channel_origin.chat_id must attempt routing before creating a new task."""
+async def test_submit_task_routes_to_active_workflow_when_the_session_continues():
+    """submit_task in a continued session must attempt routing before creating a new task."""
     executor = MagicMock()
     executor.send_workflow_command = AsyncMock(return_value=True)
     service, mocks = _make_service(temporal_executor=executor)
@@ -331,9 +336,11 @@ async def test_submit_task_routes_to_active_workflow_when_chat_id_present():
         agent_id=uuid4(),
         parameters={},
     )
-    mocks["task_repo"].find_active_by_agent_and_chat = AsyncMock(return_value=[candidate])
+    mocks["task_repo"].find_active_in_session = AsyncMock(return_value=[candidate])
 
-    task = _build_task(task_parameters={"channel_origin": {"chat_id": "c-99"}})
+    task = _build_task(
+        task_parameters={"trigger_id": "trg-1", "session": {"key": "c-99", "continue": True}}
+    )
 
     result = await service.submit_task(task)
 
@@ -355,8 +362,10 @@ async def test_changed_resource_selection_starts_a_new_channel_run(kind, change)
     new_ref = "new.txt" if kind == "files" else str(uuid4())
     old = {} if change == "add" else {kind: [old_ref]}
     new = {} if change == "remove" else {kind: [new_ref]}
-    task = _build_task(task_parameters={"channel_origin": {"chat_id": "c-99"}, **new})
-    mocks["task_repo"].find_active_by_agent_and_chat.return_value = [
+    task = _build_task(
+        task_parameters={"trigger_id": "trg-1", "session": {"key": "c-99", "continue": True}, **new}
+    )
+    mocks["task_repo"].find_active_in_session.return_value = [
         MagicMock(
             id=uuid4(),
             execution_id="task-existing",
@@ -385,13 +394,14 @@ async def test_channel_routing_matches_canonical_resource_identity_not_display_t
     mcp_id, skill_id = uuid4(), uuid4()
     task = _build_task(
         task_parameters={
-            "channel_origin": {"chat_id": "c-99"},
+            "trigger_id": "trg-1",
+            "session": {"key": "c-99", "continue": True},
             "mcps": [{"id": str(mcp_id), "name": "Renamed", "description": "Untrusted display"}],
             "skills": [str(skill_id)],
             "files": ["two.txt", "one.txt", "two.txt"],
         }
     )
-    mocks["task_repo"].find_active_by_agent_and_chat.return_value = [
+    mocks["task_repo"].find_active_in_session.return_value = [
         MagicMock(
             id=uuid4(),
             execution_id="task-existing",
@@ -415,8 +425,8 @@ async def test_channel_routing_matches_canonical_resource_identity_not_display_t
 
 
 @pytest.mark.asyncio
-async def test_create_and_execute_routes_to_active_workflow_when_chat_id_present():
-    """REST path also routes to active workflow when channel_origin.chat_id is set."""
+async def test_create_and_execute_routes_to_active_workflow_when_the_session_continues():
+    """REST path also routes to active workflow when the session continues."""
     executor = MagicMock()
     executor.send_workflow_command = AsyncMock(return_value=True)
     service, mocks = _make_service(temporal_executor=executor)
@@ -430,13 +440,13 @@ async def test_create_and_execute_routes_to_active_workflow_when_chat_id_present
         agent_id=uuid4(),
         parameters={},
     )
-    mocks["task_repo"].find_active_by_agent_and_chat = AsyncMock(return_value=[candidate])
+    mocks["task_repo"].find_active_in_session = AsyncMock(return_value=[candidate])
 
     result = await service.create_and_execute_task_with_workflow(
         agent_id=uuid4(),
         description="follow-up",
         workspace_id="ws-abc",
-        parameters={"channel_origin": {"chat_id": "c-99"}},
+        parameters={"trigger_id": "trg-1", "session": {"key": "c-99", "continue": True}},
         user_id="user-123",
     )
 
@@ -513,13 +523,13 @@ async def test_followup_routing_is_not_blocked_by_missing_model():
         agent_id=uuid4(),
         parameters={},
     )
-    mocks["task_repo"].find_active_by_agent_and_chat = AsyncMock(return_value=[candidate])
+    mocks["task_repo"].find_active_in_session = AsyncMock(return_value=[candidate])
 
     result = await service.create_and_execute_task_with_workflow(
         agent_id=agent.id,
         description="follow-up",
         workspace_id="ws-abc",
-        parameters={"channel_origin": {"chat_id": "c-99"}},
+        parameters={"trigger_id": "trg-1", "session": {"key": "c-99", "continue": True}},
         user_id="user-123",
     )
 

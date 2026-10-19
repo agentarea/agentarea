@@ -1,16 +1,23 @@
 """Agent tools: delegating to another agent as a child workflow."""
 
+import asyncio
 import json
+from collections.abc import Coroutine
 from typing import Any
 
 from temporalio import workflow
-from temporalio.exceptions import ApplicationError
+from temporalio.exceptions import (
+    ApplicationError,
+    CancelledError,
+    ChildWorkflowError,
+    is_cancelled_exception,
+)
 from temporalio.workflow import ParentClosePolicy
 
 with workflow.unsafe.imports_passed_through():
     from uuid import UUID
 
-    from agentarea_common.money import Money
+    from agentarea_common.money import Money, serialize_money
 
     from ..models import Message, ToolCall
 
@@ -19,6 +26,8 @@ from ...models import (
     AgentExecutionResult,
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
+    DelegatedSpendRequest,
+    DelegatedSpendResult,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
 )
@@ -31,7 +40,12 @@ from ..constants import (
 )
 from ..retry import make_retry_policy
 from .approval import ToolApprovalMixin
-from .patches import DELEGATION_ON_OWN_QUEUE_PATCH
+from .patches import (
+    CHILD_STOP_IS_NOT_PARENT_STOP_PATCH,
+    DELEGATION_CHILD_EXECUTION_ID_PATCH,
+    DELEGATION_ON_OWN_QUEUE_PATCH,
+    DELEGATION_STOP_RECORDED_PATCH,
+)
 
 LEGACY_DELEGATION_TASK_QUEUE = "agent-tasks"
 
@@ -91,6 +105,97 @@ class DelegationMixin(ToolApprovalMixin):
                 f"{list(self._agent_tool_registry.keys())}"
             )
 
+    def _record_stopped_delegation(
+        self,
+        tool_call: ToolCall,
+        *,
+        agent_id: str,
+        agent_name: str,
+        child_task_id: UUID | None,
+        reserved: Money | None,
+    ) -> None:
+        """Answer a delegation the stop interrupted, and reserve what the child may have spent.
+
+        The child is stopped with its parent and returns no result, so its exact
+        spend stays on its own task; the parent reserves the child's allocation,
+        as for a child that failed.
+        """
+        tool_name = tool_call.function["name"]
+        error = "Stopped by the user while the delegated agent was running."
+        self.state.messages.append(
+            Message(
+                role="tool",
+                content=json.dumps(
+                    {
+                        "status": "cancelled",
+                        "agent": agent_name,
+                        "task_id": str(child_task_id) if child_task_id else None,
+                        "error": error,
+                    }
+                ),
+                tool_call_id=tool_call.id,
+                name=tool_name,
+            )
+        )
+        if reserved is not None:
+            self._delegated_cost += reserved
+            self._budget.add_cost(reserved)
+        self._events.add_event(
+            EventTypes.DELEGATION_FAILED,
+            {
+                "tool_name": tool_name,
+                "tool_call_id": tool_call.id,
+                "target_agent_id": agent_id,
+                "target_agent_name": agent_name,
+                "child_task_id": str(child_task_id) if child_task_id else None,
+                "cancelled": True,
+                "error": error,
+                "reserved_cost": serialize_money(reserved) if reserved is not None else None,
+                "iteration": self.state.current_iteration,
+            },
+        )
+
+    @property
+    def _child_stop_is_own(self) -> bool:
+        """Whether a delegated run's cancellation is told apart from the parent's own stop."""
+        return workflow.patched(CHILD_STOP_IS_NOT_PARENT_STOP_PATCH)
+
+    async def _delegated_spend(self, child_task_id: UUID) -> Money:
+        """What a delegated agent's task spent, from the spend ledger."""
+        result: DelegatedSpendResult = await workflow.execute_activity(
+            Activities.DELEGATED_TASK_SPEND,
+            args=[
+                DelegatedSpendRequest(
+                    task_id=child_task_id, user_context_data=self.state.user_context_data
+                )
+            ],
+            result_type=DelegatedSpendResult,
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            retry_policy=make_retry_policy(DEFAULT_RETRY_ATTEMPTS),
+        )
+        return result.spent
+
+    async def _await_child(self, child_run: Coroutine[Any, Any, Any]) -> Any:
+        """Await a delegated run; a stop of the parent surfaces as the parent's cancellation.
+
+        A child cancelled on its own and a child cancelled because its parent was
+        stopped end with the same error. Shielding the wait tells them apart: the
+        parent's stop lands here, the child is told to stop and waited for, and the
+        stop is raised as the parent's.
+        """
+        if not self._child_stop_is_own:
+            return await child_run
+        handle = asyncio.ensure_future(child_run)
+        try:
+            return await asyncio.shield(handle)
+        except asyncio.CancelledError:
+            handle.cancel()
+            try:
+                await handle
+            except Exception as settled:
+                workflow.logger.info(f"Delegated run stopped with its parent: {settled}")
+            raise CancelledError("The run was stopped while a delegated agent worked") from None
+
     async def _execute_agent_delegation(
         self,
         tool_call: ToolCall,
@@ -122,7 +227,7 @@ class DelegationMixin(ToolApprovalMixin):
         message = tool_args.get("message", "")
 
         self._events.add_event(
-            EventTypes.AGENT_DELEGATION_STARTED,
+            EventTypes.DELEGATION_STARTED,
             {
                 "tool_name": tool_name,
                 "tool_call_id": tool_call.id,
@@ -135,10 +240,15 @@ class DelegationMixin(ToolApprovalMixin):
         await self._publish_events_immediately()
 
         child_task_created = False
+        child_task_id: UUID | None = None
         child_cost_accounted = False
         try:
             # Create a task record in DB for the child agent
+            child_workflow_id = f"delegation-{self.state.execution_id}-{tool_call.id}"
             create_task_request = CreateDelegationTaskRequest(
+                execution_id=child_workflow_id
+                if workflow.patched(DELEGATION_CHILD_EXECUTION_ID_PATCH)
+                else None,
                 parent_agent_id=self.state.agent_id,
                 parent_task_id=self.state.task_id,
                 target_agent_id=agent_id,
@@ -191,18 +301,19 @@ class DelegationMixin(ToolApprovalMixin):
             # - execution_timeout: caps total child runtime
             # - parent_close_policy: TERMINATE ensures child is cancelled
             #   if the parent workflow is cancelled or completed
-            child_workflow_id = f"delegation-{self.state.execution_id}-{tool_call.id}"
-            child_result: AgentExecutionResult = await workflow.execute_child_workflow(
-                AgentExecutionWorkflow.run,
-                args=[child_request],
-                id=child_workflow_id,
-                task_queue=(
-                    workflow.info().task_queue
-                    if workflow.patched(DELEGATION_ON_OWN_QUEUE_PATCH)
-                    else LEGACY_DELEGATION_TASK_QUEUE
-                ),
-                execution_timeout=DELEGATION_TIMEOUT,
-                parent_close_policy=ParentClosePolicy.TERMINATE,
+            child_result: AgentExecutionResult = await self._await_child(
+                workflow.execute_child_workflow(
+                    AgentExecutionWorkflow.run,
+                    args=[child_request],
+                    id=child_workflow_id,
+                    task_queue=(
+                        workflow.info().task_queue
+                        if workflow.patched(DELEGATION_ON_OWN_QUEUE_PATCH)
+                        else LEGACY_DELEGATION_TASK_QUEUE
+                    ),
+                    execution_timeout=DELEGATION_TIMEOUT,
+                    parent_close_policy=ParentClosePolicy.TERMINATE,
+                )
             )
 
             # Build a structured envelope for the parent's LLM. Same shape
@@ -239,7 +350,7 @@ class DelegationMixin(ToolApprovalMixin):
             )
 
             self._events.add_event(
-                EventTypes.AGENT_DELEGATION_COMPLETED,
+                EventTypes.DELEGATION_COMPLETED,
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
@@ -267,25 +378,49 @@ class DelegationMixin(ToolApprovalMixin):
             )
 
         except Exception as e:
-            if self._is_cancellation(e):
+            child_stopped_alone = (
+                isinstance(e, ChildWorkflowError)
+                and is_cancelled_exception(e)
+                and self._child_stop_is_own
+            )
+            if self._is_cancellation(e) and not child_stopped_alone:
+                if workflow.patched(DELEGATION_STOP_RECORDED_PATCH):
+                    self._record_stopped_delegation(
+                        tool_call,
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        child_task_id=child_task_id,
+                        reserved=run_budget_usd
+                        if child_task_created and not child_cost_accounted
+                        else None,
+                    )
                 raise
             if child_task_created and not child_cost_accounted:
                 # A failed child does not return AgentExecutionResult, so the
                 # parent cannot recover its exact spend from Temporal. Consume
                 # the full allocation as a fail-closed reservation; the child
-                # task still persists its exact own_cost for billing.
-                self._delegated_cost += run_budget_usd
-                self._budget.add_cost(run_budget_usd)
+                # task still persists its exact own_cost for billing. A child
+                # stopped on its own has closed and recorded what it spent.
+                spent = run_budget_usd
+                if child_stopped_alone and child_task_id is not None:
+                    spent = await self._delegated_spend(child_task_id)
+                self._delegated_cost += spent
+                self._budget.add_cost(spent)
             # Surface the failure to the parent's LLM as a tool message and
             # continue. Re-raising here would propagate out of asyncio.gather
             # and abort sibling delegations — wrong semantics for fan-out
             # where each child's success/failure should be independent.
             workflow.logger.error(f"Agent delegation to '{agent_name}' failed: {e}", exc_info=True)
 
+            error = (
+                "The delegated agent's run was stopped by a person before it finished."
+                if child_stopped_alone
+                else str(e)
+            )
             error_payload = {
-                "status": "failed",
+                "status": "cancelled" if child_stopped_alone else "failed",
                 "agent": agent_name,
-                "error": str(e),
+                "error": error,
             }
             self.state.messages.append(
                 Message(
@@ -297,13 +432,14 @@ class DelegationMixin(ToolApprovalMixin):
             )
 
             self._events.add_event(
-                EventTypes.AGENT_DELEGATION_FAILED,
+                EventTypes.DELEGATION_FAILED,
                 {
                     "tool_name": tool_name,
                     "tool_call_id": tool_call.id,
                     "target_agent_id": agent_id,
                     "target_agent_name": agent_name,
-                    "error": str(e),
+                    "error": error,
+                    **({"cancelled": True} if child_stopped_alone else {}),
                     "iteration": self.state.current_iteration,
                 },
             )

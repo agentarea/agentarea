@@ -467,11 +467,11 @@ BEGIN
 
             INSERT INTO task_events (id, task_id, event_type, timestamp, data, event_metadata, workspace_id, created_by)
             VALUES
-                (gen_random_uuid(), task_id, 'WorkflowStarted', now() - make_interval(hours => i, mins => 25), jsonb_build_object('message', 'QA seed workflow started', 'flow', flow), jsonb_build_object('qa_seed_batch', batch), ws, creator),
-                (gen_random_uuid(), task_id, 'IterationStarted', now() - make_interval(hours => i, mins => 20), jsonb_build_object('iteration', 1, 'icp', icp), jsonb_build_object('qa_seed_batch', batch), ws, creator),
-                (gen_random_uuid(), task_id, 'ToolCallStarted', now() - make_interval(hours => i, mins => 15), jsonb_build_object('tool', CASE WHEN i % 4 = 0 THEN 'agentarea/shell' WHEN i % 4 = 1 THEN 'agentarea/web' WHEN i % 4 = 2 THEN 'qa_seed_search' ELSE 'agentarea/skills' END), jsonb_build_object('qa_seed_batch', batch), ws, creator),
-                (gen_random_uuid(), task_id, 'ToolCallCompleted', now() - make_interval(hours => i, mins => 10), jsonb_build_object('tool', 'qa_seed_tool', 'duration_ms', 200 + i), jsonb_build_object('qa_seed_batch', batch), ws, creator),
-                (gen_random_uuid(), task_id, CASE WHEN st = 'failed' THEN 'WorkflowFailed' WHEN st = 'completed' THEN 'WorkflowCompleted' WHEN st = 'blocked' THEN 'HumanInputRequested' ELSE 'LLMCallCompleted' END,
+                (gen_random_uuid(), task_id, 'task.started', now() - make_interval(hours => i, mins => 25), jsonb_build_object('message', 'QA seed workflow started', 'flow', flow), jsonb_build_object('qa_seed_batch', batch), ws, creator),
+                (gen_random_uuid(), task_id, 'turn.started', now() - make_interval(hours => i, mins => 20), jsonb_build_object('iteration', 1, 'icp', icp), jsonb_build_object('qa_seed_batch', batch), ws, creator),
+                (gen_random_uuid(), task_id, 'tool.call', now() - make_interval(hours => i, mins => 15), jsonb_build_object('tool', CASE WHEN i % 4 = 0 THEN 'agentarea/shell' WHEN i % 4 = 1 THEN 'agentarea/web' WHEN i % 4 = 2 THEN 'qa_seed_search' ELSE 'agentarea/skills' END), jsonb_build_object('qa_seed_batch', batch), ws, creator),
+                (gen_random_uuid(), task_id, 'tool.result', now() - make_interval(hours => i, mins => 10), jsonb_build_object('tool', 'qa_seed_tool', 'duration_ms', 200 + i), jsonb_build_object('qa_seed_batch', batch), ws, creator),
+                (gen_random_uuid(), task_id, CASE WHEN st = 'failed' THEN 'task.failed' WHEN st = 'completed' THEN 'task.completed' WHEN st = 'blocked' THEN 'input.request' ELSE 'llm.call.completed' END,
                     now() - make_interval(hours => i, mins => 5),
                     jsonb_build_object('status', st, 'summary', 'QA seed event for ' || flow, 'artifact_kind', artifact_kind),
                     jsonb_build_object('qa_seed_batch', batch),

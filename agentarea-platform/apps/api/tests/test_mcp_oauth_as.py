@@ -99,7 +99,9 @@ def hydra(monkeypatch):
     """Point the endpoints at a stubbed Hydra and settings."""
     monkeypatch.setattr(mcp_oauth_as, "get_settings", lambda: _Settings())
     monkeypatch.setattr(mcp_oauth_as, "get_auth_settings", lambda: _AuthSettings())
-    monkeypatch.setattr(mcp_oauth_as.httpx, "AsyncClient", _FakeAsyncClient)
+    monkeypatch.setattr(
+        mcp_oauth_as, "outbound_client", lambda *args, **kwargs: _FakeAsyncClient(*args, **kwargs)
+    )
     monkeypatch.setattr(_FakeAsyncClient, "sent", [])
 
     app = FastAPI()

@@ -129,7 +129,6 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         is_public: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
     ) -> list[ProviderConfig]:
         """List provider configs with filtering and relationships."""
         filters = {}
@@ -140,9 +139,7 @@ class ProviderConfigRepository(WorkspaceScopedRepository[ProviderConfig]):
         if is_public is not None:
             filters["is_public"] = is_public
 
-        configs = await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
-        )
+        configs = await self.list_all(limit=limit, offset=offset, **filters)
 
         # Load relationships for each config
         config_ids = [config.id for config in configs]

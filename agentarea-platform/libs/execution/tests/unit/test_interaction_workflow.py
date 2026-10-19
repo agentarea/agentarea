@@ -1,10 +1,15 @@
 import asyncio
 import json
+from datetime import timedelta
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
 import pytest
-from agentarea_execution.interaction import resolve_interaction_capabilities
+from agentarea_execution.interaction import (
+    InteractionCapabilities,
+    follow_up_window,
+    resolve_interaction_capabilities,
+)
 from agentarea_execution.models import ArtifactValidationResult
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_execution.workflows.helpers import BudgetTracker, EventManager
@@ -54,6 +59,7 @@ def instance():
         patch(f"{MODULE}.logger", new=Mock()),
         patch(f"{MODULE}.uuid4", side_effect=uuid4),
         patch(f"{MODULE}.execute_activity", new=AsyncMock()),
+        patch(f"{MODULE}.patched", return_value=True),
     ):
         yield workflow
 
@@ -69,11 +75,9 @@ def instance():
         ({}, {"created_via": "mcp"}, False),
         ({}, {"created_via": "api", "scheduled_at": "2026-09-21T00:00:00Z"}, False),
         ({"interaction": {"channel": "web"}}, {"scheduled_at": "2026-09-21T00:00:00Z"}, True),
-        ({"channel_origin": {"type": "github"}}, {}, False),
-        ({"channel_origin": {"type": "telegram"}}, {}, False),
+        ({"delivery_address": {"type": "chat", "sender": "http"}}, {}, False),
         ({"trigger_id": "trigger", "interaction": {"channel": "web"}}, {}, True),
-        ({"trigger_id": "trigger", "channel_origin": {"type": "web"}}, {}, True),
-        ({"channel_origin": {"type": "web"}, "interaction": {"channel": "none"}}, {}, False),
+        ({"delivery_address": {"type": "chat"}, "interaction": {"channel": "web"}}, {}, True),
     ],
 )
 def test_capabilities_require_a_supported_return_route(parameters, metadata, web):
@@ -81,6 +85,29 @@ def test_capabilities_require_a_supported_return_route(parameters, metadata, web
     assert capabilities.allow_questions is web
     assert capabilities.allow_approvals is web
     assert capabilities.allow_a2ui is web
+
+
+@pytest.mark.parametrize(
+    ("parameters", "channel", "window"),
+    [
+        ({}, "web", timedelta(minutes=30)),
+        ({}, "none", None),
+        (
+            {"session": {"key": "s", "continue": True, "idle_timeout_seconds": 600}},
+            "none",
+            timedelta(minutes=10),
+        ),
+        ({"session": {"key": "s", "continue": True}}, "none", timedelta(minutes=30)),
+        ({"session": {"key": "s", "continue": False}}, "web", None),
+        (
+            {"session": {"key": "s", "continue": True, "idle_timeout_seconds": True}},
+            "none",
+            timedelta(minutes=30),
+        ),
+    ],
+)
+def test_the_session_decides_whether_a_turn_waits_for_a_follow_up(parameters, channel, window):
+    assert follow_up_window(parameters, InteractionCapabilities(channel=channel)) == window
 
 
 def test_restrictions_cannot_grant_a_missing_channel_or_agent_feature():
@@ -554,3 +581,39 @@ async def test_content_reply_alongside_thinking_is_still_the_answer(instance):
         )
     (completion_call,) = complete.await_args.args
     assert json.loads(completion_call.function["arguments"])["result"] == "Scheduled."
+
+
+def _in_session(instance, **session):
+    parameters = {"trigger_id": "t", "session": {"key": "src:chat-1", **session}}
+    instance.state.goal.context = parameters
+    instance.state.interaction_capabilities = resolve_interaction_capabilities(parameters, {}, True)
+    instance._validate_completion_artifacts = AsyncMock(
+        return_value=ArtifactValidationResult(state="passed", generation=0)
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_channel_task_in_a_continued_session_waits_for_the_next_message(instance):
+    _in_session(instance, **{"continue": True, "idle_timeout_seconds": 600})
+    await instance._handle_task_completion(call("completion", result="Answered", artifacts=[]))
+
+    assert instance._awaiting_input is True
+    awaiting = instance._events.get_pending_events()[-1]
+    assert awaiting["event_type"] == "task.awaiting_follow_up"
+    assert awaiting["data"]["timeout_seconds"] == 600
+
+    with patch(f"{MODULE}.wait_condition", new=AsyncMock(side_effect=TimeoutError)) as wait:
+        await instance._await_follow_up()
+    assert wait.await_args.kwargs["timeout"] == timedelta(seconds=600)
+
+
+@pytest.mark.asyncio
+async def test_a_channel_task_whose_session_does_not_continue_ends(instance):
+    _in_session(instance, **{"continue": False})
+    await instance._handle_task_completion(call("completion", result="Answered", artifacts=[]))
+
+    assert instance.state.success is True
+    assert instance._awaiting_input is False
+    assert "task.awaiting_follow_up" not in [
+        e["event_type"] for e in instance._events.get_pending_events()
+    ]

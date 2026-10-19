@@ -294,7 +294,7 @@ export type AgentCreateRequest = {
     /**
      * Triggers
      *
-     * Triggers that start the agent: schedules, webhooks, messaging channels (types from GET /v1/triggers/catalog). Created with the agent; if any cannot be created, neither the agent nor any trigger is kept.
+     * Triggers that start the agent: cron schedules, or stream triggers on a stream whose sources are webhooks and polled providers. Created with the agent; if any cannot be created, neither the agent nor any trigger is kept.
      */
     triggers?: Array<TriggerSpec>;
 };
@@ -589,7 +589,7 @@ export type AnswerCheckPolicy = {
 /**
  * ApprovalDecision
  *
- * One answered approval request, as the workflow recorded the answer.
+ * One answered approval request, as the audit trail recorded the answer.
  */
 export type ApprovalDecision = {
     /**
@@ -1570,13 +1570,21 @@ export type CatalogItemUpdate = {
 /**
  * CatalogToolPrice
  *
- * What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.
+ * What one unit of a tool's calls costs; ``tool`` null is the connector's default.
+ *
+ * ``basis`` "price": billing's price on the platform's key, markup included.
+ * "vendor_cost": the vendor's own cost, with no markup. ``unavailable``: billing could
+ * not be asked for its price, so the vendor cost stands in.
  */
 export type CatalogToolPrice = {
     /**
      * Amount
      */
     amount: string;
+    /**
+     * Basis
+     */
+    basis: 'price' | 'vendor_cost';
     /**
      * Currency
      */
@@ -1585,6 +1593,10 @@ export type CatalogToolPrice = {
      * Tool
      */
     tool: string | null;
+    /**
+     * Unavailable
+     */
+    unavailable?: boolean;
     /**
      * Unit
      */
@@ -2094,6 +2106,10 @@ export type DashboardTask = {
  */
 export type DiscoverPreviewModelResponse = {
     /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
+    /**
      * Cached Input Cost Per Token
      */
     cached_input_cost_per_token?: string | null;
@@ -2189,6 +2205,10 @@ export type DiscoverPreviewResponse = {
  * DiscoveredModelResponse
  */
 export type DiscoveredModelResponse = {
+    /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
     /**
      * Cached Input Cost Per Token
      */
@@ -2325,6 +2345,39 @@ export type EscalationResolution = {
     escalation_id: string;
 };
 /**
+ * EventAttachmentResponse
+ */
+export type EventAttachmentResponse = {
+    /**
+     * Mime
+     */
+    mime: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Ref
+     *
+     * A workspace file path, or the provider's reference (JSON).
+     */
+    ref: string;
+    /**
+     * Sha256
+     */
+    sha256: string | null;
+    /**
+     * Size
+     */
+    size: number | null;
+    /**
+     * Url
+     *
+     * Download link for a stored file; null for a provider's reference.
+     */
+    url: string | null;
+};
+/**
  * EventFilter
  *
  * Empty kinds and fields match every event.
@@ -2340,6 +2393,25 @@ export type EventFilter = {
      * Kinds
      */
     kinds?: Array<string>;
+};
+/**
+ * EventOverrides
+ *
+ * What one source may set in place of its entry's templates (a generic webhook's own key).
+ */
+export type EventOverrides = {
+    /**
+     * Key
+     */
+    key?: string | Array<string> | null;
+    /**
+     * Kind
+     */
+    kind?: string | Array<string> | null;
+    /**
+     * Session Key
+     */
+    session_key?: string | Array<string> | null;
 };
 /**
  * ExecutionCorrelationResponse
@@ -2565,6 +2637,107 @@ export type FailedTaskBlocker = {
     task_id: string;
 };
 /**
+ * FeedEventResponse
+ *
+ * An event's envelope without its body, and what the platform did with it.
+ */
+export type FeedEventResponse = {
+    /**
+     * Attachments
+     *
+     * How many files the event carries.
+     */
+    attachments: number;
+    /**
+     * Causation Id
+     */
+    causation_id: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string | null;
+    /**
+     * Depth
+     */
+    depth: number;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    processing: Processing;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Sender
+     */
+    sender: string | null;
+    /**
+     * Sequence
+     */
+    sequence: number;
+    /**
+     * Session Key
+     */
+    session_key: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string | null;
+    /**
+     * Source Type
+     */
+    source_type: string | null;
+    /**
+     * Stream Id
+     */
+    stream_id: string;
+    /**
+     * V
+     */
+    v?: number;
+};
+/**
+ * FeedFacetsResponse
+ */
+export type FeedFacetsResponse = {
+    /**
+     * Capped
+     *
+     * Under a filter other than stream and source type the counts stop after the first 1000 matching events; true when more match, so each count is a lower bound.
+     */
+    capped?: boolean;
+    /**
+     * Source Types
+     *
+     * Events per source type under the other filters.
+     */
+    source_types: {
+        [key: string]: number;
+    };
+    /**
+     * Streams
+     *
+     * Events per stream under the other filters.
+     */
+    streams: {
+        [key: string]: number;
+    };
+};
+/**
  * ForwardCreate
  */
 export type ForwardCreate = {
@@ -2712,6 +2885,51 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+/**
+ * HandlerResponse
+ *
+ * One subscription's reaction to an event, named for the person reading it.
+ */
+export type HandlerResponse = {
+    /**
+     * Derived Event Ids
+     */
+    derived_event_ids: Array<string>;
+    /**
+     * Kind
+     *
+     * trigger, forward, or deleted
+     */
+    kind: string;
+    /**
+     * Name
+     *
+     * The trigger's name, or the streams a forward writes to.
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Subscription Id
+     */
+    subscription_id: string;
+    /**
+     * Task Id
+     */
+    task_id: string | null;
+    /**
+     * Task Status
+     */
+    task_status: string | null;
+    /**
+     * Verdict
+     *
+     * reacted, skipped, error, or batched while it waits in an open batch
+     */
+    verdict: string;
 };
 /**
  * HeaderInput
@@ -3395,6 +3613,12 @@ export type McpServerInstanceResponse = {
      */
     auth_config_id?: string | string | null;
     /**
+     * Cost
+     */
+    cost?: {
+        [key: string]: unknown;
+    } | null;
+    /**
      * Created At
      */
     created_at: string;
@@ -3402,6 +3626,12 @@ export type McpServerInstanceResponse = {
      * Description
      */
     description: string | null;
+    /**
+     * Events
+     */
+    events?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Id
      */
@@ -3460,6 +3690,14 @@ export type McpServerInstanceUpdate = {
      * URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.
      */
     context_secret?: string | null;
+    /**
+     * Cost
+     *
+     * What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 §2.3). It wins over the connector's declaration. Send null to go back to the connector's.
+     */
+    cost?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Description
      */
@@ -4005,6 +4243,10 @@ export type ModelKind = 'chat' | 'embedding' | 'image' | 'video' | 'decision';
  */
 export type ModelSpecCreate = {
     /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: number | string | null;
+    /**
      * Cached Input Cost Per Token
      */
     cached_input_cost_per_token?: number | string | null;
@@ -4054,6 +4296,10 @@ export type ModelSpecCreate = {
  * ModelSpecUpdate
  */
 export type ModelSpecUpdate = {
+    /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: number | string | null;
     /**
      * Cached Input Cost Per Token
      */
@@ -4546,6 +4792,12 @@ export type OpenApiConnectionResponse = {
      */
     base_url: string;
     /**
+     * Cost
+     */
+    cost?: {
+        [key: string]: unknown;
+    } | null;
+    /**
      * Created At
      */
     created_at: string;
@@ -4571,6 +4823,10 @@ export type OpenApiConnectionResponse = {
     last_dispatch?: {
         [key: string]: unknown;
     } | null;
+    /**
+     * Managed By
+     */
+    managed_by?: string | null;
     /**
      * Name
      */
@@ -4612,6 +4868,14 @@ export type OpenApiConnectionUpdate = {
      * Base Url
      */
     base_url?: string | null;
+    /**
+     * Cost
+     *
+     * What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 §2.3). It wins over the connector's declaration. Send null to go back to the connector's.
+     */
+    cost?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Custom Headers
      *
@@ -4719,13 +4983,15 @@ export type OutcomeResponse = {
      */
     created_at: string;
     /**
-     * Derived Sequences
+     * Derived Event Ids
+     *
+     * Events a forward wrote into its output streams, in output-stream order.
      */
-    derived_sequences: Array<number>;
+    derived_event_ids: Array<string>;
     /**
-     * Event Sequence
+     * Event Id
      */
-    event_sequence: number;
+    event_id: string;
     /**
      * Reason
      */
@@ -4753,7 +5019,7 @@ export type OutcomeResponse = {
     /**
      * Verdict
      *
-     * reacted, skipped or error
+     * reacted, skipped, error, or batched while it waits in an open batch
      */
     verdict: string;
 };
@@ -5265,6 +5531,95 @@ export type PrincipalResponse = {
  * What kind of thing an id refers to.
  */
 export type PrincipalType = 'user' | 'agent' | 'platform';
+/**
+ * Processing
+ */
+export type Processing = {
+    /**
+     * Errors
+     */
+    errors: number;
+    /**
+     * Reacted
+     *
+     * Subscriptions whose reaction is recorded.
+     */
+    reacted: number;
+    /**
+     * Skipped
+     */
+    skipped: number;
+    status: ProcessingStatus;
+    /**
+     * Subscribers
+     *
+     * Subscriptions the router matched; null until it routed the event.
+     */
+    subscribers: number | null;
+    /**
+     * Tasks
+     */
+    tasks?: Array<ProcessingTask>;
+};
+/**
+ * ProcessingStatus
+ */
+export type ProcessingStatus = 'queued' | 'processing' | 'handled' | 'error' | 'no_handlers' | 'skipped';
+/**
+ * ProcessingTask
+ */
+export type ProcessingTask = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     */
+    status: string;
+};
+/**
+ * ProcessorCreate
+ */
+export type ProcessorCreate = {
+    /**
+     * Code
+     *
+     * Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.
+     */
+    code: string;
+    /**
+     * Which events the code runs on; empty runs it on every event.
+     */
+    event_filter?: EventFilter;
+    /**
+     * Output Stream Ids
+     *
+     * Streams the code may write to; never the input.
+     */
+    output_stream_ids: Array<string>;
+};
+/**
+ * ProcessorUpdate
+ */
+export type ProcessorUpdate = {
+    /**
+     * Code
+     *
+     * Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.
+     */
+    code?: string | null;
+    /**
+     * New filter; null keeps it.
+     */
+    event_filter?: EventFilter | null;
+    /**
+     * Output Stream Ids
+     *
+     * New output streams; null keeps them.
+     */
+    output_stream_ids?: Array<string> | null;
+};
 /**
  * ProjectAgentRef
  */
@@ -5788,7 +6143,7 @@ export type RegistryCreate = {
     /**
      * Registry Type
      *
-     * Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')
+     * Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles', 'source_types')
      */
     registry_type: string;
     /**
@@ -6384,6 +6739,10 @@ export type ScheduleTaskCreate = {
 };
 /**
  * ScheduledRun
+ *
+ * One upcoming run: a cron trigger firing or a task booked for later.
+ *
+ * Exactly one of `trigger_id` and `task_id` is set.
  */
 export type ScheduledRun = {
     /**
@@ -6399,13 +6758,17 @@ export type ScheduledRun = {
      */
     fires_at: string;
     /**
+     * Task Id
+     */
+    task_id?: string | null;
+    /**
      * Title
      */
     title: string;
     /**
      * Trigger Id
      */
-    trigger_id: string;
+    trigger_id?: string | null;
 };
 /**
  * ScopedSpendCap
@@ -7024,9 +7387,121 @@ export type SkippedModelResponse = {
     model_name: string;
 };
 /**
+ * SourceCreate
+ *
+ * A webhook or poll source of a catalog entry on an existing stream.
+ */
+export type SourceCreate = {
+    /**
+     * Config
+     *
+     * The type's plain settings, e.g. shop_id.
+     */
+    config?: {
+        [key: string]: string;
+    };
+    /**
+     * Credentials
+     *
+     * The type's credential fields, each a value or {secret_id} of a workspace secret. Write-only: never returned.
+     */
+    credentials?: {
+        [key: string]: string | SecretRef;
+    };
+    /**
+     * This source's own kind, key and session_key templates ({body:a.b}, {header:x}, {first_key:a|b}), in place of the type's. Without a key nothing is deduplicated.
+     */
+    event_templates?: EventOverrides | null;
+    /**
+     * webhook: the provider posts to the source's URL; poll: the platform fetches.
+     */
+    kind?: SourceKind;
+    /**
+     * Source Type
+     *
+     * A slug of GET /streams/source-types.
+     */
+    source_type: string;
+};
+/**
+ * SourceCreated
+ */
+export type SourceCreated = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Event Templates
+     *
+     * This source's own kind / key / session_key templates.
+     */
+    event_templates?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Issued
+     *
+     * Credentials generated because they were left out; shown this once only.
+     */
+    issued?: {
+        [key: string]: string;
+    };
+    /**
+     * Kind
+     *
+     * webhook or poll
+     */
+    kind: string;
+    /**
+     * Poll Error
+     */
+    poll_error?: string | null;
+    /**
+     * Polled At
+     */
+    polled_at?: string | null;
+    /**
+     * Registered
+     *
+     * The provider was pointed at webhook_url (entries with a registration).
+     */
+    registered?: boolean;
+    /**
+     * Source Type
+     *
+     * The catalog slug of GET /streams/source-types.
+     */
+    source_type: string | null;
+    /**
+     * Webhook Id
+     */
+    webhook_id: string | null;
+    /**
+     * Webhook Url
+     *
+     * Public URL the provider posts to; null for a poll source.
+     */
+    webhook_url: string | null;
+};
+/**
  * SourceField
+ *
+ * A credential or setting a member fills in for a source of this type.
  */
 export type SourceField = {
+    /**
+     * Format
+     */
+    format?: 'token' | 'whsec';
+    /**
+     * Issued
+     */
+    issued?: boolean;
     /**
      * Key
      */
@@ -7043,6 +7518,103 @@ export type SourceField = {
      * Required
      */
     required?: boolean;
+};
+/**
+ * SourceKind
+ */
+export type SourceKind = 'webhook' | 'poll' | 'platform';
+/**
+ * SourceTypeResponse
+ */
+export type SourceTypeResponse = {
+    /**
+     * Config
+     */
+    config: Array<SourceField>;
+    /**
+     * Continues Sessions
+     *
+     * Default of a trigger's session.continue for this type.
+     */
+    continues_sessions: boolean;
+    /**
+     * Credentials
+     *
+     * Secret fields: write-only, held by reference, never returned.
+     */
+    credentials: Array<SourceField>;
+    /**
+     * Delivery
+     *
+     * webhook, poll or both; platform for the platform stream, which no member adds
+     */
+    delivery: string;
+    /**
+     * Description
+     */
+    description: string;
+    event: SourceTypeTemplates;
+    /**
+     * Events
+     *
+     * What the provider can send, to enable at the provider; not a filter.
+     */
+    events: Array<string>;
+    /**
+     * Icon
+     */
+    icon: string;
+    /**
+     * Icon Url
+     */
+    icon_url: string | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Replies
+     *
+     * A task started by its event can answer where it came from.
+     */
+    replies: boolean;
+    /**
+     * Slug
+     */
+    slug: string;
+    /**
+     * Verification Header
+     */
+    verification_header: string | null;
+    /**
+     * Verification Scheme
+     */
+    verification_scheme: string | null;
+};
+/**
+ * SourceTypeTemplates
+ */
+export type SourceTypeTemplates = {
+    /**
+     * Key
+     */
+    key: string | Array<string> | null;
+    /**
+     * Kind
+     */
+    kind: string | Array<string>;
+    /**
+     * Occurred At
+     */
+    occurred_at: string | Array<string> | null;
+    /**
+     * Sender
+     */
+    sender: string | Array<string> | null;
+    /**
+     * Session Key
+     */
+    session_key: string | Array<string> | null;
 };
 /**
  * SpecPreviewRequest
@@ -7095,6 +7667,10 @@ export type SpendCard = {
      */
     cap_usd: string | null;
     /**
+     * Mtd Estimate Usd
+     */
+    mtd_estimate_usd?: string;
+    /**
      * Mtd Usd
      */
     mtd_usd: string;
@@ -7133,12 +7709,105 @@ export type StreamCreate = {
      * Name, unique in the workspace.
      */
     name: string;
+};
+/**
+ * StreamEventDetailResponse
+ */
+export type StreamEventDetailResponse = {
     /**
-     * Retention Days
-     *
-     * Days events are kept; omitted means the deployment's AGENTAREA_EVENT_RETENTION.
+     * Attachments
      */
-    retention_days?: number | null;
+    attachments: Array<EventAttachmentResponse>;
+    /**
+     * Body Url
+     *
+     * Download link for data.body_ref; null without one.
+     */
+    body_url: string | null;
+    /**
+     * Causation Id
+     */
+    causation_id: string | null;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string | null;
+    /**
+     * Data
+     *
+     * {headers, body, body_ref}: the request as sent.
+     */
+    data: {
+        [key: string]: unknown;
+    };
+    /**
+     * Depth
+     */
+    depth: number;
+    /**
+     * Event Id
+     */
+    event_id: string;
+    /**
+     * Handlers
+     *
+     * One per subscription that reacted so far; the rest are still to come.
+     */
+    handlers: Array<HandlerResponse>;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Outcomes
+     *
+     * One per subscription that took the event; empty means nobody listened.
+     */
+    outcomes: Array<OutcomeResponse>;
+    /**
+     * What the platform did with it; on the workspace feed.
+     */
+    processing?: Processing | null;
+    /**
+     * Received At
+     */
+    received_at: string;
+    /**
+     * Sender
+     */
+    sender: string | null;
+    /**
+     * Sequence
+     */
+    sequence: number;
+    /**
+     * Session Key
+     */
+    session_key: string | null;
+    /**
+     * Source Id
+     */
+    source_id: string | null;
+    /**
+     * Source Type
+     */
+    source_type: string | null;
+    /**
+     * Stream Id
+     */
+    stream_id: string;
+    /**
+     * V
+     */
+    v?: number;
 };
 /**
  * StreamEventPage
@@ -7163,8 +7832,20 @@ export type StreamEventPage = {
 };
 /**
  * StreamEventResponse
+ *
+ * The event envelope (ADR-0040 §2) and how each subscription reacted.
  */
 export type StreamEventResponse = {
+    /**
+     * Attachments
+     */
+    attachments: Array<EventAttachmentResponse>;
+    /**
+     * Body Url
+     *
+     * Download link for data.body_ref; null without one.
+     */
+    body_url: string | null;
     /**
      * Causation Id
      */
@@ -7175,6 +7856,8 @@ export type StreamEventResponse = {
     correlation_id: string | null;
     /**
      * Data
+     *
+     * {headers, body, body_ref}: the request as sent.
      */
     data: {
         [key: string]: unknown;
@@ -7188,9 +7871,9 @@ export type StreamEventResponse = {
      */
     event_id: string;
     /**
-     * Event Key
+     * Key
      */
-    event_key: string;
+    key: string;
     /**
      * Kind
      */
@@ -7206,21 +7889,41 @@ export type StreamEventResponse = {
      */
     outcomes: Array<OutcomeResponse>;
     /**
+     * What the platform did with it; on the workspace feed.
+     */
+    processing?: Processing | null;
+    /**
      * Received At
      */
     received_at: string;
+    /**
+     * Sender
+     */
+    sender: string | null;
     /**
      * Sequence
      */
     sequence: number;
     /**
-     * Source
+     * Session Key
      */
-    source: string;
+    session_key: string | null;
     /**
-     * Subject
+     * Source Id
      */
-    subject: string | null;
+    source_id: string | null;
+    /**
+     * Source Type
+     */
+    source_type: string | null;
+    /**
+     * Stream Id
+     */
+    stream_id: string;
+    /**
+     * V
+     */
+    v?: number;
 };
 /**
  * StreamResponse
@@ -7250,104 +7953,63 @@ export type StreamResponse = {
      * Name
      */
     name: string;
-    /**
-     * Retention Days
-     */
-    retention_days: number;
 };
 /**
  * StreamSourceResponse
  */
 export type StreamSourceResponse = {
     /**
-     * Allowed Methods
-     */
-    allowed_methods: Array<string> | null;
-    /**
      * Created At
      */
     created_at: string;
+    /**
+     * Event Templates
+     *
+     * This source's own kind / key / session_key templates.
+     */
+    event_templates?: {
+        [key: string]: unknown;
+    } | null;
     /**
      * Id
      */
     id: string;
     /**
      * Kind
+     *
+     * webhook or poll
      */
     kind: string;
     /**
-     * How a sender signs for a type verified by configurable HMAC; null otherwise.
+     * Poll Error
      */
-    signature_scheme?: WebhookSignatureScheme | null;
+    poll_error?: string | null;
     /**
-     * Trigger Id
-     *
-     * The webhook trigger that owns this source; null for a source added directly.
+     * Polled At
      */
-    trigger_id?: string | null;
+    polled_at?: string | null;
+    /**
+     * Registered
+     *
+     * The provider was pointed at webhook_url (entries with a registration).
+     */
+    registered?: boolean;
+    /**
+     * Source Type
+     *
+     * The catalog slug of GET /streams/source-types.
+     */
+    source_type: string | null;
     /**
      * Webhook Id
      */
     webhook_id: string | null;
     /**
-     * Webhook Type
-     */
-    webhook_type: string | null;
-    /**
      * Webhook Url
      *
-     * Public URL senders post to; null for non-webhook sources.
+     * Public URL the provider posts to; null for a poll source.
      */
     webhook_url: string | null;
-};
-/**
- * StreamSourceTypeResponse
- */
-export type StreamSourceTypeResponse = {
-    /**
-     * Config
-     *
-     * Plain settings.
-     */
-    config?: Array<SourceField>;
-    /**
-     * Credentials
-     *
-     * Secret fields: write-only, held by reference, never returned.
-     */
-    credentials: Array<SourceField>;
-    /**
-     * Description
-     */
-    description: string;
-    /**
-     * Events
-     *
-     * Event kinds it can deliver.
-     */
-    events?: Array<string>;
-    /**
-     * Icon
-     */
-    icon: string;
-    /**
-     * Icon Url
-     */
-    icon_url: string | null;
-    /**
-     * Name
-     */
-    name: string;
-    /**
-     * Verification
-     *
-     * signature: the body is signed with the secret; secret_token: the sender repeats a token; api_lookup: the notified object is read back from the API.
-     */
-    verification: 'signature' | 'secret_token' | 'api_lookup';
-    /**
-     * Webhook Type
-     */
-    webhook_type: string;
 };
 /**
  * SubjectSetBody
@@ -7371,17 +8033,15 @@ export type SubjectSetBody = {
  */
 export type SubscriptionResponse = {
     /**
-     * Attempts
+     * Code
+     *
+     * A processor's Python (def process(event)); null otherwise.
      */
-    attempts: number;
+    code?: string | null;
     /**
      * Created At
      */
     created_at: string;
-    /**
-     * Cursor Sequence
-     */
-    cursor_sequence: number;
     /**
      * Filter
      */
@@ -7396,14 +8056,6 @@ export type SubscriptionResponse = {
      * Kind
      */
     kind: string;
-    /**
-     * Last Error
-     */
-    last_error: string | null;
-    /**
-     * Next Attempt At
-     */
-    next_attempt_at: string | null;
     /**
      * Output Stream Ids
      */
@@ -7571,6 +8223,10 @@ export type TaskEvent = {
         [key: string]: unknown;
     };
     /**
+     * Seq
+     */
+    seq?: number | null;
+    /**
      * Task Id
      */
     task_id: string;
@@ -7643,6 +8299,10 @@ export type TaskProvenance = {
      * Correlation Id
      */
     correlation_id?: string | null;
+    /**
+     * Depth
+     */
+    depth?: number;
     /**
      * Origin Id
      */
@@ -7735,13 +8395,11 @@ export type TaskResponse = {
 /**
  * TaskSummary
  *
- * Headline rollup for a single task, derived from the event log.
+ * Headline rollup for a single task: its run times, answer, error and spend.
  *
- * Backed by the ``task_summary`` Postgres view. Stable contract — when
- * the view's implementation moves to a materialized view or projection
- * table, this shape stays the same. Per-tool breakdowns and per-artifact
- * lists are deliberately not here; they live in their own endpoints so
- * this stays small and additive.
+ * Read from the task row and the spend ledger. ``cost`` sums the task's current
+ * ledger lines in ``currency``, the billing currency. ``duration_ms`` runs from the
+ * task's first start to its last end, idle waits between turns included.
  */
 export type TaskSummary = {
     /**
@@ -7749,21 +8407,13 @@ export type TaskSummary = {
      */
     agent_id: string;
     /**
-     * Cost Usd
+     * Cost
      */
-    cost_usd?: number;
+    cost?: number;
     /**
-     * Delegations Completed
+     * Currency
      */
-    delegations_completed?: number;
-    /**
-     * Delegations Failed
-     */
-    delegations_failed?: number;
-    /**
-     * Delegations Started
-     */
-    delegations_started?: number;
+    currency: string;
     /**
      * Duration Ms
      */
@@ -7777,21 +8427,9 @@ export type TaskSummary = {
      */
     final_response?: string | null;
     /**
-     * Iterations
-     */
-    iterations?: number;
-    /**
      * Last Error
      */
     last_error?: string | null;
-    /**
-     * Llm Calls
-     */
-    llm_calls?: number;
-    /**
-     * Llm Calls Failed
-     */
-    llm_calls_failed?: number;
     /**
      * Started At
      */
@@ -7804,14 +8442,6 @@ export type TaskSummary = {
      * Task Id
      */
     task_id: string;
-    /**
-     * Tools Called
-     */
-    tools_called?: number;
-    /**
-     * Tools Failed
-     */
-    tools_failed?: number;
     /**
      * Workspace Id
      */
@@ -8188,6 +8818,29 @@ export type ToolsPolicy = {
     denied?: Array<string>;
 };
 /**
+ * TriggerBatchWindow
+ *
+ * A stream trigger that fires once for the events of a batch (ADR-0040 §4).
+ *
+ * The batch opens with its first event and fires when ``window`` has passed or
+ * ``max_events`` have joined, whichever comes first. Either may be left out;
+ * a batch never holds more than the deployment's cap.
+ */
+export type TriggerBatchWindow = {
+    /**
+     * Max Events
+     *
+     * Fire as soon as this many events have joined.
+     */
+    max_events?: number | null;
+    /**
+     * Window
+     *
+     * How long a batch stays open after its first event, e.g. '1h'.
+     */
+    window?: string | null;
+};
+/**
  * TriggerCreate
  *
  * Payload for creating a trigger on an existing agent.
@@ -8200,19 +8853,9 @@ export type TriggerCreate = {
      */
     agent_id: string;
     /**
-     * Allowed Methods
-     *
-     * HTTP methods accepted on the webhook endpoint.
+     * Fire once for a batch of events instead of once per event: {"window": "1h", "max_events": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event.
      */
-    allowed_methods?: Array<string>;
-    /**
-     * Channel Credentials
-     *
-     * Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.
-     */
-    channel_credentials?: {
-        [key: string]: unknown;
-    } | null;
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      *
@@ -8227,20 +8870,6 @@ export type TriggerCreate = {
      * 5- or 6-field cron expression (required when trigger_type='cron').
      */
     cron_expression?: string | null;
-    /**
-     * Data Extractor
-     *
-     * Polling extractor identifier (e.g. 'imap', 'rss').
-     */
-    data_extractor?: string | null;
-    /**
-     * Data Extractor Config
-     *
-     * Connection/auth details for the polling extractor.
-     */
-    data_extractor_config?: {
-        [key: string]: unknown;
-    } | null;
     /**
      * Description
      *
@@ -8262,12 +8891,6 @@ export type TriggerCreate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Event Types
-     *
-     * Event types to filter on (empty list = accept all events).
-     */
-    event_types?: Array<string>;
-    /**
      * Failure Threshold
      *
      * Auto-disable after this many consecutive failed executions.
@@ -8279,6 +8902,10 @@ export type TriggerCreate = {
      * Human-readable trigger name.
      */
     name: string;
+    /**
+     * What the next event of the same session does: {"continue": true, "idle_timeout": "30m"} joins the running task. Null takes the source type's default.
+     */
+    session?: TriggerSession | null;
     /**
      * Stream Id
      *
@@ -8302,37 +8929,9 @@ export type TriggerCreate = {
     /**
      * Trigger Type
      *
-     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.
+     * 'cron' for scheduled, 'stream' to run on the events of a stream (a webhook or a polled provider is a source of a stream).
      */
-    trigger_type: 'cron' | 'webhook' | 'polling' | 'stream';
-    /**
-     * Validation Rules
-     *
-     * Per-channel validation rules (signature secrets, allowed senders, etc).
-     */
-    validation_rules?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Webhook Config
-     *
-     * Channel-specific configuration (bot tokens, signing keys, etc).
-     */
-    webhook_config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Webhook Id
-     *
-     * Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.
-     */
-    webhook_id?: string | null;
-    /**
-     * Webhook Type
-     *
-     * Channel type: 'generic', 'telegram', 'slack', 'discord', etc.
-     */
-    webhook_type?: string;
+    trigger_type: 'cron' | 'stream';
 };
 /**
  * TriggerExecuteRequest
@@ -8340,12 +8939,6 @@ export type TriggerCreate = {
  * Request model for executing a trigger via the event service.
  */
 export type TriggerExecuteRequest = {
-    /**
-     * Channel Origin
-     */
-    channel_origin?: {
-        [key: string]: unknown;
-    };
     /**
      * Events
      */
@@ -8425,9 +9018,9 @@ export type TriggerResponse = {
      */
     agent_id: string;
     /**
-     * Allowed Methods
+     * The batch window it fires per; null fires on every event.
      */
-    allowed_methods?: Array<string> | null;
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      */
@@ -8451,10 +9044,6 @@ export type TriggerResponse = {
      */
     cron_expression?: string | null;
     /**
-     * Data Extractor
-     */
-    data_extractor?: string | null;
-    /**
      * Description
      */
     description: string;
@@ -8467,17 +9056,9 @@ export type TriggerResponse = {
         [key: string]: unknown;
     } | null;
     /**
-     * Event Types
-     */
-    event_types?: Array<string>;
-    /**
      * Failure Threshold
      */
     failure_threshold: number;
-    /**
-     * Has Channel Credentials
-     */
-    has_channel_credentials?: boolean;
     /**
      * Id
      */
@@ -8509,15 +9090,9 @@ export type TriggerResponse = {
      */
     next_run_time?: string | null;
     /**
-     * Signing scheme of a generic webhook; null for other types.
+     * What the next event of the same session does; null takes the defaults.
      */
-    signature_scheme?: WebhookSignatureScheme | null;
-    /**
-     * Signing Secret
-     *
-     * Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.
-     */
-    signing_secret?: string | null;
+    session?: TriggerSession | null;
     /**
      * Status
      *
@@ -8548,38 +9123,6 @@ export type TriggerResponse = {
      * Updated At
      */
     updated_at: string;
-    /**
-     * Validation Rules
-     */
-    validation_rules?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Webhook Config
-     */
-    webhook_config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Webhook Id
-     */
-    webhook_id?: string | null;
-    /**
-     * Webhook Signing
-     *
-     * What protects the public webhook URL. 'signed': requests without a valid signature or token are refused. 'unsigned': this trigger has no secret, so any request starts the agent. 'unsupported': the platform does not verify this provider's requests. Null for non-webhook triggers, or when the stored secret could not be read.
-     */
-    webhook_signing?: 'signed' | 'unsigned' | 'unsupported' | null;
-    /**
-     * Webhook Type
-     */
-    webhook_type?: string | null;
-    /**
-     * Webhook Url
-     *
-     * Public URL a sender posts to; set for webhook triggers.
-     */
-    webhook_url?: string | null;
 };
 /**
  * TriggerRunResponse
@@ -8615,31 +9158,40 @@ export type TriggerRunResponse = {
     trigger_id: string;
 };
 /**
+ * TriggerSession
+ *
+ * What happens to the next event of the same session (ADR-0040 §4).
+ */
+export type TriggerSession = {
+    /**
+     * Continue
+     *
+     * The next event with the same session_key joins the same task; null takes the source type's default (continue when it has sessions).
+     */
+    continue?: boolean | null;
+    /**
+     * Idle Timeout
+     *
+     * How long the task waits for the next event, e.g. '30m'.
+     */
+    idle_timeout?: string | null;
+};
+/**
  * TriggerSpec
  *
  * Everything about a trigger except the agent it fires.
  *
- * A trigger fires an agent — either on a cron schedule (``trigger_type='cron'``)
- * or in response to an inbound webhook (``trigger_type='webhook'``). For poll-based
- * channels (e.g. email inbox), use ``trigger_type='polling'`` plus a
- * ``data_extractor`` configuration. Creating an agent takes a list of these,
- * because the agent does not exist yet when they are written.
+ * A trigger fires an agent — on a cron schedule (``trigger_type='cron'``) or on
+ * the events of a stream (``trigger_type='stream'``). A webhook or a polled
+ * provider is a source of a stream (``streams_create_source``) with a stream
+ * trigger on it. Creating an agent takes a list of these, because the agent
+ * does not exist yet when they are written.
  */
 export type TriggerSpec = {
     /**
-     * Allowed Methods
-     *
-     * HTTP methods accepted on the webhook endpoint.
+     * Fire once for a batch of events instead of once per event: {"window": "1h", "max_events": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event.
      */
-    allowed_methods?: Array<string>;
-    /**
-     * Channel Credentials
-     *
-     * Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.
-     */
-    channel_credentials?: {
-        [key: string]: unknown;
-    } | null;
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      *
@@ -8654,20 +9206,6 @@ export type TriggerSpec = {
      * 5- or 6-field cron expression (required when trigger_type='cron').
      */
     cron_expression?: string | null;
-    /**
-     * Data Extractor
-     *
-     * Polling extractor identifier (e.g. 'imap', 'rss').
-     */
-    data_extractor?: string | null;
-    /**
-     * Data Extractor Config
-     *
-     * Connection/auth details for the polling extractor.
-     */
-    data_extractor_config?: {
-        [key: string]: unknown;
-    } | null;
     /**
      * Description
      *
@@ -8689,12 +9227,6 @@ export type TriggerSpec = {
         [key: string]: unknown;
     } | null;
     /**
-     * Event Types
-     *
-     * Event types to filter on (empty list = accept all events).
-     */
-    event_types?: Array<string>;
-    /**
      * Failure Threshold
      *
      * Auto-disable after this many consecutive failed executions.
@@ -8706,6 +9238,10 @@ export type TriggerSpec = {
      * Human-readable trigger name.
      */
     name: string;
+    /**
+     * What the next event of the same session does: {"continue": true, "idle_timeout": "30m"} joins the running task. Null takes the source type's default.
+     */
+    session?: TriggerSession | null;
     /**
      * Stream Id
      *
@@ -8729,37 +9265,9 @@ export type TriggerSpec = {
     /**
      * Trigger Type
      *
-     * 'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.
+     * 'cron' for scheduled, 'stream' to run on the events of a stream (a webhook or a polled provider is a source of a stream).
      */
-    trigger_type: 'cron' | 'webhook' | 'polling' | 'stream';
-    /**
-     * Validation Rules
-     *
-     * Per-channel validation rules (signature secrets, allowed senders, etc).
-     */
-    validation_rules?: {
-        [key: string]: unknown;
-    };
-    /**
-     * Webhook Config
-     *
-     * Channel-specific configuration (bot tokens, signing keys, etc).
-     */
-    webhook_config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Webhook Id
-     *
-     * Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.
-     */
-    webhook_id?: string | null;
-    /**
-     * Webhook Type
-     *
-     * Channel type: 'generic', 'telegram', 'slack', 'discord', etc.
-     */
-    webhook_type?: string;
+    trigger_type: 'cron' | 'stream';
 };
 /**
  * TriggerStatusResponse
@@ -8795,6 +9303,12 @@ export type TriggerStatusResponse = {
     trigger_id: string;
 };
 /**
+ * TriggerType
+ *
+ * Types of triggers supported by the system.
+ */
+export type TriggerType = 'cron' | 'stream';
+/**
  * TriggerUpdate
  *
  * Patch payload for a trigger. All fields optional — unset = unchanged.
@@ -8805,17 +9319,9 @@ export type TriggerUpdate = {
      */
     agent_id?: string | null;
     /**
-     * Allowed Methods
+     * Sent as null, the trigger fires on every event again.
      */
-    allowed_methods?: Array<string> | null;
-    /**
-     * Channel Credentials
-     *
-     * Channel credentials to update. Pass to rotate credentials.
-     */
-    channel_credentials?: {
-        [key: string]: unknown;
-    } | null;
+    batch?: TriggerBatchWindow | null;
     /**
      * Conditions
      */
@@ -8843,10 +9349,6 @@ export type TriggerUpdate = {
         [key: string]: unknown;
     } | null;
     /**
-     * Event Types
-     */
-    event_types?: Array<string> | null;
-    /**
      * Failure Threshold
      */
     failure_threshold?: number | null;
@@ -8854,6 +9356,7 @@ export type TriggerUpdate = {
      * Name
      */
     name?: string | null;
+    session?: TriggerSession | null;
     /**
      * Task Parameters
      */
@@ -8864,22 +9367,6 @@ export type TriggerUpdate = {
      * Timezone
      */
     timezone?: string | null;
-    /**
-     * Validation Rules
-     */
-    validation_rules?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Webhook Config
-     */
-    webhook_config?: {
-        [key: string]: unknown;
-    } | null;
-    /**
-     * Webhook Type
-     */
-    webhook_type?: string | null;
 };
 /**
  * UpcomingItem
@@ -9169,111 +9656,6 @@ export type WalletStatus = 'active' | 'disabled';
  */
 export type WalletType = 'x402' | 'mpp' | 'dual';
 /**
- * WebhookSignatureScheme
- *
- * How a sender signs requests to a generic webhook.
- */
-export type WebhookSignatureScheme = {
-    /**
-     * Algorithm
-     *
-     * HMAC digest, e.g. 'sha256'.
-     */
-    algorithm: string;
-    /**
-     * Header
-     *
-     * Request header carrying the signature.
-     */
-    header: string;
-    /**
-     * Prefix
-     *
-     * Text before the hex digest in the header; often empty.
-     */
-    prefix: string;
-};
-/**
- * WebhookSourceCreate
- *
- * A webhook source on an existing stream, with no trigger.
- */
-export type WebhookSourceCreate = {
-    /**
-     * Config
-     *
-     * The type's plain settings, e.g. shop_id.
-     */
-    config?: {
-        [key: string]: string;
-    };
-    /**
-     * Credentials
-     *
-     * The type's credential fields, each a value or {secret_id} of a workspace secret. Write-only: never returned.
-     */
-    credentials?: {
-        [key: string]: string | SecretRef;
-    };
-    /**
-     * Webhook Type
-     *
-     * One of GET /streams/source-types.
-     */
-    webhook_type: string;
-};
-/**
- * WebhookSourceCreated
- */
-export type WebhookSourceCreated = {
-    /**
-     * Allowed Methods
-     */
-    allowed_methods: Array<string> | null;
-    /**
-     * Created At
-     */
-    created_at: string;
-    /**
-     * Id
-     */
-    id: string;
-    /**
-     * Kind
-     */
-    kind: string;
-    /**
-     * How a sender signs for a type verified by configurable HMAC; null otherwise.
-     */
-    signature_scheme?: WebhookSignatureScheme | null;
-    /**
-     * Signing Secret
-     *
-     * Issued when the type's signing secret is optional and none was given; shown this once only.
-     */
-    signing_secret?: string | null;
-    /**
-     * Trigger Id
-     *
-     * The webhook trigger that owns this source; null for a source added directly.
-     */
-    trigger_id?: string | null;
-    /**
-     * Webhook Id
-     */
-    webhook_id: string | null;
-    /**
-     * Webhook Type
-     */
-    webhook_type: string | null;
-    /**
-     * Webhook Url
-     *
-     * Public URL senders post to; null for non-webhook sources.
-     */
-    webhook_url: string | null;
-};
-/**
  * WorkspaceDirectoryResponse
  */
 export type WorkspaceDirectoryResponse = {
@@ -9281,6 +9663,25 @@ export type WorkspaceDirectoryResponse = {
      * Path
      */
     path: string;
+};
+/**
+ * WorkspaceEventPage
+ */
+export type WorkspaceEventPage = {
+    /**
+     * Events
+     */
+    events: Array<FeedEventResponse>;
+    /**
+     * On the first page only (no ?before=).
+     */
+    facets?: FeedFacetsResponse | null;
+    /**
+     * Next Before
+     *
+     * Pass as ?before= for older events; null at the start.
+     */
+    next_before?: number | null;
 };
 /**
  * WorkspaceFileDownloadResponse
@@ -9532,6 +9933,10 @@ export type AgentareaApiApiV1AccessControlSyncResponse = {
  */
 export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
     /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
+    /**
      * Cached Input Cost Per Token
      */
     cached_input_cost_per_token?: string | null;
@@ -9613,6 +10018,10 @@ export type AgentareaApiApiV1ModelSpecsModelSpecResponse = {
  * ModelSpecResponse
  */
 export type AgentareaApiApiV1ProviderSpecsModelSpecResponse = {
+    /**
+     * Cache Creation Input Cost Per Token
+     */
+    cache_creation_input_cost_per_token?: string | null;
     /**
      * Cached Input Cost Per Token
      */
@@ -16455,6 +16864,174 @@ export type CreateStreamV1StreamsPostResponses = {
     201: StreamResponse;
 };
 export type CreateStreamV1StreamsPostResponse = CreateStreamV1StreamsPostResponses[keyof CreateStreamV1StreamsPostResponses];
+export type ListWorkspaceEventsV1StreamsEventsGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Before
+         *
+         * Newest first, before this sequence.
+         */
+        before?: number | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Stream Id
+         */
+        stream_id?: string | null;
+        /**
+         * Source Type
+         */
+        source_type?: string | null;
+        /**
+         * Kind
+         *
+         * An event kind, or a prefix ending in .* (order.*).
+         */
+        kind?: string | null;
+        /**
+         * Sender
+         */
+        sender?: string | null;
+        /**
+         * Session Key
+         */
+        session_key?: string | null;
+        /**
+         * Result
+         *
+         * What the platform did with it.
+         */
+        result?: ProcessingStatus | null;
+        /**
+         * Since
+         *
+         * Received at or after.
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * Received before.
+         */
+        until?: string | null;
+        /**
+         * Platform
+         *
+         * False leaves out the platform's own events (source type platform); the first page's counts still include them.
+         */
+        platform?: boolean;
+    };
+    url: '/v1/workspaces/{workspace}/streams/events';
+};
+export type ListWorkspaceEventsV1StreamsEventsGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type ListWorkspaceEventsV1StreamsEventsGetError = ListWorkspaceEventsV1StreamsEventsGetErrors[keyof ListWorkspaceEventsV1StreamsEventsGetErrors];
+export type ListWorkspaceEventsV1StreamsEventsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkspaceEventPage;
+};
+export type ListWorkspaceEventsV1StreamsEventsGetResponse = ListWorkspaceEventsV1StreamsEventsGetResponses[keyof ListWorkspaceEventsV1StreamsEventsGetResponses];
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Stream Id
+         */
+        stream_id?: string | null;
+        /**
+         * Source Type
+         */
+        source_type?: string | null;
+        /**
+         * Kind
+         *
+         * An event kind, or a prefix ending in .* (order.*).
+         */
+        kind?: string | null;
+        /**
+         * Sender
+         */
+        sender?: string | null;
+        /**
+         * Session Key
+         */
+        session_key?: string | null;
+        /**
+         * Result
+         *
+         * What the platform did with it.
+         */
+        result?: ProcessingStatus | null;
+        /**
+         * Since
+         *
+         * Received at or after.
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * Received before.
+         */
+        until?: string | null;
+        /**
+         * Platform
+         *
+         * False leaves out the platform's own events (source type platform); the first page's counts still include them.
+         */
+        platform?: boolean;
+    };
+    url: '/v1/workspaces/{workspace}/streams/events/live';
+};
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetError = StreamWorkspaceEventsV1StreamsEventsLiveGetErrors[keyof StreamWorkspaceEventsV1StreamsEventsLiveGetErrors];
+export type StreamWorkspaceEventsV1StreamsEventsLiveGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: unknown;
+};
+export type GetEventByIdV1StreamsEventsEventIdGetData = {
+    body?: never;
+    path: {
+        /**
+         * Event Id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/events/{event_id}';
+};
+export type GetEventByIdV1StreamsEventsEventIdGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type GetEventByIdV1StreamsEventsEventIdGetError = GetEventByIdV1StreamsEventsEventIdGetErrors[keyof GetEventByIdV1StreamsEventsEventIdGetErrors];
+export type GetEventByIdV1StreamsEventsEventIdGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamEventDetailResponse;
+};
+export type GetEventByIdV1StreamsEventsEventIdGetResponse = GetEventByIdV1StreamsEventsEventIdGetResponses[keyof GetEventByIdV1StreamsEventsEventIdGetResponses];
 export type ListSourceTypesV1StreamsSourceTypesGetData = {
     body?: never;
     path?: never;
@@ -16474,7 +17051,7 @@ export type ListSourceTypesV1StreamsSourceTypesGetResponses = {
      *
      * Successful Response
      */
-    200: Array<StreamSourceTypeResponse>;
+    200: Array<SourceTypeResponse>;
 };
 export type ListSourceTypesV1StreamsSourceTypesGetResponse = ListSourceTypesV1StreamsSourceTypesGetResponses[keyof ListSourceTypesV1StreamsSourceTypesGetResponses];
 export type DeleteStreamV1StreamsStreamIdDeleteData = {
@@ -16595,7 +17172,7 @@ export type GetEventV1StreamsStreamIdEventsSequenceGetResponses = {
     /**
      * Successful Response
      */
-    200: StreamEventResponse;
+    200: StreamEventDetailResponse;
 };
 export type GetEventV1StreamsStreamIdEventsSequenceGetResponse = GetEventV1StreamsStreamIdEventsSequenceGetResponses[keyof GetEventV1StreamsStreamIdEventsSequenceGetResponses];
 export type CreateForwardV1StreamsStreamIdForwardsPostData = {
@@ -16623,6 +17200,89 @@ export type CreateForwardV1StreamsStreamIdForwardsPostResponses = {
     201: SubscriptionResponse;
 };
 export type CreateForwardV1StreamsStreamIdForwardsPostResponse = CreateForwardV1StreamsStreamIdForwardsPostResponses[keyof CreateForwardV1StreamsStreamIdForwardsPostResponses];
+export type CreateProcessorV1StreamsStreamIdProcessorsPostData = {
+    body: ProcessorCreate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/processors';
+};
+export type CreateProcessorV1StreamsStreamIdProcessorsPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type CreateProcessorV1StreamsStreamIdProcessorsPostError = CreateProcessorV1StreamsStreamIdProcessorsPostErrors[keyof CreateProcessorV1StreamsStreamIdProcessorsPostErrors];
+export type CreateProcessorV1StreamsStreamIdProcessorsPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: SubscriptionResponse;
+};
+export type CreateProcessorV1StreamsStreamIdProcessorsPostResponse = CreateProcessorV1StreamsStreamIdProcessorsPostResponses[keyof CreateProcessorV1StreamsStreamIdProcessorsPostResponses];
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteData = {
+    body?: never;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}';
+};
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteError = DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors[keyof DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteErrors];
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+export type DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponse = DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses[keyof DeleteProcessorV1StreamsStreamIdProcessorsSubscriptionIdDeleteResponses];
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchData = {
+    body: ProcessorUpdate;
+    path: {
+        /**
+         * Stream Id
+         */
+        stream_id: string;
+        /**
+         * Subscription Id
+         */
+        subscription_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}';
+};
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchError = UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors[keyof UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchErrors];
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses = {
+    /**
+     * Successful Response
+     */
+    200: SubscriptionResponse;
+};
+export type UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponse = UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses[keyof UpdateProcessorV1StreamsStreamIdProcessorsSubscriptionIdPatchResponses];
 export type ListSourcesV1StreamsStreamIdSourcesGetData = {
     body?: never;
     path: {
@@ -16650,8 +17310,8 @@ export type ListSourcesV1StreamsStreamIdSourcesGetResponses = {
     200: Array<StreamSourceResponse>;
 };
 export type ListSourcesV1StreamsStreamIdSourcesGetResponse = ListSourcesV1StreamsStreamIdSourcesGetResponses[keyof ListSourcesV1StreamsStreamIdSourcesGetResponses];
-export type CreateSourceV1StreamsStreamIdSourcesPostData = {
-    body: WebhookSourceCreate;
+export type AddSourceV1StreamsStreamIdSourcesPostData = {
+    body: SourceCreate;
     path: {
         /**
          * Stream Id
@@ -16661,20 +17321,20 @@ export type CreateSourceV1StreamsStreamIdSourcesPostData = {
     query?: never;
     url: '/v1/workspaces/{workspace}/streams/{stream_id}/sources';
 };
-export type CreateSourceV1StreamsStreamIdSourcesPostErrors = {
+export type AddSourceV1StreamsStreamIdSourcesPostErrors = {
     /**
      * Validation Error
      */
     422: HttpValidationError;
 };
-export type CreateSourceV1StreamsStreamIdSourcesPostError = CreateSourceV1StreamsStreamIdSourcesPostErrors[keyof CreateSourceV1StreamsStreamIdSourcesPostErrors];
-export type CreateSourceV1StreamsStreamIdSourcesPostResponses = {
+export type AddSourceV1StreamsStreamIdSourcesPostError = AddSourceV1StreamsStreamIdSourcesPostErrors[keyof AddSourceV1StreamsStreamIdSourcesPostErrors];
+export type AddSourceV1StreamsStreamIdSourcesPostResponses = {
     /**
      * Successful Response
      */
-    201: WebhookSourceCreated;
+    201: SourceCreated;
 };
-export type CreateSourceV1StreamsStreamIdSourcesPostResponse = CreateSourceV1StreamsStreamIdSourcesPostResponses[keyof CreateSourceV1StreamsStreamIdSourcesPostResponses];
+export type AddSourceV1StreamsStreamIdSourcesPostResponse = AddSourceV1StreamsStreamIdSourcesPostResponses[keyof AddSourceV1StreamsStreamIdSourcesPostResponses];
 export type DeleteSourceV1StreamsStreamIdSourcesSourceIdDeleteData = {
     body?: never;
     path: {
@@ -16994,9 +17654,9 @@ export type ListTriggersV1TriggersGetData = {
         /**
          * Trigger Type
          *
-         * Filter by trigger type (cron, webhook, stream)
+         * Filter by trigger type (cron, stream)
          */
-        trigger_type?: string | null;
+        trigger_type?: TriggerType | null;
         /**
          * Active Only
          *
@@ -17048,54 +17708,6 @@ export type CreateTriggerV1TriggersPostResponses = {
     201: TriggerResponse;
 };
 export type CreateTriggerV1TriggersPostResponse = CreateTriggerV1TriggersPostResponses[keyof CreateTriggerV1TriggersPostResponses];
-export type GetCatalogV1TriggersCatalogGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/workspaces/{workspace}/triggers/catalog';
-};
-export type GetCatalogV1TriggersCatalogGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetCatalogV1TriggersCatalogGetError = GetCatalogV1TriggersCatalogGetErrors[keyof GetCatalogV1TriggersCatalogGetErrors];
-export type GetCatalogV1TriggersCatalogGetResponses = {
-    /**
-     * Response Get Catalog V1 Triggers Catalog Get
-     *
-     * Successful Response
-     */
-    200: Array<{
-        [key: string]: unknown;
-    }>;
-};
-export type GetCatalogV1TriggersCatalogGetResponse = GetCatalogV1TriggersCatalogGetResponses[keyof GetCatalogV1TriggersCatalogGetResponses];
-export type GetChannelEventsV1TriggersChannelsEventsGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/workspaces/{workspace}/triggers/channels/events';
-};
-export type GetChannelEventsV1TriggersChannelsEventsGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type GetChannelEventsV1TriggersChannelsEventsGetError = GetChannelEventsV1TriggersChannelsEventsGetErrors[keyof GetChannelEventsV1TriggersChannelsEventsGetErrors];
-export type GetChannelEventsV1TriggersChannelsEventsGetResponses = {
-    /**
-     * Response Get Channel Events V1 Triggers Channels Events Get
-     *
-     * Successful Response
-     */
-    200: {
-        [key: string]: Array<string>;
-    };
-};
-export type GetChannelEventsV1TriggersChannelsEventsGetResponse = GetChannelEventsV1TriggersChannelsEventsGetResponses[keyof GetChannelEventsV1TriggersChannelsEventsGetResponses];
 export type TriggersHealthCheckV1TriggersHealthGetData = {
     body?: never;
     path?: never;
@@ -17433,31 +18045,6 @@ export type RunTriggerNowV1TriggersTriggerIdRunPostResponses = {
     200: TriggerRunResponse;
 };
 export type RunTriggerNowV1TriggersTriggerIdRunPostResponse = RunTriggerNowV1TriggersTriggerIdRunPostResponses[keyof RunTriggerNowV1TriggersTriggerIdRunPostResponses];
-export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostData = {
-    body?: never;
-    path: {
-        /**
-         * Trigger Id
-         */
-        trigger_id: string;
-    };
-    query?: never;
-    url: '/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret';
-};
-export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostError = RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors[keyof RotateSigningSecretV1TriggersTriggerIdSigningSecretPostErrors];
-export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: TriggerResponse;
-};
-export type RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponse = RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses[keyof RotateSigningSecretV1TriggersTriggerIdSigningSecretPostResponses];
 export type GetTriggerStatusV1TriggersTriggerIdStatusGetData = {
     body?: never;
     path: {
@@ -17685,126 +18272,6 @@ export type WebhookHealthCheckWebhooksHealthGetResponses = {
     };
 };
 export type WebhookHealthCheckWebhooksHealthGetResponse = WebhookHealthCheckWebhooksHealthGetResponses[keyof WebhookHealthCheckWebhooksHealthGetResponses];
-export type HandleWebhookWebhooksWebhookIdDeleteData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdDeleteErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdDeleteError = HandleWebhookWebhooksWebhookIdDeleteErrors[keyof HandleWebhookWebhooksWebhookIdDeleteErrors];
-export type HandleWebhookWebhooksWebhookIdDeleteResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdGetData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdGetErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdGetError = HandleWebhookWebhooksWebhookIdGetErrors[keyof HandleWebhookWebhooksWebhookIdGetErrors];
-export type HandleWebhookWebhooksWebhookIdGetResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdHeadData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdHeadErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdHeadError = HandleWebhookWebhooksWebhookIdHeadErrors[keyof HandleWebhookWebhooksWebhookIdHeadErrors];
-export type HandleWebhookWebhooksWebhookIdHeadResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdOptionsData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdOptionsErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdOptionsError = HandleWebhookWebhooksWebhookIdOptionsErrors[keyof HandleWebhookWebhooksWebhookIdOptionsErrors];
-export type HandleWebhookWebhooksWebhookIdOptionsResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPatchData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPatchErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPatchError = HandleWebhookWebhooksWebhookIdPatchErrors[keyof HandleWebhookWebhooksWebhookIdPatchErrors];
-export type HandleWebhookWebhooksWebhookIdPatchResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
 export type HandleWebhookWebhooksWebhookIdPostData = {
     body?: never;
     path: {
@@ -17824,30 +18291,6 @@ export type HandleWebhookWebhooksWebhookIdPostErrors = {
 };
 export type HandleWebhookWebhooksWebhookIdPostError = HandleWebhookWebhooksWebhookIdPostErrors[keyof HandleWebhookWebhooksWebhookIdPostErrors];
 export type HandleWebhookWebhooksWebhookIdPostResponses = {
-    /**
-     * Successful Response
-     */
-    200: unknown;
-};
-export type HandleWebhookWebhooksWebhookIdPutData = {
-    body?: never;
-    path: {
-        /**
-         * Webhook Id
-         */
-        webhook_id: string;
-    };
-    query?: never;
-    url: '/webhooks/{webhook_id}';
-};
-export type HandleWebhookWebhooksWebhookIdPutErrors = {
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-};
-export type HandleWebhookWebhooksWebhookIdPutError = HandleWebhookWebhooksWebhookIdPutErrors[keyof HandleWebhookWebhooksWebhookIdPutErrors];
-export type HandleWebhookWebhooksWebhookIdPutResponses = {
     /**
      * Successful Response
      */

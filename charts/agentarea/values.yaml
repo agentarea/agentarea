@@ -142,6 +142,15 @@ global:
     maxConnections: 50
     connectionTimeout: 5s
 
+  # Broker topics: every topic and broker key is <namespace>.<domain>.<dataset>.
+  events:
+    # First segment of every topic and key; two deployments sharing one Redis
+    # need different namespaces.
+    namespace: "agentarea"
+    # Partitions of the stream-events topic. The API and the worker must agree,
+    # and changing it moves streams between partitions: drain the bus first.
+    partitions: 16
+
   # Storage configuration - S3/RustFS compatible
   storage:
     # Storage type (s3, rustfs, gcs)
@@ -608,14 +617,10 @@ eventService:
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   # Service port
   port: 8002
-  # Polling configuration
+  # How often the set of stream sources is read again; each poll source polls
+  # at the interval its catalog entry names.
   pollInterval: "30s"
   maxPollers: 10
-  inboundStream: "agentarea.channel.inbound"
-  telegramPolling:
-    # Dev-only fallback for Telegram getUpdates. Production Telegram ingress
-    # should use webhooks.
-    enabled: false
   # Resource limits and requests
   resources: {}
   #   limits:
@@ -645,6 +650,23 @@ eventService:
     failureThreshold: 3
   # Additional configuration
   extraEnv: []
+
+# Egress restriction for the backend, worker and event-service, which call
+# addresses workspace members set. Off by default: restricting these pods'
+# egress is the operator's job, here or in the cloud network. When enabled, pods
+# in the cluster stay reachable and every other destination is allowed except
+# blockedEgressCIDRs. The default blocks link-local, which holds the cloud
+# metadata endpoint (169.254.169.254). Private ranges are not blocked by default
+# because external dependencies (a managed database, an object store inside the
+# VPC) often live there: block them here and allow those dependencies through
+# extraEgress. With NodeLocal DNSCache (169.254.20.10), narrow the block to
+# 169.254.169.254/32. Requires a CNI that enforces NetworkPolicy.
+platformNetworkPolicy:
+  enabled: false
+  blockedEgressCIDRs:
+    - 169.254.0.0/16
+  # Extra raw NetworkPolicyEgressRule entries appended as-is.
+  extraEgress: []
 
 # MCP Manager Service
 mcpManager:
@@ -771,6 +793,10 @@ mcpManager:
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
     # specific in-cluster dependency).
     extraEgress: []
+    # Proxy that instance pods labelled agentarea.io/egress may reach; those pods
+    # get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
+    egressProxy: {}
 
   # Operator customization merged onto every spawned MCP instance pod. All fields
   # are optional; empty = no change. Platform security invariants (managed-by
@@ -1156,16 +1182,30 @@ valkey:
         passwordKey: "redis-password"
   replica:
     enabled: false  # Standalone mode
+  # Valkey is a store, not a cache: the event bus runs on Redis Streams
+  # consumer groups, so data must survive a restart and must never be evicted.
+  # Size memory for 24-72 h of bus and tasks topics; history lives in Postgres.
+  # Recreate stops the old pod before the new one mounts the ReadWriteOnce volume.
+  deploymentStrategy: Recreate
   dataStorage:
-    enabled: false  # Disable for development, enable for production
-    requestedSize: "1Gi"
+    enabled: true
+    requestedSize: "4Gi"
+    # StorageClass for the Valkey PVC; empty uses the cluster default.
+    className: ""
+  # maxmemory stays below the container memory limit to leave room for the
+  # AOF rewrite fork, client buffers and allocator overhead.
+  valkeyConfig: |
+    appendonly yes
+    appendfsync everysec
+    maxmemory 768mb
+    maxmemory-policy noeviction
   resources:
     limits:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 500m
+      memory: 1Gi
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 1Gi
 
 # RustFS - S3-compatible object storage
 rustfs:
@@ -1250,6 +1290,10 @@ registryReconcile:
     # the agent-create form.
     - name: system-agents
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
+      recommendation_priority: 10
+    # Event source types (ADR-0040): webhook and poll providers, read by streams.
+    - name: system-source-types
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json
       recommendation_priority: 10
 
 # OpenFGA ReBAC permission server: the authorization graph backend.

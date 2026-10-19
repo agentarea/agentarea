@@ -38,3 +38,13 @@ def test_nul_and_lone_surrogates_are_located(value, where) -> None:
 
     assert problem is not None
     assert where in problem
+
+
+def test_storable_content_has_no_nul_or_lone_surrogate_anywhere():
+    from agentarea_common.utils.pg_text import pg_storable
+
+    value = {"a\x00": ["x\x00y", {"k": "\ud800z"}], "n": 3, "none": None}
+    stored = pg_storable(value)
+    assert stored == {"a�": ["x�y", {"k": "�z"}], "n": 3, "none": None}
+    assert pg_text_problem(stored) is None
+    assert pg_storable("plain") == "plain"

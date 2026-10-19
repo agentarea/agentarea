@@ -9,6 +9,7 @@ from importlib import import_module
 from typing import Any
 
 from agentarea_common.money import ZERO
+from agentarea_common.outbound import Destination, outbound_client
 
 from .models import PaymentResult
 
@@ -192,9 +193,14 @@ class X402PaymentClient:
 
             client = self._get_client()
             http_client_cls = import_module("x402.http").x402HTTPClient
-            x402_httpx_client_cls = import_module("x402.http.clients").x402HttpxClient
+            x402_transport_cls = import_module("x402.http.clients.httpx").x402AsyncTransport
 
-            async with x402_httpx_client_cls(client) as http_client:
+            # The paid retry goes to the member's URL: x402 signs and resends,
+            # every request through the vetted, pinned transport.
+            async with outbound_client(
+                Destination.MEMBER,
+                wrap=lambda inner: x402_transport_cls(client, transport=inner),
+            ) as http_client:
                 request_kwargs: dict[str, Any] = {
                     "method": method,
                     "url": url,

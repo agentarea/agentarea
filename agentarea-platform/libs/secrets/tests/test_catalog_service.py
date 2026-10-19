@@ -40,8 +40,10 @@ pytestmark = pytest.mark.skipif(
     reason="SECRETS_TEST_DATABASE_URL not set; skipping schema-backed catalog tests",
 )
 
-WORKSPACE = "catalog-test-ws"
-OTHER_WORKSPACE = "catalog-test-other-ws"
+# Each xdist worker keeps to its own workspaces: the cleanup below empties them.
+_PREFIX = f"catalog-test-{os.getenv('PYTEST_XDIST_WORKER', 'main')}-"
+WORKSPACE = f"{_PREFIX}ws"
+OTHER_WORKSPACE = f"{_PREFIX}other-ws"
 
 
 @pytest.fixture
@@ -53,10 +55,10 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     async with maker() as s:
         yield s
         await s.execute(
-            text("DELETE FROM secret_references WHERE workspace_id LIKE 'catalog-test-%'")
+            text("DELETE FROM secret_references WHERE workspace_id LIKE :p"), {"p": f"{_PREFIX}%"}
         )
         await s.execute(
-            text("DELETE FROM encrypted_secrets WHERE workspace_id LIKE 'catalog-test-%'")
+            text("DELETE FROM encrypted_secrets WHERE workspace_id LIKE :p"), {"p": f"{_PREFIX}%"}
         )
         await s.commit()
     await engine.dispose()
@@ -253,8 +255,8 @@ class TestVisibleSecrets:
     @pytest.mark.parametrize(
         "owner_type,name",
         [
-            ("task", f"task-input/{uuid.uuid4()}/api_token"),
-            ("task", f"a2a_push_token:{uuid.uuid4()}:cfg"),
+            ("task", "task-input/42e28a72-0539-443d-8f4a-96bf240e3af9/api_token"),
+            ("task", "a2a_push_token:41000a8f-5bc0-482c-97b9-2f4276c5f7ac:cfg"),
         ],
     )
     async def test_machine_generated_owners_stay_hidden(

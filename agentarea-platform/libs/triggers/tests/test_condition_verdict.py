@@ -1,8 +1,11 @@
+from dataclasses import asdict
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from litellm import ModelResponse
+from agentarea_common.auth.context import UserContext
+from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_triggers.domain.models import ConditionVerdict
 from agentarea_triggers.llm_condition_evaluator import (
     LLMConditionEvaluationError,
@@ -18,11 +21,24 @@ def _evaluator() -> LLMConditionEvaluator:
     instance.model_spec.kind = "chat"
     instances.get.return_value = instance
     model_service = AsyncMock()
-    model_service.resolve.return_value = MagicMock(
-        provider_type="openai", model_name="gpt-4", api_key=None, endpoint_url=None
+    target = ModelTarget(
+        instance_id=CONDITION["model_id"],
+        provider_type="openai",
+        model_name="gpt-4",
+        endpoint_url=None,
+        managed_by=None,
+        input_cost_per_token=None,
+        output_cost_per_token=None,
     )
+    model_service.describe.return_value = target
+    model_service.connect.return_value = ModelEndpoint(**asdict(target))
     return LLMConditionEvaluator(
-        model_instance_service=instances, secret_manager=AsyncMock(), model_service=model_service
+        model_instance_service=instances,
+        secret_manager=AsyncMock(),
+        model_service=model_service,
+        user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
+        record_costs=AsyncMock(),
+        refuse_at_spend_cap=AsyncMock(),
     )
 
 

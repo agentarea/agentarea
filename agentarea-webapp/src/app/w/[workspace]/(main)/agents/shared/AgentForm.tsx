@@ -17,7 +17,7 @@ import type {
   McpServerResponse,
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
+import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import FullChat from "@/components/Chat/FullChat";
 import FormError from "@/components/FormError";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
@@ -88,7 +88,7 @@ interface AgentFormProps {
   /** Create only: presets and trigger types, each `null` when it failed to load. */
   create?: {
     presets: AgentPresetResponse[] | null;
-    triggerCatalog: TriggerCatalogEntry[] | null;
+    streams: StreamOptions;
   };
   /** Edit only: where this agent's triggers are managed. */
   triggersHref?: string;
@@ -283,10 +283,7 @@ export default function AgentForm({
     const form = formRef.current;
     if (!form) return;
 
-    if (
-      create &&
-      hasIncompleteTriggers(triggerDrafts, create.triggerCatalog ?? [])
-    ) {
+    if (create && hasIncompleteTriggers(triggerDrafts)) {
       setShowTriggerErrors(true);
       return;
     }
@@ -444,7 +441,7 @@ export default function AgentForm({
             {create ? (
               <>
                 <TriggersConfig
-                  catalog={create.triggerCatalog}
+                  streams={create.streams}
                   drafts={triggerDrafts}
                   onDraftsChange={setTriggerDrafts}
                   showErrors={showTriggerErrors}

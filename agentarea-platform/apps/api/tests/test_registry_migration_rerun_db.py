@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
@@ -108,4 +109,4 @@ def test_a_refused_lock_rolls_the_catalog_schema_back_whole(alembic_config, engi
 
     command.upgrade(alembic_config, "head")
 
-    assert _revision(engine) == "20261019_1510_registry_count_ix"
+    assert _revision(engine) == ScriptDirectory.from_config(alembic_config).get_current_head()

@@ -1,46 +1,61 @@
-"""What a non-chat model call costs the customer, in the billing currency."""
+"""How a non-chat model call is funded before it runs: what it can cost at most.
+
+Each estimate is in USD from the model's declared prices, or None when the model
+declares none to estimate by; billing refuses to hold a call on the platform's
+credentials against None (``model_unpriced``).
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any
 
-from agentarea_common.constants import MANAGED_BY_PLATFORM
-from agentarea_common.extensions.customer_pricing import (
-    CustomerPricing,
-    get_customer_pricing,
-    price_llm_call,
-)
-from agentarea_common.money import Money
+from agentarea_common.model_charges import ModelFunding, estimate_vendor_cost, hold_model_call
 
-from agentarea_llm.infrastructure.model_clients import ModelEndpoint
+from agentarea_llm.infrastructure.model_clients import ModelTarget
 
 
-@dataclass(frozen=True)
-class PricedCost:
-    amount: Money
-    currency: str
+def image_estimate(target: ModelTarget) -> Decimal | None:
+    return target.output_cost_per_image
 
 
-async def price_model_call(
-    endpoint: ModelEndpoint,
-    *,
-    provider_cost_usd: Decimal,
-    prompt_tokens: int = 0,
-    completion_tokens: int = 0,
-    pricing: CustomerPricing | None = None,
-) -> PricedCost:
-    """Convert a call's provider cost once, through the same seam LLM calls use.
+def video_estimate(target: ModelTarget, duration: int | None) -> Decimal | None:
+    if target.output_cost_per_video_per_second is None or duration is None:
+        return None
+    return target.output_cost_per_video_per_second * Decimal(duration)
 
-    Everything downstream (tool results, budgets, task totals) carries the amount
-    returned here, unconverted.
-    """
-    amount = await price_llm_call(
-        model_instance_id=endpoint.instance_id,
-        platform_funded=endpoint.managed_by == MANAGED_BY_PLATFORM,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        provider_cost_usd=provider_cost_usd,
-        pricing=pricing,
+
+def decision_estimate(target: ModelTarget, request: Any) -> Decimal | None:
+    if target.input_cost_per_token is None or target.output_cost_per_token is None:
+        return None
+    return estimate_vendor_cost(
+        [request],
+        target.max_output_tokens,
+        target.input_cost_per_token,
+        target.output_cost_per_token,
     )
-    return PricedCost(amount=amount, currency=(pricing or get_customer_pricing()).currency())
+
+
+def chat_estimate(target: ModelTarget, messages: list[Any], max_tokens: int) -> Decimal | None:
+    if target.input_cost_per_token is None or target.output_cost_per_token is None:
+        return None
+    return estimate_vendor_cost(
+        messages, max_tokens, target.input_cost_per_token, target.output_cost_per_token
+    )
+
+
+async def fund_model_call(
+    target: ModelTarget,
+    *,
+    workspace_id: str,
+    estimate: Decimal | None,
+    idempotency_key: str,
+) -> ModelFunding:
+    """The funding a call on ``target`` is connected with (see ``ModelService.connect``)."""
+    return await hold_model_call(
+        workspace_id=workspace_id,
+        model_instance_id=target.instance_id,
+        managed_by=target.managed_by,
+        vendor_cost_estimate=estimate,
+        idempotency_key=idempotency_key,
+    )

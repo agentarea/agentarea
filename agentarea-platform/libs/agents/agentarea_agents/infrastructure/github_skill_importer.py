@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 import httpx
-from agentarea_common.utils.outbound_tls import outbound_ssl_context
+from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.url_safety import safe_async_client
 
 logger = logging.getLogger(__name__)
@@ -201,9 +201,9 @@ class GitHubSkillImporter:
         where = f"{repo}/{folder}" if folder else repo
         api = f"{self.GITHUB_API_BASE}/repos/{owner}/{name}"
 
-        async with httpx.AsyncClient(
+        async with outbound_client(
+            Destination.VENDOR,
             timeout=self.DEFAULT_TIMEOUT,
-            verify=outbound_ssl_context(),
             follow_redirects=True,
             transport=self._transport,
         ) as client:
@@ -446,9 +446,7 @@ class GitHubSkillImporter:
 
         headers = self._get_headers()
 
-        async with httpx.AsyncClient(
-            timeout=self.DEFAULT_TIMEOUT, verify=outbound_ssl_context()
-        ) as client:
+        async with outbound_client(Destination.VENDOR, timeout=self.DEFAULT_TIMEOUT) as client:
             response = await client.get(api_url, headers=headers)
             self._check_response(response)
             return response.json()
@@ -466,9 +464,7 @@ class GitHubSkillImporter:
         api_url = f"{self.GITHUB_API_BASE}/repos/{owner}/{repo}"
         headers = self._get_headers()
 
-        async with httpx.AsyncClient(
-            timeout=self.DEFAULT_TIMEOUT, verify=outbound_ssl_context()
-        ) as client:
+        async with outbound_client(Destination.VENDOR, timeout=self.DEFAULT_TIMEOUT) as client:
             response = await client.get(api_url, headers=headers)
             self._check_response(response)
             data = response.json()

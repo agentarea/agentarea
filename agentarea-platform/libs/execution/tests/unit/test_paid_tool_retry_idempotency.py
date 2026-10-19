@@ -136,6 +136,11 @@ def activity_fns(monkeypatch, wallet_service, audit):
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     monkeypatch.setattr(tool_activities, "_offload_large_activity_output", CancelledAfterTool())
+
+    async def caps_as_the_run_froze_them(session, user_context, agent_id, run_budget):
+        return run_budget
+
+    monkeypatch.setattr(tool_activities, "current_budget", caps_as_the_run_froze_them)
     fns = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
     return ctx, fns["execute_mcp_tool_activity"]
 
@@ -329,7 +334,7 @@ async def test_retried_mcp_call_does_not_pay_again(monkeypatch, activity_fns, wa
     )
     mcp_service = ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
-    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
 
     request = _request(
@@ -413,7 +418,7 @@ async def test_payment_that_settled_before_the_request_failed_is_spent(
     )
     mcp_service = ctx.get_mcp_server_instance_service.return_value
     mcp_service.get = AsyncMock(return_value=instance)
-    mcp_service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=None)
+    mcp_service.mcp_server_repository.catalog_json_spec = AsyncMock(return_value=None)
     mcp_service.execute_tool = execute_tool
 
     request = _request(
@@ -487,6 +492,7 @@ async def test_retried_http_tool_does_not_pay_again(monkeypatch, activity_fns, w
     ctx, _ = activity_fns
     connection_service = ctx.get_openapi_connection_service.return_value
     connection_service.catalog_connector = AsyncMock(return_value="connection:paid-api")
+    connection_service.catalog_spec = AsyncMock(return_value=None)
     connection_service.get_connection = AsyncMock(
         return_value=SimpleNamespace(
             id=PaidHttpTool.connection_id,
@@ -534,16 +540,16 @@ def test_call_ref_without_tool_call_id_uses_the_activity_identity():
 
 
 GATEWAY_ID = "9a0c6d8e-0000-4000-8000-000000000001"
-YANDEX = {
-    "name": "ru.yandex/search-api",
+EXAMPLE_SEARCH = {
+    "name": "example.com/search-api",
     "metadata": {
         "agentarea:payers": ["workspace", "platform"],
         "agentarea:cost": {
             "tools": {
-                "yandex_search": {
+                "example_search": {
                     "source": "rate",
                     "unit": "request",
-                    "rate": {"amount": "0.488", "currency": "RUB"},
+                    "rate": {"amount": "0.488", "currency": "EUR"},
                 }
             }
         },
@@ -558,14 +564,13 @@ class GatewayService:
         self.calls: list[str] = []
         self.instance = SimpleNamespace(
             id=GATEWAY_ID,
-            name="Yandex Search",
+            name="Example Search",
             json_spec={},
-            server_spec_id="spec-yandex",
+            server_spec_id="spec-example",
             managed_by=managed_by,
         )
-        server = SimpleNamespace(json_spec=YANDEX)
         self.mcp_server_repository = SimpleNamespace(
-            get_server_by_id=AsyncMock(return_value=server)
+            catalog_json_spec=AsyncMock(return_value=EXAMPLE_SEARCH)
         )
 
     async def get(self, instance_id):
@@ -594,41 +599,46 @@ class Ledger:
         return len(new)
 
 
-class Guard:
-    name = "entitlement_guard"
+class Billing:
+    """Billing as the platform asks it: a hold per platform call, quotes for display."""
 
     def __init__(self, allow=True):
         self.allow = allow
-        self.contexts = []
+        self.authorizations, self.voids = [], []
 
-    async def execute(self, context):
-        from agentarea_governance.domain.enums import InterceptorAction
-        from agentarea_governance.domain.models import InterceptorResult
+    def currency(self):
+        return "EUR"
 
-        self.contexts.append(context)
-        return InterceptorResult(
-            action=InterceptorAction.ALLOW if self.allow else InterceptorAction.DENY,
-            interceptor_name=self.name,
-            reason="ok" if self.allow else "no credits remaining",
+    async def authorize(self, **request):
+        self.authorizations.append(request)
+        return SimpleNamespace(
+            allowed=self.allow,
+            code="ok" if self.allow else "no_credits",
+            reason="" if self.allow else "no credits remaining",
+            hold_id=f"hold-{len(self.authorizations)}" if self.allow else None,
+            amount=Decimal("0.64") if self.allow else None,
+            currency="EUR" if self.allow else None,
+            expires_at=None,
         )
 
+    async def void(self, *, hold_id):
+        self.voids.append(hold_id)
 
-def _install_gateway(monkeypatch, activity_fns, *, managed_by="platform", guard=None):
-    from agentarea_common.extensions import customer_pricing
+    async def capture(self, **request):
+        raise AssertionError("the settlement worker captures, not the activity")
+
+    async def quote(self, lines):
+        raise AssertionError("every cost here is in the deployment currency")
+
+
+def _install_gateway(monkeypatch, activity_fns, *, managed_by="platform", billing=None):
+    from agentarea_common.extensions import tool_billing
     from agentarea_common.extensions.registry import ExtensionRegistry
-    from agentarea_governance.tool_calls import entitlement_guard
-
-    class Rub(customer_pricing.ProviderCostPricing):
-        def currency(self) -> str:
-            return "RUB"
-
-        async def price_vendor_cost(self, *, payer, connector, tool, vendor_cost, currency):
-            return vendor_cost * (Decimal("1.5") if payer == "platform" else Decimal(1))
 
     ctx, _ = activity_fns
     service = GatewayService(managed_by)
     ctx.get_mcp_server_instance_service = AsyncMock(return_value=service)
-    monkeypatch.setattr(customer_pricing, "get_customer_pricing", lambda: Rub())
+    monkeypatch.setattr(tool_billing, "get_spend_currency", lambda: "EUR")
     monkeypatch.setattr(
         tool_activities,
         "_offload_large_activity_output",
@@ -637,25 +647,25 @@ def _install_gateway(monkeypatch, activity_fns, *, managed_by="platform", guard=
     ledger = Ledger()
     monkeypatch.setattr(tool_activities, "CostEntryRepository", ledger)
     ExtensionRegistry.clear()
-    entitlement_guard.cache_clear()
-    guard = guard or Guard()
-    ExtensionRegistry.register("entitlement_guard", lambda: guard)
-    return service, ledger, guard
+    tool_billing.get_tool_billing.cache_clear()
+    billing = billing or Billing()
+    ExtensionRegistry.register("tool_billing", lambda: billing)
+    return service, ledger, billing
 
 
 @pytest.fixture(autouse=True)
-def _clear_guard():
+def _clear_billing():
+    from agentarea_common.extensions import tool_billing
     from agentarea_common.extensions.registry import ExtensionRegistry
-    from agentarea_governance.tool_calls import entitlement_guard
 
     yield
     ExtensionRegistry.clear()
-    entitlement_guard.cache_clear()
+    tool_billing.get_tool_billing.cache_clear()
 
 
-def _gateway_request(raw_name: str = "yandex_search") -> MCPToolRequest:
+def _gateway_request(raw_name: str = "example_search") -> MCPToolRequest:
     return _request(
-        tool_name=f"yandex__{raw_name}",
+        tool_name=f"example__{raw_name}",
         tool_args={"query": "agentarea"},
         tools=[{"type": "mcp", "name": GATEWAY_ID}],
         mcp_route=McpToolRoute(
@@ -665,13 +675,13 @@ def _gateway_request(raw_name: str = "yandex_search") -> MCPToolRequest:
 
 
 @pytest.mark.asyncio
-async def test_a_platform_call_is_gated_then_writes_one_line_at_vendor_cost(
+async def test_a_platform_call_holds_then_writes_one_line_at_the_held_amount(
     monkeypatch, activity_fns
 ):
     from agentarea_tasks.domain.costs import tool_call_event_id
 
     _, execute_mcp_tool_activity = activity_fns
-    service, ledger, guard = _install_gateway(monkeypatch, activity_fns)
+    service, ledger, billing = _install_gateway(monkeypatch, activity_fns)
     request = _gateway_request()
 
     result = await ActivityEnvironment().run(execute_mcp_tool_activity, request)
@@ -684,15 +694,18 @@ async def test_a_platform_call_is_gated_then_writes_one_line_at_vendor_cost(
     assert result.success is True
     assert (result.payer, result.cost, result.cost_metered) == (
         "platform",
-        Decimal("0.7320"),
+        Decimal("0.64"),
         True,
     )
-    assert service.calls == ["yandex_search", "yandex_search"]
-    assert guard.contexts[0].execution_state["paid_call"] == {
-        "payer": "platform",
-        "metric_type": "tool.vendor_cost.RUB",
-        "resource_ref": "ru.yandex/search-api#yandex_search",
-    }
+    assert service.calls == ["example_search", "example_search"]
+    first = billing.authorizations[0]
+    assert (first["connector"], first["tool"], first["vendor_cost"]) == (
+        "example.com/search-api",
+        "example_search",
+        Decimal("0.488"),
+    )
+    # The retry's hold is released: the first attempt's line carries the one captured.
+    assert billing.voids == ["hold-2"]
     [line] = ledger.lines.values()
     assert line.event_id == tool_call_event_id(f"{request.task_id}:call_1")
     assert (str(line.task_id), line.agent_id, line.client_id) == (
@@ -702,31 +715,34 @@ async def test_a_platform_call_is_gated_then_writes_one_line_at_vendor_cost(
     )
     assert (line.subject_id, line.subject_name, line.payer.value) == (
         GATEWAY_ID,
-        "yandex_search",
+        "example_search",
         "platform",
     )
     assert (line.vendor_cost, line.vendor_currency, line.amount, line.currency) == (
         Decimal("0.488"),
-        "RUB",
-        Decimal("0.7320"),
-        "RUB",
+        "EUR",
+        Decimal("0.64"),
+        "EUR",
     )
     assert (line.quantity, line.unit, line.source.value) == (Decimal(1), "request", "rate")
+    assert line.estimate is True
     assert line.evidence == {
-        "connector": "ru.yandex/search-api",
-        "tool_name": "yandex__yandex_search",
+        "connector": "example.com/search-api",
+        "tool_name": "example__example_search",
+        "hold_id": "hold-1",
+        "settle": "capture",
     }
 
 
 @pytest.mark.asyncio
 async def test_a_customer_key_call_is_metered_without_asking_billing(monkeypatch, activity_fns):
     _, execute_mcp_tool_activity = activity_fns
-    _, ledger, guard = _install_gateway(monkeypatch, activity_fns, managed_by=None)
+    _, ledger, billing = _install_gateway(monkeypatch, activity_fns, managed_by=None)
 
     result = await ActivityEnvironment().run(execute_mcp_tool_activity, _gateway_request())
 
     assert (result.payer, result.cost) == ("workspace", Decimal("0.488"))
-    assert guard.contexts == []
+    assert billing.authorizations == []
     [line] = ledger.lines.values()
     assert (line.payer.value, line.amount) == ("workspace", Decimal("0.488"))
 
@@ -734,7 +750,7 @@ async def test_a_customer_key_call_is_metered_without_asking_billing(monkeypatch
 @pytest.mark.asyncio
 async def test_no_balance_refuses_before_the_vendor_is_called(monkeypatch, activity_fns, audit):
     _, execute_mcp_tool_activity = activity_fns
-    service, ledger, _ = _install_gateway(monkeypatch, activity_fns, guard=Guard(allow=False))
+    service, ledger, _ = _install_gateway(monkeypatch, activity_fns, billing=Billing(allow=False))
 
     result = await ActivityEnvironment().run(execute_mcp_tool_activity, _gateway_request())
 
@@ -757,7 +773,7 @@ async def test_a_platform_tool_its_catalog_entry_does_not_price_is_refused(
     )
 
     assert result.success is False
-    assert "declares no rate or reported cost" in (result.error or "")
+    assert "declares no cost" in (result.error or "")
     assert service.calls == []
 
 

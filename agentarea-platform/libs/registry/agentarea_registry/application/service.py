@@ -10,6 +10,8 @@ Dispatches sync/create by registry_type:
   - "bundles" → catalog-only installable bundles: the registry_item.spec IS
     the canonical Bundle definition. Nothing is materialized on sync; the
     bundle is provisioned into a workspace on demand via BundleService.install.
+  - "source_types" → catalog-only event source types (ADR-0040): the
+    registry_item.spec IS the entry; streams read it by slug.
 
 Source format auto-detected (JSON or YAML).
 Entity-specific details (connection_type, source_type) live in spec JSONB.
@@ -31,12 +33,12 @@ import httpx
 import yaml
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID, REGISTRY_TRUST_LEVELS
 from agentarea_common.money import to_optional_money
+from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.slug import generate_slug
 from agentarea_common.utils.untrusted_yaml import load_untrusted_yaml
 from agentarea_common.utils.url_safety import (
     OutboundPolicy,
-    SafeOutboundTransport,
     UnsafeUrlError,
     validate_outbound_url,
 )
@@ -101,6 +103,7 @@ VALID_REGISTRY_TYPES = (
     "llm_models",
     "agents",
     "bundles",
+    "source_types",
 )
 VALID_SOURCE_TYPES = ("url", "github", "api", "managed")
 # What a workspace admin may point a workspace registry at: an index in the
@@ -128,6 +131,7 @@ TYPE_BY_TOPLEVEL_KEY = {
     "models": "llm_models",
     "agents": "agents",
     "bundles": "bundles",
+    "source_types": "source_types",
 }
 
 
@@ -209,8 +213,8 @@ def _size(n: int) -> str:
     return f"{n // mb} MB" if n >= mb else f"{n // 1024} KB"
 
 
-def _default_untrusted_transport() -> httpx.AsyncBaseTransport:
-    return SafeOutboundTransport(OutboundPolicy.from_env())
+def _member_client(**kwargs: Any) -> httpx.AsyncClient:
+    return outbound_client(Destination.MEMBER, **kwargs)
 
 
 # Where a curator can declare an item's rank explicitly, instead of relying on
@@ -473,9 +477,9 @@ class RegistryService:
         credentials_resolver: CredentialsResolver | None = None,
         github_source_factory: Callable[[str | None], GitHubSource] = HttpGitHubSource,
         content_mirror: ContentMirror | None = None,
-        untrusted_transport: Callable[[], httpx.AsyncBaseTransport] = _default_untrusted_transport,
+        untrusted_client: Callable[..., httpx.AsyncClient] = _member_client,
     ):
-        self.untrusted_transport = untrusted_transport
+        self.untrusted_client = untrusted_client
         self.credentials_resolver = credentials_resolver
         self.content_mirror = content_mirror
         self.github_source_factory = github_source_factory
@@ -960,6 +964,7 @@ class RegistryService:
                     )
 
                 if existing:
+                    previous_spec = dict(existing.spec or {})
                     for field in (
                         "name",
                         "description",
@@ -990,6 +995,8 @@ class RegistryService:
                         await self._drop_platform_skill(existing)
 
                     await self.item_repo.session.commit()
+                    if registry.registry_type == "llm_models":
+                        await self._resync_model_cache_prices(previous_spec, existing.spec)
 
                     # Backfill json_spec on linked entity if missing
                     if existing.installed_entity_id:
@@ -1236,6 +1243,9 @@ class RegistryService:
             # provisioned into a workspace on demand via BundleService.install, so
             # nothing is materialized on sync.
             return None
+        elif registry_type == "source_types":
+            # Catalog-only: streams read the entry from registry_items by slug.
+            return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     async def _update_entity(
@@ -1254,8 +1264,8 @@ class RegistryService:
         elif registry_type == "agents":
             # No materialized entity to update for catalog agents (ADR-003).
             return None
-        elif registry_type == "bundles":
-            # No materialized entity to update for catalog bundles.
+        elif registry_type in ("bundles", "source_types"):
+            # No materialized entity to update for catalog bundles or source types.
             return None
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
@@ -1423,6 +1433,31 @@ class RegistryService:
 
     # ── LLM model handlers ──
 
+    async def _resync_model_cache_prices(
+        self, previous: dict[str, Any], current: dict[str, Any] | None
+    ) -> None:
+        """A model's cache prices, changed in the catalog, reach the workspaces' copies."""
+        current = current or {}
+        if not (self.model_spec_repo and self.provider_spec_repo):
+            raise ValueError("Provider and model spec repositories required")
+        provider = await self.provider_spec_repo.get_by_provider_key(current.get("provider_key"))
+        if provider is None or not current.get("model_name"):
+            return
+        changed = await self.model_spec_repo.resync_cache_prices(
+            provider_spec_id=provider.id,
+            model_name=current["model_name"],
+            previous=previous,
+            current=current,
+        )
+        await self.model_spec_repo.session.commit()
+        if changed:
+            logger.info(
+                "Catalog cache prices of %s/%s reached %d workspace copies",
+                current.get("provider_key"),
+                current["model_name"],
+                changed,
+            )
+
     async def _create_llm_model(self, item: RegistryItem) -> str:
         if not (self.model_spec_repo and self.provider_spec_repo):
             raise ValueError("Provider and model spec repositories required")
@@ -1462,6 +1497,9 @@ class RegistryService:
             input_cost_per_token=to_optional_money(spec.get("input_cost_per_token")),
             output_cost_per_token=to_optional_money(spec.get("output_cost_per_token")),
             cached_input_cost_per_token=to_optional_money(spec.get("cached_input_cost_per_token")),
+            cache_creation_input_cost_per_token=to_optional_money(
+                spec.get("cache_creation_input_cost_per_token")
+            ),
             supports_function_calling=spec.get("supports_function_calling", False),
             is_active=spec.get("is_active", True),
         )
@@ -1474,8 +1512,7 @@ class RegistryService:
 
     def _untrusted_client(self) -> httpx.AsyncClient:
         """For a member-supplied index: the pinned transport vets every hop's address."""
-        return httpx.AsyncClient(
-            transport=self.untrusted_transport(),
+        return self.untrusted_client(
             follow_redirects=True,
             max_redirects=MAX_SOURCE_REDIRECTS,
             timeout=SOURCE_FETCH_TIMEOUT_SECONDS,
@@ -1623,6 +1660,8 @@ class RegistryService:
             return RegistryService._parse_agents(data)
         elif registry_type == "bundles":
             return RegistryService._parse_bundles(data)
+        elif registry_type == "source_types":
+            return RegistryService._parse_source_types(data)
         raise ValueError(f"Unknown registry_type: {registry_type}")
 
     @staticmethod
@@ -2010,6 +2049,9 @@ class RegistryService:
                         "input_cost_per_token": entry.get("input_cost_per_token"),
                         "output_cost_per_token": entry.get("output_cost_per_token"),
                         "cached_input_cost_per_token": entry.get("cached_input_cost_per_token"),
+                        "cache_creation_input_cost_per_token": entry.get(
+                            "cache_creation_input_cost_per_token"
+                        ),
                         "supports_function_calling": entry.get("supports_function_calling", False),
                         "is_active": entry.get("is_active", True),
                     },
@@ -2054,6 +2096,27 @@ class RegistryService:
                         "triggers": entry.get("triggers") or [],
                     },
                     "tags": entry.get("tags", []),
+                    **rank_fields(entry),
+                }
+            )
+        return items
+
+    @staticmethod
+    def _parse_source_types(data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Event source types (ADR-0040): the whole entry is the spec, its slug the external id."""
+        items = []
+        for entry in data.get("source_types", []):
+            slug = entry.get("slug")
+            if not slug:
+                raise ValueError(f"source type entry {entry.get('name')!r} has no slug")
+            items.append(
+                {
+                    "external_id": slug,
+                    "name": entry.get("name") or slug,
+                    "description": (entry.get("description") or "")[:500],
+                    "version": entry.get("version") or "1.0.0",
+                    "spec": entry,
+                    "tags": [entry.get("delivery")] if entry.get("delivery") else [],
                     **rank_fields(entry),
                 }
             )

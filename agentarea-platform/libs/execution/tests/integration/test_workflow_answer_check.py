@@ -21,6 +21,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.contrib.pydantic import pydantic_data_converter
@@ -112,6 +113,9 @@ async def validate_artifacts(request: ArtifactValidationRequest) -> ArtifactVali
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_RECORD = make_record_activity(publish=publish_events, update_status=update_task_status)
+
+
 async def _run(
     content_safety: dict[str, Any] | None,
     agent_setting: dict[str, Any] | None = None,
@@ -149,6 +153,7 @@ async def _run(
                     resolve_model,
                     call_llm,
                     publish_events,
+                    _RECORD,
                     update_task_status,
                     validate_artifacts,
                 ],
@@ -191,7 +196,7 @@ async def test_a_leaky_answer_is_rewritten_once_and_the_rewrite_is_what_the_task
 
     # Nothing the person can see carries the unchecked answer or the critique.
     assert _replies() == [CLEAN, CLEAN]
-    (checked,) = [e for e in events if e["event_type"] == "AnswerChecked"]
+    (checked,) = [e for e in events if e["event_type"] == "answer.checked"]
     assert checked["data"]["rewritten"] is True
     assert checked["data"]["changes"] == "убрал edit_estimate, перевёл rooms"
     assert {leak["kind"] for leak in checked["data"]["leaks"]} >= {"cjk", "english"}
@@ -216,7 +221,7 @@ async def test_without_the_policy_or_the_setting_the_answer_is_returned_as_the_m
     assert result.final_response == LEAKY
     assert len(llm_requests) == 1
     assert llm_requests[0].stream_text is True
-    assert not [e for e in events if e["event_type"] == "AnswerChecked"]
+    assert not [e for e in events if e["event_type"] == "answer.checked"]
 
 
 @pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
@@ -245,7 +250,7 @@ async def test_an_answer_given_through_the_completion_tool_is_checked_at_complet
 
     assert result.final_response == CLEAN
     assert len(llm_requests) == 2
-    (checked,) = [e for e in events if e["event_type"] == "AnswerChecked"]
+    (checked,) = [e for e in events if e["event_type"] == "answer.checked"]
     assert checked["data"]["rewritten"] is True
     completed = next(s for s in statuses if s.status == "completed")
     assert json.loads(completed.result or "{}")["response"] == CLEAN

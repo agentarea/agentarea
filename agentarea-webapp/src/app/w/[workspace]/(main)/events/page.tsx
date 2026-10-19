@@ -1,53 +1,95 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { cookies } from "next/headers";
 import ContentBlock from "@/components/ContentBlock";
-import { ViewModeTabs } from "@/components/HeaderTabs";
-import SearchInput from "@/components/SearchInput";
-import SubheaderToolbar from "@/components/SubheaderToolbar";
-import StreamsContent from "./components/StreamsContent";
-import StreamsSkeleton from "./components/StreamsSkeleton";
+import { listStreams, listStreamSourceTypes } from "@/lib/api";
+import {
+  feedHref,
+  liveQuery,
+  parseFeedState,
+  showsPlatform,
+} from "@/lib/eventFeed";
+import { isPlatformStream } from "@/lib/platformStream";
+import { requireApiData } from "@/lib/server-resource";
+import FeedContent from "./components/feed/FeedContent";
+import FeedEventPanelServer from "./components/feed/FeedEventPanelServer";
+import FeedEventSidePanel from "./components/feed/FeedEventSidePanel";
+import { FeedLiveProvider, LiveIndicator } from "./components/feed/FeedLive";
+import { FeedSelectionProvider } from "./components/feed/FeedSelection";
+import FeedSkeleton, {
+  FEED_GRID,
+  FeedEventPanelSkeleton,
+} from "./components/feed/FeedSkeleton";
+import StreamsMenu from "./components/feed/StreamsMenu";
 
 export const metadata: Metadata = { title: "Events" };
 
+/** Everything that arrived in the workspace, newest first and live, and what the platform did with it. */
 export default async function EventsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const t = await getTranslations("EventsPage");
-  const params = await searchParams;
-  const cookieTab = (await cookies()).get("tab_events")?.value;
-  const viewMode =
-    typeof params.tab === "string" ? params.tab : cookieTab || "table";
-  const search = typeof params.search === "string" ? params.search : "";
+  const [t, params, streamsResult, typesResult] = await Promise.all([
+    getTranslations("EventsPage"),
+    searchParams,
+    listStreams(),
+    listStreamSourceTypes(),
+  ]);
+  const state = parseFeedState(params);
+  const streams = requireApiData(streamsResult, "streams").map((s) => ({
+    id: s.id,
+    name: s.name,
+    kind: s.kind,
+  }));
+  const sourceTypes = requireApiData(typesResult, "stream source types");
+  const platformStreams = streams.filter(isPlatformStream).map((s) => s.id);
+  const { event, ...filters } = state;
+  const filterKey = feedHref(filters);
 
   return (
-    <ContentBlock
-      header={{
-        breadcrumb: [{ label: t("title") }],
-        description: t("description"),
-      }}
-      subheader={
-        <SubheaderToolbar
-          search={
-            <SearchInput
-              urlParamName="search"
-              urlPath="/events"
-              placeholder={t("searchPlaceholder")}
-            />
-          }
-          controls={<ViewModeTabs currentTab={viewMode} defaultTab="table" />}
-        />
-      }
+    <FeedLiveProvider
+      query={liveQuery(state, showsPlatform(state, platformStreams))}
     >
-      <Suspense
-        key={`${search}-${viewMode}`}
-        fallback={<StreamsSkeleton viewMode={viewMode} />}
-      >
-        <StreamsContent search={search} viewMode={viewMode} />
-      </Suspense>
-    </ContentBlock>
+      <FeedSelectionProvider serverEvent={event}>
+        <ContentBlock
+          className="flex overflow-hidden p-0"
+          header={{
+            breadcrumb: [{ label: t("title") }],
+            description: t("description"),
+            controls: (
+              <>
+                <LiveIndicator />
+                <StreamsMenu streams={streams} />
+              </>
+            ),
+          }}
+        >
+          <div className="min-w-0 flex-1 overflow-y-auto px-4 py-5">
+            <div className={FEED_GRID}>
+              <Suspense key={filterKey} fallback={<FeedSkeleton />}>
+                <FeedContent
+                  state={state}
+                  streams={streams}
+                  platformStreams={platformStreams}
+                  sourceTypes={sourceTypes}
+                />
+              </Suspense>
+            </div>
+          </div>
+          <FeedEventSidePanel streams={streams} sourceTypes={sourceTypes}>
+            {event && (
+              <Suspense key={event} fallback={<FeedEventPanelSkeleton />}>
+                <FeedEventPanelServer
+                  eventId={event}
+                  streams={streams}
+                  sourceTypes={sourceTypes}
+                />
+              </Suspense>
+            )}
+          </FeedEventSidePanel>
+        </ContentBlock>
+      </FeedSelectionProvider>
+    </FeedLiveProvider>
   );
 }

@@ -1,11 +1,15 @@
 """Codec tests for the Redis Streams event-bus adapter (ADR-0018)."""
 
-from agentarea_common.events.adapters.redis_streams import decode, encode, topic_for
+from agentarea_common.broker.topics import domain_events_topic
+from agentarea_common.events.adapters.redis_streams import decode, encode
 from agentarea_common.events.ports import IntegrationEvent
 
 
-def test_topic_for():
-    assert topic_for("agentarea.agents.v1.AgentDeleted") == "events:agentarea.agents.v1.AgentDeleted"
+def test_domain_events_topic():
+    assert (
+        domain_events_topic("agentarea.agents.v1.AgentDeleted")
+        == "domain.events.agentarea.agents.v1.AgentDeleted"
+    )
 
 
 def test_encode_fields_are_all_strings():

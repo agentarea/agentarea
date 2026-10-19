@@ -1,8 +1,8 @@
 """Performance and concurrency tests for trigger execution.
 
 This module tests trigger system performance under load, concurrent execution
-scenarios, and stress testing to ensure the system can handle high-throughput
-webhook processing and multiple simultaneous trigger executions.
+scenarios, and stress testing to ensure the system can handle
+multiple simultaneous trigger executions.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ import pytest
 
 # Import trigger system components
 try:
-    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
+    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
     from agentarea_triggers.domain.models import (
         TriggerCreate,
     )
@@ -24,7 +24,6 @@ try:
         TriggerRepository,
     )
     from agentarea_triggers.trigger_service import TriggerService
-    from agentarea_triggers.webhook_manager import WebhookManager
 
     TRIGGERS_AVAILABLE = True
 except ImportError:
@@ -98,11 +97,6 @@ class TestTriggerPerformanceConcurrent:
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
-
-    @pytest.fixture
-    async def webhook_manager(self, trigger_service, mock_event_broker):
-        """Create webhook manager for testing."""
-        return WebhookManager(trigger_service=trigger_service, event_broker=mock_event_broker)
 
     @pytest.fixture
     def sample_agent_id(self):
@@ -249,261 +243,15 @@ class TestTriggerPerformanceConcurrent:
             history = await trigger_service.get_execution_history(trigger.id)
             assert len(history) == 3  # 3 executions per trigger
 
-    async def test_webhook_concurrent_request_processing(
-        self, webhook_manager, trigger_service, mock_task_service, sample_agent_id
-    ):
-        """Test concurrent webhook request processing."""
-        # Create webhook trigger
-        trigger_data = TriggerCreate(
-            name="Concurrent Webhook Test",
-            description="Test concurrent webhook processing",
-            agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_type=WebhookType.GENERIC,
-            allowed_methods=["POST"],
-            task_parameters={"webhook_concurrent_test": True},
-            created_by="webhook_concurrent_test",
-        )
-
-        trigger = await trigger_service.create_trigger(trigger_data)
-        webhook_id = trigger.webhook_id
-
-        # Define concurrent webhook request function
-        async def send_webhook_request(request_id: int):
-            request_data = {
-                "method": "POST",
-                "headers": {
-                    "Content-Type": "application/json",
-                    "X-Request-ID": f"req-{request_id}",
-                },
-                "body": {
-                    "request_id": request_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "data": f"concurrent_request_{request_id}",
-                },
-                "query_params": {"source": "concurrent_test"},
-            }
-
-            start_time = time.time()
-            response = await webhook_manager.handle_webhook_request(
-                webhook_id,
-                request_data["method"],
-                request_data["headers"],
-                request_data["body"],
-                request_data["query_params"],
-            )
-            end_time = time.time()
-
-            return {
-                "request_id": request_id,
-                "response": response,
-                "duration": end_time - start_time,
-            }
-
-        # Send concurrent webhook requests
-        concurrent_requests = 20
-        start_time = time.time()
-
-        tasks = [send_webhook_request(i) for i in range(concurrent_requests)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        end_time = time.time()
-        total_duration = end_time - start_time
-
-        # Verify all requests were processed successfully
-        successful_results = []
-        for result in results:
-            assert not isinstance(result, Exception), f"Request failed: {result}"
-            assert result["response"]["status_code"] == 200
-            assert result["response"]["body"]["status"] == "success"
-            successful_results.append(result)
-
-        # Verify performance metrics
-        assert len(successful_results) == concurrent_requests
-        assert total_duration < 15.0  # Should complete within 15 seconds
-
-        # Verify all tasks were created
-        assert mock_task_service.create_task_from_params.call_count == concurrent_requests
-
-        # Check average response time
-        avg_duration = sum(r["duration"] for r in successful_results) / len(successful_results)
-        assert avg_duration < 2.0  # Each request should be under 2 seconds
-
-    # High-Throughput Tests
-
-    async def test_high_throughput_webhook_processing(
-        self, webhook_manager, trigger_service, mock_task_service, sample_agent_id
-    ):
-        """Test high-throughput webhook processing."""
-        # Create multiple webhook triggers
-        webhook_count = 5
-        triggers = []
-
-        for i in range(webhook_count):
-            trigger_data = TriggerCreate(
-                name=f"High Throughput Webhook {i}",
-                agent_id=sample_agent_id,
-                trigger_type=TriggerType.WEBHOOK,
-                webhook_type=WebhookType.GENERIC,
-                task_parameters={"webhook_index": i},
-                created_by="throughput_test",
-            )
-            trigger = await trigger_service.create_trigger(trigger_data)
-            triggers.append(trigger)
-
-        # Generate high volume of requests
-        requests_per_webhook = 10
-        total_requests = webhook_count * requests_per_webhook
-
-        async def process_batch_requests():
-            tasks = []
-
-            for trigger in triggers:
-                webhook_id = trigger.webhook_id
-                for j in range(requests_per_webhook):
-                    request_data = {
-                        "method": "POST",
-                        "headers": {"Content-Type": "application/json"},
-                        "body": {
-                            "webhook_index": trigger.task_parameters["webhook_index"],
-                            "request_index": j,
-                            "timestamp": datetime.utcnow().isoformat(),
-                        },
-                        "query_params": {},
-                    }
-
-                    task = webhook_manager.handle_webhook_request(
-                        webhook_id,
-                        request_data["method"],
-                        request_data["headers"],
-                        request_data["body"],
-                        request_data["query_params"],
-                    )
-                    tasks.append(task)
-
-            return await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process requests and measure performance
-        start_time = time.time()
-        results = await process_batch_requests()
-        end_time = time.time()
-
-        total_duration = end_time - start_time
-        throughput = total_requests / total_duration
-
-        # Verify all requests were processed
-        successful_count = 0
-        for result in results:
-            if not isinstance(result, Exception) and result["status_code"] == 200:
-                successful_count += 1
-
-        # Performance assertions
-        assert successful_count == total_requests
-        assert throughput > 5.0  # At least 5 requests per second
-        assert total_duration < 30.0  # Complete within 30 seconds
-
-        # Verify all tasks were created
-        assert mock_task_service.create_task_from_params.call_count == total_requests
-
-    async def test_mixed_trigger_types_concurrent_execution(
-        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
-    ):
-        """Test concurrent execution of mixed trigger types (cron and webhook)."""
-        # Create cron triggers
-        cron_triggers = []
-        for i in range(3):
-            trigger_data = TriggerCreate(
-                name=f"Mixed Cron Trigger {i}",
-                agent_id=sample_agent_id,
-                trigger_type=TriggerType.CRON,
-                cron_expression=f"0 {9 + i} * * *",
-                task_parameters={"type": "cron", "index": i},
-                created_by="mixed_test",
-            )
-            trigger = await trigger_service.create_trigger(trigger_data)
-            cron_triggers.append(trigger)
-
-        # Create webhook triggers
-        webhook_triggers = []
-        for i in range(3):
-            trigger_data = TriggerCreate(
-                name=f"Mixed Webhook Trigger {i}",
-                agent_id=sample_agent_id,
-                trigger_type=TriggerType.WEBHOOK,
-                webhook_type=WebhookType.GENERIC,
-                task_parameters={"type": "webhook", "index": i},
-                created_by="mixed_test",
-            )
-            trigger = await trigger_service.create_trigger(trigger_data)
-            webhook_triggers.append(trigger)
-
-        # Execute cron triggers and process webhook requests concurrently
-        async def execute_cron_trigger(trigger):
-            execution_data = {
-                "execution_time": datetime.utcnow().isoformat(),
-                "source": "cron",
-                "trigger_index": trigger.task_parameters["index"],
-            }
-            return await trigger_service.execute_trigger(trigger.id, execution_data)
-
-        async def process_webhook_request(trigger):
-            webhook_id = trigger.webhook_id
-            request_data = {
-                "method": "POST",
-                "headers": {"Content-Type": "application/json"},
-                "body": {"source": "webhook", "trigger_index": trigger.task_parameters["index"]},
-                "query_params": {},
-            }
-            return await webhook_manager.handle_webhook_request(
-                webhook_id,
-                request_data["method"],
-                request_data["headers"],
-                request_data["body"],
-                request_data["query_params"],
-            )
-
-        # Execute all triggers concurrently
-        start_time = time.time()
-
-        cron_tasks = [execute_cron_trigger(trigger) for trigger in cron_triggers]
-        webhook_tasks = [process_webhook_request(trigger) for trigger in webhook_triggers]
-
-        all_tasks = cron_tasks + webhook_tasks
-        results = await asyncio.gather(*all_tasks, return_exceptions=True)
-
-        end_time = time.time()
-        total_duration = end_time - start_time
-
-        # Verify all executions completed successfully
-        cron_results = results[: len(cron_triggers)]
-        webhook_results = results[len(cron_triggers) :]
-
-        # Verify cron trigger results
-        for result in cron_results:
-            assert not isinstance(result, Exception)
-            assert result.status == ExecutionStatus.SUCCESS
-
-        # Verify webhook trigger results
-        for result in webhook_results:
-            assert not isinstance(result, Exception)
-            assert result["status_code"] == 200
-
-        # Performance verification
-        total_executions = len(cron_triggers) + len(webhook_triggers)
-        assert total_duration < 10.0  # Should complete within 10 seconds
-        assert mock_task_service.create_task_from_params.call_count == total_executions
-
-    # Stress Tests
-
     async def test_trigger_system_under_stress(
-        self, trigger_service, webhook_manager, mock_task_service, sample_agent_id
+        self, trigger_service, mock_task_service, sample_agent_id
     ):
         """Test trigger system under stress conditions."""
         # Create multiple triggers of different types
         triggers = []
 
-        # Create 10 cron triggers
-        for i in range(10):
+        # Create 20 cron triggers
+        for i in range(20):
             trigger_data = TriggerCreate(
                 name=f"Stress Cron Trigger {i}",
                 agent_id=sample_agent_id,
@@ -515,56 +263,18 @@ class TestTriggerPerformanceConcurrent:
             trigger = await trigger_service.create_trigger(trigger_data)
             triggers.append(("cron", trigger))
 
-        # Create 10 webhook triggers
-        for i in range(10):
-            trigger_data = TriggerCreate(
-                name=f"Stress Webhook Trigger {i}",
-                agent_id=sample_agent_id,
-                trigger_type=TriggerType.WEBHOOK,
-                webhook_type=WebhookType.GENERIC,
-                task_parameters={"stress_test": True, "index": i + 10},
-                created_by="stress_test",
-            )
-            trigger = await trigger_service.create_trigger(trigger_data)
-            triggers.append(("webhook", trigger))
-
         # Generate stress load
         async def stress_execution_batch():
             tasks = []
 
-            for trigger_type, trigger in triggers:
-                if trigger_type == "cron":
-                    # Execute cron trigger multiple times
-                    for j in range(5):
-                        execution_data = {
-                            "execution_time": datetime.utcnow().isoformat(),
-                            "batch_index": j,
-                            "stress_test": True,
-                        }
-                        task = trigger_service.execute_trigger(trigger.id, execution_data)
-                        tasks.append(task)
-
-                elif trigger_type == "webhook":
-                    # Process webhook requests multiple times
-                    for j in range(5):
-                        request_data = {
-                            "method": "POST",
-                            "headers": {"Content-Type": "application/json"},
-                            "body": {
-                                "batch_index": j,
-                                "stress_test": True,
-                                "timestamp": datetime.utcnow().isoformat(),
-                            },
-                            "query_params": {},
-                        }
-                        task = webhook_manager.handle_webhook_request(
-                            trigger.webhook_id,
-                            request_data["method"],
-                            request_data["headers"],
-                            request_data["body"],
-                            request_data["query_params"],
-                        )
-                        tasks.append(task)
+            for _trigger_type, trigger in triggers:
+                for j in range(5):
+                    execution_data = {
+                        "execution_time": datetime.utcnow().isoformat(),
+                        "batch_index": j,
+                        "stress_test": True,
+                    }
+                    tasks.append(trigger_service.execute_trigger(trigger.id, execution_data))
 
             return await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -581,8 +291,6 @@ class TestTriggerPerformanceConcurrent:
         for result in results:
             if not isinstance(result, Exception):
                 if hasattr(result, "status") and result.status == ExecutionStatus.SUCCESS:
-                    successful_operations += 1
-                elif isinstance(result, dict) and result.get("status_code") == 200:
                     successful_operations += 1
 
         # Performance and reliability assertions

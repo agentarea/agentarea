@@ -13,6 +13,7 @@ the source of truth is ``ClientCreate``/``ClientUpdate`` in
 
 import builtins
 import json
+from typing import Annotated
 from uuid import UUID
 
 from agentarea_agents_sdk.mcp_server import UnknownToolsetError
@@ -24,15 +25,46 @@ from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_mcp.application.client_service import ClientService
 from agentarea_mcp.infrastructure.client_repository import ClientRepository
 from agentarea_mcp.schemas.client_dto import ClientCreate, ClientUpdate
+from pydantic import BaseModel, Field
 
 from ..api.v1._access_control_grants import grant_resource_owner
-from ..api.v1.clients import client_mcp_endpoint_url, client_responses
+from ..api.v1.clients import ClientResponse, client_mcp_endpoint_url, client_responses
 from ..platform_mcp import attachable_toolset
 from .base import platform_context, platform_read_context
 
 
 def _build_service(repo_factory) -> ClientService:
     return ClientService(repo_factory.create_repository(ClientRepository))
+
+
+ClientId = Annotated[
+    str, Field(description="Client id (UUID), from `clients_list` or `clients_create`.")
+]
+
+
+class ClientSummary(BaseModel):
+    id: str = Field(description="Client id (UUID).")
+    name: str = Field(description="Client name.")
+    kind: str = Field(description="Kind of client, e.g. `harness`.")
+    mcp_endpoint_url: str = Field(description="MCP endpoint URL the harness connects to.")
+
+
+class ClientDeleted(BaseModel):
+    deleted: bool = Field(description="Whether a client was deleted.")
+
+
+class ClientAttached(BaseModel):
+    added: bool = Field(description="True once the item is attached to the client.")
+
+
+class ClientToolsetAttached(BaseModel):
+    added: str = Field(
+        description="Namespace of the attached platform toolset, e.g. `agentarea/runs`."
+    )
+
+
+class ClientDetached(BaseModel):
+    removed: bool = Field(description="True once the item is no longer attached to the client.")
 
 
 def _summary(client) -> dict[str, str]:
@@ -57,9 +89,15 @@ def _summary(client) -> dict[str, str]:
 class ClientsToolset(Toolset):
     """Manage registered clients: list, get, create, update, delete, and wire their tools."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List clients", effect="read", output=builtins.list[ClientSummary])
     @enforced_in_handler("narrowed to the rows the graph says this caller may read")
-    async def list(self, limit: int = 100, offset: int = 0) -> str:
+    async def list(
+        self,
+        limit: Annotated[int, Field(description="Maximum number of clients to return.")] = 100,
+        offset: Annotated[int, Field(description="Number of clients to skip, for paging.")] = 0,
+    ) -> str:
         """List registered clients and their MCP endpoint URLs."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
@@ -70,9 +108,9 @@ class ClientsToolset(Toolset):
             )
             return json.dumps([_summary(c) for c in clients], default=str)
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get client", effect="read", output=ClientResponse)
     @requires("read", "client", id_param="client_id")
-    async def get(self, client_id: str) -> str:
+    async def get(self, client_id: ClientId) -> str:
         """Get a client with the skills, connections, and platform toolsets attached to it."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
@@ -82,13 +120,17 @@ class ClientsToolset(Toolset):
             (response,) = await client_responses(service, [client])
             return response.model_dump_json()
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Register client", effect="write", output=ClientSummary)
     @unrestricted("any member may register a client, as POST /v1/clients allows")
     async def create(
         self,
-        name: str,
-        description: str | None = None,
-        kind: str = "harness",
+        name: Annotated[str, Field(description="Client name, 1-255 characters, e.g. `codex`.")],
+        description: Annotated[
+            str | None, Field(description="What the client is for, up to 1000 characters.")
+        ] = None,
+        kind: Annotated[
+            str, Field(description="Kind of client, up to 32 characters; `harness` by default.")
+        ] = "harness",
     ) -> str:
         """Register a client. Returns the MCP endpoint URL the harness connects to."""
         payload = ClientCreate(
@@ -106,14 +148,23 @@ class ClientsToolset(Toolset):
             )
             return json.dumps(_summary(client), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Update client", effect="write", idempotent=True, output=ClientSummary
+    )
     @requires("edit", "client", id_param="client_id")
     async def update(
         self,
-        client_id: str,
-        name: str | None = None,
-        description: str | None = None,
-        kind: str | None = None,
+        client_id: ClientId,
+        name: Annotated[
+            str | None, Field(description="New name, 1-255 characters; omit to keep it.")
+        ] = None,
+        description: Annotated[
+            str | None,
+            Field(description="New description, up to 1000 characters; omit to keep it."),
+        ] = None,
+        kind: Annotated[
+            str | None, Field(description="New kind, up to 32 characters; omit to keep it.")
+        ] = None,
     ) -> str:
         """Update a client's fields. Only fields explicitly set are written."""
         patch: dict[str, object] = {}
@@ -132,41 +183,86 @@ class ClientsToolset(Toolset):
                 raise ToolError("Client not found")
             return json.dumps(_summary(client), default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete client", effect="destructive", idempotent=True, output=ClientDeleted
+    )
     @requires("delete", "client", id_param="client_id")
-    async def delete(self, client_id: str) -> str:
+    async def delete(self, client_id: ClientId) -> str:
         """Delete a client. Its MCP endpoint stops answering."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             deleted = await service.delete(UUID(client_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Attach skill to client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientAttached,
+    )
     @requires("edit", "client", id_param="client_id")
-    async def add_skill(self, client_id: str, skill_id: str) -> str:
+    async def add_skill(
+        self,
+        client_id: ClientId,
+        skill_id: Annotated[str, Field(description="Skill id (UUID), from `skills_list`.")],
+    ) -> str:
         """Attach a skill to a client, widening what the harness can call."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.add_skill(UUID(client_id), UUID(skill_id))
             return json.dumps({"added": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Detach skill from client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientDetached,
+    )
     @requires("edit", "client", id_param="client_id")
-    async def remove_skill(self, client_id: str, skill_id: str) -> str:
+    async def remove_skill(
+        self,
+        client_id: ClientId,
+        skill_id: Annotated[
+            str, Field(description="Skill id (UUID), from the client's `skills` in `clients_get`.")
+        ],
+    ) -> str:
         """Detach a skill from a client."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.remove_skill(UUID(client_id), UUID(skill_id))
             return json.dumps({"removed": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Attach MCP instance to client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientAttached,
+    )
     @requires("edit", "client", id_param="client_id")
     async def add_mcp_instance(
         self,
-        client_id: str,
-        mcp_instance_id: str,
-        namespace_prefix: str = "",
-        allowed_tools: builtins.list[str] | None = None,
+        client_id: ClientId,
+        mcp_instance_id: Annotated[
+            str, Field(description="MCP server instance id (UUID), from `mcp_servers_list`.")
+        ],
+        namespace_prefix: Annotated[
+            str,
+            Field(
+                description=(
+                    "Prefix put before the instance's tool names on the client's "
+                    "endpoint; empty for none."
+                )
+            ),
+        ] = "",
+        allowed_tools: Annotated[
+            builtins.list[str] | None,
+            Field(
+                description=(
+                    "Names of the instance's tools the client serves, as "
+                    "`mcp_servers_get` lists them; omit to serve all of them."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Attach an MCP instance to a client, optionally namespacing and narrowing its tools.
 
@@ -183,23 +279,63 @@ class ClientsToolset(Toolset):
             )
             return json.dumps({"added": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Detach MCP instance from client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientDetached,
+    )
     @requires("edit", "client", id_param="client_id")
-    async def remove_mcp_instance(self, client_id: str, mcp_instance_id: str) -> str:
+    async def remove_mcp_instance(
+        self,
+        client_id: ClientId,
+        mcp_instance_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "MCP server instance id (UUID), from the client's "
+                    "`mcp_instances` in `clients_get`."
+                )
+            ),
+        ],
+    ) -> str:
         """Detach an MCP instance from a client."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.remove_mcp_instance(UUID(client_id), UUID(mcp_instance_id))
             return json.dumps({"removed": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Attach OpenAPI connection to client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientAttached,
+    )
     @requires("edit", "client", id_param="client_id")
     async def add_openapi_connection(
         self,
-        client_id: str,
-        openapi_connection_id: str,
-        namespace_prefix: str = "",
-        allowed_tools: builtins.list[str] | None = None,
+        client_id: ClientId,
+        openapi_connection_id: Annotated[
+            str, Field(description="OpenAPI connection id (UUID), from `openapi_connections_list`.")
+        ],
+        namespace_prefix: Annotated[
+            str,
+            Field(
+                description=(
+                    "Prefix put before the connection's operation names on the "
+                    "client's endpoint; empty for none."
+                )
+            ),
+        ] = "",
+        allowed_tools: Annotated[
+            builtins.list[str] | None,
+            Field(
+                description=(
+                    "Names of the connection's operations the client serves, as "
+                    "`openapi_connections_get` lists its tools; omit to serve all of them."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Attach an OpenAPI connection to a client, optionally namespacing and narrowing it.
 
@@ -217,22 +353,60 @@ class ClientsToolset(Toolset):
             )
             return json.dumps({"added": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Detach OpenAPI connection from client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientDetached,
+    )
     @requires("edit", "client", id_param="client_id")
-    async def remove_openapi_connection(self, client_id: str, openapi_connection_id: str) -> str:
+    async def remove_openapi_connection(
+        self,
+        client_id: ClientId,
+        openapi_connection_id: Annotated[
+            str,
+            Field(
+                description=(
+                    "OpenAPI connection id (UUID), from the client's "
+                    "`openapi_connections` in `clients_get`."
+                )
+            ),
+        ],
+    ) -> str:
         """Detach an OpenAPI connection from a client."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.remove_openapi_connection(UUID(client_id), UUID(openapi_connection_id))
             return json.dumps({"removed": True})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Attach platform toolset to client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientToolsetAttached,
+    )
     @requires("edit", "client", id_param="client_id")
     async def add_platform_toolset(
         self,
-        client_id: str,
-        toolset: str,
-        disabled_methods: builtins.list[str] | None = None,
+        client_id: ClientId,
+        toolset: Annotated[
+            str,
+            Field(
+                description=(
+                    "Platform toolset namespace (`agentarea/runs`) or name (`runs`), "
+                    "as GET /v1/clients/platform-toolsets lists them."
+                )
+            ),
+        ],
+        disabled_methods: Annotated[
+            builtins.list[str] | None,
+            Field(
+                description=(
+                    "Method names of the toolset the client does not serve, e.g. "
+                    "`delete`; omit to serve all of them."
+                )
+            ),
+        ] = None,
     ) -> str:
         """Attach a platform toolset (e.g. ``agentarea/runs``) to a client.
 
@@ -249,9 +423,26 @@ class ClientsToolset(Toolset):
             await service.set_platform_toolset(UUID(client_id), namespace, disabled_methods)
             return json.dumps({"added": namespace})
 
-    @tool_method(effect="privileged")
+    @tool_method(
+        display_name="Detach platform toolset from client",
+        effect="privileged",
+        idempotent=True,
+        output=ClientDetached,
+    )
     @requires("edit", "client", id_param="client_id")
-    async def remove_platform_toolset(self, client_id: str, toolset: str) -> str:
+    async def remove_platform_toolset(
+        self,
+        client_id: ClientId,
+        toolset: Annotated[
+            str,
+            Field(
+                description=(
+                    "Platform toolset namespace, e.g. `agentarea/runs`, as the "
+                    "client's `platform_toolsets` in `clients_get` lists it."
+                )
+            ),
+        ],
+    ) -> str:
         """Detach a platform toolset from a client, by the namespace the client lists."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)

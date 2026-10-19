@@ -12,7 +12,12 @@ from agentarea_common.auth.tool_authorization import (
     any_name_matches,
     decide_tool_policy,
 )
-from agentarea_common.events.contract import canonical_type, ensure_terminal_message
+from agentarea_common.events.contract import (
+    canonical_type,
+    ensure_terminal_message,
+    require_known_type,
+)
+from agentarea_common.events.redaction import MAX_EVENT_STRING_CHARS, sanitize_tool_event_value
 from agentarea_governance.domain.tool_calls import CONTROL_FLOW_TOOL_NAMES
 from temporalio import workflow
 
@@ -300,83 +305,13 @@ def filter_disclosed_tools(
     return disclosed
 
 
-_EVENT_CONTENT_KEYS = frozenset(
-    {
-        "base64",
-        "blob",
-        "body",
-        "bytes",
-        "code",
-        "content",
-        "contents",
-        "data",
-        "file_content",
-        "payload",
-        "result",
-        "script",
-        "stderr",
-        "stdout",
-    }
-)
-_EVENT_SECRET_KEYS = frozenset(
-    {"api_key", "authorization", "credential", "password", "secret", "token"}
-)
-_BASE64_LIKE = re.compile(r"^[A-Za-z0-9+/=_-]{256,}$")
-_MAX_EVENT_STRING_CHARS = 2000
-
-
-def _event_omission(value: Any) -> str:
-    size = len(value) if isinstance(value, str | bytes | bytearray) else 0
-    return f"[omitted from event log: {size} units]"
-
-
-def _looks_binary_or_bulk(value: str) -> bool:
-    if len(value) > _MAX_EVENT_STRING_CHARS or _BASE64_LIKE.fullmatch(value):
-        return True
-    if "\x00" in value:
-        return True
-    controls = sum(ord(character) < 32 and character not in "\n\r\t" for character in value)
-    return bool(value) and controls / len(value) > 0.02
-
-
-def sanitize_tool_event_value(value: Any, *, field_name: str = "", _depth: int = 0) -> Any:
-    """Bound event metadata without file bodies, secrets, or binary blobs.
-
-    This helper applies only to Redis/DB event projections. Activities and the
-    LLM still receive the original tool arguments and results.
-    """
-    if _depth >= 10:
-        return "[nested value omitted from event log]"
-    normalized_name = field_name.lower()
-    if any(fragment in normalized_name for fragment in _EVENT_SECRET_KEYS):
-        return "[redacted]"
-    if normalized_name in _EVENT_CONTENT_KEYS:
-        return _event_omission(value)
-    if normalized_name == "command":
-        return _event_omission(value)
-    if isinstance(value, str):
-        return _event_omission(value) if _looks_binary_or_bulk(value) else value
-    if isinstance(value, bytes | bytearray):
-        return _event_omission(value)
-    if isinstance(value, dict):
-        return {
-            str(key): sanitize_tool_event_value(item, field_name=str(key), _depth=_depth + 1)
-            for key, item in list(value.items())[:100]
-        }
-    if isinstance(value, list | tuple):
-        return [sanitize_tool_event_value(item, _depth=_depth + 1) for item in value[:100]]
-    if value is None or isinstance(value, bool | int | float):
-        return value
-    return f"[{type(value).__name__} omitted from event log]"
-
-
 def _bounded_llm_display_content(value: Any) -> str:
     if not isinstance(value, str):
         return str(sanitize_tool_event_value(value, field_name="llm_content"))
-    if len(value) <= _MAX_EVENT_STRING_CHARS:
+    if len(value) <= MAX_EVENT_STRING_CHARS:
         return value
-    omitted = len(value) - _MAX_EVENT_STRING_CHARS
-    return f"{value[:_MAX_EVENT_STRING_CHARS]}\n[truncated {omitted} characters from event log]"
+    omitted = len(value) - MAX_EVENT_STRING_CHARS
+    return f"{value[:MAX_EVENT_STRING_CHARS]}\n[truncated {omitted} characters from event log]"
 
 
 def _sanitize_llm_completed_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -417,16 +352,13 @@ class EventManager:
     def add_event(self, event_type: str, data: dict[str, Any]) -> None:
         """Add an event to the workflow event log.
 
-        The ``EventTypes`` constants already hold canonical dotted names, so the
-        wire speaks one vocabulary. ``canonical_type`` is applied defensively
-        (it only strips a leading ``workflow.`` prefix; a no-op for canonical
-        inputs).
+        A type outside the closed vocabulary raises ``UnknownEventTypeError``.
 
         Terminal events (completed/failed/cancelled) get a user-facing
         ``message`` (and ``reason``) so a client attaching after completion
         renders the final state from catch-up alone. No-op for other types.
         """
-        event_type = canonical_type(event_type)
+        event_type = require_known_type(canonical_type(event_type))
         if event_type == "llm.call.completed":
             data = _sanitize_llm_completed_data(data)
         elif event_type == "tool.result":

@@ -102,11 +102,11 @@ def test_webhook_adapter_formats_terminal_only():
         "data": {"task_id": "t", "result": "done"},
     }
     assert (
-        json.loads(_a2a_webhook_format(terminal, "silent"))["statusUpdate"]["status"]["state"]
+        json.loads(_a2a_webhook_format(terminal, "silent", {}))["statusUpdate"]["status"]["state"]
         == "TASK_STATE_COMPLETED"
     )
     # non-terminal renders empty (won't be delivered)
-    assert _a2a_webhook_format({"event_type": "LLMCallChunk", "data": {}}, "silent") == ""
+    assert _a2a_webhook_format({"event_type": "LLMCallChunk", "data": {}}, "silent", {}) == ""
 
 
 # ── Request handler ───────────────────────────────────────────────
