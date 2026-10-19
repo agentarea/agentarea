@@ -8,7 +8,8 @@ related:
   - /guides/agents/create-and-configure
   - /concepts/agents/context-strategies
   - /concepts/integration/registry-and-catalog
-last_updated: 2026-09-07
+  - /guides/agents/add-a-skill-registry
+last_updated: 2026-10-20
 ---
 
 A skill is a named bundle of instructions and files. Attaching one does not put
@@ -46,7 +47,15 @@ maintained once.
     Import one from GitHub by passing `github_url` instead of `content`, upload a
     directory with `POST /v1/workspaces/{workspace}/skills/upload`, or install one from the catalog with
     `POST /v1/workspaces/{workspace}/skills/{skill_id}/install`. All four produce the same object; only
-    `source_type` differs.
+    `source_type` differs. Every one is stored as a package in object storage; the
+    row holds only metadata.
+
+    A catalog install is a pin: the skill points at the catalog item's package and
+    keeps that version until an admin updates it. Passing a catalog skill's id in
+    `skill_ids` installs it the same way. A catalog install and a GitHub URL
+    import both ask the workspace's install policy first; a GitHub URL import
+    counts as the registry `registry:github` with trust `community`. See
+    [add a skill registry](/guides/agents/add-a-skill-registry) for the rules.
   </Step>
 
   <Step title="Attach it to the agent">
@@ -58,6 +67,21 @@ maintained once.
       -H "Content-Type: application/json" \
       -d '{"skill_ids": ["<skill-id>", "<other-skill-id>"]}'
     ```
+  </Step>
+
+  <Step title="Update an installed skill, when the catalog moves on">
+    An installed skill whose catalog item has a new version reads
+    `"update_available": true`. A workspace admin moves it to that version:
+
+    ```bash
+    curl -X POST http://localhost:8000/v1/workspaces/{workspace}/skills/<skill-id>/update \
+      -H "Authorization: Bearer $TOKEN"
+    ```
+
+    `POST /v1/workspaces/{workspace}/skills/update-all` updates every installed
+    skill that has an update and was not edited in the workspace. An edited one
+    reads `"customized": true`; update it alone with `?discard_changes=true`,
+    which replaces the edit with the catalog's version.
   </Step>
 
   <Step title="Compose skills, if useful">
@@ -93,6 +117,16 @@ next model turn.
     Files land in the task workspace at activation, not at attach time. A task
     that never activated the skill has no reason to have its files.
   </Accordion>
+  <Accordion title="Install or import answers 403 &quot;Install refused by policy&quot;">
+    An install rule refuses the item's registry or its trust level; the message
+    names the rule. A GitHub URL import is refused by a rule on `registry:github`
+    or on `registry_trust:community`. An admin changes the rule under
+    **Policies**, or installs from a registry the rules allow.
+  </Accordion>
+  <Accordion title="Update answers 409 skill_customized">
+    The skill was edited in this workspace. Pass `discard_changes=true` to
+    replace the edit with the catalog's version, or leave it as it is.
+  </Accordion>
   <Accordion title="Context is exhausted despite progressive disclosure">
     Attaching many skills still costs their catalog entries. Consider the
     `dynamic` context strategy — see
@@ -110,7 +144,7 @@ next model turn.
     Create an agent, bind it to a model instance, and give it instructions and
     tools
   </Card>
-  <Card title="Registry and catalog" icon="plug" href="/concepts/integration/registry-and-catalog">
-    Built-in agents, MCP servers, skills
+  <Card title="Add a skill registry" icon="robot" href="/guides/agents/add-a-skill-registry">
+    Your own source of skills, and the policy on where installs come from
   </Card>
 </Columns>

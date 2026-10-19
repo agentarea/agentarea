@@ -177,7 +177,9 @@ you install, not after.
     The install runs Jobs in this order: create the auxiliary databases, run
     `agentarea-api migrate` (the `db-migration` Job, working directory
     `/app/apps/api`), then `agentarea-api reconcile` (the `registry-reconcile` Job,
-    which seeds the LLM provider, LLM model, and MCP server catalogs from S3). The
+    which creates and syncs the [platform registries](/self-host/catalog-registries):
+    LLM providers and models, MCP servers, curated skills, built-in agents and
+    event source types). The
     migration Job has an init container that blocks on a TCP connection to the
     database, so it sits in `Init:0/1` until PostgreSQL accepts connections.
   </Step>
