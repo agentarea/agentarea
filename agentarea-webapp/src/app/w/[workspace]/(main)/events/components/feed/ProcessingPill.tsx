@@ -4,7 +4,11 @@ import { useTranslations } from "next-intl";
 import type { Processing } from "@/api/client/types.gen";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { processingProgress, shortAge } from "@/lib/eventFeed";
-import { getEventProcessingStatusPresentation } from "@/lib/status";
+import type { PlatformRun } from "@/lib/eventFeedRuns";
+import {
+  getEventProcessingStatusPresentation,
+  type StatusPresentation,
+} from "@/lib/status";
 import { parseUtcTimestamp } from "@/utils/dateUtils";
 
 /**
@@ -62,18 +66,61 @@ export default function ProcessingPill({
   }
 
   return (
+    <Pill
+      presentation={presentation}
+      title={t(`result.${presentation.labelKey ?? "unknown"}`)}
+      label={label}
+      details={details.join(", ")}
+    />
+  );
+}
+
+/** A folded run of events: the worst status among them, and how many have it. */
+export function ProcessingRunPill({ run }: { run: PlatformRun }) {
+  const t = useTranslations("EventsPage");
+  const presentation = getEventProcessingStatusPresentation(run.worst);
+  const name = t(`result.${presentation.labelKey ?? "unknown"}`);
+  return (
+    <Pill
+      presentation={presentation}
+      title={name}
+      label={name}
+      details={
+        run.worstCount < run.events.length
+          ? t("list.ofTotal", {
+              count: run.worstCount,
+              total: run.events.length,
+            })
+          : ""
+      }
+    />
+  );
+}
+
+function Pill({
+  presentation,
+  title,
+  label,
+  details,
+}: {
+  presentation: StatusPresentation;
+  title: string;
+  label: string;
+  details: string;
+}) {
+  return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <StatusIndicator
         size="sm"
         kind={presentation.kind}
         className="shrink-0 tabular-nums"
-        title={t(`result.${presentation.labelKey ?? "unknown"}`)}
+        title={title}
       >
         {label}
       </StatusIndicator>
-      {details.length > 0 && (
-        <span className="truncate text-[11px] text-muted-foreground">
-          {details.join(", ")}
+      {details && (
+        <span className="truncate text-[11px] tabular-nums text-muted-foreground">
+          {details}
         </span>
       )}
     </span>

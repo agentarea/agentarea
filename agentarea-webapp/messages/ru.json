@@ -2384,7 +2384,9 @@
       "errors": "{count, plural, one {# ошибка} few {# ошибки} many {# ошибок} other {# ошибок}}",
       "skippedOf": "пропущено {done}/{total}",
       "filterSession": "Показать всю сессию",
-      "unknownStream": "Удалённый поток"
+      "unknownStream": "Удалённый поток",
+      "platformRun": "{count, plural, one {# событие платформы} few {# события платформы} many {# событий платформы} other {# события платформы}}",
+      "ofTotal": "{count} из {total}"
     },
     "panel": {
       "handlers": "Обработчики",

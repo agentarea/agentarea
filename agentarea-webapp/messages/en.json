@@ -2384,7 +2384,9 @@
       "errors": "{count, plural, one {# error} other {# errors}}",
       "skippedOf": "skipped {done}/{total}",
       "filterSession": "Show the whole session",
-      "unknownStream": "Deleted stream"
+      "unknownStream": "Deleted stream",
+      "platformRun": "{count, plural, one {# platform event} other {# platform events}}",
+      "ofTotal": "{count} of {total}"
     },
     "panel": {
       "handlers": "Handlers",

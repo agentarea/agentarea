@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { ArrowUp, Paperclip } from "lucide-react";
+import { ArrowUp, ChevronRight, Paperclip } from "lucide-react";
 import type { FeedEventResponse, Processing } from "@/api/client/types.gen";
 import SourceTypeMark from "@/components/SourceTypeMark";
 import Table, { type Column } from "@/components/Table/Table";
@@ -15,16 +15,32 @@ import {
   dayGroups,
   feedHref,
   matchesResult,
-  neighbourEvent,
   type FeedState,
 } from "@/lib/eventFeed";
+import {
+  feedItems,
+  feedStops,
+  groupsPlatformRuns,
+  isRunExpanded,
+  neighbourStop,
+  PLATFORM_SOURCE_TYPE,
+  runHolding,
+  type FeedStop,
+  type PlatformRun,
+} from "@/lib/eventFeedRuns";
+import { isPlatformStream } from "@/lib/platformStream";
 import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import { cn } from "@/lib/utils";
 import { useFeedLive } from "./FeedLive";
 import { useFeedSelection } from "./FeedSelection";
-import ProcessingPill from "./ProcessingPill";
+import ProcessingPill, { ProcessingRunPill } from "./ProcessingPill";
 
-/** `Table` keys rows by `id`. */
-type FeedRow = FeedEventResponse & { id: string };
+/** `Table` keys rows by `id`; a run of platform events is one row. */
+type FeedRow =
+  | { id: string; type: "event"; event: FeedEventResponse; child: boolean }
+  | { id: string; type: "run"; run: PlatformRun; expanded: boolean };
+
+const rowDomId = (stop: FeedStop) => `feed-row-${stop.id}`;
 
 /** Scrolled further than this, a new event waits behind the "N new" pill. */
 const AT_TOP_PX = 48;
@@ -62,7 +78,7 @@ export default function FeedList({
   initial: FeedEventResponse[];
   nextBefore: number | null;
   state: FeedState;
-  streams: { id: string; name: string }[];
+  streams: { id: string; name: string; kind: string }[];
   sourceTypes: SourceType[];
 }) {
   const t = useTranslations("EventsPage.list");
@@ -76,6 +92,9 @@ export default function FeedList({
   const [arrived, setArrived] = useState<FeedEventResponse[]>([]);
   const [held, setHeld] = useState<FeedEventResponse[]>([]);
   const [moved, setMoved] = useState<Record<string, Processing>>({});
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const [cursorRun, setCursorRun] = useState<string | null>(null);
+  const [entered, setEntered] = useState<string | null | undefined>(undefined);
   // The viewer's clock and zone, known once mounted; the server renders UTC.
   const [clock, setClock] = useState<{ now: number; zone: string } | null>(
     null
@@ -155,33 +174,25 @@ export default function FeedList({
     return () => parent.removeEventListener("scroll", onScroll);
   }, [held]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-      const step =
-        e.key === "ArrowDown" || e.key === "j"
-          ? 1
-          : e.key === "ArrowUp" || e.key === "k"
-            ? -1
-            : 0;
-      if (step === 0) return;
-      const next = neighbourEvent(rows, selected ?? undefined, step);
-      if (!next) return;
-      e.preventDefault();
-      select(feedHref(state, { event: next }), next);
-      document
-        .getElementById(`feed-row-${next}`)
-        ?.scrollIntoView({ block: "nearest" });
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [rows, state, selected, select]);
-
-  const open = (eventId: string) =>
-    select(feedHref(state, { event: eventId }), eventId);
   const streamNames = new Map(streams.map((s) => [s.id, s.name]));
   const zone = clock?.zone ?? "UTC";
-  const groups = dayGroups(rows, new Date(clock?.now ?? Date.now()), zone);
+  const group = groupsPlatformRuns(
+    state,
+    streams.filter(isPlatformStream).map((s) => s.id)
+  );
+  const days = dayGroups(rows, new Date(clock?.now ?? Date.now()), zone).map(
+    (day) => ({ ...day, items: feedItems(day.events, group) })
+  );
+  const items = days.flatMap((day) => day.items);
+  if (entered !== selected) {
+    setEntered(selected);
+    const holding = runHolding(items, selected);
+    if (holding && !opened.has(holding.id)) {
+      setOpened((ids) => new Set(ids).add(holding.id));
+    }
+  }
+  const expanded = (run: PlatformRun) => isRunExpanded(run, opened, selected);
+  const stops = feedStops(items, expanded);
   const filtered = Boolean(
     state.stream ||
       state.source_type ||
@@ -191,36 +202,177 @@ export default function FeedList({
       state.sender
   );
 
+  const open = (eventId: string) => {
+    setCursorRun(null);
+    select(feedHref(state, { event: eventId }), eventId);
+  };
+
+  const moveTo = (stop: FeedStop) => {
+    if (stop.type === "event") open(stop.id);
+    else setCursorRun(stop.id);
+    const row = document.getElementById(rowDomId(stop));
+    row?.focus({ preventScroll: true });
+    row?.scrollIntoView({ block: "nearest" });
+  };
+
+  const toggle = (run: PlatformRun) => {
+    setCursorRun(run.id);
+    if (!expanded(run)) {
+      setOpened((ids) => new Set(ids).add(run.id));
+      return;
+    }
+    setOpened((ids) => {
+      const next = new Set(ids);
+      next.delete(run.id);
+      return next;
+    });
+    if (run.events.some((e) => e.event_id === selected)) {
+      select(feedHref(state, { event: undefined }), null);
+    }
+  };
+
+  const keys = useRef({ stops, items, cursorRun, selected, moveTo });
+  keys.current = { stops, items, cursorRun, selected, moveTo };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || isTyping(e.target)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const { stops, items, cursorRun, selected, moveTo } = keys.current;
+      if (e.key === "ArrowLeft") {
+        const run = cursorRun ? undefined : runHolding(items, selected);
+        if (!run) return;
+        e.preventDefault();
+        moveTo({ type: "run", id: run.id });
+        return;
+      }
+      const step =
+        e.key === "ArrowDown" || e.key === "j"
+          ? 1
+          : e.key === "ArrowUp" || e.key === "k"
+            ? -1
+            : 0;
+      if (step === 0) return;
+      const current: FeedStop | undefined = cursorRun
+        ? { type: "run", id: cursorRun }
+        : selected
+          ? { type: "event", id: selected }
+          : undefined;
+      const next = neighbourStop(stops, current, step);
+      if (!next) return;
+      e.preventDefault();
+      moveTo(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const onRunKey = (run: PlatformRun, e: React.KeyboardEvent) => {
+    const isOpen = expanded(run);
+    if (e.key === "Enter" || e.key === " ") toggle(run);
+    else if (e.key === "ArrowRight" && !isOpen) toggle(run);
+    else if (e.key === "ArrowRight")
+      moveTo({ type: "event", id: run.events[0].event_id });
+    else if (e.key === "ArrowLeft" && isOpen) toggle(run);
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const timeOf = (iso: string) =>
+    new Date(iso).toLocaleTimeString(locale, {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: zone,
+    });
+  const dateTimeOf = (iso: string) =>
+    new Date(iso).toLocaleString(locale, {
+      dateStyle: "medium",
+      timeStyle: "medium",
+      timeZone: zone,
+    });
+
   const columns: Column<FeedRow>[] = [
     {
       header: tFeed("received"),
       accessor: "received_at",
       cellClassName: "w-0 whitespace-nowrap tabular-nums text-muted-foreground",
-      render: (_value, event) =>
-        event && (
-          <time
-            dateTime={event.received_at}
-            title={new Date(event.received_at).toLocaleString(locale, {
-              dateStyle: "medium",
-              timeStyle: "medium",
-              timeZone: zone,
-            })}
+      render: (_value, row) => {
+        if (!row) return null;
+        if (row.type === "event") {
+          return (
+            <time
+              dateTime={row.event.received_at}
+              title={dateTimeOf(row.event.received_at)}
+            >
+              {timeOf(row.event.received_at)}
+            </time>
+          );
+        }
+        return (
+          <span
+            title={`${dateTimeOf(row.run.oldest)} – ${dateTimeOf(row.run.newest)}`}
           >
-            {new Date(event.received_at).toLocaleTimeString(locale, {
-              hour: "2-digit",
-              minute: "2-digit",
-              timeZone: zone,
-            })}
-          </time>
-        ),
+            <span className="sm:hidden">{timeOf(row.run.newest)}</span>
+            <span className="hidden sm:inline">
+              {new Intl.DateTimeFormat(locale, {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: zone,
+              }).formatRange(
+                new Date(row.run.oldest),
+                new Date(row.run.newest)
+              )}
+            </span>
+          </span>
+        );
+      },
     },
     {
       header: tFeed("kind"),
       accessor: "kind",
       cellClassName: "w-full max-w-0",
-      render: (_value, event) =>
-        event && (
-          <span className="flex min-w-0 items-center gap-2">
+      render: (_value, row) => {
+        if (!row) return null;
+        if (row.type === "run") {
+          const breakdown = row.run.kinds
+            .map(({ kind, count }) => `${kind} ${count}`)
+            .join(" · ");
+          return (
+            <span className="flex min-w-0 items-center gap-2">
+              <SourceTypeMark
+                type={sourceTypeBySlug(sourceTypes, PLATFORM_SOURCE_TYPE)}
+                slug={PLATFORM_SOURCE_TYPE}
+                inline
+                className="h-3.5 w-3.5 shrink-0"
+              />
+              <span className="truncate font-medium">
+                {t("platformRun", { count: row.run.events.length })}
+              </span>
+              <ChevronRight
+                aria-hidden="true"
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                  row.expanded && "rotate-90"
+                )}
+              />
+              <span
+                title={breakdown}
+                className="hidden shrink-[100] truncate tabular-nums text-muted-foreground sm:block"
+              >
+                {breakdown}
+              </span>
+            </span>
+          );
+        }
+        const { event } = row;
+        return (
+          <span
+            className={cn(
+              "flex min-w-0 items-center gap-2",
+              row.child && "pl-3 sm:pl-[22px]"
+            )}
+          >
             <SourceTypeMark
               type={sourceTypeBySlug(sourceTypes, event.source_type)}
               slug={event.source_type}
@@ -240,7 +392,8 @@ export default function FeedList({
               />
             )}
           </span>
-        ),
+        );
+      },
     },
     {
       header: t("stream"),
@@ -248,18 +401,26 @@ export default function FeedList({
       headerClassName: "hidden md:table-cell",
       cellClassName:
         "hidden max-w-[160px] truncate text-muted-foreground md:table-cell",
-      render: (value) => streamNames.get(String(value)) ?? t("unknownStream"),
+      render: (_value, row) => {
+        if (!row) return null;
+        const streamId =
+          row.type === "event"
+            ? row.event.stream_id
+            : row.run.events[0].stream_id;
+        return streamNames.get(streamId) ?? t("unknownStream");
+      },
     },
     {
       header: t("session"),
       accessor: "session_key",
       headerClassName: "hidden 2xl:table-cell",
       cellClassName: "hidden max-w-[160px] truncate 2xl:table-cell",
-      render: (_value, event) =>
-        event?.session_key && (
+      render: (_value, row) =>
+        row?.type === "event" &&
+        row.event.session_key && (
           <WorkspaceLink
             href={feedHref(state, {
-              session: event.session_key,
+              session: row.event.session_key,
               event: undefined,
               before: undefined,
             })}
@@ -268,8 +429,8 @@ export default function FeedList({
             onClick={(e) => e.stopPropagation()}
             className="font-mono text-muted-foreground hover:text-primary hover:underline"
           >
-            {event.session_key.split(":").slice(1).join(":") ||
-              event.session_key}
+            {row.event.session_key.split(":").slice(1).join(":") ||
+              row.event.session_key}
           </WorkspaceLink>
         ),
     },
@@ -277,16 +438,72 @@ export default function FeedList({
       header: t("result"),
       accessor: "processing",
       cellClassName: "w-0 whitespace-nowrap",
-      render: (_value, event) =>
-        event && (
+      render: (_value, row) => {
+        if (!row) return null;
+        if (row.type === "run") return <ProcessingRunPill run={row.run} />;
+        return (
           <ProcessingPill
-            processing={event.processing}
-            receivedAt={event.received_at}
+            processing={row.event.processing}
+            receivedAt={row.event.received_at}
             now={clock?.now ?? null}
           />
-        ),
+        );
+      },
     },
   ];
+
+  const tableRows = (day: (typeof days)[number]): FeedRow[] =>
+    day.items.flatMap((item): FeedRow[] => {
+      if (item.type === "event") {
+        const { event } = item;
+        return [{ id: event.event_id, type: "event", event, child: false }];
+      }
+      const { run } = item;
+      const open = expanded(run);
+      return [
+        { id: run.id, type: "run", run, expanded: open },
+        ...(open
+          ? run.events.map(
+              (event): FeedRow => ({
+                id: event.event_id,
+                type: "event",
+                event,
+                child: true,
+              })
+            )
+          : []),
+      ];
+    });
+
+  const rowProps = (row: FeedRow): React.HTMLAttributes<HTMLElement> => {
+    if (row.type === "run") {
+      return {
+        id: rowDomId(row),
+        role: "button",
+        tabIndex: 0,
+        "aria-expanded": row.expanded,
+        onFocus: () => setCursorRun(row.id),
+        onKeyDown: (e) => onRunKey(row.run, e),
+        className: "outline-none focus-visible:bg-muted/40",
+      };
+    }
+    const { event } = row;
+    return {
+      id: rowDomId({ type: "event", id: event.event_id }),
+      role: "link",
+      tabIndex: 0,
+      onFocus: () => setCursorRun(null),
+      onKeyDown: (e) => {
+        if (e.key === "Enter") open(event.event_id);
+      },
+      ...(event.event_id === selected ? { "aria-current": "true" } : {}),
+      className: cn(
+        "outline-none focus-visible:bg-muted/40",
+        row.child && "bg-muted/20",
+        event.event_id === selected && "bg-muted/40"
+      ),
+    };
+  };
 
   return (
     <div ref={listRef} className="min-w-0 space-y-5">
@@ -308,40 +525,26 @@ export default function FeedList({
           {filtered ? t("noneMatching") : t("empty")}
         </div>
       ) : (
-        groups.map((group, index) => (
-          <section key={group.day} aria-label={group.day}>
+        days.map((day, index) => (
+          <section key={day.day} aria-label={day.day}>
             <h2 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              {group.relative
-                ? t(group.relative)
-                : new Date(`${group.day}T12:00:00Z`).toLocaleDateString(
-                    locale,
-                    {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                      timeZone: "UTC",
-                    }
-                  )}
+              {day.relative
+                ? t(day.relative)
+                : new Date(`${day.day}T12:00:00Z`).toLocaleDateString(locale, {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    timeZone: "UTC",
+                  })}
             </h2>
             <Table<FeedRow>
-              data={group.events.map((event) => ({
-                ...event,
-                id: event.event_id,
-              }))}
+              data={tableRows(day)}
               columns={columns}
               hideHeader={index > 0}
-              onRowClick={(event) => open(event.event_id)}
-              rowProps={(event) => ({
-                id: `feed-row-${event.event_id}`,
-                role: "link",
-                tabIndex: 0,
-                onKeyDown: (e) => {
-                  if (e.key === "Enter") open(event.event_id);
-                },
-                ...(event.event_id === selected
-                  ? { "aria-current": "true", className: "bg-muted/40" }
-                  : {}),
-              })}
+              onRowClick={(row) =>
+                row.type === "run" ? toggle(row.run) : open(row.event.event_id)
+              }
+              rowProps={rowProps}
             />
           </section>
         ))

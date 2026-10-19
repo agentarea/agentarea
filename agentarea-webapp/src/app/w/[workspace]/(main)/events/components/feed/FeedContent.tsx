@@ -14,7 +14,7 @@ export default async function FeedContent({
   sourceTypes,
 }: {
   state: FeedState;
-  streams: { id: string; name: string }[];
+  streams: { id: string; name: string; kind: string }[];
   sourceTypes: SourceType[];
 }) {
   const before =

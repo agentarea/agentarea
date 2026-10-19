@@ -34,6 +34,7 @@ export default async function EventsPage({
   const streams = requireApiData(streamsResult, "streams").map((s) => ({
     id: s.id,
     name: s.name,
+    kind: s.kind,
   }));
   const sourceTypes = requireApiData(typesResult, "stream source types");
   const { event, ...filters } = state;
