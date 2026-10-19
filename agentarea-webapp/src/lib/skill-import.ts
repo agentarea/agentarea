@@ -6,7 +6,6 @@
 
 export const SKILL_IMPORT_QUERY_PARAM = "github";
 
-const SKILL_CREATE_PATH = "/skills/create";
 const GITHUB_ORIGIN = "https://github.com";
 const MAX_URL_LENGTH = 2048;
 
@@ -52,14 +51,4 @@ export function parseGithubSkillUrl(
   if (path.some((segment) => !segment)) return null;
 
   return [GITHUB_ORIGIN, owner, repo, kind, ref, ...path].join("/");
-}
-
-/**
- * Where an install link lands in a workspace. The value travels unchecked:
- * the form validates it, so a broken link says so instead of opening empty.
- */
-export function skillImportPath(raw: string | null | undefined): string {
-  if (!raw) return SKILL_CREATE_PATH;
-  const params = new URLSearchParams({ [SKILL_IMPORT_QUERY_PARAM]: raw });
-  return `${SKILL_CREATE_PATH}?${params}`;
 }

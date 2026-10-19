@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGithubSkillUrl, skillImportPath } from "./skill-import";
+import { parseGithubSkillUrl } from "./skill-import";
 
 describe("parseGithubSkillUrl", () => {
   it("accepts a repository", () => {
@@ -18,7 +18,9 @@ describe("parseGithubSkillUrl", () => {
 
   it("accepts a blob link to the SKILL.md file", () => {
     expect(
-      parseGithubSkillUrl("https://github.com/acme/skills/blob/main/pdf/SKILL.md")
+      parseGithubSkillUrl(
+        "https://github.com/acme/skills/blob/main/pdf/SKILL.md"
+      )
     ).toBe("https://github.com/acme/skills/blob/main/pdf/SKILL.md");
   });
 
@@ -40,7 +42,10 @@ describe("parseGithubSkillUrl", () => {
     ["a tree without a ref", "https://github.com/acme/skills/tree"],
     ["markup in the owner", "https://github.com/<script>/skills"],
     ["an empty path segment", "https://github.com/acme/skills/tree/main//pdf"],
-    ["an oversized URL", `https://github.com/acme/skills/tree/main/${"a".repeat(2100)}`],
+    [
+      "an oversized URL",
+      `https://github.com/acme/skills/tree/main/${"a".repeat(2100)}`,
+    ],
   ])("rejects %s", (_, raw) => {
     expect(parseGithubSkillUrl(raw)).toBeNull();
   });
@@ -49,19 +54,5 @@ describe("parseGithubSkillUrl", () => {
     expect(
       parseGithubSkillUrl("https://github.com/acme/skills/../../other/repo")
     ).toBe("https://github.com/other/repo");
-  });
-});
-
-describe("skillImportPath", () => {
-  it("lands on the create form with the URL encoded", () => {
-    expect(
-      skillImportPath("https://github.com/acme/skills/tree/main/pdf")
-    ).toBe(
-      "/skills/create?github=https%3A%2F%2Fgithub.com%2Facme%2Fskills%2Ftree%2Fmain%2Fpdf"
-    );
-  });
-
-  it("opens the plain create form without a URL", () => {
-    expect(skillImportPath(undefined)).toBe("/skills/create");
   });
 });

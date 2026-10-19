@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { SKILL_IMPORT_QUERY_PARAM, skillImportPath } from "@/lib/skill-import";
+import { deepLinkPath } from "@/lib/deep-link";
+import { SKILL_IMPORT_QUERY_PARAM } from "@/lib/skill-import";
 import { getPersonalWorkspacePath } from "@/lib/workspace-context";
 
 /**
@@ -12,6 +13,9 @@ export default async function SkillImportPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const value = (await searchParams)[SKILL_IMPORT_QUERY_PARAM];
-  const github = Array.isArray(value) ? value[0] : value;
-  redirect(await getPersonalWorkspacePath(skillImportPath(github)));
+  redirect(
+    await getPersonalWorkspacePath(
+      deepLinkPath("/skills/create", SKILL_IMPORT_QUERY_PARAM, value)
+    )
+  );
 }
