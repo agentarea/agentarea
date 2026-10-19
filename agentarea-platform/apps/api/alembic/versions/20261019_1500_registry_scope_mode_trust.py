@@ -44,24 +44,40 @@ BACKFILL_ITEM_TRUST = (
 )
 
 
-def _recreate_count_indexes(*, with_workspace: bool) -> None:
-    workspace = ["registry_workspace_id"] if with_workspace else []
-    op.drop_index("ix_registry_items_browse_name", table_name="registry_items")
-    op.create_index(
-        "ix_registry_items_browse_name",
-        "registry_items",
-        ["registry_type", "sort_key", "id"],
-        postgresql_include=workspace,
-        postgresql_where=sa.text("registry_active"),
-    )
-    op.drop_index("ix_registry_items_browse_facets", table_name="registry_items")
-    op.create_index(
-        "ix_registry_items_browse_facets",
-        "registry_items",
+_COUNT_INDEXES = {
+    "ix_registry_items_browse_name": (["registry_type", "sort_key", "id"], []),
+    "ix_registry_items_browse_facets": (
         ["registry_type", "category"],
-        postgresql_include=["protocol", "hosting", "pricing", *workspace],
-        postgresql_where=sa.text("registry_active"),
-    )
+        ["protocol", "hosting", "pricing"],
+    ),
+}
+
+
+def _recreate_count_indexes(*, with_workspace: bool) -> None:
+    # Built beside the old one and swapped, all concurrently: a plain DROP or
+    # CREATE INDEX holds a lock every catalog read queues behind.
+    with op.get_context().autocommit_block():
+        for name, (columns, include) in _COUNT_INDEXES.items():
+            # What an interrupted earlier run left behind, invalid.
+            op.drop_index(
+                f"{name}_next",
+                table_name="registry_items",
+                postgresql_concurrently=True,
+                if_exists=True,
+            )
+            op.create_index(
+                f"{name}_next",
+                "registry_items",
+                columns,
+                postgresql_include=[
+                    *include,
+                    *(["registry_workspace_id"] if with_workspace else []),
+                ],
+                postgresql_where=sa.text("registry_active"),
+                postgresql_concurrently=True,
+            )
+            op.drop_index(name, table_name="registry_items", postgresql_concurrently=True)
+            op.execute(f"ALTER INDEX {name}_next RENAME TO {name}")
 
 
 def upgrade() -> None:
