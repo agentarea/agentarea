@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # How a registry appears among a secret's consumers: names, not values.
-REGISTRY_SECRET_CONSUMER = "registry"  # noqa: S105
-REGISTRY_SECRET_FIELD = "credentials"  # noqa: S105
+REGISTRY_SECRET_CONSUMER = "registry"  # noqa: S105  # pragma: allowlist secret
+REGISTRY_SECRET_FIELD = "credentials"  # noqa: S105  # pragma: allowlist secret
 
 
 class RegistryCredentialsError(LookupError):

@@ -232,7 +232,7 @@ async def test_a_parse_error_never_echoes_the_source(db_session):
 
 async def test_an_unexpected_failure_is_not_echoed(db_session):
     def handler(request: httpx.Request) -> httpx.Response:
-        raise RuntimeError("postgres://admin:hunter2@db/internal")
+        raise RuntimeError("postgres://admin:hunter2@db/internal")  # pragma: allowlist secret
 
     _, registry = await _sync_error(db_session, handler)
 
