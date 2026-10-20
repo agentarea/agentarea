@@ -1,6 +1,6 @@
 module github.com/agentarea/mcp-manager
 
-go 1.27.3
+go 1.27.0
 
 require (
 	connectrpc.com/connect v1.18.1

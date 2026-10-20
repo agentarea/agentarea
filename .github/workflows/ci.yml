@@ -33,7 +33,6 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.14"
-  UV_CACHE_DIR: ~/.cache/uv
 
 jobs:
   changes:
