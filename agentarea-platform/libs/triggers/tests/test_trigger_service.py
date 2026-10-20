@@ -832,8 +832,12 @@ class TestTriggerService:
         # Execute
         await trigger_service.create_trigger(sample_cron_trigger_data)
 
-        # Verify schedule was created
-        trigger_service._mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
+        trigger_service._mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once_with(
+            sample_cron_trigger.id,
+            sample_cron_trigger.cron_expression,
+            sample_cron_trigger.timezone,
+            paused=False,
+        )
 
     @pytest.mark.asyncio
     async def test_a_disabled_cron_trigger_is_scheduled_paused(
@@ -849,8 +853,8 @@ class TestTriggerService:
 
         await trigger_service.create_trigger(sample_cron_trigger_data)
 
-        create = trigger_service._mock_temporal_schedule_manager.create_cron_schedule
-        assert create.await_args.kwargs["paused"] is True
+        apply = trigger_service._mock_temporal_schedule_manager.apply_cron_schedule
+        assert apply.await_args.kwargs["paused"] is True
 
     @pytest.mark.asyncio
     async def test_update_cron_trigger_updates_schedule(
@@ -867,8 +871,7 @@ class TestTriggerService:
         # Execute
         await trigger_service.update_trigger(sample_cron_trigger.id, trigger_update)
 
-        # Verify schedule was updated
-        trigger_service._mock_temporal_schedule_manager.update_cron_schedule.assert_called_once()
+        trigger_service._mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_update_timezone_refreshes_schedule(
@@ -882,11 +885,40 @@ class TestTriggerService:
             sample_cron_trigger.id, TriggerUpdate(timezone="Europe/Moscow")
         )
 
-        trigger_service._mock_temporal_schedule_manager.update_cron_schedule.assert_awaited_once_with(
-            trigger_id=sample_cron_trigger.id,
-            cron_expression=sample_cron_trigger.cron_expression,
-            timezone="Europe/Moscow",
+        trigger_service._mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once_with(
+            sample_cron_trigger.id,
+            sample_cron_trigger.cron_expression,
+            "Europe/Moscow",
+            paused=False,
         )
+
+    @pytest.mark.asyncio
+    async def test_switching_a_trigger_on_by_update_resumes_its_schedule(
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
+    ):
+        """An update that only flips is_active used to leave the schedule paused."""
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger.model_copy(
+            update={"is_active": False}
+        )
+        mock_trigger_repository.update_by_id.return_value = sample_cron_trigger
+
+        await trigger_service.update_trigger(sample_cron_trigger.id, TriggerUpdate(is_active=True))
+
+        apply = trigger_service._mock_temporal_schedule_manager.apply_cron_schedule
+        assert apply.await_args.kwargs["paused"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_schedule_temporal_refuses_does_not_fail_the_change(
+        self, trigger_service, mock_trigger_repository, sample_cron_trigger
+    ):
+        """The trigger is stored either way; the schedule sync brings the schedule in line."""
+        mock_trigger_repository.enable_trigger.return_value = True
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        trigger_service._mock_temporal_schedule_manager.apply_cron_schedule.side_effect = (
+            ConnectionError("Temporal is unavailable")
+        )
+
+        assert await trigger_service.enable_trigger(sample_cron_trigger.id) is True
 
     @pytest.mark.asyncio
     async def test_delete_cron_trigger_deletes_schedule(
@@ -918,29 +950,25 @@ class TestTriggerService:
         # Execute
         result = await trigger_service.enable_trigger(sample_cron_trigger.id)
 
-        # Verify
         assert result is True
-        trigger_service._mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(
-            sample_cron_trigger.id
-        )
+        apply = trigger_service._mock_temporal_schedule_manager.apply_cron_schedule
+        assert apply.await_args.kwargs["paused"] is False
 
     @pytest.mark.asyncio
     async def test_disable_cron_trigger_pauses_schedule(
         self, trigger_service, mock_trigger_repository, sample_cron_trigger
     ):
         """Test that disabling a cron trigger pauses its schedule."""
-        # Setup mocks
         mock_trigger_repository.disable_trigger.return_value = True
-        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger.model_copy(
+            update={"is_active": False}
+        )
 
-        # Execute
         result = await trigger_service.disable_trigger(sample_cron_trigger.id)
 
-        # Verify
         assert result is True
-        trigger_service._mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(
-            sample_cron_trigger.id
-        )
+        apply = trigger_service._mock_temporal_schedule_manager.apply_cron_schedule
+        assert apply.await_args.kwargs["paused"] is True
 
     @pytest.mark.asyncio
     async def test_execute_trigger_success(

@@ -157,34 +157,6 @@ class TestTriggerServiceErrorHandling:
         assert "Failed to record trigger execution" in str(exc_info.value)
         assert exc_info.value.context["trigger_id"] == str(trigger_id)
 
-    async def test_schedule_cron_trigger_temporal_unavailable(self, trigger_service):
-        """Test cron trigger scheduling when temporal manager is unavailable."""
-        # Setup - no temporal schedule manager
-        trigger_service.temporal_schedule_manager = None
-        trigger = CronTrigger(
-            id=uuid4(),
-            name="Test Trigger",
-            description="Test",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.CRON,
-            is_active=True,
-            task_parameters={},
-            conditions={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            created_by="test",
-            cron_expression="0 9 * * *",
-            timezone="UTC",
-        )
-
-        # Execute and verify
-        with pytest.raises(DependencyUnavailableError) as exc_info:
-            await trigger_service.schedule_cron_trigger(trigger)
-
-        assert "Temporal schedule manager not available" in str(exc_info.value)
-        assert exc_info.value.context["dependency"] == "temporal_schedule_manager"
-
-
 class TestTemporalScheduleManagerErrorHandling:
     """Test error handling in TemporalScheduleManager."""
 
@@ -359,29 +331,3 @@ class TestGracefulDegradation:
         # For now, we verify the service can be created without task_service
         assert trigger_service_partial_deps.task_service is None
 
-    async def test_graceful_degradation_missing_temporal_manager(
-        self, trigger_service_partial_deps
-    ):
-        """Test graceful handling when temporal schedule manager is missing."""
-        # Verify service can be created without temporal manager
-        assert trigger_service_partial_deps.temporal_schedule_manager is None
-
-        # Cron trigger scheduling should fail gracefully
-        trigger = CronTrigger(
-            id=uuid4(),
-            name="Test",
-            description="Test",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.CRON,
-            is_active=True,
-            task_parameters={},
-            conditions={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            created_by="test",
-            cron_expression="0 9 * * *",
-            timezone="UTC",
-        )
-
-        with pytest.raises(DependencyUnavailableError):
-            await trigger_service_partial_deps.schedule_cron_trigger(trigger)

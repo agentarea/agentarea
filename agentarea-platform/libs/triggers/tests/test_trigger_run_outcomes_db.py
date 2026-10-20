@@ -137,7 +137,9 @@ async def test_failed_runs_disable_the_trigger_and_pause_its_schedule(setup):
             "insufficient credits",
         )
         assert tuple(await setup.trigger()) == (n, n < THRESHOLD)
-    setup.schedules.pause_cron_schedule.assert_awaited_once_with(setup.trigger_id)
+    setup.schedules.apply_cron_schedule.assert_awaited_once_with(
+        setup.trigger_id, "0 * * * *", "UTC", paused=True
+    )
 
 
 async def test_a_redelivered_failure_counts_once(setup):

@@ -124,45 +124,6 @@ class TestTemporalScheduleManager:
             )
 
     @pytest.mark.asyncio
-    async def test_update_schedule(
-        self, schedule_manager, mock_temporal_client, sample_cron_trigger
-    ):
-        """Test updating an existing cron schedule.
-
-        ``update_cron_schedule`` takes ``(trigger_id, cron_expression,
-        timezone)`` and applies the change through the schedule handle's
-        ``update`` updater callback.
-        """
-        # Setup mocks
-        mock_handle = AsyncMock(spec=ScheduleHandle)
-        mock_temporal_client.get_schedule_handle = MagicMock(return_value=mock_handle)
-
-        # Execute
-        await schedule_manager.update_cron_schedule(
-            trigger_id=sample_cron_trigger.id,
-            cron_expression=sample_cron_trigger.cron_expression,
-            timezone=sample_cron_trigger.timezone,
-        )
-
-        # Verify the handle was resolved and update invoked
-        schedule_id = f"cron-trigger-{sample_cron_trigger.id}"
-        mock_temporal_client.get_schedule_handle.assert_called_once_with(schedule_id)
-        mock_handle.update.assert_called_once()
-
-        # Verify the updater produces a schedule with the new spec
-        _args, kwargs = mock_handle.update.call_args
-        updater = kwargs["updater"]
-
-        update_input = MagicMock()
-        update_input.description.schedule.state = ScheduleState(
-            paused=True, note="Old note"
-        )
-        schedule_update = updater(update_input)
-        updated_schedule = schedule_update.schedule
-        assert updated_schedule.spec.cron_expressions == [sample_cron_trigger.cron_expression]
-        assert updated_schedule.spec.time_zone_name == sample_cron_trigger.timezone
-
-    @pytest.mark.asyncio
     async def test_delete_schedule(self, schedule_manager, mock_temporal_client):
         """Test deleting a schedule."""
         # Setup mocks
@@ -198,38 +159,6 @@ class TestTemporalScheduleManager:
         schedule_id = f"cron-trigger-{trigger_id}"
         mock_temporal_client.get_schedule_handle.assert_called_once_with(schedule_id)
         mock_handle.delete.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_pause_schedule(self, schedule_manager, mock_temporal_client):
-        """Test pausing a schedule."""
-        # Setup mocks
-        mock_handle = AsyncMock()
-        mock_temporal_client.get_schedule_handle = MagicMock(return_value=mock_handle)
-        trigger_id = uuid4()
-
-        # Execute
-        await schedule_manager.pause_cron_schedule(trigger_id)
-
-        # Verify
-        schedule_id = f"cron-trigger-{trigger_id}"
-        mock_temporal_client.get_schedule_handle.assert_called_once_with(schedule_id)
-        mock_handle.pause.assert_called_once_with(note=f"Trigger {trigger_id} disabled")
-
-    @pytest.mark.asyncio
-    async def test_unpause_schedule(self, schedule_manager, mock_temporal_client):
-        """Test unpausing a schedule."""
-        # Setup mocks
-        mock_handle = AsyncMock()
-        mock_temporal_client.get_schedule_handle = MagicMock(return_value=mock_handle)
-        trigger_id = uuid4()
-
-        # Execute
-        await schedule_manager.unpause_cron_schedule(trigger_id)
-
-        # Verify
-        schedule_id = f"cron-trigger-{trigger_id}"
-        mock_temporal_client.get_schedule_handle.assert_called_once_with(schedule_id)
-        mock_handle.unpause.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_schedule_status(self, schedule_manager, mock_temporal_client):

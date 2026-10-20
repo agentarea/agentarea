@@ -23,44 +23,54 @@ pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 async def test_schedule_lifecycle_round_trips(temporal_sqlite_client):
-    """Create -> describe -> update -> pause/unpause -> delete on a real server.
+    """Apply creates, changes, pauses and resumes a schedule; delete removes it.
 
     Every assertion goes through the schedule handle (``describe``), which is
-    strongly consistent, so the test is deterministic without polling. It asserts
-    only on fields the real server round-trips faithfully; cron-expression
-    reporting is covered (as a known bug) by the xfail test below.
+    strongly consistent, so the test is deterministic without polling.
     """
     manager = TemporalScheduleManager(temporal_sqlite_client)
     trigger_id = uuid.uuid4()
 
-    # create
-    schedule_id = await manager.create_cron_schedule(trigger_id, "0 9 * * *", "UTC")
-    assert schedule_id == f"cron-trigger-{trigger_id}"
-
-    # describe round-trips the metadata we set, including the cron expression
+    assert await manager.apply_cron_schedule(trigger_id, "0 9 * * *", "UTC", paused=False)
     info = await manager.get_schedule_info(trigger_id)
     assert info is not None
-    assert info["schedule_id"] == schedule_id
+    assert info["schedule_id"] == f"cron-trigger-{trigger_id}"
     assert info["trigger_id"] == str(trigger_id)
-    assert info["cron_expressions"] == ["0 9 * * *"]
-    assert info["timezone"] == "UTC"
-    assert info["paused"] is False
+    assert (info["cron_expressions"], info["timezone"], info["paused"]) == (
+        ["0 9 * * *"],
+        "UTC",
+        False,
+    )
 
-    # update changes the cron expression and timezone
-    await manager.update_cron_schedule(trigger_id, "30 18 * * 1-5", "Europe/Berlin")
+    assert await manager.apply_cron_schedule(
+        trigger_id, "30 18 * * 1-5", "Europe/Berlin", paused=False
+    )
     info = await manager.get_schedule_info(trigger_id)
-    assert info["cron_expressions"] == ["30 18 * * 1-5"]
-    assert info["timezone"] == "Europe/Berlin"
+    assert (info["cron_expressions"], info["timezone"]) == (["30 18 * * 1-5"], "Europe/Berlin")
 
-    # pause / unpause are reflected in describe
-    await manager.pause_cron_schedule(trigger_id)
+    assert await manager.apply_cron_schedule(
+        trigger_id, "30 18 * * 1-5", "Europe/Berlin", paused=True
+    )
     assert (await manager.get_schedule_info(trigger_id))["paused"] is True
-    await manager.unpause_cron_schedule(trigger_id)
+    assert await manager.apply_cron_schedule(
+        trigger_id, "30 18 * * 1-5", "Europe/Berlin", paused=False
+    )
     assert (await manager.get_schedule_info(trigger_id))["paused"] is False
 
-    # delete removes it; describe then reports None
     await manager.delete_cron_schedule(trigger_id)
     assert await manager.get_schedule_info(trigger_id) is None
+
+
+async def test_applying_what_the_schedule_already_is_changes_nothing(temporal_sqlite_client):
+    manager = TemporalScheduleManager(temporal_sqlite_client)
+    trigger_id = uuid.uuid4()
+    await manager.apply_cron_schedule(trigger_id, "0 9 * * *", "Asia/Tokyo", paused=True)
+    try:
+        assert not await manager.apply_cron_schedule(
+            trigger_id, "0 9 * * *", "Asia/Tokyo", paused=True
+        )
+    finally:
+        await manager.delete_cron_schedule(trigger_id)
 
 
 async def test_get_schedule_info_reports_cron_expression(temporal_sqlite_client):
@@ -184,19 +194,19 @@ async def test_a_schedule_catches_up_missed_slots_only_within_the_window(tempora
     manager = TemporalScheduleManager(temporal_sqlite_client)
     trigger_id = uuid.uuid4()
     handle = temporal_sqlite_client.get_schedule_handle(f"cron-trigger-{trigger_id}")
-    await manager.create_cron_schedule(trigger_id, "0 9 * * *", "UTC")
+    await manager.apply_cron_schedule(trigger_id, "0 9 * * *", "UTC", paused=False)
     try:
         created = (await handle.describe()).schedule.policy.catchup_window
-        await manager.update_cron_schedule(trigger_id, "0 10 * * *", "UTC")
-        updated = (await handle.describe()).schedule.policy.catchup_window
+        await manager.apply_cron_schedule(trigger_id, "0 10 * * *", "UTC", paused=False)
+        changed = (await handle.describe()).schedule.policy.catchup_window
     finally:
         await manager.delete_cron_schedule(trigger_id)
 
-    assert (created, updated) == (CATCHUP_WINDOW, CATCHUP_WINDOW)
+    assert (created, changed) == (CATCHUP_WINDOW, CATCHUP_WINDOW)
 
 
-async def test_reconcile_brings_a_schedule_of_the_old_shape_up_to_date(temporal_sqlite_client):
-    """A schedule saved before the slot time and catch-up window gains both, and keeps the rest."""
+async def test_apply_brings_a_schedule_of_the_old_shape_up_to_date(temporal_sqlite_client):
+    """A schedule saved before the slot time and catch-up window gains both."""
     from agentarea_triggers.temporal_schedule_manager import CATCHUP_WINDOW, DEFAULT_TASK_QUEUE
     from temporalio.client import (
         Schedule,
@@ -230,8 +240,12 @@ async def test_reconcile_brings_a_schedule_of_the_old_shape_up_to_date(temporal_
         ),
     )
     try:
-        brought_up_to_date = await manager.reconcile_cron_schedules()
-        again = await manager.reconcile_cron_schedules()
+        brought_up_to_date = await manager.apply_cron_schedule(
+            trigger_id, "0 9 * * *", "Europe/Berlin", paused=True
+        )
+        again = await manager.apply_cron_schedule(
+            trigger_id, "0 9 * * *", "Europe/Berlin", paused=True
+        )
         description = await temporal_sqlite_client.get_schedule_handle(schedule_id).describe()
         info = await manager.get_schedule_info(trigger_id)
     finally:
@@ -240,7 +254,7 @@ async def test_reconcile_brings_a_schedule_of_the_old_shape_up_to_date(temporal_
     payload = temporal_sqlite_client.data_converter.payload_converter.from_payloads(
         [description.schedule.action.args[1]]
     )[0]
-    assert (brought_up_to_date, again) == (1, 0)
+    assert (brought_up_to_date, again) == (True, False)
     assert description.schedule.policy.catchup_window == CATCHUP_WINDOW
     assert payload == {"source": "cron", "cron_expression": "0 9 * * *", "timezone": "Europe/Berlin"}
     assert (info["cron_expressions"], info["timezone"], info["paused"]) == (
@@ -248,3 +262,38 @@ async def test_reconcile_brings_a_schedule_of_the_old_shape_up_to_date(temporal_
         "Europe/Berlin",
         True,
     )
+
+
+async def test_schedules_of_triggers_that_are_gone_are_deleted(temporal_sqlite_client):
+    """Only trigger schedules are swept; a schedule of anything else is not ours to delete."""
+    from datetime import timedelta
+
+    from temporalio.client import (
+        Schedule,
+        ScheduleActionStartWorkflow,
+        ScheduleIntervalSpec,
+        ScheduleSpec,
+    )
+
+    manager = TemporalScheduleManager(temporal_sqlite_client)
+    kept, gone = uuid.uuid4(), uuid.uuid4()
+    for trigger_id in (kept, gone):
+        await manager.apply_cron_schedule(trigger_id, "0 9 * * *", "UTC", paused=False)
+    await temporal_sqlite_client.create_schedule(
+        "someone-elses-schedule",
+        Schedule(
+            action=ScheduleActionStartWorkflow("Other", id="other", task_queue="other"),
+            spec=ScheduleSpec(intervals=[ScheduleIntervalSpec(every=timedelta(hours=1))]),
+        ),
+    )
+    try:
+        removed = await manager.delete_cron_schedules_except({kept})
+        remaining = {
+            listed.id async for listed in await temporal_sqlite_client.list_schedules()
+        }
+    finally:
+        await manager.delete_cron_schedule(kept)
+
+    assert removed == 1
+    assert f"cron-trigger-{gone}" not in remaining
+    assert {f"cron-trigger-{kept}", "someone-elses-schedule"} <= remaining
