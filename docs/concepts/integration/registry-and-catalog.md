@@ -133,15 +133,31 @@ sync, in `external_id` order: one `ls-refs` request per repository and branch,
 and the commit's archive, unpacked once for every folder of it, when the branch
 moved. A `mirror` registry versions such a pointer by the tree it stored.
 
-Editing an installed skill copies its package into the workspace's own prefix,
-`skills/<workspace>/<skill id>/`, and edits the copy. The catalog package is
-never written. The skill still records its catalog item, so it still shows
+Editing an installed skill stores the edited files as a new package of the
+workspace's own and points the skill at it. The catalog package is never
+written. The skill still records its catalog item, so it still shows
 "update available", but it now reads "Customized": update-all skips it, and a
-single update replaces the edit only when the admin passes `discard_changes`.
+single update replaces the edit only when the admin passes `discard_changes`, and
+the edit stays in the skill's history to roll back to.
 
 The same copy-on-write applies to catalog agents. A catalog agent's spec carries
 `preferred_models` (model slugs) and never a `model_id`, because model instances
 are per-workspace; the model is resolved at install.
+
+### A workspace's own skill has a history
+
+A skill authored, uploaded, imported or edited in a workspace is stored the same
+way as catalog content: an immutable package under the sha256 of its files, in
+the workspace's own prefix, `skills/<workspace>/packages/<digest>/`. An edit
+never rewrites a package; it stores a new one and moves the skill's pointer.
+Every move is a row of the skill's history, with its reason (`create`, `edit`,
+`install`, `update`, `rollback` or `migrate`), who made it and when.
+`GET /v1/workspaces/{workspace}/skills/{skill_id}/versions` lists it, oldest
+first, the current one marked. `POST .../versions/{version_id}/rollback` points
+the skill at that version's package again; the rollback is itself a new row, so
+it can be undone the same way. Rolling an edited install back to the version it
+was installed at re-pins it to that catalog version, after the same policy check
+an install makes, and it reads as not customized again.
 
 ### Policy decides where installs may come from
 
@@ -227,14 +243,19 @@ link instead: an installed skill, agent or MCP server records `registry_item_id`
 - **An inline body stays in the catalog row.** An index that publishes `content`
   instead of a pointer has that body stored in the item's spec, in addition to
   the package built from it.
-- **A workspace's own skills are not versioned.** Catalog packages are immutable;
-  a skill authored or edited in the workspace is rewritten in place under its own
-  prefix, with no history.
+- **Packages are never deleted.** Deleting a skill or rolling it forward keeps
+  every package its history names, and a package can be shared by any skill with
+  the same files. Nothing yet removes a package no skill or history row points at.
+- **The history has no UI yet.** Versions and rollback are API calls only.
 - **Version comparison is string inequality.** Any different version, a
   downgrade included, sets "update available".
 - **Skills stored before packages are moved lazily.** A row that still holds its
-  body in `skills.content` is moved into a package the first time it is read, or
-  all at once by `agentarea-api skills move-bodies-to-packages`.
+  body in `skills.content`, or that points at the mutable copy a workspace skill
+  used to be rewritten in (`skills/<workspace>/<skill id>/`), is moved into a
+  package the first time it is read, which starts its history. `agentarea-api
+  skills move-bodies-to-packages` and `move-own-copies-to-packages` do it for
+  every row at once. The old copies stay until `agentarea-api skills
+  delete-moved-own-copies` (add `--dry-run` to count first).
 - **Nothing in the chart schedules a sync.** See
   [configure the platform registries](/self-host/catalog-registries).
 
