@@ -44,7 +44,7 @@ class TaskProvenance(BaseModel):
     source_identity: str | None = None
 
     @classmethod
-    def started_by(cls, user_id: str, *, via_api_key: bool) -> "TaskProvenance":
+    def started_by(cls, user_id: str, *, via_api_key: bool) -> TaskProvenance:
         """A run a person started from the app, the API or MCP."""
         return cls(
             origin_type="api" if via_api_key else "user",
@@ -53,7 +53,7 @@ class TaskProvenance(BaseModel):
         )
 
     @classmethod
-    def started_by_caller(cls, caller: "UserContext") -> "TaskProvenance":
+    def started_by_caller(cls, caller: UserContext) -> TaskProvenance:
         """A run ``caller`` started: a person from the app, API or MCP, or an agent in its run.
 
         An agent starting a run is recorded as the agent. The person its own run

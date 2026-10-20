@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class TaskDefinitionService:
     """Task definitions of the caller's workspace, and runs started from them."""
 
-    def __init__(self, repository_factory: "RepositoryFactory", task_service: "TaskService"):
+    def __init__(self, repository_factory: RepositoryFactory, task_service: TaskService):
         from agentarea_agents.infrastructure.repository import AgentRepository
 
         self.repository_factory = repository_factory

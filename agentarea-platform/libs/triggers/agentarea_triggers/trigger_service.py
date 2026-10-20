@@ -119,7 +119,7 @@ def event_text(trigger_data: dict[str, Any]) -> str | None:
 def resolve_task_query(
     trigger: Trigger,
     trigger_data: dict[str, Any],
-    definition: "TaskDefinition | None" = None,
+    definition: TaskDefinition | None = None,
 ) -> str | None:
     """What the agent is being asked to do, or None when nothing says.
 
@@ -169,7 +169,7 @@ def compose_task_input(
     trigger: Trigger,
     trigger_data: dict[str, Any],
     event: TriggerEvent | None = None,
-    definition: "TaskDefinition | None" = None,
+    definition: TaskDefinition | None = None,
 ) -> TriggerTaskInput | None:
     """The task a firing starts: its ask, plus the event that fired it. None when nothing asks.
 
@@ -1711,7 +1711,7 @@ class TriggerService:
         trigger_data: dict[str, Any],
         fired_by: str | None = None,
         delivery: FiringDelivery | None = None,
-        definition: "TaskDefinition | None" = None,
+        definition: TaskDefinition | None = None,
     ) -> dict[str, Any]:
         """Build task parameters from trigger and execution data using LLM extraction.
 

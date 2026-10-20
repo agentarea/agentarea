@@ -49,7 +49,7 @@ class TaskDefinitionResponse(BaseModel):
     updated_at: UtcDatetime
 
     @classmethod
-    def from_domain(cls, definition: TaskDefinition) -> "TaskDefinitionResponse":
+    def from_domain(cls, definition: TaskDefinition) -> TaskDefinitionResponse:
         return cls.model_validate(definition.model_dump())
 
 
