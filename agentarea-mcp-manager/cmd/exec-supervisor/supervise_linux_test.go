@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -150,6 +151,37 @@ func TestSuperviseReapsSetsidAndDoubleForkDescendants(t *testing.T) {
 	time.Sleep(400 * time.Millisecond)
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("setsid/double-fork descendant survived supervisor return: %v", err)
+	}
+}
+
+// The supervisor itself runs as root with HOME=/root; the dropped command must
+// see its own account's home, or every tool that caches under ~ fails.
+func TestSuperviseGivesTheCommandItsOwnHome(t *testing.T) {
+	t.Setenv("HOME", "/root")
+	t.Setenv("USER", "root")
+	t.Setenv("LOGNAME", "root")
+	uid := os.Getuid()
+	if uid == 0 {
+		uid = 65534
+	}
+	account, err := user.LookupId(strconv.Itoa(uid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := sandboxTempPath(t, "agentarea-supervisor-home-*")
+	result := runSuperviseHelper(t,
+		[]string{"/bin/sh", "-c", fmt.Sprintf(`printf '%%s:%%s:%%s' "$HOME" "$USER" "$LOGNAME" > %q`, marker)},
+		5*time.Second, 1024*1024,
+	)
+	if result.exitCode != 0 || result.timedOut {
+		t.Fatalf("supervise() = %+v", result)
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := account.HomeDir + ":" + account.Username + ":" + account.Username; string(got) != want {
+		t.Fatalf("command saw HOME:USER:LOGNAME = %q, want %q", got, want)
 	}
 }
 
