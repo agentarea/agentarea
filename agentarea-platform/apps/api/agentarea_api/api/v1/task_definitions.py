@@ -17,6 +17,7 @@ from agentarea_tasks.application.task_definition_service import TaskDefinitionSe
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
 from agentarea_tasks.domain.task_definitions import (
     TaskDefinition,
+    TaskDefinitionInUseError,
     TaskDefinitionNotFoundError,
     TaskDefinitionValidationError,
 )
@@ -123,6 +124,8 @@ async def update_task_definition(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except TaskDefinitionValidationError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except TaskDefinitionInUseError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @router.delete(
@@ -131,8 +134,12 @@ async def update_task_definition(
     dependencies=[requires("delete", "task_definition", id_param="definition_id")],
 )
 async def delete_task_definition(definition_id: UUID, service: TaskDefinitionServiceDep) -> None:
-    """Delete a saved task. Runs started from it stay; a trigger on it fails until changed."""
-    if not await service.delete(definition_id):
+    """Delete a saved task no trigger runs. Runs started from it stay."""
+    try:
+        deleted = await service.delete(definition_id)
+    except TaskDefinitionInUseError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    if not deleted:
         raise HTTPException(status_code=404, detail=f"Task definition {definition_id} not found")
 
 
@@ -153,7 +160,7 @@ async def run_task_definition(
     user_context: UserContextDep,
     payload: TaskDefinitionRun | None = Body(None),
 ) -> TaskResponse:
-    """Run a saved task now, as the caller, with its agent, text and parameters.
+    """Run a saved task now with its agent, text and parameters; the run acts as the agent.
 
     ``parameters`` in the body are merged over the saved ones for this run only.
     """

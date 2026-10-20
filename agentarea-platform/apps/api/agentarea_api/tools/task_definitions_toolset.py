@@ -147,7 +147,7 @@ class TaskDefinitionsToolset(Toolset):
             Field(description="Merged over the saved task's own parameters for this run only."),
         ] = None,
     ) -> str:
-        """Run a saved task now, as the caller; returns the run to watch with `runs_get`."""
+        """Run a saved task now (it acts as its agent); returns the run to watch with `runs_get`."""
         async with platform_context() as (_session, _user_ctx, repo_factory, broker, _secret):
             service = await _service(repo_factory, broker)
             try:

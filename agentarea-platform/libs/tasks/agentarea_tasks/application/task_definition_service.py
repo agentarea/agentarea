@@ -9,6 +9,7 @@ from agentarea_common.auth.permission import require_permission
 from ..domain.models import AgentTask, TaskProvenance
 from ..domain.task_definitions import (
     TaskDefinition,
+    TaskDefinitionInUseError,
     TaskDefinitionNotFoundError,
     TaskDefinitionValidationError,
 )
@@ -36,6 +37,27 @@ class TaskDefinitionService:
         if await self.agent_repository.get(agent_id) is None:
             raise TaskDefinitionValidationError(
                 f"Agent {agent_id} does not exist in this workspace"
+            )
+
+    async def _triggers_running(self, definition_id: UUID) -> int:
+        """How many triggers of this workspace run the definition."""
+        from agentarea_triggers.infrastructure.orm import TriggerORM
+        from sqlalchemy import func, select
+
+        result = await self.repository_factory.session.execute(
+            select(func.count())
+            .select_from(TriggerORM)
+            .where(
+                TriggerORM.workspace_id == self.repository_factory.user_context.workspace_id,
+                TriggerORM.task_definition_id == definition_id,
+            )
+        )
+        return int(result.scalar_one())
+
+    async def _require_unused(self, definition_id: UUID, what: str) -> None:
+        if count := await self._triggers_running(definition_id):
+            raise TaskDefinitionInUseError(
+                f"{count} trigger(s) run this saved task; point them elsewhere before you {what}"
             )
 
     @audited("task_definition.create", resource_type="task_definition")
@@ -69,6 +91,8 @@ class TaskDefinitionService:
         }
         if "agent_id" in changes:
             await self._require_agent(changes["agent_id"])
+            # A trigger was bound to one agent; it must not start asking another.
+            await self._require_unused(definition_id, "change its agent")
         if not changes:
             return await self.get(definition_id)
         updated = await self.repository.update_definition(definition_id, **changes)
@@ -80,6 +104,7 @@ class TaskDefinitionService:
         "task_definition.delete", resource_type="task_definition", resource_id_param="definition_id"
     )
     async def delete(self, definition_id: UUID) -> bool:
+        await self._require_unused(definition_id, "delete it")
         return await self.repository.delete(definition_id)
 
     async def run(
@@ -102,11 +127,7 @@ class TaskDefinitionService:
             description=definition.description,
             parameters={**definition.parameters, **(parameters or {})},
         )
-        credential = user_context.credential
-        provenance = TaskProvenance.started_by(
-            user_context.user_id,
-            via_api_key=credential is not None and credential.kind == "api_key",
-        )
+        provenance = TaskProvenance.started_by_caller(user_context)
         return await self.task_service.start_run(
             payload,
             workspace_id=user_context.workspace_id,

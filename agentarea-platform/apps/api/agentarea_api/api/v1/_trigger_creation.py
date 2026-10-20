@@ -19,15 +19,6 @@ async def require_stream_readable(stream_id: UUID | None, caller: UserContext) -
         await require_permission("read", "stream", str(stream_id), caller)
 
 
-async def require_may_bind(agent_id: UUID, caller: UserContext) -> None:
-    """Refuse pointing a trigger at an agent the caller may not make act (403).
-
-    The trigger's runs act as the agent, so wiring one is the grant to check:
-    nobody can set an agent going on a schedule they could not start by hand.
-    """
-    await require_permission("execute", "agent", str(agent_id), caller)
-
-
 async def create_trigger_from_spec(
     spec: TriggerSpec,
     *,
@@ -40,7 +31,6 @@ async def create_trigger_from_spec(
     A spec with ``enabled=False`` is created inactive with its schedule paused,
     so it never fires before its owner switches it on.
     """
-    await require_may_bind(agent_id, user_context)
     if spec.trigger_type == "stream":
         await require_stream_readable(spec.stream_id, user_context)
     return await trigger_service.create_trigger(

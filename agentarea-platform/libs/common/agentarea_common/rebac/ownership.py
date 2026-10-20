@@ -165,17 +165,26 @@ def _agent_enrollment(agent_id: UUID | str, workspace_id: str) -> tuple[Relation
         RelationTuple(
             namespace="project",
             object=root_project_id(workspace_id),
-            relation="writer",
+            relation="reader",
+            subject_id=subject,
+        ),
+        RelationTuple(
+            namespace="resource",
+            object=str(agent_id),
+            relation=INVOKER_RELATION,
             subject_id=subject,
         ),
     )
 
 
 async def enroll_agent(*, agent_id: UUID | str, workspace_id: str) -> None:
-    """Give a new agent the relations its runs act with: member, and writer of the root project.
+    """Give a new agent the relations its runs act with.
 
-    A run executes as its agent, so these are what it may reach. They are
-    ordinary grants: narrow them in access control like any other.
+    A run executes as its agent, so these are what it may reach: membership,
+    reading its workspace (as a plain member does), and starting itself again,
+    so it can schedule its own follow-ups. Writing is what it created, or what
+    access control grants it: a workspace-wide write would let any member who
+    can create an agent edit every other agent and trigger through it.
     """
     client = resolve_graph_client()
     for relationship in _agent_enrollment(agent_id, workspace_id):

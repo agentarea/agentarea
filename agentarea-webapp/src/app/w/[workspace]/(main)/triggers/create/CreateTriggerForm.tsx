@@ -35,13 +35,16 @@ import Link from "@/components/WorkspaceLink";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { resolveSession } from "@/lib/sourceTypes";
+import { BatchSetting } from "../components/BatchSetting";
+import {
+  SessionSetting,
+  type TriggerSession,
+} from "../components/SessionSetting";
 import {
   composeTaskParameters,
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
-import { BatchSetting } from "../components/BatchSetting";
-import { SessionSetting, type TriggerSession } from "../components/SessionSetting";
 import { renderTriggerIcon } from "../components/triggerDisplay";
 import {
   createTriggerAction,
@@ -124,10 +127,7 @@ export function CreateTriggerForm({
   const [runSettingsOpen, setRunSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (
-      state.errors?.failure_threshold ||
-      state.errors?.description
-    )
+    if (state.errors?.failure_threshold || state.errors?.description)
       setRunSettingsOpen(true);
   }, [state.errors]);
   // Field errors the form has no inline slot for (e.g. `config.*` from the
@@ -315,7 +315,9 @@ export function CreateTriggerForm({
       >
         {isEditing && <input type="hidden" name="id" value={initialData.id} />}
         <input type="hidden" name="trigger_type" value={triggerType} />
-        <input type="hidden" name="task_definition_id"
+        <input
+          type="hidden"
+          name="task_definition_id"
           value={chosenSavedTaskId}
         />
         <input

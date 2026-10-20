@@ -1,4 +1,4 @@
-"""A trigger as a stream subscriber: check the configurer, fire, report the outcome."""
+"""A trigger as a stream subscriber: admit the sender, check the agent stands, fire, report."""
 
 import logging
 from collections.abc import Callable

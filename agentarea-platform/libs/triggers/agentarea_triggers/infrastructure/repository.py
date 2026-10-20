@@ -290,8 +290,8 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     async def enable_trigger(self, trigger_id: UUID) -> bool:
         """Enable a trigger in the current workspace.
 
-        Clears a "needs a new owner" stop: the next event re-checks the
-        configurer's access and stops the trigger again if it is still missing.
+        Clears a "needs attention" stop: the next firing re-checks the agent and
+        stops the trigger again if it is still gone or inactive.
         Starts the failure count over, so one failure after it does not stop it again.
         """
         stmt = (
@@ -310,7 +310,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def mark_needs_new_owner(self, trigger_id: UUID) -> bool:
-        """Stop a trigger whose configurer can no longer run its agent, and say why."""
+        """Stop a trigger whose agent is gone or inactive, and say why."""
         stmt = (
             update(TriggerORM)
             .where(TriggerORM.id == trigger_id, self._get_workspace_filter())

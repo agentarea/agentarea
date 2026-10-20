@@ -2020,7 +2020,7 @@
       "inactive": "Inactive",
       "paused": "Paused",
       "error": "Error",
-      "needs_owner": "Needs a new owner"
+      "needs_owner": "Agent unavailable"
     },
     "create": {
       "title": "Create Trigger",

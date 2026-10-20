@@ -70,6 +70,7 @@ from agentarea_api.api.v1.a2a_mapping import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
 from agentarea_common.auth.credential import Credential
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -371,6 +372,10 @@ class AgentAreaRequestHandler(RequestHandler):
         scope = op.scope
         user = _user_context(scope)
         await self._require_available_agent(scope.agent_id)
+        # An agent's own key was confined to this agent at the edge; anyone else
+        # is starting the agent and must be allowed to (``can_invoke``).
+        if user.credential is None or user.credential.kind != "api_key":
+            await require_permission("execute", "agent", str(scope.agent_id), user)
 
         text = message_text(params.message)
         if not text.strip():

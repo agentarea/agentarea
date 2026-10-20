@@ -142,11 +142,7 @@ class TaskWebhook(BaseModel):
 
 def started_by(user_context: UserContext) -> TaskProvenance:
     """The provenance of a run the caller started from the app, the API or MCP."""
-    credential = user_context.credential
-    return TaskProvenance.started_by(
-        user_context.user_id,
-        via_api_key=credential is not None and credential.kind == "api_key",
-    )
+    return TaskProvenance.started_by_caller(user_context)
 
 
 def _is_api_caller(user_context: UserContext) -> bool:

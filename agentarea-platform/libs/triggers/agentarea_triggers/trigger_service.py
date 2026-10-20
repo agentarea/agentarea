@@ -259,6 +259,9 @@ class TriggerService:
         )
 
         self.repository_factory = repository_factory
+        # Whoever this service acts for: a person through the API, an agent in a
+        # run, a trigger's configurer when the schedule fires it.
+        self._caller = repository_factory.user_context
         self.event_broker = event_broker
         self.task_service = task_service
         self.llm_condition_evaluator = llm_condition_evaluator
@@ -317,6 +320,7 @@ class TriggerService:
 
             # Validate agent exists first (fail fast)
             await self._validate_agent_exists(trigger_data.agent_id)
+            await self._require_may_invoke(trigger_data.agent_id)
 
             # Validate trigger configuration
             await self._validate_trigger_configuration(trigger_data)
@@ -460,6 +464,11 @@ class TriggerService:
 
         # Validate update data
         await self._validate_trigger_update(existing_trigger, trigger_update)
+        # Pointing the trigger at an agent, or switching it on, binds it.
+        if trigger_update.agent_id is not None or (
+            trigger_update.is_active is True and not existing_trigger.is_active
+        ):
+            await self._require_may_invoke(trigger_update.agent_id or existing_trigger.agent_id)
 
         # Update the trigger
         updated_trigger = await self.trigger_repository.update_by_id(trigger_id, trigger_update)
@@ -572,6 +581,9 @@ class TriggerService:
         Returns:
             True if the trigger was successfully enabled, False if not found
         """
+        trigger = await self.get_trigger(trigger_id)
+        if trigger is not None:
+            await self._require_may_invoke(trigger.agent_id)
         # Enable trigger in database
         success = await self.trigger_repository.enable_trigger(trigger_id)
 
@@ -1082,6 +1094,17 @@ class TriggerService:
 
     # Validation Methods
 
+    async def _require_may_invoke(self, agent_id: UUID) -> None:
+        """Refuse binding or starting ``agent_id`` unless the caller may make it act (403).
+
+        A trigger's runs act as its agent, so wiring one is the grant to check:
+        nobody sets an agent going on a schedule, or presses "run now", for an
+        agent they could not start by hand. A scheduled firing asks nobody.
+        """
+        from agentarea_common.auth.permission import require_permission
+
+        await require_permission("execute", "agent", str(agent_id), self._caller)
+
     async def agent_stands(self, agent_id: UUID) -> bool:
         """Whether the agent a trigger runs still exists in its workspace and is active."""
         if self.agent_repository is None:
@@ -1367,15 +1390,6 @@ class TriggerService:
         if not trigger:
             raise TriggerNotFoundError(f"Trigger {trigger_id} not found")
 
-        # The run acts as the agent, so the agent is what must still stand when it
-        # fires; whoever configured the trigger lends it nothing.
-        if not await self.agent_stands(trigger.agent_id):
-            reason = f"agent {trigger.agent_id} is gone or inactive"
-            execution = await self._record_execution_failure(
-                trigger_id, reason, trigger_data, 0, fired_by=fired_by
-            )
-            return TriggerFiring(outcome="error", reason=reason, execution=execution)
-
         # is_active governs the trigger's own mechanism -- whether the schedule
         # comes due, whether the webhook is accepted. It does not govern a person
         # asking for one run, and testing a trigger that is switched off (or not
@@ -1388,6 +1402,20 @@ class TriggerService:
             return TriggerFiring(
                 outcome="skipped", reason="trigger is inactive", execution=execution
             )
+
+        # A person pressing "run now" starts the agent, so they must be allowed to.
+        if fired_by is not None:
+            await self._require_may_invoke(trigger.agent_id)
+        # The run acts as the agent, so the agent is what must still stand when it
+        # fires; whoever configured the trigger lends it nothing. A trigger whose
+        # agent is gone stops once, with that reason, on every path.
+        if not await self.agent_stands(trigger.agent_id):
+            reason = f"agent_unavailable: agent {trigger.agent_id} is gone or inactive"
+            await self.trigger_repository.mark_needs_new_owner(trigger.id)
+            execution = await self._record_execution_failure(
+                trigger_id, reason, trigger_data, 0, fired_by=fired_by
+            )
+            return TriggerFiring(outcome="error", reason=reason, execution=execution)
 
         definition = None
         if trigger.task_definition_id is not None:

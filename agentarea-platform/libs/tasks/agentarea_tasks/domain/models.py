@@ -2,11 +2,14 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
 
 from agentarea_common.events.contract import require_known_type
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from agentarea_common.auth.context import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,21 @@ class TaskProvenance(BaseModel):
             origin_type="api" if via_api_key else "user",
             origin_id=user_id,
             source_identity=f"user:{user_id}",
+        )
+
+    @classmethod
+    def started_by_caller(cls, caller: "UserContext") -> "TaskProvenance":
+        """A run ``caller`` started: a person from the app, API or MCP, or an agent in its run.
+
+        An agent starting a run is recorded as the agent. The person its own run
+        is attributed to did not start this one, so no person narrows it.
+        """
+        if caller.subject is not None and caller.subject.kind == "agent":
+            return cls(origin_type="agent", origin_id=caller.subject.id)
+        credential = caller.credential
+        return cls.started_by(
+            caller.user_id,
+            via_api_key=credential is not None and credential.kind == "api_key",
         )
 
     @property

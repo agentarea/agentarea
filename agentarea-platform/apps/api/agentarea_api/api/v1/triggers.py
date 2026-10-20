@@ -25,7 +25,7 @@ from agentarea_api.api.deps.services import (
     get_trigger_health_check,
     get_trigger_service,
 )
-from agentarea_api.api.v1._trigger_creation import create_trigger_from_spec, require_may_bind
+from agentarea_api.api.v1._trigger_creation import create_trigger_from_spec
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_PAGE
@@ -66,7 +66,7 @@ TriggerStatus = Literal["active", "inactive", "needs_owner"]
 
 
 def trigger_status(trigger: Any) -> TriggerStatus:
-    """'needs_owner' while a trigger stopped for its configurer's lost access stays off."""
+    """'needs_owner' while a trigger stopped because its agent is gone or inactive stays off."""
     if trigger.is_active:
         return "active"
     if getattr(trigger, "needs_new_owner_at", None) is not None:
@@ -630,9 +630,6 @@ async def enable_trigger(
     Raises:
         HTTPException: If trigger not found
     """
-    trigger = await trigger_service.get_trigger(trigger_id)
-    if trigger is not None:
-        await require_may_bind(trigger.agent_id, user_context)
     try:
         success = await trigger_service.enable_trigger(trigger_id)
 
@@ -1056,6 +1053,7 @@ async def get_execution_correlations(
 async def execute_trigger(
     trigger_id: UUID,
     request: TriggerExecuteRequest,
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Execute a trigger with the provided event data.
@@ -1072,6 +1070,7 @@ async def execute_trigger(
     Args:
         trigger_id: The unique identifier of the trigger
         request: The events to run the trigger on
+        user_context: The person replaying the events; the run is theirs
         trigger_service: Injected trigger service
 
     Returns:
@@ -1083,7 +1082,10 @@ async def execute_trigger(
     try:
         trigger_data: dict[str, Any] = {"events": request.events}
 
-        execution = await trigger_service.execute_trigger(trigger_id, trigger_data)
+        # A person replaying events starts the run: it is theirs to narrow.
+        execution = await trigger_service.execute_trigger(
+            trigger_id, trigger_data, fired_by=user_context.user_id
+        )
 
         if execution is None:
             return {

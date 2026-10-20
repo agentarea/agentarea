@@ -37,3 +37,7 @@ class TaskDefinitionNotFoundError(Exception):
 
 class TaskDefinitionValidationError(ValueError):
     """A task definition that cannot be saved as given."""
+
+
+class TaskDefinitionInUseError(Exception):
+    """Triggers run this definition, so it cannot change agent or be deleted under them."""

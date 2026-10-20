@@ -107,11 +107,11 @@ A run you started reads `origin: "user"`; one a trigger fired reads
 ## Troubleshooting
 
 <AccordionGroup>
-  <Accordion title="A trigger's runs fail with “Task definition … no longer exists”">
-    The saved task was deleted while a trigger still pointed at it. Each firing
-    is recorded as failed and counts towards the trigger's `failure_threshold`.
-    Point the trigger at another saved task, or send
-    `"task_definition_id": null` with `task_parameters.text`.
+  <Accordion title="Deleting a saved task, or changing its agent, answers 409">
+    Triggers still run it. A trigger was bound to one agent, so the saved task
+    cannot move to another or disappear under it. Point those triggers at
+    another saved task, or send `"task_definition_id": null` with
+    `task_parameters.text`, then try again.
   </Accordion>
 </AccordionGroup>
 

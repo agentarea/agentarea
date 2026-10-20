@@ -71,14 +71,18 @@ ENROLLMENT = [
     RelationTuple(
         namespace="project",
         object=ownership.root_project_id("ws-1"),
-        relation="writer",
+        relation="reader",
         subject_id="Agent:agent-7",
+    ),
+    RelationTuple(
+        namespace="resource", object="agent-7", relation="invoker", subject_id="Agent:agent-7"
     ),
 ]
 
 
 @pytest.mark.asyncio
-async def test_a_new_agent_can_act_in_its_workspace(monkeypatch):
+async def test_a_new_agent_reads_its_workspace_and_may_start_itself(monkeypatch):
+    """Read like a member, never write everything: that would let any agent edit every other."""
     graph = _Graph()
     monkeypatch.setattr(ownership, "resolve_graph_client", lambda: graph)
 
@@ -95,3 +99,18 @@ async def test_a_deleted_agent_loses_what_it_acted_with(monkeypatch):
     await ownership.withdraw_agent(agent_id="agent-7", workspace_id="ws-1")
 
     assert graph.deleted == ENROLLMENT
+
+
+@pytest.mark.asyncio
+async def test_a_run_never_administers_the_workspace():
+    """Whoever the run is attributed to -- even the owner -- lends it no admin authority."""
+    from agentarea_common.auth.authorization import is_workspace_admin
+
+    owner_run = UserContext(
+        user_id="ws-1",
+        workspace_id="ws-1",
+        admin_workspaces=["ws-1"],
+        subject=Subject(kind="agent", id="agent-7"),
+    )
+
+    assert await is_workspace_admin(owner_run) is False
