@@ -191,7 +191,7 @@ services:
         "--source",
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json}",
         "--source",
-        "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json}",
+        "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json}",
         "--source",
         "/app/data/catalog/source-types.json",
       ]

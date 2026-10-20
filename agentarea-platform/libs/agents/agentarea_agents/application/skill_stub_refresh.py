@@ -11,7 +11,6 @@ skill at it, keeping its id, slug, name and agents.
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -26,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.application.skill_service import SkillService
-from agentarea_agents.application.skill_stub import StubSource, parse_stub
+from agentarea_agents.application.skill_stub import REPO_NAME, StubSource, parse_stub
 from agentarea_agents.domain.skill_models import Skill, SkillSourceType
 from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillRepository
 from agentarea_agents.infrastructure.github_skill_importer import (
@@ -40,8 +39,6 @@ from agentarea_agents.infrastructure.skill_repository import (
 from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
 
 logger = logging.getLogger(__name__)
-
-_REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 
 @dataclass
@@ -72,7 +69,7 @@ async def _stored_skill_md(storage: SkillStorageService, skill: Skill) -> str:
 
 async def _github_source(service: SkillService, skill: Skill, stub: StubSource) -> tuple[str, str]:
     """``(repo, folder)`` from the stub, else from its catalog item's GitHub source."""
-    if _REPO.fullmatch(stub.repo):
+    if REPO_NAME.fullmatch(stub.repo):
         return stub.repo, stub.folder
     if skill.registry_item_id is not None:
         item = await CatalogSkillRepository(
