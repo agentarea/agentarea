@@ -25,7 +25,7 @@
     "@mintlify/validation": {
       "js-yaml": "4.3.2"
     },
-    "@modelcontextprotocol/sdk@>=1.12.0 <1.31.0": "1.31.0",
+    "@modelcontextprotocol/sdk@>=1.12.0 <1.32.0": "1.32.0",
     "@stoplight/spectral-core": "1.22.0",
     "adm-zip@<0.6.1": "0.6.1",
     "ajv@>=8.0.0 <8.18.0": "8.18.0",
@@ -55,7 +55,9 @@
     "minimatch@>=9.0.0 <9.0.7": "9.0.7",
     "path-to-regexp@<0.1.13": "0.1.13",
     "picomatch@>=2.0.0 <2.3.2": "2.3.2",
+    "katex@<0.18.2": "0.18.2",
     "postcss@<8.5.23": "8.5.23",
+    "postcss-selector-parser@<7.1.6": "7.1.6",
     "proxy-addr@<2.0.8": "2.0.8",
     "qs@<6.16.0": "6.16.0",
     "send@<0.19.0": "0.19.0",
@@ -75,7 +77,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@modelcontextprotocol/sdk@>=1.12.0 <1.31.0": "1.31.0",
+      "@modelcontextprotocol/sdk@>=1.12.0 <1.32.0": "1.32.0",
       "@stoplight/spectral-core": "1.22.0",
       "adm-zip@<0.6.1": "0.6.1",
       "ajv@>=8.0.0 <8.18.0": "8.18.0",
@@ -102,7 +104,9 @@
       "minimatch@>=9.0.0 <9.0.7": "9.0.7",
       "path-to-regexp@<0.1.13": "0.1.13",
       "picomatch@>=2.0.0 <2.3.2": "2.3.2",
+      "katex@<0.18.2": "0.18.2",
       "postcss@<8.5.23": "8.5.23",
+      "postcss-selector-parser@<7.1.6": "7.1.6",
       "proxy-addr@<2.0.8": "2.0.8",
       "qs@<6.16.0": "6.16.0",
       "send@<0.19.0": "0.19.0",
