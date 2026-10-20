@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.14"
   UV_CACHE_DIR: ~/.cache/uv
 
 jobs:
@@ -52,11 +52,11 @@ jobs:
       operator: ${{ steps.filter.outputs.operator }}
       events: ${{ steps.filter.outputs.events }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: filter
-        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         with:
           base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
           # 'VERSION' changes only in a release commit. It is in every filter that gates an
@@ -107,7 +107,7 @@ jobs:
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
       github.event_name == 'workflow_call'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Verify version synchronization
         run: bash scripts/verify-version-sync.sh
@@ -117,7 +117,7 @@ jobs:
   jwks-perms-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: JWKS/config/auth permissions
         run: make check-jwks-perms
@@ -125,12 +125,12 @@ jobs:
   env-naming:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install PyYAML
         run: pip install pyyaml
@@ -152,14 +152,14 @@ jobs:
         needs.changes.outputs.platform == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -188,14 +188,14 @@ jobs:
         needs.changes.outputs.platform == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -225,14 +225,14 @@ jobs:
       matrix:
         component: [api, worker]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -265,10 +265,10 @@ jobs:
   #         --health-retries 5
 
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
       
   #     - name: Install uv
-  #       uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+  #       uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
   #       with:
   #         enable-cache: true
   #         cache-dependency-glob: "core/**/pyproject.toml"
@@ -294,14 +294,14 @@ jobs:
   #           -n auto
 
   #     - name: Upload coverage to Codecov
-  #       uses: codecov/codecov-action@v4
+  #       uses: codecov/codecov-action@v7
   #       with:
   #         file: ./core/coverage.xml
   #         flags: unittests
   #         name: codecov-umbrella
 
   #     - name: Upload test results
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       if: always()
   #       with:
   #         name: test-results
@@ -315,10 +315,10 @@ jobs:
   #       component: [api, worker]
     
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
       
   #     - name: Install uv
-  #       uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+  #       uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
   #       with:
   #         enable-cache: true
 
@@ -335,7 +335,7 @@ jobs:
   #       run: uv build apps/${{ matrix.component }}
 
   #     - name: Upload build artifacts
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       with:
   #         name: ${{ matrix.component }}-dist
   #         path: core/dist/
@@ -371,21 +371,21 @@ jobs:
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.platform == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
 
       # Runs unconditionally, so on real GitHub Actions it reinstalls uv over the
       # version setup-uv just pinned. Pinned to the same version so both paths agree
       # rather than this one silently winning with whatever is latest.
       - name: Install uv (act fallback)
         run: |
-          curl -Ls https://astral.sh/uv/0.8.22/install.sh | sh
+          curl -Ls https://astral.sh/uv/0.13.3/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Set up Python
@@ -595,22 +595,22 @@ jobs:
         needs.changes.outputs.webapp == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
         with:
           version: 9
 
       - name: Cache pnpm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'pnpm'
           cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
 
@@ -633,22 +633,22 @@ jobs:
         needs.changes.outputs.webapp == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
         with:
           version: 9
 
       - name: Cache pnpm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'pnpm'
           cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
 
@@ -671,27 +671,22 @@ jobs:
         needs.changes.outputs.webapp == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # jsdom (and its undici dependency) requires Node's worker_threads.markAsUncloneable,
-      # which Node 20 (used by the other webapp jobs) does not have — the vitest workers
-      # crash on import with "webidl.util.markAsUncloneable is not a function". jsdom's own
-      # engines field wants ^22.22.2 || ^24.15.0 || >=26.0.0; 22 is the smallest bump that
-      # satisfies it and stays closest to the Node 20 used elsewhere in this workflow.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
         with:
           version: 9
 
       - name: Cache pnpm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'pnpm'
           cache-dependency-path: 'agentarea-webapp/pnpm-lock.yaml'
 
@@ -716,22 +711,22 @@ jobs:
         needs.changes.outputs.cli == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
         with:
           version: 9
 
       - name: Cache pnpm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'pnpm'
           cache-dependency-path: 'agentarea-cli/pnpm-lock.yaml'
 
@@ -754,19 +749,19 @@ jobs:
         needs.changes.outputs.mcp_manager == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache-dependency-path: agentarea-mcp-manager/go.sum
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-mcp-manager/Makefile.
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.15.0
           install-only: true
 
       - name: Build, test, lint
@@ -783,19 +778,19 @@ jobs:
         needs.changes.outputs.events == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache-dependency-path: agentarea-event-service/go.sum
 
       # Must match GOLANGCI_LINT_VERSION in agentarea-event-service/Makefile.
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.15.0
           install-only: true
 
       - name: Build, test, lint
@@ -840,14 +835,14 @@ jobs:
         needs.changes.outputs.operator == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
           enable-cache: true
           cache-dependency-glob: "agentarea-operator/pyproject.toml"
 
@@ -874,16 +869,16 @@ jobs:
         needs.changes.outputs.mcp_base == 'true'
       )
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          version: "0.8.22"
+          version: "0.13.3"
 
       - name: Run tests
         working-directory: mcp-servers/mcp-base
-        run: uv run --no-project --python 3.12 --with-requirements requirements.txt --with pytest python -m pytest -q tests
+        run: uv run --no-project --python 3.14 --with-requirements requirements.txt --with pytest python -m pytest -q tests
 
   # Migration safety gate: a broken or conflicting migration is a top cause of
   # prod incidents. Prove migrations apply cleanly on a fresh DB, that there is
@@ -928,14 +923,14 @@ jobs:
       AGENTAREA_DB_PORT: "5432"
       AGENTAREA_DB_NAME: agentarea_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
           enable-cache: true
           cache-dependency-glob: "agentarea-platform/**/pyproject.toml"
 
@@ -948,9 +943,9 @@ jobs:
 
       # The MCP manager's Go SQL is checked against the migrated schema too.
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version: '1.27'
           cache-dependency-path: agentarea-mcp-manager/go.sum
 
       # Migrations heads/upgrade/roundtrip, then every schema-backed suite
