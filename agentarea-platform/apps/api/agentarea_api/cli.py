@@ -451,6 +451,45 @@ async def _repin_catalog_installs(*, dry_run: bool) -> None:
         sys.exit(1)
 
 
+@skills.command("refresh-stub-installs")
+@click.option("--dry-run", is_flag=True, help="Report what would be refreshed; change nothing.")
+def refresh_stub_installs(dry_run: bool):
+    """Replace skills whose SKILL.md is an old index's stub with the original from GitHub.
+
+    An install from a community shard before packages existed holds the
+    shard's stub, which names the original's repository and path. Each such
+    skill outside the platform workspace is re-read from that folder at its
+    default branch's head, if the workspace's install policy allows a GitHub
+    import, keeping its id, name and agents. Safe to run again: a refreshed
+    skill is no longer a stub. The repin cannot reach these once their item
+    left the catalog; run this after it.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_refresh_stub_installs(dry_run=dry_run))
+
+
+async def _refresh_stub_installs(*, dry_run: bool) -> None:
+    from collections import Counter
+
+    from agentarea_agents.application import skill_stub_refresh
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    _require_object_storage()
+    db = Database(get_db_settings())
+    results = await skill_stub_refresh.refresh_all_stub_installs(
+        db.async_session_factory, SkillStorageService(), dry_run=dry_run
+    )
+    for workspace_id, result in results:
+        line = f"{result.status}  {workspace_id}/{result.skill_id}  {result.name}"
+        if result.source_url:
+            line += f"  {result.source_url}"
+        click.echo(f"{line}: {result.detail}" if result.detail else line)
+    counts = Counter(result.status for _, result in results)
+    click.echo(", ".join(f"{n} {status}" for status, n in counts.items()) or "No stub installs")
+    if counts["error"]:
+        sys.exit(1)
+
+
 async def _register_graph_client() -> None:
     """Register the authorization-graph client the API and worker register.
 

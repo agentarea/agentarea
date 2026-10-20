@@ -91,6 +91,17 @@ async def list_catalog_installs(session: AsyncSession) -> list[tuple[UUID, str]]
         return [(row.id, row.workspace_id) for row in result.all()]
 
 
+async def list_workspace_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
+    """``(id, workspace_id)`` of every skill but the platform workspace's stub copies."""
+    with unscoped("finding skills whose body is an index stub spans every workspace"):
+        result = await session.execute(
+            select(Skill.id, Skill.workspace_id)
+            .where(Skill.workspace_id != PLATFORM_WORKSPACE_ID)
+            .order_by(Skill.workspace_id, Skill.id)
+        )
+        return [(row.id, row.workspace_id) for row in result.all()]
+
+
 # ``set_package`` without a compare-and-set.
 ANY_PACKAGE = object()
 

@@ -158,10 +158,10 @@ class SkillVersion(BaseModel, WorkspaceScopedMixin):
     )
     s3_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # create, edit, install, update, rollback or migrate.
+    # create, edit, install, update, rollback, migrate or refresh.
     reason: Mapped[str] = mapped_column(String(32), nullable=False)
-    # The catalog item version a catalog package was pinned at; null for the
-    # workspace's own packages.
+    # The catalog item version a catalog package was pinned at, or the source
+    # commit a refresh read; null for the workspace's other packages.
     catalog_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 

@@ -13501,7 +13501,8 @@
               "install",
               "update",
               "rollback",
-              "migrate"
+              "migrate",
+              "refresh"
             ],
             "title": "Reason",
             "type": "string"

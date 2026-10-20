@@ -3222,6 +3222,7 @@ export const zSkillVersionResponse = z.object({
     "update",
     "rollback",
     "migrate",
+    "refresh",
   ]),
 });
 
