@@ -17,7 +17,7 @@ class S3LogBodyStore:
         self._bucket = bucket
 
     @classmethod
-    def from_settings(cls) -> "S3LogBodyStore":
+    def from_settings(cls) -> S3LogBodyStore:
         from agentarea_common.config.aws import get_aws_settings, get_s3_client
 
         return cls(get_s3_client(), get_aws_settings().BUCKET)

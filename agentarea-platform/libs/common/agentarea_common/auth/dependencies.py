@@ -139,7 +139,7 @@ async def _member_workspace_ids(user_id: str) -> list[str]:
 
 async def _owned_and_named_workspaces(
     user_id: str, *, slug: str | None = None, workspace_id: str | None = None
-) -> "tuple[list[Workspace], Workspace | None]":
+) -> tuple[list[Workspace], Workspace | None]:
     """The workspaces ``user_id`` owns and the one named by slug or id, in one query.
 
     Database errors propagate: a failed lookup must not read as "no such
@@ -167,7 +167,7 @@ async def _owned_and_named_workspaces(
 
 async def _resolve_access(
     principal: UserPrincipal, *, slug: str | None = None, workspace_id: str | None = None
-) -> "Workspace | None":
+) -> Workspace | None:
     """Fill the workspaces ``principal`` can reach and administer.
 
     Combines what the ``AuthorizationService`` grants, graph memberships, and
@@ -183,7 +183,7 @@ async def _resolve_access(
 
 async def _resolve_access_unobserved(
     principal: UserPrincipal, *, slug: str | None, workspace_id: str | None
-) -> "Workspace | None":
+) -> Workspace | None:
     from agentarea_common.di.container import resolve
 
     authz = resolve(AuthorizationService)

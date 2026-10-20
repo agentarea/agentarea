@@ -46,7 +46,7 @@ class NulCharacterMiddleware(BaseHTTPMiddleware):
             body = await request.body()
             try:
                 payload = json.loads(body) if body else None
-            except (ValueError, RecursionError):
+            except ValueError, RecursionError:
                 # Not JSON this layer can read; request validation reports it.
                 payload = None
             if contains_nul(payload):

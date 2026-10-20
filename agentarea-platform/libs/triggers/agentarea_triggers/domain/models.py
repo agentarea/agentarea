@@ -76,7 +76,7 @@ class Trigger(BaseModel):
         return v.strip()
 
     @model_validator(mode="after")
-    def validate_datetime_fields(self, info: ValidationInfo) -> "Trigger":
+    def validate_datetime_fields(self, info: ValidationInfo) -> Trigger:
         """Validate datetime field relationships.
 
         Building a trigger this way out of order is a programming error and
@@ -185,7 +185,7 @@ class TriggerBatchWindow(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _a_window_or_a_count(self) -> "TriggerBatchWindow":
+    def _a_window_or_a_count(self) -> TriggerBatchWindow:
         if self.window is None and self.max_events is None:
             raise ValueError("a batch needs a window or max_events")
         return self
@@ -278,7 +278,7 @@ class TriggerCreate(BaseModel):
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
 
     @model_validator(mode="after")
-    def validate_trigger_type_fields(self) -> "TriggerCreate":
+    def validate_trigger_type_fields(self) -> TriggerCreate:
         """Validate that required fields are present for each trigger type."""
         if self.trigger_type == TriggerType.CRON:
             if not self.cron_expression:

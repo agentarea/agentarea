@@ -368,7 +368,7 @@ async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) ->
 
 
 def make_config_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

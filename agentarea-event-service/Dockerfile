@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27.3-alpine3.24 AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -15,7 +15,7 @@ ARG TARGETOS
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -installsuffix cgo -o bin/event-service ./cmd/server
 
 # Runtime stage
-FROM alpine:3.20
+FROM alpine:3.24.2
 
 RUN apk add --no-cache ca-certificates dumb-init && rm -rf /var/cache/apk/*
 

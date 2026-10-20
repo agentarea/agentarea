@@ -381,8 +381,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         )
 
     async def monthly_llm_cap_reached(
-        self, budget: "BudgetPolicy | None", agent_id: UUID | None = None
-    ) -> "LlmCapReached | None":
+        self, budget: BudgetPolicy | None, agent_id: UUID | None = None
+    ) -> LlmCapReached | None:
         """The first monthly cap on LLM spend that this month's model lines reached."""
         from ..spend_gate import monthly_llm_cap_reached
 

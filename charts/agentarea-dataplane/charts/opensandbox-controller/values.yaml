@@ -2,9 +2,15 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# -- Override the name of the chart
+# NOTE: resource names in this chart are fixed (Deployment
+# opensandbox-controller-manager, ServiceAccount opensandbox-controller-manager,
+# ClusterRoles opensandbox-manager-role / opensandbox-metrics-*-role). The
+# overrides below change label values only, and installing more than one
+# release of this chart into a single cluster is not supported.
+
+# -- Override the name of the chart (labels only; resource names are fixed)
 nameOverride: ""
-# -- Override the full name of the chart
+# -- Override the full name of the chart (labels only; resource names are fixed)
 fullnameOverride: ""
 
 # -- Override the namespace where resources will be created
@@ -21,10 +27,10 @@ controller:
     pullPolicy: IfNotPresent
     # -- Overrides the image tag whose default is the chart appVersion
     tag: ""
-  
+
   # -- Number of controller replicas
   replicaCount: 1
-  
+
   # -- Resource requests and limits for the controller
   resources:
     limits:
@@ -33,18 +39,18 @@ controller:
     requests:
       cpu: 10m
       memory: 64Mi
-  
+
   # -- Log level for zap logger (debug, info, error)
   logLevel: info
 
   # -- controller-runtime metrics endpoint (Prometheus). Disabled by default to
-  # preserve the current behavior (the binary defaults to --metrics-bind-address=0).
+  # preserve the current behavior (the binary defaults to `--metrics-bind-address=0`).
   metrics:
-    # -- Expose the controller-runtime /metrics endpoint (sets --metrics-bind-address)
+    # -- Expose the controller-runtime /metrics endpoint (sets `--metrics-bind-address`)
     enabled: false
     # -- Port for the metrics endpoint
     port: 8080
-    # -- Serve metrics over HTTPS with authn/authz (--metrics-secure). Set to false
+    # -- Serve metrics over HTTPS with authn/authz (`--metrics-secure`). Set to false
     # to serve plain HTTP for scraping without TLS/RBAC (e.g. PodMonitoring).
     secure: false
 
@@ -55,19 +61,37 @@ controller:
     # -- Burst for Kubernetes client rate limiter.
     burst: 200
 
+  # -- Image pull stuck pod recovery during initial startup (BatchSandbox).
+  # Rendered into the `feature-flags` ConfigMap in the controller namespace;
+  # the controller hot-reloads it without a restart.
+  podRecovery:
+    # -- How long a pod must stay in ImagePullBackOff/ErrImagePull during initial
+    # startup before the controller replaces it (`pod-recovery-stuck-threshold`).
+    stuckThreshold: "1m"
+    # -- Maximum number of stuck-pod replacements per BatchSandbox generation
+    # (`pod-recovery-max-attempts`).
+    maxAttempts: 3
+    # -- Comma-separated kubelet admission rejection reasons that pod replacement
+    # can recover (`pod-recovery-admission-reasons`). Replaces the built-in set
+    # (NodeNotSchedulable, KubeletNotReady, UnexpectedAdmissionError, Evicted;
+    # OutOf* reasons always apply). Leave empty to use the built-in defaults.
+    admissionReasons: ""
+
   # -- Pause/Resume snapshot configuration
   snapshot:
-    # -- Image used for commit operations
-    # DockerHub: opensandbox/image-committer:v0.1.1
-    imageCommitterImage: "sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/image-committer:v0.1.1"
+    # -- Image used for commit operations.
+    # DockerHub: opensandbox/image-committer:release-1.1.1
+    imageCommitterImage: "sandbox-registry.cn-zhangjiakou.cr.aliyuncs.com/opensandbox/image-committer:release-1.1.1"
     # -- PodTemplateSpec overlay for image-committer commit Job Pods.
     imageCommitterPodTemplate: {}
-    # -- Containerd socket path of host. Defaults to empty so the controller uses its built-in default (/var/run/containerd/containerd.sock) without passing --containerd-socket-path flag.
+    # -- Containerd socket path of host. Defaults to empty so the controller uses its built-in default (/var/run/containerd/containerd.sock) without passing the `--containerd-socket-path` flag.
     containerdSocketPath: ""
     # -- Timeout duration for commit jobs
     commitJobTimeout: "10m"
     # -- OCI registry prefix used for snapshot images.
     registry: ""
+    # -- Go named-field template for snapshot image URIs. Empty preserves default naming.
+    imageURITemplate: ""
     # -- Use insecure registry mode when pushing snapshot images.
     registryInsecure: false
     # -- Secret name used by commit Jobs to push snapshot images.
@@ -81,8 +105,9 @@ controller:
   # -- Enable leader election for controller manager
   leaderElection:
     enabled: true
-  
-  # -- Liveness probe configuration
+
+  # -- Liveness probe configuration. The livenessProbe.httpGet.port below also
+  # drives --health-probe-bind-address and the health container port.
   livenessProbe:
     enabled: true
     httpGet:
@@ -93,8 +118,8 @@ controller:
     timeoutSeconds: 1
     successThreshold: 1
     failureThreshold: 3
-  
-  # -- Readiness probe configuration
+
+  # -- Readiness probe configuration. Shares the health-probe port with livenessProbe.
   readinessProbe:
     enabled: true
     httpGet:
@@ -105,22 +130,22 @@ controller:
     timeoutSeconds: 1
     successThreshold: 1
     failureThreshold: 3
-  
+
   # -- Node labels for controller pod assignment
   nodeSelector: {}
-  
+
   # -- Tolerations for controller pod assignment
   tolerations: []
-  
+
   # -- Affinity for controller pod assignment
   affinity: {}
-  
+
   # -- Pod security context
   podSecurityContext:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
-  
+
   # -- Container security context
   containerSecurityContext:
     allowPrivilegeEscalation: false
@@ -128,13 +153,13 @@ controller:
       drop:
         - "ALL"
     readOnlyRootFilesystem: false
-  
+
   # -- Additional labels for controller pods
   podLabels: {}
-  
+
   # -- Additional annotations for controller pods
   podAnnotations: {}
-  
+
   # -- Priority class name for controller pods
   priorityClassName: ""
 
@@ -156,16 +181,6 @@ serviceAccount:
 rbac:
   # -- Specifies whether RBAC resources should be created
   create: true
-
-# CRD configuration
-crds:
-  # -- Specifies whether CRDs should be installed
-  install: true
-  # -- Keep CRDs on chart uninstall (adds helm.sh/resource-policy: keep annotation)
-  keep: true
-  # -- Additional annotations to add to CRDs (will be merged with resource-policy if keep is true)
-  annotations: {}
-
 
 # -- Additional environment variables for the controller
 extraEnv: []

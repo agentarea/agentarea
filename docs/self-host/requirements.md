@@ -74,8 +74,8 @@ the corresponding `global.*` key at a managed service instead.
 | PostgreSQL | `postgres:16-alpine` | `postgresql.enabled` | `true` |
 | Valkey (Redis-compatible) | `valkey` subchart 0.9.3 from `https://valkey.io/valkey-helm/` | `redis.enabled` | `true` |
 | RustFS (S3-compatible object store) | `rustfs/rustfs:latest` | `rustfs.enabled` | `true` |
-| Temporal | `temporalio/auto-setup:1.29.1` | `temporal.enabled` | `true` |
-| Ory Kratos | `oryd/kratos:v1.3.1` | `kratos.enabled` | `true` |
+| Temporal | `temporalio/server:1.32.1`, schema and namespace by `temporalio/admin-tools:1.32.1` | `temporal.enabled` | `true` |
+| Ory Kratos | `oryd/kratos:v26.2.0` | `kratos.enabled` | `true` |
 | OpenFGA | `openfga/openfga:v1.18.0` | `openfga.enabled` | `true` |
 
 The bundled PostgreSQL is a single StatefulSet with no replication and no backup.
@@ -94,7 +94,7 @@ One PostgreSQL instance, several logical databases. Compose creates them in
 | Database | Created by | Required when |
 |---|---|---|
 | `agentarea` (`global.database.name`) | `postgres_init` / `db-migration` job | Always |
-| `temporal` (`temporal.database.name`) | `postgres_init` / `create-temporal-db-job` | `temporal.enabled=true` |
+| `temporal`, `temporal_visibility` (`temporal.database.name`) | `postgres_init` / the Temporal pod's `schema` init container | `temporal.enabled=true` |
 | `kratos` (`kratos.database.name`) | `postgres_init` / `create-kratos-db-job` | `kratos.enabled=true` |
 | `openfga` (`openfga.database.name`) | `create-openfga-db-job` | `openfga.enabled=true` |
 

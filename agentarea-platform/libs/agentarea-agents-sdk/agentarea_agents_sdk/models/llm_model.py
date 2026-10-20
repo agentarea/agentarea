@@ -190,7 +190,7 @@ class LLMModel:
         input_cost_per_token: Decimal | None = None,
         output_cost_per_token: Decimal | None = None,
         cached_input_cost_per_token: Decimal | None = None,
-        endpoint_policy: "OutboundPolicy | None" = None,
+        endpoint_policy: OutboundPolicy | None = None,
         cache_creation_input_cost_per_token: Decimal | None = None,
     ):
         """Initialize LLM model with explicit parameters.
@@ -254,7 +254,7 @@ class LLMModel:
         """Convert any Python object to JSON-serializable string safely."""
         try:
             return json.dumps(obj, ensure_ascii=False)
-        except (TypeError, OverflowError):
+        except TypeError, OverflowError:
             return str(obj)
 
     def _to_content_parts(self, content: Any, metadata: dict[str, Any] | None = None) -> Any:

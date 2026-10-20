@@ -55,7 +55,7 @@ def upgrade() -> None:
         if isinstance(tools, str):
             try:
                 tools = json.loads(tools)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
         tools, changed = _empty_allowlists_to_null(tools)
         if changed:

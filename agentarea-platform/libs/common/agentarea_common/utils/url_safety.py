@@ -98,7 +98,7 @@ def validate_outbound_url(
     *,
     allow_private: bool = False,
     allowed_hosts: Iterable[str] | None = None,
-    policy: "OutboundPolicy | None" = None,
+    policy: OutboundPolicy | None = None,
 ) -> None:
     """Validate that ``url`` is safe to fetch; raise ``UnsafeUrlError`` otherwise.
 
@@ -188,7 +188,7 @@ class OutboundPolicy:
         object.__setattr__(self, "_host_patterns", tuple(patterns))
 
     @classmethod
-    def from_env(cls) -> "OutboundPolicy":
+    def from_env(cls) -> OutboundPolicy:
         from agentarea_common.config import get_settings
 
         settings = get_settings()

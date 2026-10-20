@@ -1,5 +1,6 @@
 """Project application service."""
 
+import builtins
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -68,7 +69,7 @@ class ProjectService:
 
     async def run_instructions(
         self, agent_id: UUID | str, project_id: UUID | None
-    ) -> list[tuple[str, str]]:
+    ) -> builtins.list[tuple[str, str]]:
         """Name and instructions of a run's project and each one above it, root first.
 
         The run's project is ``project_id``, else the one project the agent
@@ -121,7 +122,7 @@ class ProjectService:
         self,
         limit: int | None = None,
         offset: int | None = None,
-    ) -> list[Project]:
+    ) -> builtins.list[Project]:
         """List all projects in the current workspace."""
         return await self.repository.list_all(limit=limit, offset=offset)
 

@@ -76,7 +76,7 @@ class MCPServerInstanceResponse(BaseModel):
         instance: MCPServerInstance,
         verification_override: dict | None = None,
         secret_env_names: set[str] | None = None,
-    ) -> "MCPServerInstanceResponse":
+    ) -> MCPServerInstanceResponse:
         json_spec = dict(instance.json_spec or {})
 
         # Old rows may still contain secret plaintext without env_vars metadata.
@@ -713,7 +713,7 @@ async def get_containers_health(
     settings = get_settings()
     instances = await service.list()
 
-    async def read_one(client: "httpx.AsyncClient", instance) -> dict:
+    async def read_one(client: httpx.AsyncClient, instance) -> dict:
         row = {"instance_id": str(instance.id), "name": getattr(instance, "name", None)}
         url = f"{settings.mcp.MANAGER_URL}/instances/{instance.id}/health"
         try:

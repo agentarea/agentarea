@@ -132,7 +132,7 @@ class CommandsMixin(BudgetMixin):
             next_policy = effective_policy_from_json(info.effective_policy)
             current_runtime = current_policy.runtime_contract()
             next_runtime = next_policy.runtime_contract()
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None, {"accepted": False, "reason": "invalid_governance_snapshot"}
 
         if info.governance_snapshot.get("effective_policy") != next_policy.to_json_dict():

@@ -37,7 +37,7 @@ def pending_entries(first_seq: int, messages: list[dict[str, Any]]) -> list[Conv
 
 
 async def write_entries(
-    container: "ActivityServiceContainer",
+    container: ActivityServiceContainer,
     user_context: UserContext,
     task_id: str,
     entries: list[ConversationEntry],
@@ -52,7 +52,7 @@ async def write_entries(
 
 
 async def read_window(
-    container: "ActivityServiceContainer",
+    container: ActivityServiceContainer,
     user_context: UserContext,
     window: ConversationWindow,
     pending: list[dict[str, Any]],
@@ -78,7 +78,7 @@ async def read_window(
 
 
 async def sync_window(
-    container: "ActivityServiceContainer",
+    container: ActivityServiceContainer,
     user_context: UserContext,
     window: ConversationWindow,
     pending: list[dict[str, Any]],

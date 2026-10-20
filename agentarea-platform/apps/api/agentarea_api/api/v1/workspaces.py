@@ -55,7 +55,7 @@ from ._access_control_grants import seed_workspace
 logger = logging.getLogger(__name__)
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     async with get_database().async_session_factory() as session:
         yield session
 

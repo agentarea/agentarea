@@ -331,7 +331,7 @@ class TaskEvent(BaseModel):
         timestamp: datetime,
         workspace_id: str,  # Required - no default
         created_by: str,  # Required - no default
-    ) -> "TaskEvent":
+    ) -> TaskEvent:
         """Create a workflow event with the identity the workflow minted.
 
         ``event_id`` and ``timestamp`` come from the workflow, so a retried

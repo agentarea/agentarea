@@ -191,7 +191,7 @@ def skill_entry(
 
 
 def make_files_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

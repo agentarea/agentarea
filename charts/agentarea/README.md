@@ -144,9 +144,7 @@ The following table lists configurable parameters of the chart and their default
 | global.jobs.kube.timeouts.discover | string | `"900s"` |  |
 | global.jobs.kube.mainContainerImagePullPolicy | string | `"IfNotPresent"` |  |
 | global.jobs.kube.sidecarContainerImagePullPolicy | string | `"IfNotPresent"` |  |
-| global.jobs.kube.images.socat | string | `"alpine/socat:latest"` |  |
-| global.jobs.kube.images.busybox | string | `"busybox:latest"` |  |
-| global.jobs.kube.images.curl | string | `"curlimages/curl:latest"` |  |
+| global.jobs.kube.images.busybox | string | `"busybox:1.38.0"` |  |
 | global.workloads.resources.mainContainer.cpu.request | string | `"50m"` |  |
 | global.workloads.resources.mainContainer.cpu.limit | string | `"1000m"` |  |
 | global.workloads.resources.mainContainer.memory.request | string | `"128Mi"` |  |
@@ -199,7 +197,7 @@ The following table lists configurable parameters of the chart and their default
 | backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
 | backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
 | backend.image.repository | string | `"agentarea/agentarea-api"` |  |
-| backend.image.tag | string | `"latest"` |  |
+| backend.image.tag | string | `""` |  |
 | backend.image.pullPolicy | string | `""` |  |
 | backend.service.type | string | `"ClusterIP"` |  |
 | backend.service.port | int | `8000` |  |
@@ -230,7 +228,7 @@ The following table lists configurable parameters of the chart and their default
 | frontend.enabled | bool | `true` |  |
 | frontend.replicaCount | int | `1` |  |
 | frontend.image.repository | string | `"agentarea/agentarea-frontend"` |  |
-| frontend.image.tag | string | `"latest"` |  |
+| frontend.image.tag | string | `""` |  |
 | frontend.image.pullPolicy | string | `""` |  |
 | frontend.service.type | string | `"ClusterIP"` |  |
 | frontend.service.port | int | `3000` |  |
@@ -259,7 +257,7 @@ The following table lists configurable parameters of the chart and their default
 | worker.enabled | bool | `true` |  |
 | worker.replicaCount | int | `1` |  |
 | worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
-| worker.image.tag | string | `"latest"` |  |
+| worker.image.tag | string | `""` |  |
 | worker.image.pullPolicy | string | `""` |  |
 | worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
 | worker.outageWait.retryWindow | string | `"5m"` | How long a call retries before the run starts waiting. |
@@ -287,7 +285,7 @@ The following table lists configurable parameters of the chart and their default
 | eventService.enabled | bool | `true` |  |
 | eventService.replicaCount | int | `1` |  |
 | eventService.image.repository | string | `"agentarea/agentarea-events"` |  |
-| eventService.image.tag | string | `"latest"` |  |
+| eventService.image.tag | string | `""` |  |
 | eventService.image.pullPolicy | string | `""` |  |
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
@@ -315,7 +313,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
 | mcpManager.image.repository | string | `"agentarea/agentarea-mcp-manager"` |  |
-| mcpManager.image.tag | string | `"latest"` |  |
+| mcpManager.image.tag | string | `""` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
 | mcpManager.serviceAccount.create | bool | `true` |  |
@@ -328,7 +326,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
 | mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
-| mcpManager.mcpBase.image.tag | string | `"latest"` |  |
+| mcpManager.mcpBase.image.tag | string | `""` |  |
 | mcpManager.packageImages.repository | string | `""` | Registry repository where immutable images built from npm/PyPI packages are stored. Leave empty to use the local Docker daemon with the Docker backend; Kubernetes and data-plane backends require a repository. |
 | mcpManager.packageImages.registrySecret | string | `""` | Existing dockerconfigjson Secret used to authenticate package-image registry lookups and pushes. The Secret is mounted read-only in the manager. |
 | mcpManager.packageImages.importTimeout | string | `"15m"` | Maximum time allowed for one package-image import. |
@@ -372,7 +370,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.features.variants | object | `{}` |  |
 | mcpManager.warmPool.enabled | bool | `true` |  |
 | mcpManager.warmPool.image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
-| mcpManager.warmPool.image.tag | string | `"latest"` |  |
+| mcpManager.warmPool.image.tag | string | `""` |  |
 | mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
 | mcpManager.warmPool.idleTimeout | string | `"0s"` |  |
 | mcpManager.warmPool.size | int | `1` |  |
@@ -457,17 +455,19 @@ The following table lists configurable parameters of the chart and their default
 | mcpSandboxRunner.extraEnv | list | `[]` |  |
 | temporal.enabled | bool | `true` |  |
 | temporal.replicaCount | int | `1` |  |
-| temporal.image.repository | string | `"temporalio/auto-setup"` |  |
-| temporal.image.tag | string | `"1.29.1"` |  |
+| temporal.image.repository | string | `"temporalio/server"` |  |
+| temporal.image.tag | string | `"1.32.1"` |  |
+| temporal.adminTools.image.repository | string | `"temporalio/admin-tools"` |  |
+| temporal.adminTools.image.tag | string | `"1.32.1"` |  |
+| temporal.namespaceRetention | string | `"24h"` |  |
 | temporal.database.name | string | `"temporal"` |  |
-| temporal.database.createJob.enabled | bool | `true` |  |
 | temporal.service.type | string | `"ClusterIP"` |  |
 | temporal.service.port | int | `7233` |  |
 | temporal.resources | object | `{}` |  |
 | temporal.extraEnv | list | `[]` |  |
 | postgresql.enabled | bool | `true` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
-| postgresql.image.tag | string | `"16-alpine"` |  |
+| postgresql.image.tag | string | `"16.15-alpine"` |  |
 | postgresql.resources.limits.cpu | string | `"500m"` |  |
 | postgresql.resources.limits.memory | string | `"512Mi"` |  |
 | postgresql.resources.requests.cpu | string | `"250m"` |  |
@@ -492,7 +492,7 @@ The following table lists configurable parameters of the chart and their default
 | valkey.resources.requests.memory | string | `"1Gi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
-| rustfs.image.tag | string | `"latest"` |  |
+| rustfs.image.tag | string | `"1.0.3"` |  |
 | rustfs.auth.existingSecret | string | `"agentarea-rustfs-secret"` |  |
 | rustfs.defaultBuckets | string | `""` |  |
 | rustfs.resources.limits.cpu | string | `"500m"` |  |
@@ -535,7 +535,7 @@ The following table lists configurable parameters of the chart and their default
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |
-| openfga.image.tag | string | `"v1.18.0"` |  |
+| openfga.image.tag | string | `"v1.22.0"` |  |
 | openfga.database.name | string | `"openfga"` |  |
 | openfga.database.createJob.enabled | bool | `true` |  |
 | openfga.log.level | string | `"info"` |  |
@@ -553,7 +553,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.enabled | bool | `true` |  |
 | kratos.replicaCount | int | `1` |  |
 | kratos.image.repository | string | `"oryd/kratos"` |  |
-| kratos.image.tag | string | `"v1.3.1"` |  |
+| kratos.image.tag | string | `"v26.2.0"` |  |
 | kratos.urls.public | string | `""` |  |
 | kratos.urls.publicBrowser | string | `""` |  |
 | kratos.urls.admin | string | `""` |  |
@@ -575,7 +575,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.jwt.issuer | string | `"https://agentarea.dev"` |  |
 | kratos.jwt.audience | string | `"agentarea-api"` |  |
 | kratos.identitySchema | string | `"{\n  \"$id\": \"https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json\",\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Person\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"traits\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"email\": {\n          \"type\": \"string\",\n          \"format\": \"email\",\n          \"title\": \"Email\",\n          \"ory.sh/kratos\": {\n            \"credentials\": {\n              \"password\": {\n                \"identifier\": true\n              }\n            },\n            \"recovery\": {\n              \"via\": \"email\"\n            }\n          }\n        },\n        \"name\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"first\": {\n              \"title\": \"First Name\",\n              \"type\": \"string\"\n            },\n            \"last\": {\n              \"title\": \"Last Name\",\n              \"type\": \"string\"\n            }\n          }\n        },\n        \"username\": {\n          \"type\": \"string\",\n          \"title\": \"Username\"\n        }\n      },\n      \"required\": [\n        \"email\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n}\n"` |  |
-| kratos.config.version | string | `"v1.3.1"` |  |
+| kratos.config.version | string | `"v26.2.0"` |  |
 | kratos.config.serve.public.cors.enabled | bool | `true` |  |
 | kratos.config.serve.public.cors.allowed_origins[0] | string | `"https://staging-0.agentarea.ai"` |  |
 | kratos.config.serve.public.cors.allowed_origins[1] | string | `"https://*.staging-0.agentarea.ai"` |  |

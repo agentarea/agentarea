@@ -32,8 +32,8 @@ class ActivityDependencies:
     any worker that records runs; an activity that publishes without it fails.
     """
 
-    settings: "Settings"
-    event_broker: "EventBroker"
-    secret_manager_factory: "SecretManagerFactory"
+    settings: Settings
+    event_broker: EventBroker
+    secret_manager_factory: SecretManagerFactory
     workflow_executor: Any = field(default=None)
-    broker_client: "BrokerClient | None" = field(default=None)
+    broker_client: BrokerClient | None = field(default=None)

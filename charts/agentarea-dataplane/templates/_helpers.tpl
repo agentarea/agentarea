@@ -136,7 +136,6 @@ namespace = {{ $s.namespace | quote }}
 workload_provider = "batchsandbox"
 batchsandbox_template_file = "/etc/opensandbox/batchsandbox-template.yaml"
 image_pull_policy = "IfNotPresent"
-informer_enabled = true
 sandbox_create_timeout_seconds = {{ $s.server.createTimeoutSeconds | int }}
 
 [secure_runtime]

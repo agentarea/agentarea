@@ -1,3 +1,4 @@
+import builtins
 from uuid import UUID
 
 from agentarea_common.base.service import BaseCrudService
@@ -32,7 +33,7 @@ class ModelInstanceService(BaseCrudService[ModelInstance]):
         model_spec_id: UUID | None = None,
         is_active: bool | None = None,
         is_public: bool | None = None,
-    ) -> list[ModelInstance]:
+    ) -> builtins.list[ModelInstance]:
         """List ModelInstances with filtering options."""
         return await self.repository.list_instances(
             provider_config_id=provider_config_id,

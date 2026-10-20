@@ -15,46 +15,47 @@ To learn more about the release, try:
 
   kubectl --namespace {{ include "opensandbox.namespace" . }} get pods -l "app.kubernetes.io/name={{ include "opensandbox.name" . }}"
 
-📚 Check the installed CRDs:
+📚 Check the installed CRDs (managed by the base chart):
 
   kubectl get crd batchsandboxes.sandbox.opensandbox.io
   kubectl get crd pools.sandbox.opensandbox.io
+  kubectl get crd sandboxsnapshots.sandbox.opensandbox.io
 
 🚀 Create your first resources:
 
   # Create a resource pool
-  cat <<EOF | kubectl apply -f -
-  apiVersion: sandbox.opensandbox.io/v1alpha1
-  kind: Pool
-  metadata:
-    name: example-pool
-    namespace: {{ include "opensandbox.namespace" . }}
-  spec:
-    template:
-      spec:
-        containers:
-        - name: sandbox-container
-          image: nginx:latest
-          ports:
-          - containerPort: 80
-    capacitySpec:
-      bufferMax: 10
-      bufferMin: 2
-      poolMax: 20
-      poolMin: 5
-  EOF
+cat <<EOF | kubectl apply -f -
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: Pool
+metadata:
+  name: example-pool
+  namespace: {{ include "opensandbox.namespace" . }}
+spec:
+  template:
+    spec:
+      containers:
+      - name: sandbox-container
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+  capacitySpec:
+    bufferMax: 10
+    bufferMin: 2
+    poolMax: 20
+    poolMin: 5
+EOF
 
   # Create a batch sandbox
-  cat <<EOF | kubectl apply -f -
-  apiVersion: sandbox.opensandbox.io/v1alpha1
-  kind: BatchSandbox
-  metadata:
-    name: example-batch-sandbox
-    namespace: {{ include "opensandbox.namespace" . }}
-  spec:
-    replicas: 3
-    poolRef: example-pool
-  EOF
+cat <<EOF | kubectl apply -f -
+apiVersion: sandbox.opensandbox.io/v1alpha1
+kind: BatchSandbox
+metadata:
+  name: example-batch-sandbox
+  namespace: {{ include "opensandbox.namespace" . }}
+spec:
+  replicas: 3
+  poolRef: example-pool
+EOF
 
 📊 Monitor resources:
 
@@ -86,11 +87,5 @@ To learn more about the release, try:
 {{- if not .Values.rbac.create }}
 
 ⚠️  WARNING: RBAC is disabled. Make sure the ServiceAccount has proper permissions.
-
-{{- end }}
-
-{{- if not .Values.crds.install }}
-
-⚠️  WARNING: CRD installation is disabled. Make sure CRDs are installed manually.
 
 {{- end }}

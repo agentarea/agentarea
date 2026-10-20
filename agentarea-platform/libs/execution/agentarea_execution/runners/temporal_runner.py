@@ -245,7 +245,7 @@ class TemporalAgentRunner(BaseAgentRunner):
 
                 try:
                     tool_args = json.loads(tool_call["function"]["arguments"])
-                except (json.JSONDecodeError, KeyError):
+                except json.JSONDecodeError, KeyError:
                     tool_args = {}
 
                 # Extract workspace_id from agent_config.user_context_data

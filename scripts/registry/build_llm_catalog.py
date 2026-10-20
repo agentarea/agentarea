@@ -41,7 +41,7 @@ DEFAULT_CURRENT = f"{S3_BASE}/llm-models.json"
 
 DEFAULT_LITELLM = (
     Path(__file__).resolve().parents[2]
-    / "agentarea-platform/.venv/lib/python3.12/site-packages/litellm"
+    / "agentarea-platform/.venv/lib/python3.14/site-packages/litellm"
     / "model_prices_and_context_window_backup.json"
 )
 

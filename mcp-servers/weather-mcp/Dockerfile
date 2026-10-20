@@ -1,8 +1,8 @@
-FROM python:3.12-slim
+FROM python:3.14.8-slim-trixie
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
+RUN pip install --no-cache-dir uv==0.13.3
 
 COPY requirements.txt .
 RUN uv pip install --system -r requirements.txt

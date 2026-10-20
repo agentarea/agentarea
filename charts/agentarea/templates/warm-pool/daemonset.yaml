@@ -47,7 +47,7 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: warm-pod
-          image: "{{ required "mcpManager.warmPool.image.repository is required" .Values.mcpManager.warmPool.image.repository }}:{{ required "mcpManager.warmPool.image.tag is required" .Values.mcpManager.warmPool.image.tag }}"
+          image: "{{ required "mcpManager.warmPool.image.repository is required" .Values.mcpManager.warmPool.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.warmPool.image.tag }}"
           imagePullPolicy: {{ .Values.mcpManager.warmPool.image.pullPolicy }}
           ports:
             - name: activation

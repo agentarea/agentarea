@@ -107,7 +107,7 @@ def tool_call_event_id(line_key: str) -> UUID:
     return uuid5(_TOOL_CALL_EVENTS, line_key)
 
 
-def tool_call_entry(usage: "ToolUsage") -> CostEntry:
+def tool_call_entry(usage: ToolUsage) -> CostEntry:
     """The line a metered tool call is, from a run or from /mcp."""
     return CostEntry(
         workspace_id=usage.workspace_id,

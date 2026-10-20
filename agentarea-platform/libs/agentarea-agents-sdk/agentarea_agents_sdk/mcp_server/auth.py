@@ -275,7 +275,7 @@ def _parse_jsonrpc(body: bytes) -> tuple[str, Any]:
     try:
         data = json.loads(body)
         return data.get("method", ""), data.get("id")
-    except (json.JSONDecodeError, AttributeError):
+    except json.JSONDecodeError, AttributeError:
         return "", None
 
 

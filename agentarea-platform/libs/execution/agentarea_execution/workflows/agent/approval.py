@@ -64,7 +64,7 @@ class ToolApprovalMixin(BudgetMixin):
         """Record the model's tool.call for a call refused before it ran, so its result has one."""
         try:
             arguments = json.loads(tool_call.function.get("arguments") or "{}")
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             arguments = {}
         self._events.add_event(
             EventTypes.TOOL_CALL_STARTED,
@@ -299,7 +299,7 @@ class ToolApprovalMixin(BudgetMixin):
         tool_name = tool_call.function["name"]
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         if self._monthly_cap_message:

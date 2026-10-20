@@ -159,7 +159,7 @@ class AgentService(BaseCrudService[Agent]):
         """Get the agent repository with proper type."""
         return self.repository_factory.create_repository(AgentRepository)
 
-    async def _resolve_skills(self, skill_ids: list[UUID] | None) -> list[UUID]:
+    async def _resolve_skills(self, skill_ids: builtins.list[UUID] | None) -> builtins.list[UUID]:
         """The workspace skill ids to attach for ``skill_ids``.
 
         A workspace skill is attached as is. A catalog skill is installed into the
@@ -225,7 +225,7 @@ class AgentService(BaseCrudService[Agent]):
             )
         return instance.model_spec.kind
 
-    async def _validate_tool_models(self, tools: list[dict] | None) -> None:
+    async def _validate_tool_models(self, tools: builtins.list[dict] | None) -> None:
         """Every model a code toolset names exists here and is of the kind it needs."""
         for tool in tools or []:
             if tool.get("type") != "code":
@@ -250,7 +250,7 @@ class AgentService(BaseCrudService[Agent]):
                     )
 
     async def _validate_delegates(
-        self, tools: list[dict] | None, previous: list[dict] | None = None
+        self, tools: builtins.list[dict] | None, previous: builtins.list[dict] | None = None
     ) -> None:
         """Every delegate the agent names is one the runtime can reach.
 
@@ -323,8 +323,8 @@ class AgentService(BaseCrudService[Agent]):
         )
 
     def _lift_approval_toggles(
-        self, tools: list[dict] | None
-    ) -> tuple[set[str], list[dict] | None]:
+        self, tools: builtins.list[dict] | None
+    ) -> tuple[set[str], builtins.list[dict] | None]:
         """Split the per-tool approval toggles out of the tool config.
 
         Returns the rule targets to sync and the tools with the flag removed, so
@@ -345,7 +345,7 @@ class AgentService(BaseCrudService[Agent]):
             targets,
         )
 
-    async def list(self, include_catalog: bool = False) -> list[Agent]:
+    async def list(self, include_catalog: bool = False) -> builtins.list[Agent]:
         """List the workspace's own agents.
 
         Catalog (built-in) agents live in the registry and are discovered via

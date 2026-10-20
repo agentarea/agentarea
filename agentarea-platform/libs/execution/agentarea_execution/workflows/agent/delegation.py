@@ -221,7 +221,7 @@ class DelegationMixin(ToolApprovalMixin):
         # Parse the message argument
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         message = tool_args.get("message", "")

@@ -90,7 +90,7 @@ def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | N
                     if not isinstance(ref, str):
                         return None
                     identities.add(str(UUID(ref)))
-            except (ValueError, TypeError, WorkspaceValidationError):
+            except ValueError, TypeError, WorkspaceValidationError:
                 return None
         groups.append(frozenset(identities))
     return tuple(groups)
@@ -153,7 +153,7 @@ class TaskService(BaseTaskService):
 
     def __init__(
         self,
-        repository_factory: "RepositoryFactory",
+        repository_factory: RepositoryFactory,
         event_broker: EventBroker,
         task_manager: BaseTaskManager,
         policy_resolver: PolicyResolverPort | None = None,

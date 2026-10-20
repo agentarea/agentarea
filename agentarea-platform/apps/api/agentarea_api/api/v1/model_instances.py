@@ -91,7 +91,7 @@ class ModelInstanceResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
     @classmethod
-    def from_domain(cls, model_instance: ModelInstance) -> "ModelInstanceResponse":
+    def from_domain(cls, model_instance: ModelInstance) -> ModelInstanceResponse:
         provider_config = model_instance.provider_config
         provider_spec = provider_config.provider_spec if provider_config else None
         return cls(

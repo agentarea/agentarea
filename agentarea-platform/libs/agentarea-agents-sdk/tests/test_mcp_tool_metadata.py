@@ -5,6 +5,7 @@ an agent reads the whole docstring, not only the line an agent's own tool
 schema carries.
 """
 
+import builtins
 import json
 from typing import Annotated
 
@@ -112,7 +113,7 @@ class _TypedNotesToolset(Toolset):
         effect="read",
         output=list[_Note],
     )
-    async def list(self) -> list[dict]:
+    async def list(self) -> builtins.list[dict]:
         """List notes."""
         return [{"id": "1", "text": "a"}]
 

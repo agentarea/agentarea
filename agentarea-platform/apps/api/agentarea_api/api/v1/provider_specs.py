@@ -30,7 +30,7 @@ class ProviderSpecResponse(BaseModel):
     @classmethod
     def from_domain(
         cls, provider_spec: ProviderSpec, request: Request | None = None
-    ) -> "ProviderSpecResponse":
+    ) -> ProviderSpecResponse:
         # request kept for signature compatibility; the icon URL is resolved
         # from the configured public base, never the incoming request host.
         icon_url = build_provider_icon_url(provider_spec.icon)
@@ -70,7 +70,7 @@ class ModelSpecResponse(BaseModel):
     updated_at: UtcDatetime
 
     @classmethod
-    def from_domain(cls, model_spec: ModelSpec) -> "ModelSpecResponse":
+    def from_domain(cls, model_spec: ModelSpec) -> ModelSpecResponse:
         return cls(
             id=str(model_spec.id),
             provider_spec_id=str(model_spec.provider_spec_id),
@@ -109,7 +109,7 @@ class ProviderSpecWithModelsResponse(BaseModel):
     @classmethod
     def from_domain(
         cls, provider_spec: ProviderSpec, request: Request | None = None
-    ) -> "ProviderSpecWithModelsResponse":
+    ) -> ProviderSpecWithModelsResponse:
         # request kept for signature compatibility; the icon URL is resolved
         # from the configured public base, never the incoming request host.
         icon_url = build_provider_icon_url(provider_spec.icon)

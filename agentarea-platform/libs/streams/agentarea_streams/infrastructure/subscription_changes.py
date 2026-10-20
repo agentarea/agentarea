@@ -65,7 +65,7 @@ class SubscriptionChangeListener:
             for message in messages:
                 try:
                     on_change(changed_stream(decode(message.fields).data))
-                except (ValueError, TypeError, KeyError):
+                except ValueError, TypeError, KeyError:
                     logger.warning(
                         "Unreadable subscription change notice %s; dropping every cached stream",
                         message.id,

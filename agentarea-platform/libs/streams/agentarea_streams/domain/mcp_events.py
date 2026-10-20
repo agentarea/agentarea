@@ -137,7 +137,7 @@ class EventEnvelope(BaseModel):
     attachments: list[EnvelopeAttachment] = Field(default_factory=list)
 
     @classmethod
-    def of(cls, event: StreamEvent) -> "EventEnvelope":
+    def of(cls, event: StreamEvent) -> EventEnvelope:
         return cls(
             v=ENVELOPE_VERSION,
             id=str(event.id),
@@ -211,7 +211,7 @@ class PollCursor:
         return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
     @classmethod
-    def decode(cls, text: str) -> "PollCursor":
+    def decode(cls, text: str) -> PollCursor:
         try:
             raw = base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode()
             version, millis, sequence = raw.split(":")
@@ -220,7 +220,7 @@ class PollCursor:
             return cls(
                 at=datetime.fromtimestamp(int(millis) / 1000, tz=UTC), sequence=int(sequence)
             )
-        except (ValueError, UnicodeDecodeError, binascii.Error):
+        except ValueError, UnicodeDecodeError, binascii.Error:
             raise EventsError(
                 ErrorCode.INVALID_PARAMS, "cursor is not one this server issued"
             ) from None

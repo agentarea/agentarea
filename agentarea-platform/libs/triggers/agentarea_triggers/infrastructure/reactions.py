@@ -68,7 +68,7 @@ class StreamCause:
     causation_id: str
 
     @classmethod
-    def of(cls, subscription: SubscriptionView, event: StreamEvent) -> "StreamCause":
+    def of(cls, subscription: SubscriptionView, event: StreamEvent) -> StreamCause:
         return cls(
             subscription_id=subscription.id,
             trigger_id=subscription.trigger_id,

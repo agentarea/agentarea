@@ -66,7 +66,7 @@ def _is_whsec(value: str) -> bool:
         return False
     try:
         decoded = base64.b64decode(value.removeprefix("whsec_"), validate=True)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         return False
     return 24 <= len(decoded) <= 64
 

@@ -12,7 +12,7 @@ authors = [
 description = "AgentArea workspace with API, Worker and shared libraries"
 readme = "README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "python-dotenv>=1.1.0",
     "pytz>=2025.2",
@@ -44,11 +44,11 @@ members = [
 ]
 
 [tool.uv]
-# uv.lock is at lockfile revision 3. An older uv silently rewrites it back to
-# revision 1, which shows up as a ~2000-line diff of pure format churn on anyone
+# uv.lock is at lockfile revision 5. An older uv silently rewrites it back to
+# an older revision, which shows up as a large diff of pure format churn on anyone
 # who runs `uv sync` or `uv run`. Failing loudly on an old uv is better than that
 # diff appearing in unrelated pull requests.
-required-version = ">=0.8.22"
+required-version = ">=0.13.3"
 
 constraint-dependencies = [
     "aiohttp>=3.14.4",
@@ -133,7 +133,7 @@ lint = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 exclude = ["tests", "scripts", "test_tools_display.py", "libs/triggers/examples"]
 
@@ -325,7 +325,7 @@ exclude = [
 ]
 typeCheckingMode = "standard"
 defineConstant = { DEBUG = true }
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 pythonPlatform = "All"
 reportMissingImports = true
 reportMissingTypeStubs = false

@@ -22,12 +22,56 @@ version: 0.0.27
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 appVersion: "0.1.1"
+home: https://agentarea.ai
+icon: https://raw.githubusercontent.com/agentarea/agentarea/main/agentarea-webapp/public/Icon.png
+sources:
+  - https://github.com/agentarea/agentarea
+maintainers:
+  - name: AgentArea
+    url: https://github.com/agentarea
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/images: |
+    - name: agentarea/agentarea-api
+      image: agentarea/agentarea-api:0.1.1
+    - name: agentarea/agentarea-events
+      image: agentarea/agentarea-events:0.1.1
+    - name: agentarea/agentarea-frontend
+      image: agentarea/agentarea-frontend:0.1.1
+    - name: agentarea/agentarea-mcp-base
+      image: agentarea/agentarea-mcp-base:0.1.1
+    - name: agentarea/agentarea-mcp-manager
+      image: agentarea/agentarea-mcp-manager:0.1.1
+    - name: agentarea/agentarea-mcp-runner
+      image: agentarea/agentarea-mcp-runner:0.1.1
+    - name: agentarea/agentarea-worker
+      image: agentarea/agentarea-worker:0.1.1
+    - name: amazon/aws-cli
+      image: amazon/aws-cli:2.38.2
+    - name: busybox
+      image: busybox:1.38.0
+    - name: valkey/valkey
+      image: docker.io/valkey/valkey:9.1.2
+    - name: openfga/openfga
+      image: openfga/openfga:v1.22.0
+    - name: oryd/kratos
+      image: oryd/kratos:v26.2.0
+    - name: postgres
+      image: postgres:16.15-alpine
+    - name: pause
+      image: registry.k8s.io/pause:3.10.2
+    - name: rustfs/rustfs
+      image: rustfs/rustfs:1.0.3
+    - name: temporalio/admin-tools
+      image: temporalio/admin-tools:1.32.1
+    - name: temporalio/server
+      image: temporalio/server:1.32.1
 
 # External dependencies - users can disable these and use their own infrastructure
 # For production, we recommend using managed services (RDS, ElastiCache, etc.)
 dependencies:
   # Valkey - for caching and event streaming (Redis-compatible, Apache 2.0)
   - name: valkey
-    version: "0.9.3"
+    version: "0.12.0"
     repository: "https://valkey.io/valkey-helm/"
     condition: redis.enabled

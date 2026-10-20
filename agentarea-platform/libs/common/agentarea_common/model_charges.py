@@ -103,7 +103,7 @@ class ModelFunding:
         }
 
     @classmethod
-    def restore(cls, stored: dict[str, Any]) -> "ModelFunding":
+    def restore(cls, stored: dict[str, Any]) -> ModelFunding:
         return cls(
             model_instance_id=str(stored["model_instance_id"]),
             platform_funded=bool(stored["platform_funded"]),
@@ -124,7 +124,7 @@ class UnfundedPlatformCallError(RuntimeError):
     """The platform's credential was asked for without a funding for the call."""
 
 
-def require_funding(funding: "ModelFunding | None", managed_by: str | None) -> None:
+def require_funding(funding: ModelFunding | None, managed_by: str | None) -> None:
     """Refuse the platform's credential to a call ``hold_model_call`` did not fund."""
     if managed_by != MANAGED_BY_PLATFORM:
         return

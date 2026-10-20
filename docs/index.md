@@ -108,7 +108,7 @@ follows a single request across it.
 | Layer | Technology |
 |---|---|
 | Frontend | Next.js 16, React 19 |
-| API | FastAPI, Python 3.12+ |
+| API | FastAPI, Python 3.14+ |
 | Workflows | Temporal 1.29 |
 | Sandbox and MCP orchestration | Go, Kubernetes or Docker |
 | Database | PostgreSQL 18 |

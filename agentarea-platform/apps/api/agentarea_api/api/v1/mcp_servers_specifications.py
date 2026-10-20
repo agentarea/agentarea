@@ -41,7 +41,7 @@ class MCPServerResponse(BaseModel):
     updated_at: UtcDatetime
 
     @classmethod
-    def from_domain(cls, server: MCPServer) -> "MCPServerResponse":
+    def from_domain(cls, server: MCPServer) -> MCPServerResponse:
         return cls(
             id=server.id,
             slug=server.slug,

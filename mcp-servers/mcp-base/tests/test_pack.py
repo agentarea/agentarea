@@ -121,7 +121,7 @@ def test_npm_executable_resolution_accepts_only_bin(tmp_path: Path) -> None:
 
 def test_python_executable_resolution_uses_project_console_script(tmp_path: Path) -> None:
     package = tmp_path / "mcp-pkg"
-    site = package / "venv" / "lib" / "python3.12" / "site-packages"
+    site = package / "venv" / "lib" / "python3.14" / "site-packages"
     site.mkdir(parents=True)
     dist_info = site / "mcp_server_time-1.0.dist-info"
     dist_info.mkdir()

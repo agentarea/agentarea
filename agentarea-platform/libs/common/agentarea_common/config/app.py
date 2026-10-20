@@ -123,7 +123,7 @@ class AppSettings(BaseAppSettings):
         return [h.strip() for h in self.CORS_HEADERS.split(",") if h.strip()]
 
     @model_validator(mode="after")
-    def _reject_wildcard_origin_with_credentials(self) -> "AppSettings":
+    def _reject_wildcard_origin_with_credentials(self) -> AppSettings:
         """Fail fast on the one CORS combo that is always a CSRF hole.
 
         ``allow_origins=["*"]`` together with ``allow_credentials=True`` makes
@@ -141,7 +141,7 @@ class AppSettings(BaseAppSettings):
         return self
 
     @model_validator(mode="after")
-    def _check_a2a_agent_url(self) -> "AppSettings":
+    def _check_a2a_agent_url(self) -> AppSettings:
         """Refuse an A2A address the agent cannot be found by."""
         parsed = urlsplit(self.A2A_AGENT_URL)
         hostname = parsed.hostname or ""

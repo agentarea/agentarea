@@ -80,7 +80,7 @@ class StreamEvent(IntegrationEvent):
         )
 
     @classmethod
-    def from_bus(cls, event: IntegrationEvent) -> "StreamEvent":
+    def from_bus(cls, event: IntegrationEvent) -> StreamEvent:
         missing = [
             n
             for f, n in _STREAM_ATTRIBUTES.items()
@@ -102,7 +102,7 @@ class StreamEvent(IntegrationEvent):
         )
 
 
-def consumed_stream_event(message: IntegrationEvent) -> "StreamEvent":
+def consumed_stream_event(message: IntegrationEvent) -> StreamEvent:
     """The stream event a bus message carries; a message carrying none is dead-lettered at once."""
     try:
         return StreamEvent.from_bus(message)

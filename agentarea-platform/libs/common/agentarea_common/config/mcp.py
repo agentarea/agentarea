@@ -66,7 +66,7 @@ class MCPOAuthApp(BaseModel):
     resource_origins: tuple[str, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def _refuse_loose_urls(self) -> "MCPOAuthApp":
+    def _refuse_loose_urls(self) -> MCPOAuthApp:
         if not self.client_secret.get_secret_value():
             raise ValueError(f"MCP OAuth app for {self.issuer} has an empty client_secret")
         https_origin(self.issuer)

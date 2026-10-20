@@ -81,7 +81,7 @@ def sha256_hex_from_head(head: Mapping[str, Any]) -> str | None:
     if checksum_b64:
         try:
             digest = base64.b64decode(str(checksum_b64), validate=True)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
         if len(digest) == 32:
             return digest.hex()

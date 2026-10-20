@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.12-slim as builder
+FROM python:3.14.8-slim-trixie AS builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ WORKDIR /app
 # rebuilt to the same bytes and a bad uv release would land in prod unreviewed. The
 # digest also removes the network installer, and with it the reason this stage needed
 # curl at all. Bump together with required-version in pyproject.toml.
-COPY --from=ghcr.io/astral-sh/uv:0.8.22@sha256:9874eb7afe5ca16c363fe80b294fe700e460df29a55532bbfea234a0f12eddb1 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.3@sha256:bee0a2a458fd956c5df7b8b4c5fed2257b0af34866e3da7b51db0be3acb375d1 /uv /uvx /bin/
 
 # Copy workspace configuration and source
 COPY pyproject.toml uv.lock ./
@@ -21,7 +21,7 @@ COPY apps/ ./apps/
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-group test --all-packages
 
 # Runtime stage
-FROM python:3.12-slim
+FROM python:3.14.8-slim-trixie
 
 # Create a non-root user to run the application
 RUN groupadd -r appuser && useradd -r -g appuser -d /app appuser

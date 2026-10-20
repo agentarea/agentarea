@@ -36,7 +36,7 @@ class UserInputMixin(ToolApprovalMixin):
 
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
         if not isinstance(tool_args, dict):
             await self._deny_tool_call(

@@ -51,7 +51,7 @@ class EventEnvelope(BaseModel):
         return value.isoformat()
 
     @classmethod
-    def from_domain_event(cls, event: DomainEvent) -> "EventEnvelope":
+    def from_domain_event(cls, event: DomainEvent) -> EventEnvelope:
         """Create envelope from a DomainEvent."""
         # DomainEvent.data already contains the payload kwargs
         return cls(
@@ -62,7 +62,7 @@ class EventEnvelope(BaseModel):
         )
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "EventEnvelope":
+    def from_dict(cls, payload: dict[str, Any]) -> EventEnvelope:
         """Create envelope from a dict; tolerant of missing fields by applying defaults."""
         # Accept either nested dicts with keys or already-normalized envelopes
         event_id = payload.get("event_id", uuid4())
@@ -85,7 +85,7 @@ class EventEnvelope(BaseModel):
         return cls(event_id=event_id, timestamp=timestamp, event_type=event_type, data=data)
 
     @classmethod
-    def from_any(cls, obj: "EventEnvelope | DomainEvent | dict[str, Any]") -> "EventEnvelope":
+    def from_any(cls, obj: EventEnvelope | DomainEvent | dict[str, Any]) -> EventEnvelope:
         """Coerce an object into EventEnvelope."""
         if isinstance(obj, EventEnvelope):
             return obj
@@ -100,11 +100,11 @@ class EventEnvelope(BaseModel):
         return self.model_dump(mode="json")
 
 
-def to_event_envelope(obj: "EventEnvelope | DomainEvent | dict[str, Any]") -> EventEnvelope:
+def to_event_envelope(obj: EventEnvelope | DomainEvent | dict[str, Any]) -> EventEnvelope:
     """Helper to normalize any event-like object to EventEnvelope."""
     return EventEnvelope.from_any(obj)
 
 
-def dump_event_envelope(obj: "EventEnvelope | DomainEvent | dict[str, Any]") -> dict[str, Any]:
+def dump_event_envelope(obj: EventEnvelope | DomainEvent | dict[str, Any]) -> dict[str, Any]:
     """Helper to normalize and dump to a JSON-ready dict suitable for publish/SSE."""
     return to_event_envelope(obj).as_json_dict()

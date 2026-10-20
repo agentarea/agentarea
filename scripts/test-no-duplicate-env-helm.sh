@@ -29,9 +29,9 @@ helm template dup-env "$chart" \
   --set sandboxRuntime.opensandbox.apiKeySecretRef.key=api-key \
   --set sandboxRuntime.manifest.allowed.image_version=0.0.0 \
   --set sandboxRuntime.manifest.allowed.managed_environment=mutable \
-  --set sandboxRuntime.manifest.allowed.python.version=3.12.13 \
+  --set sandboxRuntime.manifest.allowed.python.version=3.14.8 \
   --set sandboxRuntime.manifest.allowed.python.executable=/usr/bin/python3 \
-  --set sandboxRuntime.manifest.allowed.node.version=v22.23.2 \
+  --set sandboxRuntime.manifest.allowed.node.version=v24.22.0 \
   --set sandboxRuntime.manifest.allowed.features.browser=none \
   --set sandboxRuntime.manifest.allowed.features.managed_environment_mutation=true \
   --set sandboxRuntime.manifest.allowed.features.arbitrary_workspace_code=true \

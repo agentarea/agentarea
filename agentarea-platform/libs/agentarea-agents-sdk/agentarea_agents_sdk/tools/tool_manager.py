@@ -255,7 +255,7 @@ class ToolManager:
                 conn = await openapi_connection_service.get_connection(uuid_val)
                 if conn:
                     return conn
-            except (ValueError, AttributeError):
+            except ValueError, AttributeError:
                 pass
             connections, _ = await openapi_connection_service.list_connections(
                 search=str(connection_name_or_id)
@@ -322,7 +322,7 @@ class ToolManager:
 
                 instance_uuid = _UUID(instance_name)
                 instance = await mcp_server_instance_service.get(instance_uuid)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 pass  # Not a UUID — fall through to name lookup
 
             if not instance:

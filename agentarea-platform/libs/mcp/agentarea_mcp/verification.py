@@ -252,7 +252,7 @@ def _in_progress_is_stale(verification: dict) -> bool:
         return True
     try:
         started = datetime.fromisoformat(at)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return True
     if started.tzinfo is None:
         started = started.replace(tzinfo=UTC)

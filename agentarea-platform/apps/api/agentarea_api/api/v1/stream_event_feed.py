@@ -182,7 +182,7 @@ async def iter_live_feed(
     subscribe: Callable[[], AbstractAsyncContextManager[Any]],
     streams: Collection[UUID],
     load: Callable[[UUID], Awaitable[FeedEventResponse | None]],
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[str]:
     """SSE frames for the notices on ``streams`` whose event passes the page's filter."""
     visible = set(streams)
     async with subscribe() as queue:

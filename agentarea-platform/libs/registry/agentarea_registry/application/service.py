@@ -1662,7 +1662,7 @@ class RegistryService:
             async with asyncio.timeout(SOURCE_DEADLINE_SECONDS):
                 async with self._untrusted_client() as client:
                     response = await client.head(source_url)
-        except (httpx.HTTPError, TimeoutError):
+        except httpx.HTTPError, TimeoutError:
             logger.warning("No ETag from a workspace source; reading it in full", exc_info=True)
             return None
         return response.headers.get("ETag") if response.status_code == 200 else None
@@ -1707,7 +1707,7 @@ class RegistryService:
                 req, timeout=SOURCE_FETCH_TIMEOUT_SECONDS, context=outbound_ssl_context()
             ) as resp:
                 return resp.headers.get("ETag")
-        except (urllib.error.HTTPError, urllib.error.URLError):
+        except urllib.error.HTTPError, urllib.error.URLError:
             # Some sources refuse HEAD (a presigned GET URL, an API without it);
             # without an ETag the source is read in full.
             logger.warning("No ETag from %s; reading it in full", source_url, exc_info=True)

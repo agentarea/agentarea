@@ -119,7 +119,7 @@ class AnalyzeRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _exactly_one_source(self) -> "AnalyzeRequest":
+    def _exactly_one_source(self) -> AnalyzeRequest:
         provided = [s for s in (self.source, self.source_url) if s and s.strip()]
         if len(provided) != 1:
             raise ValueError("provide exactly one of 'source' or 'source_url'")

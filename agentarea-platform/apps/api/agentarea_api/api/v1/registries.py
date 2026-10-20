@@ -128,7 +128,7 @@ class RegistryResponse(BaseModel):
     updated_at: UtcDatetime
 
     @classmethod
-    def from_domain(cls, r: Registry) -> "RegistryResponse":
+    def from_domain(cls, r: Registry) -> RegistryResponse:
         return cls(
             id=r.id,
             name=r.name,
@@ -169,7 +169,7 @@ class CatalogToolPrice(BaseModel):
     unavailable: bool = False
 
     @classmethod
-    def from_domain(cls, price: ToolPrice) -> "CatalogToolPrice":
+    def from_domain(cls, price: ToolPrice) -> CatalogToolPrice:
         return cls(
             tool=price.tool,
             amount=price.amount,
@@ -192,7 +192,7 @@ class CatalogComputeEstimate(BaseModel):
     currency: str | None
 
     @classmethod
-    def from_domain(cls, compute: ComputeEstimate) -> "CatalogComputeEstimate":
+    def from_domain(cls, compute: ComputeEstimate) -> CatalogComputeEstimate:
         return cls(
             vcpu=compute.vcpu,
             memory_gib=compute.memory_gib,
@@ -218,7 +218,7 @@ class CatalogItemPricingResponse(BaseModel):
     compute: CatalogComputeEstimate | None = None
 
     @classmethod
-    def from_domain(cls, pricing: CatalogItemPricing) -> "CatalogItemPricingResponse":
+    def from_domain(cls, pricing: CatalogItemPricing) -> CatalogItemPricingResponse:
         return cls(
             kind=pricing.kind,
             payers=[payer.value for payer in pricing.payers],
@@ -270,7 +270,7 @@ class RegistryItemResponse(BaseModel):
         workspace_connections: list[CatalogConnection] | None = None,
         pricing: CatalogItemPricing | None = None,
         registry: Registry | None = None,
-    ) -> "RegistryItemResponse":
+    ) -> RegistryItemResponse:
         return cls(
             registry_name=registry.name if registry else None,
             registry_scope=type_cast(RegistryScope, registry.scope) if registry else None,

@@ -85,7 +85,7 @@ async def publish_events(
 
 
 def make_events_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext
 

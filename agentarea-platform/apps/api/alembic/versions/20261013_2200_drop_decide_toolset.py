@@ -39,7 +39,7 @@ def upgrade() -> None:
         if isinstance(tools, str):
             try:
                 tools = json.loads(tools)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
         if not isinstance(tools, list) or not any(_is_removed(tool) for tool in tools):
             continue

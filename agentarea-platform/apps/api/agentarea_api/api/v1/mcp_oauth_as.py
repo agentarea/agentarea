@@ -200,9 +200,9 @@ async def oauth_protected_resource_metadata_by_path(resource_path: str) -> JSONR
 async def oauth_authorization_server_metadata() -> JSONResponse:
     """RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.
 
-    Hydra v2 only serves /.well-known/openid-configuration; we bridge the gap
-    so MCP clients (Cursor) that look for /.well-known/oauth-authorization-server
-    still get the Hydra endpoints, rewritten to point to our proxy paths.
+    MCP clients (Cursor) look for /.well-known/oauth-authorization-server on the
+    resource's AS URL, which is this API, so we serve Hydra's document here with
+    the endpoints we proxy rewritten to point at us.
     """
     settings = get_settings()
     api_base = settings.app.API_URL.rstrip("/")

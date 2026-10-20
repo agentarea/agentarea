@@ -76,7 +76,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
 
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         # Single policy enforcement point (allow / deny / require-approval).

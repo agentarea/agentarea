@@ -27,7 +27,7 @@ class UndispatchedTaskReconcilerWorkflow:
         )
 
 
-async def ensure_undispatched_task_schedule(client: "Client", task_queue: str) -> None:
+async def ensure_undispatched_task_schedule(client: Client, task_queue: str) -> None:
     """Create the reconciler's schedule, or bring an existing one up to date."""
     from temporalio.client import (
         Schedule,
@@ -48,7 +48,7 @@ async def ensure_undispatched_task_schedule(client: "Client", task_queue: str) -
         policy=SchedulePolicy(overlap=ScheduleOverlapPolicy.SKIP),
     )
 
-    def replace(_: "ScheduleUpdateInput") -> ScheduleUpdate:
+    def replace(_: ScheduleUpdateInput) -> ScheduleUpdate:
         return ScheduleUpdate(schedule=schedule)
 
     try:

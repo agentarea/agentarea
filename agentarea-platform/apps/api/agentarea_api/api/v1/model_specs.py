@@ -40,7 +40,7 @@ class ModelSpecCreate(BaseModel):
     is_active: bool = True
 
     @model_validator(mode="after")
-    def _billable(self) -> "ModelSpecCreate":
+    def _billable(self) -> ModelSpecCreate:
         # A chat or embedding run is billed from these; the other kinds at the cost
         # the provider reports per call.
         if self.kind.priced_per_token:
@@ -95,7 +95,7 @@ class ModelSpecResponse(BaseModel):
     provider_key: str | None = None
 
     @classmethod
-    def from_domain(cls, model_spec: ModelSpec) -> "ModelSpecResponse":
+    def from_domain(cls, model_spec: ModelSpec) -> ModelSpecResponse:
         return cls(
             id=str(model_spec.id),
             provider_spec_id=str(model_spec.provider_spec_id),

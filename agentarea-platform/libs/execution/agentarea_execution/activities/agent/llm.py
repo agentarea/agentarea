@@ -109,7 +109,7 @@ def _stopped_by_request() -> bool:
 
 
 def make_llm_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

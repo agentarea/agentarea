@@ -129,7 +129,7 @@ class TriggerResponse(BaseModel):
         cls,
         trigger: Any,
         binding: TriggerBinding | None = None,
-    ) -> "TriggerResponse":
+    ) -> TriggerResponse:
         """Create response from domain model."""
         # Base fields
         response_data = {
@@ -205,7 +205,7 @@ class TriggerExecutionResponse(BaseModel):
     )
 
     @classmethod
-    def from_domain_model(cls, execution: Any) -> "TriggerExecutionResponse":
+    def from_domain_model(cls, execution: Any) -> TriggerExecutionResponse:
         """Create response from domain model."""
         return cls(
             id=execution.id,
