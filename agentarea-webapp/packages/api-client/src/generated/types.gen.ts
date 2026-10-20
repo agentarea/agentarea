@@ -4748,6 +4748,26 @@ export type OAuthAuthorizeResponse = {
 };
 
 /**
+ * OAuthFinishRequest
+ */
+export type OAuthFinishRequest = {
+    /**
+     * Token
+     */
+    token: string;
+};
+
+/**
+ * OAuthFinishResponse
+ */
+export type OAuthFinishResponse = {
+    /**
+     * Location
+     */
+    location: string;
+};
+
+/**
  * OAuthLinkCreateRequest
  */
 export type OAuthLinkCreateRequest = {
@@ -11119,6 +11139,31 @@ export type OauthCallbackV1OauthCallbackGetResponses = {
      */
     200: unknown;
 };
+
+export type OauthFinishV1OauthFinishPostData = {
+    body: OAuthFinishRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/oauth/finish';
+};
+
+export type OauthFinishV1OauthFinishPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type OauthFinishV1OauthFinishPostError = OauthFinishV1OauthFinishPostErrors[keyof OauthFinishV1OauthFinishPostErrors];
+
+export type OauthFinishV1OauthFinishPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: OAuthFinishResponse;
+};
+
+export type OauthFinishV1OauthFinishPostResponse = OauthFinishV1OauthFinishPostResponses[keyof OauthFinishV1OauthFinishPostResponses];
 
 export type GetPricingCurrencyV1PricingCurrencyGetData = {
     body?: never;

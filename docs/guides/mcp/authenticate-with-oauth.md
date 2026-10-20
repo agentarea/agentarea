@@ -138,11 +138,18 @@ supply per connection. Ask the preflight endpoint rather than guessing.
     `GET /v1/oauth/callback` with `code` and `state`.
 
     The callback is public — it must be, because the provider redirects a browser to
-    it — and it is protected by the `state` token rather than your API key. It
-    exchanges the code for tokens, updates the auth config created in the previous
-    step with the access token, refresh token, scope, and expiry, links it to the
-    instance via `auth_config_id`, and then redirects the browser to
-    `{return_to}/connections/{instance_id}?oauth=success`.
+    it — and it is protected by the `state` token rather than your API key. It does
+    not redeem the code itself: whoever opens a provider URL lands there, not only
+    the person the authorize call returned it to. It parks the code for ten minutes
+    and sends the browser to the web app's `/oauth/finish` page.
+
+    That page calls `POST /v1/oauth/finish` in the signed-in session, and the API
+    goes on only if that person started the flow; anyone else gets a 403 and nothing
+    is attached. It then exchanges the code for tokens, updates the auth config
+    created in the previous step with the access token, refresh token, scope, and
+    expiry, links it to the instance via `auth_config_id`, and redirects the browser
+    to `{return_to}/connections/{instance_id}?oauth=success`. Sign in to the web app
+    as the user whose token started the flow before you open the URL.
 
     Tool discovery is kicked off in the background at that point, so the tool list
     may be a moment behind the redirect.

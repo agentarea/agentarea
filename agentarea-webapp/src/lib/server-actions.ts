@@ -27,6 +27,7 @@ import {
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zOAuthAuthorizeResponse,
+  zOAuthFinishResponse,
   zOAuthPreflightResponse,
   zProjectCreate,
   zProjectUpdate,
@@ -680,6 +681,31 @@ export async function oauthAuthorizeAction(body: OAuthAuthorizeRequest) {
     };
   }
   return { data: parsed.data, error: null, code: null };
+}
+
+/**
+ * Finish a sign-in the provider sent back: the API exchanges the code only
+ * for the person who started it. Returns where to land, a failure included.
+ */
+export async function oauthFinishAction(token: string): Promise<string> {
+  const base = new URL(env.AGENTAREA_API_URL);
+  base.pathname = "/v1/oauth/finish";
+
+  const res = await workspaceFetch(base.href, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const parsed = res.ok
+    ? zOAuthFinishResponse.safeParse(await res.json())
+    : null;
+  if (parsed?.success) {
+    return parsed.data.location;
+  }
+  const reason = parsed
+    ? "Unexpected OAuth finish response"
+    : await readApiError(res);
+  return `/?${new URLSearchParams({ oauth: "error", reason })}`;
 }
 
 /**

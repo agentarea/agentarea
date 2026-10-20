@@ -1803,6 +1803,20 @@ export const zOAuthAuthorizeResponse = z.object({
 });
 
 /**
+ * OAuthFinishRequest
+ */
+export const zOAuthFinishRequest = z.object({
+  token: z.string().min(1).max(256),
+});
+
+/**
+ * OAuthFinishResponse
+ */
+export const zOAuthFinishResponse = z.object({
+  location: z.string(),
+});
+
+/**
  * OAuthLinkCreateRequest
  */
 export const zOAuthLinkCreateRequest = z.object({
@@ -4713,6 +4727,13 @@ export const zOauthCallbackV1OauthCallbackGetQuery = z.object({
   error: z.string().nullish(),
   error_description: z.string().nullish(),
 });
+
+export const zOauthFinishV1OauthFinishPostBody = zOAuthFinishRequest;
+
+/**
+ * Successful Response
+ */
+export const zOauthFinishV1OauthFinishPostResponse = zOAuthFinishResponse;
 
 /**
  * Successful Response
