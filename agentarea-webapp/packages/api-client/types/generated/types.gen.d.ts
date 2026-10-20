@@ -6189,12 +6189,6 @@ export type RegistryCreate = {
      */
     source_url?: string | null;
     /**
-     * Sync Mode
-     *
-     * 'auto' or 'manual'
-     */
-    sync_mode?: string;
-    /**
      * Trust
      *
      * Trust label on every catalog card
@@ -6366,10 +6360,6 @@ export type RegistryResponse = {
      */
     source_url: string;
     /**
-     * Sync Mode
-     */
-    sync_mode: string;
-    /**
      * Trust
      */
     trust: 'official' | 'verified' | 'community' | 'private';
@@ -6410,10 +6400,6 @@ export type RegistryUpdate = {
      * Source Url
      */
     source_url?: string | null;
-    /**
-     * Sync Mode
-     */
-    sync_mode?: string | null;
     /**
      * Trust
      */

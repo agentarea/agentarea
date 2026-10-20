@@ -739,7 +739,6 @@ async def _reconcile(
                                 source_type=config.get("source_type", "url"),
                                 source_url=config["source_url"],
                                 description=config.get("description"),
-                                sync_mode=config.get("sync_mode", "manual"),
                                 recommendation_priority=config.get("recommendation_priority"),
                                 mode=config.get("mode", "mirror"),
                                 trust=config.get("trust", "official"),

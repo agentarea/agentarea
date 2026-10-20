@@ -71,9 +71,9 @@ async def _registry(conn, name: str, **fields) -> uuid.UUID:
     await conn.execute(
         text(
             "INSERT INTO registries (id, name, registry_type, source_type, source_url, scope, "
-            "workspace_id, mode, trust, is_active, sync_mode, recommendation_priority, item_count) "
+            "workspace_id, mode, trust, is_active, recommendation_priority, item_count) "
             "VALUES (:id, :name, :registry_type, :source_type, :source_url, :scope, "
-            ":workspace_id, :mode, :trust, true, 'manual', 100, 0)"
+            ":workspace_id, :mode, :trust, true, 100, 0)"
         ),
         {"id": registry_id, "name": name, **values},
     )
