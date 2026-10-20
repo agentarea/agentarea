@@ -143,11 +143,13 @@ async def test_create_from_content_writes_a_one_file_package_not_the_column():
 
     skill = await svc.create_from_content(SkillCreateFromContent(content="# Mine\nbody"))
 
-    prefix = f"skills/w1/{skill.id}/"
+    files = {"SKILL.md": b"# Mine\nbody"}
+    prefix = f"skills/w1/packages/{package_digest(files)}/"
     assert skill.s3_path == prefix
     assert skill.content is None
     assert repo.created_kwargs[0]["content"] is None
-    assert s3.under(prefix) == {"SKILL.md": b"# Mine\nbody"}
+    assert s3.under(prefix) == files
+    assert [v.reason for v in await repo.list_versions(skill.id)] == ["create"]
 
 
 async def test_editing_an_installed_skill_copies_it_and_leaves_the_catalog_package_alone():
@@ -158,10 +160,11 @@ async def test_editing_an_installed_skill_copies_it_and_leaves_the_catalog_packa
 
     edited = await svc.set_content(skill.id, "# Edited")
 
-    own = f"skills/w1/{skill.id}/"
+    files = {**PDF, "SKILL.md": b"# Edited"}
+    own = f"skills/w1/packages/{package_digest(files)}/"
     assert edited.s3_path == own
     assert edited.content is None
-    assert s3.under(own) == {**PDF, "SKILL.md": b"# Edited"}
+    assert s3.under(own) == files
     assert s3.under(catalog_prefix) == PDF
 
 
@@ -184,7 +187,7 @@ async def test_listing_the_files_of_a_pre_package_row_moves_its_body():
     files = await svc.get_skill_files(skill.id)
 
     assert [(f.path, f.size) for f in files] == [("SKILL.md", 5)]
-    assert skill.s3_path == f"skills/w1/{skill.id}/"
+    assert skill.s3_path == f"skills/w1/packages/{package_digest({'SKILL.md': b'# Old'})}/"
     assert skill.content is None
 
 

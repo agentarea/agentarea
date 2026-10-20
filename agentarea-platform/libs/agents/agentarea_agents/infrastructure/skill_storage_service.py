@@ -31,6 +31,10 @@ SKILLS_PREFIX = "skills"
 # workspace's own area (``catalog_area``).
 CATALOG_PREFIX = f"{SKILLS_PREFIX}/catalog"
 CATALOG_AREA = "catalog"
+# A workspace's own skill bodies (authored, uploaded, imported or edited), each
+# an immutable package keyed by its digest. An edit stores a new package and
+# moves the skill's pointer; the old one stays, which is the skill's history.
+PACKAGES_AREA = "packages"
 
 
 def catalog_area(workspace_id: str | None) -> str:
@@ -44,14 +48,41 @@ def catalog_area(workspace_id: str | None) -> str:
 
 
 def tenant_package_prefix(workspace_id: str, skill_id: str) -> str:
-    """The prefix a workspace's own copy of a skill lives under."""
+    """The mutable prefix a workspace's own copy of a skill lived under before packages.
+
+    Nothing writes here any more; a skill still pointing here is moved into a
+    package the first time it is read.
+    """
     return f"{SKILLS_PREFIX}/{workspace_id}/{skill_id}/"
+
+
+def workspace_package_area(workspace_id: str) -> str:
+    """Where a workspace's own immutable packages live, inside its own prefix."""
+    return f"{SKILLS_PREFIX}/{workspace_id}/{PACKAGES_AREA}"
 
 
 def is_catalog_package(s3_path: str | None) -> bool:
     """An immutable package stored by digest, in the shared or a workspace's area."""
     parts = str(s3_path or "").split("/")
     return len(parts) > 2 and parts[0] == SKILLS_PREFIX and CATALOG_AREA in (parts[1], parts[2])
+
+
+def is_workspace_package(s3_path: str | None) -> bool:
+    """A workspace's own immutable package (``skills/<ws>/packages/<digest>/``)."""
+    parts = str(s3_path or "").split("/")
+    return len(parts) > 3 and parts[0] == SKILLS_PREFIX and parts[2] == PACKAGES_AREA
+
+
+def is_immutable_package(s3_path: str | None) -> bool:
+    """A package keyed by its digest: its files never change."""
+    return is_catalog_package(s3_path) or is_workspace_package(s3_path)
+
+
+def package_digest_of(s3_path: str | None) -> str | None:
+    """The digest an immutable package is keyed by, read off its path."""
+    if not is_immutable_package(s3_path):
+        return None
+    return str(s3_path).rstrip("/").rsplit("/", 1)[-1]
 
 
 def package_digest(files: Mapping[str, bytes]) -> str:
@@ -98,8 +129,11 @@ class FileInfo:
 class SkillStorageService:
     """Service for storing skill packages in S3.
 
-    A workspace's own skill is stored at s3://{bucket}/skills/{workspace_id}/{skill_id}/;
-    a catalog skill's package at s3://{bucket}/skills/catalog/{sha256}/.
+    Every package is immutable and keyed by the sha256 of its files: a
+    workspace's own at s3://{bucket}/skills/{workspace_id}/packages/{sha256}/, a
+    catalog skill's at s3://{bucket}/skills/catalog/{sha256}/ (or its
+    workspace registry's area). Skills stored before that live at
+    skills/{workspace_id}/{skill_id}/ until they are next read.
     """
 
     SKILLS_PREFIX = SKILLS_PREFIX
@@ -148,13 +182,22 @@ class SkillStorageService:
 
         ``workspace_id`` is the owner of a workspace registry's item; a
         platform registry's item goes to the shared area.
+        """
+        return await self._store_by_digest(catalog_area(workspace_id), files)
+
+    async def store_workspace_package(self, files: Mapping[str, bytes], workspace_id: str) -> str:
+        """Store a workspace's own skill body under its digest, once; return its prefix."""
+        return await self._store_by_digest(workspace_package_area(workspace_id), files)
+
+    async def _store_by_digest(self, area: str, files: Mapping[str, bytes]) -> str:
+        """Store ``files`` at ``<area>/<digest>/``.
 
         A prefix already holding every path is reused as is: the key is the
         digest, so the same paths there are the same bytes. One holding only
         some of them (an earlier store that died midway) is completed.
         """
         checked = checked_package_files(files)
-        prefix = f"{catalog_area(workspace_id)}/{package_digest(checked)}/"
+        prefix = f"{area}/{package_digest(checked)}/"
         stored = {f.path for f in await self.list_files(prefix)}
         missing = [path for path in checked if path not in stored]
         for path in missing:
@@ -165,22 +208,7 @@ class SkillStorageService:
                 ContentType=self._guess_content_type(path),
             )
         if missing:
-            logger.info("Stored catalog skill package %s (%d files)", prefix, len(missing))
-        return prefix
-
-    async def store_package_files(
-        self, skill_id: str, workspace_id: str, files: Mapping[str, bytes]
-    ) -> str:
-        """Write a file set into a workspace's own copy of a skill; return its prefix."""
-        checked = checked_package_files(files)
-        prefix = self._get_s3_prefix(workspace_id, skill_id)
-        for path, data in checked.items():
-            self.client.put_object(
-                Bucket=self.bucket_name,
-                Key=f"{prefix}{path}",
-                Body=data,
-                ContentType=self._guess_content_type(path),
-            )
+            logger.info("Stored skill package %s (%d files)", prefix, len(missing))
         return prefix
 
     async def read_package(self, s3_path: str) -> dict[str, bytes]:
@@ -250,11 +278,8 @@ class SkillStorageService:
             entries.append((info, safe_package_path(relative_path)))
         return entries
 
-    def validate_package_zip(self, zip_data: bytes | BinaryIO) -> None:
-        """Refuse a package ``store_package_from_zip`` would refuse, storing nothing.
-
-        Lets a caller check the whole package before it creates the row the
-        package belongs to.
+    def files_from_zip(self, zip_data: bytes | BinaryIO) -> dict[str, bytes]:
+        """The package a ZIP upload holds, by path; every path and the budget checked first.
 
         Raises:
             ValueError: If the data is not a ZIP archive, is over budget, or
@@ -264,137 +289,22 @@ class SkillStorageService:
             zip_data = io.BytesIO(zip_data)
         zip_data.seek(0)
         try:
-            with zipfile.ZipFile(zip_data, "r") as zf:
-                self._package_entries(zf)
-        except zipfile.BadZipFile as e:
-            raise ValueError("Skill package is not a valid ZIP archive") from e
-        finally:
-            zip_data.seek(0)
-
-    async def store_package_from_zip(
-        self,
-        skill_id: str,
-        workspace_id: str,
-        zip_data: bytes | BinaryIO,
-    ) -> str:
-        """Store a skill package from a ZIP file.
-
-        Every path and the size budget are checked before the first upload.
-
-        Args:
-            skill_id: The skill ID.
-            workspace_id: The workspace ID.
-            zip_data: ZIP file as bytes or file-like object.
-
-        Returns:
-            S3 path prefix for the stored package.
-        """
-        if isinstance(zip_data, bytes):
-            zip_data = io.BytesIO(zip_data)
-
-        s3_prefix = self._get_s3_prefix(workspace_id, skill_id)
-
-        try:
             zf = zipfile.ZipFile(zip_data, "r")
         except zipfile.BadZipFile as e:
             raise ValueError("Skill package is not a valid ZIP archive") from e
         with zf:
-            for info, relative_path in self._package_entries(zf):
-                content = read_entry(zf, info)
+            return {path: read_entry(zf, info) for info, path in self._package_entries(zf)}
 
-                # Upload to S3
-                s3_key = f"{s3_prefix}{relative_path}"
-                content_type = self._guess_content_type(relative_path)
-
-                self.client.put_object(
-                    Bucket=self.bucket_name,
-                    Key=s3_key,
-                    Body=content,
-                    ContentType=content_type,
-                )
-
-                logger.debug(f"Uploaded {relative_path} to s3://{self.bucket_name}/{s3_key}")
-
-        return s3_prefix
-
-    async def store_package_from_directory(
-        self,
-        skill_id: str,
-        workspace_id: str,
-        directory: str | Path,
-    ) -> str:
-        """Store a skill package from a local directory.
-
-        Args:
-            skill_id: The skill ID.
-            workspace_id: The workspace ID.
-            directory: Path to the directory.
-
-        Returns:
-            S3 path prefix for the stored package.
-        """
+    @staticmethod
+    def files_from_directory(directory: str | Path) -> dict[str, bytes]:
+        """The package a local directory holds, by path; hidden files left out."""
         directory = Path(directory)
-        s3_prefix = self._get_s3_prefix(workspace_id, skill_id)
-
-        for file_path in directory.rglob("*"):
-            if file_path.is_dir():
-                continue
-
-            # Skip hidden files
-            if any(part.startswith(".") for part in file_path.parts):
-                continue
-
-            relative_path = str(file_path.relative_to(directory)).replace("\\", "/")
-            s3_key = f"{s3_prefix}{relative_path}"
-
-            content_type = self._guess_content_type(relative_path)
-
-            with open(file_path, "rb") as f:
-                self.client.put_object(
-                    Bucket=self.bucket_name,
-                    Key=s3_key,
-                    Body=f.read(),
-                    ContentType=content_type,
-                )
-
-            logger.debug(f"Uploaded {relative_path} to s3://{self.bucket_name}/{s3_key}")
-
-        return s3_prefix
-
-    async def store_single_file(
-        self,
-        skill_id: str,
-        workspace_id: str,
-        filename: str,
-        content: bytes | str,
-    ) -> str:
-        """Store a single file for a skill.
-
-        Args:
-            skill_id: The skill ID.
-            workspace_id: The workspace ID.
-            filename: The filename to store.
-            content: File content as bytes or string.
-
-        Returns:
-            S3 path prefix for the stored file.
-        """
-        s3_prefix = self._get_s3_prefix(workspace_id, skill_id)
-        s3_key = f"{s3_prefix}{safe_package_path(filename)}"
-
-        if isinstance(content, str):
-            content = content.encode("utf-8")
-
-        content_type = self._guess_content_type(filename)
-
-        self.client.put_object(
-            Bucket=self.bucket_name,
-            Key=s3_key,
-            Body=content,
-            ContentType=content_type,
-        )
-
-        return s3_prefix
+        return {
+            str(file_path.relative_to(directory)).replace("\\", "/"): file_path.read_bytes()
+            for file_path in sorted(directory.rglob("*"))
+            if file_path.is_file()
+            and not any(part.startswith(".") for part in file_path.relative_to(directory).parts)
+        }
 
     async def get_file_url(
         self,

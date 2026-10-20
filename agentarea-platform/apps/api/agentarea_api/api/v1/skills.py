@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Annotated, Literal, cast
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from agentarea_agents.application.skill_parser import SkillFrontmatterError
@@ -11,9 +11,10 @@ from agentarea_agents.application.skill_service import (
     SkillNotFromCatalogError,
     SkillService,
     SkillUpdateResult,
+    SkillVersionNotFoundError,
     is_customized,
 )
-from agentarea_agents.domain.skill_models import Skill
+from agentarea_agents.domain.skill_models import Skill, SkillVersion
 from agentarea_agents.infrastructure.catalog_skill_repository import CatalogProvenance
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubNotFoundError,
@@ -186,6 +187,31 @@ class SkillUpdateAllResponse(BaseModel):
     """One result per installed skill that had an update."""
 
     results: list[SkillUpdateResultResponse]
+
+
+class SkillVersionResponse(BaseModel):
+    """One package a skill pointed at; the last is what it runs now."""
+
+    id: str
+    digest: str | None
+    reason: Literal["create", "edit", "install", "update", "rollback", "migrate"]
+    # The catalog item version an installed package was pinned at.
+    catalog_version: str | None = None
+    created_by: str
+    created_at: str
+    current: bool
+
+    @classmethod
+    def from_version(cls, version: SkillVersion, current: bool) -> "SkillVersionResponse":
+        return cls(
+            id=str(version.id),
+            digest=version.digest,
+            reason=cast(Any, version.reason),
+            catalog_version=version.catalog_version,
+            created_by=version.created_by,
+            created_at=utc_isoformat(version.created_at),
+            current=current,
+        )
 
 
 class SkillContentResponse(BaseModel):
@@ -459,6 +485,43 @@ async def update_installed_skill(
     if result.skill is None:
         raise HTTPException(status_code=404, detail="Skill not found")
     return SkillResponse.from_skill(result.skill)
+
+
+@router.get(
+    "/{skill_id}/versions",
+    response_model=list[SkillVersionResponse],
+    dependencies=[requires("read", "skill", id_param="skill_id")],
+)
+async def list_skill_versions(skill_id: UUID, skill_service: SkillServiceDep):
+    """Every package the skill pointed at, oldest first; the last is the current one."""
+    try:
+        skill = await skill_service.get(skill_id)
+        versions = await skill_service.list_versions(skill_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail="Skill not found") from e
+    current = skill.s3_path if skill else None
+    return [
+        SkillVersionResponse.from_version(
+            v, current=i == len(versions) - 1 and v.s3_path == current
+        )
+        for i, v in enumerate(versions)
+    ]
+
+
+@router.post(
+    "/{skill_id}/versions/{version_id}/rollback",
+    response_model=SkillResponse,
+    dependencies=[requires("edit", "skill", id_param="skill_id")],
+)
+async def rollback_skill(skill_id: UUID, version_id: UUID, skill_service: SkillServiceDep):
+    """Point the skill at the package one of its versions had; recorded as a new version."""
+    try:
+        skill = await skill_service.rollback(skill_id, version_id)
+    except SkillVersionNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Skill version not found") from e
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail="Skill not found") from e
+    return SkillResponse.from_skill(skill)
 
 
 @router.post(

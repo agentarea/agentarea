@@ -50,8 +50,8 @@ def _packages(repo=None, github=None, s3=None):
 async def test_the_body_is_read_from_the_package():
     packages, storage, _ = _packages()
     skill = _tenant()
-    skill.s3_path = await storage.store_package_files(
-        str(skill.id), "w1", {"SKILL.md": b"# From S3", "a.txt": b"a"}
+    skill.s3_path = await storage.store_workspace_package(
+        {"SKILL.md": b"# From S3", "a.txt": b"a"}, "w1"
     )
 
     assert await packages.read_skill_md(skill) == "# From S3"
@@ -70,15 +70,47 @@ async def test_a_catalog_package_is_read_from_storage_once_per_process():
     assert len(s3.gets) == reads
 
 
-async def test_a_tenant_package_is_never_cached():
+async def test_a_workspace_package_is_read_from_storage_once_per_process():
     packages, storage, s3 = _packages()
     skill = _tenant()
-    skill.s3_path = await storage.store_package_files(str(skill.id), "w1", {"SKILL.md": b"v1"})
+    skill.s3_path = await storage.store_workspace_package({"SKILL.md": b"# Own"}, "w1")
+
+    assert await packages.read_skill_md(skill) == "# Own"
+    reads = len(s3.gets)
+    assert await packages.read_files(skill) == {"SKILL.md": b"# Own"}
+    assert len(s3.gets) == reads
+
+
+async def test_a_pre_package_copy_read_without_a_repository_is_read_in_place_uncached():
+    packages, _, s3 = _packages()
+    skill = _tenant(s3_path=None)
+    skill.s3_path = f"skills/w1/{skill.id}/"
+    s3.objects[f"{skill.s3_path}SKILL.md"] = b"v1"
     assert await packages.read_skill_md(skill) == "v1"
 
     s3.objects[f"{skill.s3_path}SKILL.md"] = b"v2"
 
     assert await packages.read_skill_md(skill) == "v2"
+
+
+async def test_a_pre_package_copy_is_moved_into_a_package_on_first_read(caplog):
+    skill = _tenant()
+    skill.s3_path = f"skills/w1/{skill.id}/"
+    repo = FakeSkillRepo([skill])
+    packages, _, s3 = _packages(repo=repo)
+    s3.objects[f"skills/w1/{skill.id}/SKILL.md"] = b"# Mine"
+    s3.objects[f"skills/w1/{skill.id}/notes.md"] = b"n"
+
+    with caplog.at_level(logging.INFO):
+        assert await packages.read_skill_md(skill) == "# Mine"
+
+    files = {"SKILL.md": b"# Mine", "notes.md": b"n"}
+    assert skill.s3_path == f"skills/w1/packages/{package_digest(files)}/"
+    assert s3.under(skill.s3_path) == files
+    # The copy stays until the explicit clean-up command.
+    assert s3.under(f"skills/w1/{skill.id}/") == files
+    assert [(v.reason, v.s3_path) for v in repo.versions] == [("migrate", skill.s3_path)]
+    assert any("Moved the copy" in r.getMessage() for r in caplog.records)
 
 
 async def test_a_row_still_holding_its_body_is_moved_into_a_package_on_first_read(caplog):
@@ -89,10 +121,11 @@ async def test_a_row_still_holding_its_body_is_moved_into_a_package_on_first_rea
     with caplog.at_level(logging.INFO):
         assert await packages.read_skill_md(skill) == "# Legacy body"
 
-    prefix = f"skills/w1/{skill.id}/"
+    prefix = f"skills/w1/packages/{package_digest({'SKILL.md': b'# Legacy body'})}/"
     assert skill.s3_path == prefix
     assert skill.content is None
     assert s3.under(prefix) == {"SKILL.md": b"# Legacy body"}
+    assert [v.reason for v in repo.versions] == ["migrate"]
     assert any("Moved the body of skill" in r.getMessage() for r in caplog.records)
 
 
@@ -107,8 +140,9 @@ async def test_an_edit_left_in_the_row_of_a_packaged_skill_wins_on_first_read():
 
     assert await packages.read_skill_md(skill) == "# Edited"
 
-    assert (skill.s3_path, skill.content) == (f"skills/w1/{skill.id}/", None)
-    assert s3.under(skill.s3_path) == {"SKILL.md": b"# Edited", "fill.py": b"x"}
+    edited = {"SKILL.md": b"# Edited", "fill.py": b"x"}
+    assert (skill.s3_path, skill.content) == (f"skills/w1/packages/{package_digest(edited)}/", None)
+    assert s3.under(skill.s3_path) == edited
     assert s3.under(shared) == {"SKILL.md": b"# Imported", "fill.py": b"x"}
 
 
@@ -122,7 +156,7 @@ async def test_a_skill_with_neither_package_nor_body_is_an_error():
 async def test_a_package_without_skill_md_is_an_error():
     packages, storage, _ = _packages()
     skill = _tenant()
-    skill.s3_path = await storage.store_package_files(str(skill.id), "w1", {"notes.md": b"n"})
+    skill.s3_path = await storage.store_workspace_package({"notes.md": b"n"}, "w1")
 
     with pytest.raises(ValueError, match=r"no SKILL\.md"):
         await packages.read_skill_md(skill)
@@ -211,7 +245,9 @@ async def test_a_mirrored_package_outside_its_registrys_store_is_refused(s3_path
 async def test_a_workspace_registrys_item_is_stored_and_aliased_in_that_workspace():
     github = StubGitHub({"SKILL.md": b"---\nname: p\n---\n# Private"})
     packages, storage, s3 = _packages(github=github)
-    spec = {"source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE}}
+    spec = {
+        "source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE}
+    }
 
     private = await packages.store_catalog_item(spec, workspace_id="ws-1")
     public = await packages.store_catalog_item(spec)
@@ -229,7 +265,9 @@ async def test_the_mirror_stores_each_item_and_says_where():
     github = StubGitHub({"SKILL.md": b"---\nname: p\n---\n# P"})
     storage, s3 = fake_storage()
     mirror = CatalogMirror(storage, github, workspace_id="ws-1")
-    spec = {"source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE}}
+    spec = {
+        "source": {"type": "github", "repo": "o/r", "path": "x", "ref": COMMIT, "tree_sha": TREE}
+    }
 
     package = await mirror(spec)
 

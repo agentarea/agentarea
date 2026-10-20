@@ -14,7 +14,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from agentarea_agents.application.skill_service import SkillService
-from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+from agentarea_agents.infrastructure.skill_storage_service import (
+    SkillStorageService,
+    package_digest,
+)
 from agentarea_agents.schemas.skills_dto import SkillCreateFromContent
 from agentarea_common.auth.context import UserContext
 
@@ -140,11 +143,9 @@ async def test_a_store_failure_after_the_row_exists_removes_the_row(repo, s3_cli
     assert len(repo.created_kwargs) == 1
     assert await repo.list_all() == []
     assert len(repo.deleted) == 1
-    # The part of the package that did land is listed for deletion under its prefix.
-    prefix = service.storage_service._get_s3_prefix("w1", repo.deleted[0])
-    s3_client.get_paginator.return_value.paginate.assert_called_with(
-        Bucket="test-bucket", Prefix=prefix
-    )
+    # A package is keyed by its digest and may be another skill's too: what
+    # landed of it stays, and nothing is deleted.
+    s3_client.delete_objects.assert_not_called()
 
 
 async def test_a_valid_zip_still_creates_the_skill_with_its_package(repo, s3_client):
@@ -152,10 +153,12 @@ async def test_a_valid_zip_still_creates_the_skill_with_its_package(repo, s3_cli
 
     skill = await _service(repo).create_from_zip(data)
 
+    files = {"SKILL.md": b"---\nname: fine\n---\nhi", "scripts/run.sh": b"echo"}
+    prefix = f"skills/w1/packages/{package_digest(files)}/"
     assert skill.name == "fine"
-    assert skill.s3_path == f"skills/w1/{skill.id}/"
+    assert skill.s3_path == prefix
     keys = {call.kwargs["Key"] for call in s3_client.put_object.call_args_list}
-    assert keys == {f"skills/w1/{skill.id}/SKILL.md", f"skills/w1/{skill.id}/scripts/run.sh"}
+    assert keys == {f"{prefix}SKILL.md", f"{prefix}scripts/run.sh"}
 
 
 COLON_SKILL_MD = "---\nname: colon\ndescription: Do X: then Y\n---\nhi"

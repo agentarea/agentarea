@@ -173,6 +173,10 @@ async def _skill_row(session, workspace: str, **columns) -> str:
     return skill_id
 
 
+def _own(workspace: str, files: dict[str, bytes]) -> str:
+    return f"skills/{workspace}/packages/{package_digest(files)}/"
+
+
 def _service(session, workspace: str, storage) -> SkillService:
     context = UserContext(user_id="u1", workspace_id=workspace)
     return SkillService(
@@ -253,12 +257,369 @@ async def test_bodies_left_in_rows_move_into_packages_in_every_workspace(session
             )
         ).all()
     }
-    assert rows[legacy].s3_path == f"skills/{workspace}/{legacy}/"
+    assert rows[legacy].s3_path == _own(workspace, {"SKILL.md": b"# Legacy"})
     assert rows[legacy].content is None
     assert s3.under(rows[legacy].s3_path) == {"SKILL.md": b"# Legacy"}
-    assert rows[legacy_elsewhere].s3_path == f"skills/{other}/{legacy_elsewhere}/"
-    assert (rows[edited].s3_path, rows[edited].content) == (f"skills/{workspace}/{edited}/", None)
-    assert s3.under(rows[edited].s3_path) == {"SKILL.md": b"# Edited", "fill.py": b"print(1)"}
+    assert rows[legacy_elsewhere].s3_path == _own(other, {"SKILL.md": b"# Elsewhere"})
+    edited_files = {"SKILL.md": b"# Edited", "fill.py": b"print(1)"}
+    assert (rows[edited].s3_path, rows[edited].content) == (_own(workspace, edited_files), None)
+    assert s3.under(rows[edited].s3_path) == edited_files
     assert s3.under(shared) == {"SKILL.md": b"# Imported", "fill.py": b"print(1)"}
     assert (rows[unedited].s3_path, rows[unedited].content) == (shared, None)
     assert (rows[stub].s3_path, rows[stub].content) == (None, "# Stub")
+
+
+async def _versions(session, skill_id: str) -> list[tuple[str, str, str | None]]:
+    rows = await session.execute(
+        text(
+            "SELECT reason, s3_path, digest FROM skill_versions WHERE skill_id = :id "
+            "ORDER BY created_at, id"
+        ),
+        {"id": skill_id},
+    )
+    return [tuple(r) for r in rows.all()]
+
+
+async def test_edits_are_versions_and_a_rollback_moves_the_pointer_back(session, workspace):
+    storage, s3 = fake_storage()
+    v1_path = await storage.store_workspace_package({"SKILL.md": b"# v1"}, workspace)
+    skill_id = await _skill_row(session, workspace, s3_path=v1_path)
+    with workspace_scope(workspace):
+        svc = _service(session, workspace, storage)
+        repo = svc._get_repository()
+        await repo.add_version(await repo.get_by_id(skill_id), reason="create")
+        skill = await svc.set_content(skill_id, "# v2")
+        [first, _] = await svc.list_versions(skill.id)
+        rolled = await svc.rollback(skill.id, first.id)
+
+    v1, v2 = {"SKILL.md": b"# v1"}, {"SKILL.md": b"# v2"}
+    assert rolled.s3_path == _own(workspace, v1)
+    assert await _versions(session, str(skill.id)) == [
+        ("create", _own(workspace, v1), package_digest(v1)),
+        ("edit", _own(workspace, v2), package_digest(v2)),
+        ("rollback", _own(workspace, v1), package_digest(v1)),
+    ]
+    assert s3.under(_own(workspace, v2)) == v2
+
+
+async def test_copies_move_into_packages_and_only_the_moved_ones_are_deleted(session, workspace):
+    from agentarea_agents.application.skill_packages import (
+        delete_moved_own_copies,
+        move_all_own_copies_to_packages,
+    )
+
+    from datetime import timedelta
+
+    now = timedelta(seconds=-60)  # "moved before a minute from now": everything moved so far
+    storage, s3 = fake_storage()
+    copied = await _skill_row(session, workspace)
+    await session.execute(
+        text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+        {"p": f"skills/{workspace}/{copied}/", "id": copied},
+    )
+    s3.objects[f"skills/{workspace}/{copied}/SKILL.md"] = b"# Copied"
+
+    @asynccontextmanager
+    async def same_session():
+        yield session
+
+    assert await delete_moved_own_copies(same_session, storage, dry_run=True, min_age=now) == (0, 0)
+    moved, failed = await move_all_own_copies_to_packages(same_session, storage)
+
+    assert (moved, failed) == (1, 0)
+    package = _own(workspace, {"SKILL.md": b"# Copied"})
+    row = (await session.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": copied})).one()
+    assert row.s3_path == package
+    assert await _versions(session, copied) == [
+        ("migrate", package, package_digest({"SKILL.md": b"# Copied"}))
+    ]
+    # The copy stays until the explicit command, and a dry run deletes nothing.
+    assert s3.under(f"skills/{workspace}/{copied}/") == {"SKILL.md": b"# Copied"}
+    # Moved just now: kept by the default age, deleted only once old enough.
+    assert await delete_moved_own_copies(same_session, storage) == (0, 0)
+    assert await delete_moved_own_copies(same_session, storage, dry_run=True, min_age=now) == (1, 1)
+    assert s3.under(f"skills/{workspace}/{copied}/") == {"SKILL.md": b"# Copied"}
+    s3.delete_objects = lambda *, Bucket, Delete: [  # noqa: N803
+        s3.objects.pop(o["Key"]) for o in Delete["Objects"]
+    ]
+    assert await delete_moved_own_copies(same_session, storage, min_age=now) == (1, 1)
+    assert s3.under(f"skills/{workspace}/{copied}/") == {}
+    assert s3.under(package) == {"SKILL.md": b"# Copied"}
+
+
+async def test_the_migration_starts_each_packaged_skills_history(session, workspace):
+    import importlib.util
+    from pathlib import Path
+
+    migration_file = next(
+        (Path(__file__).resolve().parents[3] / "apps" / "api" / "alembic" / "versions").glob(
+            "*_skill_versions.py"
+        )
+    )
+    spec = importlib.util.spec_from_file_location("skill_versions_migration", migration_file)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    item_id = await _item(session, OLD_TREE)
+    own = await _skill_row(session, workspace, s3_path=f"skills/{workspace}/packages/{'d' * 64}/")
+    installed = await _skill_row(
+        session, workspace, s3_path=f"skills/catalog/{'e' * 64}/", registry_item_id=item_id
+    )
+    await CatalogSkillRepository(
+        session, UserContext(user_id="u1", workspace_id=workspace)
+    ).mark_installed(item_id, installed, OLD_TREE)
+    copy = await _skill_row(session, workspace)
+    await session.execute(
+        text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+        {"p": f"skills/{workspace}/{copy}/", "id": copy},
+    )
+
+    await session.execute(text(migration.BACKFILL))
+    await session.execute(text(migration.BACKFILL))
+
+    assert await _versions(session, own) == [
+        ("create", f"skills/{workspace}/packages/{'d' * 64}/", "d" * 64)
+    ]
+    assert await _versions(session, installed) == [
+        ("install", f"skills/catalog/{'e' * 64}/", "e" * 64)
+    ]
+    catalog_version = (
+        await session.execute(
+            text("SELECT catalog_version FROM skill_versions WHERE skill_id = :id"),
+            {"id": installed},
+        )
+    ).scalar_one()
+    assert catalog_version == OLD_TREE
+    assert await _versions(session, copy) == []
+
+
+@pytest.fixture
+async def committed():
+    """Sessions on their own connections that really commit, as two requests would."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    workspace = f"ws-{uuid4()}"
+    yield maker, workspace
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM skills WHERE workspace_id = :w"), {"w": workspace}
+        )
+    await engine.dispose()
+
+
+async def _legacy_copy(maker, workspace: str, s3) -> str:
+    async with maker() as setup:
+        skill_id = await _skill_row(setup, workspace)
+        await setup.execute(
+            text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+            {"p": f"skills/{workspace}/{skill_id}/", "id": skill_id},
+        )
+        await setup.commit()
+    s3.objects[f"skills/{workspace}/{skill_id}/SKILL.md"] = b"# Legacy"
+    return skill_id
+
+
+async def _history(maker, skill_id: str) -> tuple[str, list[tuple[str, str]]]:
+    async with maker() as check:
+        pointer = (
+            await check.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": skill_id})
+        ).scalar_one()
+        rows = await check.execute(
+            text("SELECT reason, s3_path FROM skill_versions WHERE skill_id = :id ORDER BY created_at, id"),
+            {"id": skill_id},
+        )
+        return pointer, [tuple(r) for r in rows.all()]
+
+
+async def test_a_stale_read_of_a_legacy_skill_does_not_move_it_back_over_an_edit(committed):
+    maker, workspace = committed
+    storage, _s3 = fake_storage()
+    skill_id = await _legacy_copy(maker, workspace, _s3)
+    with workspace_scope(workspace):
+        async with maker() as reader_session, maker() as editor_session:
+            # A run's config loaded the skill while it was still at its copy...
+            reader = _service(reader_session, workspace, storage)
+            stale = await reader._get_repository().get_by_id(skill_id)
+            # ...then the user edited it in another request...
+            editor = _service(editor_session, workspace, storage)
+            await editor.set_content(skill_id, "# Edited")
+            # ...and only then did the run read its body.
+            body = await reader.read_skill_md(stale)
+
+    edited = _own(workspace, {"SKILL.md": b"# Edited"})
+    pointer, history = await _history(maker, skill_id)
+    assert body == "# Edited"
+    assert pointer == edited
+    assert history == [("migrate", _own(workspace, {"SKILL.md": b"# Legacy"})), ("edit", edited)]
+
+
+async def test_concurrent_edits_leave_the_pointer_where_the_history_ends(committed):
+    import asyncio
+
+    maker, workspace = committed
+    storage, s3 = fake_storage()
+    skill_id = await _legacy_copy(maker, workspace, s3)
+
+    async def edit(body: str) -> None:
+        with workspace_scope(workspace):
+            async with maker() as session:
+                await _service(session, workspace, storage).set_content(skill_id, body)
+
+    await asyncio.gather(*(edit(f"# Edit {n}") for n in range(4)))
+
+    pointer, history = await _history(maker, skill_id)
+    assert history[0][0] == "migrate"
+    assert [reason for reason, _ in history[1:]] == ["edit"] * 4
+    assert pointer == history[-1][1]
+    assert len({path for _, path in history}) == len(history)
+
+
+async def _copy_row(engine, workspace: str) -> tuple[str, str]:
+    skill_id = str(uuid4())
+    own = f"skills/{workspace}/{skill_id}/"
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO skills (id, name, slug, source_type, s3_path, workspace_id, "
+                "created_by, network_scope, created_at, updated_at) VALUES (:id, 'pdf', :slug, "
+                "'github', :p, :w, 'u1', 'private', now(), now())"
+            ),
+            {"id": skill_id, "slug": f"pdf-{skill_id[:8]}", "p": own, "w": workspace},
+        )
+    return skill_id, own
+
+
+async def _cleanup(engine, skill_id: str) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(text("DELETE FROM skills WHERE id = :id"), {"id": skill_id})
+
+
+@pytest.mark.parametrize("autocommit", [False, True])
+async def test_an_edit_committed_between_a_movers_read_and_its_move_wins(autocommit):
+    from agentarea_agents.infrastructure.skill_repository import (
+        SkillPackageMovedError,
+        SkillRepository,
+    )
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    engine = create_async_engine(TEST_DATABASE_URL)
+    mover_engine = engine.execution_options(isolation_level="AUTOCOMMIT") if autocommit else engine
+    workspace = f"ws-{uuid4()}"
+    skill_id, own = await _copy_row(engine, workspace)
+    edited = f"skills/{workspace}/packages/{'e' * 64}/"
+    try:
+        with workspace_scope(workspace):
+            maker = async_sessionmaker(mover_engine, class_=AsyncSession, expire_on_commit=False)
+            async with maker() as session:
+                repo = SkillRepository(session, UserContext(user_id="u1", workspace_id=workspace))
+                assert (await repo.get_by_id(skill_id)).s3_path == own
+                async with engine.begin() as conn:
+                    await conn.execute(
+                        text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+                        {"p": edited, "id": skill_id},
+                    )
+                with pytest.raises(SkillPackageMovedError) as lost:
+                    await repo.set_package(
+                        skill_id, f"skills/{workspace}/packages/{'m' * 64}/", reason="migrate", expect=own
+                    )
+        assert lost.value.current == edited
+        async with engine.connect() as conn:
+            pointer = (
+                await conn.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": skill_id})
+            ).scalar_one()
+            versions = (
+                await conn.execute(
+                    text("SELECT count(*) FROM skill_versions WHERE skill_id = :id"), {"id": skill_id}
+                )
+            ).scalar_one()
+        assert (pointer, versions) == (edited, 0)
+    finally:
+        await _cleanup(engine, skill_id)
+        await engine.dispose()
+
+
+async def test_an_edit_landing_just_after_an_autocommit_move_is_not_reverted():
+    # The probe of the review: the edit commits while the mover is between its
+    # pointer move and its history row. The move is one statement, so the edit
+    # comes after it and stands.
+    import asyncio
+
+    from agentarea_agents.infrastructure.skill_repository import SkillRepository
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    engine = create_async_engine(TEST_DATABASE_URL)
+    workspace = f"ws-{uuid4()}"
+    skill_id, own = await _copy_row(engine, workspace)
+    edited = f"skills/{workspace}/packages/{'e' * 64}/"
+    try:
+        with workspace_scope(workspace):
+            maker = async_sessionmaker(
+                engine.execution_options(isolation_level="AUTOCOMMIT"),
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+            async with maker() as session:
+                repo = SkillRepository(session, UserContext(user_id="u1", workspace_id=workspace))
+                original = repo.latest_version
+
+                async def edit_in_the_window(sid):
+                    async def edit():
+                        async with engine.begin() as conn:
+                            await conn.execute(
+                                text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+                                {"p": edited, "id": skill_id},
+                            )
+
+                    await asyncio.wait_for(edit(), 5)
+                    return await original(sid)
+
+                repo.latest_version = edit_in_the_window
+                await repo.set_package(
+                    skill_id, f"skills/{workspace}/packages/{'m' * 64}/", reason="migrate", expect=own
+                )
+        async with engine.connect() as conn:
+            pointer = (
+                await conn.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": skill_id})
+            ).scalar_one()
+        assert pointer == edited
+    finally:
+        await _cleanup(engine, skill_id)
+        await engine.dispose()
+
+
+async def test_a_read_session_reads_a_legacy_copy_without_moving_it():
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    engine = create_async_engine(TEST_DATABASE_URL)
+    workspace = f"ws-{uuid4()}"
+    skill_id, own = await _copy_row(engine, workspace)
+    storage, s3 = fake_storage()
+    s3.objects[f"{own}SKILL.md"] = b"# Legacy"
+    try:
+        with workspace_scope(workspace):
+            maker = async_sessionmaker(
+                engine.execution_options(isolation_level="AUTOCOMMIT"),
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+            async with maker() as session:
+                svc = _service(session, workspace, storage)
+                skill = await svc.get(skill_id)
+                assert await svc.read_skill_md(skill) == "# Legacy"
+                assert [f.path for f in await svc.get_skill_files(skill_id)] == ["SKILL.md"]
+        async with engine.connect() as conn:
+            pointer = (
+                await conn.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": skill_id})
+            ).scalar_one()
+            versions = (
+                await conn.execute(
+                    text("SELECT count(*) FROM skill_versions WHERE skill_id = :id"), {"id": skill_id}
+                )
+            ).scalar_one()
+        assert (pointer, versions) == (own, 0)
+        assert not any(key.startswith(f"skills/{workspace}/packages/") for key in s3.objects)
+    finally:
+        await _cleanup(engine, skill_id)
+        await engine.dispose()

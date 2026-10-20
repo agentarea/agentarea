@@ -3204,6 +3204,28 @@ export const zSkillUpdateAllResponse = z.object({
 });
 
 /**
+ * SkillVersionResponse
+ *
+ * One package a skill pointed at; the last is what it runs now.
+ */
+export const zSkillVersionResponse = z.object({
+  catalog_version: z.string().nullish(),
+  created_at: z.string(),
+  created_by: z.string(),
+  current: z.boolean(),
+  digest: z.string().nullable(),
+  id: z.string(),
+  reason: z.enum([
+    "create",
+    "edit",
+    "install",
+    "update",
+    "rollback",
+    "migrate",
+  ]),
+});
+
+/**
  * SkippedItem
  */
 export const zSkippedItem = z.object({
@@ -7044,6 +7066,31 @@ export const zUpdateInstalledSkillV1SkillsSkillIdUpdatePostQuery = z.object({
  * Successful Response
  */
 export const zUpdateInstalledSkillV1SkillsSkillIdUpdatePostResponse =
+  zSkillResponse;
+
+export const zListSkillVersionsV1SkillsSkillIdVersionsGetPath = z.object({
+  skill_id: z.string().uuid(),
+});
+
+/**
+ * Response List Skill Versions V1 Skills  Skill Id  Versions Get
+ *
+ * Successful Response
+ */
+export const zListSkillVersionsV1SkillsSkillIdVersionsGetResponse = z.array(
+  zSkillVersionResponse
+);
+
+export const zRollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostPath =
+  z.object({
+    skill_id: z.string().uuid(),
+    version_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponse =
   zSkillResponse;
 
 export const zListStreamsV1StreamsGetQuery = z.object({

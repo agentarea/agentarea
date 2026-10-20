@@ -7672,6 +7672,42 @@ export type SkillUpdateResultResponse = {
 };
 
 /**
+ * SkillVersionResponse
+ *
+ * One package a skill pointed at; the last is what it runs now.
+ */
+export type SkillVersionResponse = {
+  /**
+   * Catalog Version
+   */
+  catalog_version?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Created By
+   */
+  created_by: string;
+  /**
+   * Current
+   */
+  current: boolean;
+  /**
+   * Digest
+   */
+  digest: string | null;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Reason
+   */
+  reason: "create" | "edit" | "install" | "update" | "rollback" | "migrate";
+};
+
+/**
  * SkippedItem
  */
 export type SkippedItem = {
@@ -19046,6 +19082,77 @@ export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses = {
 
 export type UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponse =
   UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses[keyof UpdateInstalledSkillV1SkillsSkillIdUpdatePostResponses];
+
+export type ListSkillVersionsV1SkillsSkillIdVersionsGetData = {
+  body?: never;
+  path: {
+    /**
+     * Skill Id
+     */
+    skill_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/skills/{skill_id}/versions";
+};
+
+export type ListSkillVersionsV1SkillsSkillIdVersionsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListSkillVersionsV1SkillsSkillIdVersionsGetError =
+  ListSkillVersionsV1SkillsSkillIdVersionsGetErrors[keyof ListSkillVersionsV1SkillsSkillIdVersionsGetErrors];
+
+export type ListSkillVersionsV1SkillsSkillIdVersionsGetResponses = {
+  /**
+   * Response List Skill Versions V1 Skills  Skill Id  Versions Get
+   *
+   * Successful Response
+   */
+  200: Array<SkillVersionResponse>;
+};
+
+export type ListSkillVersionsV1SkillsSkillIdVersionsGetResponse =
+  ListSkillVersionsV1SkillsSkillIdVersionsGetResponses[keyof ListSkillVersionsV1SkillsSkillIdVersionsGetResponses];
+
+export type RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostData = {
+  body?: never;
+  path: {
+    /**
+     * Skill Id
+     */
+    skill_id: string;
+    /**
+     * Version Id
+     */
+    version_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/skills/{skill_id}/versions/{version_id}/rollback";
+};
+
+export type RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostError =
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors[keyof RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors];
+
+export type RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses =
+  {
+    /**
+     * Successful Response
+     */
+    200: SkillResponse;
+  };
+
+export type RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponse =
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses[keyof RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses];
 
 export type ListStreamsV1StreamsGetData = {
   body?: never;

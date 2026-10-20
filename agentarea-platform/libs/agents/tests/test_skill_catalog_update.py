@@ -108,11 +108,11 @@ async def test_a_customized_skill_is_not_updated_over_its_edit():
     assert github.calls == []
 
 
-async def test_discarding_the_edit_updates_and_removes_the_workspace_copy():
+async def test_discarding_the_edit_updates_and_keeps_the_edit_to_roll_back_to():
     item = _pointer_item(tree_sha=NEW_TREE)
-    svc, _, _, s3, _, [skill] = await _installed([item])
-    await svc.set_content(skill.id, "# my edit")
-    own = f"skills/w1/{skill.id}/"
+    svc, repo, _, s3, _, [skill] = await _installed([item])
+    edited = await svc.set_content(skill.id, "# my edit")
+    own = edited.s3_path
     assert s3.under(own)
 
     result = await svc.update_from_catalog(skill.id, discard_changes=True)
@@ -120,7 +120,10 @@ async def test_discarding_the_edit_updates_and_removes_the_workspace_copy():
     assert result.status == "updated"
     assert not is_customized(result.skill)
     assert await svc.read_skill_md(result.skill) == "# v2"
-    assert s3.under(own) == {}
+    assert s3.under(own) == {"SKILL.md": b"# my edit"}
+    [_, edit, _] = await repo.list_versions(skill.id)
+    restored = await svc.rollback(skill.id, edit.id)
+    assert await svc.read_skill_md(restored) == "# my edit"
 
 
 async def test_a_skill_not_installed_from_the_catalog_cannot_be_updated():
