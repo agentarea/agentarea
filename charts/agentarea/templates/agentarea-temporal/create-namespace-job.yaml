@@ -1,0 +1,32 @@
+{{- if .Values.temporal.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentarea.fullname" . }}-create-temporal-namespace
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+    app.kubernetes.io/component: create-temporal-namespace
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "agentarea.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: create-temporal-namespace
+    spec:
+      restartPolicy: Never
+      {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: create-namespace
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.adminTools.image.repository }}:{{ .Values.temporal.adminTools.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              until temporal operator namespace describe -n "$TEMPORAL_NAMESPACE" >/dev/null 2>&1; do
+                temporal operator namespace create -n "$TEMPORAL_NAMESPACE" --retention {{ .Values.temporal.namespaceRetention }} || sleep 5
+              done
+              echo "namespace $TEMPORAL_NAMESPACE is registered"
+          env:
+            {{- include "agentarea.temporal.envs" . | nindent 12 }}
+{{- end }}
