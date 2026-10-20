@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentProps, type ReactNode } from "react";
+import { Fragment, useState, type ComponentProps, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import EmptyState from "@/components/EmptyState";
 import { MenuSectionLabel } from "@/components/ui/menu-row";
@@ -35,8 +35,12 @@ type ResourcePickerListProps<T extends { id: string }> = {
   emptyTitle: string;
   emptyHint?: string;
   /** Where the empty state sends you to make one, in a new tab. */
-  createText: string;
-  createHref: string;
+  createText?: string;
+  createHref?: string;
+  /** More follows below the list: an empty state sits on top, not centred. */
+  inline?: boolean;
+  /** What opens under a picked row, e.g. the toolset's methods to tick. */
+  renderExpanded?: (item: T) => ReactNode;
 };
 
 /**
@@ -65,6 +69,8 @@ export function ResourcePickerList<T extends { id: string }>({
   emptyHint,
   createText,
   createHref,
+  inline = false,
+  renderExpanded,
 }: ResourcePickerListProps<T> & { query: string }) {
   const t = useTranslations("Pickers");
   const inWorkspace = useWorkspacePath();
@@ -85,7 +91,7 @@ export function ResourcePickerList<T extends { id: string }>({
     description?: string;
     action?: { label: string; onClick: () => void };
   }) => (
-    <div className="flex h-full flex-col justify-center">
+    <div className={inline ? undefined : "flex h-full flex-col justify-center"}>
       <EmptyState
         iconsType={iconsType}
         className={PICKER_BARE_EMPTY_STATE}
@@ -106,12 +112,19 @@ export function ResourcePickerList<T extends { id: string }>({
     body = emptyState({
       title: emptyTitle,
       description: emptyHint,
-      action: {
-        label: createText,
-        // A new tab: leaving would drop the form being filled in.
-        onClick: () =>
-          window.open(inWorkspace(createHref), "_blank", "noopener,noreferrer"),
-      },
+      action:
+        createText && createHref
+          ? {
+              label: createText,
+              // A new tab: leaving would drop the form being filled in.
+              onClick: () =>
+                window.open(
+                  inWorkspace(createHref),
+                  "_blank",
+                  "noopener,noreferrer"
+                ),
+            }
+          : undefined,
     });
   } else if (!visible.length) {
     body = emptyState({
@@ -129,28 +142,36 @@ export function ResourcePickerList<T extends { id: string }>({
         {visible.map((item) => {
           const selected = selectedIds.includes(item.id);
           const iconSrc = extractIconSrc?.(item);
+          const expanded = selected ? renderExpanded?.(item) : null;
           return (
-            <PickerRow
-              key={item.id}
-              selected={selected}
-              onToggle={() => (selected ? onRemove(item) : onAdd(item))}
-              avatar={renderAvatar?.(item)}
-              iconScale={iconSrc ? 0.62 : 0.45}
-              icon={
-                iconSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={iconSrc}
-                    alt=""
-                    className="h-full w-full object-contain"
-                  />
-                ) : (
-                  extractIcon?.(item)
-                )
-              }
-              title={extractTitle(item)}
-              subtitle={extractSubtitle?.(item)}
-            />
+            <Fragment key={item.id}>
+              <PickerRow
+                selected={selected}
+                onToggle={() => (selected ? onRemove(item) : onAdd(item))}
+                avatar={renderAvatar?.(item)}
+                iconScale={iconSrc ? 0.62 : 0.45}
+                icon={
+                  iconSrc ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={iconSrc}
+                      alt=""
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    extractIcon?.(item)
+                  )
+                }
+                title={extractTitle(item)}
+                subtitle={extractSubtitle?.(item)}
+              />
+              {/* Its own box, indented to the row's text. */}
+              {expanded && (
+                <div className="mb-2 ml-[64px] mr-5 rounded-md border px-3 py-2.5">
+                  {expanded}
+                </div>
+              )}
+            </Fragment>
           );
         })}
       </>

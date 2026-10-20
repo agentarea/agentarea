@@ -25,6 +25,7 @@ export function PickerRow({
   subtitle,
   selected,
   onToggle,
+  end,
 }: {
   /** What goes on the tile: a glyph, or a logo. */
   icon?: ReactNode;
@@ -36,6 +37,8 @@ export function PickerRow({
   subtitle?: ReactNode;
   selected: boolean;
   onToggle: () => void;
+  /** What the row does instead of ticking, e.g. "Configure →". */
+  end?: ReactNode;
 }) {
   return (
     <InteractiveListRow
@@ -57,13 +60,15 @@ export function PickerRow({
         )
       }
       end={
-        // The row is the control; the box only shows its state.
-        <Checkbox
-          checked={selected}
-          tabIndex={-1}
-          aria-hidden
-          className="pointer-events-none border-zinc-300 dark:border-zinc-600 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-        />
+        end ?? (
+          // The row is the control; the box only shows its state.
+          <Checkbox
+            checked={selected}
+            tabIndex={-1}
+            aria-hidden
+            className="pointer-events-none"
+          />
+        )
       }
     >
       <div className="min-w-0 flex-1">

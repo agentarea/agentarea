@@ -2,7 +2,7 @@ import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-import { ArrowRight, Globe, Wrench } from "lucide-react";
+import { Globe, Wrench } from "lucide-react";
 import {
   Control,
   FieldErrors,
@@ -16,7 +16,6 @@ import {
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
@@ -43,7 +42,10 @@ import AccordionControl from "@/components/AccordionControl";
 import ConfigSheet from "@/components/ConfigSheet";
 import { MethodsList } from "./MethodsList";
 import type { Method } from "./MethodsList";
-import { SelectableList } from "@/components/SelectableList";
+import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
+import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { McpToolsTab } from "./McpToolsTab";
 import { TriggerControl } from "./TriggerControl";
 import { CodeToolModelSettings } from "./CodeToolModelSettings";
 
@@ -147,10 +149,10 @@ const ToolConfig = ({
   );
   const [accordionValue, setAccordionValue] = useState<string>("tools");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [scrollToolId] = useState<string | null>(null);
-  const [scrollBuiltinToolId] = useState<string | null>(
-    null
+  const [toolTab, setToolTab] = useState<"builtin" | "openapi" | "mcp">(
+    "builtin"
   );
+  const [toolQuery, setToolQuery] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<
     Record<string, Record<string, boolean>>
   >({});
@@ -160,7 +162,7 @@ const ToolConfig = ({
     name: "tools_config.openapi_configs",
   });
   const tMcp = useTranslations("MCPServersPage.createInstance");
-  const tCommon = useTranslations("Common");
+  const tPickers = useTranslations("Pickers");
 
   // Configure server overlay (like marketplace, but in sheet)
   const [configureServerSheetOpen, setConfigureServerSheetOpen] =
@@ -533,23 +535,59 @@ const ToolConfig = ({
     };
   };
 
-  // Small mark used in the picker lists: real connection icon, or a wrench when
-  // the registry has no icon for this server.
-  const McpMark = ({ src }: { src?: string }) => (
-    <span className="relative grid h-4 w-4 shrink-0 place-items-center overflow-hidden">
-      {src ? (
-        <Image
-          src={src}
-          alt=""
-          width={16}
-          height={16}
-          className="h-4 w-4 object-contain"
-        />
-      ) : (
-        <Wrench className="h-4 w-4 text-muted-foreground" />
-      )}
-    </span>
-  );
+  // A toolset's methods, ticked in place under its row in the sheet.
+  const renderBuiltinMethods = (tool: BuiltinTool) =>
+    tool.available_methods?.length ? (
+      <MethodsList
+        methods={tool.available_methods}
+        selectedMethods={selectedMethods[tool.name] || {}}
+        onMethodToggle={(methodName, checked) =>
+          handleMethodToggle(tool.name, methodName, checked)
+        }
+        toolName={tool.name}
+        showSelectAll
+        onSelectAll={(checked) =>
+          tool.available_methods?.forEach((method: Method) =>
+            handleMethodToggle(tool.name, method.name, checked)
+          )
+        }
+      />
+    ) : null;
+
+  // An OpenAPI connection's operations, picked one by one; with "all tools"
+  // on, every one is ticked.
+  const renderOpenapiOperations = (connectionId: string) => {
+    const index = (openapiFields ?? []).findIndex(
+      (field) => field.openapi_connection_id === connectionId
+    );
+    const connection = openapiConnections.find((c) => c.id === connectionId);
+    const operations = connection?.available_tools ?? [];
+    if (index === -1 || !operations.length) return null;
+    const allowed = watchedOpenapiConfigs?.[index]?.allowed_tools ?? null;
+    return (
+      <MethodsList
+        label={t("create.openapiOperationsLabel")}
+        methods={operations}
+        selectedMethods={Object.fromEntries(
+          operations.map((operation) => [
+            operation.name,
+            allowed === null || allowed.includes(operation.name),
+          ])
+        )}
+        onMethodToggle={(name, checked) =>
+          handleOpenapiToolToggle(connectionId, name, checked)
+        }
+        toolName={`openapi-${connectionId}`}
+        showSelectAll
+        onSelectAll={(checked) =>
+          setValue(
+            `tools_config.openapi_configs.${index}.allowed_tools`,
+            checked ? operations.map((operation) => operation.name) : []
+          )
+        }
+      />
+    );
+  };
 
   const handleAddTools = (servers: McpInstance[]) => {
     if (!servers?.length) return;
@@ -625,30 +663,6 @@ const ToolConfig = ({
     }
   };
 
-  useEffect(() => {
-    if (isSheetOpen && scrollToolId) {
-      const timer = setTimeout(() => {
-        const el =
-          document.getElementById(`active-mcp-${scrollToolId}`) ||
-          document.getElementById(`mcp-${scrollToolId}`);
-        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isSheetOpen, scrollToolId]);
-
-  useEffect(() => {
-    if (isSheetOpen && scrollBuiltinToolId) {
-      const timer = setTimeout(() => {
-        const el = document.getElementById(
-          `builtin-tool-${scrollBuiltinToolId}`
-        );
-        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isSheetOpen, scrollBuiltinToolId]);
-
   const note = useMemo(
     () => (
       <>
@@ -685,273 +699,133 @@ const ToolConfig = ({
             className="ml-auto"
             open={isSheetOpen}
             onOpenChange={setIsSheetOpen}
+            panel
           >
-            <div className="flex flex-col space-y-4 overflow-y-auto">
-              <div className="font-semibold text-sm">{t("create.builtinTools")}</div>
-              <SelectableList
-                items={ungroupedBuiltinTools.map((tool) => ({
-                  ...tool,
-                  id: tool.name,
-                }))}
-                prefix="builtin-tool"
-                extractTitle={(tool) => {
-                  const { IconComponent, displayName } =
-                    getBuiltinToolDisplayInfo(tool);
-                  return (
-                    <div className="flex flex-row items-center gap-2 px-[7px] py-[7px]">
-                      <IconComponent className="h-4 w-4 text-muted-foreground" />
-                      <h3 className="text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                        {displayName}
-                      </h3>
-                    </div>
-                  );
-                }}
-                onAdd={(tool) => handleAddBuiltinTool(tool.name)}
-                onRemove={(tool) => handleRemoveBuiltinTool(tool.name)}
-                selectedIds={getSelectedBuiltinTools().map(
-                  (tool) => tool.tool_name
-                )}
-                openItemId={scrollBuiltinToolId}
-                renderContent={(tool) => {
-                  const methodsState = selectedMethods[tool.name] || {};
-
-                  return (
-                    <div className="space-y-2 p-2">
-                      <p className="text-xs text-muted-foreground">
-                        {tool.description}
-                      </p>
-                      <MethodsList
-                        methods={tool.available_methods || []}
-                        selectedMethods={methodsState}
-                        onMethodToggle={(methodName, checked) =>
-                          handleMethodToggle(tool.name, methodName, checked)
-                        }
-                        toolName={tool.name}
-                        showSelectAll={true}
-                        onSelectAll={(checked) => {
-                          if (tool.available_methods) {
-                            tool.available_methods.forEach((method: Method) => {
-                              handleMethodToggle(
-                                tool.name,
-                                method.name,
-                                checked
-                              );
-                            });
-                          }
-                        }}
-                      />
-                    </div>
-                  );
-                }}
-              />
-              <div className="flex items-center gap-2 font-semibold text-sm">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                {t("create.availableOpenAPIConnections")}
-              </div>
-              {loadingOpenapiConnections ? (
-                <Note>
-                  <p>{t("create.loadingOpenapiConnections")}</p>
-                </Note>
-              ) : openapiLoadError ? (
-                <div className="flex flex-col items-start gap-2">
-                  <FormError className="w-full">{openapiLoadError}</FormError>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={loadOpenapiConnections}
-                  >
-                    {tCommon("retry")}
-                  </Button>
-                </div>
-              ) : openapiConnections.length > 0 ? (
-                <SelectableList
+            <PickerPanel
+              title={t("create.toolsMcp")}
+              description={t("create.toolsMcpDescription")}
+              onSearch={setToolQuery}
+              tabs={
+                <CountSegmentedControl
+                  layoutId="tools-tabs"
+                  value={toolTab}
+                  onChange={setToolTab}
+                  items={[
+                    {
+                      value: "builtin",
+                      label: t("create.toolsTabBuiltin"),
+                      count: visibleBuiltinToolFields.length || undefined,
+                    },
+                    {
+                      value: "openapi",
+                      label: "OpenAPI",
+                      count: openapiFields?.length || undefined,
+                    },
+                    {
+                      value: "mcp",
+                      label: "MCP",
+                      count: toolFields.length || undefined,
+                    },
+                  ]}
+                />
+              }
+              manageText={
+                toolTab === "mcp"
+                  ? tPickers("manageMcpsLink")
+                  : t("create.manageConnections")
+              }
+              manageHref={toolTab === "builtin" ? undefined : "/connections"}
+            >
+              {toolTab === "builtin" && (
+                <ResourcePickerList
+                  query={toolQuery}
+                  heading={t("create.builtinTools")}
+                  items={ungroupedBuiltinTools.map((tool) => ({
+                    ...tool,
+                    id: tool.name,
+                  }))}
+                  selectedIds={getSelectedBuiltinTools().map(
+                    (tool) => tool.tool_name
+                  )}
+                  onAdd={(tool) => handleAddBuiltinTool(tool.name)}
+                  onRemove={(tool) => handleRemoveBuiltinTool(tool.name)}
+                  extractTitle={(tool) =>
+                    getBuiltinToolDisplayInfo(tool).displayName
+                  }
+                  extractSubtitle={(tool) =>
+                    getBuiltinToolDisplayInfo(tool).description
+                  }
+                  extractIcon={(tool) => {
+                    const { IconComponent } = getBuiltinToolDisplayInfo(tool);
+                    return <IconComponent strokeWidth={1.85} />;
+                  }}
+                  loading={false}
+                  failed={false}
+                  onRefresh={() => undefined}
+                  emptyTitle={t("create.noBuiltinTools")}
+                  renderExpanded={renderBuiltinMethods}
+                />
+              )}
+              {toolTab === "openapi" && (
+                <ResourcePickerList
+                  query={toolQuery}
+                  heading={t("create.openAPIConnections")}
                   items={openapiConnections}
-                  prefix="openapi"
-                  extractTitle={(connection) => (
-                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <div className="relative shrink-0">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                        {connection.name}
-                      </h3>
-                    </div>
+                  selectedIds={(openapiFields || []).map(
+                    (field) => field.openapi_connection_id
                   )}
                   onAdd={(connection) => handleAddOpenapiConnection(connection)}
-                  onRemove={(connection) => handleRemoveOpenapiConnection(connection.id)}
-                  selectedIds={(openapiFields || []).map((f) => f.openapi_connection_id)}
-                  renderContent={(connection) => (
-                    <div className="space-y-2 p-2">
-                      <p className="text-xs text-muted-foreground">
-                        {connection.base_url}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {connection.available_tools?.length ?? 0} operations available
-                      </p>
-                      {connection.available_tools && connection.available_tools.length > 0 && (
-                        <div className="space-y-1">
-                          <p className="text-xs font-medium text-foreground">Operations:</p>
-                          <div className="space-y-1">
-                            {connection.available_tools.map((tool) => {
-                              const field = (watchedOpenapiConfigs || []).find(
-                                (f) => f.openapi_connection_id === connection.id
-                              );
-                              const allowedTools = field?.allowed_tools ?? null;
-                              const isEnabled =
-                                allowedTools === null ||
-                                allowedTools.includes(tool.name);
-                              const isSelected = (openapiFields || []).some(
-                                (f) => f.openapi_connection_id === connection.id
-                              );
-                              return (
-                                <div
-                                  key={tool.name}
-                                  className="flex items-center gap-2 rounded bg-muted/30 p-1"
-                                >
-                                  {isSelected && (
-                                    <Checkbox
-                                      id={`${connection.id}-${tool.name}`}
-                                      checked={isEnabled}
-                                      onCheckedChange={(checked) =>
-                                        handleOpenapiToolToggle(
-                                          connection.id,
-                                          tool.name,
-                                          checked === true
-                                        )
-                                      }
-                                    />
-                                  )}
-                                  <span className="text-xs text-foreground">
-                                    {tool.name}
-                                  </span>
-                                  {tool.description && (
-                                    <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">
-                                      {tool.description}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  onRemove={(connection) =>
+                    handleRemoveOpenapiConnection(connection.id)
+                  }
+                  extractTitle={(connection) => connection.name}
+                  extractSubtitle={(connection) =>
+                    [
+                      connection.base_url,
+                      t("create.openapiOperations", {
+                        count: connection.available_tools?.length ?? 0,
+                      }),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  }
+                  extractIcon={() => <Globe strokeWidth={1.85} />}
+                  loading={loadingOpenapiConnections}
+                  failed={Boolean(openapiLoadError)}
+                  onRefresh={loadOpenapiConnections}
+                  emptyTitle={t("create.noOpenapiConnections")}
+                  emptyHint={t("create.noOpenapiConnectionsHint")}
+                  createText={t("create.connectOpenapi")}
+                  createHref="/connections"
+                  renderExpanded={(connection) =>
+                    renderOpenapiOperations(connection.id)
+                  }
                 />
-              ) : (
-                <Note>
-                  <p>No OpenAPI connections configured yet.</p>
-                </Note>
               )}
-              <div className="flex items-center gap-2 font-semibold text-sm">
-                <Image
-                  src="/mcp.svg"
-                  alt="MCP"
-                  width={16}
-                  height={16}
-                  className="text-current"
-                />
-                {t("create.activeMcpServers")}
-              </div>
-              {activeInstances.length > 0 ? (
-                <SelectableList
-                  items={activeInstances}
-                  prefix="active-mcp"
-                  extractTitle={(instance) => (
-                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <McpMark src={instanceIconSrc(instance)} />
-                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                        {instance.name || instance.id}
-                      </h3>
-                    </div>
-                  )}
+              {toolTab === "mcp" && (
+                <McpToolsTab
+                  query={toolQuery}
+                  instances={activeInstances}
+                  servers={mcpServers}
+                  selectedIds={toolFields.map((item) => item.mcp_server_id)}
                   onAdd={(instance) => handleAddTools([instance])}
                   onRemove={(instance) => handleRemoveTool(instance.id)}
-                  selectedIds={toolFields.map((item) => item.mcp_server_id)}
-                  openItemId={scrollToolId}
-                  renderContent={(instance) => (
-                    <div className="space-y-2 p-2">
-                      <p className="text-xs text-muted-foreground">
-                        Active MCP Server Instance
-                      </p>
-                      {getInstanceTools(instance).length > 0 && (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-foreground">
-                              Available Tools:
-                            </p>
-                            <div className="space-y-1">
-                              {getInstanceTools(instance).map((tool) => (
-                                <div
-                                  key={tool.name}
-                                  className="flex items-center gap-2 rounded bg-muted/30 p-1"
-                                >
-                                  <div className="h-1.5 w-1.5 rounded-full bg-primary/60" />
-                                  <span className="text-xs text-foreground">
-                                    {tool.display_name || tool.name}
-                                  </span>
-                                  <span className="ml-auto text-xs text-muted-foreground">
-                                    {tool.description}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  )}
+                  onConfigure={handleAddConfigurationTools}
+                  instanceIconSrc={instanceIconSrc}
+                  instanceSubtitle={(instance) => {
+                    const res = resolveMcpRef(
+                      instance.id,
+                      activeInstances,
+                      mcpServers
+                    );
+                    return res.status === "instance"
+                      ? (res.server?.name ?? null)
+                      : null;
+                  }}
+                  serverIconSrc={serverIconSrc}
                 />
-              ) : (
-                <Note>
-                  <p>{t("create.noActiveMcpServersDescription")}</p>
-                </Note>
               )}
-              <div className="flex items-center gap-2 font-semibold text-sm">
-                <Image
-                  src="/mcp.svg"
-                  alt="MCP"
-                  width={16}
-                  height={16}
-                  className="text-current"
-                />
-                {t("create.availableMcpServers")}
-              </div>
-              {mcpServers.length > 0 ? (
-                <SelectableList
-                  disableExpand={true}
-                  items={mcpServers}
-                  prefix="mcp"
-                  extractTitle={(server) => (
-                    <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <McpMark src={serverIconSrc(server)} />
-                      <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
-                        {server.name}
-                      </h3>
-                    </div>
-                  )}
-                  onAdd={(server) => handleAddConfigurationTools(server)}
-                  onRemove={(server) => handleRemoveTool(server.id)}
-                  selectedIds={toolFields.map((item) => item.mcp_server_id)}
-                  openItemId={scrollToolId}
-                  inactiveLabel={
-                    <>
-                      Configure <ArrowRight className="h-3 w-3" />
-                    </>
-                  }
-                  renderContent={(server) => (
-                    <div className="space-y-2 p-2">
-                      <p className="text-xs text-muted-foreground">
-                        {server.description || "Available MCP Server"}
-                      </p>
-                    </div>
-                  )}
-                />
-              ) : (
-                <Note>
-                  <p>{t("create.noAvailableMcpServersDescription")}</p>
-                </Note>
-              )}
-            </div>
+            </PickerPanel>
           </ConfigSheet>
         }
       >
