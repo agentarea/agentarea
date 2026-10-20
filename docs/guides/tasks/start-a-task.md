@@ -205,12 +205,6 @@ never dispatched.
     creation success does not prove a worker exists. Check the worker, then
     start a new task — a task that never dispatched cannot be resumed.
   </Accordion>
-  <Accordion title="A creation call returns a task you did not expect">
-    If `parameters` carries `channel_origin.chat_id` matching a workflow already
-    running for the same agent, the message is delivered into that workflow as a
-    follow-up and the existing task comes back with `status: "routed"` . No new
-    task is created.
-  </Accordion>
 </AccordionGroup>
 
 ## Related

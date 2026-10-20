@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import cast
 
-import httpx
 from agentarea_common.config import get_settings
+from agentarea_common.outbound import Destination, outbound_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def _quantity(body: dict[str, object], key: str) -> int:
 
 async def _fetch() -> InstanceReservation | None:
     settings = get_settings().mcp
-    async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=_TIMEOUT_SECONDS) as client:
         response = await client.get(
             f"{settings.MANAGER_URL.rstrip('/')}/instances/reservation",
             headers=settings.manager_inspection_headers(),

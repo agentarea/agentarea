@@ -54,7 +54,7 @@ def to_money(value: float | str | int | Decimal | None) -> Decimal:
         return value
     try:
         return Decimal(str(value))
-    except (InvalidOperation, ValueError, TypeError):
+    except InvalidOperation, ValueError, TypeError:
         return ZERO
 
 
@@ -82,5 +82,5 @@ def serialize_money(value: Decimal | float | str | int | None) -> str:
         return str(value)
     try:
         return str(Decimal(str(value)))
-    except (InvalidOperation, ValueError, TypeError):
+    except InvalidOperation, ValueError, TypeError:
         return "0"

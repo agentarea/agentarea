@@ -36,6 +36,7 @@ import EmptyState from "@/components/EmptyState";
 import EntityMark from "@/components/EntityMark";
 import FormError from "@/components/FormError";
 import HeaderTabs from "@/components/HeaderTabs";
+import { RegistryBadge } from "@/components/RegistryBadge";
 import Table, { type Column } from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,12 +61,16 @@ import {
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
+import { useCatalogFetchError } from "@/hooks/useCatalogFetchError";
 import {
   apiErrorMessage,
   formatApiError,
   isApiNotFound,
 } from "@/lib/api-errors";
-import { existingConnectionsHref } from "@/lib/catalog-connections";
+import {
+  catalogServerSetupHref,
+  existingConnectionsHref,
+} from "@/lib/catalog-connections";
 import { getCategoryIcon } from "@/lib/category-icons";
 import type { StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -1128,6 +1133,16 @@ const CATALOG_COLUMNS: Column<CatalogEntry>[] = [
       ) : null,
   },
   {
+    header: "Source",
+    accessor: "source",
+    headerClassName: "hidden w-[200px] lg:table-cell",
+    cellClassName: "hidden lg:table-cell",
+    render: (_, e) =>
+      e?.source ? (
+        <RegistryBadge name={e.source.name} trust={e.source.trust} />
+      ) : null,
+  },
+  {
     header: "Category",
     accessor: "category",
     headerClassName: "hidden w-[200px] sm:table-cell",
@@ -1361,10 +1376,17 @@ function CatalogCard({
           {entry.category && <CategoryBadge category={entry.category} />}
         </div>
         <p className="table-description line-clamp-2">{entry.description}</p>
-        {(entry.protocol ||
+        {(entry.source ||
+          entry.protocol ||
           entry.meta.length > 0 ||
           entry.connections.length > 0) && (
           <div className="mt-auto flex flex-wrap items-center gap-1 pt-1.5">
+            {entry.source && (
+              <RegistryBadge
+                name={entry.source.name}
+                trust={entry.source.trust}
+              />
+            )}
             {entry.connections.length > 0 && (
               <ConnectedCount count={entry.connections.length} />
             )}
@@ -1415,6 +1437,7 @@ function DetailView({
   const [state, setState] = useState<InstallState>({ phase: "idle" });
   const tBundle = useTranslations("BundleInstall");
   const tConnected = useTranslations("CatalogPage.connected");
+  const catalogFetchError = useCatalogFetchError();
   // Bundles open an inline configure-then-install step rather than installing on
   // the first click (pick model, skip connections, tune policies, then commit).
   const [configuring, setConfiguring] = useState(false);
@@ -1441,7 +1464,7 @@ function DetailView({
   // (ADR-003); an HTTP API entry to its connect form.
   const connectHref = isCatalogApi
     ? `/connections/catalog/${entry.id}`
-    : `/connections/create/${entry.id}`;
+    : catalogServerSetupHref(entry.id);
   // Connecting again makes another account, so a connected item opens what
   // exists and offers another one second.
   const openHref = existingConnectionsHref(entry.id, entry.connections);
@@ -1461,7 +1484,7 @@ function DetailView({
       if (result.error || !result.data) {
         setState({
           phase: "error",
-          message: apiErrorMessage(result, tBundle("agentInstallFailed")),
+          message: catalogFetchError(result, tBundle("agentInstallFailed")),
         });
         return;
       }
@@ -1507,6 +1530,12 @@ function DetailView({
                   <BadgeCheck className="h-3 w-3" />
                   Verified
                 </Badge>
+              )}
+              {entry.source && (
+                <RegistryBadge
+                  name={entry.source.name}
+                  trust={entry.source.trust}
+                />
               )}
               {entry.protocol && <ProtocolBadge protocol={entry.protocol} />}
               {entry.category && <CategoryBadge category={entry.category} />}
@@ -1836,6 +1865,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
   );
   const tBundle = useTranslations("BundleInstall");
   const tCommon = useTranslations("Common");
+  const catalogFetchError = useCatalogFetchError();
 
   // Lazy-load the workspace agents the first time the picker opens.
   useEffect(() => {
@@ -1869,7 +1899,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     try {
       const installed = await installCatalogSkillAction(skillId);
       if (installed.error || !installed.data) {
-        setMessage(apiErrorMessage(installed, tBundle("skillInstallFailed")));
+        setMessage(catalogFetchError(installed, tBundle("skillInstallFailed")));
         setPhase("error");
         return;
       }
@@ -1889,7 +1919,7 @@ function AddSkillToAgent({ skillId }: { skillId: string }) {
     try {
       const attached = await addCatalogSkillToAgentAction(skillId, agent.id);
       if (attached.error || !attached.data) {
-        setMessage(apiErrorMessage(attached, label));
+        setMessage(catalogFetchError(attached, label));
         setPhase("error");
         return;
       }

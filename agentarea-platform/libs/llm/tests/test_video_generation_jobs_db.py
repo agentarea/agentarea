@@ -6,7 +6,6 @@ Needs a PostgreSQL migrated to head (``LLM_TEST_DATABASE_URL``); skips without o
 ``make check-db`` wires it.
 """
 
-import json
 import os
 import uuid
 from decimal import Decimal
@@ -124,6 +123,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             provider_job_id="gen-vid-2-abcdefghijklmnopqrst",
             prompt="waves",
             status="in_progress",
+            funding={"model_instance_id": str(video_instance), "platform_funded": True, "hold_id": "hold-1"},
         )
 
     def record(repo, call_ref):
@@ -132,6 +132,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             "media/x.mp4",
             cost_usd=Decimal("1.25"),
             billed_cost=Decimal("125"),
+            billing={"amount": "125", "currency": "EUR", "hold_id": "hold-1", "settle": "capture"},
             call_ref=call_ref,
         )
 
@@ -152,6 +153,7 @@ async def test_a_finished_job_is_billed_to_one_call(sessions, video_instance):
             Decimal("125"),
         )
         assert saved.billed_call_ref == "t:call-1"
+        assert saved.funding["hold_id"] == saved.billing["hold_id"] == "hold-1"
 
 
 async def test_instances_are_listed_by_their_model_kind(sessions, video_instance):
@@ -165,48 +167,3 @@ async def test_instances_are_listed_by_their_model_kind(sessions, video_instance
 
     assert [instance.id for instance in videos] == [video_instance]
     assert video_instance not in [instance.id for instance in chats]
-
-
-async def test_task_summary_counts_model_cost_with_llm_cost(engine, sessions):
-    """The summary's cost is the run's total: LLM calls plus the models tools called."""
-    task_id = uuid.uuid4()
-    events = [
-        ("llm.call.completed", {"cost": "0.5"}),
-        ("tool.result", {"success": True, "model_cost": "150"}),
-        ("tool.result", {"success": False, "model_cost": "4"}),
-        ("tool.result", {"success": True, "service_cost": "9"}),
-    ]
-    try:
-        async with engine.begin() as conn:
-            await conn.execute(
-                text(
-                    "INSERT INTO tasks (id, agent_id, description, status, workspace_id, "
-                    "created_by) VALUES (:id, :agent, 'd', 'completed', :w, 't')"
-                ),
-                {"id": task_id, "agent": uuid.uuid4(), "w": WS_A},
-            )
-            for event_type, data in events:
-                await conn.execute(
-                    text(
-                        "INSERT INTO task_events (id, task_id, event_type, data, workspace_id, "
-                        "created_by) VALUES (:id, :task, :type, CAST(:data AS jsonb), :w, 't')"
-                    ),
-                    {
-                        "id": uuid.uuid4(),
-                        "task": task_id,
-                        "type": event_type,
-                        "data": json.dumps(data),
-                        "w": WS_A,
-                    },
-                )
-        async with sessions() as session:
-            cost = (
-                await session.execute(
-                    text("SELECT cost_usd FROM task_summary WHERE task_id = :id"), {"id": task_id}
-                )
-            ).scalar_one()
-        assert cost == Decimal("154.5")
-    finally:
-        async with engine.begin() as conn:
-            await conn.execute(text("DELETE FROM task_events WHERE task_id = :id"), {"id": task_id})
-            await conn.execute(text("DELETE FROM tasks WHERE id = :id"), {"id": task_id})

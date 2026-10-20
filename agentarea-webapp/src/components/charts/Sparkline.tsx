@@ -2,6 +2,7 @@
 // no deps. Reserved for inline trend hints next to numbers — recharts
 // handles the few "hero" charts where axes / tooltips matter.
 
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -165,6 +166,7 @@ export function DeltaBadge({
   goodDirection?: "up" | "down";
   className?: string;
 }) {
+  const t = useTranslations("Common");
   if (pct === null || direction === "flat") {
     return (
       <span
@@ -190,7 +192,7 @@ export function DeltaBadge({
     >
       <span>{arrow}</span>
       <span>
-        {Number.isFinite(pct) ? `${Math.abs(pct).toFixed(0)}%` : "new"}
+        {Number.isFinite(pct) ? `${Math.abs(pct).toFixed(0)}%` : t("newValue")}
       </span>
     </span>
   );

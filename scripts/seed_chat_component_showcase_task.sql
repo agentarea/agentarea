@@ -197,13 +197,13 @@ WITH event_rows(sequence, event_type, data) AS (
             'answers', jsonb_build_object('segment', 'B2B SaaS', 'threshold', 70),
             'message', 'Параметры демо сохранены.'
         )),
-        (10, 'approval.request', jsonb_build_object(
+        (10, 'approval.requested', jsonb_build_object(
             'escalation_id', 'demo-approval-resolved',
             'tool_call_id', 'demo-approval-tool',
             'tool_name', 'demo_review',
             'reason', 'Демо-согласование результата'
         )),
-        (11, 'approval.response', jsonb_build_object(
+        (11, 'approval.decided', jsonb_build_object(
             'escalation_id', 'demo-approval-resolved',
             'tool_call_id', 'demo-approval-tool',
             'tool_name', 'demo_review',

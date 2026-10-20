@@ -1,8 +1,9 @@
 import { useTranslations } from "next-intl";
 import Image from "next/image";
-import { Clock, Sparkles, SquareTerminal } from "lucide-react";
+import { Clock, Sparkles } from "lucide-react";
 import { describeToolCall } from "@/components/Chat/utils/describeToolCall";
 import { scrollToToolCall } from "@/components/Chat/utils/scrollToToolCall";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { formatMoney } from "@/lib/money";
 import Section from "./Section";
 
@@ -80,7 +81,8 @@ function ServiceIcon({ service }: { service: ServiceGroup }) {
       </span>
     );
   }
-  return <SquareTerminal className="h-4 w-4 shrink-0 text-muted-foreground" />;
+  const ToolIcon = ENTITY_ICONS.tool;
+  return <ToolIcon className="h-4 w-4 shrink-0 text-muted-foreground" />;
 }
 
 export default function ActivitySummary({
@@ -121,7 +123,7 @@ export default function ActivitySummary({
                 >
                   <ServiceIcon service={service} />
                   <span className="flex-1 truncate font-medium text-foreground">
-                    {service.name}
+                    {service.isMcp ? service.name : t("builtinTools")}
                   </span>
                   {service.isMcp ? (
                     <span className="rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-primary">
@@ -159,7 +161,7 @@ export default function ActivitySummary({
                           )}
                           {tool.failed > 0 && (
                             <span className="text-[10px] text-destructive">
-                              {tool.failed} failed
+                              {t("toolFailed", { count: tool.failed })}
                             </span>
                           )}
                         </button>

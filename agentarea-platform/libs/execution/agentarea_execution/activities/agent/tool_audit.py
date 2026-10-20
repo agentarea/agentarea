@@ -2,8 +2,8 @@
 
 The workflow's persisted events already carry every policy outcome of a tool
 call: ``tool.call`` once the gate let it run, a ``tool.result`` marked
-``denied_by_policy`` when it refused, ``approval.request`` when it paused for a
-human and ``approval.response`` with who decided. They are mapped onto audit
+``denied_by_policy`` when it refused, ``approval.requested`` when it paused for a
+human and ``approval.decided`` with who decided. They are mapped onto audit
 rows here, in the activity that stores them, so the trail covers every gate
 without the workflow doing IO. Each row reuses its event's id, which makes a
 retried batch write nothing twice.
@@ -17,6 +17,7 @@ from typing import Any
 from uuid import UUID
 
 from agentarea_common.audit import AuditService
+from agentarea_tasks.infrastructure.task_log import AuditLine
 
 from ...workflows.constants import EventTypes
 
@@ -71,7 +72,7 @@ def tool_audit_entry(event: dict[str, Any]) -> ToolAuditEntry | None:
             decision="allowed",
             argument_keys=argument_keys(data.get("arguments")),
         )
-    if event_type == EventTypes.AGENT_DELEGATION_STARTED:
+    if event_type == EventTypes.DELEGATION_STARTED:
         return as_agent(
             TOOL_CALL_ALLOWED,
             decision="allowed",
@@ -89,7 +90,7 @@ def tool_audit_entry(event: dict[str, Any]) -> ToolAuditEntry | None:
             argument_keys=argument_keys(data.get("arguments")),
         )
     # Only the response that carries the decision: before the one-response
-    # patch a denial also emitted a second, decision-less approval.response.
+    # patch a denial also emitted a second, decision-less approval.decided.
     if event_type == EventTypes.HUMAN_APPROVAL_RECEIVED and "approved" in data:
         approved = bool(data["approved"])
         approver = data.get("approved_by")
@@ -108,23 +109,36 @@ def tool_audit_entry(event: dict[str, Any]) -> ToolAuditEntry | None:
     return None
 
 
-async def record_tool_audit(
-    audit: AuditService, event_id: UUID, entry: ToolAuditEntry, *, requested_by: str
-) -> None:
-    """Write ``entry`` once under its event's id.
+def audit_line(event_id: UUID, entry: ToolAuditEntry, *, requested_by: str) -> AuditLine:
+    """The audit row ``entry`` is, stored under its event's id.
 
     ``requested_by`` is the user the task runs for; it stands in as the actor
     only when the event names none.
     """
-    await audit.record_once(
-        event_id,
-        entry.action,
-        "task",
-        entry.task_id or None,
+    return AuditLine(
+        event_id=event_id,
+        action=entry.action,
+        task_id=entry.task_id or None,
         actor_type=entry.actor_type,
         actor_id=entry.actor_id or requested_by,
         event_metadata={
             **{k: v for k, v in entry.metadata.items() if v is not None},
             "requested_by": requested_by,
         },
+    )
+
+
+async def record_tool_audit(
+    audit: AuditService, event_id: UUID, entry: ToolAuditEntry, *, requested_by: str
+) -> None:
+    """Write ``entry`` once under its event's id."""
+    line = audit_line(event_id, entry, requested_by=requested_by)
+    await audit.record_once(
+        line.event_id,
+        line.action,
+        "task",
+        line.task_id,
+        actor_type=line.actor_type,
+        actor_id=line.actor_id,
+        event_metadata=line.event_metadata,
     )

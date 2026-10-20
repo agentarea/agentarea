@@ -11,9 +11,9 @@ from typing import Annotated, Literal, NoReturn
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from agentarea_api.api.deps.services import AuditServiceDep
+from agentarea_common.auth.credential import Scope
 from agentarea_common.auth.dependencies import (
     PrincipalDep,
-    UnboundPrincipalDep,
     UserContextDep,
 )
 from agentarea_common.auth.identity_directory import (
@@ -23,7 +23,7 @@ from agentarea_common.auth.identity_directory import (
 )
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
-    requires_user_session,
+    requires_principal_scope,
     requires_workspace_admin,
     unrestricted,
 )
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     async with get_database().async_session_factory() as session:
         yield session
 
@@ -308,7 +308,7 @@ principal_router = APIRouter(tags=["workspace-invitations"])
     "/invitations",
     response_model=InvitationCreatedResponse,
     status_code=201,
-    dependencies=[requires_user_session("invite members"), requires_workspace_admin()],
+    dependencies=[requires_workspace_admin()],
 )
 async def create_invitation(
     body: CreateInvitationBody,
@@ -365,7 +365,7 @@ async def list_invitations(
 @router.delete(
     "/invitations/{invitation_id}",
     status_code=204,
-    dependencies=[requires_user_session("revoke invitations"), requires_workspace_admin()],
+    dependencies=[requires_workspace_admin()],
 )
 async def revoke_invitation(
     invitation_id: UUID,
@@ -439,15 +439,16 @@ async def preview_invitation(
     "/invitations/accept",
     response_model=AcceptInvitationResponse,
     dependencies=[
+        requires_principal_scope(Scope.WORKSPACES, "join workspaces"),
         enforced_in_handler(
             "token bearer only; an emailed invitation must match the caller's email, "
-            "checked by InvitationService.accept; API keys confined to a workspace are refused"
-        )
+            "checked by InvitationService.accept"
+        ),
     ],
 )
 async def accept_invitation(
     body: AcceptInvitationBody,
-    user: UnboundPrincipalDep,
+    user: PrincipalDep,
     service: InvitationServiceDep,
     memberships: MembershipServiceDep,
 ):
@@ -521,7 +522,6 @@ async def list_members(
         }
     },
     dependencies=[
-        requires_user_session("remove members"),
         enforced_in_handler("owner-only, enforced by MembershipService.remove"),
     ],
 )

@@ -84,13 +84,14 @@ export function buildWorkplaceSuggestions(
   const prompts: WorkplaceSuggestion[] = [];
 
   if (shape.connectedChannels.length === 0) {
-    // Named from the catalog, so a deployment that ships Slack but not
-    // Telegram offers Slack instead of advertising something it cannot do.
+    // Named from the catalog, so a deployment offers only the channels its
+    // catalog ships instead of advertising something it cannot do. A channel
+    // is wired up as a source on a stream, so the way in is the events page.
     for (const channel of shape.availableChannels.slice(0, 2)) {
       setup.push({
         label: copy("putOnChannel.label", { channel: channel.name }),
         hint: channel.description?.trim() || copy("putOnChannel.hint"),
-        href: "/triggers/create",
+        href: "/events",
         iconUrl: channel.iconUrl,
       });
     }

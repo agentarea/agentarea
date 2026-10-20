@@ -18,6 +18,8 @@ from agentarea_agents.infrastructure.catalog_agent_repository import (
 )
 from agentarea_common.auth.context import UserContext
 
+from .test_catalog_skills import AllowInstalls
+
 
 def _item(item_id=None, name="Built-in", version="1", installed_version=None, spec=None):
     return CatalogAgentItem(
@@ -106,7 +108,9 @@ class CapturingSession:
 
 def _service(repo, catalog):
     uc = UserContext(user_id="u1", workspace_id="w1")
-    svc = AgentService(FakeFactory(repo, uc), FakeBroker(), FakeAuthz())
+    svc = AgentService(
+        FakeFactory(repo, uc), FakeBroker(), FakeAuthz(), install_guard=AllowInstalls()
+    )
     svc._get_agent_repository = lambda: repo
     svc._get_catalog_repository = lambda: catalog
     return svc

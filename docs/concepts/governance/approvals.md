@@ -106,7 +106,7 @@ true or the tool is in `escalation_rules`. The workflow's tool gate then:
    (`approvers_by_tool` wins over the global list, falling back to empty).
 2. Sets the workflow status to `WAITING_FOR_APPROVAL` and updates the task row to
    `waiting_for_approval`, so the inbox can find it by querying the database.
-3. Emits an `approval.request` event with the escalation id, tool name, sanitized
+3. Emits an `approval.requested` event with the escalation id, tool name, sanitized
    arguments and the approver list, and publishes it immediately to the event
    stream. Sanitizing drops fields such as `command`, which can carry inline
    secrets, so the event alone does not show the approver what they approve.
@@ -132,7 +132,7 @@ is the authorization point:
 - If the caller is not permitted to approve, the signal is logged as unauthorized
   and ignored, so the API or activity boundary cannot bypass the policy.
 - Otherwise the escalation is marked resolved. When the waiting tool call
-  resumes it emits exactly one `approval.response` event carrying `approved`,
+  resumes it emits exactly one `approval.decided` event carrying `approved`,
   `approved_by` and the `comment`. Approve and deny share that one wire type; the
   decision is in the payload.
 
@@ -143,7 +143,7 @@ workflow), `403` when the caller is not one of its approvers, and `200` with
 `{"status": "resolved"}` once the signal is delivered. The MCP
 `runs.resolve_escalation` tool returns the same outcomes as an `error` field.
 The workflow still applies the approver check itself, so a signal sent around
-the API is ignored. Confirm the outcome by the `approval.response` event.
+the API is ignored. Confirm the outcome by the `approval.decided` event.
 
 On approval the tool call proceeds and the normal `tool.call` event
 follows. On denial a tool message saying the call was denied by a human operator,
@@ -203,7 +203,7 @@ agent workflow has no approval flow, only a denial. See the limits below.
   resolution check only matches direct `user:<id>` subjects. An approver list
   containing nothing but group references matches nobody and blocks the task
   indefinitely.
-- **No notification is sent.** Core emits the `approval.request` event to the
+- **No notification is sent.** Core emits the `approval.requested` event to the
   stream and updates the task row. It does not send mail, post to a channel, or
   page anyone. Anything that notifies an approver has to consume the event.
 - **Approval does not change who acts.** The task continues to execute as the

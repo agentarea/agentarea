@@ -45,7 +45,7 @@ The following endpoints are publicly accessible:
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.14+
 - uv (package manager)
 
 ### Installation

@@ -1,3 +1,4 @@
+import builtins
 from typing import Any, cast
 from uuid import UUID
 
@@ -10,7 +11,7 @@ class BaseCrudService[T]:
         """Get an entity by ID."""
         return await self.repository.get(id)
 
-    async def list(self) -> list[T]:
+    async def list(self) -> builtins.list[T]:
         """List all entities in the workspace.
 
         Returns all resources within the current workspace scope.

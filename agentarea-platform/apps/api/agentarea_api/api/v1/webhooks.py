@@ -1,18 +1,25 @@
-"""Webhook endpoints for trigger system."""
+"""Public webhook sink: ``/webhooks/{webhook_id}`` records a source's event in its stream."""
 
 import json
 import logging
 from typing import Any
+from urllib.parse import parse_qsl
 
 from agentarea_api.api.deps.services import get_public_webhook_manager
 from agentarea_api.api.rate_limit import limit_webhook
 from agentarea_common.auth.route_authz import unrestricted
+from agentarea_common.utils.pg_text import pg_text_problem
+from agentarea_streams.domain.keys import MAX_REQUEST_BYTES
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+class RequestTooLargeError(Exception):
+    pass
 
 
 @router.get("/health", dependencies=[unrestricted("liveness probe, returns no workspace data")])
@@ -28,17 +35,64 @@ async def webhook_health_check(
         return {"status": "unhealthy", "service": "webhook-manager"}
 
 
-@router.get(
-    "/{webhook_id}",
-    operation_id="handle_webhook_webhooks__webhook_id__get",
-    summary="Handle webhook requests",
-    description="Record an incoming webhook in its stream",
-    dependencies=[
-        unrestricted(
-            "the webhook id is the credential; external senders carry no workspace session"
-        )
-    ],
-)
+def _error(status: int, message: str) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"status": "error", "message": message})
+
+
+def _refuse_non_finite(constant: str) -> float:
+    raise ValueError(f"{constant} is not a JSON number")
+
+
+async def read_limited(request: Request, limit: int = MAX_REQUEST_BYTES) -> bytes:
+    """The request body, refused past ``limit`` bytes before it is all read."""
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > limit:
+        raise RequestTooLargeError
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            raise RequestTooLargeError
+        chunks.append(chunk)
+    body = b"".join(chunks)
+    # Starlette re-reads a consumed stream from here, so request.form() still works.
+    request._body = body
+    return body
+
+
+async def parse_body(request: Request, raw: bytes, content_type: str) -> Any:
+    """JSON strictly; form fields as text, form files as inline attachments; else text."""
+    if "application/json" in content_type or content_type.endswith("+json"):
+        return json.loads(raw, parse_constant=_refuse_non_finite) if raw else None
+    if "application/x-www-form-urlencoded" in content_type:
+        return dict(parse_qsl(raw.decode("utf-8"), keep_blank_values=True))
+    if "multipart/form-data" in content_type:
+        import base64
+
+        fields: dict[str, Any] = {}
+        files: list[dict[str, Any]] = []
+        async with request.form() as form:
+            for name, value in form.multi_items():
+                if isinstance(value, str):
+                    fields[name] = value
+                    continue
+                data = await value.read()
+                files.append(
+                    {
+                        "field": name,
+                        "name": value.filename or name,
+                        "mime": value.content_type,
+                        "size": len(data),
+                        "content_base64": base64.b64encode(data).decode("ascii"),
+                    }
+                )
+        if files:
+            fields["attachments"] = files
+        return fields
+    return raw.decode("utf-8") if raw else None
+
+
 @router.post(
     "/{webhook_id}",
     operation_id="handle_webhook_webhooks__webhook_id__post",
@@ -48,104 +102,34 @@ async def webhook_health_check(
         unrestricted("public webhook sink; authenticity is the signed payload, not a session")
     ],
 )
-@router.put(
-    "/{webhook_id}",
-    operation_id="handle_webhook_webhooks__webhook_id__put",
-    summary="Handle webhook requests",
-    description="Record an incoming webhook in its stream",
-    dependencies=[
-        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
-    ],
-)
-@router.patch(
-    "/{webhook_id}",
-    operation_id="handle_webhook_webhooks__webhook_id__patch",
-    summary="Handle webhook requests",
-    description="Record an incoming webhook in its stream",
-    dependencies=[
-        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
-    ],
-)
-@router.delete(
-    "/{webhook_id}",
-    operation_id="handle_webhook_webhooks__webhook_id__delete",
-    summary="Handle webhook requests",
-    description="Record an incoming webhook in its stream",
-    dependencies=[
-        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
-    ],
-)
-@router.head(
-    "/{webhook_id}",
-    operation_id="handle_webhook_webhooks__webhook_id__head",
-    summary="Handle webhook requests",
-    description="Record an incoming webhook in its stream",
-    dependencies=[
-        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
-    ],
-)
-@router.options(
-    "/{webhook_id}",
-    operation_id="handle_webhook_webhooks__webhook_id__options",
-    summary="Handle webhook requests",
-    description="Record an incoming webhook in its stream",
-    dependencies=[
-        unrestricted("public webhook sink; authenticity is the signed payload, not a session")
-    ],
-)
 async def handle_webhook(
     webhook_id: str,
     request: Request,
-    # Every method reaches the same handler, so the limit lives here, not on one route.
     _rate_limited: None = Depends(limit_webhook),
     webhook_manager=Depends(get_public_webhook_manager),
 ):
-    """Handle incoming webhook requests from external services (Telegram, Slack, GitHub, etc.)."""
+    """Verify the request by its source's catalog entry and record it as one event."""
     try:
-        method = request.method
-        headers = dict(request.headers)
-        query_params = dict(request.query_params)
-
-        body = None
-        # Capture the exact raw bytes BEFORE parsing — HMAC signature
-        # verification must run over the unmodified payload, never a
-        # re-serialized dict (whitespace/key-order/escaping would differ).
-        raw_body: bytes | None = None
-        content_type = headers.get("content-type", "").lower()
-
-        if method in ["POST", "PUT", "PATCH"]:
-            raw_body = await request.body()
-            try:
-                if "application/json" in content_type:
-                    body = json.loads(raw_body) if raw_body else None
-                elif "application/x-www-form-urlencoded" in content_type:
-                    body = dict(await request.form())
-                elif "multipart/form-data" in content_type:
-                    body = dict(await request.form())
-                else:
-                    body = raw_body.decode("utf-8") if raw_body else None
-            except Exception as e:
-                logger.warning(
-                    f"Failed to parse request body for webhook {webhook_id}: {e}", exc_info=True
-                )
-                body = None
-
+        raw = await read_limited(request)
+    except RequestTooLargeError:
+        return _error(413, f"The request is larger than {MAX_REQUEST_BYTES} bytes")
+    content_type = request.headers.get("content-type", "").lower()
+    try:
+        body = await parse_body(request, raw, content_type)
+    except (ValueError, UnicodeDecodeError) as error:
+        return _error(400, f"Body cannot be read: {error}")
+    if problem := pg_text_problem(body):
+        # Postgres cannot store it; accepting it would lose the event later.
+        return _error(422, f"Body cannot be stored: {problem}")
+    try:
         result = await webhook_manager.handle_webhook_request(
             webhook_id=webhook_id,
-            method=method,
-            headers=headers,
+            method=request.method,
+            headers=dict(request.headers),
             body=body,
-            query_params=query_params,
-            raw_body=raw_body,
+            raw_body=raw,
         )
-
-        status_code = result.get("status_code", 200)
-        response_body = result.get("body", {"status": "success"})
-        return JSONResponse(status_code=status_code, content=response_body)
-
-    except Exception as e:
-        logger.exception(f"Unexpected error handling webhook {webhook_id}: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": "Internal server error processing webhook"},
-        )
+    except Exception:
+        logger.exception("Unexpected error handling webhook %s", webhook_id)
+        return _error(500, "Internal server error processing webhook")
+    return JSONResponse(status_code=result["status_code"], content=result["body"])

@@ -24,6 +24,20 @@ export function existingConnectionsHref(
   return `/connections?${CATALOG_SOURCE_PARAM}=${encodeURIComponent(itemId)}`;
 }
 
+/** A catalog item set up by signing in (an HTTP API), not by configuring an MCP server. */
+export function isCatalogApi(spec: unknown): boolean {
+  return (
+    typeof spec === "object" &&
+    spec !== null &&
+    (spec as { connection_type?: unknown }).connection_type === "openapi"
+  );
+}
+
+/** Where a catalog item that is not an HTTP API is set up. */
+export function catalogServerSetupHref(itemId: string): string {
+  return `/connections/create/${itemId}`;
+}
+
 export function parseCatalogSource(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }

@@ -230,7 +230,9 @@ async def get_agent_overview(
         upcoming.append(
             UpcomingItem(
                 fires_at=t.started_at or t.created_at,
-                kind="running_task" if t.status in ("running", "working") else "pending_task",
+                kind="running_task"
+                if t.status in ("running", "working", "waiting_for_infrastructure")
+                else "pending_task",
                 title=t.description[:120] if t.description else "(unnamed task)",
                 task_id=type_cast(UUID, t.id),
             )

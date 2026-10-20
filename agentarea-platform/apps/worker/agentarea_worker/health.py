@@ -108,7 +108,7 @@ class HealthServer:
             )
             writer.write("\r\n".join(headers).encode() + b"\r\n\r\n" + payload)
             await writer.drain()
-        except (TimeoutError, ConnectionError, asyncio.IncompleteReadError):
+        except TimeoutError, ConnectionError, asyncio.IncompleteReadError:
             logger.debug("Health probe connection dropped", exc_info=True)
         finally:
             writer.close()

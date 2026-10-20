@@ -2,6 +2,14 @@ name: Integration Tests
 
 on:
   workflow_dispatch:  # Always available manually
+    inputs:
+      fuzz_coverage:
+        description: Run the schemathesis coverage phase (as the nightly run does)
+        type: boolean
+        default: false
+  schedule:
+    # Nightly: the fuzz with its coverage phase, which PRs skip for speed.
+    - cron: "0 2 * * *"
   pull_request:
     # The heavy jobs run on a PR when it touches what they exercise (the
     # `changes` job), or when it carries the `run-integration-tests` label;
@@ -38,11 +46,11 @@ jobs:
     outputs:
       stack: ${{ steps.filter.outputs.stack }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: filter
-        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         with:
           base: ${{ github.event_name == 'pull_request' && github.base_ref || 'main' }}
           filters: |
@@ -65,22 +73,22 @@ jobs:
   collect-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
 
       - name: Cache uv
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
@@ -119,22 +127,22 @@ jobs:
         ports:
           - 6379:6379
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
 
       - name: Cache uv
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
@@ -195,22 +203,22 @@ jobs:
         ports:
           - 6379:6379
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
 
       - name: Cache uv
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
@@ -244,7 +252,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: integration-test-results
           path: agentarea-platform/test-results.xml
@@ -262,7 +270,7 @@ jobs:
     timeout-minutes: 30
     if: github.ref == 'refs/heads/main' || needs.changes.outputs.stack == 'true' || contains(github.event.pull_request.labels.*.name, 'run-integration-tests')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Prepare env file
         # .env.example carries the non-secret defaults but leaves the Ory
@@ -285,10 +293,10 @@ jobs:
           grep -q "^AGENTAREA_SECRET_ENCRYPTION_KEY=${key}$" .env
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build API image from PR source
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ./agentarea-platform
           file: ./agentarea-platform/apps/api/Dockerfile
@@ -301,7 +309,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build worker image from PR source
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: ./agentarea-platform
           file: ./agentarea-platform/apps/worker/Dockerfile
@@ -362,19 +370,19 @@ jobs:
           exit 1
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Pinned: an unpinned setup-uv resolves to whatever uv shipped that day, which
           # is how uv.lock kept getting rewritten. Bump with pyproject required-version.
-          version: "0.8.22"
+          version: "0.13.3"
 
       - name: Cache uv
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
@@ -382,6 +390,11 @@ jobs:
       - name: Install test deps
         working-directory: ./agentarea-platform
         run: uv sync --all-extras --group dev
+
+      # agentarea-platform/schemathesis.toml keeps it off for PRs and pushes.
+      - name: Enable the schemathesis coverage phase
+        if: github.event_name == 'schedule' || inputs.fuzz_coverage
+        run: printf '[phases.coverage]\nenabled = true\n' > agentarea-platform/schemathesis.toml
 
       # Fails when both modules skip at import (unreachable stack) instead
       # of passing on an empty run.

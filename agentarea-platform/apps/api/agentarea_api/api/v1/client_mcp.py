@@ -40,7 +40,9 @@ from agentarea_agents_sdk.tools.mcp_tool_identity import (
     server_label,
 )
 from agentarea_agents_sdk.tools.openapi_tool import _slugify_name
-from agentarea_api.platform_mcp import client_platform_server
+from agentarea_api.mcp_events import ClientScope as EventsClientScope
+from agentarea_api.mcp_events import install_mcp_events
+from agentarea_api.platform_mcp import client_platform_server, server_identity
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
     ToolAuthorizationDecision,
@@ -53,6 +55,7 @@ from agentarea_execution.workflows.helpers import approvers_for_tool
 from agentarea_governance.domain.tool_call_approvals import GateVerdict, ToolCallRequest
 from agentarea_governance.tool_calls import (
     GovernedToolCall,
+    PendingCost,
     ToolCallOutcome,
     ToolUsage,
     Verdict,
@@ -251,7 +254,42 @@ async def _effective_tool_policy(session: AsyncSession, user_ctx: UserContext) -
 def _actor_type(principal, client_id: str) -> str:
     if principal.client_id == client_id:
         return "client"
-    return "api_key" if principal.api_key_id else "user"
+    credential = principal.credential
+    return "api_key" if credential is not None and credential.kind == "api_key" else "user"
+
+
+async def _enter_client(session: AsyncSession, client_id: str) -> UserContext | None:
+    """The caller acting in the client's workspace; None when the caller reaches no such client.
+
+    Raises ``ClientAccessDeniedError`` when the caller may not use the client.
+    """
+    from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
+    from agentarea_common.workspaces.lookup import workspace_slug_for
+    from agentarea_mcp.infrastructure.client_repository import ClientRepository
+
+    principal = get_mcp_user_context()
+    workspace_id = await ClientRepository.locate_workspace(
+        session, client_id, principal.accessible_workspaces or []
+    )
+    if workspace_id is None:
+        return None
+    await _authorize_client_access(principal, client_id)
+    return principal.enter(workspace_id, await workspace_slug_for(workspace_id))
+
+
+async def client_events_context() -> UserContext | None:
+    """The caller in the workspace of the client this request names, for MCP Events."""
+    from agentarea_common.config.database import get_database
+
+    try:
+        client_id = str(UUID(_client_id_var.get() or ""))
+    except ValueError:
+        return None
+    async with get_database().read_session() as session:
+        try:
+            return await _enter_client(session, client_id)
+        except ClientAccessDeniedError:
+            return None
 
 
 async def _resolve_client_scope(client_id: str) -> ClientScope | None:
@@ -268,13 +306,13 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
     except ValueError:
         return None
 
+    from agentarea_agents.application.skill_service import SkillService
     from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
     from agentarea_agents_sdk.skills.skill_catalog_builder import SkillEntry
     from agentarea_common.base.repository_factory import RepositoryFactory
     from agentarea_common.base.tenant_scope import workspace_scope
     from agentarea_common.config.database import get_database
     from agentarea_common.infrastructure.connection_manager import get_connection_manager
-    from agentarea_common.workspaces.lookup import workspace_slug_for
     from agentarea_mcp.application.service import MCPServerInstanceService
     from agentarea_mcp.infrastructure.client_repository import ClientRepository
     from agentarea_openapi.infrastructure.repository import OpenAPIConnectionRepository
@@ -285,18 +323,13 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
     broker = await connection_manager.get_event_broker()
 
     async with get_database().read_session() as session:
-        workspace_id = await ClientRepository.locate_workspace(
-            session, client_id, principal.accessible_workspaces or []
-        )
-        if workspace_id is None:
-            return None
-
-        await _authorize_client_access(principal, client_id)
-
         # A client endpoint is itself a workspace reference. Enter it before
         # constructing workspace-scoped dependencies: secret managers may
         # capture the workspace id in their constructor.
-        user_ctx = principal.enter(workspace_id, await workspace_slug_for(workspace_id))
+        user_ctx = await _enter_client(session, client_id)
+        if user_ctx is None:
+            return None
+        workspace_id = user_ctx.workspace_id
         with workspace_scope(workspace_id):
             client_repo = ClientRepository(session, user_ctx)
             client = await client_repo.get_by_id(client_id)
@@ -321,11 +354,12 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
             ]
             skills = {str(s.id): s for s in client.skills}
 
+            skill_service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skill_registry = {
                 s.name: SkillEntry(
                     name=s.name,
                     description=s.description or "",
-                    content=s.content or "",
+                    content=await skill_service.read_skill_md(s),
                     files=[],
                 )
                 for s in skills.values()
@@ -650,7 +684,9 @@ async def _record_tool_call_costs(user_ctx: UserContext, usages: list[ToolUsage]
             )
 
 
-async def _spend_cap_refusal(user_ctx: UserContext, call: GovernedToolCall) -> str | None:
+async def _spend_cap_refusal(
+    user_ctx: UserContext, call: GovernedToolCall, pending: PendingCost | None
+) -> str | None:
     from agentarea_common.base.tenant_scope import workspace_scope
     from agentarea_common.config.database import get_database
     from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
@@ -658,7 +694,7 @@ async def _spend_cap_refusal(user_ctx: UserContext, call: GovernedToolCall) -> s
 
     with workspace_scope(user_ctx.workspace_id):
         async with get_database().session() as session:
-            return await spend_cap_refusal(CostEntryRepository(session, user_ctx), call)
+            return await spend_cap_refusal(CostEntryRepository(session, user_ctx), call, pending)
 
 
 async def _catalog_server_spec(user_ctx: UserContext, instance: Any) -> dict | None:
@@ -669,10 +705,9 @@ async def _catalog_server_spec(user_ctx: UserContext, instance: Any) -> dict | N
 
     with workspace_scope(user_ctx.workspace_id):
         async with get_database().session() as session:
-            server = await MCPServerRepository(session, user_ctx).get_server_by_id(
+            return await MCPServerRepository(session, user_ctx).catalog_json_spec(
                 instance.server_spec_id
             )
-    return getattr(server, "json_spec", None)
 
 
 async def _scope_tool_connection(scope: ClientScope, tool_name: str) -> ToolConnection | None:
@@ -745,8 +780,8 @@ async def _governed_call(
     async def ledger(usages: list[ToolUsage]) -> None:
         await _record_tool_call_costs(user_ctx, usages)
 
-    async def spend_gate(governed: GovernedToolCall) -> str | None:
-        return await _spend_cap_refusal(user_ctx, governed)
+    async def spend_gate(governed: GovernedToolCall, pending: PendingCost | None) -> str | None:
+        return await _spend_cap_refusal(user_ctx, governed, pending)
 
     async def audit_refusal(decision: ToolAuthorizationDecision) -> None:
         if not decision.allowed:
@@ -860,7 +895,10 @@ async def _run_openapi_operation(
     tool = tools[0]
     try:
         tool_connection = openapi_tool_connection(
-            connection, await connection_service.catalog_connector(connection), tool.operation_name
+            connection,
+            await connection_service.catalog_connector(connection),
+            tool.operation_name,
+            catalog_spec=await connection_service.catalog_spec(connection),
         )
     except ToolCostError as error:
         return _refusal(f"the tool's cost declaration is invalid: {error}")
@@ -1085,9 +1123,11 @@ def _answer(result: CallToolResult | ApprovalRequired) -> CallToolResult:
 client_mcp_server = Server(
     "AgentArea Client",
     instructions="Scoped tool bundle for a registered client (agent-proxy).",
+    **server_identity(),
     on_list_tools=_list_tools,
     on_call_tool=_call_tool,
 )
+install_mcp_events(client_mcp_server, EventsClientScope(client_events_context))
 
 
 class ClientMCPScopeMiddleware:

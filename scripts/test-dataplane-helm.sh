@@ -61,6 +61,7 @@ assert_contains "kind: ValidatingAdmissionPolicy$"
 assert_contains "object.spec.runtimeClassName == 'gvisor'"
 assert_contains "name: ingress-from-dataplane-only"
 assert_contains "name: egress-dns-and-public-only"
+assert_contains "name: egress-dns-and-proxy-only"
 assert_contains "pod-security.kubernetes.io/enforce: baseline"
 assert_contains "automountServiceAccountToken: false"
 assert_contains "value: \"gvisor\""
@@ -103,8 +104,8 @@ assert_contains "name: opensandbox-controller-manager"
 # The server must not share the data plane's selector: it would sit behind the
 # data plane's Service and inside the MCP servers' ingress policy.
 assert_contains "app.kubernetes.io/name: agentarea-sandbox-server"
-if [ "$(grep -c '^kind: NetworkPolicy' "$rendered")" != 4 ]; then
-  echo "expected ingress and egress policies for both workload namespaces" >&2
+if [ "$(grep -c '^kind: NetworkPolicy' "$rendered")" != 5 ]; then
+  echo "expected ingress and egress policies for both workload namespaces, and the labelled-egress policy for MCP servers" >&2
   exit 1
 fi
 

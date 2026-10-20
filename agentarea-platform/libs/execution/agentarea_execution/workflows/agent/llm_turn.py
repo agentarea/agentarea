@@ -1,5 +1,6 @@
 """One iteration of the agent loop: the model call and its response."""
 
+import asyncio
 import json
 from typing import Any
 
@@ -23,14 +24,18 @@ from ..constants import (
 )
 from .compaction import CompactionMixin
 from .errors import RUN_INPUT_EXCEEDS_CONTEXT_WINDOW, ErrorReportingMixin
-from .limits import run_limit_reason
+from .limits import run_limit_reason, spend_cap_reached
 from .patches import (
     ANSWER_CHECK_BEFORE_REPLY_PATCH,
     COMPACTION_BOUNDS_PAYLOAD_PATCH,
     GOVERNANCE_DENIAL_BLOCKS_RUN_PATCH,
     PAID_CALL_PERSISTED_BEFORE_LIMITS_PATCH,
+    PAID_REPLY_KEPT_AT_LIMIT_PATCH,
     RUN_INPUT_IN_FIRST_MESSAGE_PATCH,
+    SPEND_CAP_REACHED_STOPS_RUN_PATCH,
+    SPEND_CAP_REFUSAL_NOT_A_CALL_FAILURE_PATCH,
     THINKING_ONLY_REPLY_PATCH,
+    TURN_ABORTED_EVENT_PATCH,
 )
 from .tool_dispatch import ToolDispatchMixin
 
@@ -97,9 +102,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
     async def _execute_iteration(self) -> None:
         """Execute a single iteration."""
         iteration = self.state.current_iteration
+        # A completion an earlier turn never got to store is stored by finalization.
+        self._completed_status = None
 
         self._events.add_event(
-            EventTypes.ITERATION_STARTED,
+            EventTypes.TURN_STARTED,
             {
                 "iteration": iteration,
                 "budget_remaining": serialize_money(self._budget.get_remaining()),
@@ -114,11 +121,11 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             await self._check_budget_status()
 
             self._events.add_event(
-                EventTypes.ITERATION_COMPLETED,
+                EventTypes.TURN_COMPLETED,
                 {"iteration": iteration, "total_cost": serialize_money(self._budget.cost)},
             )
 
-            # Emit WorkflowCompleted after IterationCompleted for conversational agents.
+            # Emit task.completed after turn.completed for conversational agents.
             # Stateless runs publish the completion event from _finalize_execution.
             if self._awaiting_input:
                 self._events.add_event(
@@ -142,10 +149,25 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     },
                 )
                 self._completion_event_published = True
+            if self._completed_status is not None:
+                completed, self._completed_status = self._completed_status, None
+                await self._persist_task_status(completed)
 
+        except asyncio.CancelledError:
+            self._abort_turn(iteration, "cancelled")
+            raise
         except Exception as e:
-            if self._is_cancellation(e) or run_limit_reason(e):
+            if self._is_cancellation(e):
+                self._abort_turn(iteration, "cancelled")
                 raise
+            if limit := run_limit_reason(e):
+                self._abort_turn(iteration, limit)
+                raise
+            cap_reached = spend_cap_reached(e)
+            if cap_reached is not None and workflow.patched(SPEND_CAP_REACHED_STOPS_RUN_PATCH):
+                self._monthly_cap_message = cap_reached
+                self._abort_turn(iteration, "spend_cap")
+                return
             error_details = self._extract_temporal_error_details(e)
             workflow.logger.error(
                 f"Iteration {iteration} failed: {error_details}",
@@ -165,15 +187,23 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self.state.failure_reason = failure_reason
                 self.state.error_message = message
                 self.state.blocked_reason = message
+                self._abort_turn(iteration, "blocked")
                 return
             if e is not self._reported_llm_failure:
                 self._events.add_event(
                     EventTypes.LLM_CALL_FAILED,
                     {"iteration": iteration, "error": error_details},
                 )
+            self._abort_turn(iteration, "failed")
             raise
 
         await self._publish_events_immediately()
+
+    def _abort_turn(self, iteration: int, reason: str) -> None:
+        if workflow.patched(TURN_ABORTED_EVENT_PATCH):
+            self._events.add_event(
+                EventTypes.TURN_ABORTED, {"iteration": iteration, "reason": reason}
+            )
 
     def _refuse_a_head_the_window_cannot_hold(self, system_prompt: str) -> None:
         """Fail the run when its pinned head alone overflows the model's window.
@@ -310,6 +340,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 self.state.messages.append(
                     Message(role="user", content=self.state.goal.description)
                 )
+                self._conversation_seeded = True
                 if input_in_first_message:
                     self._refuse_a_head_the_window_cannot_hold(system_prompt)
                     self.state.context_head_seqs = [
@@ -521,6 +552,7 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 if prompt_tokens > 0:
                     self.state.last_prompt_tokens = prompt_tokens
                     self.context_manager.update_usage(prompt_tokens)
+                    self._note_prompt_tokens(prompt_tokens)
 
             # Strip A2UI JSON from the content sent to frontend via LLM_CALL_COMPLETED
             display_content = content_value
@@ -550,13 +582,15 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     # Which model produced this. Token counts are meaningless without
                     # it — the same 1000 tokens cost very different amounts depending
                     # on the model, so no consumer can interpret `usage` without it.
-                    "model_id": self.state.agent_config.get("model_id"),
+                    # The call's own model: a change_model landing during the call
+                    # has already moved the run's.
+                    "model_id": llm_request.model_id or None,
                     # The provider's own name for the model, alongside the instance id
                     # above. The id identifies a row; this identifies what was actually
                     # bought, and it survives the row being deleted or recreated —
                     # which a metered fact has to, because it is priced and invoiced
                     # long after the run.
-                    "model_name": (self.state.resolved_model or {}).get("model_name"),
+                    "model_name": (llm_request.resolved_model or {}).get("model_name"),
                     # Whose credentials paid the provider. Without it there is no way
                     # to tell a run on the operator's key — real money out of our
                     # account, and the only kind that must be recovered from the
@@ -592,12 +626,22 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                 "usage": usage_info,
                 "cost": cost_value,
                 "answer_checked": answer_checked,
+                # The model that answered, as the call was made.
+                "model": {
+                    "model_id": llm_request.model_id,
+                    "model_name": (llm_request.resolved_model or {}).get("model_name"),
+                },
             }
 
         except Exception as e:
             # A budget stop keeps its llm.call.failed event: runs recorded before
             # this change publish it on their way to the continuation wait.
             if self._is_cancellation(e) or run_limit_reason(e) == "token_limit":
+                raise
+            # A spend cap refusing the call is no failed call: turn.aborted says why.
+            if spend_cap_reached(e) is not None and workflow.patched(
+                SPEND_CAP_REFUSAL_NOT_A_CALL_FAILURE_PATCH
+            ):
                 raise
             error_lower = self._extract_temporal_error_details(e).lower()
             cause = self._failure_cause(e)
@@ -633,8 +677,36 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
             raise
 
         if billed_first:
-            self._enforce_inference_limits("LLM call")
+            try:
+                self._enforce_inference_limits("LLM call")
+            except ApplicationError:
+                if workflow.patched(PAID_REPLY_KEPT_AT_LIMIT_PATCH):
+                    self._keep_reply(reply)
+                raise
         return reply
+
+    def _keep_reply(self, reply: dict[str, Any]) -> None:
+        """Keep a paid reply in the conversation although the run stops at a limit on it.
+
+        Its tool calls are not run; the stop answers them as not executed.
+        """
+        content = reply.get("content") or ""
+        tool_calls = reply.get("tool_calls")
+        if not content.strip() and not tool_calls:
+            return
+        self.state.messages.append(
+            Message(
+                role=reply.get("role") or "assistant",
+                content=content,
+                tool_calls=tool_calls,
+                meta=reply.get("model"),
+            )
+        )
+        self._turn_call_ids = {
+            call["id"]
+            for call in tool_calls or []
+            if isinstance(call, dict) and isinstance(call.get("id"), str)
+        }
 
     async def _process_llm_response(self, response: dict[str, Any]) -> None:
         """Process LLM response and handle tool calls."""
@@ -727,8 +799,14 @@ class LLMTurnMixin(ToolDispatchMixin, CompactionMixin, ErrorReportingMixin):
                     role=response.get("role", "assistant"),
                     content=effective_content,
                     tool_calls=tool_calls_raw,
+                    meta=response.get("model"),
                 )
             )
+            self._turn_call_ids = {
+                call["id"]
+                for call in tool_calls_raw or []
+                if isinstance(call, dict) and isinstance(call.get("id"), str)
+            }
         else:
             workflow.logger.warning(
                 f"Received empty LLM response in iteration {self.state.current_iteration}"

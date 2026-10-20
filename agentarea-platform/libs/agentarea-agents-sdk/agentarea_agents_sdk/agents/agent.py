@@ -101,7 +101,7 @@ class Agent:
         goal: str | None = None,
         success_criteria: list[str] | None = None,
         stream: bool = True,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """Internal method to execute the agent loop."""
         goal = goal or task
         system_prompt = self._build_system_prompt(goal, success_criteria)
@@ -208,7 +208,7 @@ class Agent:
         task: str,
         goal: str | None = None,
         success_criteria: list[str] | None = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """Run the agent on a task and stream content as it's generated.
 
         Args:

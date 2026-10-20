@@ -91,7 +91,7 @@ class ProviderConfigResponse(BaseModel):
     model_instance_ids: list[str] = []
 
     @classmethod
-    def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigResponse":
+    def from_domain(cls, provider_config: ProviderConfig) -> ProviderConfigResponse:
         # Extract model instance IDs from the relationship if loaded
         # Always return a list (empty if no model instances)
         model_instance_ids: list[str] = []
@@ -146,7 +146,7 @@ class ModelInstanceResponse(BaseModel):
     config_name: str | None = None
 
     @classmethod
-    def from_domain(cls, model_instance) -> "ModelInstanceResponse":
+    def from_domain(cls, model_instance) -> ModelInstanceResponse:
         provider_spec = (
             model_instance.provider_config.provider_spec if model_instance.provider_config else None
         )
@@ -192,7 +192,7 @@ class ProviderConfigWithInstancesResponse(BaseModel):
     model_instances: list[ModelInstanceResponse] = []
 
     @classmethod
-    def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigWithInstancesResponse":
+    def from_domain(cls, provider_config: ProviderConfig) -> ProviderConfigWithInstancesResponse:
         provider_config_any = cast(Any, provider_config)
         return cls(
             id=str(provider_config.id),
@@ -297,6 +297,7 @@ class DiscoverPreviewModelResponse(BaseModel):
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
     cached_input_cost_per_token: Money | None = None
+    cache_creation_input_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -308,7 +309,7 @@ class DiscoverPreviewResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoverPreviewModelResponse]
-    skipped: list["SkippedModelResponse"] = []
+    skipped: list[SkippedModelResponse] = []
 
 
 class SkippedModelResponse(BaseModel):
@@ -452,6 +453,7 @@ async def discover_models_preview(
             input_cost_per_token=model.input_cost_per_token,
             output_cost_per_token=model.output_cost_per_token,
             cached_input_cost_per_token=model.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=model.cache_creation_input_cost_per_token,
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
@@ -472,6 +474,7 @@ async def discover_models_preview(
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
                 cached_input_cost_per_token=model.cached_input_cost_per_token,
+                cache_creation_input_cost_per_token=model.cache_creation_input_cost_per_token,
                 supports_function_calling=model.supports_function_calling,
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,
@@ -575,6 +578,7 @@ class DiscoveredModelResponse(BaseModel):
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
     cached_input_cost_per_token: Money | None = None
+    cache_creation_input_cost_per_token: Money | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -666,6 +670,7 @@ async def discover_models(
             input_cost_per_token=model.input_cost_per_token,
             output_cost_per_token=model.output_cost_per_token,
             cached_input_cost_per_token=model.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=model.cache_creation_input_cost_per_token,
             supports_function_calling=model.supports_function_calling,
             supports_vision=model.supports_vision,
             supports_reasoning=model.supports_reasoning,
@@ -685,6 +690,7 @@ async def discover_models(
                 input_cost_per_token=model.input_cost_per_token,
                 output_cost_per_token=model.output_cost_per_token,
                 cached_input_cost_per_token=model.cached_input_cost_per_token,
+                cache_creation_input_cost_per_token=model.cache_creation_input_cost_per_token,
                 supports_function_calling=model.supports_function_calling,
                 supports_vision=model.supports_vision,
                 supports_reasoning=model.supports_reasoning,

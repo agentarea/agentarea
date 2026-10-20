@@ -25,6 +25,7 @@ async def test_repository_writes_provenance_columns():
         correlation_id="corr",
         causation_id="evt",
         parent_task_id=parent,
+        depth=2,
     )
     repo = TaskRepository.__new__(TaskRepository)
     captured: dict = {}
@@ -53,6 +54,7 @@ async def test_repository_writes_provenance_columns():
             correlation_id="corr",
             causation_id="evt",
             parent_task_id=parent,
+            depth=kwargs["depth"],
         )
 
     repo.create = AsyncMock(side_effect=create)
@@ -70,4 +72,5 @@ async def test_repository_writes_provenance_columns():
     )
     assert captured["origin_type"] == "trigger"
     assert captured["parent_task_id"] == parent
+    assert captured["depth"] == 2
     assert stored.provenance == provenance

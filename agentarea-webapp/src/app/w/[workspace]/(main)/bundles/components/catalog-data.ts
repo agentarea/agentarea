@@ -6,6 +6,7 @@
 import type {
   CatalogConnection,
   CatalogItemPricingResponse,
+  RegistryItemResponse,
 } from "@/api/client/types.gen";
 import type { EntityKind } from "@/lib/entity-icons";
 import {
@@ -122,6 +123,20 @@ export type RegistryItem = {
   // the caller may read.
   workspace_connections?: CatalogConnection[] | null;
   pricing?: CatalogItemPricingResponse | null;
+  // The registry the item comes from (ADR-0044). Optional for the same reason
+  // as the facets above.
+  registry_name?: RegistryItemResponse["registry_name"];
+  registry_trust?: RegistryItemResponse["registry_trust"];
+  registry_scope?: RegistryItemResponse["registry_scope"];
+  registry_mode?: RegistryItemResponse["registry_mode"];
+};
+
+// Where a catalog entry is published, as every card labels it.
+export type CatalogSource = {
+  name: string | null;
+  trust: RegistryItemResponse["registry_trust"];
+  scope: RegistryItemResponse["registry_scope"];
+  mode: RegistryItemResponse["registry_mode"];
 };
 
 export type Registry = { id: string; name: string; registry_type: string };
@@ -150,6 +165,8 @@ export type CatalogEntry = {
   pricing: CatalogItemPricingResponse | null;
   // Connections only: what the workspace already made from this item.
   connections: CatalogConnection[];
+  // Null when the endpoint did not say which registry the item is from.
+  source: CatalogSource | null;
   spec: RawSpec;
 };
 
@@ -387,6 +404,14 @@ function describe(
     verified: false,
     pricing: item.pricing ?? null,
     connections: item.workspace_connections ?? [],
+    source: item.registry_trust
+      ? {
+          name: item.registry_name ?? null,
+          trust: item.registry_trust,
+          scope: item.registry_scope ?? null,
+          mode: item.registry_mode ?? null,
+        }
+      : null,
     spec,
   };
   const serverCategory = str(item.category);

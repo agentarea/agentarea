@@ -16,6 +16,7 @@ from agentarea_api.api.v1 import workspace_invitations
 from agentarea_api.main import app
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.auth.credential import SESSION
 from agentarea_common.auth.dependencies import get_principal
 from agentarea_common.auth.identity_directory import IdentityRecord
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -89,7 +90,9 @@ def directory(monkeypatch):
 
 
 def _client_as(email: str | None):
-    return UserPrincipal(user_id=INVITEE, email=email, accessible_workspaces=[])
+    return UserPrincipal(
+        user_id=INVITEE, email=email, accessible_workspaces=[], credential=SESSION
+    )
 
 
 @pytest_asyncio.fixture

@@ -22,8 +22,9 @@ from agentarea_common.auth.authorization import assert_workspace_admin
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import AUTHZ_ATTR
+from agentarea_common.auth.tool_authorization import caller_can_approve
 from agentarea_tasks.task_service import TaskService
-from fastapi import Depends, params
+from fastapi import Depends, HTTPException, params
 
 from ..deps.services import get_task_service
 
@@ -36,6 +37,28 @@ async def assert_may_act_on_task(task, user_context: UserContext) -> None:
     # Not the creator: the only other answer is authority over the workspace,
     # which raises 403 of its own if it is not there.
     await assert_workspace_admin(user_context)
+
+
+async def caller_may_act_on_task(task, user_context: UserContext) -> bool:
+    """Whether the caller started this run, or administers the workspace."""
+    try:
+        await assert_may_act_on_task(task, user_context)
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            return False
+        raise
+    return True
+
+
+def may_resolve_escalation(approvers: list[str], user_id: str, *, may_act_on_run: bool) -> bool:
+    """Who decides an escalation: its named approvers, else whoever may act on the run.
+
+    A named approver need not have started the run nor administer the workspace;
+    naming them is the grant, or the run would wait on a person who cannot answer.
+    """
+    if approvers:
+        return caller_can_approve(approvers, user_id)
+    return may_act_on_run
 
 
 def requires_task_authority() -> params.Depends:
@@ -68,4 +91,9 @@ def requires_task_authority() -> params.Depends:
     return Depends(_check)
 
 
-__all__ = ["assert_may_act_on_task", "requires_task_authority"]
+__all__ = [
+    "assert_may_act_on_task",
+    "caller_may_act_on_task",
+    "may_resolve_escalation",
+    "requires_task_authority",
+]

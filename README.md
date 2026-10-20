@@ -126,7 +126,7 @@ refund.
    configured provider: Docker, Kubernetes, E2B, OpenSandbox or Cube. Logs and
    output land in object storage and come back as a handle, not inline.
 6. **`refund_payment` matches an approval rule.** The workflow suspends and an
-   `approval.request` appears in the approver's inbox. There is no timeout.
+   `approval.requested` appears in the approver's inbox. There is no timeout.
 7. **A named approver decides.** They do it from the dashboard or from Claude
    Code over MCP. The signal resumes the workflow and the refund runs, or it is
    refused and the model is told why.

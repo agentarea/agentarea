@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { extractInboxResult, getInboxResultDetails } from "./inboxResult";
+import {
+  extractInboxResult,
+  getInboxResultDetails,
+  inboxResultPreview,
+} from "./inboxResult";
 
 describe("extractInboxResult", () => {
   it("extracts the human response from an SEO result envelope", () => {
@@ -91,5 +95,23 @@ describe("getInboxResultDetails", () => {
         total_cost: "0",
       })
     ).toEqual({ validation_state: "passed" });
+  });
+});
+
+// A failed task read "Result available": its result held only accounting.
+describe("inboxResultPreview", () => {
+  it("calls a failed run a failure even with accounting in its result", () => {
+    expect(
+      inboxResultPreview("failed", { result: { total_cost: "0.01" } })
+    ).toBe("row.taskFailed");
+  });
+
+  it("offers a result only when there is output", () => {
+    expect(
+      inboxResultPreview("completed", { result: { response: "done" } })
+    ).toBe("row.resultAvailable");
+    expect(
+      inboxResultPreview("completed", { result: { total_cost: "0.01" } })
+    ).toBe("row.taskActivity");
   });
 });

@@ -23,6 +23,7 @@ def _task(agent_id):
         task_parameters={},
         status="running",
         result=None,
+        metadata={},
         error_message=None,
         created_at=datetime.now(UTC),
         execution_id="exec-1",

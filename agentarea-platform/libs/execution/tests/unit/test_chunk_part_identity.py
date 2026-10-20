@@ -23,9 +23,9 @@ class CapturingStreamBroker:
     def __init__(self) -> None:
         self.events: list[IntegrationEvent] = []
 
-    async def submit(self, topic: str, fields: dict[str, str], *, maxlen, ttl_seconds) -> str:
+    async def notify(self, channel, fields) -> None:
+        assert channel.startswith("tasks.live.")
         self.events.append(decode(fields))
-        return f"{len(self.events)}-0"
 
 
 def _published_parts(stream: CapturingStreamBroker) -> list[Part]:

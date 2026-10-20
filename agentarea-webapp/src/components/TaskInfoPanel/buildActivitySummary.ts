@@ -8,7 +8,7 @@ import type {
 
 const SKILL_TOOL = "activate_skill";
 const HIDDEN_TOOLS = new Set(["completion", "task_complete"]);
-const SANDBOX_KEY = "__sandbox__";
+const BUILTIN_KEY = "__builtin__";
 
 interface ServerInfo {
   name: string;
@@ -144,8 +144,8 @@ function addToolToGroup(group: ServiceGroup, use: ToolUse) {
 /**
  * Derive the side-panel activity summary from the reduced event parts.
  * Tools group by the service that ran them: each MCP server (with its logo)
- * gets its own group; built-in/shell tools collapse into a single "Sandbox"
- * group (shown by total runtime). Files touched are surfaced separately.
+ * gets its own group; every other tool collapses into one built-in group
+ * (shown by total runtime), which the panel names in the active locale. Files touched are surfaced separately.
  */
 export function buildActivitySummary(
   parts: Part[],
@@ -204,9 +204,9 @@ export function buildActivitySummary(
           durationSec: 0,
           tools: [],
         }))
-      : groupFor(SANDBOX_KEY, () => ({
-          key: SANDBOX_KEY,
-          name: "Sandbox",
+      : groupFor(BUILTIN_KEY, () => ({
+          key: BUILTIN_KEY,
+          name: BUILTIN_KEY,
           isMcp: false,
           count: 0,
           durationSec: 0,

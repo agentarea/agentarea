@@ -1,5 +1,6 @@
 """The tool-call policy gate: allow, deny, or pause for human approval."""
 
+import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -22,15 +23,13 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .patches import (
     APPROVAL_RESPONSE_ONCE_PATCH,
+    REFUSED_TOOL_CALL_ANNOUNCED_PATCH,
     TOOL_CONFIG_ALIASES_PATCH,
     WEB_FETCH_SEEN_URL_PATCH,
 )
@@ -61,15 +60,39 @@ class ToolApprovalMixin(BudgetMixin):
         """Agent-config names that may deny this tool or put it behind approval."""
         return tool_config_aliases(tool_name, *self._policy_tool_configs())
 
+    def _announce_tool_call(self, tool_call: ToolCall) -> None:
+        """Record the model's tool.call for a call refused before it ran, so its result has one."""
+        try:
+            arguments = json.loads(tool_call.function.get("arguments") or "{}")
+        except json.JSONDecodeError, TypeError:
+            arguments = {}
+        self._events.add_event(
+            EventTypes.TOOL_CALL_STARTED,
+            {
+                "tool_name": tool_call.function["name"],
+                "tool_call_id": tool_call.id,
+                "iteration": self.state.current_iteration,
+                "arguments": sanitize_tool_event_value(arguments),
+            },
+        )
+
     async def _deny_tool_call(
-        self, tool_call: ToolCall, tool_name: str, reason: str, ran: bool = False
+        self,
+        tool_call: ToolCall,
+        tool_name: str,
+        reason: str,
+        ran: bool = False,
+        announced: bool = False,
     ) -> None:
         """Reject a tool call by policy and surface the reason to the LLM.
 
         ``ran`` marks a gate that judged the call's output: the call executed,
-        only its result is kept from the model.
+        only its result is kept from the model. ``announced`` says its tool.call
+        is already recorded; otherwise it is recorded here first.
         """
         workflow.logger.warning(f"Tool '{tool_name}' denied by policy: {reason}")
+        if not announced and workflow.patched(REFUSED_TOOL_CALL_ANNOUNCED_PATCH):
+            self._announce_tool_call(tool_call)
         message = (
             f"Tool call ran, but its result was withheld by policy: {reason}"
             if ran
@@ -130,20 +153,27 @@ class ToolApprovalMixin(BudgetMixin):
         )
         self._pending_escalations[escalation_id] = escalation
         self.state.status = ExecutionStatus.WAITING_FOR_APPROVAL
+        if self._task_log_on() and not self._events_in_log():
+            self._log_event(
+                EventTypes.APPROVAL_REQUESTED,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_call_id": tool_call.id,
+                    "tool_name": tool_name,
+                    "arguments": tool_args,
+                    "approvers": escalation.approvers,
+                    "reason": reason,
+                },
+            )
 
         # Persist approval status to DB so inbox can query it
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="waiting_for_approval",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="waiting_for_approval",
+                workspace_id=self.state.workspace_id,
+            )
         )
 
         self._events.add_event(
@@ -165,6 +195,18 @@ class ToolApprovalMixin(BudgetMixin):
         await workflow.wait_condition(lambda: escalation.resolved)
 
         approved = escalation.approved
+        if self._task_log_on() and not self._events_in_log():
+            self._log_event(
+                EventTypes.APPROVAL_DECIDED,
+                {
+                    "escalation_id": escalation_id,
+                    "tool_call_id": tool_call.id,
+                    "tool_name": tool_name,
+                    "approved": bool(approved),
+                    "decided_by": escalation.approved_by,
+                    "comment": escalation.comment,
+                },
+            )
         if approved:
             await self._check_monthly_spend_cap()
         one_response = workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH)
@@ -233,18 +275,13 @@ class ToolApprovalMixin(BudgetMixin):
         del self._pending_escalations[escalation_id]
         if not self._pending_escalations:
             self.state.status = ExecutionStatus.EXECUTING
-            await workflow.execute_activity(
-                Activities.UPDATE_TASK_STATUS,
-                args=[
-                    UpdateTaskStatusRequest(
-                        user_context_data=self.state.user_context_data,
-                        task_id=self.state.task_id,
-                        status="running",
-                        workspace_id=self.state.workspace_id,
-                    )
-                ],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=bookkeeping_retry_policy(),
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status="running",
+                    workspace_id=self.state.workspace_id,
+                )
             )
         if approved and self._monthly_cap_message:
             await self._deny_tool_call(tool_call, tool_name, self._monthly_cap_message)
@@ -262,7 +299,7 @@ class ToolApprovalMixin(BudgetMixin):
         tool_name = tool_call.function["name"]
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         if self._monthly_cap_message:

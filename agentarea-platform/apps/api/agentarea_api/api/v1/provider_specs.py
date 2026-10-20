@@ -30,7 +30,7 @@ class ProviderSpecResponse(BaseModel):
     @classmethod
     def from_domain(
         cls, provider_spec: ProviderSpec, request: Request | None = None
-    ) -> "ProviderSpecResponse":
+    ) -> ProviderSpecResponse:
         # request kept for signature compatibility; the icon URL is resolved
         # from the configured public base, never the incoming request host.
         icon_url = build_provider_icon_url(provider_spec.icon)
@@ -61,6 +61,7 @@ class ModelSpecResponse(BaseModel):
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
     cached_input_cost_per_token: Money | None = None
+    cache_creation_input_cost_per_token: Money | None = None
     supports_function_calling: bool | None = False
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False
@@ -69,7 +70,7 @@ class ModelSpecResponse(BaseModel):
     updated_at: UtcDatetime
 
     @classmethod
-    def from_domain(cls, model_spec: ModelSpec) -> "ModelSpecResponse":
+    def from_domain(cls, model_spec: ModelSpec) -> ModelSpecResponse:
         return cls(
             id=str(model_spec.id),
             provider_spec_id=str(model_spec.provider_spec_id),
@@ -82,6 +83,7 @@ class ModelSpecResponse(BaseModel):
             input_cost_per_token=model_spec.input_cost_per_token,
             output_cost_per_token=model_spec.output_cost_per_token,
             cached_input_cost_per_token=model_spec.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=model_spec.cache_creation_input_cost_per_token,
             supports_function_calling=model_spec.supports_function_calling,
             supports_vision=model_spec.supports_vision,
             supports_reasoning=model_spec.supports_reasoning,
@@ -107,7 +109,7 @@ class ProviderSpecWithModelsResponse(BaseModel):
     @classmethod
     def from_domain(
         cls, provider_spec: ProviderSpec, request: Request | None = None
-    ) -> "ProviderSpecWithModelsResponse":
+    ) -> ProviderSpecWithModelsResponse:
         # request kept for signature compatibility; the icon URL is resolved
         # from the configured public base, never the incoming request host.
         icon_url = build_provider_icon_url(provider_spec.icon)

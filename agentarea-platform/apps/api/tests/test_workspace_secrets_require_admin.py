@@ -10,7 +10,6 @@ true for anyone already acting in that workspace.
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import uuid4
 
 import pytest
 from agentarea_api.api.deps.services import get_secret_catalog_service
@@ -23,7 +22,7 @@ from agentarea_common.di.container import register_singleton
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-SECRET_ID = str(uuid4())
+SECRET_ID = "b37b68df-6954-45c0-9cdd-4e389755a2d4"
 
 
 @pytest.fixture(autouse=True)

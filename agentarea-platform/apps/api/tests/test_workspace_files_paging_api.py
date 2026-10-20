@@ -135,6 +135,17 @@ async def test_task_output_does_not_crowd_a_persons_files_out_of_the_listing(sto
 
 
 @pytest.mark.asyncio
+async def test_stream_event_files_stay_out_of_a_persons_files(store) -> None:
+    _fill(store, "events/s-1/e-1", 3)
+    _fill(store, "wiki", 2)
+
+    listing = await _listing()
+
+    assert [f.path for f in listing.files] == [f"wiki/f{i:05d}.txt" for i in range(2)]
+    assert not any(p.startswith(f"{ROOT}events/") for p in store.listed_prefixes)
+
+
+@pytest.mark.asyncio
 async def test_a_listing_past_the_cap_says_it_was_cut_short(store, monkeypatch) -> None:
     monkeypatch.setattr(files, "MAX_LISTED_FILES", 3)
     _fill(store, "wiki", 5)

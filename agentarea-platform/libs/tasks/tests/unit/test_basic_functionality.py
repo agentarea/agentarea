@@ -18,7 +18,7 @@ class TestBasicFunctionality:
         event = TaskEvent(
             id=event_id,
             task_id=task_id,
-            event_type="LLMCallStarted",
+            event_type="llm.call.started",
             timestamp=timestamp,
             data={"model": "gpt-4", "tokens": 150},
             metadata={"source": "workflow"},
@@ -28,7 +28,7 @@ class TestBasicFunctionality:
 
         assert event.id == event_id
         assert event.task_id == task_id
-        assert event.event_type == "LLMCallStarted"
+        assert event.event_type == "llm.call.started"
         assert event.timestamp == timestamp
         assert event.data == {"model": "gpt-4", "tokens": 150}
         assert event.metadata == {"source": "workflow"}
@@ -38,7 +38,7 @@ class TestBasicFunctionality:
     def test_task_event_factory_method(self):
         """Test TaskEvent.create_workflow_event factory method."""
         task_id = uuid4()
-        event_type = "LLMCallCompleted"
+        event_type = "llm.call.completed"
         data = {"tokens": 150, "cost": 0.001}
 
         event_id = uuid4()
@@ -70,7 +70,7 @@ class TestBasicFunctionality:
         event = TaskEvent.create_workflow_event(
             task_id=task_id,
             event_id=uuid4(),
-            event_type="TaskStarted",
+            event_type="task.started",
             timestamp=datetime.now(UTC),
             data={"agent_id": str(uuid4())},
             workspace_id="default",
@@ -88,7 +88,7 @@ class TestBasicFunctionality:
         event = TaskEvent.create_workflow_event(
             task_id=task_id,
             event_id=uuid4(),
-            event_type="LLMCallStarted",
+            event_type="llm.call.started",
             timestamp=datetime.now(UTC),
             data={"model": "gpt-4", "temperature": 0.7},
             workspace_id="test-workspace",
@@ -107,6 +107,6 @@ class TestBasicFunctionality:
         assert "created_by" in event_dict
 
         assert str(event_dict["task_id"]) == str(task_id)
-        assert event_dict["event_type"] == "LLMCallStarted"
+        assert event_dict["event_type"] == "llm.call.started"
         assert event_dict["data"] == {"model": "gpt-4", "temperature": 0.7}
         assert event_dict["workspace_id"] == "test-workspace"

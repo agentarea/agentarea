@@ -83,7 +83,9 @@ class FakeTaskService:
 @pytest.fixture
 def harness(monkeypatch):
     workflow = FakeWorkflowService()
-    task_service = FakeTaskService(SimpleNamespace(id=RUN_ID, user_id="user-1", status="running"))
+    task_service = FakeTaskService(
+        SimpleNamespace(id=RUN_ID, user_id="user-1", status="running", execution_id=None)
+    )
 
     @asynccontextmanager
     async def fake_context():

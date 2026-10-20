@@ -223,7 +223,7 @@ async def test_creator_scoped_filtering(workspace_scoped_repository, test_user_c
     await workspace_scoped_repository.session.commit()
 
     # Test workspace-scoped listing (should return all workspace tasks)
-    all_workspace_tasks = await workspace_scoped_repository.list_all(creator_scoped=False)
+    all_workspace_tasks = await workspace_scoped_repository.list_all()
     # Filter to only our test tasks
     our_workspace_tasks = [
         t for t in all_workspace_tasks if t.id in [task1.id, different_user_task.id]
@@ -232,9 +232,11 @@ async def test_creator_scoped_filtering(workspace_scoped_repository, test_user_c
     assert all(task.workspace_id == test_user_context.workspace_id for task in our_workspace_tasks)
 
     # Test creator-scoped listing (should return only current user's tasks)
-    creator_tasks = await workspace_scoped_repository.list_all(creator_scoped=True)
+    creator_tasks = await workspace_scoped_repository.list_all(
+        created_by=test_user_context.user_id
+    )
     # Filter to only our test tasks
-    our_creator_tasks = [t for t in creator_tasks if t.id == task1.id]
+    our_creator_tasks = [t for t in creator_tasks if t.id in [task1.id, different_user_task.id]]
     assert len(our_creator_tasks) == 1
     assert our_creator_tasks[0].id == task1.id
     assert our_creator_tasks[0].created_by == test_user_context.user_id

@@ -1,4 +1,9 @@
-"""Integration tests for TaskEvent functionality."""
+"""The legacy ``task_events`` write path against a migrated database.
+
+Runs from before the task log still store their events here; nothing reads
+them back through the repository any more (the feed reads the task log), so
+these tests read the stored rows directly.
+"""
 
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -10,7 +15,9 @@ from agentarea_common.base import RepositoryFactory
 from agentarea_common.config.database import DatabaseSettings
 from agentarea_tasks.application.task_event_service import TaskEventService
 from agentarea_tasks.domain.models import TaskEvent
+from agentarea_tasks.infrastructure.orm import TaskEventORM
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -65,285 +72,113 @@ def task_event_service(repository_factory):
     return TaskEventService(repository_factory, None)  # No event broker needed for these tests
 
 
+async def _stored(session, task_id, workspace_id):
+    rows = await session.scalars(
+        select(TaskEventORM)
+        .where(TaskEventORM.task_id == task_id, TaskEventORM.workspace_id == workspace_id)
+        .order_by(TaskEventORM.timestamp)
+    )
+    return list(rows.all())
+
+
+def _event(task_id, event_type, data, workspace_id="test-workspace", created_by="test_user"):
+    return TaskEvent.create_workflow_event(
+        task_id=task_id,
+        event_id=uuid4(),
+        event_type=event_type,
+        timestamp=datetime.now(UTC),
+        data=data,
+        workspace_id=workspace_id,
+        created_by=created_by,
+    )
+
+
 class TestTaskEventRepositoryIntegration:
-    """Integration tests for TaskEventRepository."""
-
     @pytest.mark.asyncio
-    async def test_create_and_retrieve_event(self, task_event_repository, db_session):
-        """Test creating and retrieving a task event."""
-        # Create test event
+    async def test_create_event_stores_the_row(self, task_event_repository, db_session):
         task_id = uuid4()
-        event = TaskEvent.create_workflow_event(
-            task_id=task_id,
-            event_id=uuid4(),
-            event_type="LLMCallStarted",
-            timestamp=datetime.now(UTC),
-            data={"model": "gpt-4", "tokens": 150},
-            workspace_id="test-workspace",
-            created_by="workflow",
+        event = _event(
+            task_id, "llm.call.started", {"model": "gpt-4", "tokens": 150}, created_by="workflow"
         )
 
-        # Save to database
-        saved_event = await task_event_repository.create_event(event)
+        saved = await task_event_repository.create_event(event)
         await db_session.commit()
 
-        # Verify saved event
-        assert saved_event.id == event.id
-        assert saved_event.task_id == task_id
-        assert saved_event.event_type == "LLMCallStarted"
-        assert saved_event.data == {"model": "gpt-4", "tokens": 150}
-        assert saved_event.workspace_id == "test-workspace"
-        assert saved_event.created_by == "workflow"
-
-        # Retrieve events for task
-        retrieved_events = await task_event_repository.get_events_for_task(task_id)
-
-        # Verify retrieved events
-        assert len(retrieved_events) == 1
-        retrieved_event = retrieved_events[0]
-        assert retrieved_event.id == event.id
-        assert retrieved_event.task_id == task_id
-        assert retrieved_event.event_type == "LLMCallStarted"
-        assert retrieved_event.data == {"model": "gpt-4", "tokens": 150}
+        assert (saved.id, saved.task_id, saved.event_type) == (
+            event.id,
+            task_id,
+            "llm.call.started",
+        )
+        assert saved.data == {"model": "gpt-4", "tokens": 150}
+        assert (saved.workspace_id, saved.created_by) == ("test-workspace", "workflow")
+        [row] = await _stored(db_session, task_id, "test-workspace")
+        assert (row.id, row.event_type, row.data) == (event.id, "llm.call.started", event.data)
 
     @pytest.mark.asyncio
-    async def test_get_events_for_task_multiple(self, task_event_repository, db_session):
-        """Test retrieving multiple events for a task."""
+    async def test_a_repeated_event_is_stored_once(self, task_event_repository, db_session):
         task_id = uuid4()
+        event = _event(task_id, "task.completed", {"result": "success"})
 
-        # Create multiple events for the same task
-        events = [
-            TaskEvent.create_workflow_event(
-                task_id=task_id,
-                event_id=uuid4(),
-                event_type="LLMCallStarted",
-                timestamp=datetime.now(UTC),
-                data={"model": "gpt-4"},
-                workspace_id="test-workspace",
-                created_by="test_user",
-            ),
-            TaskEvent.create_workflow_event(
-                task_id=task_id,
-                event_id=uuid4(),
-                event_type="LLMCallCompleted",
-                timestamp=datetime.now(UTC),
-                data={"tokens": 150},
-                workspace_id="test-workspace",
-                created_by="test_user",
-            ),
-            TaskEvent.create_workflow_event(
-                task_id=task_id,
-                event_id=uuid4(),
-                event_type="TaskCompleted",
-                timestamp=datetime.now(UTC),
-                data={"result": "success"},
-                workspace_id="test-workspace",
-                created_by="test_user",
-            ),
+        await task_event_repository.create_event(event)
+        await task_event_repository.create_event(event)
+        await db_session.commit()
+
+        assert [row.id for row in await _stored(db_session, task_id, "test-workspace")] == [
+            event.id
         ]
 
-        # Save all events
-        for event in events:
-            await task_event_repository.create_event(event)
-        await db_session.commit()
-
-        # Retrieve events for task
-        retrieved_events = await task_event_repository.get_events_for_task(task_id)
-
-        # Verify all events retrieved and ordered by timestamp
-        assert len(retrieved_events) == 3
-        event_types = [event.event_type for event in retrieved_events]
-        assert "LLMCallStarted" in event_types
-        assert "LLMCallCompleted" in event_types
-        assert "TaskCompleted" in event_types
-
     @pytest.mark.asyncio
-    async def test_get_events_by_type(self, task_event_repository, db_session):
-        """Test retrieving events by type."""
-        # Create events of different types
-        task_id_1 = uuid4()
-        task_id_2 = uuid4()
-
-        events = [
-            TaskEvent.create_workflow_event(
-                task_id=task_id_1,
-                event_id=uuid4(),
-                event_type="LLMCallStarted",
-                timestamp=datetime.now(UTC),
-                data={"model": "gpt-4"},
-                workspace_id="test-workspace",
-                created_by="test_user",
-            ),
-            TaskEvent.create_workflow_event(
-                task_id=task_id_2,
-                event_id=uuid4(),
-                event_type="LLMCallStarted",
-                timestamp=datetime.now(UTC),
-                data={"model": "claude-3"},
-                workspace_id="test-workspace",
-                created_by="test_user",
-            ),
-            TaskEvent.create_workflow_event(
-                task_id=task_id_1,
-                event_id=uuid4(),
-                event_type="TaskCompleted",
-                timestamp=datetime.now(UTC),
-                data={"result": "success"},
-                workspace_id="test-workspace",
-                created_by="test_user",
-            ),
-        ]
-
-        # Save all events
-        for event in events:
-            await task_event_repository.create_event(event)
-        await db_session.commit()
-
-        # Retrieve events by type
-        llm_started_events = await task_event_repository.get_events_by_type("LLMCallStarted")
-        task_completed_events = await task_event_repository.get_events_by_type("TaskCompleted")
-
-        # Verify filtering by type. Events created by earlier runs of this
-        # test persist in the shared "test-workspace" (each run commits for
-        # real, no cross-run cleanup), so use >= like the equivalent
-        # service-level test below rather than an exact count.
-        assert len(llm_started_events) >= 2
-        assert len(task_completed_events) >= 1
-
-        assert all(event.event_type == "LLMCallStarted" for event in llm_started_events)
-        assert all(event.event_type == "TaskCompleted" for event in task_completed_events)
-
-    @pytest.mark.asyncio
-    async def test_workspace_isolation(self, db_session):
-        """Test that events are properly isolated by workspace."""
+    async def test_each_workspace_stores_its_own_events(self, db_session):
         task_id = uuid4()
-
-        # Create repositories for different workspaces
-        workspace1_context = UserContext(user_id="user1", workspace_id="workspace1")
-        workspace2_context = UserContext(user_id="user2", workspace_id="workspace2")
-
-        repo1 = TaskEventRepository(db_session, workspace1_context)
-        repo2 = TaskEventRepository(db_session, workspace2_context)
-
-        # Create events in different workspaces
-        event1 = TaskEvent.create_workflow_event(
-            task_id=task_id,
-            event_id=uuid4(),
-            event_type="LLMCallStarted",
-            timestamp=datetime.now(UTC),
-            data={"model": "gpt-4"},
-            workspace_id="workspace1",
-            created_by="test_user",
+        repo1 = TaskEventRepository(
+            db_session, UserContext(user_id="user1", workspace_id="workspace1")
+        )
+        repo2 = TaskEventRepository(
+            db_session, UserContext(user_id="user2", workspace_id="workspace2")
         )
 
-        event2 = TaskEvent.create_workflow_event(
-            task_id=task_id,
-            event_id=uuid4(),
-            event_type="LLMCallStarted",
-            timestamp=datetime.now(UTC),
-            data={"model": "claude-3"},
-            workspace_id="workspace2",
-            created_by="test_user",
+        await repo1.create_event(
+            _event(task_id, "llm.call.started", {"model": "gpt-4"}, "workspace1")
         )
-
-        # Save events using respective repositories
-        await repo1.create_event(event1)
-        await repo2.create_event(event2)
+        await repo2.create_event(
+            _event(task_id, "llm.call.started", {"model": "claude-3"}, "workspace2")
+        )
         await db_session.commit()
 
-        # Verify workspace isolation
-        workspace1_events = await repo1.get_events_for_task(task_id)
-        workspace2_events = await repo2.get_events_for_task(task_id)
+        [one] = await _stored(db_session, task_id, "workspace1")
+        [two] = await _stored(db_session, task_id, "workspace2")
+        assert (one.data["model"], two.data["model"]) == ("gpt-4", "claude-3")
 
-        assert len(workspace1_events) == 1
-        assert len(workspace2_events) == 1
-
-        assert workspace1_events[0].data["model"] == "gpt-4"
-        assert workspace2_events[0].data["model"] == "claude-3"
+    @pytest.mark.asyncio
+    async def test_an_event_of_another_workspace_is_refused(self, task_event_repository):
+        with pytest.raises(ValueError, match="not test-workspace"):
+            await task_event_repository.create_event(
+                _event(uuid4(), "llm.call.started", {}, workspace_id="someone-else")
+            )
 
 
 class TestTaskEventServiceIntegration:
-    """Integration tests for TaskEventService."""
-
     @pytest.mark.asyncio
     async def test_create_workflow_event_end_to_end(self, task_event_service, db_session):
-        """Test creating a workflow event end-to-end."""
         task_id = uuid4()
-        event_type = "LLMCallStarted"
         data = {"model": "gpt-4", "tokens": 150}
-        workspace_id = "test-workspace"
 
-        # Create event using service
-        created_event = await task_event_service.create_workflow_event(
+        created = await task_event_service.create_workflow_event(
             task_id=task_id,
             event_id=uuid4(),
-            event_type=event_type,
+            event_type="llm.call.started",
             timestamp=datetime.now(UTC),
             data=data,
-            workspace_id=workspace_id,
+            workspace_id="test-workspace",
             created_by="integration_test",
         )
         await db_session.commit()
 
-        # Verify event was created
-        assert created_event.task_id == task_id
-        assert created_event.event_type == event_type
-        assert created_event.data == data
-        assert created_event.workspace_id == workspace_id
-        assert created_event.created_by == "integration_test"
-
-        # Verify event can be retrieved
-        retrieved_events = await task_event_service.get_task_events(task_id)
-        assert len(retrieved_events) == 1
-        assert retrieved_events[0].id == created_event.id
-
-    @pytest.mark.asyncio
-    async def test_get_events_by_type_end_to_end(self, task_event_service, db_session):
-        """Test retrieving events by type end-to-end."""
-        # Create events of different types
-        await task_event_service.create_workflow_event(
-            task_id=uuid4(),
-            event_id=uuid4(),
-            event_type="LLMCallStarted",
-            timestamp=datetime.now(UTC),
-            data={"model": "gpt-4"},
-            workspace_id="test-workspace",
-            created_by="test_user",
+        assert (created.task_id, created.event_type, created.data) == (
+            task_id,
+            "llm.call.started",
+            data,
         )
-
-        await task_event_service.create_workflow_event(
-            task_id=uuid4(),
-            event_id=uuid4(),
-            event_type="LLMCallStarted",
-            timestamp=datetime.now(UTC),
-            data={"model": "claude-3"},
-            workspace_id="test-workspace",
-            created_by="test_user",
-        )
-
-        await task_event_service.create_workflow_event(
-            task_id=uuid4(),
-            event_id=uuid4(),
-            event_type="TaskCompleted",
-            timestamp=datetime.now(UTC),
-            data={"result": "success"},
-            workspace_id="test-workspace",
-            created_by="test_user",
-        )
-
-        await db_session.commit()
-
-        # Retrieve events by type
-        llm_started_events = await task_event_service.get_events_by_type("LLMCallStarted")
-        task_completed_events = await task_event_service.get_events_by_type("TaskCompleted")
-
-        # Verify filtering
-        assert len(llm_started_events) >= 2  # May have events from other tests
-        assert len(task_completed_events) >= 1
-
-        # Verify all retrieved events have correct type
-        for event in llm_started_events:
-            assert event.event_type == "LLMCallStarted"
-
-        for event in task_completed_events:
-            assert event.event_type == "TaskCompleted"
+        assert (created.workspace_id, created.created_by) == ("test-workspace", "integration_test")
+        [row] = await _stored(db_session, task_id, "test-workspace")
+        assert row.id == created.id

@@ -22,6 +22,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
@@ -71,21 +72,25 @@ async def mock_resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 @activity.defn(name="call_llm_activity")
 async def mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     """Mock LLM that captures the request and calls completion."""
-    captured_llm_requests.append({
-        "messages": request.messages,
-        "tools": request.tools,
-        "model_id": request.model_id,
-    })
+    captured_llm_requests.append(
+        {
+            "messages": _TASK_LOG.messages(request),
+            "tools": request.tools,
+            "model_id": request.model_id,
+        }
+    )
 
     # Check that completion is in the tools
     tool_names = []
-    for tool in (request.tools or []):
+    for tool in request.tools or []:
         if tool.get("type") == "function" and "function" in tool:
             tool_names.append(tool["function"]["name"])
         elif "name" in tool:
             tool_names.append(tool["name"])
 
-    print(f"[MOCK LLM] Received {len(request.messages)} messages, {len(request.tools or [])} tools")
+    print(
+        f"[MOCK LLM] Received {len(_TASK_LOG.messages(request))} messages, {len(request.tools or [])} tools"
+    )
     print(f"[MOCK LLM] Tool names: {tool_names}")
     print(f"[MOCK LLM] completion present: {'completion' in tool_names}")
 
@@ -99,10 +104,12 @@ async def mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
                 "type": "function",
                 "function": {
                     "name": "completion",
-                    "arguments": json.dumps({
-                        "result": "Привет! Я готов помочь. Чем могу быть полезен?",
-                        "artifacts": [],
-                    }),
+                    "arguments": json.dumps(
+                        {
+                            "result": "Привет! Я готов помочь. Чем могу быть полезен?",
+                            "artifacts": [],
+                        }
+                    ),
                 },
             }
         ],
@@ -147,6 +154,14 @@ async def mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=mock_publish_events,
+    update_status=mock_update_task_status,
+    log=_TASK_LOG,
+)
+
+
 ALL_ACTIVITIES = [
     mock_build_config,
     mock_discover_tools,
@@ -154,6 +169,7 @@ ALL_ACTIVITIES = [
     mock_call_llm,
     mock_execute_mcp_tool,
     mock_publish_events,
+    _RECORD,
     mock_update_task_status,
     mock_validate_artifacts,
 ]
@@ -222,7 +238,9 @@ class TestTaskCompleteSmokeTest:
                     )
 
                     # Verify completion was in tools
-                    assert len(captured_llm_requests) >= 1, "LLM should have been called at least once"
+                    assert len(captured_llm_requests) >= 1, (
+                        "LLM should have been called at least once"
+                    )
                     first_request = captured_llm_requests[0]
                     tool_names = []
                     for tool in first_request["tools"]:

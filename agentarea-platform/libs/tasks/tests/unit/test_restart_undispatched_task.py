@@ -49,11 +49,24 @@ async def test_a_task_that_never_started_is_started_under_its_stored_policy():
     assert started is submitted
 
 
+async def test_a_pending_task_whose_workflow_never_started_is_started():
+    engine = MagicMock()
+    engine.submit_task = AsyncMock(side_effect=lambda task: task)
+    task = _stored(status="pending", error_message=None)
+    await _service(engine).restart_undispatched_task(task)
+    submitted = engine.submit_task.await_args.args[0]
+    assert submitted.id == task.id
+    assert submitted.effective_policy == POLICY
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
         {"status": "running"},
+        {"status": "completed"},
+        {"status": "cancelled"},
         {"execution_id": "task-1"},
+        {"status": "pending", "execution_id": "task-1"},
         {"metadata": {}},
     ],
 )

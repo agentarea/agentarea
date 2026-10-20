@@ -6,9 +6,9 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.trigger_event_file import event_data_json
-from agentarea_streams.domain import JournaledEvent
+from agentarea_streams.domain import StreamEvent
 from agentarea_triggers.domain.enums import TriggerType
-from agentarea_triggers.domain.models import Trigger, WebhookTrigger
+from agentarea_triggers.domain.models import StreamTrigger, Trigger
 from agentarea_triggers.event_context import (
     EVENT_INLINE_LIMIT_BYTES,
     UNTRUSTED_DATA_NOTICE,
@@ -16,19 +16,20 @@ from agentarea_triggers.event_context import (
     TriggerEvent,
     render_event_block,
 )
+from agentarea_triggers.event_scrub import journal_data
 from agentarea_triggers.trigger_service import compose_task_input
-from agentarea_triggers.webhook_intake import journal_data
 
 RECEIVED = datetime(2026, 10, 6, 9, 30, 15, tzinfo=UTC)
 
 
-def _journaled(data, *, sequence=7, kind="order.paid", key="webhook-id:evt-1"):
-    return JournaledEvent(
+def _journaled(data, *, kind="order.paid", key="webhook-id:evt-1"):
+    return StreamEvent(
         type=kind,
         source="webhook:generic",
         data=data,
         stream_id=uuid4(),
-        sequence=sequence,
+        workspace_id="w",
+        created_by="u",
         event_key=key,
         received_at=RECEIVED,
     )
@@ -50,7 +51,7 @@ def test_a_small_event_is_quoted_whole_under_its_provenance():
     block = render_event_block(
         trigger_name="Orders",
         trigger_type="stream",
-        event=TriggerEvent.from_journaled(_journaled(data), stream_name="shop orders"),
+        event=TriggerEvent.from_stream_event(_journaled(data), stream_name="shop orders"),
     )
     assert block.event_file is None
     assert "- Trigger: Orders (stream)" in block.text
@@ -58,7 +59,7 @@ def test_a_small_event_is_quoted_whole_under_its_provenance():
     assert '- Event kind: "order.paid"' in block.text
     assert '- Event key: "webhook-id:evt-1"' in block.text
     assert "- Received: 2026-10-06T09:30:15+00:00" in block.text
-    assert "- Stream sequence: 7" in block.text
+    assert "sequence" not in block.text
     assert f"{UNTRUSTED_DATA_NOTICE}\n\nEvent data:\n```json\n{event_data_json(data)}\n```" in (
         block.text
     )
@@ -69,13 +70,12 @@ def test_a_large_event_is_named_as_a_task_file_and_not_quoted():
     block = render_event_block(
         trigger_name="Orders",
         trigger_type="stream",
-        event=TriggerEvent.from_journaled(_journaled(data, sequence=42), stream_name="s"),
+        event=TriggerEvent.from_stream_event(_journaled(data), stream_name="s"),
     )
-    assert block.event_file == "trigger-event-42.json"
-    assert "`inputs/attachments/trigger-event-42.json`" in block.text
+    assert block.event_file == "trigger-event.json"
+    assert "`inputs/attachments/trigger-event.json`" in block.text
     assert f"{len(event_data_json(data).encode())} bytes" in block.text
     assert "END-OF-PAYLOAD" not in block.text
-    assert "- Stream sequence: 42" in block.text
     assert UNTRUSTED_FILE_NOTICE in block.text
 
 
@@ -84,7 +84,9 @@ def test_the_inline_limit_is_inclusive_and_one_byte_over_goes_to_a_file():
     data["pad"] = "a" * (EVENT_INLINE_LIMIT_BYTES - len(event_data_json(data).encode()))
     assert len(event_data_json(data).encode()) == EVENT_INLINE_LIMIT_BYTES
     event = TriggerEvent(received_at=RECEIVED, data=data)
-    assert render_event_block(trigger_name="t", trigger_type="webhook", event=event).event_file is None
+    assert (
+        render_event_block(trigger_name="t", trigger_type="webhook", event=event).event_file is None
+    )
 
     data["pad"] += "a"
     over = TriggerEvent(received_at=RECEIVED, data=data)
@@ -117,7 +119,7 @@ def test_only_the_scrubbed_journal_payload_reaches_the_agent():
         "query_params": {"token": "qs-secret", "page": "2"},
         "raw_data": {"number": 12},
     }
-    event = TriggerEvent.from_journaled(_journaled(journal_data(parsed)), stream_name="gh")
+    event = TriggerEvent.from_stream_event(_journaled(journal_data(parsed)), stream_name="gh")
     text = render_event_block(trigger_name="t", trigger_type="webhook", event=event).text
     assert "sk-live-secret" not in text
     assert "deadbeef" not in text
@@ -136,7 +138,7 @@ def test_a_stream_trigger_asks_its_instruction_and_shows_the_order():
     task_input = compose_task_input(
         _stream_trigger("Reply naming the order id"),
         data,
-        TriggerEvent.from_journaled(_journaled(data), stream_name="orders"),
+        TriggerEvent.from_stream_event(_journaled(data), stream_name="orders"),
     )
     assert task_input is not None
     assert task_input.ask == "Reply naming the order id"
@@ -151,30 +153,28 @@ def test_a_large_stream_event_stamps_the_file_the_run_must_provision():
     task_input = compose_task_input(
         _stream_trigger("Summarise"),
         data,
-        TriggerEvent.from_journaled(_journaled(data, sequence=9), stream_name="orders"),
+        TriggerEvent.from_stream_event(_journaled(data), stream_name="orders"),
     )
     assert task_input is not None
     assert task_input.stamp({"trigger_data": data}) == {
         "trigger_data": data,
-        "trigger_event_file": "trigger-event-9.json",
+        "trigger_event_file": "trigger-event.json",
         "trigger_event": data,
     }
 
 
 def test_a_chat_message_with_no_instruction_is_still_the_ask():
-    trigger = WebhookTrigger(
+    trigger = StreamTrigger(
         name="Support bot",
         agent_id=uuid4(),
         created_by="u",
         workspace_id="w",
-        webhook_id="wh-1234567890abcd",
-        webhook_type="telegram",
     )
     data = {"text": "where is my parcel?", "chat_id": 42, "raw_data": {"update_id": 1}}
     task_input = compose_task_input(
         trigger,
         data,
-        TriggerEvent.from_journaled(
+        TriggerEvent.from_stream_event(
             _journaled(data, kind="message", key="telegram:1"), stream_name="tg"
         ),
     )
@@ -185,19 +185,18 @@ def test_a_chat_message_with_no_instruction_is_still_the_ask():
 
 
 def test_a_webhook_texts_never_displaces_the_trigger_instruction():
-    trigger = WebhookTrigger(
+    trigger = StreamTrigger(
         name="Incidents",
         agent_id=uuid4(),
         created_by="u",
         workspace_id="w",
-        webhook_id="wh-1234567890abcd",
         task_parameters={"text": "Open a ticket for this incident"},
     )
     data = {"body": {"text": "db is down", "severity": "high"}, "text": "db is down"}
     task_input = compose_task_input(
         trigger,
         data,
-        TriggerEvent.from_journaled(_journaled(data, kind="webhook.generic"), stream_name="in"),
+        TriggerEvent.from_stream_event(_journaled(data, kind="webhook.generic"), stream_name="in"),
     )
     assert task_input is not None
     assert task_input.ask == "Open a ticket for this incident"
@@ -209,7 +208,9 @@ def test_a_webhook_texts_never_displaces_the_trigger_instruction():
 def test_an_event_without_text_stamps_no_follow_up():
     data = {"order": {"id": "A-1"}}
     task_input = compose_task_input(
-        _stream_trigger("go"), data, TriggerEvent.from_journaled(_journaled(data), stream_name="s")
+        _stream_trigger("go"),
+        data,
+        TriggerEvent.from_stream_event(_journaled(data), stream_name="s"),
     )
     assert task_input is not None
     assert "follow_up_message" not in task_input.stamp({})
@@ -221,7 +222,7 @@ def test_an_event_with_nothing_to_ask_starts_nothing():
         compose_task_input(
             _stream_trigger(),
             data,
-            TriggerEvent.from_journaled(_journaled(data), stream_name="s"),
+            TriggerEvent.from_stream_event(_journaled(data), stream_name="s"),
         )
         is None
     )
@@ -232,7 +233,7 @@ def test_the_event_must_carry_the_data_the_task_stores():
         compose_task_input(
             _stream_trigger("go"),
             {"a": 1},
-            TriggerEvent.from_journaled(_journaled({"a": 2}), stream_name="s"),
+            TriggerEvent.from_stream_event(_journaled({"a": 2}), stream_name="s"),
         )
 
 
@@ -273,7 +274,7 @@ def test_a_sender_written_kind_cannot_open_lines_in_the_provenance_list():
     block = render_event_block(
         trigger_name="Support",
         trigger_type="webhook",
-        event=TriggerEvent.from_journaled(
+        event=TriggerEvent.from_stream_event(
             _journaled({"type": hostile}, kind=hostile, key=f"slack:{hostile}"), stream_name="s"
         ),
     )
@@ -289,3 +290,12 @@ def test_a_schedule_tick_carries_no_event_so_the_message_is_the_ask():
     task_input = compose_task_input(_stream_trigger("Score leads"), {"source": "schedule"})
     assert task_input is not None
     assert task_input.message == "Score leads"
+
+
+def test_a_body_moved_to_files_reaches_the_run_through_the_event_file():
+    body = {"text": "TAIL-OF-A-LONG-MAIL " * 4000}
+    stored = _journaled({"headers": {}, "body": None, "body_ref": "events/s/e/body.json"})
+    event = TriggerEvent.from_stream_event(stored, stream_name="mail", body=body)
+    assert event.data["body"] == body
+    block = render_event_block(trigger_name="t", trigger_type="stream", event=event)
+    assert block.event_file == "trigger-event.json"

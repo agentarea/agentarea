@@ -7,10 +7,10 @@ name = "agentarea-agents-sdk"
 version = "0.1.1"
 description = "Independent Agent SDK for AgentArea - agentic AI components"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "a2a-sdk>=1.1.5",
-    "litellm>=1.83.11",
+    "litellm>=1.105.0",
     "pydantic>=2.4.2",
     "httpx>=0.25.0",
     "mcp>=2.2.0,<3",
@@ -55,6 +55,6 @@ extend = "../../pyproject.toml"
 "agentarea_agents_sdk/tools/example_decorator_tool.py" = ["T201"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true

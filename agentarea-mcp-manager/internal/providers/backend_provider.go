@@ -41,6 +41,10 @@ type BackendInstanceResult struct {
 	Status string
 }
 
+// InstanceSpecHook amends an instance's assembled spec before its workload is
+// created. An error stops the start.
+type InstanceSpecHook func(ctx context.Context, instance *models.MCPServerInstance, spec *BackendInstanceSpec) error
+
 // Backend defines the interface that Kubernetes backend must satisfy
 type Backend interface {
 	CreateInstance(ctx context.Context, spec *BackendInstanceSpec) (*BackendInstanceResult, error)
@@ -54,6 +58,7 @@ type BackendProvider struct {
 	logger  *slog.Logger
 	secrets secrets.SecretResolver
 	storage *mcpstorage.Issuer
+	hook    InstanceSpecHook
 }
 
 // NewBackendProvider creates a provider over any Backend
@@ -64,6 +69,12 @@ func NewBackendProvider(backend Backend, secretResolver secrets.SecretResolver, 
 		secrets: secretResolver,
 		storage: storage,
 	}
+}
+
+// SetInstanceSpecHook installs the hook called on every assembled spec before
+// its workload is created.
+func (p *BackendProvider) SetInstanceSpecHook(hook InstanceSpecHook) {
+	p.hook = hook
 }
 
 // CreateInstance creates a new Kubernetes deployment/service for the MCP server
@@ -87,6 +98,14 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 	}
 	for key, value := range storageEnvironment {
 		spec.Environment[key] = value
+	}
+	if p.hook != nil {
+		if err := p.hook(ctx, instance, spec); err != nil {
+			p.logger.Error("Instance spec hook refused the instance",
+				slog.String("instance_id", instance.InstanceID),
+				slog.String("error", err.Error()))
+			return fmt.Errorf("instance spec hook: %w", err)
+		}
 	}
 
 	// Use the backend to create the instance
@@ -237,6 +256,7 @@ func applyEnvironment(spec *BackendInstanceSpec, jsonSpec map[string]any) {
 func applyLabels(spec *BackendInstanceSpec, jsonSpec map[string]any) {
 	if labels, exists := jsonSpec["labels"]; exists {
 		if values, ok := stringMap(labels); ok {
+			delete(values, models.EgressLabel)
 			spec.Labels = values
 		}
 	}

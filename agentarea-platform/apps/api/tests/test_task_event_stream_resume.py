@@ -2,8 +2,8 @@
 
 The feed stops after 30 minutes and the browser's EventSource reconnects,
 sending the last ``id:`` it received as ``Last-Event-ID``. Every durable event
-carries its stored id so that reconnect resumes after it instead of replaying
-the task's whole history. Chunks are stream-only, have no stored row to resume
+carries its position in the task log (``seq``) so that reconnect resumes after
+it instead of replaying the task's whole history. Chunks are stream-only, have no stored row to resume
 from, and so carry no id.
 """
 
@@ -27,6 +27,7 @@ from httpx import ASGITransport, AsyncClient
 AGENT_ID = uuid4()
 TASK_ID = uuid4()
 DURABLE_ID = str(uuid4())
+DURABLE_SEQ = 7
 
 
 @pytest_asyncio.fixture
@@ -43,7 +44,9 @@ def feed_calls(monkeypatch) -> list[dict]:
     async def feed(task_id, **kwargs):
         calls.append(kwargs)
         yield TaskEventEnvelope("llm.call.chunk", str(uuid4()), None, {"chunk": "po"})
-        yield TaskEventEnvelope("task.completed", DURABLE_ID, None, {"message": "done"})
+        yield TaskEventEnvelope(
+            "task.completed", DURABLE_ID, None, {"message": "done"}, seq=DURABLE_SEQ
+        )
 
     monkeypatch.setattr("agentarea_api.api.v1.task_event_feed.open_task_event_feed", feed)
 
@@ -83,7 +86,7 @@ async def test_durable_events_carry_their_id_and_chunks_do_not(async_client, fee
 
     assert response.status_code == 200, response.text
     frames = {frame["event"]: frame for frame in _frames(response.text)}
-    assert frames["task.completed"]["id"] == DURABLE_ID
+    assert frames["task.completed"]["id"] == str(DURABLE_SEQ)
     assert "id" not in frames["llm.call.chunk"]
     assert "id" not in frames["connected"]
     assert feed_calls[0]["last_event_id"] is None
@@ -93,11 +96,11 @@ async def test_durable_events_carry_their_id_and_chunks_do_not(async_client, fee
 async def test_a_reconnect_resumes_after_the_last_event_id(async_client, feed_calls):
     response = await async_client.get(
         f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/events/stream",
-        headers={"Last-Event-ID": DURABLE_ID},
+        headers={"Last-Event-ID": str(DURABLE_SEQ)},
     )
 
     assert response.status_code == 200, response.text
-    assert feed_calls[0]["last_event_id"] == DURABLE_ID
+    assert feed_calls[0]["last_event_id"] == str(DURABLE_SEQ)
 
 
 @pytest.mark.asyncio
@@ -220,7 +223,9 @@ async def test_event_stream_closes_read_session_before_first_frame(monkeypatch):
         return task
 
     async def feed(task_id, **kwargs):
-        yield TaskEventEnvelope("task.completed", DURABLE_ID, None, {"message": "done"})
+        yield TaskEventEnvelope(
+            "task.completed", DURABLE_ID, None, {"message": "done"}, seq=DURABLE_SEQ
+        )
 
     monkeypatch.setitem(app.dependency_overrides, get_read_db_session, read_session)
     monkeypatch.setitem(

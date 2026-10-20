@@ -1,11 +1,14 @@
 """Installer orchestration tests (mocked domain services)."""
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from agentarea_agents.application import workspace_export_service
+from agentarea_agents.application.skill_service import SkillService
 from agentarea_agents.application.workspace_export_service import WorkspaceExportService
 from agentarea_bundles.application.analyzer import BundleAnalyzer, parse_bundle
 from agentarea_bundles.application.installer import (
@@ -18,8 +21,14 @@ from agentarea_bundles.schemas.result import InstallAction
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
+from agentarea_common.base.models import BaseModel
 from agentarea_common.di.container import register_singleton
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
+from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
+from agentarea_governance.infrastructure.orm import PolicyRuleORM
+from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 FULL = """
 schema_version: "0.1.0"
@@ -101,10 +110,45 @@ class FakeAgentRepo:
         return self.existing
 
 
+_CATALOG = {
+    entry["slug"]: entry
+    for entry in json.loads(
+        (Path(__file__).parents[4] / "data" / "catalog" / "source-types.json").read_text()
+    )["source_types"]
+}
+
+
+class FakeCatalogSession:
+    """Answers CatalogSourceTypeRepository's lookups from the shipped catalog."""
+
+    async def execute(self, statement, params=None):
+        slug = (params or {}).get("slug")
+        rows = [SimpleNamespace(external_id=slug, spec=_CATALOG[slug])] if slug in _CATALOG else []
+        return SimpleNamespace(fetchall=lambda: rows)
+
+
+class FakeStreamSvc:
+    def __init__(self):
+        self.repository_factory = SimpleNamespace(session=FakeCatalogSession())
+        self.streams = []
+        self.sources = []
+
+    async def create_stream(self, *, name, description):
+        stream = SimpleNamespace(id=uuid4(), name=name, description=description)
+        self.streams.append(stream)
+        return stream
+
+    async def add_source(self, **kwargs):
+        source = SimpleNamespace(id=uuid4(), **kwargs)
+        self.sources.append(source)
+        return source
+
+
 class FakeTriggerSvc:
     def __init__(self):
         self.created = []
         self.disabled = []
+        self.stream_service = FakeStreamSvc()
 
     async def create_trigger(self, domain):
         t = SimpleNamespace(id=uuid4(), name=domain.name)
@@ -356,7 +400,7 @@ channels:
 """
 
 
-async def test_channel_installs_telegram_trigger_and_stores_secret():
+async def test_channel_installs_a_stream_its_source_and_a_trigger_and_stores_the_secret():
     sm = FakeSecretManager()
     inst, deps = _installer(secret_manager=sm)
     res = await inst.install(parse_bundle(CHANNEL), {"bot": "12345:secret"})
@@ -364,19 +408,46 @@ async def test_channel_installs_telegram_trigger_and_stores_secret():
     actions = {(e.kind, e.key): e.action for e in res.entities}
     assert actions[("channel", "inbox")] == InstallAction.CREATED
 
-    # a trigger was created for the agent and imported disabled
     ts = deps["trigger_service"]
+    (stream,) = ts.stream_service.streams
+    (source,) = ts.stream_service.sources
+    assert stream.name == "tg:inbox"
+    assert source.stream_id == stream.id
+    assert source.source_type == "telegram"
+
+    # a stream trigger on that stream, imported disabled
     assert len(ts.created) == 1
     assert ts.created[0].name == "tg:inbox"
+    assert ts.created[0].stream_id == stream.id
     assert ts.created[0].is_active is False
     assert ts.disabled == []
 
-    # the resolved bot token is stored under the exact key the outbound delivery
-    # adapter reads: channel_cred:{type}:{trigger_id}
-    assert len(sm.secrets) == 1
-    name, blob = next(iter(sm.secrets.items()))
-    assert name.startswith("channel_cred:telegram:")
-    assert "12345:secret" in blob
+    # the bot token is stored under the source's credential key, with the
+    # webhook secret the catalog entry issues
+    assert list(sm.secrets) == [f"channel_cred:telegram:{source.id}"]
+    stored = json.loads(sm.secrets[f"channel_cred:telegram:{source.id}"])
+    assert stored["bot_token"] == "12345:secret"
+    assert stored["secret_token"]
+
+
+async def test_a_generic_channel_is_a_generic_webhook_source_with_an_issued_secret():
+    sm = FakeSecretManager()
+    inst, deps = _installer(secret_manager=sm)
+    pkg = parse_bundle(CHANNEL.replace("type: telegram", "type: generic"))
+    await inst.install(pkg, {"bot": "x"})
+
+    (source,) = deps["trigger_service"].stream_service.sources
+    assert source.source_type == "generic_webhook"
+    (stored,) = sm.secrets.values()
+    assert json.loads(stored)["signing_secret"]
+
+
+async def test_a_channel_type_the_catalog_lacks_refuses_the_install(monkeypatch):
+    monkeypatch.setitem(globals(), "_CATALOG", {})
+    inst, deps = _installer(secret_manager=FakeSecretManager())
+    with pytest.raises(BundleInstallError):
+        await inst.install(parse_bundle(CHANNEL), {"bot": "x"})
+    assert deps["trigger_service"].created == []
 
 
 async def test_channel_created_without_secret_manager():
@@ -507,27 +578,24 @@ async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_trigg
         is_active=False,
         conditions={},
     )
-    webhook = SimpleNamespace(
+    stream_trigger = SimpleNamespace(
         id=uuid4(),
         name="incoming-events",
-        trigger_type="webhook",
-        webhook_type="generic",
-        webhook_id="source-webhook-id-must-not-export",
+        trigger_type="stream",
         agent_id=agent.id,
         task_parameters={"text": "Process the inbound event."},
         is_active=False,
         conditions={},
-        allowed_methods=["POST"],
-        validation_rules={},
-        webhook_config=None,
-        event_types=[],
     )
     agent_service = SimpleNamespace(
         list=AsyncMock(return_value=[agent]),
         get_with_skills=AsyncMock(return_value=agent),
     )
-    skill_service = SimpleNamespace(list=AsyncMock(return_value=[skill]))
-    trigger_repository = SimpleNamespace(list_all=AsyncMock(return_value=[cron, webhook]))
+    skill_service = SimpleNamespace(
+        list=AsyncMock(return_value=[skill]),
+        read_skill_md=AsyncMock(return_value=skill.content),
+    )
+    trigger_repository = SimpleNamespace(list_all=AsyncMock(return_value=[cron, stream_trigger]))
     monkeypatch.setattr(
         workspace_export_service,
         "load_workspace",
@@ -563,10 +631,8 @@ async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_trigg
     assert model_setup.type.value == "string"
     assert len(package.automations) == 1
     assert package.automations[0].enabled is False
-    assert len(package.channels) == 1
-    assert package.channels[0].type == "generic"
-    assert package.channels[0].enabled is False
-    assert "source-webhook-id-must-not-export" not in yaml_text
+    # A stream trigger's sources live on its stream, which bundles do not carry.
+    assert package.channels == []
 
     target_context = UserContext(
         user_id="target-user",
@@ -580,16 +646,11 @@ async def test_exported_workspace_bundle_installs_agent_skill_and_disabled_trigg
     assert len(deps["skill_service"].calls) == 1
     assert deps["agent_service"].calls[0].model_id == "gpt-4o"
     assert len(deps["agent_service"].calls) == 1
-    assert len(deps["trigger_service"].created) == 2
-    created = {
-        getattr(trigger.trigger_type, "value", trigger.trigger_type): trigger
-        for trigger in deps["trigger_service"].created
-    }
-    assert created["cron"].task_parameters == {"text": "Prepare the nightly summary."}
-    assert created["cron"].cron_expression == "0 0 * * *"
-    assert created["cron"].timezone == "UTC"
-    assert created["webhook"].task_parameters == {"text": "Process the inbound event."}
-    assert [t.is_active for t in deps["trigger_service"].created] == [False, False]
+    (cron_created,) = deps["trigger_service"].created
+    assert cron_created.task_parameters == {"text": "Prepare the nightly summary."}
+    assert cron_created.cron_expression == "0 0 * * *"
+    assert cron_created.timezone == "UTC"
+    assert cron_created.is_active is False
     assert deps["trigger_service"].disabled == []
 
 
@@ -717,6 +778,44 @@ agents: [{key: a, name: A, model: gpt-4o, skills: [review]}]
     assert call.github_url == "https://github.com/o/r/tree/main/review"
     assert call.name == "Review"
     assert len(deps["agent_service"].calls[0].skill_ids) == 1
+
+
+async def test_a_github_skill_is_refused_when_the_install_policy_denies_community_sources():
+    caller = UserContext(user_id="u", workspace_id="w", admin_workspaces=["w"])
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda c: BaseModel.metadata.create_all(c, tables=[PolicyRuleORM.__table__])
+        )
+    async with async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)() as s:
+        await PolicyRuleRepository(s, caller).create(
+            PolicyRule(
+                subject_type=PolicySubjectType.WORKSPACE,
+                subject_id=caller.workspace_id,
+                target="registry_trust:community",
+                effect=PolicyEffect.DENY,
+            )
+        )
+        await s.commit()
+        package = parse_bundle(
+            """
+schema_version: "0.1.0"
+name: p
+skills:
+  - {key: review, name: Review, source_type: github, source_url: "https://github.com/o/r"}
+agents: [{key: a, name: A, model: gpt-4o, skills: [review]}]
+"""
+        )
+        installer, deps = _installer(
+            skill_service=SkillService(SimpleNamespace(session=s, user_context=caller), caller),
+            user_context=caller,
+        )
+
+        with pytest.raises(CatalogInstallRefusedError, match="registry_trust:community"):
+            await installer.install(package, {})
+
+    await engine.dispose()
+    assert deps["agent_service"].calls == []
 
 
 BLOCKED = """

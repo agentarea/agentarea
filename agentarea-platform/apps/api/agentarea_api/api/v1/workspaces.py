@@ -11,11 +11,13 @@ from dataclasses import replace
 from typing import Annotated
 
 from agentarea_common.auth.authorization import is_workspace_admin
-from agentarea_common.auth.context import UserContext, UserPrincipal
-from agentarea_common.auth.dependencies import PrincipalDep, UnboundPrincipalDep, UserContextDep
+from agentarea_common.auth.context import UserContext, UserPrincipal, granted_scopes
+from agentarea_common.auth.credential import Scope
+from agentarea_common.auth.dependencies import PrincipalDep, UserContextDep
 from agentarea_common.auth.identity_directory import get_identity_directory
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
+    requires_principal_scope,
     requires_workspace_admin,
     unrestricted,
 )
@@ -53,7 +55,7 @@ from ._access_control_grants import seed_workspace
 logger = logging.getLogger(__name__)
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_session() -> AsyncGenerator[AsyncSession]:
     async with get_database().async_session_factory() as session:
         yield session
 
@@ -143,8 +145,8 @@ async def list_reachable_workspaces(
 ) -> list[Workspace]:
     """Every workspace *user* can reach: personal (provisioned on first call) + joined.
 
-    An API key reaches only the workspace it was issued for, so it provisions
-    nothing: a personal workspace minted for it could never be listed.
+    A credential that may not reach past its workspace (an API key) provisions
+    nothing and lists only the workspaces its access was narrowed to.
     """
     graph = get_workspace_membership_graph()
     member_workspace_ids = (
@@ -154,10 +156,10 @@ async def list_reachable_workspaces(
         user.user_id,
         email=user.email,
         member_workspace_ids=member_workspace_ids,
-        provision_personal=user.bound_workspace_id is None,
+        provision_personal=Scope.WORKSPACES in granted_scopes(user),
     )
-    if user.bound_workspace_id is not None:
-        return [w for w in workspaces if w.id == user.bound_workspace_id]
+    if Scope.WORKSPACES not in granted_scopes(user):
+        return [w for w in workspaces if w.id in (user.accessible_workspaces or [])]
     return workspaces
 
 
@@ -200,15 +202,13 @@ router = APIRouter(tags=["workspaces"])
     response_model=WorkspaceResponse,
     status_code=201,
     dependencies=[
-        unrestricted(
-            "any signed-in user may create a workspace and becomes its owner; "
-            "an API key confined to one workspace may not"
-        )
+        requires_principal_scope(Scope.WORKSPACES, "create workspaces"),
+        unrestricted("any signed-in user may create a workspace and becomes its owner"),
     ],
 )
 async def create_workspace(
     body: CreateWorkspaceBody,
-    user: UnboundPrincipalDep,
+    user: PrincipalDep,
     service: WorkspaceServiceDep,
 ) -> WorkspaceResponse:
     """Create a new shared workspace owned by the current user.

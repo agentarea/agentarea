@@ -49,6 +49,45 @@ export function isPending(status: string): boolean {
   return inboxBucket(status) === "pending";
 }
 
+/** Task id -> the escalation the user decided on this page. */
+export type DecidedEscalations = Record<string, string>;
+
+/**
+ * The status to show for a task. A decision is shown as made until the server
+ * stops listing that approval as pending: the inbox reloads before the
+ * workflow has written the task's new status, and once the decision lands the
+ * workflow no longer reports the escalation it settled. A new escalation on
+ * the same task is pending again.
+ */
+export function decidedStatus(
+  task: Pick<InboxTask, "id" | "status" | "escalation_id">,
+  decided: DecidedEscalations
+): string {
+  const escalationId = decided[String(task.id)];
+  if (escalationId === undefined || !isPending(task.status)) return task.status;
+  return !task.escalation_id || task.escalation_id === escalationId
+    ? RESOLVED_ESCALATION_STATUS
+    : task.status;
+}
+
+/** Keep only the decisions the reloaded items have not caught up with yet. */
+export function pruneDecided(
+  decided: DecidedEscalations,
+  items: Pick<InboxTask, "id" | "status" | "escalation_id">[]
+): DecidedEscalations {
+  const next: DecidedEscalations = {};
+  for (const task of items) {
+    const id = String(task.id);
+    if (
+      decided[id] !== undefined &&
+      decidedStatus(task, decided) === RESOLVED_ESCALATION_STATUS
+    ) {
+      next[id] = decided[id];
+    }
+  }
+  return next;
+}
+
 /**
  * Counts per filter, plus the statuses no filter can hold. `decided` is the
  * number of recorded approval decisions; those are not tasks, so `all` leaves

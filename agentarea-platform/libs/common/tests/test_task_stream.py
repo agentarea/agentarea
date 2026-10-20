@@ -1,553 +1,239 @@
-"""Tests for the task-event read side (catch-up + live), ADR-0018."""
+"""A task's feed: the log from a position, then the tasks.events tail and live signals (ADR-0043 §8)."""
 
-from datetime import UTC, datetime, timedelta
+import asyncio
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 import pytest
-from agentarea_common.events.adapters.redis_streams import topic_for
-from agentarea_common.events.contract import ensure_terminal_message
-from agentarea_common.events.ports import IntegrationEvent
+from agentarea_common.broker.interface import BrokerMessage
+from agentarea_common.broker.topics import BUS_RETENTION, TASK_EVENTS
+from agentarea_common.events.adapters.redis_streams import decode, encode
 from agentarea_common.events.task_stream import (
-    TASK_STREAM_MAXLEN,
-    TASK_STREAM_TTL_SECONDS,
     TaskEventEnvelope,
+    TaskEventsHub,
+    broadcast_live,
+    envelope_from_event,
     iter_task_event_feed,
     publish_task_event,
-    task_stream_name,
+    task_event,
 )
 
-_TASK = "task-123"
-_TERMINAL = frozenset({"TaskCompleted"})
+_TASK = "11111111-1111-1111-1111-111111111111"
+_OTHER = "22222222-2222-2222-2222-222222222222"
+_TERMINAL = frozenset({"task.completed"})
 
 
 def _uid(n: int) -> str:
     return f"00000000-0000-0000-0000-{n:012d}"
 
 
-class _FakeStream:
-    """EventStream stub yielding scripted IntegrationEvents then stopping."""
-
-    def __init__(self, events: list[IntegrationEvent]) -> None:
-        self._events = events
-        self.read_args: dict = {}
-
-    async def read(self, *, stream, from_offset="0"):
-        self.read_args = {"stream": stream, "from_offset": from_offset}
-        for e in self._events:
-            yield e
+def _env(seq: int | None, event_type: str = "turn.started", **data) -> TaskEventEnvelope:
+    return TaskEventEnvelope(
+        event_type=event_type, event_id=_uid(seq or 999), timestamp=None, data=data, seq=seq
+    )
 
 
-def _env(n: int, event_type: str = "Step") -> TaskEventEnvelope:
-    return TaskEventEnvelope(event_type=event_type, event_id=_uid(n), timestamp=None, data={})
+class _FakeHub:
+    """A hub whose live queue already holds what the tail will deliver."""
+
+    def __init__(self, live: list[TaskEventEnvelope]) -> None:
+        self.live = live
+        self.subscribed: list[str] = []
+
+    @asynccontextmanager
+    async def subscribe(self, task_id: str):
+        self.subscribed.append(task_id)
+        queue: asyncio.Queue[TaskEventEnvelope] = asyncio.Queue()
+        for env in self.live:
+            queue.put_nowait(env)
+        yield queue
 
 
-def _evt(n: int, event_type: str = "Step") -> IntegrationEvent:
-    return IntegrationEvent(id=_uid(n), type=event_type, source="w", subject=_TASK, data={})
-
-
-async def _collect(agen) -> list[TaskEventEnvelope]:
-    return [e async for e in agen]
-
-
-async def _snapshot_of(*envs):
-    async def _loader():
+def _snapshot(*envs: TaskEventEnvelope):
+    async def loader():
         for env in envs:
             yield env
 
-    return _loader
+    return loader
 
 
-def test_task_stream_name():
-    assert task_stream_name("abc") == "task.abc"
-
-
-@pytest.mark.asyncio
-async def test_feed_replays_snapshot_then_live():
-    snapshot = await _snapshot_of(_env(1), _env(2))
-    stream = _FakeStream([_evt(3), _evt(4, "TaskCompleted")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=_TERMINAL
+async def _feed(hub, snapshot, **kwargs) -> list[TaskEventEnvelope]:
+    kwargs.setdefault("max_wall_time_seconds", 1)
+    return [
+        env
+        async for env in iter_task_event_feed(
+            hub=hub, task_id=_TASK, snapshot=snapshot, terminal_types=_TERMINAL, **kwargs
         )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3), _uid(4)]
-    # Live tail replays the retained stream from the start.
-    assert stream.read_args == {"stream": task_stream_name(_TASK), "from_offset": "0"}
-
-
-@pytest.mark.asyncio
-async def test_feed_dedups_overlap_between_snapshot_and_stream():
-    # Event 2 is in the DB snapshot AND replayed by the stream — emit once.
-    snapshot = await _snapshot_of(_env(1), _env(2))
-    stream = _FakeStream([_evt(2), _evt(3, "TaskCompleted")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=_TERMINAL
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3)]
-
-
-@pytest.mark.asyncio
-async def test_feed_stops_in_snapshot_when_task_already_terminal():
-    # Task already finished: terminal is in the snapshot, never touch the stream.
-    snapshot = await _snapshot_of(_env(1), _env(2, "TaskCompleted"))
-    stream = _FakeStream([_evt(99)])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=_TERMINAL
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2)]
-    assert stream.read_args == {}  # stream never read
-
-
-@pytest.mark.asyncio
-async def test_feed_drops_excluded_types_from_snapshot_and_live():
-    # SSE excludes LLMCallChunk (stream-only, high volume) to preserve behaviour;
-    # terminal detection must still fire.
-    snapshot = await _snapshot_of(_env(1), _env(2, "LLMCallChunk"))
-    stream = _FakeStream([_evt(3, "LLMCallChunk"), _evt(4, "TaskCompleted")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=_TERMINAL,
-            exclude_types=frozenset({"LLMCallChunk"}),
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(4)]
-
-
-@pytest.mark.asyncio
-async def test_feed_includes_chunks_when_not_excluded():
-    # Default (no exclude_types): chunks and finals both yielded, in order.
-    snapshot = await _snapshot_of(_env(1), _env(2, "LLMCallChunk"))
-    stream = _FakeStream([_evt(3, "LLMCallChunk"), _evt(4, "TaskCompleted")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=_TERMINAL
-        )
-    )
-    assert [(e.event_id, e.event_type) for e in out] == [
-        (_uid(1), "Step"),
-        (_uid(2), "LLMCallChunk"),
-        (_uid(3), "LLMCallChunk"),
-        (_uid(4), "TaskCompleted"),
     ]
 
 
-@pytest.mark.asyncio
-async def test_feed_excludes_chunks_still_terminates_with_finals():
-    # With chunks excluded: chunks dropped, finals + terminal still yielded and
-    # the feed terminates on the terminal event.
-    snapshot = await _snapshot_of(_env(1, "LLMCallChunk"), _env(2, "Step"))
-    stream = _FakeStream(
-        [_evt(3, "LLMCallChunk"), _evt(4, "Step"), _evt(5, "TaskCompleted"), _evt(6, "Step")]
-    )
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=_TERMINAL,
-            exclude_types=frozenset({"LLMCallChunk"}),
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(2), _uid(4), _uid(5)]
-    assert [e.event_type for e in out] == ["Step", "Step", "TaskCompleted"]
+async def test_the_log_then_the_tail_dropping_positions_already_sent():
+    hub = _FakeHub([_env(2), _env(3), _env(4, "task.completed")])
+    out = await _feed(hub, _snapshot(_env(1), _env(2)))
+    assert [e.seq for e in out] == [1, 2, 3, 4]
+    assert hub.subscribed == [_TASK]
 
 
-@pytest.mark.asyncio
-async def test_catch_up_replay_equals_live_replay():
-    # The same event set delivered via snapshot-only vs live-only yields the
-    # same normalized (id, type) sequence.
-    events = [(1, "Step"), (2, "LLMCallChunk"), (3, "Step"), (4, "TaskCompleted")]
-
-    snapshot_only = await _snapshot_of(*[_env(n, t) for n, t in events])
-    via_snapshot = await _collect(
-        iter_task_event_feed(
-            stream=_FakeStream([]),
-            task_id=_TASK,
-            snapshot=snapshot_only,
-            terminal_types=_TERMINAL,
-        )
-    )
-
-    empty_snapshot = await _snapshot_of()
-    via_live = await _collect(
-        iter_task_event_feed(
-            stream=_FakeStream([_evt(n, t) for n, t in events]),
-            task_id=_TASK,
-            snapshot=empty_snapshot,
-            terminal_types=_TERMINAL,
-        )
-    )
-
-    normalized = [(e.event_id, e.event_type) for e in via_snapshot]
-    assert normalized == [(e.event_id, e.event_type) for e in via_live]
-    assert normalized == [(_uid(n), t) for n, t in events]
-
-
-@pytest.mark.asyncio
-async def test_publish_task_event_uses_bounded_stream():
-    captured = {}
-
-    class _Broker:
-        async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
-            captured["stream"] = stream
-            captured["maxlen"] = maxlen
-            captured["ttl_seconds"] = ttl_seconds
-            captured["fields"] = fields
-            return "1-0"
-
-    await publish_task_event(
-        _Broker(),
-        task_id=_TASK,
-        event_type="TaskCompleted",
-        data={"result": "ok"},
-        event_id=_uid(1),
-    )
-    assert captured["stream"] == topic_for(task_stream_name(_TASK))
-    assert captured["maxlen"] == TASK_STREAM_MAXLEN
-    # A finished task's stream must not outlive its readers.
-    assert captured["ttl_seconds"] == TASK_STREAM_TTL_SECONDS
-    # Round-trips back through the same codec the reader uses.
-    from agentarea_common.events.adapters.redis_streams import decode
-
-    restored = decode(captured["fields"])
-    assert restored.type == "TaskCompleted"
-    assert restored.subject == _TASK
-    assert restored.data == {"result": "ok"}
-
-
-@pytest.mark.asyncio
-async def test_feed_terminates_on_canonical_terminal_row():
-    # New canonical row: terminal_types are the canonical task.* names; a
-    # persisted "task.completed" row must end the feed.
-    canonical_terminal = frozenset({"task.completed", "task.failed", "task.cancelled"})
-    snapshot = await _snapshot_of(_env(1), _env(2, "task.completed"))
-    stream = _FakeStream([_evt(99)])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=canonical_terminal
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2)]
-    assert stream.read_args == {}
-
-
-@pytest.mark.asyncio
-async def test_feed_terminates_on_canonical_history():
-    # Canonical rows across the snapshot/live boundary; terminal detection fires
-    # on the canonical "task.completed" row.
-    canonical_terminal = frozenset({"task.completed", "task.failed", "task.cancelled"})
-    snapshot = await _snapshot_of(_env(1, "task.started"), _env(2, "tool.result"))
-    stream = _FakeStream([_evt(3, "llm.call.completed"), _evt(4, "task.completed"), _evt(5)])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream, task_id=_TASK, snapshot=snapshot, terminal_types=canonical_terminal
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3), _uid(4)]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(("follow_execution", "expected"), [(False, [1]), (True, [1, 2, 3])])
-async def test_web_feed_follows_execution_while_a2a_ends_at_completed_turn(
-    follow_execution, expected
-):
-    turn = TaskEventEnvelope(
-        event_type="task.completed",
-        event_id=_uid(1),
-        timestamp=None,
-        data={"execution_status": "waiting"},
-    )
-    snapshot = await _snapshot_of(turn)
-    stream = _FakeStream(
-        [
-            _evt(2, "llm.call.started"),
-            _evt(3, "execution.finished"),
-            _evt(4, "unused"),
-        ]
-    )
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=frozenset({"task.completed", "execution.finished"}),
-            follow_execution=follow_execution,
-        )
-    )
-    assert [event.event_id for event in out] == [_uid(n) for n in expected]
-
-
-@pytest.mark.asyncio
-async def test_web_feed_keeps_live_follow_up_wait_open_until_execution_finishes():
-    snapshot = await _snapshot_of(_env(1, "task.started"))
-    stream = _FakeStream(
-        [
-            IntegrationEvent(
-                id=_uid(2),
-                type="task.completed",
-                source="w",
-                subject=_TASK,
-                data={"execution_status": "waiting"},
-            ),
-            _evt(3, "execution.finished"),
-            _evt(4, "unused"),
-        ]
-    )
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=frozenset({"task.completed", "execution.finished"}),
-            follow_execution=True,
-        )
-    )
-    assert [event.event_type for event in out] == [
-        "task.started",
-        "task.completed",
-        "execution.finished",
+async def test_live_only_signals_have_no_position_and_pass():
+    hub = _FakeHub([_env(None, "llm.call.chunk"), _env(3, "task.completed")])
+    out = await _feed(hub, _snapshot(_env(1)))
+    assert [(e.event_type, e.seq) for e in out] == [
+        ("turn.started", 1),
+        ("llm.call.chunk", None),
+        ("task.completed", 3),
     ]
 
 
-@pytest.mark.asyncio
-async def test_feed_excludes_chunks_by_canonical_name():
-    # exclude_types passed as canonical "llm.call.chunk" drops chunk rows.
-    canonical_terminal = frozenset({"task.completed"})
-    snapshot = await _snapshot_of(_env(1, "llm.call.chunk"), _env(2, "llm.call.chunk"))
-    stream = _FakeStream([_evt(3, "llm.call.chunk"), _evt(4, "task.completed")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=canonical_terminal,
-            exclude_types=frozenset({"llm.call.chunk"}),
-        )
+async def test_a_finished_task_ends_after_its_log():
+    hub = _FakeHub([_env(9)])
+    out = await _feed(
+        hub, _snapshot(_env(1), _env(2, "task.completed")), run_open=_returns(False)
     )
-    assert [e.event_id for e in out] == [_uid(4)]
+    assert [e.seq for e in out] == [1, 2]
 
 
-def test_terminal_message_added_for_completed():
-    # A terminal completed event with no message gets a human-readable one.
-    data = ensure_terminal_message("task.completed", {"final_response": "All done."})
-    assert data["message"] == "All done."
+async def test_a_task_with_a_new_run_keeps_tailing_after_its_log():
+    hub = _FakeHub([_env(3), _env(4, "task.completed")])
+    out = await _feed(hub, _snapshot(_env(1), _env(2, "task.completed")), run_open=_returns(True))
+    assert [e.seq for e in out] == [1, 2, 3, 4]
 
 
-def test_terminal_message_added_for_failed_with_reason():
-    data = ensure_terminal_message(
-        "task.failed", {"error": "Provider quota exceeded", "error_type": "QuotaExceeded"}
+async def test_a_later_task_started_reopens_a_closed_history():
+    hub = _FakeHub([_env(4), _env(5, "task.completed")])
+    out = await _feed(
+        hub,
+        _snapshot(_env(1, "task.completed"), _env(2, "task.started"), _env(3)),
+        run_open=_returns(False),
     )
-    assert data["message"]
-    assert data["reason"] == "Provider quota exceeded"
+    assert [e.seq for e in out] == [1, 2, 3, 4, 5]
 
 
-def test_terminal_message_added_for_cancelled():
-    data = ensure_terminal_message("task.cancelled", {})
-    assert data["message"]
-    assert data["reason"]
-
-
-def test_terminal_message_preserved_when_present():
-    # Existing message is never overwritten (additive).
-    data = ensure_terminal_message(
-        "task.completed", {"message": "custom", "final_response": "ignored"}
+async def test_a_conversation_waiting_for_a_follow_up_stays_open():
+    hub = _FakeHub([_env(3, "message.received"), _env(4, "task.completed")])
+    out = await _feed(
+        hub,
+        _snapshot(_env(1), _env(2, "task.completed", execution_status="waiting")),
+        follow_execution=True,
     )
-    assert data["message"] == "custom"
+    assert [e.seq for e in out] == [1, 2, 3, 4]
 
 
-def test_terminal_message_noop_for_non_terminal():
-    # Non-terminal events pass through unchanged.
-    src = {"chunk": "hi"}
-    data = ensure_terminal_message("llm.call.chunk", src)
-    assert data == src
-    assert "message" not in data
+async def test_a_resume_starts_after_the_position_the_client_has():
+    hub = _FakeHub([_env(2), _env(3, "task.completed")])
+    out = await _feed(hub, _snapshot(_env(2)), resume_after=_env(1))
+    assert [e.seq for e in out] == [2, 3]
 
 
-def test_terminal_message_accepts_prefixed_and_canonical():
-    prefixed = ensure_terminal_message("workflow.task.cancelled", {})
-    assert prefixed["message"]
-    canonical = ensure_terminal_message("task.cancelled", {})
-    assert canonical["message"]
+async def test_excluded_types_are_dropped():
+    hub = _FakeHub([_env(None, "llm.call.chunk"), _env(2, "task.completed")])
+    out = await _feed(hub, _snapshot(_env(1)), exclude_types=frozenset({"llm.call.chunk"}))
+    assert [e.event_type for e in out] == ["turn.started", "task.completed"]
 
 
-@pytest.mark.asyncio
-async def test_publish_task_event_raises_broker_errors():
-    class _BadBroker:
-        async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
-            raise RuntimeError("redis down")
+def _returns(value: bool):
+    async def check() -> bool:
+        return value
 
-    # The caller decides: the workflow-event activity retries the whole batch,
-    # the chunk publisher drops a best-effort snapshot.
-    with pytest.raises(RuntimeError, match="redis down"):
-        await publish_task_event(_BadBroker(), task_id=_TASK, event_type="Step", data={})
+    return check
 
 
-_T0 = datetime(2026, 9, 29, 12, 0, tzinfo=UTC)
+class _RecordingBroker:
+    def __init__(self) -> None:
+        self.submitted: list[tuple[str, dict[str, str], object]] = []
+        self.notified: list[tuple[str, dict[str, str]]] = []
+
+    async def submit(self, stream, fields, *, retention):
+        self.submitted.append((stream, dict(fields), retention))
+        return "1-0"
+
+    async def notify(self, channel, fields):
+        self.notified.append((channel, dict(fields)))
 
 
-def _at(n: int, seconds: int, event_type: str = "Step", data: dict | None = None):
-    return TaskEventEnvelope(
+def _event(event_type: str, seq: int | None = 1, task_id: str = _TASK):
+    return task_event(
+        task_id=task_id,
+        workspace_id="ws",
         event_type=event_type,
-        event_id=_uid(n),
-        timestamp=(_T0 + timedelta(seconds=seconds)).isoformat(),
-        data=data or {},
+        event_id=_uid(seq or 7),
+        timestamp=datetime.now(UTC),
+        data={"n": 1},
+        seq=seq,
     )
 
 
-def _live_at(n: int, seconds: int, event_type: str = "Step") -> IntegrationEvent:
-    return IntegrationEvent(
-        id=_uid(n),
-        type=event_type,
-        source="w",
-        subject=_TASK,
-        time=_T0 + timedelta(seconds=seconds),
-        data={},
-    )
+async def test_a_stored_event_goes_to_tasks_events_with_its_position_and_retention():
+    broker = _RecordingBroker()
+    await publish_task_event(broker, _event("tool.result", seq=5))
+    ((stream, fields, retention),) = broker.submitted
+    assert (stream, retention) == (TASK_EVENTS, BUS_RETENTION)
+    decoded = decode(fields)
+    assert decoded.subject == _TASK
+    assert envelope_from_event(decoded).seq == 5
+    assert decoded.extensions["workspace"] == "ws"
 
 
-@pytest.mark.asyncio
-async def test_resumed_feed_skips_retained_stream_entries_the_client_already_saw():
-    # The client saw event 2; the snapshot loader returns only what came after
-    # it, and the retained stream still replays 1 and 2 from offset 0.
-    cursor = _at(2, 2)
-    snapshot = await _snapshot_of(_at(3, 3))
-    stream = _FakeStream([_live_at(1, 1), _live_at(2, 2), _live_at(3, 3), _live_at(4, 4)])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=_TERMINAL,
-            resume_after=cursor,
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(3), _uid(4)]
+async def test_a_live_only_signal_is_broadcast_never_stored():
+    broker = _RecordingBroker()
+    await broadcast_live(broker, _event("llm.call.chunk", seq=None))
+    assert broker.submitted == []
+    assert [channel for channel, _ in broker.notified] == [f"tasks.live.{_TASK}"]
+    with pytest.raises(ValueError, match="live-only"):
+        await publish_task_event(broker, _event("llm.call.chunk", seq=None))
+    with pytest.raises(ValueError, match="stored"):
+        await broadcast_live(broker, _event("tool.result"))
 
 
-@pytest.mark.asyncio
-async def test_resume_after_a_terminal_event_ends_the_feed_without_tailing():
-    cursor = _at(5, 5, "TaskCompleted")
-    snapshot = await _snapshot_of()
-    stream = _FakeStream([_live_at(6, 6)])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=_TERMINAL,
-            resume_after=cursor,
-        )
-    )
-    assert out == []
-    assert stream.read_args == {}
+class _HubBroker:
+    """One scripted tail batch and a live connection that records subscriptions."""
+
+    def __init__(self, messages: list[BrokerMessage]) -> None:
+        self._messages = messages
+        self.channels: list[str] = []
+        self.unsubscribed: list[str] = []
+
+    async def last_id(self, stream):
+        return "5-0"
+
+    async def tail(self, stream, last_id="$", block_ms=5000, count=100):
+        assert last_id == "5-0" or self._messages == []
+        if self._messages:
+            batch, self._messages = self._messages, []
+            return batch[-1].id, batch
+        await asyncio.sleep(0.01)
+        return last_id, []
+
+    async def open_live(self):
+        broker = self
+
+        class _Live:
+            async def subscribe(self, channel):
+                broker.channels.append(channel)
+
+            async def unsubscribe(self, channel):
+                broker.unsubscribed.append(channel)
+
+            async def next_message(self, timeout_seconds):
+                await asyncio.sleep(0.01)
+                return None
+
+            async def aclose(self):
+                pass
+
+        return _Live()
 
 
-@pytest.mark.asyncio
-async def test_resume_after_a_waiting_turn_keeps_following_the_execution():
-    cursor = _at(1, 1, "task.completed", {"execution_status": "waiting"})
-    snapshot = await _snapshot_of()
-    stream = _FakeStream([_live_at(1, 1, "task.completed"), _live_at(2, 2, "execution.finished")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=frozenset({"task.completed", "execution.finished"}),
-            follow_execution=True,
-            resume_after=cursor,
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(2)]
-
-
-@pytest.mark.asyncio
-async def test_history_of_a_continued_conversation_is_replayed_past_the_first_run():
-    # A stopped run, then a follow-up run that is under way.
-    snapshot = await _snapshot_of(
-        _env(1, "task.started"),
-        _env(2, "task.cancelled"),
-        _env(3, "tool.result"),
-        _env(4, "task.started"),
-        _env(5, "llm.call.completed"),
-    )
-    stream = _FakeStream([_evt(6, "task.completed")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=frozenset({"task.cancelled", "task.completed"}),
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(n) for n in range(1, 7)]
-
-
-@pytest.mark.asyncio
-async def test_a_stopped_run_keeps_its_settled_events_and_then_closes():
-    snapshot = await _snapshot_of(
-        _env(1, "task.started"), _env(2, "task.cancelled"), _env(3, "tool.result")
-    )
-    stream = _FakeStream([_evt(99)])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=frozenset({"task.cancelled"}),
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3)]
-    assert stream.read_args == {}
-
-
-@pytest.mark.asyncio
-async def test_resume_after_a_terminal_event_tails_a_run_started_since():
-    async def run_open() -> bool:
-        return True
-
-    cursor = _at(5, 5, "task.failed")
-    snapshot = await _snapshot_of()
-    stream = _FakeStream([_live_at(6, 6, "task.started"), _live_at(7, 7, "task.completed")])
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=snapshot,
-            terminal_types=frozenset({"task.failed", "task.completed"}),
-            resume_after=cursor,
-            run_open=run_open,
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(6), _uid(7)]
-
-
-@pytest.mark.asyncio
-async def test_web_feed_stays_open_while_a_stopped_run_records_what_it_interrupted():
-    stream = _FakeStream(
-        [
-            _evt_with(1, "task.cancelled", {"execution_status": "settling"}),
-            _evt_with(2, "tool.result", {"cancelled": True}),
-            _evt_with(3, "execution.finished", {"execution_status": "cancelled"}),
-            _evt(4),
-        ]
-    )
-    out = await _collect(
-        iter_task_event_feed(
-            stream=stream,
-            task_id=_TASK,
-            snapshot=await _snapshot_of(),
-            terminal_types=frozenset({"task.cancelled", "execution.finished"}),
-            follow_execution=True,
-        )
-    )
-    assert [e.event_id for e in out] == [_uid(1), _uid(2), _uid(3)]
-
-
-def _evt_with(n: int, event_type: str, data: dict) -> IntegrationEvent:
-    return IntegrationEvent(id=_uid(n), type=event_type, source="w", subject=_TASK, data=data)
+async def test_the_hub_hands_each_feed_only_its_task_events_from_the_newest_entry_on():
+    mine = BrokerMessage(id="6-0", fields=encode(_event("tool.result", seq=3)))
+    other = BrokerMessage(id="7-0", fields=encode(_event("tool.result", seq=1, task_id=_OTHER)))
+    broker = _HubBroker([other, mine])
+    hub = TaskEventsHub(broker, block_ms=10)
+    try:
+        async with hub.subscribe(_TASK) as queue:
+            got = await asyncio.wait_for(queue.get(), timeout=2)
+            assert (got.seq, got.event_type) == (3, "tool.result")
+            assert queue.empty()
+        assert broker.channels == [f"tasks.live.{_TASK}"]
+        assert broker.unsubscribed == [f"tasks.live.{_TASK}"]
+    finally:
+        await hub.aclose()

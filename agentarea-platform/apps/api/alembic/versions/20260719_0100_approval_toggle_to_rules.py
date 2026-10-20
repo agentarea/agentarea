@@ -94,7 +94,7 @@ def upgrade() -> None:
         if isinstance(tools, str):
             try:
                 tools = json.loads(tools)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
         targets, stripped, changed = _targets_and_stripped(tools)
         for target in targets:

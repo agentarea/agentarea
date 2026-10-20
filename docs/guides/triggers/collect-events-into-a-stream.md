@@ -1,7 +1,7 @@
 ---
 title: Collect events into a stream
 type: guide
-description: "Point Sentry, GitHub or YooKassa at a stream with no trigger, then have a weekly agent read what arrived with read_stream."
+description: "Point Sentry or GitHub at a stream with no trigger, then have a weekly agent read what arrived with read_stream."
 prerequisites:
   - /concepts/integration/event-streams
 related:
@@ -98,26 +98,6 @@ arrives. When each event should start a run, create a
         named `<X-GitHub-Event>.<action>`, such as `pull_request.opened`, and a
         redelivery is recognized by `X-GitHub-Delivery`.
       </Tab>
-      <Tab title="YooKassa">
-        ```bash
-        curl -X POST "$AGENTAREA_URL/v1/workspaces/$WORKSPACE/streams/$STREAM_ID/sources" \
-          -H "Authorization: Bearer $AGENTAREA_TOKEN" \
-          -H "Content-Type: application/json" \
-          -d '{"webhook_type": "yookassa",
-               "credentials": {"secret_key": {"secret_id": "<secret-id>"}},
-               "config": {"shop_id": "<shop id>"}}'
-        ```
-
-        The stored secret is the shop's API secret key (`live_…` or
-        `test_…`). In the YooKassa merchant profile, open **Integration →
-        HTTP notifications**, paste the `webhook_url`, and pick the events.
-        YooKassa does not sign notifications, so each one is checked against
-        its API instead: AgentArea reads the notified object back with your
-        shop id and key and records the event only when YooKassa answers that
-        object in the notified state. The event is named by the body's
-        `event` (`payment.succeeded`), and a repeat of the same object reaching
-        the same state is recorded once.
-      </Tab>
     </Tabs>
 
     The response carries `webhook_url`. A source creation that lacks a
@@ -164,7 +144,7 @@ arrives. When each event should start a run, create a
         "agent_id": "<agent-id>",
         "trigger_type": "cron",
         "cron_expression": "0 9 * * 1",
-        "timezone": "Europe/Moscow",
+        "timezone": "Europe/Berlin",
         "task_parameters": {
           "text": "Call read_stream on sentry-errors from after_sequence 0, then again with next_after while has_more is true. Summarise the new and resolved issues of the past week."
         }
@@ -176,8 +156,7 @@ arrives. When each event should start a run, create a
 ## Verify
 
 Send a test delivery from the provider (GitHub: **Recent Deliveries →
-Redeliver**; Sentry: the integration's test button; YooKassa: a test payment in
-a `test_` shop). The provider sees `202` with `{"status": "accepted",
+Redeliver**; Sentry: the integration's test button). The provider sees `202` with `{"status": "accepted",
 "sequence": n}`, and the event appears on the stream's page under **Events**.
 List the sources to see what feeds the stream:
 
@@ -193,9 +172,10 @@ No credential is ever returned here; a source added directly has
 
 - **`400 Signature verification failed`.** The secret stored is not the one
   the provider signs with — for Sentry it must be the integration's Client
-  Secret, for GitHub the webhook's Secret. For YooKassa it means the API did
-  not confirm the object: a wrong shop id or key, a `test_` key against a live
-  shop, or the object already moved on to another status.
+  Secret, for GitHub the webhook's Secret. For a provider that does not sign
+  its notifications and is checked against its own API, it means the API did
+  not confirm the object: wrong credentials, a test key against a live
+  account, or the object already moved on to another status.
 - **`400 Webhook … not found`.** The source was deleted; its URL stops
   answering. Add a new source and give the sender the new URL.
 - **`409` when deleting a source or the stream.** A webhook trigger owns that

@@ -380,19 +380,11 @@ class TestWorkspaceErrorHandling:
             await repository.create(name="test")
 
     async def test_repository_invalid_field_filters(self, repository, mock_session):
-        """Test error handling with invalid field filters."""
-        # Arrange
-        mock_result = MagicMock()
-        mock_scalars = MagicMock()
-        mock_scalars.all.return_value = []
-        mock_result.scalars.return_value = mock_scalars
-        mock_session.execute.return_value = mock_result
+        """A filter naming no column raises instead of returning the unfiltered workspace."""
+        with pytest.raises(TypeError, match="nonexistent_field"):
+            await repository.list_all(nonexistent_field="value")
 
-        # Act - Using non-existent field should not crash
-        result = await repository.list_all(nonexistent_field="value")
-
-        # Assert - Should return empty list, not crash
-        assert result == []
+        mock_session.execute.assert_not_called()
 
     async def test_repository_invalid_uuid_format(self, repository, mock_session):
         """Test error handling with invalid UUID format."""

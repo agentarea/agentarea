@@ -1,23 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createTriggerAction,
-  listTriggerCatalogAction,
-  updateTriggerAction,
-} from "./actions";
+import { createTriggerAction, updateTriggerAction } from "./actions";
 
-const { createTrigger, updateTrigger, listTriggerCatalog, revalidatePath } =
-  vi.hoisted(() => ({
-    createTrigger: vi.fn(),
-    updateTrigger: vi.fn(),
-    listTriggerCatalog: vi.fn(),
-    revalidatePath: vi.fn(),
-  }));
-
-vi.mock("@/lib/api", () => ({
-  createTrigger,
-  updateTrigger,
-  listTriggerCatalog,
+const { createTrigger, updateTrigger, revalidatePath } = vi.hoisted(() => ({
+  createTrigger: vi.fn(),
+  updateTrigger: vi.fn(),
+  revalidatePath: vi.fn(),
 }));
+
+vi.mock("@/lib/api", () => ({ createTrigger, updateTrigger }));
 vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/workspace-request", () => ({
   requestWorkspacePath: async (path: string) => `/w/acme${path}`,
@@ -85,46 +75,21 @@ describe("trigger form actions", () => {
     );
   });
 
-  it("saves webhook methods, event filters and replacement credentials", async () => {
+  it("saves a stream trigger's session setting", async () => {
     await updateTriggerAction(
       { message: "" },
       form({
-        trigger_type: "webhook",
-        method_POST: "on",
-        method_PATCH: "on",
-        method_HEAD: "on",
-        method_OPTIONS: "on",
-        event_types: '["push"]',
-        credential_signing_secret: "replacement",
-        credential_unused: "",
+        trigger_type: "stream",
+        session_continue: "false",
+        session_idle_timeout: "1h",
       })
     );
-    expect(updateTrigger).toHaveBeenCalledWith(
-      triggerId,
-      expect.objectContaining({
-        allowed_methods: ["POST", "PATCH", "HEAD", "OPTIONS"],
-        event_types: ["push"],
-        channel_credentials: { signing_secret: "replacement" },
-      })
-    );
+    expect(updateTrigger.mock.calls[0][1]).toHaveProperty("session", {
+      continue: false,
+      idle_timeout: "1h",
+    });
     expect(updateTrigger.mock.calls[0][1]).not.toHaveProperty(
       "cron_expression"
-    );
-  });
-
-  it("clears event filters and preserves stored credentials when inputs are blank", async () => {
-    await updateTriggerAction(
-      { message: "" },
-      form({
-        trigger_type: "webhook",
-        event_types: "[]",
-        credential_bot_token: "",
-        method_POST: "on",
-      })
-    );
-    expect(updateTrigger.mock.calls[0][1]).toHaveProperty("event_types", []);
-    expect(updateTrigger.mock.calls[0][1]).not.toHaveProperty(
-      "channel_credentials"
     );
   });
 
@@ -155,33 +120,24 @@ describe("trigger form actions", () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("shows an unavailable secret error returned on create", async () => {
-    createTrigger.mockResolvedValue({
-      error: {
-        detail:
-          "Selected channel credential secret is not available in this workspace.",
-      },
-    });
-    const result = await createTriggerAction(
-      { message: "" },
-      form({
-        credential_secret_bot_token: "33333333-3333-4333-8333-333333333333",
-      })
-    );
-    expect(result.errors?._form).toEqual([
-      "API error: Selected channel credential secret is not available in this workspace.",
-    ]);
-  });
-
   it("creates a stream trigger bound to the chosen stream", async () => {
     const streamId = "44444444-4444-4444-8444-444444444444";
     const result = await createTriggerAction(
       { message: "" },
-      form({ trigger_type: "stream", stream_id: streamId })
+      form({
+        trigger_type: "stream",
+        stream_id: streamId,
+        session_continue: "true",
+        session_idle_timeout: "30m",
+      })
     );
     expect(result.success).toBe(true);
     expect(createTrigger).toHaveBeenCalledWith(
-      expect.objectContaining({ trigger_type: "stream", stream_id: streamId })
+      expect.objectContaining({
+        trigger_type: "stream",
+        stream_id: streamId,
+        session: { continue: true, idle_timeout: "30m" },
+      })
     );
   });
 
@@ -192,107 +148,6 @@ describe("trigger form actions", () => {
       expect.objectContaining({
         description: "Send the report to the team",
       })
-    );
-  });
-
-  it.each(["create", "update"])(
-    "sends secret references on %s without reading values",
-    async (mode) => {
-      const action =
-        mode === "create" ? createTriggerAction : updateTriggerAction;
-      const secretId = "33333333-3333-4333-8333-333333333333";
-      const result = await action(
-        { message: "" },
-        form({
-          trigger_type: "webhook",
-          webhook_type: "telegram",
-          credential_secret_bot_token: secretId,
-        })
-      );
-      expect(result.success).toBe(true);
-      const payload =
-        mode === "create"
-          ? createTrigger.mock.calls[0][0]
-          : updateTrigger.mock.calls[0][1];
-      expect(payload.channel_credentials).toEqual({
-        bot_token: { secret_id: secretId },
-      });
-    }
-  );
-
-  it.each(["create", "update"])(
-    "rejects invalid secret selections before %s",
-    async (mode) => {
-      const action =
-        mode === "create" ? createTriggerAction : updateTriggerAction;
-      const result = await action(
-        { message: "" },
-        form({ credential_secret_bot_token: "not-a-secret-id" })
-      );
-      expect(result.errors?.credential_secret_bot_token).toBeDefined();
-      expect(createTrigger).not.toHaveBeenCalled();
-      expect(updateTrigger).not.toHaveBeenCalled();
-    }
-  );
-
-  it("keeps the catalog usable when one entry is of a kind this build cannot render", async () => {
-    listTriggerCatalog.mockResolvedValue({
-      data: [
-        {
-          id: "cron",
-          name: "Cron",
-          icon: "cron",
-          description: "Run on a schedule",
-          kind: "schedule",
-          backend_type: "cron",
-        },
-        {
-          id: "mailbox",
-          name: "Mailbox (IMAP)",
-          icon: "gmail",
-          description: "Poll a mailbox",
-          kind: "messaging",
-          backend_type: "polling",
-        },
-        {
-          id: "quantum",
-          name: "Quantum",
-          icon: "q",
-          description: "From a newer server",
-          kind: "telepathy",
-          backend_type: "telepathy",
-        },
-      ],
-    });
-
-    const catalog = await listTriggerCatalogAction();
-
-    expect(catalog.map((entry) => entry.id)).toEqual(["cron", "mailbox"]);
-  });
-
-  it("refuses to create an extracting channel with no secret picked", async () => {
-    const result = await createTriggerAction(
-      { message: "" },
-      form({
-        trigger_type: "webhook",
-        webhook_type: "telegram",
-        data_extractor: "telegram",
-        credential_secret_bot_token: "",
-      })
-    );
-    expect(result.errors?.credential_secret_bot_token).toEqual([
-      "Select a workspace secret",
-    ]);
-    expect(createTrigger).not.toHaveBeenCalled();
-  });
-
-  it("leaves existing credentials untouched when no replacement secret is selected", async () => {
-    await updateTriggerAction(
-      { message: "" },
-      form({ credential_secret_bot_token: "" })
-    );
-    expect(updateTrigger.mock.calls[0][1]).not.toHaveProperty(
-      "channel_credentials"
     );
   });
 });

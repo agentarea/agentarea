@@ -23,6 +23,7 @@ import type {
   ListPolicyRulesV1PoliciesGetData,
   ListRelationshipsV1AccessControlRelationshipsGetData,
   ListToolCallApprovalsV1ToolCallApprovalsGetData,
+  ListWorkspaceEventsV1StreamsEventsGetData,
   McpInstanceConsumer,
   McpServerCreate,
   McpServerInstanceCreate,
@@ -53,19 +54,23 @@ import type {
   ProviderSpecWithModelsResponse,
   RelationshipWriteRequest,
   ResolveRequest,
+  ScheduleTaskCreate,
   SkillContentResponse,
   SkillCreateRequest,
   SkillFileResponse,
   SkillResponse,
   SkillUpdateRequest,
+  SourceCreate,
   TaskCreate,
   ToolCallApprovalDecision,
   TriggerCreate,
+  TriggerType,
   TriggerUpdate,
   UpdateWalletRequest,
   UploadPlanRequest,
   ValidateRequest,
-  WebhookSourceCreate,
+  WorkspaceRegistryCreate,
+  WorkspaceRegistryUpdate,
 } from "@/api/client/types.gen";
 import { apiErrorMessage } from "@/lib/api-errors";
 import { SPEC_IDS_PER_REQUEST, specIdBatches } from "@/lib/mcp/specIds";
@@ -148,6 +153,66 @@ export const listRegistries = async (params?: {
   return { data, error };
 };
 
+// The platform's active registries, which every workspace sees and only the
+// operator changes.
+export const listPlatformRegistries = async () => {
+  const result = await sdk.listRegistriesV1RegistriesGet({
+    client: serverClient,
+    query: { scope: "platform", active_only: true },
+  });
+  return withStatus(result);
+};
+
+// The workspace's own registries (ADR-0044); the platform's are listed by
+// listRegistries above.
+export const listWorkspaceRegistries = async () => {
+  const result = await sdk.listWorkspaceRegistriesV1WorkspaceRegistriesGet({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
+export const createWorkspaceRegistry = async (
+  body: WorkspaceRegistryCreate
+) => {
+  const result = await sdk.createWorkspaceRegistryV1WorkspaceRegistriesPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const updateWorkspaceRegistry = async (
+  registryId: string,
+  body: WorkspaceRegistryUpdate
+) => {
+  const result =
+    await sdk.updateWorkspaceRegistryV1WorkspaceRegistriesRegistryIdPatch({
+      client: serverClient,
+      path: { registry_id: registryId },
+      body,
+    });
+  return withStatus(result);
+};
+
+export const deleteWorkspaceRegistry = async (registryId: string) => {
+  const result =
+    await sdk.deleteWorkspaceRegistryV1WorkspaceRegistriesRegistryIdDelete({
+      client: serverClient,
+      path: { registry_id: registryId },
+    });
+  return withStatus(result);
+};
+
+export const syncWorkspaceRegistry = async (registryId: string) => {
+  const result =
+    await sdk.syncWorkspaceRegistryV1WorkspaceRegistriesRegistryIdSyncPost({
+      client: serverClient,
+      path: { registry_id: registryId },
+    });
+  return withStatus(result);
+};
+
 export const listRegistryItems = async (
   registryId: string,
   params?: { limit?: number; offset?: number }
@@ -206,6 +271,20 @@ export const createAgentTask = async (agentId: string, task: TaskCreate) => {
       body: task,
     });
   return { data, error };
+};
+
+export const scheduleAgentTask = async (
+  agentId: string,
+  task: ScheduleTaskCreate
+) => {
+  const result = await sdk.scheduleTaskForAgentV1AgentsAgentIdTasksSchedulePost(
+    {
+      client: serverClient,
+      path: { agent_id: agentId },
+      body: task,
+    }
+  );
+  return withStatus(result);
 };
 
 export const getAgentTask = async (agentId: string, taskId: string) => {
@@ -372,11 +451,10 @@ export const resolveEscalation = async (
 };
 
 export const getToolCallApproval = async (approvalId: string) => {
-  const result =
-    await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
-      client: serverClient,
-      path: { approval_id: approvalId },
-    });
+  const result = await sdk.getToolCallApprovalV1ToolCallApprovalsApprovalIdGet({
+    client: serverClient,
+    path: { approval_id: approvalId },
+  });
   return withStatus(result);
 };
 
@@ -1071,6 +1149,27 @@ export const installSkill = async (skillId: string) => {
   return withStatus(result);
 };
 
+// Move an installed catalog skill to the catalog's current version. A skill
+// edited here answers 409 unless the edit is to be discarded.
+export const updateInstalledSkill = async (
+  skillId: string,
+  options: { discardChanges?: boolean } = {}
+) => {
+  const result = await sdk.updateInstalledSkillV1SkillsSkillIdUpdatePost({
+    client: serverClient,
+    path: { skill_id: skillId },
+    query: options.discardChanges ? { discard_changes: true } : undefined,
+  });
+  return withStatus(result);
+};
+
+export const updateAllSkills = async () => {
+  const result = await sdk.updateAllSkillsV1SkillsUpdateAllPost({
+    client: serverClient,
+  });
+  return withStatus(result);
+};
+
 export const deleteSkill = async (skillId: string) => {
   const result = await sdk.deleteSkillV1SkillsSkillIdDelete({
     client: serverClient,
@@ -1163,16 +1262,9 @@ export const resolvePrincipals = async (ids: string[]) => {
   return { data, error };
 };
 
-export const listTriggerCatalog = async () => {
-  const { data, error } = await sdk.getCatalogV1TriggersCatalogGet({
-    client: serverClient,
-  });
-  return { data, error };
-};
-
 export const listTriggers = async (params?: {
   agent_id?: string;
-  trigger_type?: string;
+  trigger_type?: TriggerType;
   active_only?: boolean;
 }) => {
   const { data, error } = await sdk.listTriggersV1TriggersGet({
@@ -1236,15 +1328,6 @@ export const runTriggerNow = async (triggerId: string) => {
     client: serverClient,
     path: { trigger_id: triggerId },
   });
-  return withStatus(result);
-};
-
-export const rotateTriggerSigningSecret = async (triggerId: string) => {
-  const result =
-    await sdk.rotateSigningSecretV1TriggersTriggerIdSigningSecretPost({
-      client: serverClient,
-      path: { trigger_id: triggerId },
-    });
   return withStatus(result);
 };
 
@@ -1334,10 +1417,28 @@ export const listStreamEvents = async (
   return { data, error };
 };
 
+export const listWorkspaceEvents = async (
+  query: NonNullable<ListWorkspaceEventsV1StreamsEventsGetData["query"]>
+) => {
+  const result = await sdk.listWorkspaceEventsV1StreamsEventsGet({
+    client: serverClient,
+    query,
+  });
+  return withStatus(result);
+};
+
 export const getStreamEvent = async (streamId: string, sequence: number) => {
   const result = await sdk.getEventV1StreamsStreamIdEventsSequenceGet({
     client: serverClient,
     path: { stream_id: streamId, sequence },
+  });
+  return withStatus(result);
+};
+
+export const getStreamEventById = async (eventId: string) => {
+  const result = await sdk.getEventByIdV1StreamsEventsEventIdGet({
+    client: serverClient,
+    path: { event_id: eventId },
   });
   return withStatus(result);
 };
@@ -1368,9 +1469,9 @@ export const listStreamSourceTypes = async () => {
 
 export const createStreamSource = async (
   streamId: string,
-  body: WebhookSourceCreate
+  body: SourceCreate
 ) => {
-  const { data, error } = await sdk.createSourceV1StreamsStreamIdSourcesPost({
+  const { data, error } = await sdk.addSourceV1StreamsStreamIdSourcesPost({
     client: serverClient,
     path: { stream_id: streamId },
     body,

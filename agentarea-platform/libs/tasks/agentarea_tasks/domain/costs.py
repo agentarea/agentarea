@@ -68,7 +68,8 @@ class CostEntry:
 
     ``currency`` is the ISO 4217 code ``amount`` is in. ``supersedes_id`` names
     an earlier line this one replaces, so an estimate settled later keeps both
-    numbers and only the newest counts towards a sum. For a tool line,
+    numbers and only the newest counts towards a sum. ``estimate`` says the amount is
+    not final; ``evidence["settle"]`` names what still finalises it. For a tool line,
     ``subject_id`` is the connection and ``subject_name`` the tool.
     """
 
@@ -95,6 +96,10 @@ class CostEntry:
     evidence: dict[str, Any] = field(default_factory=dict)
     supersedes_id: UUID | None = None
     client_id: UUID | None = None
+    estimate: bool = False
+    # The chain the spend belongs to (ADR-0043 §10); a task's line takes its task's.
+    correlation_id: str | None = None
+    causation_id: str | None = None
 
 
 def tool_call_event_id(line_key: str) -> UUID:
@@ -102,7 +107,7 @@ def tool_call_event_id(line_key: str) -> UUID:
     return uuid5(_TOOL_CALL_EVENTS, line_key)
 
 
-def tool_call_entry(usage: "ToolUsage") -> CostEntry:
+def tool_call_entry(usage: ToolUsage) -> CostEntry:
     """The line a metered tool call is, from a run or from /mcp."""
     return CostEntry(
         workspace_id=usage.workspace_id,
@@ -134,4 +139,5 @@ def tool_call_entry(usage: "ToolUsage") -> CostEntry:
             if value is not None
         },
         client_id=UUID(usage.client_id) if usage.client_id else None,
+        estimate=usage.estimate,
     )

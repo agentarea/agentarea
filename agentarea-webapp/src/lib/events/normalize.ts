@@ -45,6 +45,7 @@ export function normalizeSSEEvent(type: string, raw: unknown): EventInput | null
  */
 export function normalizeHistory(event: {
   id?: string;
+  seq?: number | null;
   event_type: string;
   timestamp: string;
   metadata?: Record<string, unknown> | null;
@@ -55,6 +56,8 @@ export function normalizeHistory(event: {
   delete data.original_data;
   data.timestamp = event.timestamp;
   if (event.id && data.event_id === undefined) data.event_id = event.id;
+  // The row's position in the task log: where a reopened stream resumes.
+  if (typeof event.seq === "number") data.seq = event.seq;
   return { eventType: event.event_type, data };
 }
 

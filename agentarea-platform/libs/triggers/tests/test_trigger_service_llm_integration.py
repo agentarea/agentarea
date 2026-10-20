@@ -1,17 +1,18 @@
 """Integration tests for trigger service with LLM condition evaluation."""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import (
     ConditionVerdict,
     CronTrigger,
+    StreamTrigger,
     TriggerCreate,
-    WebhookTrigger,
 )
 from agentarea_triggers.trigger_service import TriggerService
 
@@ -103,8 +104,8 @@ class TestTriggerServiceLLMIntegration:
             name="File Upload Trigger",
             description="Trigger when user uploads a file",
             agent_id=agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="webhook_123",
+            trigger_type=TriggerType.STREAM,
+            stream_id=uuid4(),
             conditions={
                 "type": "llm",
                 "description": "when user sends a file attachment or document",
@@ -120,14 +121,14 @@ class TestTriggerServiceLLMIntegration:
             model_spec=SimpleNamespace(kind="chat")
         )
 
+        trigger_service.stream_service = AsyncMock()
+
         # Mock repository response
-        created_trigger = WebhookTrigger(
+        created_trigger = StreamTrigger(
             id=uuid4(),
             name=trigger_data.name,
             description=trigger_data.description,
             agent_id=agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="webhook_123",
             conditions=trigger_data.conditions,
             task_parameters=trigger_data.task_parameters,
             created_by="test_user",
@@ -148,11 +149,10 @@ class TestTriggerServiceLLMIntegration:
         self, trigger_service, mock_llm_condition_evaluator
     ):
         """Test trigger condition evaluation using LLM."""
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             conditions={
                 "type": "llm",
                 "description": "when user sends a file attachment",
@@ -188,11 +188,10 @@ class TestTriggerServiceLLMIntegration:
         self, trigger_service, mock_llm_condition_evaluator
     ):
         """Test fallback to simple evaluation when LLM fails."""
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             conditions={"field_matches": {"request.method": "POST"}},
             created_by="test_user",
         )
@@ -239,11 +238,10 @@ class TestTriggerServiceLLMIntegration:
         from agentarea_triggers.domain.enums import ExecutionStatus
         from agentarea_triggers.llm_condition_evaluator import LLMConditionEvaluationError
 
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=uuid4(),
             name="Urgent tickets",
             agent_id=uuid4(),
-            webhook_id="webhook_urgent",
             conditions=conditions,
             task_parameters={"text": "Triage the ticket"},
             created_by="test_user",
@@ -272,11 +270,10 @@ class TestTriggerServiceLLMIntegration:
         self, trigger_service, mock_llm_condition_evaluator
     ):
         """Test task parameter building with LLM extraction."""
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             task_parameters={
                 "base_param": "base_value",
                 "llm_parameter_extraction": "extract user information and file details",
@@ -306,7 +303,7 @@ class TestTriggerServiceLLMIntegration:
         # Should include base parameters, trigger metadata, and LLM-extracted parameters
         assert result["base_param"] == "base_value"
         assert result["trigger_id"] == str(trigger.id)
-        assert result["trigger_type"] == "webhook"
+        assert result["trigger_type"] == "stream"
         assert result["user_id"] == "123"
         assert result["user_name"] == "John"
         assert result["file_name"] == "report.pdf"
@@ -321,11 +318,10 @@ class TestTriggerServiceLLMIntegration:
     ):
         """Test trigger execution with LLM condition evaluation."""
         trigger_id = uuid4()
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=trigger_id,
             name="File Processing Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             conditions={"type": "llm", "description": "when user uploads a document for analysis"},
             task_parameters={
                 "llm_parameter_extraction": "extract file details and user intent",
@@ -386,11 +382,10 @@ class TestTriggerServiceLLMIntegration:
     ):
         """Test trigger execution when conditions are not met."""
         trigger_id = uuid4()
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=trigger_id,
             name="Test Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             conditions={"type": "llm", "description": "when user sends a file attachment"},
             created_by="test_user",
         )
@@ -432,6 +427,9 @@ class TestTriggerServiceLLMIntegration:
             model_instance_service=AsyncMock(),
             secret_manager=MagicMock(),
             model_service=AsyncMock(),
+            user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
+            record_costs=AsyncMock(),
+            refuse_at_spend_cap=AsyncMock(),
         )
 
         conditions = {
@@ -458,6 +456,9 @@ class TestTriggerServiceLLMIntegration:
             model_instance_service=AsyncMock(),
             secret_manager=MagicMock(),
             model_service=AsyncMock(),
+            user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
+            record_costs=AsyncMock(),
+            refuse_at_spend_cap=AsyncMock(),
         )
 
         conditions = {
@@ -516,11 +517,10 @@ class TestTriggerServiceLLMIntegration:
         self, trigger_service, mock_llm_condition_evaluator
     ):
         """Test task parameter extraction with LLM failure."""
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             task_parameters={"llm_parameter_extraction": "extract parameters"},
             created_by="test_user",
         )
@@ -554,11 +554,10 @@ class TestTriggerServiceLLMIntegration:
             llm_condition_evaluator=None,  # No LLM evaluator
         )
 
-        trigger = WebhookTrigger(
+        trigger = StreamTrigger(
             id=uuid4(),
             name="Test Trigger",
             agent_id=uuid4(),
-            webhook_id="webhook_123",
             conditions={"field_matches": {"request.method": "POST"}},
             created_by="test_user",
         )

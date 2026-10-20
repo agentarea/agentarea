@@ -10,11 +10,14 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_api.api.deps.services import get_read_agent_service, get_read_task_service
+from agentarea_api.api.deps.services import (
+    get_read_agent_service,
+    get_read_task_service,
+    get_temporal_workflow_service,
+)
 from agentarea_api.api.v1.inbox import INBOX_STATUSES
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
-from agentarea_common.base import get_read_repository_factory
 from httpx import ASGITransport, AsyncClient
 
 
@@ -38,11 +41,7 @@ def task_repository():
     app.dependency_overrides[get_read_task_service] = lambda: task_service
     app.dependency_overrides[get_read_agent_service] = lambda: agent_service
     app.dependency_overrides[get_user_context] = lambda: MagicMock()
-    events = MagicMock()
-    events.unanswered_approval_requests = AsyncMock(return_value={})
-    app.dependency_overrides[get_read_repository_factory] = lambda: MagicMock(
-        create_repository=MagicMock(return_value=events)
-    )
+    app.dependency_overrides[get_temporal_workflow_service] = lambda: MagicMock()
     try:
         yield repository
     finally:
@@ -50,7 +49,7 @@ def task_repository():
             get_read_task_service,
             get_read_agent_service,
             get_user_context,
-            get_read_repository_factory,
+            get_temporal_workflow_service,
         ):
             app.dependency_overrides.pop(dep, None)
 

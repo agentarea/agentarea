@@ -2,6 +2,7 @@
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import MANAGED_BY_PLATFORM
+from agentarea_common.model_charges import ModelFunding, require_funding
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 
 
@@ -9,6 +10,7 @@ async def resolve_provider_api_key(
     *,
     reference: str | None,
     managed_by: str | None,
+    funding: ModelFunding | None,
     user_context: UserContext,
     secret_manager_factory: SecretManagerFactory,
 ) -> str | None:
@@ -26,7 +28,11 @@ async def resolve_provider_api_key(
     Getting this branch wrong in either direction is silent: the name resolves to
     None in the wrong workspace and the provider answers 401, which reads as "the
     user's key is broken" — the one thing neither case is.
+
+    The platform's credential is read only with the ``funding`` ``hold_model_call``
+    made for the call, so no surface can spend on it without billing holding the call.
     """
+    require_funding(funding, managed_by)
     if not reference:
         return None
 

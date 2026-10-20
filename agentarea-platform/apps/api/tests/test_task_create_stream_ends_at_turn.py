@@ -9,6 +9,7 @@ import pytest
 from agentarea_api.api.v1 import agents_tasks
 from agentarea_api.api.v1.agents_tasks import TaskCreate, create_task_for_agent_with_stream
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.credential import Credential
 
 
 async def _stream(monkeypatch, *, follow: bool) -> dict:
@@ -36,7 +37,9 @@ async def _stream(monkeypatch, *, follow: bool) -> dict:
     response = await create_task_for_agent_with_stream(
         agent_id=agent_id,
         data=TaskCreate(description="d"),
-        user_context=UserContext(user_id="u", workspace_id="w", api_key_id="k"),
+        user_context=UserContext(
+            user_id="u", workspace_id="w", credential=Credential(kind="api_key", key_id="k")
+        ),
         secret_manager=SimpleNamespace(),
         follow=follow,
         task_service=task_service,  # type: ignore[arg-type]

@@ -1,9 +1,9 @@
 """What started a trigger's run, told to the agent the same way for every source.
 
 One block, rendered from the event alone: which trigger, which stream, the
-event's kind, key, time and sequence, then its data. Nothing here knows a
-provider; the data is the scrubbed payload -- what the journal recorded, or
-the events a channel or poller carried, under the journal's rule -- quoted as
+event's kind, key and time, then its data. Nothing here knows a provider; the
+data is the scrubbed payload -- what the stream carried, or the events a
+channel or poller carried, under the same scrubbing rule -- quoted as
 JSON when small and handed over as a task input file when not. It is never
 cut. The sender is outside, so the block says the data is not instructions and
 no field the sender wrote can step out of its line.
@@ -20,7 +20,7 @@ from agentarea_common.trigger_event_file import (
     trigger_event_file_name,
     trigger_event_file_path,
 )
-from agentarea_streams.domain import JournaledEvent
+from agentarea_streams.domain import StreamEvent
 from pydantic import BaseModel
 
 from .event_scrub import scrub_carried_event
@@ -38,22 +38,23 @@ class TriggerEvent(BaseModel):
     # When the platform received it; None when the source does not say.
     received_at: datetime | None = None
     stream_name: str | None = None
-    sequence: int | None = None
     data: dict[str, Any]
 
     @classmethod
-    def from_journaled(cls, event: JournaledEvent, *, stream_name: str) -> "TriggerEvent":
+    def from_stream_event(
+        cls, event: StreamEvent, *, stream_name: str, body: Any = None
+    ) -> TriggerEvent:
+        """``body``: a body the event carries by reference only, read back so the run gets it."""
         return cls(
             kind=event.type,
             key=event.event_key,
             received_at=event.received_at,
             stream_name=stream_name,
-            sequence=event.sequence,
-            data=event.data,
+            data=event.data if body is None else {**event.data, "body": body},
         )
 
     @classmethod
-    def from_trigger_data(cls, trigger_data: dict[str, Any]) -> "TriggerEvent | None":
+    def from_trigger_data(cls, trigger_data: dict[str, Any]) -> TriggerEvent | None:
         """The events a channel, a poller or a replay handed over; None when there are none.
 
         Only the events, scrubbed: the routing metadata beside them is not the event.
@@ -121,8 +122,6 @@ def render_event_block(
         lines.append(f"- Event key: {_sender_value(event.key)}")
     if event.received_at is not None:
         lines.append(f"- Received: {_utc_iso(event.received_at)}")
-    if event.sequence is not None:
-        lines.append(f"- Stream sequence: {event.sequence}")
 
     data = event_data_json(event.data)
     size = len(data.encode())
@@ -130,7 +129,7 @@ def render_event_block(
         lines += ["", UNTRUSTED_DATA_NOTICE, "", "Event data:", "```json", data, "```"]
         return EventBlock(text="\n".join(lines))
 
-    file_name = trigger_event_file_name(event.sequence)
+    file_name = trigger_event_file_name(None)
     lines += [
         "",
         UNTRUSTED_FILE_NOTICE,

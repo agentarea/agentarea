@@ -1,0 +1,46 @@
+{{- if .Values.platformNetworkPolicy.enabled }}
+# Restricts egress of the backend, worker and event-service. They send requests
+# to addresses workspace members set -- LLM provider endpoints, URL MCP servers,
+# OpenAPI connections, A2A delegates -- so a member who points one at an
+# internal address would have the platform call it. The code checks those
+# addresses; this policy is the network-level backstop that holds even where a
+# module forgets to.
+#
+# Pods anywhere in the cluster stay reachable: that is where Postgres, Valkey,
+# Temporal, Kratos, OpenFGA, the MCP manager and DNS run when they run
+# in-cluster. Every other destination is allowed except blockedEgressCIDRs.
+#
+# Requires a CNI that enforces NetworkPolicy; a no-op on clusters without it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "agentarea.fullname" . }}-platform-egress
+  labels:
+    {{- include "agentarea.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "agentarea.selectorLabels" . | nindent 6 }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - backend
+          - worker
+          - event-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- range .Values.platformNetworkPolicy.blockedEgressCIDRs }}
+              - {{ . | quote }}
+              {{- end }}
+    {{- with .Values.platformNetworkPolicy.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

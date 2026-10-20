@@ -27,7 +27,13 @@ from .agent.commands import CommandsMixin
 from .agent.finalization import FinalizationMixin
 from .agent.initialization import InitializationMixin
 from .agent.lifecycle import LifecycleMixin
-from .agent.patches import APPROVAL_RESPONSE_ONCE_PATCH, RESUME_AFTER_STOP_OR_FAILURE_PATCH
+from .agent.patches import (
+    APPROVAL_RESPONSE_ONCE_PATCH,
+    RESUME_AFTER_STOP_OR_FAILURE_PATCH,
+    RESUME_ONLY_WHEN_PAUSED_PATCH,
+    SERIAL_CONTINUATION_GRANTS_PATCH,
+    STOP_RESOLVES_ESCALATIONS_PATCH,
+)
 from .constants import (
     ACTIVITY_TIMEOUT,
     Activities,
@@ -51,7 +57,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
         # Add event for pause
         if self.event_manager:
             self.event_manager.add_event(
-                "execution_paused",
+                EventTypes.EXECUTION_PAUSED,
                 {
                     "reason": reason,
                     "iteration": self.state.current_iteration,
@@ -64,7 +70,15 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
 
     @workflow.signal
     async def resume_execution(self, reason: str = "Resumed by user") -> None:
-        """Signal to resume execution."""
+        """Signal to resume execution; a run waiting out an outage also retries at once."""
+        if self._waiting_for_outage:
+            self._retry_outage_now = True
+            workflow.logger.info(f"Retrying the unreachable service now: {reason}")
+            if not self._paused:
+                return
+        if not self._paused and workflow.patched(RESUME_ONLY_WHEN_PAUSED_PATCH):
+            workflow.logger.info("Resume ignored: the run is not paused")
+            return
         self._paused = False
         self._pause_reason = ""
         workflow.logger.info(f"Workflow resumed: {reason}")
@@ -72,7 +86,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
         # Add event for resume
         if self.event_manager:
             self.event_manager.add_event(
-                "execution_resumed",
+                EventTypes.EXECUTION_RESUMED,
                 {
                     "reason": reason,
                     "iteration": self.state.current_iteration,
@@ -162,7 +176,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
             esc.comment = comment or None
             esc.deny_comment = comment if not approved else None
 
-            # The waiting approval flow emits the one approval.response.
+            # The waiting approval flow emits the one approval.decided.
             if not workflow.patched(APPROVAL_RESPONSE_ONCE_PATCH):
                 event_type = (
                     EventTypes.HUMAN_APPROVAL_RECEIVED
@@ -217,7 +231,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
                 )
                 if self.event_manager:
                     self.event_manager.add_event(
-                        EventTypes.WORKFLOW_COMMAND_REJECTED,
+                        EventTypes.COMMAND_REJECTED,
                         {
                             "command": command,
                             "reason": reason,
@@ -227,7 +241,7 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
                 return
             if self.event_manager:
                 self.event_manager.add_event(
-                    EventTypes.WORKFLOW_COMMAND_RECEIVED,
+                    EventTypes.COMMAND_RECEIVED,
                     {
                         "command": command,
                         "iteration": self.state.current_iteration,
@@ -239,26 +253,33 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
     @workflow.update
     async def continue_execution(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Persist and atomically apply a re-resolved policy revision."""
+        serial = workflow.patched(SERIAL_CONTINUATION_GRANTS_PATCH)
+        if serial and self._continuation_in_flight:
+            return {"accepted": False, "reason": "not_waiting_for_continuation"}
         info, rejection = self._prepare_continuation(payload)
         if rejection is not None:
             return rejection
         if info is None or info.governance_snapshot is None:
             raise RuntimeError("continuation validation returned no result")
 
-        result: UpdateTaskGovernanceSnapshotResult = await workflow.execute_activity(
-            Activities.UPDATE_TASK_GOVERNANCE_SNAPSHOT,
-            args=[
-                UpdateTaskGovernanceSnapshotRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    workspace_id=self.state.workspace_id,
-                    governance_snapshot=info.governance_snapshot,
-                )
-            ],
-            result_type=UpdateTaskGovernanceSnapshotResult,
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
-        )
+        self._continuation_in_flight = serial
+        try:
+            result: UpdateTaskGovernanceSnapshotResult = await workflow.execute_activity(
+                Activities.UPDATE_TASK_GOVERNANCE_SNAPSHOT,
+                args=[
+                    UpdateTaskGovernanceSnapshotRequest(
+                        user_context_data=self.state.user_context_data,
+                        task_id=self.state.task_id,
+                        workspace_id=self.state.workspace_id,
+                        governance_snapshot=info.governance_snapshot,
+                    )
+                ],
+                result_type=UpdateTaskGovernanceSnapshotResult,
+                start_to_close_timeout=ACTIVITY_TIMEOUT,
+                retry_policy=bookkeeping_retry_policy(),
+            )
+        finally:
+            self._continuation_in_flight = False
         if not result.success:
             raise ApplicationError(
                 result.error or "Failed to persist governance snapshot",
@@ -270,6 +291,10 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
     @workflow.run
     async def run(self, request: AgentExecutionRequest) -> AgentExecutionResult:
         """Main workflow execution method."""
+        # Whether the run writes its task log through the record activity is
+        # decided here, once, for the whole run.
+        self._task_log_on()
+        self._conversation_seeded = request.resume is not None
         try:
             # Initialize workflow
             await self._initialize_workflow(request)
@@ -298,6 +323,12 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
         if not self._interaction_contract_enabled:
             return
         self._pending_input_requests.clear()
+        if workflow.patched(STOP_RESOLVES_ESCALATIONS_PATCH):
+            for escalation in self._pending_escalations.values():
+                if not escalation.resolved:
+                    escalation.resolved = True
+                    escalation.approved = False
+                    escalation.deny_comment = "The run was stopped before a decision."
         self._awaiting_input = False
         self.state.status = ExecutionStatus.CANCELLED
         if not self.state.success:
@@ -361,6 +392,8 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
             "continuation_failure_reason": self._continuation_failure_reason,
             "continuation_message": self._continuation_message,
             "continuation_count": self._continuation_count,
+            "waiting_for_infrastructure": self._waiting_for_outage,
+            "infrastructure_reason": self._outage_reason,
             "pending_escalations": {
                 eid: {
                     "tool_name": e.tool_name,

@@ -393,7 +393,7 @@ func (p *E2BProvider) uploadFile(ctx context.Context, session *Session, remotePa
 	resp, err := p.envdClient.Do(req)
 	if err != nil {
 		_ = pipeReader.CloseWithError(err)
-		<-writeDone
+		<-writeDone //nolint:errcheck // draining to unblock the goroutine; Do()'s err above is what we return
 		return fmt.Errorf("%s file upload: %w", p.Name(), err)
 	}
 	defer resp.Body.Close()

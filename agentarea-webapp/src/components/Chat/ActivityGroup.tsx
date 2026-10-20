@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ChevronRight } from "lucide-react";
 import type {
   A2UIActionHandler,
@@ -28,6 +29,8 @@ interface ActivityGroupProps {
   ) => void;
   onA2UIAction?: A2UIActionHandler;
   isInteractionClosed?: (part: Part) => boolean;
+  /** The task is paused: an open run is held, not working. */
+  paused?: boolean;
 }
 
 export function ActivityGroup({
@@ -35,7 +38,9 @@ export function ActivityGroup({
   onFormSubmit,
   onA2UIAction,
   isInteractionClosed,
+  paused = false,
 }: ActivityGroupProps) {
+  const t = useTranslations("Chat.ActivityGroup");
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? !run.completed;
   const hasUnavailableDetails = run.parts.some(
@@ -51,14 +56,18 @@ export function ActivityGroup({
       ].some(containsUnavailableToolValue)
   );
   const summary = !run.completed
-    ? "Working"
+    ? paused
+      ? t("paused")
+      : t("working")
     : run.terminalType === "task.failed"
-      ? "Work failed"
+      ? t("workFailed")
       : run.terminalType === "task.cancelled"
-        ? "Work stopped"
-        : "Work completed";
+        ? t("workStopped")
+        : t("workCompleted");
   const runKind: StatusKind = !run.completed
-    ? "running"
+    ? paused
+      ? "paused"
+      : "running"
     : run.terminalType === "task.failed"
       ? "failed"
       : run.terminalType === "task.cancelled"
@@ -73,7 +82,9 @@ export function ActivityGroup({
           ? part.data.name
           : "tool"
     )
-  );
+  )
+    .map(({ category, count }) => t(`toolGroup.${category}`, { count }))
+    .join(", ");
   const representative = toolParts[0];
   const representativeName = representative
     ? typeof representative.data.tool_name === "string"
@@ -111,7 +122,9 @@ export function ActivityGroup({
             className="h-4 w-4 shrink-0 text-muted-foreground"
           />
         ) : null}
-        <span className="text-foreground/80">{actionSummary || summary}</span>
+        <span className="text-foreground/80 first-letter:uppercase">
+          {actionSummary || summary}
+        </span>
         <span className="text-muted-foreground/60" aria-hidden>
           ·
         </span>
@@ -121,16 +134,14 @@ export function ActivityGroup({
         <span className="text-muted-foreground/60" aria-hidden>
           ·
         </span>
-        <span>
-          {run.actionCount} {run.actionCount === 1 ? "action" : "actions"}
-        </span>
+        <span>{t("actions", { count: run.actionCount })}</span>
         {run.errorCount > 0 && (
           <>
             <span className="text-muted-foreground/60" aria-hidden>
               ·
             </span>
             <StatusIndicator kind="failed" size="sm">
-              {run.errorCount} failed
+              {t("failed", { count: run.errorCount })}
             </StatusIndicator>
           </>
         )}

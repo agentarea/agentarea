@@ -437,7 +437,7 @@ async def stream_project_file(
     full_path = _project_path(project_id, file_path)
     try:
         data, content_type = await svc.get(user_context.workspace_id, full_path)
-    except (FileNotFoundError, InvalidArtifactPathError):
+    except FileNotFoundError, InvalidArtifactPathError:
         raise HTTPException(status_code=404, detail="File not found") from None
 
     filename = PurePosixPath(file_path).name or "file.bin"

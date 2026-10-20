@@ -7,12 +7,12 @@ from agentarea_common.tool_cost import CostSourceKind, Payer
 from agentarea_openapi.application.metering import openapi_tool_connection
 from agentarea_openapi.application.spec_parser import parse_openapi_operations
 
-RATE = {"source": "rate", "rate": {"amount": "0.488", "currency": "RUB"}}
+RATE = {"source": "rate", "rate": {"amount": "0.488", "currency": "EUR"}}
 SPEC = {
     "openapi": "3.0.0",
     "info": {"title": "Search", "version": "1"},
     "x-agentarea-payers": ["workspace", "platform"],
-    "x-agentarea-cost": {"source": "rate", "rate": {"amount": "0.02", "currency": "RUB"}},
+    "x-agentarea-cost": {"source": "rate", "rate": {"amount": "0.02", "currency": "EUR"}},
     "paths": {
         "/v2/web/search": {
             "post": {
@@ -33,19 +33,25 @@ def _connection(managed_by=None, spec=SPEC):
 
 
 def test_an_operation_declaration_wins_and_the_rest_take_the_default():
-    search = openapi_tool_connection(_connection(), "ru.yandex/search-api/openapi", "web_search")
-    top = openapi_tool_connection(_connection(), "ru.yandex/search-api/openapi", "wordstat_top")
+    search = openapi_tool_connection(
+        _connection(), "example.com/search-api/openapi", "web_search", catalog_spec=None
+    )
+    top = openapi_tool_connection(
+        _connection(), "example.com/search-api/openapi", "wordstat_top", catalog_spec=None
+    )
 
     assert (search.cost_model.source, str(search.cost_model.rate_amount)) == (
         CostSourceKind.RATE,
         "0.488",
     )
     assert str(top.cost_model.rate_amount) == "0.02"
-    assert search.resource_ref == "ru.yandex/search-api/openapi#web_search"
+    assert search.resource_ref == "example.com/search-api/openapi#web_search"
 
 
 def test_a_platform_managed_connection_is_paid_by_the_platform():
-    connection = openapi_tool_connection(_connection("platform"), "c", "web_search")
+    connection = openapi_tool_connection(
+        _connection("platform"), "c", "web_search", catalog_spec=SPEC
+    )
 
     assert connection.payer is Payer.PLATFORM
 

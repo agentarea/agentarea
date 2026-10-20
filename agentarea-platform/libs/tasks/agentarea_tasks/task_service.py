@@ -14,11 +14,14 @@ from uuid import UUID, uuid4
 
 from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
-from agentarea_common.channel_origin import FOLLOW_UP_MESSAGE_PARAMETER
 from agentarea_common.events.broker import EventBroker
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import Money, serialize_money, to_money
 from agentarea_common.ports.policy_resolver import PolicyResolverPort
+from agentarea_common.reserved_task_parameters import (
+    FOLLOW_UP_MESSAGE_PARAMETER,
+    SESSION_PARAMETER,
+)
 from agentarea_common.trigger_event_file import TRIGGER_EVENT_FILE_PARAMETER
 from agentarea_execution.models import AgentExecutionResume, ConversationResumeSnapshot
 from agentarea_governance.domain.policies import (
@@ -41,6 +44,7 @@ from .domain.exceptions import (
 )
 from .domain.interfaces import BaseTaskManager, FollowUpClaim
 from .domain.models import AgentTask, TaskProvenance
+from .domain.statuses import ENDED_TASK_STATUSES
 from .infrastructure.repository import TaskConversationRepository, TaskRepository
 from .schemas.dto import RunCreate
 
@@ -86,7 +90,7 @@ def _task_resource_selection_key(parameters: dict[str, Any] | None) -> tuple | N
                     if not isinstance(ref, str):
                         return None
                     identities.add(str(UUID(ref)))
-            except (ValueError, TypeError, WorkspaceValidationError):
+            except ValueError, TypeError, WorkspaceValidationError:
                 return None
         groups.append(frozenset(identities))
     return tuple(groups)
@@ -104,12 +108,52 @@ def _with_stored_usage(result: Any, stored: Any) -> Any:
     return {**result, **kept}
 
 
+# The grant each continuation reason needs, as the workflow checks it.
+_CONTINUATION_GRANT_REQUIRED = {
+    "iteration_limit": "additional_iterations_required",
+    "budget_exceeded": "additional_budget_required",
+    "token_limit": "additional_tokens_required",
+    "tool_call_limit": "additional_tool_calls_required",
+}
+
+
+def _limit_ceilings(policy: EffectivePolicy) -> dict[str, str]:
+    """What the workspace, agent and user policies allow for each limit a grant raises.
+
+    Keyed by the failure reason that stops a run at that limit; a limit no policy
+    bounds is left out.
+    """
+    execution, tokens, budget = policy.execution, policy.tokens, policy.budget
+    ceilings: dict[str, Any] = {
+        "iteration_limit": execution.max_model_turns if execution else None,
+        "tool_call_limit": execution.max_tool_calls_total if execution else None,
+        "token_limit": tokens.max_tokens if tokens else None,
+        "budget_exceeded": serialize_money(budget.run_budget_usd)
+        if budget and budget.run_budget_usd is not None
+        else None,
+    }
+    return {reason: str(value) for reason, value in ceilings.items() if value is not None}
+
+
+def continued_session(parameters: dict[str, Any] | None) -> tuple[str | None, str | None]:
+    """The (session key, trigger id) a follow-up joins, or Nones when it starts its own task."""
+    parameters = parameters or {}
+    session = parameters.get(SESSION_PARAMETER)
+    if not isinstance(session, dict) or session.get("continue") is not True:
+        return None, None
+    key = session.get("key")
+    trigger_id = parameters.get("trigger_id")
+    if not isinstance(key, str) or not key or not trigger_id:
+        return None, None
+    return key, str(trigger_id)
+
+
 class TaskService(BaseTaskService):
     """High-level service for task management that orchestrates persistence and execution."""
 
     def __init__(
         self,
-        repository_factory: "RepositoryFactory",
+        repository_factory: RepositoryFactory,
         event_broker: EventBroker,
         task_manager: BaseTaskManager,
         policy_resolver: PolicyResolverPort | None = None,
@@ -176,6 +220,14 @@ class TaskService(BaseTaskService):
             task_id=task_id,
             task_policy=task_policy,
             user_id=self.repository_factory.user_context.user_id,
+        )
+
+    async def _resolve_limit_ceilings(
+        self, workspace_id: str, agent_id: UUID | None
+    ) -> dict[str, str]:
+        """The limit ceilings the task's own policy layer may not raise past."""
+        return _limit_ceilings(
+            await self._resolve_effective_policy(workspace_id=workspace_id, agent_id=agent_id)
         )
 
     @staticmethod
@@ -345,6 +397,7 @@ class TaskService(BaseTaskService):
         require_model: bool = False,
         scheduled_at: datetime | None = None,
         provenance: TaskProvenance | None = None,
+        execution_id: str | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
 
@@ -432,6 +485,7 @@ class TaskService(BaseTaskService):
             if effective_policy.execution is not None
             else {},
             "effective_policy": effective_policy.to_json_dict(),
+            "limit_ceilings": await self._resolve_limit_ceilings(workspace_id, agent_id),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": 1,
         }
@@ -449,6 +503,7 @@ class TaskService(BaseTaskService):
             metadata=metadata,
             scheduled_at=scheduled_at,
             provenance=provenance or TaskProvenance(),
+            execution_id=execution_id,
         )
         stored_task = await self.create_task(task)
         # Hand the exact DB-persisted snapshot to Temporal. Policy changes after
@@ -607,11 +662,13 @@ class TaskService(BaseTaskService):
         """Start a stored task whose workflow never started, under the policy stored with it.
 
         A submission that fails after the row is written leaves the task
-        ``failed`` with no execution. A caller that still holds the work -- a
-        retried stream event -- starts that task instead of creating another.
-        Raises whatever the engine raises when it cannot start it this time either.
+        ``failed`` with no execution; a process that dies between writing the row
+        and starting the workflow leaves it ``pending``. A caller that still holds
+        the work -- a redelivered event, the reconciler -- starts that task
+        instead of creating another. Raises whatever the engine raises when it
+        cannot start it this time either.
         """
-        if task.status != "failed" or task.execution_id:
+        if task.status not in ("pending", "failed") or task.execution_id:
             raise ValueError(f"Task {task.id} has started before; refusing to start it again")
         snapshot = (task.metadata or {}).get(_GOVERNANCE_SNAPSHOT_METADATA_KEY)
         if not isinstance(snapshot, dict) or snapshot.get("effective_policy") is None:
@@ -626,7 +683,7 @@ class TaskService(BaseTaskService):
         """Submit a channel-originated task, routing follow-ups to an active workflow.
 
         Named entry point for trigger/channel callers. The routing itself — if a
-        running workflow already exists for the same agent + chat_id, deliver the
+        task of the same trigger waits in the event's session, deliver the
         message to it as a follow-up signal instead of creating a new task — lives
         canonically in ``create_and_execute_task_with_workflow`` (reached via
         ``submit_task``). This delegates straight there so routing happens exactly
@@ -638,9 +695,13 @@ class TaskService(BaseTaskService):
         return await self.submit_task(task, follow_up_claim=follow_up_claim)
 
     async def _try_route_to_active_workflow(
-        self, task: AgentTask, chat_id: str, follow_up_claim: FollowUpClaim | None = None
+        self,
+        task: AgentTask,
+        trigger_id: str,
+        session_key: str,
+        follow_up_claim: FollowUpClaim | None = None,
     ) -> AgentTask | None:
-        """Try to route a message to an existing active workflow for this channel.
+        """Try to route a message to the task of this trigger waiting in this session.
 
         Returns the existing task (with status="routed") if successful, None otherwise.
         ``follow_up_claim`` is consulted right before the signal; see FollowUpClaim.
@@ -650,7 +711,9 @@ class TaskService(BaseTaskService):
             return None
 
         task_repository = self.repository_factory.create_repository(TaskRepository)
-        candidates = await task_repository.find_active_by_agent_and_chat(task.agent_id, chat_id)
+        candidates = await task_repository.find_active_in_session(
+            task.agent_id, trigger_id, session_key
+        )
 
         parameters = task.task_parameters or {}
         follow_up = parameters.get(FOLLOW_UP_MESSAGE_PARAMETER)
@@ -715,10 +778,10 @@ class TaskService(BaseTaskService):
                     await follow_up_claim.release()
                 continue
             logger.info(
-                "Routed follow-up to workflow %s (agent=%s, chat_id=%s)",
+                "Routed follow-up to workflow %s (agent=%s, session=%s)",
                 candidate.execution_id,
                 task.agent_id,
-                chat_id,
+                session_key,
             )
             return routed
 
@@ -728,36 +791,20 @@ class TaskService(BaseTaskService):
         """Cancel a task."""
         return await self.task_manager.cancel_task(task_id)
 
-    async def get_user_tasks(
-        self, user_id: str, limit: int = 100, offset: int = 0
-    ) -> list[AgentTask]:
-        """Get tasks for a specific user."""
-        return await self.list_tasks(user_id=user_id, limit=limit, offset=offset)
-
     async def get_agent_tasks(
         self,
         agent_id: UUID,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         status: str | None = None,
     ) -> list[AgentTask]:
         """Get tasks for a specific agent, newest first, optionally of one status."""
-        # Get Task domain models from repository and convert to AgentTask
-        if hasattr(self.task_repository, "list_all"):
-            filters: dict[str, Any] = {"agent_id": agent_id}
-            if status is not None:
-                filters["status"] = status
-            # Get raw TaskORM objects from workspace repository
-            task_orms = await self.task_repository.list_all(
-                creator_scoped=creator_scoped, limit=limit, offset=offset, **filters
-            )
-            # Convert TaskORM -> Task -> AgentTask
-            tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
-            return [self._task_to_agent_task(task) for task in tasks]
-        else:
-            # Fallback for repositories that don't support workspace scoping
-            return await self.list_tasks(agent_id=agent_id, limit=limit, offset=offset)
+        filters: dict[str, Any] = {"agent_id": agent_id}
+        if status is not None:
+            filters["status"] = status
+        task_orms = await self.task_repository.list_all(limit=limit, offset=offset, **filters)
+        tasks = [self.task_repository._orm_to_domain(task_orm) for task_orm in task_orms]
+        return [self._task_to_agent_task(task) for task in tasks]
 
     async def count_agent_tasks(self, agent_id: UUID) -> int:
         """Count the workspace's tasks for an agent, matching ``get_agent_tasks``."""
@@ -795,56 +842,30 @@ class TaskService(BaseTaskService):
         cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
         try:
-            if hasattr(self.task_repository, "list_all"):
-                # Use workspace-aware repository method
-                # Note: The base repository doesn't support created_after filtering yet,
-                # so we'll get all recent tasks and filter in memory for now
-                task_orms = await self.task_repository.list_all(
-                    limit=limit * 2,  # Get more to account for time filtering
-                    offset=0,
-                )
-                # Convert TaskORM -> Task -> AgentTask and filter by time
-                tasks = []
-                for task_orm in task_orms:
-                    task = self.task_repository._orm_to_domain(task_orm)
-                    agent_task = self._task_to_agent_task(task)
-
-                    # Filter by time and workspace
-                    if agent_task.created_at and agent_task.created_at >= cutoff_time:
-                        if workspace_id is None or agent_task.workspace_id == workspace_id:
-                            tasks.append(agent_task)
-
-                    if len(tasks) >= limit:
-                        break
-
-                # Sort by creation time (newest first)
-                tasks.sort(
-                    key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True
-                )
-                return tasks[:limit]
-            else:
-                # Fallback for repositories without workspace scoping
-                # Get all tasks and filter in memory (not ideal for production)
-                all_tasks = await self.list_tasks(
-                    limit=limit * 2
-                )  # Get more to account for filtering
+            # Use workspace-aware repository method
+            # Note: The base repository doesn't support created_after filtering yet,
+            # so we'll get all recent tasks and filter in memory for now
+            task_orms = await self.task_repository.list_all(
+                limit=limit * 2,  # Get more to account for time filtering
+                offset=0,
+            )
+            # Convert TaskORM -> Task -> AgentTask and filter by time
+            tasks = []
+            for task_orm in task_orms:
+                task = self.task_repository._orm_to_domain(task_orm)
+                agent_task = self._task_to_agent_task(task)
 
                 # Filter by time and workspace
-                filtered_tasks = []
-                for task in all_tasks:
-                    if task.created_at and task.created_at >= cutoff_time:
-                        if workspace_id is None or task.workspace_id == workspace_id:
-                            filtered_tasks.append(task)
+                if agent_task.created_at and agent_task.created_at >= cutoff_time:
+                    if workspace_id is None or agent_task.workspace_id == workspace_id:
+                        tasks.append(agent_task)
 
-                    if len(filtered_tasks) >= limit:
-                        break
+                if len(tasks) >= limit:
+                    break
 
-                # Sort by creation time (newest first)
-                filtered_tasks.sort(
-                    key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True
-                )
-                return filtered_tasks[:limit]
-
+            # Sort by creation time (newest first)
+            tasks.sort(key=lambda t: t.created_at or datetime.min.replace(tzinfo=UTC), reverse=True)
+            return tasks[:limit]
         except Exception as e:
             logger.exception(f"Failed to get recent tasks: {e}")
             # Return empty list on error to not break monitoring
@@ -884,7 +905,6 @@ class TaskService(BaseTaskService):
         self,
         agent_id: UUID,
         limit: int = 100,
-        creator_scoped: bool = False,
         offset: int = 0,
         status: str | None = None,
     ) -> list[AgentTask]:
@@ -893,45 +913,13 @@ class TaskService(BaseTaskService):
         Args:
             agent_id: The agent ID to get tasks for
             limit: Maximum number of tasks to return
-            creator_scoped: If True, only return tasks created by current user
             offset: Number of tasks to skip, newest first
             status: Only tasks in this status
 
         Returns:
             List of tasks for the agent
         """
-        return await self.get_agent_tasks(
-            agent_id, limit=limit, offset=offset, creator_scoped=creator_scoped, status=status
-        )
-
-    async def list_agent_tasks_with_workflow_status(
-        self, agent_id: UUID, limit: int = 100, creator_scoped: bool = False
-    ) -> list[AgentTask]:
-        """List tasks for an agent enriched with workflow status.
-
-        Args:
-            agent_id: The agent ID to get tasks for
-            limit: Maximum number of tasks to return
-            creator_scoped: If True, only return tasks created by current user
-
-        Returns:
-            List of tasks for the agent with current workflow status
-        """
-        tasks = await self.list_agent_tasks(agent_id, limit, creator_scoped=creator_scoped)
-
-        if not self.workflow_service:
-            logger.warning(
-                "Workflow service not available - returning tasks without workflow enrichment"
-            )
-            return tasks
-
-        # Enrich each task with workflow status
-        enriched_tasks = []
-        for task in tasks:
-            enriched_task = await self._enrich_task_with_workflow_status(task)
-            enriched_tasks.append(enriched_task)
-
-        return enriched_tasks
+        return await self.get_agent_tasks(agent_id, limit=limit, offset=offset, status=status)
 
     async def get_task_with_workflow_status(self, task_id: UUID) -> AgentTask | None:
         """Get a task enriched with workflow status.
@@ -981,6 +969,15 @@ class TaskService(BaseTaskService):
             return {"accepted": False, "reason": "governance_snapshot_missing"}
         current_policy = effective_policy_from_json(current_policy_data)
         current_runtime = current_policy.runtime_contract()
+        granted = {
+            "iteration_limit": additional_iterations > 0,
+            "budget_exceeded": additional_budget_usd is not None,
+            "token_limit": additional_tokens > 0,
+            "tool_call_limit": additional_tool_calls > 0,
+        }
+        stopped_at = metadata.get("failure_reason")
+        if stopped_at in _CONTINUATION_GRANT_REQUIRED and not granted[stopped_at]:
+            return {"accepted": False, "reason": _CONTINUATION_GRANT_REQUIRED[stopped_at]}
 
         requested_policy = PolicyDocument.model_validate(
             current_snapshot.get("requested_policy") or {}
@@ -1031,6 +1028,7 @@ class TaskService(BaseTaskService):
             else {},
             "resolved_execution": resolved_execution.model_dump(exclude_none=True),
             "effective_policy": next_policy.to_json_dict(),
+            "limit_ceilings": await self._resolve_limit_ceilings(task.workspace_id, task.agent_id),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": int(current_snapshot.get("revision") or 1) + 1,
         }
@@ -1115,11 +1113,16 @@ class TaskService(BaseTaskService):
         stored = (task.metadata or {}).get(_CONVERSATION_RESUME_METADATA_KEY)
         if stored is not None:
             snapshot = ConversationResumeSnapshot.model_validate(stored)
-            # A later run that left no snapshot of its own moved the log on from
-            # this one; continuing from it would write over that run's entries.
-            if snapshot.next_seq == await conversation.next_seq(task.id):
+            # The run's closing events are rows after its snapshot and change no
+            # conversation; messages there are a later run's that left no snapshot
+            # of its own, and continuing from this one would answer without them.
+            log_end = await conversation.next_seq(task.id)
+            if snapshot.next_seq == log_end or (
+                snapshot.next_seq < log_end
+                and not await conversation.has_messages_from(task.id, snapshot.next_seq)
+            ):
                 return AgentExecutionResume(
-                    snapshot=snapshot,
+                    snapshot=snapshot.model_copy(update={"next_seq": log_end}),
                     total_cost=total_cost,
                     own_cost=own_cost,
                     llm_cost=llm_cost,
@@ -1173,6 +1176,7 @@ class TaskService(BaseTaskService):
             if resolved_execution is not None
             else {},
             "effective_policy": policy.to_json_dict(),
+            "limit_ceilings": await self._resolve_limit_ceilings(task.workspace_id, task.agent_id),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": int(current.get("revision") or 1) + 1,
         }
@@ -1190,6 +1194,10 @@ class TaskService(BaseTaskService):
         completing a turn. A closed execution is reconciled using its business
         outcome, never by treating Temporal completion as task success.
 
+        A status the run itself stored as ended (completed, failed, cancelled,
+        blocked) is kept with its error: it carries the run's own reason, which
+        the engine's view of a closed execution does not.
+
         Args:
             task: The task to enrich
 
@@ -1205,6 +1213,8 @@ class TaskService(BaseTaskService):
                 "execution_status", workflow_status.get("status")
             )
             if execution_status in _CLOSED_EXECUTION_STATUSES:
+                if task.status in ENDED_TASK_STATUSES:
+                    return task
                 result = workflow_status.get("result")
                 result_status = result.get("status") if isinstance(result, dict) else None
                 outcome = result_status or workflow_status.get("status")
@@ -1261,7 +1271,7 @@ class TaskService(BaseTaskService):
             agent_id: The agent to execute the task
             description: Task description (used as default for title/query)
             workspace_id: Workspace ID (required for multi-tenancy isolation)
-            parameters: Task parameters (channel_origin.chat_id triggers routing)
+            parameters: Task parameters (a continued ``session`` triggers routing)
             user_id: Task owner; required, the run carries this principal
             requires_human_approval: Whether to gate the task on human approval
             task_id: Pre-assign the task id (A2A echoes it back in JSON-RPC reply)
@@ -1277,7 +1287,7 @@ class TaskService(BaseTaskService):
 
         Returns:
             Created task with workflow execution info, or the routed-into existing
-            task when ``channel_origin.chat_id`` matches an active workflow.
+            task when a task of the same trigger waits in the parameters' session.
 
         Raises:
             ValueError: If no owner is supplied. The workflow executes with this
@@ -1292,14 +1302,13 @@ class TaskService(BaseTaskService):
 
         new_task_id = task_id or uuid4()
 
-        # Try routing to an active workflow first — if a follow-up matches an
-        # existing channel session, we never persist a new task or resolve a
-        # new effective policy. Routing only needs identity/message fields.
-        channel_origin = (parameters or {}).get("channel_origin", {})
-        chat_id = channel_origin.get("chat_id") if channel_origin else None
+        # Try routing to an active workflow first — if the event continues a
+        # session a task of the same trigger is waiting in, we never persist a
+        # new task or resolve a new effective policy.
+        session_key, trigger_id = continued_session(parameters)
         # A deferred run is a new run, never a follow-up delivered into whatever
-        # workflow happens to be live for this chat right now.
-        if chat_id and scheduled_at is None:
+        # workflow happens to be live for this session right now.
+        if session_key and trigger_id and scheduled_at is None:
             draft = AgentTask(
                 id=new_task_id,
                 title=title or description,
@@ -1312,7 +1321,9 @@ class TaskService(BaseTaskService):
                 task_parameters=parameters or {},
                 provenance=provenance or TaskProvenance(),
             )
-            routed = await self._try_route_to_active_workflow(draft, str(chat_id), follow_up_claim)
+            routed = await self._try_route_to_active_workflow(
+                draft, trigger_id, session_key, follow_up_claim
+            )
             if routed:
                 return routed
 

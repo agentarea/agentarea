@@ -39,6 +39,7 @@ def _app_for(
                 id=task_id,
                 agent_id=getattr(agent, "id", None),
                 user_id=context.user_id,
+                execution_id=None,
             )
 
         task_service.get_task.side_effect = _get_task

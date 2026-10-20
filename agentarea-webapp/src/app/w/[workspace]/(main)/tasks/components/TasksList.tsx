@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import type { SourceType } from "@/lib/sourceTypes";
 import GridAndTableViews from "@/components/GridAndTableViews/GridAndTableViews";
 import { AgentLink } from "@/components/AgentIdentity";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
@@ -16,7 +16,7 @@ interface TasksListProps {
   initialTasks: TaskWithAgent[];
   viewMode?: string;
   /** Names and draws the channel each task came from. */
-  catalog?: TriggerCatalogEntry[];
+  sourceTypes?: SourceType[];
   /**
    * Principal id -> display name, resolved by the caller via GET /v1/principals:
    * each task's creator, plus any principal its source names. An id missing from
@@ -34,7 +34,7 @@ interface TasksListProps {
 export default function TasksList({
   initialTasks,
   viewMode = "table",
-  catalog = [],
+  sourceTypes = [],
   principalNames = {},
   showAgent = true,
 }: TasksListProps) {
@@ -103,7 +103,7 @@ export default function TasksList({
           parameters={value}
           createdBy={row.created_by}
           principalNames={principalNames}
-          catalog={catalog}
+          sourceTypes={sourceTypes}
         />
       ),
     },

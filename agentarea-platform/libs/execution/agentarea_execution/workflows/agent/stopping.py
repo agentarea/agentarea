@@ -18,7 +18,6 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import LLMCallRequest, MCPToolRequest, UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
     DEFAULT_RETRY_ATTEMPTS,
     HEARTBEAT_TIMEOUT,
     LLM_CALL_TIMEOUT,
@@ -26,9 +25,13 @@ from ..constants import (
     Activities,
     EventTypes,
 )
-from ..retry import bookkeeping_retry_policy, make_retry_policy, model_call_retry_policy
+from ..retry import make_retry_policy, model_call_retry_policy
 from .budget import BudgetMixin
-from .patches import STOP_SETTLES_IN_FLIGHT_TOOL_PATCH, STOP_SETTLES_MODEL_CALL_PATCH
+from .patches import (
+    STOP_SETTLES_IN_FLIGHT_TOOL_PATCH,
+    STOP_SETTLES_MODEL_CALL_PATCH,
+    STOPPED_MODEL_CALL_IS_NOT_A_FAILURE_PATCH,
+)
 
 STOPPED_WHILE_RUNNING = (
     "Stopped by the user while this call was running. Whether it finished, and what it "
@@ -51,6 +54,8 @@ class StoppedModelCall:
 
     iteration: int
     handle: asyncio.Future[Any]
+    # "compaction" for the summary call; None for a turn.
+    purpose: str | None = None
 
 
 def stopped_tool_event(tool_call: ToolCall, outcome: dict[str, Any]) -> dict[str, Any]:
@@ -177,29 +182,24 @@ class ToolStopMixin(BudgetMixin):
         await self._publish_events_immediately()
         if spent > ZERO:
             self._budget.add_cost(spent)
-            await workflow.execute_activity(
-                Activities.UPDATE_TASK_STATUS,
-                args=[
-                    UpdateTaskStatusRequest(
-                        user_context_data=self.state.user_context_data,
-                        task_id=self.state.task_id,
-                        status=final_status,
-                        result=json.dumps(
-                            {
-                                "response": self.state.final_response,
-                                "validation_state": self.state.validation_state,
-                            }
-                        )
-                        if self.state.final_response
-                        else None,
-                        workspace_id=self.state.workspace_id,
-                        total_cost=self._budget.cost,
-                        own_cost=self._own_cost,
-                        tokens_used=self.state.tokens_used,
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status=final_status,
+                    result=json.dumps(
+                        {
+                            "response": self.state.final_response,
+                            "validation_state": self.state.validation_state,
+                        }
                     )
-                ],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=bookkeeping_retry_policy(),
+                    if self.state.final_response
+                    else None,
+                    workspace_id=self.state.workspace_id,
+                    total_cost=self._budget.cost,
+                    own_cost=self._own_cost,
+                    tokens_used=self.state.tokens_used,
+                )
             )
         self._add_execution_finished_event(execution_cancelled=True)
         await self._publish_events_immediately()
@@ -207,13 +207,37 @@ class ToolStopMixin(BudgetMixin):
     async def _settle_stopped_model_call(self, call: StoppedModelCall) -> Money:
         """Record the interrupted model call, and what it cost when the provider said."""
         model_id = self.state.agent_config.get("model_id")
+        purpose = {"purpose": call.purpose} if call.purpose else {}
         try:
             result = await call.handle
         except ActivityError as error:
+            if is_cancelled_exception(error) and workflow.patched(
+                STOPPED_MODEL_CALL_IS_NOT_A_FAILURE_PATCH
+            ):
+                self._events.add_event(
+                    EventTypes.LLM_CALL_COMPLETED,
+                    {
+                        "iteration": call.iteration,
+                        **purpose,
+                        "model_id": model_id,
+                        "model_name": (self.state.resolved_model or {}).get("model_name"),
+                        "cancelled": True,
+                        "interrupted": True,
+                        # Cut off before the provider reported usage: the call may
+                        # have been billed, by an amount nobody knows.
+                        "cost": None,
+                        "cost_known": False,
+                        "content": "",
+                        "tool_calls": [],
+                        "role": "assistant",
+                    },
+                )
+                return ZERO
             self._events.add_event(
                 EventTypes.LLM_CALL_FAILED,
                 {
                     "iteration": call.iteration,
+                    **purpose,
                     "model_id": model_id,
                     "cancelled": True,
                     # Cut off before the provider reported usage: the call may
@@ -236,6 +260,7 @@ class ToolStopMixin(BudgetMixin):
             EventTypes.LLM_CALL_COMPLETED,
             {
                 "iteration": call.iteration,
+                **purpose,
                 "model_id": model_id,
                 "model_name": (self.state.resolved_model or {}).get("model_name"),
                 "managed_by": outcome.get("managed_by"),

@@ -49,6 +49,9 @@ class OpenAPIConnectionResponse(BaseModel):
     available_tools: list[OpenAPIToolResponse]
     status: str
     last_dispatch: dict[str, Any] | None = None
+    # A member-set cost that wins over the connector's (wiki ADR-0038 §2.3).
+    cost: dict[str, Any] | None = None
+    managed_by: str | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

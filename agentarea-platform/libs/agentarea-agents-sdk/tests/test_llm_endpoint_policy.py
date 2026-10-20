@@ -122,3 +122,38 @@ async def test_a_refusal_does_not_name_the_resolved_address():
 async def test_an_operator_endpoint_is_called_as_given(litellm_reached):
     with pytest.raises(_Reached):
         await _model("http://10.0.0.5:8080/v1", None).complete(_request())
+
+
+@pytest.mark.asyncio
+async def test_streaming_with_events_pins_a_member_endpoint_instead_of_using_litellm(
+    litellm_reached,
+):
+    async def publish(content, index, final):
+        return None
+
+    with pytest.raises(UnsafeUrlError):
+        await _model("http://10.0.0.5:8080/v1", OutboundPolicy()).complete_with_streaming(
+            _request(), "task", "agent", "execution", publish
+        )
+
+
+@pytest.mark.asyncio
+async def test_streaming_with_events_publishes_the_pinned_stream(monkeypatch):
+    model = _model("http://93.184.216.34/v1", OutboundPolicy())
+
+    async def pinned_stream(request):
+        yield module.LLMResponse(content="Hel", role="assistant")
+        yield module.LLMResponse(content="lo", role="assistant")
+
+    monkeypatch.setattr(model, "_stream_openai_compatible", pinned_stream)
+    published: list = []
+
+    async def publish(content, index, final):
+        published.append((content, index, final))
+
+    response = await model.complete_with_streaming(
+        _request(), "task", "agent", "execution", publish
+    )
+
+    assert response.content == "Hello"
+    assert published == [("Hel", 0, False), ("lo", 1, False), ("", 2, True)]

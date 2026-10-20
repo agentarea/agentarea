@@ -10,7 +10,7 @@ related:
   - /self-host/secrets-backends
   - /self-host/database-and-migrations
   - /self-host/upgrades
-last_updated: 2026-07-29
+last_updated: 2026-10-15
 ---
 
 Install AgentArea with the `agentarea` chart. Choose Kubernetes over
@@ -29,7 +29,7 @@ you install, not after.
 <Info>
 - Kubernetes with `batch/v1` Jobs and `networking.k8s.io/v1` NetworkPolicy; the chart README states 1.20 or later
 - Helm 3.8 or later
-- A default StorageClass, if you keep the bundled PostgreSQL or RustFS
+- A default StorageClass, if you keep the bundled PostgreSQL, Valkey, or RustFS
 - Gateway API CRDs and a Gateway, if you keep `gateway_api` in `mcpManager.features.enabled`
 - See [requirements](/self-host/requirements) for the full matrix
 </Info>
@@ -96,6 +96,49 @@ you install, not after.
     endpoint, and those URLs resolve to a cluster-only address.
   </Step>
 
+  <Step title="Size the bundled Valkey as a store">
+    Valkey is a store for the event bus, not a cache. The bus runs on Redis
+    Streams consumer groups, so entries no group has handled must survive a
+    restart and must never be evicted. The chart defaults to that shape: a 4 GiB
+    PVC, a 1 GiB memory limit, and this `valkey.conf`:
+
+    ```text
+    appendonly yes
+    appendfsync everysec
+    maxmemory 768mb
+    maxmemory-policy noeviction
+    ```
+
+    With `noeviction`, a full Valkey rejects writes instead of dropping data.
+    Size memory for 24 to 72 hours of bus and task traffic; the 7-day event
+    history lives in PostgreSQL, not in Valkey. Keep `maxmemory` about a quarter
+    below the memory limit, which leaves room for the AOF rewrite fork and client
+    buffers. Keep the PVC at several times `maxmemory`, since the AOF grows to
+    roughly twice the dataset before it is rewritten.
+
+    ```yaml
+    valkey:
+      dataStorage:
+        className: ""          # empty uses the cluster's default StorageClass
+        requestedSize: "8Gi"
+      valkeyConfig: |
+        appendonly yes
+        appendfsync everysec
+        maxmemory 1536mb
+        maxmemory-policy noeviction
+      resources:
+        requests:
+          memory: 2Gi
+        limits:
+          memory: 2Gi
+    ```
+
+    `valkey.valkeyConfig` replaces the whole file, so repeat all four lines when
+    you change one. The Valkey Deployment uses the `Recreate` strategy: the old
+    pod releases the `ReadWriteOnce` volume before the new one mounts it, so each
+    rollout has a few seconds with no Valkey.
+  </Step>
+
   <Step title="Set the isolation boundary for untrusted code">
     `mcpManager.runtimeClass` governs both MCP server instance pods and agent sandbox
     pods — one setting, so a sandbox can never end up less confined than an MCP
@@ -134,7 +177,9 @@ you install, not after.
     The install runs Jobs in this order: create the auxiliary databases, run
     `agentarea-api migrate` (the `db-migration` Job, working directory
     `/app/apps/api`), then `agentarea-api reconcile` (the `registry-reconcile` Job,
-    which seeds the LLM provider, LLM model, and MCP server catalogs from S3). The
+    which creates and syncs the [platform registries](/self-host/catalog-registries):
+    LLM providers and models, MCP servers, curated skills, built-in agents and
+    event source types). The
     migration Job has an init container that blocks on a TCP connection to the
     database, so it sits in `Init:0/1` until PostgreSQL accepts connections.
   </Step>
@@ -203,8 +248,9 @@ kubectl logs -n agentarea -l app.kubernetes.io/component=registry-reconcile
     untrusted code shares the host kernel.
   </Accordion>
   <Accordion title="PVCs stay `Pending`">
-    No default StorageClass. Set `postgresql.persistence.storageClass` and
-    `rustfs.persistence` , or disable both components and use managed services.
+    No default StorageClass. Set `postgresql.persistence.storageClass`,
+    `valkey.dataStorage.className`, and `rustfs.persistence` , or disable those
+    components and use managed services.
   </Accordion>
   <Accordion title="MCP server instances are created but nothing can reach them">
     With `mcpManager.backend: kubernetes` and the `gateway_api` feature enabled,

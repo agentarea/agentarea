@@ -14,6 +14,7 @@ import pytest
 from agentarea_api.api.deps.services import get_audit_service
 from agentarea_api.api.v1.api_keys import get_api_key_service, router
 from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.credential import SESSION
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -46,7 +47,7 @@ def _client(context: UserContext) -> tuple[TestClient, AsyncMock, AsyncMock]:
 
 
 def test_a_member_cannot_revoke_someone_elses_key() -> None:
-    client, service, audit = _client(UserContext(user_id="user-other", workspace_id="ws-acme"))
+    client, service, audit = _client(UserContext(user_id="user-other", workspace_id="ws-acme", credential=SESSION))
 
     response = client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
 
@@ -56,7 +57,7 @@ def test_a_member_cannot_revoke_someone_elses_key() -> None:
 
 
 def test_the_creator_revokes_their_own_key() -> None:
-    client, service, _ = _client(UserContext(user_id=OWNER_ID, workspace_id="ws-acme"))
+    client, service, _ = _client(UserContext(user_id=OWNER_ID, workspace_id="ws-acme", credential=SESSION))
 
     response = client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
 
@@ -66,7 +67,7 @@ def test_the_creator_revokes_their_own_key() -> None:
 
 def test_a_workspace_admin_revokes_any_key() -> None:
     client, service, _ = _client(
-        UserContext(user_id="user-owner", workspace_id="ws-acme", admin_workspaces=["ws-acme"])
+        UserContext(user_id="user-owner", workspace_id="ws-acme", admin_workspaces=["ws-acme"], credential=SESSION)
     )
 
     response = client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
@@ -76,7 +77,7 @@ def test_a_workspace_admin_revokes_any_key() -> None:
 
 
 def test_a_revocation_is_audited_by_name() -> None:
-    client, _, audit = _client(UserContext(user_id=OWNER_ID, workspace_id="ws-acme"))
+    client, _, audit = _client(UserContext(user_id=OWNER_ID, workspace_id="ws-acme", credential=SESSION))
 
     client.delete(f"/v1/workspaces/acme/api-keys/{TOKEN_ID}")
 

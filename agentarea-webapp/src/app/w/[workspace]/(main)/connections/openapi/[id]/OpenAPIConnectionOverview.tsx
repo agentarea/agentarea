@@ -30,6 +30,7 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { updateOpenAPIConnectionAction } from "@/lib/server-actions";
 import { getOpenApiConnectionDisplayStatus } from "@/lib/status";
 import { CardField, ConnectionDetailsCard } from "../../components/ConnectionCards";
+import { ConnectionCostSection } from "../../components/ConnectionCostSection";
 import {
   cleanHeaderRows,
   CustomHeadersEditor,
@@ -330,6 +331,13 @@ export default function OpenAPIConnectionOverview({
                 <EmptyRow text={t("noCustomQueryParams")} />
               )}
             </SectionCard>
+
+            <ConnectionCostSection
+              cost={connection.cost}
+              managedBy={connection.managed_by}
+              onSave={(cost) => updateOpenAPIConnectionAction(connection.id, { cost })}
+              onSaved={() => router.refresh()}
+            />
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">

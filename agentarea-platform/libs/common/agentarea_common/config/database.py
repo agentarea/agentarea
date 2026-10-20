@@ -19,7 +19,7 @@ from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
 from enum import StrEnum
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Any
 
 from pydantic_settings import SettingsConfigDict
 from sqlalchemy import URL, Engine, create_engine
@@ -122,7 +122,7 @@ class TenantScopeSettings(BaseAppSettings):
 class Database:
     """Database connection manager using singleton pattern."""
 
-    _instance: Optional["Database"] = None
+    _instance: Database | None = None
     _initialized: bool = False
 
     def __init__(self, settings: DatabaseSettings | None = None) -> None:
@@ -136,7 +136,7 @@ class Database:
         self._initialized = True
 
     @classmethod
-    def get_instance(cls, settings: DatabaseSettings | None = None) -> "Database":
+    def get_instance(cls, settings: DatabaseSettings | None = None) -> Database:
         """Get the singleton instance of Database."""
         if cls._instance is None:
             instance = cls.__new__(cls)
@@ -226,7 +226,7 @@ class Database:
         return self.async_session_factory
 
     @asynccontextmanager
-    async def session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def session(self) -> AsyncGenerator[AsyncSession]:
         """Get an async (write) database session with transaction management."""
         session = self.async_session_factory()
         try:
@@ -243,7 +243,7 @@ class Database:
     get_db = session
 
     @asynccontextmanager
-    async def read_session(self) -> AsyncGenerator[AsyncSession, None]:
+    async def read_session(self) -> AsyncGenerator[AsyncSession]:
         """Get a read-only database session (AUTOCOMMIT — no transaction management)."""
         session = self.read_session_factory()
         try:
@@ -255,7 +255,7 @@ class Database:
                 logger.debug("Failed to close read DB session cleanly: %s", exc)
 
     @contextmanager
-    def get_sync_db(self) -> Generator[Session, None, None]:
+    def get_sync_db(self) -> Generator[Session]:
         """Get a synchronous database session - used for migrations."""
         session = self.sync_session_factory()
         try:
@@ -303,7 +303,7 @@ def get_sync_db():
     return get_database().get_sync_db()
 
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency for an async (write) database session.
 
     Flat async-generator form (commit/rollback/close) so ``session.close()``
@@ -314,7 +314,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def get_read_db_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_read_db_session() -> AsyncGenerator[AsyncSession]:
     """FastAPI dependency for a read-only (AUTOCOMMIT) database session."""
     async with get_database().read_session() as session:
         yield session

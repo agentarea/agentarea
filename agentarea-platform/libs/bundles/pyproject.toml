@@ -7,11 +7,12 @@ name = "agentarea-bundles"
 version = "0.1.1"
 description = "Agent package import (analyze + install) for AgentArea"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "agentarea-common",
     "agentarea-agents",
     "agentarea-mcp",
+    "agentarea-streams",
     "agentarea-triggers",
     "agentarea-governance",
     "pydantic>=2.4.2",
@@ -22,6 +23,7 @@ dependencies = [
 agentarea-common = { workspace = true }
 agentarea-agents = { workspace = true }
 agentarea-mcp = { workspace = true }
+agentarea-streams = { workspace = true }
 agentarea-triggers = { workspace = true }
 agentarea-governance = { workspace = true }
 

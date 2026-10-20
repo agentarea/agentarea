@@ -69,6 +69,7 @@ from agentarea_api.api.v1.a2a_mapping import (
 )
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
+from agentarea_common.auth.credential import Credential
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -209,7 +210,7 @@ class _Operation:
             extra_metadata=self.extra or None,
         )
 
-    def __enter__(self) -> "_Operation":
+    def __enter__(self) -> _Operation:
         self._started = time.monotonic()
         self._log("started")
         return self
@@ -255,6 +256,9 @@ def _user_context(scope: A2ACallScope) -> UserContext:
         workspace_id=auth.workspace_id,
         workspace_slug=auth.workspace_slug,
         admin_workspaces=[] if auth.agent_key_id else None,
+        credential=(
+            Credential(kind="api_key", key_id=auth.agent_key_id) if auth.agent_key_id else None
+        ),
     )
     ContextManager.set_context(user_context)
     bind_workspace_scope(user_context.workspace_id)

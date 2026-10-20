@@ -9,7 +9,7 @@ related:
   - /reference/limits
   - /guides/governance/authorize-a-tool-call
   - /guides/governance/set-a-budget
-last_updated: 2026-10-13
+last_updated: 2026-10-20
 ---
 
 One `PolicyRule` row expresses one governance intent for one subject. Rules are
@@ -69,8 +69,8 @@ The task layer is not a rule. It is supplied as a `PolicyDocument` in
 
 | Value | Meaning |
 |---|---|
-| `allow` | Add the target to the layer's tool allowlist. |
-| `deny` | Add the target to the layer's tool denylist. |
+| `allow` | Add the target to the layer's tool allowlist, or, on a `registry` or `registry_trust` target, to its install allowlist. |
+| `deny` | Add the target to the layer's tool denylist, or, on a `registry` or `registry_trust` target, refuse installs from it. |
 | `cap` | Set a numeric ceiling. |
 | `approval` | Require human sign-off. |
 | `safety` | Toggle a content-safety filter. |
@@ -95,6 +95,8 @@ at parse time.
 | `model` | `model:<id>` | Yes | **No** |
 | `skill` | `skill:<id>` | Yes | **No** |
 | `collection` | `collection:<id>` | Yes | **No** |
+| `registry` | `registry:<registry id>` or `registry:github` | Yes, with `allow` or `deny` on a `workspace` or `user` subject only | **No.** Decided on catalog install; see [Install rules](#install-rules) |
+| `registry_trust` | `registry_trust:<level>`, level one of `official`, `verified`, `community`, `private` | Yes, with `allow` or `deny` on a `workspace` or `user` subject only | **No.** Decided on catalog install |
 
 Tool names are matched with `fnmatch` glob semantics against the LLM-facing tool
 name.
@@ -231,7 +233,7 @@ checked when the run completes.
 |---|---|
 | `llm.call.completed` of the turn | `content` = the checked answer |
 | `llm.call.completed` with `purpose: "answer_check"` | The rewrite call: its cost and usage, and `content` = the checked answer. Same `execution_id`/`iteration` as the turn, so it supersedes the same reply part |
-| `AnswerChecked` | `{iteration, leaks: [{kind, sample}], rewritten, changes}`: what was found and the model's `<changes>`, for audit; never shown as the answer |
+| `answer.checked` | `{iteration, leaks: [{kind, sample}], rewritten, changes}`: what was found and the model's `<changes>`, for audit; never shown as the answer |
 | `task.completed` `result`, the task's `result.response` | The checked answer |
 
 The rewrite is metered like any model call and counts against the run's budget.
@@ -257,6 +259,7 @@ and the API returns it while the runtime never sees it.
 | `cap` on any target other than `spend` / `service` / `tokens` | **Inert.** |
 | `approval` on any target other than `*` / `tool:*` / `tool:<name>` | **Inert.** |
 | `safety` on any target other than `content` | **Inert.** |
+| `allow` / `deny` on `registry:` / `registry_trust:` | Enforced by the catalog install check, not by the runtime policy. See [Install rules](#install-rules) |
 | `egress` on `mcp:<id>` | **Inert in core.** Stored and readable; core enforces no container network boundary and the reader helper has no caller in this repository. |
 | `tokens.max_tokens_per_call` | **Inert.** Resolved and merged; never written into guard state. |
 
@@ -266,6 +269,26 @@ Two further enforcement boundaries:
 |---|---|
 | Snapshot timing | Resolved once at task creation. A rule changed afterwards does not reach a running task. |
 | MCP proxy requests | Resolve the workspace and calling user layers only. Agent-scoped and task rules do not apply. |
+
+## Install rules
+
+Rules on `registry:` and `registry_trust:` decide whether a catalog item may
+become a workspace's own. The check reads the enabled rules of the workspace
+and of the acting user, each as its own layer:
+
+| Situation in a layer | Decision |
+|---|---|
+| A `deny` names the item's registry or its trust level | Refused |
+| The layer has any `allow` on these targets and none names the registry or its trust level | Refused |
+| Otherwise | Allowed |
+
+A lower layer cannot widen a higher one's allowlist: every layer must allow.
+`registry:github` is a skill imported straight from a GitHub URL, with trust
+`community`. The check runs on catalog install, on attaching a catalog skill to
+an agent, on editing a catalog item, on updating an installed skill, on a
+GitHub URL import, and when a task uses a catalog skill or agent the workspace
+never installed. A refusal answers `403` through the API and fails a task as
+non-retryable. Skills installed before a rule are not re-checked.
 
 ## Defaults and overrides
 

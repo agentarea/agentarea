@@ -30,6 +30,8 @@ from agentarea_execution.models import (
     ArtifactValidationResult,
     LLMCallRequest,
     MCPToolRequest,
+    RecordRequest,
+    RecordResult,
     ResolveModelRequest,
     ToolDiscoveryRequest,
     UpdateTaskStatusRequest,
@@ -39,6 +41,7 @@ from agentarea_execution.models import (
 from agentarea_execution.workflows.agent.stopping import STOPPED_WHILE_RUNNING
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity
 from temporalio.client import WorkflowFailureError, WorkflowHandle
 from temporalio.common import WorkflowIDReusePolicy
@@ -161,18 +164,12 @@ async def _resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 
 @activity.defn(name="call_llm_activity")
 async def _call_llm(request: LLMCallRequest) -> dict[str, Any]:
-    """Write the pending entries and answer from the window the log holds, as the real one."""
+    """Answer from the window the log holds, then the pending entries, as the real one."""
     window = request.conversation
     assert window is not None
-    _write(window.next_seq, request.messages)
-    end_seq = window.next_seq + len(request.messages)
-    head = [_log[seq] for seq in window.head_seqs]
-    tail = [
-        _log[seq]
-        for seq in sorted(_log)
-        if window.tail_start <= seq < end_seq and seq not in window.head_seqs
-    ]
-    _model_windows.append([entry.as_message() for entry in (*head, *tail)])
+    logged = [entry for seq, entry in sorted(_log.items()) if seq < window.next_seq]
+    unwritten = pending_entries(window.next_seq, request.messages)
+    _model_windows.append([entry.as_message() for entry in (*model_window(logged), *unwritten)])
     turn = _llm_script.pop(0)()
     return await turn if inspect.isawaitable(turn) else turn
 
@@ -204,6 +201,8 @@ async def _model_reply_billed_before_the_stop() -> dict[str, Any]:
 @activity.defn(name="execute_mcp_tool_activity")
 async def _build_report(request: MCPToolRequest) -> dict[str, Any]:
     """A long call: it either stops when told, or finishes and bills regardless."""
+    if _tool_behaviour.get("on_start") == "finish":
+        return {"success": True, "result": "Report with 10 rows", "tool_name": request.tool_name}
     _tool_runs.append("started")
     try:
         while True:
@@ -242,6 +241,42 @@ async def _validate_artifacts(_request: ArtifactValidationRequest) -> ArtifactVa
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_records: list[RecordRequest] = []
+
+
+@activity.defn(name="record_activity")
+async def _record(request: RecordRequest) -> RecordResult:
+    _records.append(request)
+    for row in request.rows:
+        _log.setdefault(
+            row.seq,
+            ConversationEntry(**row.model_dump(exclude={"event_id"}), event_id=row.event_id),
+        )
+    if request.status is not None:
+        await _update_task_status(request.status)
+    # The feed sees the event rows and the live signals sent beside them, in order.
+    events = [
+        {
+            "event_id": row.event_id,
+            "event_type": row.name,
+            "timestamp": row.timestamp,
+            "data": row.meta or {},
+        }
+        for row in request.rows
+        if row.kind == "event" and row.timestamp is not None
+    ] + [json.loads(event) for event in request.events_json]
+    events.sort(key=lambda event: event["timestamp"])
+    if events:
+        await _publish_events(
+            WorkflowEventsRequest(
+                events_json=[json.dumps(event) for event in events],
+                workspace_id=request.workspace_id,
+                user_id=request.user_id,
+            )
+        )
+    return RecordResult(rows=len(request.rows), events=len(request.events_json))
+
+
 _ACTIVITIES = [
     _build_config,
     _discover_tools,
@@ -249,6 +284,7 @@ _ACTIVITIES = [
     _call_llm,
     _build_report,
     _publish_events,
+    _record,
     _update_task_status,
     _validate_artifacts,
 ]
@@ -264,6 +300,7 @@ def _reset() -> None:
     _tool_runs.clear()
     _tool_behaviour.clear()
     _model_runs.clear()
+    _records.clear()
 
 
 def _request(task_id: uuid.UUID, resume: AgentExecutionResume | None = None):
@@ -338,6 +375,16 @@ async def _stop_once(handle: WorkflowHandle, runs: list[str]) -> None:
     assert isinstance(failure.value.cause, CancelledError)
 
 
+def _messages() -> list[ConversationEntry]:
+    return [entry for _, entry in sorted(_log.items()) if entry.kind != "event"]
+
+
+def _where_the_service_resumes(snapshot):
+    """The snapshot as the task service resumes it: after the run's closing events."""
+    assert all(_log[seq].kind == "event" for seq in _log if seq >= snapshot.next_seq)
+    return snapshot.model_copy(update={"next_seq": len(_log)})
+
+
 def _tool_results() -> list[dict[str, Any]]:
     return [event["data"] for event in _published if event["event_type"] == "tool.result"]
 
@@ -354,6 +401,41 @@ def _assert_stop_shown_first_and_execution_ended_last(settled_type: str) -> None
     assert types.index("task.cancelled") < len(types) - 1 - types[::-1].index(settled_type)
     assert types[-1] == "execution.finished"
     assert types.count("execution.finished") == 1
+
+
+@pytest.mark.asyncio
+async def test_stopping_a_run_booked_for_later_records_it_cancelled_as_its_user():
+    """A stop wakes a delayed run before it has initialised anything.
+
+    The closing status update must still carry the principal it runs as, or the
+    activity refuses it and the run fails instead of ending cancelled.
+    """
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"stop-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                request = _request(uuid.uuid4())
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    request,
+                    id=f"task-{request.task_id}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(days=1),
+                    start_delay=timedelta(hours=6),
+                )
+                await handle.cancel()
+                with pytest.raises(WorkflowFailureError) as failure:
+                    await handle.result()
+
+    assert isinstance(failure.value.cause, CancelledError)
+    assert _model_windows == []
+    [closing] = _status_requests
+    assert closing.status == "cancelled"
+    assert closing.user_context_data == {
+        "user_id": "stop-user",
+        "workspace_id": "stop-workspace",
+    }
 
 
 @pytest.mark.asyncio
@@ -380,10 +462,11 @@ async def test_stop_cancels_the_running_tool_and_records_it_stopped():
     closing = _status_requests[0]
     assert closing.status == "cancelled"
     assert closing.conversation_resume is not None
-    assert closing.conversation_resume.next_seq == len(_log)
-    assert _log[max(_log)].role == "tool"
-    assert _log[max(_log)].tool_call_id == "call_report"
-    assert _log[max(_log)].content == STOPPED_WHILE_RUNNING
+    _where_the_service_resumes(closing.conversation_resume)
+    last = _messages()[-1]
+    assert last.role == "tool"
+    assert last.tool_call_id == "call_report"
+    assert last.content == STOPPED_WHILE_RUNNING
     # Nothing was billed after the stop, so the closing total stands.
     assert len(_status_requests) == 1
     await _replay(history)
@@ -436,7 +519,7 @@ async def test_a_message_after_the_stop_continues_the_same_conversation():
                     _request(
                         task_id,
                         AgentExecutionResume(
-                            snapshot=closing.conversation_resume,
+                            snapshot=_where_the_service_resumes(closing.conversation_resume),
                             total_cost=closing.total_cost,
                             own_cost=closing.own_cost,
                         ),
@@ -450,7 +533,7 @@ async def test_a_message_after_the_stop_continues_the_same_conversation():
     first_window, resumed_window = _model_windows
     assert resumed_window[: len(first_window)] == first_window
     assert resumed_window[len(first_window) :] == [
-        _log[len(first_window)].as_message(),
+        _messages()[len(first_window)].as_message(),
         {
             "role": "tool",
             "content": STOPPED_WHILE_RUNNING,
@@ -489,7 +572,7 @@ async def test_retry_reruns_the_failed_turn_on_the_same_conversation():
                     _request(
                         task_id,
                         AgentExecutionResume(
-                            snapshot=closing.conversation_resume,
+                            snapshot=_where_the_service_resumes(closing.conversation_resume),
                             total_cost=closing.total_cost or Decimal(0),
                             retry=True,
                         ),
@@ -504,7 +587,9 @@ async def test_retry_reruns_the_failed_turn_on_the_same_conversation():
     assert retried_window == failed_window
     assert [m["role"] for m in retried_window] == ["system", "user"]
     retry_events = [
-        event for event in _published[published_before_retry:] if event["event_type"] == "task.retried"
+        event
+        for event in _published[published_before_retry:]
+        if event["event_type"] == "task.retried"
     ]
     assert len(retry_events) == 1
     assert [e.role for e in _log.values()].count("user") == 1
@@ -525,11 +610,12 @@ async def test_a_model_call_cut_off_by_the_stop_is_recorded_with_its_cost_unknow
                 history = await handle.fetch_history()
 
     assert _model_runs == ["started", "told to stop"]
-    [cut_off] = [e["data"] for e in _published if e["event_type"] == "llm.call.failed"]
+    assert [e for e in _published if e["event_type"] == "llm.call.failed"] == []
+    [cut_off] = [e["data"] for e in _published if e["event_type"] == "llm.call.completed"]
     assert cut_off["cancelled"] is True
     assert cut_off["cost_known"] is False
     assert cut_off["cost"] is None
-    _assert_stop_shown_first_and_execution_ended_last("llm.call.failed")
+    _assert_stop_shown_first_and_execution_ended_last("llm.call.completed")
     assert len(_status_requests) == 1
     assert _tool_runs == []
     await _replay(history)
@@ -558,4 +644,161 @@ async def test_a_model_reply_billed_before_the_stop_is_recorded_and_not_acted_on
     closing, rebilled = _status_requests
     assert closing.total_cost == Decimal("0")
     assert rebilled.total_cost == Decimal("0.50")
+    await _replay(history)
+
+
+def _events_of(event_type: str) -> list[dict[str, Any]]:
+    """The run's events of one type as its feed saw them."""
+    return [e["data"] for e in _published if e["event_type"] == event_type]
+
+
+@pytest.mark.asyncio
+async def test_a_run_stopped_before_its_first_turn_leaves_no_resume_snapshot():
+    """Nothing is seeded yet, so the next run must rebuild and seed the prompt and request."""
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"stop-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                request = _request(uuid.uuid4())
+                handle = await env.client.start_workflow(
+                    AgentExecutionWorkflow.run,
+                    request,
+                    id=f"task-{request.task_id}",
+                    task_queue=task_queue,
+                    execution_timeout=timedelta(days=1),
+                    start_delay=timedelta(hours=6),
+                )
+                await handle.cancel()
+                with pytest.raises(WorkflowFailureError):
+                    await handle.result()
+                history = await handle.fetch_history()
+
+    [closing] = _status_requests
+    assert closing.status == "cancelled"
+    assert closing.conversation_resume is None
+    assert [e for e in _log.values() if e.kind == "message"] == []
+    await _replay(history)
+
+
+@pytest.mark.asyncio
+async def test_a_follow_up_queued_when_the_run_is_stopped_is_kept_in_the_log():
+    _llm_script.append(_model_reply_cut_off)
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"stop-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                handle = await _start(env, task_queue, _request(uuid.uuid4()))
+                for _ in range(400):
+                    if _model_runs:
+                        break
+                    await asyncio.sleep(0.05)
+                await handle.signal(
+                    "workflow_command", args=["queue_message", {"message": "Also add totals"}]
+                )
+                await _stop_once(handle, _model_runs)
+                history = await handle.fetch_history()
+
+    messages = sorted((e for e in _log.values() if e.kind == "message"), key=lambda e: e.seq)
+    assert [(m.role, m.content) for m in messages if m.role == "user"] == [
+        ("user", "Build the quarterly report"),
+        ("user", "Also add totals"),
+    ]
+    closing = next(r for r in _status_requests if r.status == "cancelled")
+    assert closing.conversation_resume is not None
+    await _replay(history)
+
+
+_compactions: list[str] = []
+
+
+@activity.defn(name="compact_messages_activity")
+async def _compact_billed_before_the_stop(_request: Any) -> Any:
+    """A summary call the provider had billed for when the stop arrived."""
+    from agentarea_execution.models import CompactMessagesResult, LLMUsage
+
+    _compactions.append("started")
+    try:
+        while True:
+            activity.heartbeat()
+            await asyncio.sleep(0.05)
+    except asyncio.CancelledError:
+        _compactions.append("told to stop")
+    return CompactMessagesResult(
+        summary="earlier work",
+        original_message_count=2,
+        estimated_tokens_saved=100,
+        context_tokens=1_000,
+        cost=Decimal("0.30"),
+        usage=LLMUsage(prompt_tokens=900, completion_tokens=100, total_tokens=1_000),
+    )
+
+
+def _turn_filling_the_window() -> dict[str, Any]:
+    return {
+        **_tool_turn(),
+        "usage": {"prompt_tokens": 126_000, "completion_tokens": 20, "total_tokens": 126_020},
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_stop_during_compaction_records_the_billed_summary_call():
+    _compactions.clear()
+    _tool_behaviour["on_start"] = "finish"
+    _llm_script.append(_turn_filling_the_window)
+    request = _request(uuid.uuid4()).model_copy(
+        update={
+            "effective_policy": {
+                **_POLICY,
+                "tokens": {"max_tokens": 10_000_000, "max_tokens_per_call": 200_000},
+            }
+        }
+    )
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"stop-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with Worker(
+                env.client,
+                task_queue=task_queue,
+                workflows=[AgentExecutionWorkflow],
+                activities=[*_ACTIVITIES, _compact_billed_before_the_stop],
+                activity_executor=executor,
+                workflow_runner=create_workflow_runner(),
+                max_heartbeat_throttle_interval=timedelta(milliseconds=100),
+                default_heartbeat_throttle_interval=timedelta(milliseconds=100),
+            ):
+                handle = await _start(env, task_queue, request)
+                await _stop_once(handle, _compactions)
+                history = await handle.fetch_history()
+
+    assert _compactions == ["started", "told to stop"]
+    [summary_call] = [e for e in _events_of("llm.call.completed") if e.get("purpose")]
+    assert summary_call["purpose"] == "compaction"
+    assert summary_call["cancelled"] is True
+    assert summary_call["cost"] == "0.30"
+    assert _status_requests[-1].total_cost == Decimal("0.31")
+    await _replay(history)
+
+
+@pytest.mark.asyncio
+async def test_the_completed_status_is_stored_with_the_turns_closing_events():
+    _llm_script.append(_completion_turn)
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"stop-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                handle = await _start(env, task_queue, _request(uuid.uuid4()))
+                await handle.result()
+                history = await handle.fetch_history()
+
+    first_completed = next(
+        r for r in _records if r.status is not None and r.status.status == "completed"
+    )
+    recorded_with_it = {row.name for row in first_completed.rows if row.kind == "event"} | {
+        json.loads(event)["event_type"] for event in first_completed.events_json
+    }
+    assert {"turn.completed", "task.completed"} <= recorded_with_it
     await _replay(history)

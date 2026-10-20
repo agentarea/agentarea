@@ -15,6 +15,7 @@ from agentarea_common.constants import (
     MANAGED_BY_PLATFORM,
     PLATFORM_WORKSPACE_ID,
 )
+from agentarea_common.model_charges import ModelFunding, UnfundedPlatformCallError
 from agentarea_execution.llm_execution_service import resolve_provider_api_key
 from agentarea_execution.models import LLMCallRequest, ResolvedModelInfo
 
@@ -23,6 +24,9 @@ TENANT_WORKSPACE = "ws"
 # Deliberately the same name in both workspaces. A tenant can choose what to call
 # their own secrets, so the names are not a namespace — the workspace is.
 SHARED_REFERENCE = "openai"
+
+TENANT_FUNDING = ModelFunding(model_instance_id="m-1", platform_funded=False)
+PLATFORM_FUNDING = ModelFunding(model_instance_id="m-1", platform_funded=True, hold_id="hold-1")
 
 
 def _resolved(**overrides):
@@ -125,6 +129,7 @@ async def test_tenant_config_reads_the_callers_workspace(factory):
     key = await resolve_provider_api_key(
         reference=SHARED_REFERENCE,
         managed_by=None,
+        funding=TENANT_FUNDING,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
         secret_manager_factory=factory,
     )
@@ -144,6 +149,7 @@ async def test_platform_config_reads_the_platform_workspace_not_the_callers(fact
     key = await resolve_provider_api_key(
         reference=SHARED_REFERENCE,
         managed_by=MANAGED_BY_PLATFORM,
+        funding=PLATFORM_FUNDING,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
         secret_manager_factory=factory,
     )
@@ -164,6 +170,7 @@ async def test_a_platform_credential_the_operator_never_set_is_not_an_error(fact
     key = await resolve_provider_api_key(
         reference="never-created",
         managed_by=MANAGED_BY_PLATFORM,
+        funding=PLATFORM_FUNDING,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
         secret_manager_factory=factory,
     )
@@ -176,9 +183,33 @@ async def test_no_reference_touches_no_store(factory):
     key = await resolve_provider_api_key(
         reference=None,
         managed_by=None,
+        funding=TENANT_FUNDING,
         user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
         secret_manager_factory=factory,
     )
 
     assert key is None
+    assert factory.contexts == []
+
+
+@pytest.mark.parametrize(
+    "funding",
+    [None, TENANT_FUNDING],
+    ids=["no funding", "a funding that is not the platform's"],
+)
+async def test_the_platform_credential_is_refused_to_a_call_billing_did_not_fund(factory, funding):
+    """No surface spends on the platform's key without ``hold_model_call`` first.
+
+    The refusal comes before any store is opened, so an unheld call cannot even
+    learn whether the operator set the credential.
+    """
+    with pytest.raises(UnfundedPlatformCallError):
+        await resolve_provider_api_key(
+            reference=SHARED_REFERENCE,
+            managed_by=MANAGED_BY_PLATFORM,
+            funding=funding,
+            user_context=SimpleNamespace(workspace_id=TENANT_WORKSPACE, user_id="u"),
+            secret_manager_factory=factory,
+        )
+
     assert factory.contexts == []

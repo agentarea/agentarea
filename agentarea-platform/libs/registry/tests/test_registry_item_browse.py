@@ -8,9 +8,10 @@ server-side replacement: filtering, sorting and paging all happen in SQL, so
 one offset means one thing.
 """
 
-import pytest_asyncio
-from agentarea_registry.application.catalog_facets import derive_facets
 import pytest
+import pytest_asyncio
+from agentarea_common.auth.context import UserContext
+from agentarea_registry.application.catalog_facets import derive_facets
 from agentarea_registry.domain.models import Registry
 from agentarea_registry.infrastructure.repository import (
     RegistryItemRepository,
@@ -65,7 +66,7 @@ async def _item(
 
 @pytest_asyncio.fixture
 async def item_repo(db_session):
-    return RegistryItemRepository(db_session)
+    return RegistryItemRepository(db_session, UserContext(user_id="u", workspace_id="ws"))
 
 
 class TestPagingAcrossRegistries:
@@ -520,6 +521,21 @@ class TestInSource:
         assert await item_repo.mark_in_source(reg.id, {"keep", "gone"}) == 0
         _, total = await item_repo.browse("skills")
         assert total == 2
+
+    async def test_an_unchanged_item_is_not_rewritten(self, db_session, item_repo):
+        reg = await _registry(db_session, "src")
+        keep = await _item(item_repo, reg, "keep", "keep")
+        gone = await _item(item_repo, reg, "gone", "gone")
+        await item_repo.mark_in_source(reg.id, {"keep"})
+        await db_session.refresh(keep)
+        await db_session.refresh(gone)
+        stamps = (keep.updated_at, gone.updated_at)
+
+        await item_repo.mark_in_source(reg.id, {"keep"})
+
+        await db_session.refresh(keep)
+        await db_session.refresh(gone)
+        assert (keep.updated_at, gone.updated_at) == stamps
 
     async def test_reactivating_the_registry_keeps_dropped_items_hidden(
         self, db_session, item_repo

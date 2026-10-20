@@ -55,8 +55,14 @@ def mock_mcp_instance_service():
 
 @pytest.fixture
 def mock_skill_service():
+    async def read_skill_md(skill):
+        if skill.content is None:
+            raise ValueError(f"Skill {skill.id} has neither a package nor a body")
+        return skill.content
+
     service = MagicMock()
     service.list = AsyncMock(return_value=[])
+    service.read_skill_md = AsyncMock(side_effect=read_skill_md)
     return service
 
 
@@ -268,7 +274,7 @@ class TestSkillExport:
             _skill("Remote Skill", source_url="https://github.com/owner/repo")
         ]
 
-        with pytest.raises(ValueError, match="inline content"):
+        with pytest.raises(ValueError, match="neither a package nor a body"):
             await export_service.export_workspace()
 
     @pytest.mark.asyncio

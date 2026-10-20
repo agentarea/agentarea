@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from agentarea_common.audit import AuditService
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import tenant_scoped_session_class
 from agentarea_common.config.database import TenantScopeMode
@@ -41,13 +42,17 @@ class _Container:
         session = self._database.async_session_factory()
         return TaskEventService(RepositoryFactory(session, user_context), None), session
 
+    async def get_audit_service(self, user_context):
+        session = self._database.async_session_factory()
+        return AuditService(session, user_context), session
+
 
 class _Broker:
     def __init__(self, *, fail: bool = False) -> None:
         self.fail = fail
         self.streamed: list[tuple[str, str]] = []
 
-    async def submit(self, stream, fields, *, maxlen=None, ttl_seconds=None):
+    async def submit(self, stream, fields, *, retention):
         if self.fail:
             raise ConnectionError("redis down")
         event = decode(fields)
@@ -77,7 +82,7 @@ async def test_a_batch_retried_after_a_stream_failure_stores_each_event_once(mak
             "timestamp": (start + timedelta(microseconds=offset)).isoformat(),
             "data": {"task_id": task_id, "n": offset},
         }
-        for offset, event_type in enumerate(["llm.call.started", "llm.call.completed"])
+        for offset, event_type in enumerate(["tool.call", "llm.call.completed"])
     ]
     request = WorkflowEventsRequest(
         events_json=[json.dumps(e) for e in events], workspace_id=workspace_id, user_id="writer"
@@ -86,7 +91,6 @@ async def test_a_batch_retried_after_a_stream_failure_stores_each_event_once(mak
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
         broker_client=broker,
-        channel_delivery_settings=None,
     )
     [publish] = make_events_activities(dependencies, _Container(maker))
 
@@ -144,8 +148,7 @@ async def test_a_retried_batch_records_each_paid_line_once(maker):
     )
     dependencies = SimpleNamespace(
         event_broker=SimpleNamespace(publish=AsyncMock()),
-        broker_client=None,
-        channel_delivery_settings=None,
+        broker_client=_Broker(),
     )
     [publish] = make_events_activities(dependencies, _Container(maker))
 

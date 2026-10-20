@@ -1,6 +1,6 @@
 # Ory Hydra Configuration for AgentArea
 
-version: v2.2.0
+version: v26.2.0
 
 # DSN is overridden via docker-compose environment variable
 # Default for reference: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/hydra

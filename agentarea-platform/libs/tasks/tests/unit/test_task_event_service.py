@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
+from agentarea_common.events.contract import UnknownEventTypeError
 from agentarea_tasks.application.task_event_service import TaskEventService
 from agentarea_tasks.domain.models import TaskEvent
 from agentarea_tasks.infrastructure.repository import TaskEventRepository
@@ -45,7 +46,7 @@ def sample_task_event():
     return TaskEvent(
         id=uuid4(),
         task_id=uuid4(),
-        event_type="LLMCallStarted",
+        event_type="llm.call.started",
         timestamp=datetime.utcnow(),
         data={"model": "gpt-4", "tokens": 150},
         metadata={"source": "workflow"},
@@ -116,6 +117,24 @@ class TestTaskEventService:
                 timestamp=datetime.now(UTC),
                 workspace_id=workspace_id,
                 created_by=created_by,
+            )
+
+        mock_repository_factory.create_repository.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("event_type", ["IterationStarted", "WorkflowStarted", "nope"])
+    async def test_create_workflow_event_rejects_a_type_outside_the_vocabulary(
+        self, task_event_service, mock_repository_factory, event_type
+    ):
+        with pytest.raises(UnknownEventTypeError):
+            await task_event_service.create_workflow_event(
+                task_id=uuid4(),
+                event_id=uuid4(),
+                event_type=event_type,
+                data={},
+                timestamp=datetime.now(UTC),
+                workspace_id="test-workspace",
+                created_by="workflow",
             )
 
         mock_repository_factory.create_repository.assert_not_called()

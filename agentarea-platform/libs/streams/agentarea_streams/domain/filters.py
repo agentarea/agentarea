@@ -1,8 +1,26 @@
 """Which events a subscription receives: a kind and field filter, no code."""
 
-from typing import Any
+from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from .enums import SubscriptionKind
+
+
+class FilteredEvent(Protocol):
+    """What a filter reads of an event."""
+
+    @property
+    def type(self) -> str: ...
+
+    @property
+    def data(self) -> dict[str, Any]: ...
+
+    @property
+    def source_type(self) -> str | None: ...
+
+    @property
+    def session_key(self) -> str | None: ...
 
 
 def _kind_matches(kind: str, allowed: str) -> bool:
@@ -40,6 +58,30 @@ class EventFilter(BaseModel):
             return False
         return all(value_at(data, path) == expected for path, expected in self.fields.items())
 
+    def admits(self, event: FilteredEvent) -> bool:
+        return self.matches(event.type, event.data)
+
     @classmethod
-    def from_trigger_event_types(cls, event_types: list[str] | None) -> "EventFilter":
+    def from_trigger_event_types(cls, event_types: list[str] | None) -> EventFilter:
         return cls(kinds=list(event_types or []))
+
+
+class ExternalFilter(EventFilter):
+    """An MCP Events subscriber's arguments: a kind prefix, a source type, a session."""
+
+    source_type: str | None = None
+    session_key: str | None = None
+
+    def admits(self, event: FilteredEvent) -> bool:
+        return (
+            super().admits(event)
+            and (self.source_type is None or event.source_type == self.source_type)
+            and (self.session_key is None or event.session_key == self.session_key)
+        )
+
+
+def filter_for(kind: SubscriptionKind, stored: dict[str, Any]) -> EventFilter:
+    """The filter a subscription of ``kind`` stored."""
+    if kind is SubscriptionKind.EXTERNAL:
+        return ExternalFilter.model_validate(stored)
+    return EventFilter.model_validate(stored)

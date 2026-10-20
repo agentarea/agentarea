@@ -5,7 +5,7 @@
 # State lives in the instance's MCP storage, never in the container: it needs
 # MCP_MANAGER_URL, MCP_INSTANCE_ID and MCP_STORAGE_TOKEN, and writes the
 # demo tracker into a new database only with AGENTAREA_MCP_SEED_DEMO=1.
-FROM oven/bun:1.3.14-slim
+FROM oven/bun:1.4.3-slim
 
 WORKDIR /app
 COPY dist/server.js dist/server.js

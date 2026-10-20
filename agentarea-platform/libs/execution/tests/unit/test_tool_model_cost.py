@@ -165,3 +165,16 @@ async def test_a_first_attempt_carries_neither_field():
 
     [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
     assert not {"replayed", "attempt"} & set(completed)
+
+
+@pytest.mark.asyncio
+async def test_a_model_of_unknown_cost_says_so_on_the_event_and_leaves_the_budget_alone():
+    instance = _workflow(MCPToolResult(success=True, result="{}", cost_unknown=True))
+
+    await instance._execute_mcp_tool(_call())
+
+    assert instance.budget_tracker is not None
+    assert instance.budget_tracker.cost == Decimal("2")
+    [(_, completed)] = [c.args for c in instance.event_manager.add_event.call_args_list[1:]]
+    assert completed["cost_unknown"] is True
+    assert "model_cost" not in completed

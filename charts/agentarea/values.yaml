@@ -142,6 +142,15 @@ global:
     maxConnections: 50
     connectionTimeout: 5s
 
+  # Broker topics: every topic and broker key is <namespace>.<domain>.<dataset>.
+  events:
+    # First segment of every topic and key; two deployments sharing one Redis
+    # need different namespaces.
+    namespace: "agentarea"
+    # Partitions of the stream-events topic. The API and the worker must agree,
+    # and changing it moves streams between partitions: drain the bus first.
+    partitions: 16
+
   # Storage configuration - S3/RustFS compatible
   storage:
     # Storage type (s3, rustfs, gcs)
@@ -251,9 +260,7 @@ global:
       sidecarContainerImagePullPolicy: IfNotPresent
       # Container images
       images:
-        socat: "alpine/socat:latest"
-        busybox: "busybox:latest"
-        curl: "curlimages/curl:latest"
+        busybox: "busybox:1.38.0"
 
   # Workload configuration - Main application workloads
   workloads:
@@ -353,7 +360,7 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    # MinIO-compatible object storage, for presigned browser uploads/downloads.
+    # S3-compatible object storage, for presigned browser uploads/downloads.
     rustfs:
       host: ""  # e.g., s3.example.com
       paths:
@@ -397,7 +404,7 @@ backend:
   terminationGracePeriodSeconds: 30
   image:
     repository: agentarea/agentarea-api
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
 
   service:
@@ -446,7 +453,7 @@ backend:
 
   extraInitContainers: []
   # - name: init
-  #   image: busybox:latest
+  #   image: busybox:1.38.0
   #   command: ['sh', '-c', 'echo initializing']
 
   # Security context
@@ -477,7 +484,7 @@ frontend:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-frontend
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   service:
     type: ClusterIP
@@ -523,7 +530,7 @@ worker:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-worker
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
 
   # -- Port of the worker's health endpoint, passed to the container as
@@ -531,6 +538,21 @@ worker:
   # authorization backend and Redis are reachable and every Temporal worker is
   # polling; /livez answers 200 while the event loop responds.
   healthPort: 8081
+
+  # How a run rides out a service it cannot reach (skill storage): the call
+  # retries for retryWindow, then the run waits (status
+  # waiting_for_infrastructure), retrying after each backoff step (the last
+  # repeats), and fails with dependency_unavailable once deadline has passed.
+  outageWait:
+    # -- How long a call retries before the run starts waiting.
+    retryWindow: 5m
+    # -- Pauses between retries while the run waits, comma-separated.
+    backoff: "1m,5m,10m"
+    # -- How long a run waits before it fails.
+    deadline: 24h
+  # -- Share of the model's context window all of a run's activated skills may
+  # take together (their instructions are never compacted); between 0 and 1.
+  skillsWindowShare: "0.3"
 
   # -- Seconds a new pod must stay ready before it counts as available, so a
   # pod that passes readiness and then crashes cannot retire an old replica.
@@ -604,18 +626,14 @@ eventService:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-events
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   # Service port
   port: 8002
-  # Polling configuration
+  # How often the set of stream sources is read again; each poll source polls
+  # at the interval its catalog entry names.
   pollInterval: "30s"
   maxPollers: 10
-  inboundStream: "agentarea.channel.inbound"
-  telegramPolling:
-    # Dev-only fallback for Telegram getUpdates. Production Telegram ingress
-    # should use webhooks.
-    enabled: false
   # Resource limits and requests
   resources: {}
   #   limits:
@@ -646,13 +664,30 @@ eventService:
   # Additional configuration
   extraEnv: []
 
+# Egress restriction for the backend, worker and event-service, which call
+# addresses workspace members set. Off by default: restricting these pods'
+# egress is the operator's job, here or in the cloud network. When enabled, pods
+# in the cluster stay reachable and every other destination is allowed except
+# blockedEgressCIDRs. The default blocks link-local, which holds the cloud
+# metadata endpoint (169.254.169.254). Private ranges are not blocked by default
+# because external dependencies (a managed database, an object store inside the
+# VPC) often live there: block them here and allow those dependencies through
+# extraEgress. With NodeLocal DNSCache (169.254.20.10), narrow the block to
+# 169.254.169.254/32. Requires a CNI that enforces NetworkPolicy.
+platformNetworkPolicy:
+  enabled: false
+  blockedEgressCIDRs:
+    - 169.254.0.0/16
+  # Extra raw NetworkPolicyEgressRule entries appended as-is.
+  extraEgress: []
+
 # MCP Manager Service
 mcpManager:
   enabled: true
   replicaCount: 1
   image:
     repository: agentarea/agentarea-mcp-manager
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
   service:
     type: ClusterIP
     port: 80
@@ -704,7 +739,7 @@ mcpManager:
   mcpBase:
     image:
       repository: agentarea/agentarea-mcp-base
-      tag: "latest"
+      tag: ""  # Defaults to the chart appVersion
   packageImages:
     # -- Registry repository where immutable images built from npm/PyPI packages
     # are stored. Leave empty to use the local Docker daemon with the Docker
@@ -771,6 +806,10 @@ mcpManager:
     # Extra raw NetworkPolicyEgressRule entries appended as-is (e.g. to allow a
     # specific in-cluster dependency).
     extraEgress: []
+    # Proxy that instance pods labelled agentarea.io/egress may reach; those pods
+    # get DNS and this proxy only, and DNS only while it is empty. Shape:
+    # {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128}
+    egressProxy: {}
 
   # Operator customization merged onto every spawned MCP instance pod. All fields
   # are optional; empty = no change. Platform security invariants (managed-by
@@ -901,7 +940,7 @@ mcpManager:
     # not select images or runtime policy.
     image:
       repository: agentarea/agentarea-mcp-runner
-      tag: "latest"
+      tag: ""  # Defaults to the chart appVersion
       pullPolicy: IfNotPresent
 
     # Explicit zero disables process-local idle exit; pod retirement is owned
@@ -1106,15 +1145,22 @@ temporal:
   enabled: true
   replicaCount: 1
   image:
-    repository: temporalio/auto-setup
-    tag: "1.29.1"
-  
+    repository: temporalio/server
+    tag: "1.32.1"
+  # Runs the schema init container (creates and migrates the temporal and
+  # temporal_visibility databases) and the namespace job. Keep its tag equal
+  # to image.tag: the schema it applies is the one that server version needs.
+  adminTools:
+    image:
+      repository: temporalio/admin-tools
+      tag: "1.32.1"
+  # Retention of global.temporal.namespace when the namespace job creates it.
+  namespaceRetention: 24h
+
   # Database configuration
   database:
     name: "temporal"
-    createJob:
-      enabled: true
-  
+
   service:
     type: ClusterIP
     port: 7233
@@ -1127,7 +1173,7 @@ postgresql:
   enabled: true
   image:
     repository: postgres
-    tag: "16-alpine"
+    tag: "16.15-alpine"
   resources:
     limits:
       cpu: 500m
@@ -1156,23 +1202,37 @@ valkey:
         passwordKey: "redis-password"
   replica:
     enabled: false  # Standalone mode
+  # Valkey is a store, not a cache: the event bus runs on Redis Streams
+  # consumer groups, so data must survive a restart and must never be evicted.
+  # Size memory for 24-72 h of bus and tasks topics; history lives in Postgres.
+  # Recreate stops the old pod before the new one mounts the ReadWriteOnce volume.
+  deploymentStrategy: Recreate
   dataStorage:
-    enabled: false  # Disable for development, enable for production
-    requestedSize: "1Gi"
+    enabled: true
+    requestedSize: "4Gi"
+    # StorageClass for the Valkey PVC; empty uses the cluster default.
+    className: ""
+  # maxmemory stays below the container memory limit to leave room for the
+  # AOF rewrite fork, client buffers and allocator overhead.
+  valkeyConfig: |
+    appendonly yes
+    appendfsync everysec
+    maxmemory 768mb
+    maxmemory-policy noeviction
   resources:
     limits:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 500m
+      memory: 1Gi
     requests:
       cpu: 100m
-      memory: 128Mi
+      memory: 1Gi
 
 # RustFS - S3-compatible object storage
 rustfs:
   enabled: true
   image:
     repository: "rustfs/rustfs"
-    tag: "latest"
+    tag: "1.0.3"
   auth:
     existingSecret: "agentarea-rustfs-secret"
   # Optional bootstrap override. Empty means global.storage.bucket, keeping
@@ -1218,13 +1278,25 @@ jobs:
 # Disable to bring your own catalog or start empty.
 registryReconcile:
   enabled: true
+  # -- Also sync every active registry a workspace admin added (`--workspace-registries`).
+  # A tenant's failing source is recorded on its registry and does not fail the Job.
+  workspaceRegistries: false
   # Each entry needs `name` + `source_url`; the catalog type is auto-detected
-  # from the fetched payload. `recommendation_priority` (lower first, default
-  # 100) weights a whole source in the /explore "Recommended" order. The
-  # built-in curated sources below take 10, so any registry added without one
-  # -- a custom catalog, or the ~123k community mirror, which stays opt-in and
-  # must not drive first-run picks -- lands after them instead of interleaving
-  # its first entries with the curated front page.
+  # from the fetched payload unless `type` names it. `recommendation_priority`
+  # (lower first, default 100) weights a whole source in the /explore
+  # "Recommended" order. The built-in curated sources below take 10, so any
+  # registry added without one -- a custom catalog, or the community skill
+  # index, which stays opt-in and must not drive first-run picks -- lands after
+  # them instead of interleaving its first entries with the curated front page.
+  # `mode` is `mirror` (the default: a skills registry's content is copied into
+  # object storage at sync, so the Job needs the storage credentials) or
+  # `upstream` (content is fetched on first install); `trust` is `official`
+  # (default), `verified` or `community`. `credentials_secret_ref` names a
+  # secret of the `platform` workspace (by name or id) a sync reads a private
+  # source with; only the reference is stored. Every field is applied to an
+  # existing registry on each run (a moved source is read again in full); a
+  # changed `type` is refused. An entry with `active: false` and no
+  # `source_url` retires that registry: what nothing uses is deleted.
   registries:
     - name: system-llm-providers
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json
@@ -1236,12 +1308,16 @@ registryReconcile:
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json
       recommendation_priority: 10
     - name: system-skills-curated
-      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json
       recommendation_priority: 10
     # Built-in agents; those tagged "preset" are the starting points offered on
     # the agent-create form.
     - name: system-agents
       source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json
+      recommendation_priority: 10
+    # Event source types (ADR-0040): webhook and poll providers, read by streams.
+    - name: system-source-types
+      source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json
       recommendation_priority: 10
 
 # OpenFGA ReBAC permission server: the authorization graph backend.
@@ -1250,7 +1326,7 @@ openfga:
   replicaCount: 1
   image:
     repository: openfga/openfga
-    tag: "v1.18.0"
+    tag: "v1.22.0"
   database:
     name: "openfga"
     createJob:
@@ -1278,7 +1354,7 @@ kratos:
   replicaCount: 1
   image:
     repository: oryd/kratos
-    tag: "v1.3.1"
+    tag: "v26.2.0"
   
   # URL configuration
   # If not set, these default to internal Kubernetes service DNS names
@@ -1368,7 +1444,7 @@ kratos:
   # Provide a pure YAML map here (no Helm templating). Dynamic fields (URLs, SMTP, cookie domain,
   # whoami tokenizer) are injected by the chart at render time.
   config:
-    version: v1.3.1
+    version: v26.2.0
     serve:
       public:
         cors:

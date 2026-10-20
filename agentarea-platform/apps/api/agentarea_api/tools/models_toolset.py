@@ -1,13 +1,31 @@
 """ModelsToolset — inspect model specs and manage model instances."""
 
 import json
+from typing import Annotated
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from pydantic import BaseModel, Field
 
 from .base import platform_context
+
+
+class ModelSpecOutput(BaseModel):
+    id: str = Field(description="Model spec id (UUID); pass as model_spec_id.")
+    name: str = Field(description="Display name of the model, e.g. GPT-4o.")
+    provider_spec_id: str = Field(
+        description="Id of the provider spec serving it, as in `providers_list_specs`."
+    )
+
+
+class ModelInstanceOutput(BaseModel):
+    id: str = Field(description="Model instance id (UUID); an agent's model_id.")
+    name: str = Field(description="Name of the instance.")
+    model_spec_id: str = Field(description="Id of the model spec it runs.")
+    provider_config_id: str = Field(description="Id of the provider config it calls through.")
+    is_active: bool = Field(description="Whether agents can run on it.")
 
 
 @toolset(
@@ -20,7 +38,9 @@ from .base import platform_context
 class ModelsToolset(Toolset):
     """Inspect available model specs and manage the workspace's model instances."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List model specs", effect="read", output=list[ModelSpecOutput])
     @unrestricted("model specs are platform data, as GET /v1/model-specs serves them")
     async def list_specs(self) -> str:
         """List available model specifications (e.g. gpt-4o, claude-sonnet)."""
@@ -62,7 +82,9 @@ class ModelsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(
+        display_name="List model instances", effect="read", output=list[ModelInstanceOutput]
+    )
     @unrestricted("model instances in the workspace, as GET /v1/model-instances lists them")
     async def list_instances(self) -> str:
         """List configured model instances (models connected to provider configs)."""
@@ -106,14 +128,22 @@ class ModelsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create model instance", effect="write", output=ModelInstanceOutput)
     @unrestricted("any member may add a model instance, as POST /v1/model-instances allows")
     async def create_instance(
         self,
-        provider_config_id: str,
-        model_spec_id: str,
-        name: str,
-        description: str = "",
+        provider_config_id: Annotated[
+            str, Field(description="Provider config id (UUID), from `providers_list_configs`.")
+        ],
+        model_spec_id: Annotated[
+            str,
+            Field(
+                description="Model spec id (UUID), from `models_list_specs`; "
+                "the spec must belong to that config's provider."
+            ),
+        ],
+        name: Annotated[str, Field(description="Name for the instance.")],
+        description: Annotated[str, Field(description="What the instance is for.")] = "",
     ) -> str:
         """Connect a model spec to a provider config, making it usable by agents.
 
@@ -166,9 +196,18 @@ class ModelsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get model instance", effect="read", output=ModelInstanceOutput)
     @unrestricted("a model instance in the workspace, as GET /v1/model-instances/{id} returns it")
-    async def get(self, model_instance_id: str) -> str:
+    async def get(
+        self,
+        model_instance_id: Annotated[
+            str,
+            Field(
+                description="Model instance id (UUID), from `models_list_instances` "
+                "or an agent's model_id."
+            ),
+        ],
+    ) -> str:
         """Get details of a model instance."""
         from uuid import UUID
 

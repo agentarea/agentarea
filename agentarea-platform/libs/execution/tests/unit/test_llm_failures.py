@@ -63,7 +63,9 @@ def _wrapped(error: Exception, outer: str = "LLM call failed") -> RuntimeError:
             "out of credits",
         ),
         (
-            litellm.AuthenticationError(message="Incorrect API key", llm_provider="openai", model="m"),
+            litellm.AuthenticationError(
+                message="Incorrect API key", llm_provider="openai", model="m"
+            ),
             "provider_auth",
             "api key",
         ),
@@ -73,7 +75,9 @@ def _wrapped(error: Exception, outer: str = "LLM call failed") -> RuntimeError:
             "try again",
         ),
         (
-            litellm.NotFoundError(message="model gpt-9 not found", llm_provider="openai", model="m"),
+            litellm.NotFoundError(
+                message="model gpt-9 not found", llm_provider="openai", model="m"
+            ),
             "model_not_found",
             "not found",
         ),

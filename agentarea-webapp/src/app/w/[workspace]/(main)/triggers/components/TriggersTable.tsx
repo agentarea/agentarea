@@ -1,52 +1,53 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import Table, { type Column } from "@/components/Table/Table";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { getTriggerStatusPresentation } from "@/lib/status";
+import { parseUtcTimestamp } from "@/utils/dateUtils";
 import {
   describeTriggerSchedule,
-  findTriggerCatalogEntry,
-  formatCompactDistance,
   getTriggerDisplayName,
   getTriggerHealth,
   TriggerSourceMark,
   type EnrichedTrigger,
-  type TriggerCatalogEntry,
 } from "./triggerDisplay";
 
 interface TriggersTableProps {
   triggers: EnrichedTrigger[];
-  catalog?: TriggerCatalogEntry[];
   /** Grouped view already names the channel in the section header. */
   hideChannelColumn?: boolean;
 }
 
 export default function TriggersTable({
   triggers,
-  catalog = [],
   hideChannelColumn = false,
 }: TriggersTableProps) {
   const t = useTranslations("TriggersPage.table");
   const tStatus = useTranslations("TriggersPage.status");
   const tCommon = useTranslations("TriggersPage");
   const router = useWorkspaceRouter();
+  const format = useFormatter();
+  const now = useNow({ updateInterval: 60_000 });
+  const relative = (value: string) => {
+    const date = parseUtcTimestamp(value);
+    return date ? format.relativeTime(date, { now, style: "narrow" }) : "—";
+  };
 
   const columns: Column<EnrichedTrigger>[] = [
-    // Leads the row: the icon belongs to the event source, which is what this
-    // column spells out ("On GitHub event"), not to the trigger's own name.
+    // Leads the row: the icon belongs to what fires the trigger, which is what
+    // this column spells out, not to the trigger's own name.
     {
       header: t("when"),
       accessor: "when",
       headerClassName: "w-[200px]",
       render: (_value, trigger) => {
         if (!trigger) return null;
-        const entry = findTriggerCatalogEntry(trigger, catalog);
         return (
           <span className="flex min-w-0 items-center gap-2.5">
-            <TriggerSourceMark entry={entry} trigger={trigger} size={28} />
+            <TriggerSourceMark trigger={trigger} size={28} />
             <span className="truncate text-[13px] text-muted-foreground">
               {trigger.trigger_type === "stream"
                 ? tCommon("onStreamEvents")
@@ -78,9 +79,8 @@ export default function TriggersTable({
             render: (_value, trigger) =>
               trigger ? (
                 <span className="block truncate text-[13px] text-muted-foreground">
-                  {getTriggerDisplayName(
-                    trigger,
-                    findTriggerCatalogEntry(trigger, catalog)
+                  {getTriggerDisplayName(trigger, (type) =>
+                    tCommon(`type.${type}`)
                   )}
                 </span>
               ) : null,
@@ -129,7 +129,7 @@ export default function TriggersTable({
               aria-label={t("lastRun")}
               title={t("lastRun")}
             />
-            {formatCompactDistance(trigger.last_execution_at)}
+            {relative(trigger.last_execution_at)}
           </span>
         );
       },
@@ -142,7 +142,7 @@ export default function TriggersTable({
       render: (_value, trigger) =>
         trigger?.created_at ? (
           <span className="text-[13px] text-muted-foreground">
-            {formatCompactDistance(trigger.created_at)}
+            {relative(trigger.created_at)}
           </span>
         ) : (
           <span className="text-[13px] text-muted-foreground">—</span>

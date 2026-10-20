@@ -1,9 +1,4 @@
-import { listTriggerCatalog } from "@/lib/api";
-import {
-  findTriggerCatalogEntry,
-  getTriggerLane,
-  type TriggerCatalogEntry,
-} from "./triggerDisplay";
+import { getTriggerLane } from "./triggerDisplay";
 import { getTriggersCached } from "./triggersData";
 import TriggersTypeFilter from "./TriggersTypeFilter";
 
@@ -16,15 +11,8 @@ export default async function TriggersTypeFilterSection({
 }: {
   currentType: string;
 }) {
-  const [{ triggers }, catalogResponse] = await Promise.all([
-    getTriggersCached(),
-    listTriggerCatalog(),
-  ]);
-  const catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
-
-  const lanes = triggers.map((trigger) =>
-    getTriggerLane(trigger, findTriggerCatalogEntry(trigger, catalog))
-  );
+  const { triggers } = await getTriggersCached();
+  const lanes = triggers.map((trigger) => getTriggerLane(trigger));
 
   const counts = {
     all: triggers.length,

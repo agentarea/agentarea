@@ -35,6 +35,7 @@ PROVENANCE = TaskProvenance(
     correlation_id=ROOT_EVENT_ID,
     causation_id=EVENT_ID,
     parent_task_id=PARENT_ID,
+    depth=1,
 )
 EXPECTED = {
     "origin_type": "trigger",
@@ -42,6 +43,7 @@ EXPECTED = {
     "correlation_id": ROOT_EVENT_ID,
     "causation_id": EVENT_ID,
     "parent_task_id": str(PARENT_ID),
+    "depth": 1,
 }
 
 
@@ -96,7 +98,7 @@ def test_a_task_nothing_recorded_for_reads_as_unknown_origin() -> None:
         ),
         None,
     )
-    assert response.model_dump(mode="json")["provenance"] == dict.fromkeys(EXPECTED)
+    assert response.model_dump(mode="json")["provenance"] == {**dict.fromkeys(EXPECTED), "depth": 0}
 
 
 @pytest_asyncio.fixture

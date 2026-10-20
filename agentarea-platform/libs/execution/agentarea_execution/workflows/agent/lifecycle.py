@@ -6,25 +6,22 @@ from temporalio import workflow
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
-    from agentarea_common.money import serialize_money
+    from agentarea_common.money import serialize_money, to_money
 
     from ..models import Message
 
 
 from ...models import UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
     CONTINUATION_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .budget import LLM_RUN_CAP_FAILURE_REASON, MONTHLY_CAP_FAILURE_REASON
 from .continue_as_new import ContinueAsNewMixin
 from .limits import run_limit_reason
 from .llm_turn import LLMTurnMixin
-from .patches import LONG_RUN_LOOP_PATCH
+from .patches import CONTINUATION_WITHIN_POLICY_CEILING_PATCH, LONG_RUN_LOOP_PATCH
 from .stopping import STOPPED_BEFORE_RUNNING, STOPPED_WHILE_RUNNING
 
 
@@ -69,7 +66,9 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 if failure_reason and await self._await_continuation(failure_reason, reason):
                     await self._check_monthly_spend_cap()
                     continue
-                self._record_unsuccessful_termination(failure_reason, reason)
+                self._record_unsuccessful_termination(
+                    failure_reason, self._termination_message(failure_reason, reason)
+                )
                 break
 
             workflow.logger.info(f"Starting iteration {self.state.current_iteration}")
@@ -88,7 +87,9 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 if await self._await_continuation(failure_reason, reason):
                     await self._check_monthly_spend_cap()
                     continue
-                self._record_unsuccessful_termination(failure_reason, reason)
+                self._record_unsuccessful_termination(
+                    failure_reason, self._termination_message(failure_reason, reason)
+                )
                 break
 
             if self.state.validation_terminal:
@@ -124,7 +125,9 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                 if failure_reason and await self._await_continuation(failure_reason, reason):
                     await self._check_monthly_spend_cap()
                     continue
-                self._record_unsuccessful_termination(failure_reason, reason)
+                self._record_unsuccessful_termination(
+                    failure_reason, self._termination_message(failure_reason, reason)
+                )
                 break
 
             # Check if Temporal suggests resetting event history
@@ -143,6 +146,11 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         """Idle durably until the user grants resources or the window expires."""
         if failure_reason in (MONTHLY_CAP_FAILURE_REASON, LLM_RUN_CAP_FAILURE_REASON):
             return False
+        if workflow.patched(
+            CONTINUATION_WITHIN_POLICY_CEILING_PATCH
+        ) and self._limit_at_policy_ceiling(failure_reason):
+            self._policy_fixed_limit = failure_reason
+            return False
         if (
             self._interaction_contract_enabled
             and self.state.interaction_capabilities.channel == "none"
@@ -157,18 +165,15 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         self._continuation_message = message
         self.state.status = ExecutionStatus.WAITING_FOR_CONTINUATION
 
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status=ExecutionStatus.WAITING_FOR_CONTINUATION,
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status=ExecutionStatus.WAITING_FOR_CONTINUATION,
+                error_message=message,
+                failure_reason=failure_reason,
+                workspace_id=self.state.workspace_id,
+            )
         )
         self._events.add_event(
             EventTypes.WORKFLOW_AWAITING_CONTINUATION,
@@ -210,18 +215,13 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
             },
         )
         await self._publish_events_immediately()
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="running",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="running",
+                workspace_id=self.state.workspace_id,
+            )
         )
         self._continuation_failure_reason = None
         self._continuation_message = None
@@ -234,9 +234,12 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         persists the state and wakes the workflow on signal or timeout.
         Uses try/except per Temporal SDK docs (TimeoutError on timeout).
         """
-        from datetime import timedelta
-
-        workflow.logger.info("Task completed — waiting for follow-up messages (30 min timeout)")
+        window = self._follow_up_window()
+        if window is None:
+            return
+        workflow.logger.info(
+            f"Task completed — waiting for follow-up messages ({int(window.total_seconds())}s)"
+        )
 
         try:
             await workflow.wait_condition(
@@ -244,7 +247,7 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
                     bool(self._message_queue)
                     or (self._interaction_contract_enabled and bool(self._a2ui_action_queue))
                 ),
-                timeout=timedelta(minutes=30),
+                timeout=window,
             )
         except TimeoutError:
             workflow.logger.info("Await timeout reached, finalizing workflow")
@@ -254,18 +257,13 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         self._awaiting_input = False
 
         # Update task status back to running
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="running",
-                    workspace_id=self.state.workspace_id,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status="running",
+                workspace_id=self.state.workspace_id,
+            )
         )
 
     def _should_continue_execution(self) -> tuple[bool, str | None, str]:
@@ -338,6 +336,32 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
     def _policy_limit(self, section: str, key: str) -> int | None:
         return ((self.state.effective_policy or {}).get(section) or {}).get(key)
 
+    def _limit_at_policy_ceiling(self, failure_reason: str) -> bool:
+        """Whether the limit the run hit is already what a workspace, agent or user policy allows.
+
+        A continuation grant cannot raise it then, so the run does not wait for one.
+        The ceilings are those the task was created under, in its governance snapshot.
+        """
+        snapshot = (self._workflow_metadata or {}).get("governance_snapshot") or {}
+        ceiling = (snapshot.get("limit_ceilings") or {}).get(failure_reason)
+        if ceiling is None:
+            return False
+        current: Any = {
+            "iteration_limit": self.state.goal.max_iterations if self.state.goal else None,
+            "tool_call_limit": self._policy_limit("execution", "max_tool_calls_total"),
+            "token_limit": self._policy_limit("tokens", "max_tokens"),
+            "budget_exceeded": self._budget.budget_limit,
+        }.get(failure_reason)
+        return current is not None and to_money(current) >= to_money(ceiling)
+
+    def _termination_message(self, failure_reason: str | None, message: str) -> str:
+        """Why the run stopped, saying so when a policy fixes the limit it hit."""
+        if failure_reason is None or failure_reason != self._policy_fixed_limit:
+            return message
+        return (
+            f"{message}. A workspace, agent or user policy sets this limit, so it cannot be raised"
+        )
+
     def _run_limit_message(self, failure_reason: str) -> str:
         """The user-facing explanation of why the run stopped at a limit."""
         if failure_reason == "token_limit":
@@ -358,11 +382,8 @@ class LifecycleMixin(LLMTurnMixin, ContinueAsNewMixin):
         message continues it.
         """
         stopped = {call.tool_call.id for call in self._stopped_tool_calls}
-        last_assistant = next(
-            (message for message in reversed(self.state.messages) if message.role == "assistant"),
-            None,
-        )
-        for tool_call in (last_assistant.tool_calls or []) if last_assistant else []:
+        calls, _answered = self._last_turn_tool_calls()
+        for tool_call in calls:
             call_id = tool_call.get("id") if isinstance(tool_call, dict) else None
             if call_id in stopped:
                 self.state.messages.append(

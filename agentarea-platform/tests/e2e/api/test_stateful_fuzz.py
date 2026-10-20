@@ -32,7 +32,7 @@ try:
         headers=_CALLER.auth(),
     ).exclude(
         path_regex=(
-            r".*/events/stream$"
+            r".*/events/(stream|live)$"
             r"|^/webhooks/"
             r"|^/\.well-known/"
             r"|/a2a/"

@@ -17,12 +17,14 @@ TaskStatus = Literal[
     "waiting_for_input",
     "waiting_for_approval",
     "waiting_for_continuation",
+    "waiting_for_infrastructure",
     "blocked",
     "completed",
     "failed",
     "cancelled",
 ]
 TASK_STATUSES: frozenset[str] = frozenset(get_args(TaskStatus))
+ENDED_TASK_STATUSES: frozenset[str] = frozenset({"blocked", "completed", "failed", "cancelled"})
 
 InboxStatus = Literal[
     "waiting_for_approval",

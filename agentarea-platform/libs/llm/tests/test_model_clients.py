@@ -40,6 +40,11 @@ def _endpoint(**overrides) -> ModelEndpoint:
     return ModelEndpoint(**{**base, **overrides})
 
 
+def _member_endpoint(**overrides) -> ModelEndpoint:
+    """An address a workspace member set: called directly, never through LiteLLM."""
+    return _endpoint(**{"endpoint_url": "https://proxy.example/api/v1", **overrides})
+
+
 def _client_factory(handler):
     return lambda: httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
@@ -60,9 +65,7 @@ def _image_handler(seen: dict, *, usage: dict | None, images: list[dict] | None 
             else [
                 {
                     "type": "image_url",
-                    "image_url": {
-                        "url": "data:image/png;base64," + base64.b64encode(PNG).decode()
-                    },
+                    "image_url": {"url": "data:image/png;base64," + base64.b64encode(PNG).decode()},
                 }
             ],
         }
@@ -81,9 +84,7 @@ def _http_handler(handler) -> HTTPHandler:
 async def test_image_generation_returns_bytes_type_and_provider_cost():
     seen: dict = {}
     usage = {"prompt_tokens": 6, "completion_tokens": 1290, "total_tokens": 1296, "cost": 0.0387}
-    model = ImageModel(
-        _endpoint(), litellm_client=_http_handler(_image_handler(seen, usage=usage))
-    )
+    model = ImageModel(_endpoint(), litellm_client=_http_handler(_image_handler(seen, usage=usage)))
 
     image = await model.generate("a lighthouse at dusk", size="1024x1536")
 
@@ -96,12 +97,14 @@ async def test_image_generation_returns_bytes_type_and_provider_cost():
     assert seen["body"]["messages"] == [{"role": "user", "content": "a lighthouse at dusk"}]
 
 
-async def test_image_generation_without_a_provider_cost_is_refused():
+async def test_an_image_without_a_provider_cost_is_kept_with_its_cost_unknown():
     usage = {"prompt_tokens": 6, "completion_tokens": 1290, "total_tokens": 1296}
     model = ImageModel(_endpoint(), litellm_client=_http_handler(_image_handler({}, usage=usage)))
 
-    with pytest.raises(ModelCostUnavailableError):
-        await model.generate("a lighthouse")
+    image = await model.generate("a lighthouse")
+
+    assert image.content == PNG
+    assert image.cost_usd is None
 
 
 async def test_image_generation_that_returns_no_image_is_an_error():
@@ -288,7 +291,7 @@ def _decision_handler(seen: dict, *, usage: dict, answers: dict | None = None):
 async def test_decision_posts_state_and_questions_and_returns_answers_with_cost():
     seen: dict = {}
     model = DecisionModel(
-        _endpoint(model_name="typesafe/jev"),
+        _member_endpoint(model_name="typesafe/jev"),
         http_client_factory=_client_factory(
             _decision_handler(seen, usage={"input_tokens": 100, "output_tokens": 2, "cost": 0.0004})
         ),
@@ -296,7 +299,7 @@ async def test_decision_posts_state_and_questions_and_returns_answers_with_cost(
 
     result = await model.evaluate("Customer: my card was charged twice", _QUESTIONS)
 
-    assert seen["url"] == "https://openrouter.ai/api/v1/systemone"
+    assert seen["url"] == "https://proxy.example/api/v1/systemone"
     assert seen["body"] == {
         "model": "typesafe/jev",
         "state": "Customer: my card was charged twice",
@@ -309,7 +312,7 @@ async def test_decision_posts_state_and_questions_and_returns_answers_with_cost(
 
 async def test_decision_cost_falls_to_the_spec_token_prices_when_the_provider_omits_it():
     model = DecisionModel(
-        _endpoint(
+        _member_endpoint(
             input_cost_per_token=Decimal("0.000001"), output_cost_per_token=Decimal("0.00001")
         ),
         http_client_factory=_client_factory(
@@ -322,21 +325,24 @@ async def test_decision_cost_falls_to_the_spec_token_prices_when_the_provider_om
     assert result.cost_usd == Decimal("0.000120")
 
 
-async def test_decision_without_any_price_is_refused():
+async def test_a_decision_without_any_price_is_kept_with_its_cost_unknown():
     model = DecisionModel(
-        _endpoint(),
+        _member_endpoint(),
         http_client_factory=_client_factory(
             _decision_handler({}, usage={"input_tokens": 100, "output_tokens": 2})
         ),
     )
 
-    with pytest.raises(ModelCostUnavailableError):
-        await model.evaluate("state", _QUESTIONS)
+    result = await model.evaluate("state", _QUESTIONS)
+
+    assert result.answers
+    assert result.cost_usd is None
+    assert (result.input_tokens, result.output_tokens) == (100, 2)
 
 
 async def test_a_missing_answer_is_an_error():
     model = DecisionModel(
-        _endpoint(),
+        _member_endpoint(),
         http_client_factory=_client_factory(
             _decision_handler(
                 {},
@@ -364,7 +370,7 @@ async def test_malformed_questions_never_reach_the_provider(questions, message):
     def handler(request: httpx.Request) -> httpx.Response:
         raise AssertionError("the provider must not be called")
 
-    model = DecisionModel(_endpoint(), http_client_factory=_client_factory(handler))
+    model = DecisionModel(_member_endpoint(), http_client_factory=_client_factory(handler))
 
     with pytest.raises(ValueError, match=message):
         await model.evaluate("state", questions)
@@ -433,7 +439,7 @@ async def test_a_video_download_without_a_content_type_fails_loud():
 
 async def test_a_decision_without_token_usage_fails_loud():
     model = DecisionModel(
-        _endpoint(),
+        _member_endpoint(),
         http_client_factory=_client_factory(_decision_handler({}, usage={"cost": 0.1})),
     )
 
@@ -446,7 +452,7 @@ async def test_a_provider_that_may_answer_later_is_told_apart(status):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json={"error": {"message": "busy"}})
 
-    model = DecisionModel(_endpoint(), http_client_factory=_client_factory(handler))
+    model = DecisionModel(_member_endpoint(), http_client_factory=_client_factory(handler))
 
     with pytest.raises(ModelProviderUnavailableError) as raised:
         await model.evaluate("state", _QUESTIONS)
@@ -458,8 +464,186 @@ async def test_a_refused_call_is_not_mistaken_for_an_outage(status):
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(status, json={"error": {"message": "no"}})
 
-    model = DecisionModel(_endpoint(), http_client_factory=_client_factory(handler))
+    model = DecisionModel(_member_endpoint(), http_client_factory=_client_factory(handler))
 
     with pytest.raises(ModelCallError) as raised:
         await model.evaluate("state", _QUESTIONS)
     assert not isinstance(raised.value, ModelProviderUnavailableError)
+
+
+def _never_litellm() -> HTTPHandler:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("a member endpoint must never go through LiteLLM")
+
+    return _http_handler(handler)
+
+
+async def test_a_member_image_endpoint_is_called_through_the_pinned_client():
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["auth"] = request.headers.get("authorization")
+        seen["body"] = json.loads(request.content)
+        body = {"data": [{"b64_json": base64.b64encode(PNG).decode()}], "usage": {"cost": 0.04}}
+        return httpx.Response(200, json=body)
+
+    policies: list = []
+
+    def member_client(policy):
+        policies.append(policy)
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    model = ImageModel(
+        _endpoint(provider_type="openai", endpoint_url="https://images.example/v1"),
+        litellm_client=_never_litellm(),
+        member_client=member_client,
+    )
+
+    image = await model.generate("a lighthouse", size="1024x1024")
+
+    assert (image.content, image.media_type, image.cost_usd) == (PNG, "image/png", Decimal("0.04"))
+    assert seen["url"] == "https://images.example/v1/images/generations"
+    assert seen["auth"] == "Bearer sk-or-test"
+    assert seen["body"] == {
+        "model": "vendor/model",
+        "prompt": "a lighthouse",
+        "n": 1,
+        "response_format": "b64_json",
+        "size": "1024x1024",
+    }
+    assert len(policies) == 1 and policies[0] is not None
+
+
+async def test_a_member_image_endpoint_error_does_not_echo_the_providers_body():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text="internal-host.svc.cluster.local said no")
+
+    model = ImageModel(
+        _endpoint(endpoint_url="https://images.example/v1"),
+        litellm_client=_never_litellm(),
+        member_client=lambda policy: httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+
+    with pytest.raises(ModelCallError, match="HTTP 400") as failed:
+        await model.generate("a lighthouse")
+    assert "cluster.local" not in str(failed.value)
+
+
+async def test_a_platform_image_endpoint_still_goes_through_litellm():
+    seen: dict = {}
+    usage = {"prompt_tokens": 6, "completion_tokens": 1, "total_tokens": 7, "cost": 0.01}
+    model = ImageModel(
+        _endpoint(endpoint_url="https://gateway.internal.example/api/v1", managed_by="platform"),
+        litellm_client=_http_handler(_image_handler(seen, usage=usage)),
+        member_client=lambda policy: (_ for _ in ()).throw(AssertionError("not a member endpoint")),
+    )
+
+    image = await model.generate("a lighthouse")
+
+    assert image.cost_usd == Decimal("0.01")
+    assert seen["url"].startswith("https://gateway.internal.example/api/v1")
+
+
+@pytest.fixture
+def litellm_wire(monkeypatch):
+    """LiteLLM's own decisions call, its HTTP client answered by a handler."""
+    from litellm.llms.custom_httpx import http_handler, llm_http_handler
+
+    def install(handler):
+        client = http_handler.AsyncHTTPHandler()
+        client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        monkeypatch.setattr(llm_http_handler, "get_async_httpx_client", lambda *a, **k: client)
+
+    return install
+
+
+def _never_called(request: httpx.Request) -> httpx.Response:
+    raise AssertionError("a provider's address goes through LiteLLM, not the direct client")
+
+
+async def test_a_providers_decision_model_is_called_through_litellm(litellm_wire):
+    seen: dict = {}
+    litellm_wire(
+        _decision_handler(seen, usage={"input_tokens": 40, "output_tokens": 2, "cost": 0.0003})
+    )
+    model = DecisionModel(
+        _endpoint(provider_type="typesafe", model_name="jev"),
+        http_client_factory=_client_factory(_never_called),
+    )
+
+    result = await model.evaluate("card charged twice", _QUESTIONS)
+
+    assert seen["url"] == "https://api.typesafe.ai/v1/systemone"
+    assert seen["body"]["model"] == "jev"
+    assert seen["body"]["state"] == "card charged twice"
+    assert result.answers["route"]["choice"] == "billing"
+    assert result.answers["urgent"]["noul"] == 0.2
+    assert result.cost_usd == Decimal("0.0003")
+    assert (result.input_tokens, result.output_tokens) == (40, 2)
+
+
+async def test_openrouter_decisions_go_to_its_decisions_api(litellm_wire):
+    seen: dict = {}
+    litellm_wire(
+        _decision_handler(seen, usage={"input_tokens": 4, "output_tokens": 1, "cost": 0.0001})
+    )
+    model = DecisionModel(
+        _endpoint(model_name="typesafe/jev"), http_client_factory=_client_factory(_never_called)
+    )
+
+    await model.evaluate("state", _QUESTIONS)
+
+    assert seen["url"] == "https://openrouter.ai/api/alpha/decisions"
+    assert seen["body"]["model"] == "typesafe/jev"
+
+
+async def test_a_platform_gateway_is_called_through_litellm_at_its_address(litellm_wire):
+    seen: dict = {}
+    litellm_wire(
+        _decision_handler(seen, usage={"input_tokens": 4, "output_tokens": 1, "cost": 0.0001})
+    )
+    model = DecisionModel(
+        _endpoint(
+            provider_type="typesafe",
+            model_name="jev",
+            endpoint_url="https://gateway.internal.example",
+            managed_by="platform",
+        ),
+        http_client_factory=_client_factory(_never_called),
+    )
+
+    await model.evaluate("state", _QUESTIONS)
+
+    assert seen["url"] == "https://gateway.internal.example/v1/systemone"
+
+
+async def test_a_litellm_decision_failure_does_not_echo_the_providers_body(litellm_wire):
+    litellm_wire(
+        lambda request: httpx.Response(400, text="internal-host.svc.cluster.local said no")
+    )
+    model = DecisionModel(
+        _endpoint(provider_type="typesafe", model_name="jev"),
+        http_client_factory=_client_factory(_never_called),
+    )
+
+    with pytest.raises(ModelCallError) as failed:
+        await model.evaluate("state", _QUESTIONS)
+    assert "cluster.local" not in str(failed.value)
+
+
+async def test_a_litellm_decision_without_a_provider_cost_is_priced_from_the_spec(litellm_wire):
+    litellm_wire(_decision_handler({}, usage={"input_tokens": 100, "output_tokens": 2}))
+    model = DecisionModel(
+        _endpoint(
+            provider_type="typesafe",
+            model_name="jev",
+            input_cost_per_token=Decimal("0.000001"),
+            output_cost_per_token=Decimal("0.00001"),
+        ),
+        http_client_factory=_client_factory(_never_called),
+    )
+
+    result = await model.evaluate("state", _QUESTIONS)
+
+    assert result.cost_usd == Decimal("0.000120")

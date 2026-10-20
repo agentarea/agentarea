@@ -15,6 +15,7 @@ import json
 import threading
 import uuid
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,6 +33,8 @@ from agentarea_execution.models import (
     ArtifactValidationResult,
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
+    DelegatedSpendRequest,
+    DelegatedSpendResult,
     LLMCallRequest,
     MCPToolRequest,
     ResolveAgentToolsRequest,
@@ -42,6 +45,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent.approval import ToolApprovalMixin
 from agentarea_execution.workflows.agent.patches import TOOL_CONFIG_ALIASES_PATCH
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
@@ -50,6 +54,7 @@ from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from temporalio import activity, workflow
+from temporalio.client import WorkflowFailureError
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
@@ -76,6 +81,11 @@ _llm_script: list[str] = []
 _llm_calls = 0
 _llm_lock = threading.Lock()
 _governance_escalates = False
+_delegation_requests: list[CreateDelegationTaskRequest] = []
+# Set while a test holds the delegated child's model call until the parent is stopped.
+_child_started = threading.Event()
+_release_child = threading.Event()
+_hold_child = False
 
 
 def _policy(approval: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -157,11 +167,17 @@ async def _mock_resolve_agent_tools(request: ResolveAgentToolsRequest) -> Resolv
 async def _mock_create_delegation_task(
     request: CreateDelegationTaskRequest,
 ) -> CreateDelegationTaskResult:
+    _delegation_requests.append(request)
     return CreateDelegationTaskResult(
         task_id=uuid.uuid4(),
         status="created",
         effective_policy=request.parent_effective_policy,
     )
+
+
+@activity.defn(name="delegated_task_spend_activity")
+async def _mock_delegated_spend(_request: DelegatedSpendRequest) -> DelegatedSpendResult:
+    return DelegatedSpendResult(spent=Decimal("0.002"))
 
 
 def _reply(tool_name: str, arguments: dict[str, Any], call_id: str) -> dict[str, Any]:
@@ -185,7 +201,11 @@ def _reply(tool_name: str, arguments: dict[str, Any], call_id: str) -> dict[str,
 async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
     """Follow ``_llm_script`` for the parent run; a delegated child just completes."""
     global _llm_calls
-    if any(_CHILD_QUERY in str(m.get("content")) for m in request.messages):
+    if any(_CHILD_QUERY in str(m.get("content")) for m in _TASK_LOG.messages(request)):
+        if _hold_child:
+            _child_started.set()
+            while not _release_child.is_set():
+                await asyncio.sleep(0.05)
         return _reply("completion", {"result": "child done", "artifacts": []}, "child_done")
     with _llm_lock:
         _llm_calls += 1
@@ -264,15 +284,25 @@ async def _mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=_mock_publish_events,
+    update_status=_mock_update_status,
+    log=_TASK_LOG,
+)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
     _mock_resolve_model,
     _mock_resolve_agent_tools,
     _mock_create_delegation_task,
+    _mock_delegated_spend,
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
     _mock_validate_artifacts,
 ]
@@ -384,9 +414,23 @@ async def test_approved_tool_runs_after_the_designated_approver_signs_off():
     assert [r.tool_name for r in _tool_requests] == [_GATED_TOOL]
     assert _tool_requests[0].policy_approval_granted is True
     assert _executed_tools == [_GATED_TOOL]
-    responses = _events("approval.response")
+    responses = _events("approval.decided")
     assert len(responses) == 1
     assert responses[0]["data"]["approved"] is True
+    events = [
+        row
+        for row in _TASK_LOG.entries(str(result.task_id))
+        if row.kind == "event" and (row.name or "").startswith("approval.")
+    ]
+    assert [row.name for row in events] == ["approval.requested", "approval.decided"]
+    requested, decided = (row.meta or {} for row in events)
+    assert requested["tool_name"] == _GATED_TOOL
+    assert any(_APPROVER in approver for approver in requested["approvers"])
+    assert (decided["approved"], decided["approved_by"], decided["comment"]) == (
+        True,
+        _APPROVER,
+        "ship it",
+    )
 
 
 @pytest.mark.asyncio
@@ -397,7 +441,7 @@ async def test_approval_rule_on_agent_config_name_escalates_before_delegation():
     async def drive(handle):
         escalation = await _pending_escalation(handle)
         assert escalation["tool_name"] == _DELEGATE_TOOL
-        assert _events("AgentDelegationStarted") == []
+        assert _events("delegation.started") == []
         await handle.signal(
             AgentExecutionWorkflow.resolve_escalation,
             args=[escalation["escalation_id"], True, "approved", _APPROVER],
@@ -406,7 +450,7 @@ async def test_approval_rule_on_agent_config_name_escalates_before_delegation():
     result = await _run(_request(policy), drive)
 
     assert result.success is True
-    assert len(_events("AgentDelegationCompleted")) == 1
+    assert len(_events("delegation.completed")) == 1
 
 
 @pytest.mark.asyncio
@@ -627,6 +671,98 @@ async def test_agent_tool_runs_the_target_agent_as_a_child_workflow():
     result = await _run(_request(_policy()))
 
     assert result.success is True
-    completed = _events("AgentDelegationCompleted")
+    completed = _events("delegation.completed")
     assert len(completed) == 1
     assert completed[0]["data"]["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_delegated_childs_task_records_the_workflow_it_runs_as():
+    _delegation_requests.clear()
+    _llm_script.extend(["delegate", "complete"])
+
+    await _run(_request(_policy()))
+
+    [created] = _delegation_requests
+    assert created.execution_id is not None
+    assert created.execution_id.startswith("delegation-")
+    assert created.execution_id.endswith("-call_delegate_1")
+    # Nothing else marks the child's task running; its run does as it starts.
+    assert _status_updates.count("running") == 1
+
+
+@pytest.mark.asyncio
+async def test_stopping_the_parent_while_its_child_works_records_the_delegation_stopped():
+    global _hold_child
+    _hold_child = True
+    _child_started.clear()
+    _release_child.clear()
+    _llm_script.extend(["delegate", "complete"])
+    request = _request(_policy())
+
+    async def drive(handle):
+        for _ in range(400):
+            if _child_started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        else:
+            raise AssertionError("the child never started")
+        await handle.cancel()
+        _release_child.set()
+
+    try:
+        with pytest.raises(WorkflowFailureError):
+            await _execute(request, drive)
+    finally:
+        _hold_child = False
+        _release_child.set()
+
+    [stopped] = [e["data"] for e in _events("delegation.failed")]
+    assert stopped["cancelled"] is True
+    assert stopped["reserved_cost"] is not None
+    answers = [
+        entry
+        for entry in _TASK_LOG.entries(str(request.task_id))
+        if entry.role == "tool" and entry.tool_call_id == "call_delegate_1"
+    ]
+    assert [json.loads(entry.content)["status"] for entry in answers] == ["cancelled"]
+
+
+@pytest.mark.asyncio
+async def test_stopping_only_the_child_answers_the_delegation_and_the_parent_carries_on():
+    global _hold_child
+    _hold_child = True
+    _child_started.clear()
+    _release_child.clear()
+    _llm_script.extend(["delegate", "complete"])
+    request = _request(_policy())
+
+    async def drive(handle):
+        for _ in range(400):
+            if _child_started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        else:
+            raise AssertionError("the child never started")
+        child = handle._client.get_workflow_handle(f"delegation-{handle.id}-call_delegate_1")
+        await child.cancel()
+        _release_child.set()
+
+    try:
+        result, history = await _execute(request, drive)
+    finally:
+        _hold_child = False
+        _release_child.set()
+
+    assert result.success is True
+    [stopped] = [e["data"] for e in _events("delegation.failed")]
+    assert stopped["cancelled"] is True
+    answers = [
+        entry
+        for entry in _TASK_LOG.entries(str(request.task_id))
+        if entry.role == "tool" and entry.tool_call_id == "call_delegate_1"
+    ]
+    assert [json.loads(entry.content)["status"] for entry in answers] == ["cancelled"]
+    # The parent carries what the stopped child spent, not its whole allocation.
+    assert result.total_cost < Decimal("0.1")
+    await _replay(history)

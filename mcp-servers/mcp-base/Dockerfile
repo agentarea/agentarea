@@ -5,10 +5,10 @@
 # runs a stdio MCP server (`npx -y <pkg>`, `uvx <pkg>`, or a command baked into
 # an image built FROM this one) behind a bridge that serves Streamable HTTP on
 # $PORT at /mcp for protocol 2026-07-28 and 2025 clients.
-FROM node:22-bookworm-slim AS node
-FROM ghcr.io/astral-sh/uv:0.8.22 AS uv
+FROM node:24.22.0-trixie-slim AS node
+FROM ghcr.io/astral-sh/uv:0.13.3 AS uv
 
-FROM python:3.12-slim-bookworm
+FROM python:3.14.8-slim-trixie
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -33,8 +33,8 @@ RUN cd /opt/mcp-base/node && npm ci --omit=dev --no-audit --no-fund && npm cache
 COPY requirements.txt /opt/mcp-base/requirements.txt
 RUN uv venv /opt/mcp-base/venv \
     && uv pip install --no-cache --compile-bytecode --python /opt/mcp-base/venv/bin/python -r /opt/mcp-base/requirements.txt
-COPY mcp_base /opt/mcp-base/venv/lib/python3.12/site-packages/mcp_base
-RUN /opt/mcp-base/venv/bin/python -m compileall -q /opt/mcp-base/venv/lib/python3.12/site-packages/mcp_base
+COPY mcp_base /opt/mcp-base/venv/lib/python3.14/site-packages/mcp_base
+RUN /opt/mcp-base/venv/bin/python -m compileall -q /opt/mcp-base/venv/lib/python3.14/site-packages/mcp_base
 
 # Matches the manager's default isolation user.
 RUN useradd --uid 10001 --home-dir /tmp --no-create-home mcp

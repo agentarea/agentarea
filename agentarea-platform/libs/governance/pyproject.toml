@@ -7,7 +7,7 @@ name = "agentarea-governance"
 version = "0.1.1"
 description = "Unified interceptor framework for agent execution governance and security"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "agentarea-common",
     "pydantic>=2.4.2",

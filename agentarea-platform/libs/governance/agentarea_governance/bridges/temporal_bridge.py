@@ -156,7 +156,7 @@ def _extract_uuid_from_str(val: Any) -> UUID | None:
         return None
     try:
         return UUID(str(val))
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         return None
 
 

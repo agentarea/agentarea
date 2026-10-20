@@ -58,10 +58,15 @@ class MCPServerInstanceResponse(BaseModel):
     verification: dict[str, Any]
     last_dispatch: dict[str, Any] | None = None
     tools: list[dict[str, Any]] | None = None
+    # What the server offers as MCP Events, from its last verification: the
+    # extension's settings and events/list. None when it offers none.
+    events: dict[str, Any] | None = None
     auth_config_id: UUID | str | None = None
     # "platform" for a connection the deployment supplies to every workspace on its
     # own credential (read-only here; its calls are charged to the workspace balance).
     managed_by: str | None = None
+    # A member-set cost that wins over the catalog's (wiki ADR-0038 §2.3).
+    cost: dict[str, Any] | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -71,7 +76,7 @@ class MCPServerInstanceResponse(BaseModel):
         instance: MCPServerInstance,
         verification_override: dict | None = None,
         secret_env_names: set[str] | None = None,
-    ) -> "MCPServerInstanceResponse":
+    ) -> MCPServerInstanceResponse:
         json_spec = dict(instance.json_spec or {})
 
         # Old rows may still contain secret plaintext without env_vars metadata.
@@ -111,8 +116,10 @@ class MCPServerInstanceResponse(BaseModel):
                 "verification": verification,
                 "last_dispatch": instance.last_dispatch,
                 "tools": instance.tools,
+                "events": instance.events,
                 "auth_config_id": instance.auth_config_id,
                 "managed_by": instance.managed_by,
+                "cost": instance.cost,
                 "created_at": instance.created_at,
                 "updated_at": instance.updated_at,
             }
@@ -328,6 +335,7 @@ async def check_mcp_server_instance_configuration(
 ):
     """Check if an MCP server instance configuration is valid via the Go manager."""
     import httpx
+    from agentarea_common.outbound import Destination, outbound_client
 
     try:
         settings = get_settings()
@@ -339,7 +347,7 @@ async def check_mcp_server_instance_configuration(
             "dry_run": True,
         }
 
-        async with httpx.AsyncClient() as client:
+        async with outbound_client(Destination.INTERNAL) as client:
             resp = await client.post(
                 f"{settings.mcp.MANAGER_URL}/containers/validate",
                 json=validation_request,
@@ -700,11 +708,12 @@ async def get_containers_health(
     import asyncio
 
     import httpx
+    from agentarea_common.outbound import Destination, outbound_client
 
     settings = get_settings()
     instances = await service.list()
 
-    async def read_one(client: "httpx.AsyncClient", instance) -> dict:
+    async def read_one(client: httpx.AsyncClient, instance) -> dict:
         row = {"instance_id": str(instance.id), "name": getattr(instance, "name", None)}
         url = f"{settings.mcp.MANAGER_URL}/instances/{instance.id}/health"
         try:
@@ -746,7 +755,7 @@ async def get_containers_health(
         )
         return {**row, "healthy": False, "status": "error"}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=15.0) as client:
         rows = await asyncio.gather(*(read_one(client, instance) for instance in instances))
 
     return {

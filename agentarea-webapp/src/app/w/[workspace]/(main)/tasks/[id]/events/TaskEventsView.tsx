@@ -21,6 +21,7 @@ import {
   EventTypeCell,
   useEventLabel,
 } from "./TaskEventCells";
+import { shownEventData } from "./taskEventDisplay";
 import {
   countEventLevels,
   EVENT_LEVEL_FILTERS,
@@ -42,7 +43,7 @@ const LEVEL_KINDS: Record<
 type EventRow = DisplayEvent & { index: number };
 
 function hasData(event: DisplayEvent) {
-  return Boolean(event.data && Object.keys(event.data).length > 0);
+  return shownEventData(event.data) !== null;
 }
 
 interface TaskEventsViewProps {
@@ -179,7 +180,7 @@ export default function TaskEventsView({
           <EventDescriptionCell event={event}>
             {expanded.has(event.id) && hasData(event) && (
               <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-muted/50 p-3 font-mono text-[11px] text-muted-foreground">
-                {JSON.stringify(event.data, null, 2)}
+                {JSON.stringify(shownEventData(event.data), null, 2)}
               </pre>
             )}
           </EventDescriptionCell>

@@ -44,8 +44,6 @@ async def validate_trigger_configuration(
     # Type-specific validation
     if trigger_data.trigger_type == TriggerType.CRON:
         await _validate_cron_configuration(trigger_data)
-    elif trigger_data.trigger_type == TriggerType.WEBHOOK:
-        await _validate_webhook_configuration(trigger_data)
     elif trigger_data.trigger_type == TriggerType.STREAM:
         _validate_stream_configuration(trigger_data)
 
@@ -73,36 +71,10 @@ async def _validate_cron_configuration(trigger_data: TriggerCreate) -> None:
         raise TriggerValidationError(error)
 
     # A schedule coming due carries nothing with it, so the task text is the
-    # only thing that can tell the agent what to do. Two exemptions, both
-    # because something else supplies the text: webhooks get it from the
-    # call, and a schedule with a data extractor polls a mailbox or a feed
-    # and works on what it finds.
-    if not trigger_data.data_extractor:
-        task_text = (trigger_data.task_parameters or {}).get("text")
-        if not isinstance(task_text, str) or not task_text.strip():
-            raise TriggerValidationError("Task text is required for CRON triggers")
-
-
-async def _validate_webhook_configuration(trigger_data: TriggerCreate) -> None:
-    """Validate webhook trigger configuration.
-
-    Args:
-        trigger_data: The trigger creation data
-
-    Raises:
-        TriggerValidationError: If webhook configuration is invalid
-    """
-    if not trigger_data.webhook_id:
-        raise TriggerValidationError("Webhook ID is required for WEBHOOK triggers")
-
-    # Validate HTTP methods
-    if not trigger_data.allowed_methods:
-        raise TriggerValidationError("At least one HTTP method must be allowed")
-
-    valid_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-    for method in trigger_data.allowed_methods:
-        if method.upper() not in valid_methods:
-            raise TriggerValidationError(f"Invalid HTTP method: {method}")
+    # only thing that can tell the agent what to do.
+    task_text = (trigger_data.task_parameters or {}).get("text")
+    if not isinstance(task_text, str) or not task_text.strip():
+        raise TriggerValidationError("Task text is required for CRON triggers")
 
 
 def _validate_stream_configuration(trigger_data: TriggerCreate) -> None:

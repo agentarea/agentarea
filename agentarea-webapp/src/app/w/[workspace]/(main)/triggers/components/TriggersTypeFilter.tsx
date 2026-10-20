@@ -29,9 +29,9 @@ const LANE_ICON: Record<string, LucideIcon | undefined> = {
  * Segmented filter over what starts an automation. Drives the `type` URL param;
  * "all" clears it.
  *
- * The lanes are channel / event / schedule rather than cron / webhook: the
- * latter names the transport, which tells nobody whether a row is a Telegram
- * bot they have to stand up or a GitHub hook that just arrives.
+ * The lanes are channel / event / schedule rather than cron / stream: the
+ * latter names the mechanism, which tells nobody whether a row carries on a
+ * conversation or starts a task for every event that arrives.
  */
 export default function TriggersTypeFilter({
   currentType,

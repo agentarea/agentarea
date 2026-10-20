@@ -18,8 +18,6 @@ from agentarea_agents.schemas.import_export import (
 from agentarea_agents_sdk.tools.code_tools_loader import get_code_tools_metadata
 from agentarea_agents_sdk.tools.tool_definition import ToolEffect, ToolGroup, ToolPlane
 from agentarea_api.api.deps.services import (
-    BaseSecretManagerDep,
-    SecretCatalogServiceDep,
     get_agent_service,
     get_mcp_server_instance_service,
     get_read_agent_service,
@@ -35,7 +33,6 @@ from agentarea_common.config.database import get_db_session
 from agentarea_common.rebac import owner_relations
 from agentarea_governance.domain.policies import AnswerCheckPolicy
 from agentarea_mcp.application.service import MCPServerInstanceService
-from agentarea_triggers.channels.webhook_service import ChannelWebhookService
 from agentarea_triggers.domain.models import Trigger
 from agentarea_triggers.schemas.dto import TriggerSpec
 from agentarea_triggers.trigger_service import TriggerService, TriggerValidationError
@@ -49,13 +46,7 @@ from ._approval_policy_sync import (
     apply_approval_targets,
     approval_targets_for_agents,
 )
-from ._trigger_creation import (
-    build_domain_trigger,
-    create_trigger_from_spec,
-    discard_trigger,
-    get_channel_webhook_service,
-    resolve_channel_credentials,
-)
+from ._trigger_creation import create_trigger_from_spec
 
 DatabaseSessionDep = Annotated[AsyncSession, Depends(get_db_session, scope="function")]
 
@@ -88,7 +79,7 @@ class AgentResponse(BaseModel):
     a2a_url: str | None = None
 
     @classmethod
-    def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
+    def from_domain(cls, agent: Agent, include_skills: bool = False) -> AgentResponse:
         tools = None
         if agent.tools:
             agent_tools = cast(Any, agent.tools)
@@ -215,9 +206,9 @@ class AgentCreateRequest(AgentCreate):
     triggers: list[TriggerSpec] = Field(
         default_factory=list,
         description=(
-            "Triggers that start the agent: schedules, webhooks, messaging channels "
-            "(types from GET /v1/triggers/catalog). Created with the agent; if any "
-            "cannot be created, neither the agent nor any trigger is kept."
+            "Triggers that start the agent: cron schedules, or stream triggers on a "
+            "stream whose sources are webhooks and polled providers. Created with the "
+            "agent; if any cannot be created, neither the agent nor any trigger is kept."
         ),
     )
 
@@ -233,11 +224,8 @@ async def create_agent(
     data: AgentCreateRequest,
     user_context: UserContextDep,
     session: DatabaseSessionDep,
-    secret_manager: BaseSecretManagerDep,
-    secret_catalog: SecretCatalogServiceDep,
     agent_service: AgentService = Depends(get_agent_service),
     trigger_service: TriggerService = Depends(get_trigger_service),
-    webhook_service: ChannelWebhookService = Depends(get_channel_webhook_service),
 ):
     """Create a new agent, and the triggers that start it, in one request.
 
@@ -247,47 +235,37 @@ async def create_agent(
     """
     validate_code_tool_names(data.tools)
 
-    planned: list[tuple[TriggerSpec, dict[str, Any] | None]] = []
     for spec in data.triggers:
-        credentials = await resolve_channel_credentials(
-            spec.channel_credentials, secret_catalog, secret_manager
-        )
         try:
             # Configuration checks never read the agent, which does not exist yet.
             await trigger_service.validate_configuration(
-                build_domain_trigger(spec, _NO_AGENT_YET, user_context, credentials)
+                spec.to_domain_for(
+                    _NO_AGENT_YET,
+                    created_by=user_context.user_id,
+                    workspace_id=user_context.workspace_id,
+                )
             )
         except TriggerValidationError as e:
             raise HTTPException(status_code=400, detail=f"Trigger {spec.name!r}: {e}") from e
-        planned.append((spec, credentials))
 
     agent = await agent_service.create_agent(
         AgentCreate.model_validate(data.model_dump(exclude={"triggers"}, exclude_unset=True))
     )
-    created: list[tuple[Trigger, TriggerSpec, dict[str, Any] | None]] = []
+    created: list[Trigger] = []
     try:
-        for spec, credentials in planned:
-            trigger, _ = await create_trigger_from_spec(
-                spec,
-                agent_id=agent.id,
-                user_context=user_context,
-                credentials=credentials,
-                trigger_service=trigger_service,
-                secret_manager=secret_manager,
-                webhook_service=webhook_service,
+        for spec in data.triggers:
+            created.append(
+                await create_trigger_from_spec(
+                    spec,
+                    agent_id=agent.id,
+                    user_context=user_context,
+                    trigger_service=trigger_service,
+                )
             )
-            created.append((trigger, spec, credentials))
     except Exception as e:
         logger.error(f"Creating triggers for new agent {agent.id} failed: {e}", exc_info=True)
-        for trigger, spec, credentials in reversed(created):
-            await discard_trigger(
-                trigger,
-                spec,
-                credentials,
-                trigger_service=trigger_service,
-                secret_manager=secret_manager,
-                webhook_service=webhook_service,
-            )
+        for trigger in reversed(created):
+            await trigger_service.delete_trigger(trigger.id)
         await agent_service.delete_agent(agent.id)
         if isinstance(e, TriggerValidationError):
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -539,7 +517,8 @@ async def install_agent(
     """Add a built-in catalog agent to the workspace (copy-on-write fork).
 
     Resolves a catalog agent by UUID or slug and materializes a tenant copy.
-    Idempotent: returns the existing workspace copy if already installed.
+    Idempotent: returns the existing workspace copy if already installed. A
+    policy rule refusing the item's registry answers 403.
     """
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:

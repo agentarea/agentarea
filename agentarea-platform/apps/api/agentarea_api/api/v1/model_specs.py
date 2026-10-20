@@ -33,11 +33,14 @@ class ModelSpecCreate(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
+    cache_creation_input_cost_per_token: Money | None = Field(
+        default=None, ge=ZERO, lt=_COST_CEILING
+    )
     default_context_strategy: str | None = None  # Auto-inferred from model_name if None
     is_active: bool = True
 
     @model_validator(mode="after")
-    def _billable(self) -> "ModelSpecCreate":
+    def _billable(self) -> ModelSpecCreate:
         # A chat or embedding run is billed from these; the other kinds at the cost
         # the provider reports per call.
         if self.kind.priced_per_token:
@@ -59,6 +62,9 @@ class ModelSpecUpdate(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO, lt=_COST_CEILING)
+    cache_creation_input_cost_per_token: Money | None = Field(
+        default=None, ge=ZERO, lt=_COST_CEILING
+    )
     default_context_strategy: str | None = None
     is_active: bool | None = None
 
@@ -75,6 +81,7 @@ class ModelSpecResponse(BaseModel):
     input_cost_per_token: Money | None = None
     output_cost_per_token: Money | None = None
     cached_input_cost_per_token: Money | None = None
+    cache_creation_input_cost_per_token: Money | None = None
     supports_function_calling: bool | None = False
     supports_vision: bool | None = False
     supports_reasoning: bool | None = False
@@ -88,7 +95,7 @@ class ModelSpecResponse(BaseModel):
     provider_key: str | None = None
 
     @classmethod
-    def from_domain(cls, model_spec: ModelSpec) -> "ModelSpecResponse":
+    def from_domain(cls, model_spec: ModelSpec) -> ModelSpecResponse:
         return cls(
             id=str(model_spec.id),
             provider_spec_id=str(model_spec.provider_spec_id),
@@ -101,6 +108,7 @@ class ModelSpecResponse(BaseModel):
             input_cost_per_token=model_spec.input_cost_per_token,
             output_cost_per_token=model_spec.output_cost_per_token,
             cached_input_cost_per_token=model_spec.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=model_spec.cache_creation_input_cost_per_token,
             supports_function_calling=model_spec.supports_function_calling,
             supports_vision=model_spec.supports_vision,
             supports_reasoning=model_spec.supports_reasoning,
@@ -226,6 +234,7 @@ async def create_model_spec(
             input_cost_per_token=data.input_cost_per_token,
             output_cost_per_token=data.output_cost_per_token,
             cached_input_cost_per_token=data.cached_input_cost_per_token,
+            cache_creation_input_cost_per_token=data.cache_creation_input_cost_per_token,
             default_context_strategy=data.default_context_strategy,
             is_active=data.is_active,
         )
@@ -307,6 +316,7 @@ async def upsert_model_spec(
         input_cost_per_token=data.input_cost_per_token,
         output_cost_per_token=data.output_cost_per_token,
         cached_input_cost_per_token=data.cached_input_cost_per_token,
+        cache_creation_input_cost_per_token=data.cache_creation_input_cost_per_token,
         default_context_strategy=data.default_context_strategy,
         is_active=data.is_active,
     )

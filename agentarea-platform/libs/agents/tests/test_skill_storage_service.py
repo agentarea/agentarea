@@ -8,6 +8,7 @@ import pytest
 
 from agentarea_agents.infrastructure.skill_storage_service import (
     SkillStorageService,
+    package_digest,
 )
 
 
@@ -66,210 +67,90 @@ def create_test_zip(files: dict[str, bytes | str]) -> io.BytesIO:
     return buffer
 
 
-class TestStorePackageFromZip:
-    """Tests for store_package_from_zip method."""
+class TestFilesFromZip:
+    """A ZIP upload becomes a file set; nothing is stored until it is a package."""
 
-    @pytest.mark.asyncio
-    async def test_store_simple_zip(self, storage_service, mock_s3_client):
-        """Test storing a simple ZIP with flat structure."""
-        zip_data = create_test_zip({
-            "SKILL.md": "# Test Skill\nContent here",
-            "template.txt": "Template content",
-        })
+    def test_a_flat_zip(self, storage_service, mock_s3_client):
+        zip_data = create_test_zip({"SKILL.md": "# Test Skill", "template.txt": "Template"})
 
-        s3_path = await storage_service.store_package_from_zip(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            zip_data=zip_data,
+        files = storage_service.files_from_zip(zip_data)
+
+        assert files == {"SKILL.md": b"# Test Skill", "template.txt": b"Template"}
+        mock_s3_client.put_object.assert_not_called()
+
+    def test_a_github_root_folder_is_stripped(self, storage_service):
+        zip_data = create_test_zip(
+            {
+                "repo-main/SKILL.md": "# Test Skill",
+                "repo-main/templates/example.txt": "Example",
+            }
         )
 
-        assert s3_path == "skills/ws-456/skill-123/"
-        assert mock_s3_client.put_object.call_count == 2
+        assert set(storage_service.files_from_zip(zip_data)) == {
+            "SKILL.md",
+            "templates/example.txt",
+        }
 
-        # Check that files were uploaded with correct keys
-        call_args_list = mock_s3_client.put_object.call_args_list
-        uploaded_keys = [call.kwargs["Key"] for call in call_args_list]
-        assert "skills/ws-456/skill-123/SKILL.md" in uploaded_keys
-        assert "skills/ws-456/skill-123/template.txt" in uploaded_keys
-
-    @pytest.mark.asyncio
-    async def test_store_zip_with_github_root_folder(self, storage_service, mock_s3_client):
-        """Test storing a GitHub-style ZIP with root folder."""
-        zip_data = create_test_zip({
-            "repo-main/SKILL.md": "# Test Skill",
-            "repo-main/templates/example.txt": "Example",
-            "repo-main/README.md": "Readme",
-        })
-
-        s3_path = await storage_service.store_package_from_zip(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            zip_data=zip_data,
+    def test_macos_metadata_and_hidden_files_are_left_out(self, storage_service):
+        zip_data = create_test_zip(
+            {
+                "SKILL.md": "# Test Skill",
+                "__MACOSX/._SKILL.md": "metadata",
+                ".env": "SECRET=value",
+                "templates/.hidden": "hidden",
+            }
         )
 
-        assert s3_path == "skills/ws-456/skill-123/"
-        assert mock_s3_client.put_object.call_count == 3
+        assert set(storage_service.files_from_zip(zip_data)) == {"SKILL.md"}
 
-        # Root folder should be stripped
-        call_args_list = mock_s3_client.put_object.call_args_list
-        uploaded_keys = [call.kwargs["Key"] for call in call_args_list]
-        assert "skills/ws-456/skill-123/SKILL.md" in uploaded_keys
-        assert "skills/ws-456/skill-123/templates/example.txt" in uploaded_keys
-        assert "skills/ws-456/skill-123/README.md" in uploaded_keys
+    def test_bytes_are_accepted(self, storage_service):
+        assert storage_service.files_from_zip(create_test_zip({"SKILL.md": "# T"}).read()) == {
+            "SKILL.md": b"# T"
+        }
 
-    @pytest.mark.asyncio
-    async def test_store_zip_skips_macosx_files(self, storage_service, mock_s3_client):
-        """Test that __MACOSX files are skipped."""
-        zip_data = create_test_zip({
-            "SKILL.md": "# Test Skill",
-            "__MACOSX/._SKILL.md": "metadata",
-            "__MACOSX/.DS_Store": "more metadata",
-        })
-
-        await storage_service.store_package_from_zip(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            zip_data=zip_data,
-        )
-
-        # Only SKILL.md should be uploaded
-        assert mock_s3_client.put_object.call_count == 1
-        call_kwargs = mock_s3_client.put_object.call_args.kwargs
-        assert "SKILL.md" in call_kwargs["Key"]
-
-    @pytest.mark.asyncio
-    async def test_store_zip_skips_hidden_files(self, storage_service, mock_s3_client):
-        """Test that hidden files are skipped."""
-        zip_data = create_test_zip({
-            "SKILL.md": "# Test Skill",
-            ".gitignore": "*.pyc",
-            ".env": "SECRET=value",
-            "templates/.hidden": "hidden",
-        })
-
-        await storage_service.store_package_from_zip(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            zip_data=zip_data,
-        )
-
-        # Only SKILL.md should be uploaded
-        assert mock_s3_client.put_object.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_store_zip_with_bytes(self, storage_service, mock_s3_client):
-        """Test storing ZIP provided as bytes."""
-        zip_buffer = create_test_zip({"SKILL.md": "# Test"})
-        zip_bytes = zip_buffer.read()
-
-        s3_path = await storage_service.store_package_from_zip(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            zip_data=zip_bytes,
-        )
-
-        assert s3_path == "skills/ws-456/skill-123/"
-        assert mock_s3_client.put_object.call_count == 1
-
-    @pytest.mark.asyncio
-    async def test_store_zip_content_types(self, storage_service, mock_s3_client):
-        """Test that correct content types are set."""
-        zip_data = create_test_zip({
-            "SKILL.md": "# Markdown",
-            "config.json": "{}",
-            "data.yaml": "key: value",
-        })
-
-        await storage_service.store_package_from_zip(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            zip_data=zip_data,
-        )
-
-        call_args_list = mock_s3_client.put_object.call_args_list
-        content_types = {}
-        for call in call_args_list:
-            key = call.kwargs["Key"].split("/")[-1]
-            content_types[key] = call.kwargs["ContentType"]
-
-        assert content_types["SKILL.md"] == "text/markdown"
-        assert content_types["config.json"] == "application/json"
-        assert content_types["data.yaml"] == "application/yaml"
+    def test_not_a_zip_is_refused(self, storage_service):
+        with pytest.raises(ValueError, match="ZIP"):
+            storage_service.files_from_zip(b"not a zip")
 
 
-class TestStorePackageFromDirectory:
-    """Tests for store_package_from_directory method."""
-
-    @pytest.mark.asyncio
-    async def test_store_directory(self, storage_service, mock_s3_client, tmp_path):
-        """Test storing a directory."""
-        # Create test directory structure
+class TestFilesFromDirectory:
+    def test_hidden_files_are_left_out(self, tmp_path):
         (tmp_path / "SKILL.md").write_text("# Test Skill")
         (tmp_path / "templates").mkdir()
         (tmp_path / "templates" / "example.txt").write_text("Example")
-
-        s3_path = await storage_service.store_package_from_directory(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            directory=tmp_path,
-        )
-
-        assert s3_path == "skills/ws-456/skill-123/"
-        assert mock_s3_client.put_object.call_count == 2
-
-    @pytest.mark.asyncio
-    async def test_store_directory_skips_hidden(self, storage_service, mock_s3_client, tmp_path):
-        """Test that hidden files in directories are skipped."""
-        (tmp_path / "SKILL.md").write_text("# Test Skill")
         (tmp_path / ".git").mkdir()
         (tmp_path / ".git" / "config").write_text("git config")
-        (tmp_path / ".env").write_text("SECRET=value")
 
-        await storage_service.store_package_from_directory(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            directory=tmp_path,
-        )
-
-        # Only SKILL.md should be uploaded
-        assert mock_s3_client.put_object.call_count == 1
+        assert SkillStorageService.files_from_directory(tmp_path) == {
+            "SKILL.md": b"# Test Skill",
+            "templates/example.txt": b"Example",
+        }
 
 
-class TestStoreSingleFile:
-    """Tests for store_single_file method."""
+class TestStoreWorkspacePackage:
+    """A workspace's own package lives under its digest, in the workspace's prefix."""
 
     @pytest.mark.asyncio
-    async def test_store_single_file_bytes(self, storage_service, mock_s3_client):
-        """Test storing a single file as bytes."""
-        content = b"# Test Skill Content"
+    async def test_a_package_is_stored_under_its_digest(self, storage_service, mock_s3_client):
+        files = {"SKILL.md": b"# Markdown", "config.json": b"{}"}
 
-        s3_path = await storage_service.store_single_file(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            filename="SKILL.md",
-            content=content,
-        )
+        s3_path = await storage_service.store_workspace_package(files, "ws-456")
 
-        assert s3_path == "skills/ws-456/skill-123/"
-        mock_s3_client.put_object.assert_called_once()
-        call_kwargs = mock_s3_client.put_object.call_args.kwargs
-        assert call_kwargs["Key"] == "skills/ws-456/skill-123/SKILL.md"
-        assert call_kwargs["Body"] == content
+        assert s3_path == f"skills/ws-456/packages/{package_digest(files)}/"
+        content_types = {
+            call.kwargs["Key"].rsplit("/", 1)[-1]: call.kwargs["ContentType"]
+            for call in mock_s3_client.put_object.call_args_list
+        }
+        assert content_types == {"SKILL.md": "text/markdown", "config.json": "application/json"}
 
     @pytest.mark.asyncio
-    async def test_store_single_file_string(self, storage_service, mock_s3_client):
-        """Test storing a single file as string."""
-        content = "# Test Skill Content"
+    async def test_the_same_files_are_the_same_package(self, storage_service):
+        files = {"SKILL.md": b"# Same"}
 
-        await storage_service.store_single_file(
-            skill_id="skill-123",
-            workspace_id="ws-456",
-            filename="SKILL.md",
-            content=content,
-        )
+        first = await storage_service.store_workspace_package(files, "ws-456")
+        again = await storage_service.store_workspace_package(dict(files), "ws-456")
 
-        call_kwargs = mock_s3_client.put_object.call_args.kwargs
-        assert call_kwargs["Body"] == content.encode("utf-8")
+        assert first == again
 
 
 class TestGetFileUrl:

@@ -52,6 +52,27 @@ export function lastVisibleAssistantContent(
   return null;
 }
 
+function llmFailure(part: Part): string | null {
+  if (part.kind !== "llm" || part.eventType !== "llm.call.failed") return null;
+  return typeof part.data.error === "string" ? part.data.error.trim() : null;
+}
+
+/**
+ * Whether the transcript already shows the run's terminal line on screen: as
+ * the last assistant reply, or as a failed model call outside a work group
+ * (which collapses once the run ends).
+ */
+export function transcriptShowsTerminalMessage(
+  segments: ActivitySegment[],
+  message: string
+): boolean {
+  const text = message.trim();
+  if (text === (lastVisibleAssistantContent(segments) ?? "")) return true;
+  return segments.some(
+    (segment) => segment.kind !== "work" && llmFailure(segment.part) === text
+  );
+}
+
 export function shouldRenderConversationFallback(
   eventsLoading: boolean,
   segments: ActivitySegment[]
@@ -73,6 +94,15 @@ function failed(part: Part): boolean {
   return typeof part.data.exit_code === "number"
     ? part.data.exit_code !== 0
     : part.data.success === false;
+}
+
+/**
+ * The parts without the task's first message: that one is the run's input,
+ * which the transcript already shows as the task's description.
+ */
+export function withoutRunInput(parts: Part[]): Part[] {
+  const index = parts.findIndex((part) => part.kind === "message");
+  return index === -1 ? parts : parts.filter((_, at) => at !== index);
 }
 
 /** Terminal snapshots close runs; an LLM response alone never closes work. */
@@ -175,7 +205,9 @@ export function buildActivitySegments(
       if (
         part.kind === "form" ||
         part.kind === "artifact" ||
-        part.kind === "a2ui"
+        part.kind === "a2ui" ||
+        part.kind === "notice" ||
+        part.kind === "message"
       ) {
         flush();
         segments.push({ kind: "visible", part });

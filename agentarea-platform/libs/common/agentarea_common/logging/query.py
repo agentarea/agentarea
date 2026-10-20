@@ -30,7 +30,7 @@ class AuditLogQuery:
         """
         try:
             return json.loads(line.strip())
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError, ValueError:
             return None
 
     def _matches_filters(self, log_entry: dict[str, Any], **filters: Any) -> bool:

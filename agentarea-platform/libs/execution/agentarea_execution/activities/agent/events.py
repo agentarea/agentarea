@@ -1,4 +1,4 @@
-"""Publishing workflow events to the event store and live subscribers."""
+"""Storing a run's workflow events and putting them on the broker."""
 
 import json
 import logging
@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
-from agentarea_common.events.task_stream import publish_task_event
+from agentarea_common.events.contract import LIVE_ONLY_TYPES
+from agentarea_common.events.task_stream import broadcast_live, publish_task_event, task_event
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
+from agentarea_tasks.domain.costs import CostEntry
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
 from temporalio import activity
 
@@ -24,44 +26,66 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def load_task_parameters(
-    container: "ActivityServiceContainer", user_context: UserContext, task_id: str
-) -> dict[str, Any]:
-    """Where the task's events go: its parameters and the routing part of its metadata.
-
-    Parameters carry the channel origin and A2A push configs. From the trusted
-    metadata only the task webhook config and what its delivery reports (the
-    caller's end user id and metadata) are copied, under reserved keys.
-    """
-    from agentarea_common.utils.task_webhook import TASK_WEBHOOK_KEY
-    from agentarea_mcp.tool_context import APP_METADATA_KEY, END_USER_ID_KEY
-    from agentarea_tasks.infrastructure.repository import TaskRepository
-
-    from ..dependencies import ActivityContext
-
-    async with ActivityContext(container, user_context) as ctx:
-        session = container._database.async_session_factory()
-        ctx._sessions.append(session)
-        task = await TaskRepository(session, user_context).get_task(UUID(task_id))
-    if not task:
-        return {}
-    parameters = dict(task.parameters or {})
-    metadata = task.metadata or {}
-    if isinstance(metadata.get(TASK_WEBHOOK_KEY), dict):
-        parameters[_WEBHOOK_ROUTE_KEY] = {
-            **metadata[TASK_WEBHOOK_KEY],
-            "end_user_id": metadata.get(END_USER_ID_KEY),
-            "app_metadata": metadata.get(APP_METADATA_KEY),
-        }
-    return parameters
+def ledger_lines(
+    events: list[dict[str, Any]], *, workspace_id: str, user_id: str
+) -> list[CostEntry]:
+    """The spend ledger lines a batch of workflow events stands for."""
+    billing_currency = get_customer_pricing().currency()
+    return [
+        entry
+        for event in events
+        for entry in cost_entries(
+            event,
+            workspace_id=workspace_id,
+            created_by=user_id,
+            billing_currency=billing_currency,
+        )
+    ]
 
 
-# Not a task parameter: added by load_task_parameters from trusted metadata only.
-_WEBHOOK_ROUTE_KEY = "__task_webhook_route"
+async def store_task_events(
+    ctx: Any, events: list[dict[str, Any]], *, workspace_id: str, user_id: str
+) -> list[Any]:
+    """Store each event in ``task_events`` once under the workflow's id; the stored rows."""
+    task_event_service = await ctx.get_task_event_service()
+    return [
+        await task_event_service.create_workflow_event(
+            task_id=UUID(event["data"]["task_id"]),
+            event_id=UUID(event["event_id"]),
+            event_type=event["event_type"],
+            data=event["data"],
+            timestamp=datetime.fromisoformat(event["timestamp"]),
+            workspace_id=workspace_id,
+            created_by=user_id,
+        )
+        for event in events
+    ]
+
+
+async def publish_events(
+    dependencies: ActivityDependencies, events: list[dict[str, Any]], *, workspace_id: str
+) -> None:
+    """Publish stored workflow events to ``tasks.events``; broadcast the live-only ones."""
+    broker = dependencies.broker_client
+    if broker is None:
+        raise RuntimeError("publishing task events needs a broker client")
+    for event in events:
+        envelope = task_event(
+            task_id=str(event["data"]["task_id"]),
+            workspace_id=workspace_id,
+            event_type=event["event_type"],
+            event_id=event["event_id"],
+            timestamp=datetime.fromisoformat(event["timestamp"]),
+            data=event["data"],
+        )
+        if envelope.type in LIVE_ONLY_TYPES:
+            await broadcast_live(broker, envelope)
+        else:
+            await publish_task_event(broker, envelope)
 
 
 def make_events_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext
 
@@ -69,43 +93,24 @@ def make_events_activities(
     async def publish_workflow_events_activity(
         request: WorkflowEventsRequest,
     ) -> WorkflowEventsResult:
-        """Store each workflow event, then fan it out to live readers and channels.
+        """Store each event of a run from before the task log, then publish it.
 
-        The ``task_events`` row is the source of truth and is committed first,
+        Kept registered for those runs' histories; a run on the task log records
+        through the record activity. The ``task_events`` row is committed first,
         together with the audit rows of the tool-call outcomes and the spend
-        ledger lines of the paid calls the batch holds.
-        Any failure raises so Temporal retries the whole batch; every step is
-        safe to repeat because it is keyed by the workflow's ``event_id``: the
-        row inserts are no-ops for a stored id, the stream carries that id for the
-        read side to dedup, and channel deliveries are deduplicated by a key
-        built from it.
+        ledger lines of the paid calls the batch holds, then each event goes to
+        ``tasks.events`` (a live-only one is broadcast). Any failure raises so
+        Temporal retries the whole batch; every step is keyed by the workflow's
+        ``event_id``, so a repeat writes nothing twice and readers dedup by it.
         """
         user_context = UserContext(user_id=request.user_id, workspace_id=request.workspace_id)
-        task_parameters: dict[str, dict[str, Any]] = {}
-
-        async def parameters_of(task_id: str) -> dict[str, Any]:
-            if task_id not in task_parameters:
-                task_parameters[task_id] = await load_task_parameters(
-                    container, user_context, task_id
-                )
-            return task_parameters[task_id]
 
         try:
             events = [json.loads(event_json) for event_json in request.events_json]
             async with ActivityContext(container, user_context) as ctx:
-                task_event_service = await ctx.get_task_event_service()
-                stored_events = [
-                    await task_event_service.create_workflow_event(
-                        task_id=UUID(event["data"]["task_id"]),
-                        event_id=UUID(event["event_id"]),
-                        event_type=event["event_type"],
-                        data=event["data"],
-                        timestamp=datetime.fromisoformat(event["timestamp"]),
-                        workspace_id=request.workspace_id,
-                        created_by=request.user_id,
-                    )
-                    for event in events
-                ]
+                await store_task_events(
+                    ctx, events, workspace_id=request.workspace_id, user_id=request.user_id
+                )
                 audited = [
                     (UUID(event["event_id"]), entry)
                     for event in events
@@ -117,41 +122,15 @@ def make_events_activities(
                         await record_tool_audit(
                             audit, event_id, entry, requested_by=request.user_id
                         )
-                billing_currency = get_customer_pricing().currency()
-                costs = [
-                    entry
-                    for event in events
-                    for entry in cost_entries(
-                        event,
-                        workspace_id=request.workspace_id,
-                        created_by=request.user_id,
-                        billing_currency=billing_currency,
-                    )
-                ]
+                costs = ledger_lines(
+                    events, workspace_id=request.workspace_id, user_id=request.user_id
+                )
                 if costs:
                     session = container._database.async_session_factory()
                     ctx._sessions.append(session)
                     await CostEntryRepository(session, user_context).record(costs)
 
-            for event, stored in zip(events, stored_events, strict=True):
-                if dependencies.broker_client is not None:
-                    await publish_task_event(
-                        dependencies.broker_client,
-                        task_id=str(stored.task_id),
-                        event_type=stored.event_type,
-                        data=stored.data,
-                        event_id=str(stored.id),
-                        timestamp=stored.timestamp.isoformat(),
-                    )
-
-                if dependencies.broker_client and dependencies.channel_delivery_settings:
-                    await _emit_channel_deliveries(
-                        event,
-                        str(stored.task_id),
-                        parameters_of,
-                        dependencies.broker_client,
-                        dependencies.channel_delivery_settings.OUT_STREAM,
-                    )
+            await publish_events(dependencies, events, workspace_id=request.workspace_id)
         except Exception:
             logger.error(
                 "Failed to publish %d workflow events for workspace %s",
@@ -166,74 +145,3 @@ def make_events_activities(
     return [
         publish_workflow_events_activity,
     ]
-
-
-async def _emit_channel_deliveries(
-    event: dict[str, Any],
-    task_id: str,
-    parameters_of: Callable[[str], Any],
-    broker: Any,
-    stream: str,
-) -> None:
-    from agentarea_triggers.channels.activity_emit import emit_channel_delivery
-
-    data = event["data"]
-    channel_origin = data.get("channel_origin")
-    if not channel_origin:
-        channel_origin = (await parameters_of(task_id)).get("channel_origin")
-
-    event_with_id = {
-        "event_type": event["event_type"],
-        "event_id": event["event_id"],
-        "task_id": task_id,
-        "data": data,
-    }
-    await emit_channel_delivery(
-        event=event_with_id,
-        channel_origin=channel_origin,
-        broker=broker,
-        stream=stream,
-    )
-
-    webhook = (await parameters_of(task_id)).get(_WEBHOOK_ROUTE_KEY)
-    if isinstance(webhook, dict) and webhook.get("url"):
-        await emit_channel_delivery(
-            event={
-                **event_with_id,
-                "timestamp": event.get("timestamp"),
-                "data": {
-                    **data,
-                    "end_user_id": webhook.get("end_user_id"),
-                    "app_metadata": webhook.get("app_metadata"),
-                },
-            },
-            channel_origin={
-                "type": "task_webhook",
-                "url": webhook["url"],
-                "signed": bool(webhook.get("signed")),
-                "presentation": "silent",
-            },
-            broker=broker,
-            stream=stream,
-            dedup_suffix="task_webhook",
-        )
-
-    push_configs = (await parameters_of(task_id)).get("a2a_push_configs")
-    for cfg in push_configs if isinstance(push_configs, list) else []:
-        cfg_id = cfg.get("id")
-        cfg_url = cfg.get("url")
-        if not cfg_id or not cfg_url:
-            continue
-        await emit_channel_delivery(
-            event=event_with_id,
-            channel_origin={
-                "type": "a2a_webhook",
-                "url": cfg_url,
-                "task_id": task_id,
-                "config_id": cfg_id,
-                "presentation": "silent",
-            },
-            broker=broker,
-            stream=stream,
-            dedup_suffix=f"a2a:{cfg_id}",
-        )

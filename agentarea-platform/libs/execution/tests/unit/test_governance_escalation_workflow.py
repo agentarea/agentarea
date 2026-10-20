@@ -287,7 +287,7 @@ def _approval_responses(instance) -> list[dict]:
     return [
         event["data"]
         for event in instance._events.get_pending_events()
-        if event["event_type"] == "approval.response"
+        if event["event_type"] == "approval.decided"
     ]
 
 

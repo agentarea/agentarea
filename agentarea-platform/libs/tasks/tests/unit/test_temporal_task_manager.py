@@ -38,6 +38,8 @@ async def test_agent_workflow_disables_whole_workflow_retries() -> None:
 
     config = executor.start_workflow.await_args.kwargs["config"]
     assert config.retry_attempts == 1
+    # A first start that finds the id used before reports it started, never runs it twice.
+    assert config.start_once is True
 
 
 @pytest.mark.asyncio

@@ -51,7 +51,9 @@ class TestAgentTaskControl:
         service = AsyncMock(spec=TaskService)
 
         async def _get_task(task_id):
-            return SimpleNamespace(id=task_id, agent_id=test_agent_id)
+            return SimpleNamespace(
+                id=task_id, agent_id=test_agent_id, execution_id=None, user_id="test-user-123"
+            )
 
         service.get_task.side_effect = _get_task
         return service

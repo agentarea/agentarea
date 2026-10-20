@@ -12,11 +12,7 @@ from uuid import uuid4
 import pytest
 from agentarea_common.broker.interface import BrokerMessage
 from agentarea_common.broker.redis_streams import RedisStreamsBroker
-from agentarea_common.events.adapters.redis_streams import (
-    RedisStreamsEventStream,
-    encode,
-    topic_for,
-)
+from agentarea_common.events.adapters.redis_streams import RedisStreamsEventStream, encode
 from agentarea_common.events.ports import IntegrationEvent
 
 _TYPE = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
@@ -77,7 +73,7 @@ async def test_read_catch_up_starts_from_zero_then_advances_cursor():
 
 
 @pytest.mark.asyncio
-async def test_read_applies_topic_for():
+async def test_read_tails_the_named_stream_as_is():
     seen: dict[str, str] = {}
 
     class _SpyBroker:
@@ -90,36 +86,41 @@ async def test_read_applies_topic_for():
     with pytest.raises(asyncio.CancelledError):
         await gen.__anext__()
 
-    assert seen["stream"] == topic_for(_TYPE)
+    assert seen["stream"] == _TYPE
 
 
 class _FakeRedis:
     def __init__(self, response):
         self._response = response
+        self.streams: dict[str, str] = {}
 
     async def xread(self, streams, count, block):
+        self.streams = streams
         return self._response
 
 
 @pytest.mark.asyncio
 async def test_broker_tail_advances_cursor_to_last_id():
     fields = {"ce_id": str(uuid4()), "ce_type": _TYPE, "ce_source": "s", "data": "{}"}
-    response = [["events:t", [("5-0", fields), ("7-0", fields)]]]
-    broker = RedisStreamsBroker("redis://unused")
-    broker._client = _FakeRedis(response)  # type: ignore[assignment]
+    response = [["ns.domain.events.t", [("5-0", fields), ("7-0", fields)]]]
+    broker = RedisStreamsBroker("redis://unused", namespace="ns")
+    redis = _FakeRedis(response)
+    broker._client = redis  # type: ignore[assignment]
 
-    cursor, msgs = await broker.tail("events:t", last_id="0")
+    cursor, msgs = await broker.tail("domain.events.t", last_id="0")
 
+    assert redis.streams == {"ns.domain.events.t": "0"}
     assert cursor == "7-0"
     assert [m.id for m in msgs] == ["5-0", "7-0"]
+    assert {m.stream for m in msgs} == {"domain.events.t"}
 
 
 @pytest.mark.asyncio
 async def test_broker_tail_timeout_keeps_cursor():
-    broker = RedisStreamsBroker("redis://unused")
+    broker = RedisStreamsBroker("redis://unused", namespace="ns")
     broker._client = _FakeRedis(None)  # type: ignore[assignment]
 
-    cursor, msgs = await broker.tail("events:t", last_id="9-0")
+    cursor, msgs = await broker.tail("domain.events.t", last_id="9-0")
 
     assert cursor == "9-0"
     assert msgs == []

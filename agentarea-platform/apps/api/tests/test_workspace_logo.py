@@ -16,6 +16,7 @@ from agentarea_api.api.v1 import workspaces
 from agentarea_api.api.v1.router import principal_v1_router, workspace_v1_router
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.auth.credential import SESSION
 from agentarea_common.auth.dependencies import get_principal, get_user_context
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import get_container
@@ -188,6 +189,7 @@ def test_the_workspace_list_carries_the_logo_url(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(principal_v1_router)
     app.dependency_overrides[get_principal] = lambda: UserPrincipal(
+        credential=SESSION,
         user_id="user-owner", accessible_workspaces=[WORKSPACE], admin_workspaces=[WORKSPACE]
     )
     app.dependency_overrides[workspaces.get_workspace_service] = lambda: service

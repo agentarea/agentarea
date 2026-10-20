@@ -10,7 +10,7 @@ from ...config import get_db
 
 
 @asynccontextmanager
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """Get database session as async context manager."""
     async with get_db() as session:
         yield session

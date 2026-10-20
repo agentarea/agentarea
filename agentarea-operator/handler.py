@@ -28,6 +28,8 @@ Env vars:
 import json
 import logging
 import os
+import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 
@@ -490,6 +492,10 @@ def sync_provider_config(
                         "context_window": em.get("contextWindow", 4096),
                         "input_cost_per_token": em.get("inputCostPerToken"),
                         "output_cost_per_token": em.get("outputCostPerToken"),
+                        "cached_input_cost_per_token": em.get("cachedInputCostPerToken"),
+                        "cache_creation_input_cost_per_token": em.get(
+                            "cacheCreationInputCostPerToken"
+                        ),
                         # Always written, an omitted list as []: the resource is
                         # the whole truth about a model's tags, so taking
                         # "default" off in git takes it off the model.
@@ -538,6 +544,9 @@ def _upsert_model_spec_and_instance(
                 "context_window = :cw, "
                 "input_cost_per_token = COALESCE(:icpt, input_cost_per_token), "
                 "output_cost_per_token = COALESCE(:ocpt, output_cost_per_token), "
+                "cached_input_cost_per_token = COALESCE(:cicpt, cached_input_cost_per_token), "
+                "cache_creation_input_cost_per_token = "
+                "COALESCE(:ccicpt, cache_creation_input_cost_per_token), "
                 "updated_at = now() WHERE id = :id AND workspace_id = :ws"
             ),
             {
@@ -546,6 +555,8 @@ def _upsert_model_spec_and_instance(
                 "cw": model.get("context_window", 4096),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
+                "cicpt": model.get("cached_input_cost_per_token"),
+                "ccicpt": model.get("cache_creation_input_cost_per_token"),
                 "ws": workspace_id,
             },
         )
@@ -556,10 +567,11 @@ def _upsert_model_spec_and_instance(
                 "INSERT INTO model_specs "
                 "(id, provider_spec_id, model_name, display_name, description, "
                 "context_window, input_cost_per_token, output_cost_per_token, "
+                "cached_input_cost_per_token, cache_creation_input_cost_per_token, "
                 "is_active, workspace_id, created_by, "
                 "created_at, updated_at) "
-                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, true, "
-                ":ws, :created_by, now(), now())"
+                "VALUES (:id, :spec_id, :mn, :dn, :desc, :cw, :icpt, :ocpt, :cicpt, :ccicpt, "
+                "true, :ws, :created_by, now(), now())"
             ),
             {
                 "id": model_spec_id,
@@ -570,6 +582,8 @@ def _upsert_model_spec_and_instance(
                 "cw": model.get("context_window", 4096),
                 "icpt": model.get("input_cost_per_token"),
                 "ocpt": model.get("output_cost_per_token"),
+                "cicpt": model.get("cached_input_cost_per_token"),
+                "ccicpt": model.get("cache_creation_input_cost_per_token"),
                 "ws": workspace_id,
                 "created_by": PLATFORM_PRINCIPAL_ID,
             },
@@ -861,6 +875,38 @@ def catalog_item(conn, catalog_id: str) -> tuple[str, dict]:
     return str(row[0]), row[1] or {}
 
 
+def _generate_slug(name: str) -> str:
+    """ASCII, lowercase, hyphenated slug, as agentarea_common.utils.slug.generate_slug."""
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
+    if len(slug) > 100:
+        slug = slug[:100].rstrip("-")
+    return slug or "item"
+
+
+def _unique_mcp_slug(conn, workspace_id: str, name: str) -> str:
+    base = _generate_slug(name)
+
+    def _taken(candidate: str) -> bool:
+        return (
+            conn.execute(
+                text(
+                    "SELECT 1 FROM mcp_servers WHERE workspace_id = :ws AND slug = :slug LIMIT 1"
+                ),
+                {"ws": workspace_id, "slug": candidate},
+            ).fetchone()
+            is not None
+        )
+
+    if not _taken(base):
+        return base
+    for suffix in range(2, 1000):
+        candidate = f"{base}-{suffix}"
+        if not _taken(candidate):
+            return candidate
+    raise ValueError(f"Exhausted collision suffixes (-2..-999) for slug base '{base}'")
+
+
 def sync_mcp_connection(spec: dict, token: str) -> tuple[str, str]:
     """Upsert the server spec, instance and token secret. Returns their two ids.
 
@@ -868,8 +914,6 @@ def sync_mcp_connection(spec: dict, token: str) -> tuple[str, str]:
     resets the instance's verification and tool snapshot, so the platform
     re-verifies it against the new server instead of trusting the old one's.
     """
-    from registry_sync import _unique_mcp_slug
-
     name = spec["name"]
     description = spec.get("description") or ""
     endpoint_url = spec["endpointUrl"]
@@ -1298,165 +1342,3 @@ def periodic_platform_connection_resync(spec, meta, namespace, patch, **_):
         patch.status["message"] = f"Resync failed: {e}"
         return
     _record_connection_sync(patch, connection_id, server_id, "Re-synced")
-
-
-# ─── RegistrySync handlers ───────────────────────────────────────────────
-
-
-def _read_configmap(namespace: str, name: str, key: str) -> str:
-    v1 = k8s_client.CoreV1Api()
-    cm = v1.read_namespaced_config_map(name=name, namespace=namespace)
-    data = cm.data or {}
-    if key not in data:
-        raise kopf.PermanentError(f"Key '{key}' not found in ConfigMap '{name}'")
-    return data[key]
-
-
-def _resolve_source(
-    spec: dict, namespace: str
-) -> tuple[str, str, str | None, str | None]:
-    """Return (source_type, location_or_empty, configmap_body, expected_sha256)."""
-    source = spec.get("source") or {}
-    source_type = source.get("type")
-    expected_sha256 = source.get("sha256")
-    if source_type == "url":
-        url = source.get("url")
-        if not url:
-            raise kopf.PermanentError("source.url required when source.type=url")
-        return "url", url, None, expected_sha256
-    if source_type == "file":
-        path = source.get("url")
-        if not path:
-            raise kopf.PermanentError("source.url required when source.type=file")
-        return "file", path, None, expected_sha256
-    if source_type == "configMap":
-        ref = source.get("configMapRef") or {}
-        cm_name = ref.get("name")
-        cm_key = ref.get("key")
-        if not cm_name or not cm_key:
-            raise kopf.PermanentError(
-                "configMapRef.name and configMapRef.key required when source.type=configMap"
-            )
-        body = _read_configmap(namespace, cm_name, cm_key)
-        return "configMap", f"configMap:{cm_name}/{cm_key}", body, expected_sha256
-    raise kopf.PermanentError(f"Unknown source.type: {source_type}")
-
-
-def _sync_registrysync(spec: dict, cr_name: str, namespace: str) -> dict:
-    from registry_sync import reconcile as rs_reconcile
-
-    registry_type = spec["type"]
-    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
-    source_type, location, configmap_body, expected_sha256 = _resolve_source(spec, namespace)
-    with engine.begin() as conn:
-        return rs_reconcile(
-            conn,
-            cr_name=cr_name,
-            registry_type=registry_type,
-            source_type=source_type,
-            source_location=location,
-            configmap_body=configmap_body,
-            workspace_id=workspace_id,
-            expected_sha256=expected_sha256,
-        )
-
-
-@kopf.on.create("agentarea.io", "v1alpha1", "registrysyncs")
-@kopf.on.update("agentarea.io", "v1alpha1", "registrysyncs")
-def on_registry_sync_change(spec, meta, namespace, patch, **_):
-    cr_name = meta["name"]
-    logger.info("Syncing RegistrySync %s/%s (type=%s)", namespace, cr_name, spec.get("type"))
-    patch.status["phase"] = "Syncing"
-
-    try:
-        stats = _sync_registrysync(spec, cr_name, namespace)
-    except kopf.PermanentError:
-        patch.status["phase"] = "Error"
-        raise
-    except Exception as e:
-        logger.exception("RegistrySync failed for %s/%s", namespace, cr_name)
-        patch.status["phase"] = "Error"
-        patch.status["message"] = str(e)
-        raise kopf.TemporaryError(str(e), delay=60)
-
-    patch.status["phase"] = "Synced"
-    patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()
-    patch.status["itemCount"] = stats["total"]
-    patch.status["newItems"] = stats["new"]
-    patch.status["updatedItems"] = stats["updated"]
-    patch.status["message"] = (
-        f"Synced {stats['total']} items ({stats['new']} new, {stats['updated']} updated)"
-    )
-    logger.info(
-        "RegistrySync %s/%s synced: total=%d new=%d updated=%d",
-        namespace,
-        cr_name,
-        stats["total"],
-        stats["new"],
-        stats["updated"],
-    )
-
-
-@kopf.on.delete("agentarea.io", "v1alpha1", "registrysyncs")
-def on_registry_sync_delete(spec, meta, namespace, **_):
-    """Delete the `registries` row and let ON DELETE CASCADE drop registry_items.
-
-    Installed entities are retained (additive-only); removing a RegistrySync CR
-    stops future reconciliation but does not yank catalog entries users depend on.
-    """
-    cr_name = meta["name"]
-    workspace_id = spec.get("workspaceId", PLATFORM_WORKSPACE_ID)
-    logger.info("Deleting RegistrySync %s/%s", namespace, cr_name)
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    "DELETE FROM registries WHERE name = :name AND workspace_id = :ws"
-                ),
-                {"name": cr_name, "ws": workspace_id},
-            )
-    except Exception as e:
-        logger.error("Failed to delete registry %s: %s", cr_name, e)
-
-
-@kopf.on.timer(
-    "agentarea.io",
-    "v1alpha1",
-    "registrysyncs",
-    interval=60,
-    idle=60,
-)
-def registry_sync_timer(spec, meta, namespace, patch, status, **_):
-    """Periodic resync driven by spec.syncIntervalSeconds (default 6h).
-
-    kopf's timer fires every 60s (cheap: the body skips out quickly when the
-    per-CR interval hasn't elapsed).
-    """
-    cr_name = meta["name"]
-    interval = int(spec.get("syncIntervalSeconds", 21600))
-
-    last_iso = (status or {}).get("lastSyncedAt")
-    if last_iso:
-        try:
-            last = datetime.fromisoformat(last_iso.replace("Z", "+00:00"))
-        except ValueError:
-            last = None
-        if last and (datetime.now(timezone.utc) - last).total_seconds() < interval:
-            return
-
-    try:
-        stats = _sync_registrysync(spec, cr_name, namespace)
-    except Exception as e:
-        logger.exception("Timer resync failed for %s/%s", namespace, cr_name)
-        patch.status["phase"] = "Error"
-        patch.status["message"] = f"Resync failed: {e}"
-        return
-
-    patch.status["phase"] = "Synced"
-    patch.status["lastSyncedAt"] = datetime.now(timezone.utc).isoformat()
-    patch.status["itemCount"] = stats["total"]
-    patch.status["newItems"] = stats["new"]
-    patch.status["updatedItems"] = stats["updated"]
-    patch.status["message"] = (
-        f"Resynced {stats['total']} items ({stats['new']} new, {stats['updated']} updated)"
-    )

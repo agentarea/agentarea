@@ -28,7 +28,7 @@ reason.
 
 <Info>
 - A reachable PostgreSQL instance with the `agentarea` database created
-- For local work: Python 3.12 or later and `uv`, from a clone of the repository
+- For local work: Python 3.14 or later and `uv`, from a clone of the repository
 - The same `AGENTAREA_DB_URL` or `POSTGRES_*` values the platform uses
 </Info>
 
@@ -135,7 +135,7 @@ reason.
     | Database | Owned by | Migrated by |
     |---|---|---|
     | `agentarea` | the platform | `agentarea-api migrate` (Alembic) |
-    | `temporal` | Temporal | `temporalio/auto-setup` on start |
+    | `temporal`, `temporal_visibility` | Temporal | `temporal-sql-tool` (`temporalio/admin-tools`): the `temporal-schema` container under Compose, the Temporal pod's `schema` init container on Kubernetes |
     | `kratos` | Ory Kratos | the `kratos-migrate` container / Job |
     | `openfga` | OpenFGA | the `openfga-migrate` container / Job |
 

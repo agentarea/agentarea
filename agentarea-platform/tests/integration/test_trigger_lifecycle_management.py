@@ -13,9 +13,10 @@ import pytest
 
 # Import trigger system components
 try:
-    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
+    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
     from agentarea_triggers.domain.models import (
         TriggerCreate,
+        TriggerSession,
         TriggerUpdate,
     )
     from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
@@ -35,7 +36,11 @@ pytestmark = pytest.mark.asyncio
 
 
 def _rule(field: str, value: object) -> dict:
-    return {"type": "rule", "logic": "AND", "rules": [{"field": field, "operator": "eq", "value": value}]}
+    return {
+        "type": "rule",
+        "logic": "AND",
+        "rules": [{"field": field, "operator": "eq", "value": value}],
+    }
 
 
 class TestTriggerLifecycleManagement:
@@ -117,6 +122,13 @@ class TestTriggerLifecycleManagement:
         """Sample agent ID for testing."""
         return uuid4()
 
+    @pytest.fixture
+    async def stream_id(self, trigger_service):
+        stream = await trigger_service.stream_service.create_stream(
+            name=f"lifecycle-{uuid4().hex[:8]}", description=""
+        )
+        return stream.id
+
     # Trigger Creation Tests
 
     async def test_cron_trigger_creation_lifecycle(
@@ -163,46 +175,39 @@ class TestTriggerLifecycleManagement:
         assert retrieved_trigger.id == created_trigger.id
         assert retrieved_trigger.name == created_trigger.name
 
-    async def test_webhook_trigger_creation_lifecycle(self, trigger_service, sample_agent_id):
-        """Test complete webhook trigger creation lifecycle."""
-        # Create webhook trigger
+    async def test_stream_trigger_creation_lifecycle(
+        self, trigger_service, sample_agent_id, stream_id
+    ):
+        """A stream trigger is subscribed to its stream and keeps its session."""
         trigger_data = TriggerCreate(
-            name="Lifecycle Webhook Trigger",
-            description="Test webhook trigger lifecycle",
+            name="Lifecycle Stream Trigger",
+            description="Test stream trigger lifecycle",
             agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id=str(uuid4()),
-            webhook_type=WebhookType.GITHUB,
-            allowed_methods=["POST", "PUT"],
-            task_parameters={"webhook_lifecycle_test": True},
+            trigger_type=TriggerType.STREAM,
+            stream_id=stream_id,
+            event_filter={"kinds": ["push"]},
+            session=TriggerSession(continue_=True, idle_timeout="30m"),
+            task_parameters={"stream_lifecycle_test": True},
             conditions=_rule("branch", "main"),
-            validation_rules={"required_headers": ["X-GitHub-Event"]},
-            webhook_config={"secret": "webhook_secret"},
             created_by="lifecycle_test",
             workspace_id="lifecycle-test-workspace",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
 
-        # Verify trigger was created with correct properties
         assert created_trigger.id is not None
-        assert created_trigger.name == "Lifecycle Webhook Trigger"
-        assert created_trigger.trigger_type == TriggerType.WEBHOOK
+        assert created_trigger.name == "Lifecycle Stream Trigger"
+        assert created_trigger.trigger_type == TriggerType.STREAM
         assert created_trigger.is_active is True
-        assert created_trigger.webhook_id is not None
-        assert created_trigger.webhook_type == WebhookType.GITHUB
-        assert created_trigger.allowed_methods == ["POST", "PUT"]
-        assert created_trigger.validation_rules == {"required_headers": ["X-GitHub-Event"]}
-        assert created_trigger.webhook_config == {"secret": "webhook_secret"}
+        assert created_trigger.session == TriggerSession(continue_=True, idle_timeout="30m")
 
-        # Verify webhook ID is unique and properly formatted
-        assert len(created_trigger.webhook_id) > 0
-        assert isinstance(created_trigger.webhook_id, str)
+        subscription = await trigger_service.stream_service.trigger_subscription(created_trigger.id)
+        assert subscription is not None
+        assert subscription.stream_id == stream_id
 
-        # Verify trigger can be retrieved
         retrieved_trigger = await trigger_service.get_trigger(created_trigger.id)
         assert retrieved_trigger is not None
-        assert retrieved_trigger.webhook_id == created_trigger.webhook_id
+        assert retrieved_trigger.session == created_trigger.session
 
     # Trigger Update Tests
 
@@ -266,17 +271,15 @@ class TestTriggerLifecycleManagement:
         assert update_call.kwargs["cron_expression"] == "0 10 * * *"
         assert update_call.kwargs["timezone"] == "America/New_York"
 
-    async def test_partial_trigger_update(self, trigger_service, sample_agent_id):
+    async def test_partial_trigger_update(self, trigger_service, sample_agent_id, stream_id):
         """Test partial trigger update (only some fields)."""
         # Create initial trigger
         trigger_data = TriggerCreate(
             name="Partial Update Trigger",
             description="Original description",
             agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id=str(uuid4()),
-            webhook_type=WebhookType.GENERIC,
-            allowed_methods=["POST"],
+            trigger_type=TriggerType.STREAM,
+            stream_id=stream_id,
             task_parameters={"original": True},
             created_by="partial_test",
             workspace_id="lifecycle-test-workspace",
@@ -297,8 +300,7 @@ class TestTriggerLifecycleManagement:
 
         # Verify other fields remained unchanged
         assert updated_trigger.description == "Original description"
-        assert updated_trigger.webhook_type == WebhookType.GENERIC
-        assert updated_trigger.allowed_methods == ["POST"]
+        assert updated_trigger.trigger_type == TriggerType.STREAM
 
     # Trigger Enable/Disable Tests
 
@@ -329,7 +331,9 @@ class TestTriggerLifecycleManagement:
         assert disabled_trigger.is_active is False
 
         # Verify schedule was paused
-        mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(created_trigger.id)
+        mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(
+            created_trigger.id
+        )
 
         # Re-enable trigger
         enable_result = await trigger_service.enable_trigger(created_trigger.id)
@@ -340,41 +344,37 @@ class TestTriggerLifecycleManagement:
         assert enabled_trigger.is_active is True
 
         # Verify schedule was resumed
-        mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(created_trigger.id)
+        mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(
+            created_trigger.id
+        )
 
-    async def test_webhook_trigger_disable_enable(self, trigger_service, sample_agent_id):
-        """Test webhook trigger disable and enable."""
-        # Create webhook trigger
+    async def test_stream_trigger_disable_enable(self, trigger_service, sample_agent_id, stream_id):
+        """Disabling a stream trigger keeps its subscription to the stream."""
         trigger_data = TriggerCreate(
-            name="Webhook Enable/Disable Test",
+            name="Stream Enable/Disable Test",
             agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id=str(uuid4()),
-            webhook_type=WebhookType.GENERIC,
-            created_by="webhook_enable_test",
+            trigger_type=TriggerType.STREAM,
+            stream_id=stream_id,
+            created_by="stream_enable_test",
             workspace_id="lifecycle-test-workspace",
         )
 
         created_trigger = await trigger_service.create_trigger(trigger_data)
-        webhook_id = created_trigger.webhook_id
 
-        # Disable trigger
         disable_result = await trigger_service.disable_trigger(created_trigger.id)
         assert disable_result is True
 
-        # Verify trigger is disabled but webhook_id is preserved
         disabled_trigger = await trigger_service.get_trigger(created_trigger.id)
         assert disabled_trigger.is_active is False
-        assert disabled_trigger.webhook_id == webhook_id  # Should be preserved
+        subscription = await trigger_service.stream_service.trigger_subscription(created_trigger.id)
+        assert subscription is not None
+        assert subscription.stream_id == stream_id
 
-        # Re-enable trigger
         enable_result = await trigger_service.enable_trigger(created_trigger.id)
         assert enable_result is True
 
-        # Verify trigger is enabled and webhook_id is still preserved
         enabled_trigger = await trigger_service.get_trigger(created_trigger.id)
         assert enabled_trigger.is_active is True
-        assert enabled_trigger.webhook_id == webhook_id
 
     async def test_disable_nonexistent_trigger(self, trigger_service):
         """Test disabling non-existent trigger."""
@@ -433,16 +433,16 @@ class TestTriggerLifecycleManagement:
         history_after_delete = await trigger_service.get_execution_history(trigger_id)
         assert len(history_after_delete) == 0
 
-    async def test_webhook_trigger_deletion_lifecycle(self, trigger_service, sample_agent_id):
-        """Test complete webhook trigger deletion lifecycle."""
-        # Create webhook trigger
+    async def test_stream_trigger_deletion_lifecycle(
+        self, trigger_service, sample_agent_id, stream_id
+    ):
+        """Test complete stream trigger deletion lifecycle."""
         trigger_data = TriggerCreate(
-            name="Webhook Deletion Test",
+            name="Stream Deletion Test",
             agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id=str(uuid4()),
-            webhook_type=WebhookType.GENERIC,
-            created_by="webhook_deletion_test",
+            trigger_type=TriggerType.STREAM,
+            stream_id=stream_id,
+            created_by="stream_deletion_test",
             workspace_id="lifecycle-test-workspace",
         )
 

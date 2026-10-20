@@ -1,19 +1,8 @@
 from uuid import UUID
 
-from .keys import MAX_EVENT_BYTES
-
 
 class StreamError(Exception):
     """Base for stream failures a caller can act on."""
-
-
-class PayloadTooLargeError(StreamError):
-    def __init__(self, size: int):
-        super().__init__(
-            f"Event data is {size} bytes; the limit is {MAX_EVENT_BYTES}. "
-            "Attach large content as a workspace file and send its reference."
-        )
-        self.size = size
 
 
 class StreamQuotaExceededError(StreamError):
@@ -27,6 +16,10 @@ class StreamNotFoundError(StreamError):
     def __init__(self, stream_id: UUID | str):
         super().__init__(f"Stream {stream_id} not found")
         self.stream_id = stream_id
+
+
+class StreamEventNotFoundError(StreamError):
+    """No stream of the workspace holds an event with this id (or it aged out)."""
 
 
 class StreamNameTakenError(StreamError):
@@ -43,21 +36,21 @@ class StreamSourceNotFoundError(StreamError):
         self.source_id = source_id
 
 
-class SourceFedByTriggerError(StreamError):
-    """A live webhook trigger owns the source; deleting it would silence the trigger."""
-
-    def __init__(self, what: str, trigger_ids: list[UUID]):
-        listed = ", ".join(str(t) for t in trigger_ids)
-        super().__init__(
-            f"{what} is fed by the webhook of trigger {listed}; delete the trigger first"
-        )
-        self.trigger_ids = trigger_ids
+class StreamManagedByPlatformError(StreamError):
+    """The platform stream, or its source, is the platform's: members read it and subscribe to it."""
 
 
 class StreamInUseError(StreamError):
-    """Triggers listen to the stream or forwards write into it; deleting it would strand them."""
+    """Triggers listen to it, or forwards or processors write into it: deleting would strand them."""
 
-    def __init__(self, stream_id: UUID, trigger_ids: list[UUID], forwards: list[tuple[UUID, UUID]]):
+    def __init__(
+        self,
+        stream_id: UUID,
+        trigger_ids: list[UUID],
+        forwards: list[tuple[UUID, UUID]],
+        processors: list[tuple[UUID, UUID]] | None = None,
+    ):
+        processors = processors or []
         reasons = []
         if trigger_ids:
             listed = ", ".join(str(t) for t in trigger_ids)
@@ -73,10 +66,20 @@ class StreamInUseError(StreamError):
                 if len(forwards) == 1
                 else f"forwards {listed} write into it; remove each forward from its stream first"
             )
+        if processors:
+            listed = ", ".join(f"{sub} on stream {stream}" for sub, stream in processors)
+            reasons.append(
+                f"processor {listed} writes into it; delete that processor first "
+                "(streams_delete_processor)"
+                if len(processors) == 1
+                else f"processors {listed} write into it; delete each processor first "
+                "(streams_delete_processor)"
+            )
         super().__init__(f"Stream {stream_id} is in use: {'; '.join(reasons)}")
         self.stream_id = stream_id
         self.trigger_ids = trigger_ids
         self.forwards = forwards
+        self.processors = processors
 
 
 class TriggerSubscriptionNotFoundError(StreamError):
@@ -111,5 +114,29 @@ class ForwardLoopError(StreamError):
     """A forward that would write into its own input, or past the causation depth."""
 
 
-class LeaseLostError(StreamError):
-    """Another dispatcher took the subscription; this one must stop writing for it."""
+class ExternalSubscriptionLimitError(StreamError):
+    def __init__(self, limit: int):
+        super().__init__(f"The workspace already has {limit} external subscriptions")
+        self.limit = limit
+
+
+class ProcessorCodeError(StreamError):
+    """A processor's code that cannot be run, or that holds a secret; refused at create."""
+
+
+class ProcessorLoopError(StreamError):
+    """A processor that would write into its own input stream, or with no output at all."""
+
+
+class NotAProcessorError(StreamError):
+    def __init__(self, subscription_id: UUID):
+        super().__init__(f"Subscription {subscription_id} is not a processor")
+        self.subscription_id = subscription_id
+
+
+class ProcessorFailedError(Exception):
+    """The code ran and failed: an error reaction, never retried."""
+
+
+class ProcessorRuntimeUnavailableError(Exception):
+    """The sandbox could not run the code; the event is redelivered."""

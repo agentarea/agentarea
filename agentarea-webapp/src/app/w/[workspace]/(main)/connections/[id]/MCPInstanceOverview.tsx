@@ -57,6 +57,7 @@ import {
   TRANSPORT_LABEL,
 } from "../utils";
 import { CardField, ConnectionDetailsCard } from "../components/ConnectionCards";
+import { ConnectionCostSection } from "../components/ConnectionCostSection";
 import { relativeParts } from "../relative-parts";
 import { verifyInstance } from "./actions";
 
@@ -560,6 +561,18 @@ export default function MCPInstanceOverview({
                 ))}
               </SectionCard>
             )}
+
+            <ConnectionCostSection
+              cost={instance.cost}
+              managedBy={instance.managed_by}
+              onSave={async (cost) => {
+                const { updateMCPServerInstanceAction } = await import(
+                  "@/lib/server-actions"
+                );
+                return updateMCPServerInstanceAction(instance.id, { cost });
+              }}
+              onSaved={() => router.refresh()}
+            />
           </div>
 
           <div className="flex min-w-0 flex-col gap-4">

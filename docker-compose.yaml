@@ -25,11 +25,14 @@ services:
       # MCP settings
       - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80/api/mcp
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       # Server settings
       - PORT=${PORT:-8000}
+      # The public base of webhook URLs; the event service registers the same one.
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
       - AGENTAREA_LOG_LEVEL=${AGENTAREA_LOG_LEVEL:-info}
       - AGENTAREA_API_WORKERS=${AGENTAREA_API_WORKERS:-1}
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
@@ -55,6 +58,8 @@ services:
       # PEM file of CA certificates trusted on outbound TLS on top of the public
       # roots; a path inside the container, mounted by an override file.
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
@@ -166,7 +171,7 @@ services:
 
   # Create the main app database and auxiliary databases — idempotent.
   postgres_init:
-    image: postgres:18
+    image: postgres:18.6
     environment:
       - PGHOST=db
       - PGPORT=5432
@@ -216,7 +221,7 @@ services:
       - auth-network
 
   rustfs:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:1.0.3
     volumes:
       - ./data/rustfs:/data
     environment:
@@ -237,7 +242,7 @@ services:
       - mcp-network
 
   db:
-    image: postgres:18
+    image: postgres:18.6
     environment:
       - POSTGRES_USER=${AGENTAREA_DB_USER}
       - POSTGRES_PASSWORD=${AGENTAREA_DB_PASSWORD}
@@ -268,7 +273,7 @@ services:
       - auth-network
 
   valkey:
-    image: valkey/valkey:8
+    image: valkey/valkey:9.1.2
     container_name: agentarea-valkey
     restart: always
     volumes:
@@ -277,6 +282,8 @@ services:
     # containers on mcp-network must not be able to reach it.
     networks:
       - default
+    # A store for the event bus, not a cache: AOF on, nothing evicted.
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   agentarea-mcp-manager:
     image: agentarea/agentarea-mcp-manager:${VERSION:-latest}
@@ -301,6 +308,7 @@ services:
       # project default, which also carries the database and Redis.
       AGENTAREA_MCP_NETWORK: agentarea_mcp-network
       AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_EVENT_NAMESPACE: agentarea
       AGENTAREA_API_URL: http://app:8000
       # Demand gateway: MCP workloads start on the first call and are reclaimed
       # after AGENTAREA_MCP_IDLE_TIMEOUT (0 keeps them running once started). All four are
@@ -401,10 +409,10 @@ services:
       AGENTAREA_SANDBOX_ACTIVATION_SECRET: ${AGENTAREA_SANDBOX_ACTIVATION_SECRET:?AGENTAREA_SANDBOX_ACTIVATION_SECRET is required; run scripts/gen-dev-secrets.sh}
 
   # Temporal Infrastructure Services
-  temporal:
-    image: temporalio/auto-setup:1.29.1
-    container_name: agentarea-temporal
-    restart: unless-stopped
+  # Creates and migrates the temporal and temporal_visibility databases; the
+  # server image does neither. Keep its tag equal to the server's.
+  temporal-schema:
+    image: temporalio/admin-tools:1.32.1
     depends_on:
       db:
         condition: service_healthy
@@ -417,9 +425,37 @@ services:
       - POSTGRES_PWD=${AGENTAREA_DB_PASSWORD}
       - POSTGRES_SEEDS=db
       - DBNAME=${TEMPORAL_DB:-temporal}
+    networks:
+      - temporal-network
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        export SQL_PASSWORD="$$POSTGRES_PWD"
+        sql() { temporal-sql-tool --plugin "$$DB" --ep "$$POSTGRES_SEEDS" -p "$$DB_PORT" -u "$$POSTGRES_USER" "$$@"; }
+        sql --db "$$DBNAME" create
+        sql --db "$$DBNAME" setup-schema -v 0.0
+        sql --db "$$DBNAME" update-schema --schema-name postgresql/v12/temporal
+        sql --db temporal_visibility create
+        sql --db temporal_visibility setup-schema -v 0.0
+        sql --db temporal_visibility update-schema --schema-name postgresql/v12/visibility
+
+  temporal:
+    image: temporalio/server:1.32.1
+    container_name: agentarea-temporal
+    restart: unless-stopped
+    depends_on:
+      temporal-schema:
+        condition: service_completed_successfully
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${AGENTAREA_DB_USER}
+      - POSTGRES_PWD=${AGENTAREA_DB_PASSWORD}
+      - POSTGRES_SEEDS=db
+      - DBNAME=${TEMPORAL_DB:-temporal}
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CLI_ADDRESS=temporal:7233
       - BIND_ON_IP=0.0.0.0
     networks:
       - temporal-network
@@ -429,11 +465,30 @@ services:
     volumes:
       - ./agentarea-platform/temporal-config:/etc/temporal/config/dynamicconfig
     healthcheck:
-      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 120s
+
+  # Registers the namespace the platform runs in; the server image does not.
+  temporal-namespace:
+    image: temporalio/admin-tools:1.32.1
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+    networks:
+      - temporal-network
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until temporal operator namespace describe -n "$$TEMPORAL_NAMESPACE" >/dev/null 2>&1; do
+          temporal operator namespace create -n "$$TEMPORAL_NAMESPACE" --retention 24h || sleep 5
+        done
 
   # AgentArea Worker Service
   agentarea-worker:
@@ -447,8 +502,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_started
-      temporal:
-        condition: service_healthy
+      temporal-namespace:
+        condition: service_completed_successfully
       bucket-init:
         condition: service_completed_successfully
       openfga:
@@ -471,11 +526,14 @@ services:
 
       # Redis
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       # Links the worker sends out (the Telegram account-link reply)
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
       # PEM file of CA certificates trusted on outbound TLS on top of the public
       # roots; a path inside the container, mounted by an override file.
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
 
       # Temporal
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
@@ -490,6 +548,7 @@ services:
       - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_MCP_OAUTH_APPS=${AGENTAREA_MCP_OAUTH_APPS:-[]}
       - AGENTAREA_SANDBOX_CLEANUP_SECRET=${AGENTAREA_SANDBOX_CLEANUP_SECRET:?AGENTAREA_SANDBOX_CLEANUP_SECRET is required; run scripts/gen-dev-secrets.sh}
+      - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
 
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
@@ -563,18 +622,26 @@ services:
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_SSLMODE=disable
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_EVENT_POLL_INTERVAL=30s
       - AGENTAREA_EVENT_MAX_POLLERS=10
+      # The public base of /webhooks/{webhook_id}, as the app advertises it.
+      - AGENTAREA_API_URL=${AGENTAREA_API_URL:-http://localhost:8000}
+      # Source credentials are read from the database secret store.
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      # MCP Events sources are polled and subscribed through the manager's gateway.
+      - AGENTAREA_MCP_MANAGER_URL=http://agentarea-mcp-manager:80
+      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
     networks:
       - default
     restart: unless-stopped
 
   # Ory Kratos Migration
   kratos-migrate:
-    image: oryd/kratos:v1.3.1
+    image: oryd/kratos:v26.2.0
     environment:
       DSN: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
-    command: ["migrate", "sql", "-c", "/etc/config/kratos/kratos.yml", "-e", "--yes"]
+    command: ["migrate", "sql", "up", "-c", "/etc/config/kratos/kratos.yml", "-e", "--yes"]
     volumes:
       - ./config/auth/kratos:/etc/config/kratos
     networks:
@@ -587,7 +654,7 @@ services:
 
   # Ory Kratos Identity Server
   kratos:
-    image: oryd/kratos:v1.3.1
+    image: oryd/kratos:v26.2.0
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -619,7 +686,7 @@ services:
 
   # OpenFGA schema migration. Tag matches the Helm chart's openfga.image.tag.
   openfga-migrate:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.18.0}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
     command: migrate
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
@@ -634,7 +701,7 @@ services:
 
   # OpenFGA authorization server (the ReBAC graph behind every permission check)
   openfga:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.18.0}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
     command: run
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres

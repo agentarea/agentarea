@@ -12,7 +12,7 @@ This test locks that contract end-to-end against a real LLM:
   2. POST ``queue_message`` via the control plane.
   3. Wait for ``WorkflowCompleted`` count == 2 — proves the wait_condition
      woke, a new iteration ran, and the agent completed again.
-  4. Assert ``MessageQueued`` event landed and that turn 2 has its own
+  4. Assert ``message.queued`` event landed and that turn 2 has its own
      ``LLMCallCompleted`` event (not just a replay of turn 1).
   5. Cancel to release the workflow (otherwise it parks for 30 min).
 
@@ -90,8 +90,8 @@ def test_queue_message_resumes_completed_task(
     events = _wait_for_event_count(
         alice_client, agent_id, task_id, "WorkflowCompleted", 1, timeout=90.0
     )
-    turn1_iterations = [e for e in events if e["event_type"] == "IterationCompleted"]
-    assert turn1_iterations, "no IterationCompleted event from turn 1"
+    turn1_iterations = [e for e in events if e["event_type"] == "turn.completed"]
+    assert turn1_iterations, "no turn.completed event from turn 1"
 
     # Send the follow-up. Endpoint must accept the command and the workflow
     # must still be addressable (not yet terminated).
@@ -106,10 +106,10 @@ def test_queue_message_resumes_completed_task(
         alice_client, agent_id, task_id, "WorkflowCompleted", 2, timeout=90.0
     )
 
-    # MessageQueued event must have landed (proves the signal actually arrived
+    # message.queued event must have landed (proves the signal actually arrived
     # at the workflow, not just at the API layer).
-    assert any(e["event_type"] == "MessageQueued" for e in events), (
-        f"no MessageQueued event after queue_message: "
+    assert any(e["event_type"] == "message.queued" for e in events), (
+        f"no message.queued event after queue_message: "
         f"{[e['event_type'] for e in events]}"
     )
 
@@ -119,9 +119,9 @@ def test_queue_message_resumes_completed_task(
         f"expected >=2 LLMCallCompleted events across both turns, got {len(llm_completed)}"
     )
 
-    iteration_completed = [e for e in events if e["event_type"] == "IterationCompleted"]
+    iteration_completed = [e for e in events if e["event_type"] == "turn.completed"]
     assert len(iteration_completed) >= 2, (
-        f"expected >=2 IterationCompleted across both turns, got {len(iteration_completed)}"
+        f"expected >=2 turn.completed across both turns, got {len(iteration_completed)}"
     )
 
     # Release the workflow — otherwise it parks in awaiting_input for 30 min.

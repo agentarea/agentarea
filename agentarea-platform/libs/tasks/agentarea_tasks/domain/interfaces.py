@@ -45,7 +45,7 @@ class BaseTaskManager(ABC):
     supports_resume: bool = False
 
     async def resume_task(
-        self, task: AgentTask, resume: "AgentExecutionResume", message: str | None
+        self, task: AgentTask, resume: AgentExecutionResume, message: str | None
     ) -> AgentTask:
         """Continue a closed task's conversation with a new execution.
 

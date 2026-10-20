@@ -190,6 +190,13 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     case "paused":
       return { label: "Paused", labelKey: "paused", kind: "paused" };
+    // Held by the platform, not a person: the run retries until the service answers.
+    case "waiting_for_infrastructure":
+      return {
+        label: "Waiting for a service",
+        labelKey: "waitingForInfrastructure",
+        kind: "paused",
+      };
     // Accepted but not picked up by a worker yet. `submitted` is the status a
     // task is created with and `preparing` precedes its dispatch; A2A folds
     // both into SUBMITTED alongside `pending`, and so do we.
@@ -261,6 +268,8 @@ export function getStreamOutcomeStatusPresentation(
       return { label: "Error", labelKey: "error", kind: "failed" };
     case "unheard":
       return { label: "Nobody listened", labelKey: "unheard", kind: "draft" };
+    case "batched":
+      return { label: "In a batch", labelKey: "batched", kind: "scheduled" };
     default:
       return {
         label: "Unknown outcome",
@@ -271,25 +280,27 @@ export function getStreamOutcomeStatusPresentation(
 }
 
 /**
- * What protects a webhook URL. Only "signed" is a healthy state: the other two
- * accept a request from anyone who knows the URL.
+ * What the platform did with one event (the workspace feed's status): queued
+ * until the router matched it, in flight until every subscriber reacted.
  */
-export function getWebhookSigningPresentation(
+export function getEventProcessingStatusPresentation(
   status: string
 ): StatusPresentation {
   switch (normalizeStatus(status)) {
-    case "signed":
-      return { label: "Signed", labelKey: "signed", kind: "active" };
-    case "unsigned":
-      return { label: "Unsigned", labelKey: "unsigned", kind: "attention" };
-    case "unsupported":
-      return {
-        label: "Not verified",
-        labelKey: "unsupported",
-        kind: "attention",
-      };
+    case "queued":
+      return { label: "Queued", labelKey: "queued", kind: "queued" };
+    case "processing":
+      return { label: "Processing", labelKey: "processing", kind: "running" };
+    case "handled":
+      return { label: "Handled", labelKey: "handled", kind: "done" };
+    case "error":
+      return { label: "Error", labelKey: "error", kind: "failed" };
+    case "no_handlers":
+      return { label: "No handlers", labelKey: "no_handlers", kind: "off" };
+    case "skipped":
+      return { label: "Skipped", labelKey: "skipped", kind: "cancelled" };
     default:
-      return fallbackStatusPresentation(status);
+      return { label: "Unknown", labelKey: "unknown", kind: "attention" };
   }
 }
 
@@ -316,6 +327,8 @@ export function getTriggerExecutionStatusPresentation(
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     case "skipped":
       return { label: "Skipped", labelKey: "skipped", kind: "off" };
+    case "batched":
+      return { label: "In a batch", labelKey: "batched", kind: "scheduled" };
     default:
       return fallbackStatusPresentation(status);
   }
@@ -396,4 +409,61 @@ export function getBillingStatusPresentation(
     default:
       return fallbackStatusPresentation(status);
   }
+}
+
+/** An installed catalog skill whose registry has a newer version (ADR-0044). */
+export function getSkillUpdateStatusPresentation(skill: {
+  update_available?: boolean | null;
+}): StatusPresentation | null {
+  return skill.update_available
+    ? {
+        label: "Update available",
+        labelKey: "updateAvailable",
+        kind: "attention",
+      }
+    : null;
+}
+
+/** An installed catalog skill its registry no longer publishes; it keeps working. */
+export function getSkillSourceStatusPresentation(skill: {
+  removed_upstream?: boolean | null;
+}): StatusPresentation | null {
+  return skill.removed_upstream
+    ? { label: "Removed upstream", labelKey: "removedUpstream", kind: "off" }
+    : null;
+}
+
+/** What updating one installed skill did, as POST /skills/update-all reports it. */
+export function getSkillUpdateResultPresentation(
+  status: string
+): StatusPresentation {
+  switch (normalizeStatus(status)) {
+    case "updated":
+      return { label: "Updated", labelKey: "updated", kind: "done" };
+    case "up_to_date":
+      return { label: "Up to date", labelKey: "upToDate", kind: "active" };
+    case "customized":
+      return { label: "Customized", labelKey: "customized", kind: "attention" };
+    case "failed":
+      return { label: "Failed", labelKey: "failed", kind: "failed" };
+    default:
+      return fallbackStatusPresentation(status);
+  }
+}
+
+/** Whether a registry's index is current: off, last sync failed, synced, never. */
+export function getRegistrySyncStatusPresentation(registry: {
+  is_active: boolean;
+  last_synced_at?: string | null;
+  last_sync_error?: string | null;
+}): StatusPresentation {
+  if (!registry.is_active)
+    return { label: "Off", labelKey: "off", kind: "off" };
+  if (registry.last_sync_error) {
+    return { label: "Sync failed", labelKey: "failed", kind: "failed" };
+  }
+  if (registry.last_synced_at) {
+    return { label: "Synced", labelKey: "synced", kind: "done" };
+  }
+  return { label: "Never synced", labelKey: "never", kind: "draft" };
 }

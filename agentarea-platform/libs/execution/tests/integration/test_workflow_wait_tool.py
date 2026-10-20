@@ -29,6 +29,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent.wait import WAIT_MAX_SECONDS
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
@@ -150,6 +151,14 @@ async def _mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=_mock_publish_events,
+    update_status=_mock_update_status,
+    log=_TASK_LOG,
+)
+
+
 _ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -157,6 +166,7 @@ _ACTIVITIES = [
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
     _mock_validate_artifacts,
 ]
@@ -201,7 +211,7 @@ def _wait_events(event_type: str) -> list[dict[str, Any]]:
 
 
 def _wait_tool_message(request: LLMCallRequest) -> dict[str, Any]:
-    return next(m for m in request.messages if m.get("tool_call_id") == "call_wait")
+    return next(m for m in _TASK_LOG.messages(request) if m.get("tool_call_id") == "call_wait")
 
 
 async def _run(drive: Callable[[Any], Any] | None = None):
@@ -292,7 +302,7 @@ async def test_a_user_message_wakes_the_wait_early():
     assert finished[0]["data"]["woken_by"] == "user_message"
     assert finished[0]["data"]["waited_seconds"] < WAIT_MAX_SECONDS
 
-    second_turn = _llm_requests[1].messages
+    second_turn = _TASK_LOG.messages(_llm_requests[1])
     tool_index = next(i for i, m in enumerate(second_turn) if m.get("tool_call_id") == "call_wait")
     assert "user message" in second_turn[tool_index]["content"]
     assert second_turn[tool_index + 1]["role"] == "user"
@@ -367,7 +377,9 @@ async def test_wait_runs_in_the_position_the_model_called_it():
 
     assert result.success is True
     assert _mcp_calls == ["get_video"]
-    order = [m["tool_call_id"] for m in _llm_requests[1].messages if m.get("role") == "tool"]
+    order = [
+        m["tool_call_id"] for m in _TASK_LOG.messages(_llm_requests[1]) if m.get("role") == "tool"
+    ]
     assert order == ["call_wait", "call_poll"]
 
 

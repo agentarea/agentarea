@@ -1,6 +1,8 @@
 """SecretsToolset — manage workspace secrets."""
 
+import builtins
 import json
+from typing import Annotated
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
@@ -16,8 +18,26 @@ from agentarea_secrets.catalog_service import (
 )
 from agentarea_secrets.naming import SecretNameError
 from fastapi import HTTPException
+from pydantic import BaseModel, Field
 
 from .base import platform_context
+
+
+class SecretOutput(BaseModel):
+    id: str = Field(description="Secret id (UUID).")
+    name: str = Field(description="Secret name, the handle other resources reference it by.")
+    description: str | None = Field(description="What the secret is for.")
+
+
+class SecretCreated(BaseModel):
+    created: bool = Field(description="True once the secret is stored.")
+    id: str = Field(description="Secret id (UUID).")
+    name: str = Field(description="Secret name.")
+
+
+class SecretDeleted(BaseModel):
+    deleted: bool = Field(description="True once the secret is gone.")
+    name: str = Field(description="Name of the deleted secret.")
 
 
 @toolset(
@@ -43,7 +63,9 @@ class SecretsToolset(Toolset):
     the REST listing does.
     """
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List secrets", effect="read", output=builtins.list[SecretOutput])
     @unrestricted("names only, never values, exactly as the REST listing returns them")
     async def list(self) -> str:
         """List the workspace's own secret names. Values are not returned."""
@@ -68,9 +90,24 @@ class SecretsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="privileged")
+    @tool_method(display_name="Create secret", effect="privileged", output=SecretCreated)
     @enforced_in_handler("workspace admin, asserted before the catalog is touched")
-    async def create(self, name: str, value: str, description: str | None = None) -> str:
+    async def create(
+        self,
+        name: Annotated[
+            str,
+            Field(
+                description=(
+                    "Secret name, unique in the workspace: 2-64 characters of lowercase "
+                    "letters, digits, `-` and `_`, starting and ending with a letter or digit."
+                )
+            ),
+        ],
+        value: Annotated[
+            str, Field(description="Secret value; stored encrypted and never returned.")
+        ],
+        description: Annotated[str | None, Field(description="What the secret is for.")] = None,
+    ) -> str:
         """Create a secret. Fails if the name is taken or reserved by the platform."""
         async with platform_context() as (
             session,
@@ -90,9 +127,17 @@ class SecretsToolset(Toolset):
                 raise ToolError(str(exc)) from exc
             return json.dumps({"created": True, "id": str(secret.id), "name": name})
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete secret",
+        effect="destructive",
+        idempotent=True,
+        output=SecretDeleted,
+    )
     @enforced_in_handler("workspace admin, asserted before the catalog is touched")
-    async def delete(self, name: str) -> str:
+    async def delete(
+        self,
+        name: Annotated[str, Field(description="Secret name, from `secrets_list`.")],
+    ) -> str:
         """Delete one of the workspace's own secrets by name."""
         async with platform_context() as (
             session,

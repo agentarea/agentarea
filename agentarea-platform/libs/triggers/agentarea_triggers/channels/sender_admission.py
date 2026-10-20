@@ -1,4 +1,8 @@
-"""Who may talk to an agent through a Telegram bot.
+"""Who may talk to an agent through a messenger: the catalog entry's ``admission``.
+
+An event whose source type has an ``admission`` block is let through only for a
+sender linked to a platform user. Today the one identity the platform links is
+Telegram's, so the link handshake and the notices below speak the Bot API.
 
 A bot is a door: it answers "who is this?" and nothing more. The sender's
 Telegram account resolves to a platform user only through a link the person
@@ -18,7 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,7 +34,13 @@ from agentarea_common.identity import (
     LinkCodes,
 )
 from agentarea_common.identity.models import METHOD_PAIRING, TELEGRAM
-from agentarea_common.utils.outbound_tls import outbound_ssl_context
+from agentarea_common.outbound import Destination, outbound_client
+from agentarea_streams.application.source_credentials import credential_secret_name
+from agentarea_streams.domain import StreamEvent
+from agentarea_streams.domain.source_types import Admission
+from agentarea_streams.domain.templates import TemplateContext, render_first
+from agentarea_streams.infrastructure.catalog_source_types import CatalogSourceTypeRepository
+from agentarea_streams.infrastructure.orm import StreamSourceORM
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .secret_reader import SecretReader
@@ -45,15 +55,14 @@ NOTICE_INTERVAL_SECONDS = 86400
 MayRun = Callable[..., Awaitable[bool]]
 
 
-#: The trigger a message arrived through: the domain model on the webhook path,
-#: the ORM row on the poller path. Only ``id``, ``workspace_id`` and ``agent_id``
-#: are read.
+#: The trigger a message arrived through. Only ``id``, ``workspace_id`` and
+#: ``agent_id`` are read.
 _Trigger = Any
 
 
 @dataclass(frozen=True)
 class TelegramSender:
-    """The sender of one Telegram message, as the update reports them."""
+    """The sender of one message, as the entry's admission templates read it."""
 
     external_id: str
     chat_id: str
@@ -62,24 +71,75 @@ class TelegramSender:
     text: str
 
     @classmethod
-    def from_event(cls, data: dict[str, Any]) -> TelegramSender | None:
-        """Read the sender from a webhook event or a polled one; ``None`` if it names none."""
-        user_id = data.get("user_id")
-        chat_id = data.get("chat_id")
-        if user_id is None or chat_id is None:
+    def from_event(
+        cls, admission: Admission, body: Any, headers: Mapping[str, str]
+    ) -> TelegramSender | None:
+        """The sender of an event; ``None`` if it names none."""
+        context = TemplateContext(body=body, headers=headers)
+        external_id = render_first(admission.external_id, context)
+        chat_id = render_first(admission.chat, context)
+        if external_id is None or chat_id is None:
             return None
-        raw = data.get("raw_data") or data.get("raw") or {}
-        message = (raw.get("message") or raw.get("edited_message") or {}) if raw else {}
-        chat_type = data.get("chat_type") or (message.get("chat") or {}).get("type")
-        # A private chat's id is the user's own id; the poller reports no chat type.
-        private = chat_type == "private" if chat_type else str(chat_id) == str(user_id)
         return cls(
-            external_id=str(user_id),
-            chat_id=str(chat_id),
-            private=private,
-            is_bot=bool((message.get("from") or {}).get("is_bot")),
-            text=str(data.get("text") or "").strip(),
+            external_id=external_id,
+            chat_id=chat_id,
+            private=render_first(admission.private, context) == admission.private_value,
+            is_bot=render_first(admission.is_bot, context) == "true",
+            text=(render_first(admission.text, context) or "").strip(),
         )
+
+
+@dataclass(frozen=True)
+class EventAdmission:
+    """The admission an event's source type asks for, and where its bot's credentials are."""
+
+    admission: Admission
+    credentials_secret: str
+
+
+async def event_admission(session: AsyncSession, event: StreamEvent) -> EventAdmission | None:
+    """What admits the sender of ``event``; None when its source type admits anyone.
+
+    Raises ``LookupError`` when the event names a source or type that cannot be
+    read, or a type with an admission but no source: a door that cannot be
+    checked stays shut.
+    """
+    if event.source_id is None:
+        if event.source_type is None:
+            return None
+        entry = await CatalogSourceTypeRepository(session).get(event.source_type)
+        if entry is None:
+            raise LookupError(
+                f"source type {event.source_type!r} of event {event.id} is not in the catalog"
+            )
+        if entry.admission is None:
+            return None
+        raise LookupError(
+            f"event {event.id} of source type {event.source_type!r} names no source to admit "
+            + "its sender through"
+        )
+    source = await session.get(StreamSourceORM, event.source_id)
+    if source is None or source.workspace_id != event.workspace_id:
+        raise LookupError(f"source {event.source_id} of event {event.id} is gone")
+    slug = source.webhook_type or ""
+    entry = await CatalogSourceTypeRepository(session).get(slug)
+    if entry is None:
+        raise LookupError(f"source type {slug!r} of event {event.id} is not in the catalog")
+    if entry.admission is None:
+        return None
+    if source.credential_key is None:
+        raise LookupError(f"source {source.id} has no credentials")
+    return EventAdmission(
+        admission=entry.admission,
+        credentials_secret=credential_secret_name(slug, source.credential_key),
+    )
+
+
+@dataclass(frozen=True)
+class _BotOf:
+    """The bot that answers a sender: the one whose token the source stores."""
+
+    credentials_secret: str
 
 
 @dataclass(frozen=True)
@@ -99,7 +159,7 @@ class TelegramBotClient:
         self._base = f"https://api.telegram.org/bot{token}"
 
     async def username(self) -> str | None:
-        async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
+        async with outbound_client(Destination.VENDOR, timeout=10.0) as client:
             response = await client.get(f"{self._base}/getMe")
         if not response.is_success:
             logger.warning("Telegram getMe failed: %s", response.status_code)
@@ -107,7 +167,7 @@ class TelegramBotClient:
         return (response.json().get("result") or {}).get("username")
 
     async def send(self, chat_id: str, text: str) -> None:
-        async with httpx.AsyncClient(timeout=10.0, verify=outbound_ssl_context()) as client:
+        async with outbound_client(Destination.VENDOR, timeout=10.0) as client:
             response = await client.post(
                 f"{self._base}/sendMessage", json={"chat_id": chat_id, "text": text}
             )
@@ -145,9 +205,16 @@ class TelegramSenderAdmission:
         self._identities = identities
 
     async def admit(
-        self, session: AsyncSession, trigger: _Trigger, data: dict[str, Any]
+        self, session: AsyncSession, trigger: _Trigger, event: StreamEvent, door: EventAdmission
     ) -> Admitted | Refused:
-        sender = TelegramSender.from_event(data)
+        if door.admission.identity != TELEGRAM:
+            return Refused(f"no sender admission links {door.admission.identity} accounts")
+        data = event.data if isinstance(event.data, Mapping) else {}
+        headers = data.get("headers")
+        sender = TelegramSender.from_event(
+            door.admission, data.get("body"), headers if isinstance(headers, Mapping) else {}
+        )
+        bot = _BotOf(door.credentials_secret)
         if sender is None:
             return Refused("the update names no sender")
         if sender.is_bot:
@@ -156,15 +223,17 @@ class TelegramSenderAdmission:
             return Refused("only private chats reach the agent")
 
         if sender.text.startswith(LINK_COMMAND):
-            await self._redeem(trigger, sender, sender.text[len(LINK_COMMAND) :].strip())
+            await self._redeem(bot, sender, sender.text[len(LINK_COMMAND) :].strip())
             return Refused("account link requested")
         if sender.text == CONFIRM_COMMAND:
-            await self._confirm(session, trigger, sender)
+            await self._confirm(session, bot, sender)
             return Refused("account link confirmation")
 
         user_id = await self._identities(session).holder(TELEGRAM, sender.external_id)
         if user_id is None:
-            await self._notify_once(trigger, sender, "unlinked", await self._unlinked_text(trigger))
+            await self._notify_once(
+                trigger, bot, sender, "unlinked", await self._unlinked_text(bot)
+            )
             return Refused("the sender has not linked their Telegram account")
         if not await self._may_run(
             session,
@@ -174,6 +243,7 @@ class TelegramSenderAdmission:
         ):
             await self._notify_once(
                 trigger,
+                bot,
                 sender,
                 "denied",
                 "Your account doesn't have access to this agent. Ask its owner to grant it.",
@@ -181,7 +251,7 @@ class TelegramSenderAdmission:
             return Refused(f"user {user_id} may not run agent {trigger.agent_id}")
         return Admitted(user_id)
 
-    async def _redeem(self, trigger: _Trigger, sender: TelegramSender, code: str) -> None:
+    async def _redeem(self, bot: _BotOf, sender: TelegramSender, code: str) -> None:
         user_id = (
             await self._link_codes.redeem(code, provider=TELEGRAM, external_id=sender.external_id)
             if code
@@ -189,7 +259,7 @@ class TelegramSenderAdmission:
         )
         if user_id is None:
             await self._reply(
-                trigger,
+                bot,
                 sender,
                 "This link has expired or was already used. Open the link page again "
                 "for a new one.",
@@ -197,18 +267,16 @@ class TelegramSenderAdmission:
             return
         who = await self._describe(user_id)
         await self._reply(
-            trigger,
+            bot,
             sender,
             f"Link this Telegram account to {who}? Send {CONFIRM_COMMAND} within 10 minutes. "
             "If you did not ask for this, ignore this message.",
         )
 
-    async def _confirm(
-        self, session: AsyncSession, trigger: _Trigger, sender: TelegramSender
-    ) -> None:
+    async def _confirm(self, session: AsyncSession, bot: _BotOf, sender: TelegramSender) -> None:
         user_id = await self._link_codes.confirm(provider=TELEGRAM, external_id=sender.external_id)
         if user_id is None:
-            await self._reply(trigger, sender, "There is nothing to confirm.")
+            await self._reply(bot, sender, "There is nothing to confirm.")
             return
         try:
             await self._identities(session).link(
@@ -219,7 +287,7 @@ class TelegramSenderAdmission:
             )
         except ExternalIdentityTakenError:
             await self._reply(
-                trigger,
+                bot,
                 sender,
                 "This Telegram account is already linked to another AgentArea account. "
                 "Unlink it there first.",
@@ -227,14 +295,14 @@ class TelegramSenderAdmission:
             return
         logger.info("Telegram account linked to user %s", user_id)
         await self._reply(
-            trigger,
+            bot,
             sender,
             f"Done: this Telegram account is linked to {await self._describe(user_id)}.",
         )
 
-    async def _unlinked_text(self, trigger: _Trigger) -> str:
-        bot = await self._bot(trigger)
-        username = await bot.username() if bot else None
+    async def _unlinked_text(self, bot: _BotOf) -> str:
+        client = await self._bot(bot)
+        username = await client.username() if client else None
         url = f"{self._app_url}/link/telegram" + (f"?bot={username}" if username else "")
         return (
             "This bot answers only people who linked their Telegram account to AgentArea "
@@ -256,48 +324,50 @@ class TelegramSenderAdmission:
         return _mask_email(record.email) if record and record.email else "your AgentArea account"
 
     async def _notify_once(
-        self, trigger: _Trigger, sender: TelegramSender, kind: str, text: str
+        self, trigger: _Trigger, bot: _BotOf, sender: TelegramSender, kind: str, text: str
     ) -> None:
         if await self._notices.claim(f"{trigger.id}:{sender.external_id}:{kind}"):
-            await self._reply(trigger, sender, text)
+            await self._reply(bot, sender, text)
 
-    async def _reply(self, trigger: _Trigger, sender: TelegramSender, text: str) -> None:
-        bot = await self._bot(trigger)
-        if bot is None:
+    async def _reply(self, bot: _BotOf, sender: TelegramSender, text: str) -> None:
+        client = await self._bot(bot)
+        if client is None:
             return
         try:
-            await bot.send(sender.chat_id, text)
+            await client.send(sender.chat_id, text)
         except httpx.HTTPError:
-            logger.warning("Could not reply to a Telegram sender of trigger %s", trigger.id)
+            logger.warning("Could not reply to a Telegram sender", exc_info=True)
 
-    async def _bot(self, trigger: _Trigger) -> TelegramBotClient | None:
-        raw = await self._secret_reader.get_secret(f"channel_cred:telegram:{trigger.id}")
+    async def _bot(self, bot: _BotOf) -> TelegramBotClient | None:
+        raw = await self._secret_reader.get_secret(bot.credentials_secret)
         try:
             token = json.loads(raw).get("bot_token") if raw else None
         except json.JSONDecodeError:
+            logger.error("The source's stored credentials are not JSON", exc_info=True)
             token = None
         if not token:
-            logger.error("Trigger %s has no Telegram bot token", trigger.id)
+            logger.error("The source has no Telegram bot token")
             return None
         return self._bot_client_factory(token)
 
 
 def build_telegram_sender_admission(
-    *, may_run: MayRun, secret_reader: SecretReader, redis_url: str, app_url: str
+    *,
+    may_run: MayRun,
+    secret_reader: SecretReader,
+    redis_url: str,
+    namespace: str,
+    app_url: str,
 ) -> TelegramSenderAdmission:
     return TelegramSenderAdmission(
         may_run=may_run,
         link_codes=LinkCodes(redis_url),
         notices=DedupCache(
-            redis_url, prefix="telegram-sender-notice", ttl_seconds=NOTICE_INTERVAL_SECONDS
+            redis_url,
+            namespace=namespace,
+            prefix="telegram-sender-notice",
+            ttl_seconds=NOTICE_INTERVAL_SECONDS,
         ),
         secret_reader=secret_reader,
         app_url=app_url,
     )
-
-
-def is_telegram_trigger(trigger: Any) -> bool:
-    """A trigger whose events are Telegram messages: its webhook or its poller."""
-    if str(getattr(trigger, "webhook_type", "") or "") == "telegram":
-        return True
-    return str(getattr(trigger, "data_extractor", "") or "") == "telegram_polling"

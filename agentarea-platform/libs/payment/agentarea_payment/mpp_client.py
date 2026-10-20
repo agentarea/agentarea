@@ -8,6 +8,7 @@ from importlib import import_module
 from typing import Any
 
 from agentarea_common.money import ZERO
+from agentarea_common.outbound import Destination, outbound_client
 
 from .models import PaymentResult
 
@@ -50,29 +51,33 @@ class MPPPaymentClient:
             return self._client
 
         try:
-            client_cls = import_module("mpp.client").Client
+            payment_transport_cls = import_module("mpp.client").PaymentTransport
             tempo_module = import_module("mpp.methods.tempo")
             charge_intent_cls = tempo_module.ChargeIntent
             tempo_account_cls = tempo_module.TempoAccount
             tempo = tempo_module.tempo
 
             account = tempo_account_cls.from_key(self._tempo_key)
-            client = client_cls(
-                methods=[
-                    tempo(
-                        account=account,
-                        intents={
-                            "charge": charge_intent_cls(
-                                chain_id=self._chain_id,
-                                rpc_url=self._rpc_url,
-                            )
-                        },
-                        chain_id=self._chain_id,
-                        rpc_url=self._rpc_url,
-                        currency=self._currency,
-                        recipient=self._recipient,
-                    )
-                ]
+            methods = [
+                tempo(
+                    account=account,
+                    intents={
+                        "charge": charge_intent_cls(
+                            chain_id=self._chain_id,
+                            rpc_url=self._rpc_url,
+                        )
+                    },
+                    chain_id=self._chain_id,
+                    rpc_url=self._rpc_url,
+                    currency=self._currency,
+                    recipient=self._recipient,
+                )
+            ]
+            # The paid retry goes to the member's URL: pympp answers the
+            # challenge and resends, every request through the pinned transport.
+            client = outbound_client(
+                Destination.MEMBER,
+                wrap=lambda inner: payment_transport_cls(methods, inner=inner),
             )
             self._client = client
             return client

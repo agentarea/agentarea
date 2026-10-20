@@ -8,12 +8,29 @@ in natural language that are evaluated against event data.
 import json
 import logging
 import re
+from collections.abc import Awaitable, Callable, Sequence
+from datetime import UTC, datetime
+from decimal import Decimal
+from functools import partial
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
+from agentarea_common.auth.context import UserContext
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
+from agentarea_common.model_charges import (
+    ModelCallRefusedError,
+    ModelCharge,
+    charge_model_call,
+    release_model_hold,
+)
+from agentarea_common.tool_cost import Payer
 from agentarea_common.utils.url_safety import endpoint_policy_for
+from agentarea_llm.application.model_call_pricing import (
+    chat_estimate,
+    decision_estimate,
+    fund_model_call,
+)
 from agentarea_llm.application.model_instance_service import ModelInstanceService
 from agentarea_llm.application.model_service import ModelService
 from agentarea_llm.domain.media import DecisionQuestionType
@@ -21,12 +38,32 @@ from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 from agentarea_streams.domain import value_at
+from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType
+from agentarea_tasks.infrastructure.cost_repository import record_cost_lines
+from agentarea_tasks.model_spend_caps import (
+    SpendCapReachedError,
+    refuse_workspace_model_call_at_spend_cap,
+)
 from pydantic import ValidationError
 
 from .domain.enums import ConditionType
 from .domain.models import ConditionVerdict
 
 logger = logging.getLogger(__name__)
+
+# Stores a trigger's spend lines; a run's lines come from its events instead.
+CostRecorder = Callable[[Sequence[CostEntry]], Awaitable[int]]
+# Raises SpendCapReachedError once a monthly LLM spend cap of the trigger's agent is reached.
+SpendCapRefusal = Callable[[UUID | None], Awaitable[None]]
+
+# The most a condition or extraction answer may run to.
+_CONDITION_MAX_TOKENS = 1000
+
+
+def _trigger_agent(trigger_context: dict[str, Any] | None) -> UUID | None:
+    """The agent a trigger fires for, whose own LLM spend caps its model calls fall under."""
+    agent_id = (trigger_context or {}).get("agent_id")
+    return UUID(str(agent_id)) if agent_id else None
 
 
 def _condition_type(condition: dict[str, Any]) -> ConditionType | None:
@@ -209,7 +246,7 @@ def build_condition_evaluator(
     secret_manager: BaseSecretManager,
     secret_manager_factory: SecretManagerFactory,
     event_broker: Any,
-) -> "LLMConditionEvaluator | None":
+) -> LLMConditionEvaluator | None:
     """The evaluator a TriggerService gets outside a request, when enabled.
 
     For the worker's trigger activities and the inbound channel consumer, which
@@ -234,6 +271,11 @@ def build_condition_evaluator(
             user_context=user_context,
             secret_manager_factory=secret_manager_factory,
         ),
+        user_context=user_context,
+        record_costs=partial(record_cost_lines, user_context),
+        refuse_at_spend_cap=partial(
+            refuse_workspace_model_call_at_spend_cap, session, user_context
+        ),
     )
 
 
@@ -245,6 +287,9 @@ class LLMConditionEvaluator:
         model_instance_service: ModelInstanceService,
         secret_manager: BaseSecretManager,
         model_service: ModelService,
+        user_context: UserContext,
+        record_costs: CostRecorder,
+        refuse_at_spend_cap: SpendCapRefusal,
     ):
         """Initialize the LLM condition evaluator.
 
@@ -252,10 +297,59 @@ class LLMConditionEvaluator:
             model_instance_service: Service for managing LLM model instances
             secret_manager: Service for managing API keys and secrets
             model_service: Resolves decision models, which answer a condition directly
+            user_context: The trigger's workspace, which every model call is held for
+            record_costs: Stores the spend line of each model call
+            refuse_at_spend_cap: Refuses a model call once a monthly LLM spend cap is reached
         """
         self.model_instance_service = model_instance_service
         self.secret_manager = secret_manager
         self.model_service = model_service
+        self.user_context = user_context
+        self.record_costs = record_costs
+        self.refuse_at_spend_cap = refuse_at_spend_cap
+
+    async def _record(
+        self,
+        charge: ModelCharge,
+        *,
+        model_name: str,
+        provider_cost_usd: Decimal | None,
+        purpose: str,
+        trigger_context: dict[str, Any] | None,
+    ) -> None:
+        """Write a trigger's model call into the spend ledger, held or not."""
+        if charge.amount <= 0 and not charge.hold_id and not charge.cost_unknown:
+            return
+        await self.record_costs(
+            [
+                CostEntry(
+                    workspace_id=str(self.user_context.workspace_id),
+                    created_by=str(self.user_context.user_id),
+                    event_id=uuid4(),
+                    category=CostCategory.MODEL,
+                    task_id=None,
+                    agent_id=None,
+                    subject_type=CostSubjectType.MODEL_INSTANCE,
+                    subject_id=charge.model_instance_id,
+                    subject_name=model_name[:255],
+                    call_ref=None,
+                    amount=charge.amount,
+                    currency=charge.currency,
+                    source=CostSource.TOKEN_PRICING,
+                    occurred_at=datetime.now(UTC),
+                    provider_cost_usd=provider_cost_usd,
+                    payer=Payer.PLATFORM if charge.platform_funded else Payer.WORKSPACE,
+                    vendor_cost=charge.vendor_cost,
+                    vendor_currency=charge.vendor_currency,
+                    estimate=charge.estimate,
+                    evidence={
+                        "purpose": purpose,
+                        "trigger_id": (trigger_context or {}).get("trigger_id"),
+                        **charge.evidence(),
+                    },
+                )
+            ]
+        )
 
     async def evaluate_structured(
         self,
@@ -427,7 +521,9 @@ class LLMConditionEvaluator:
         )
 
         # Call LLM for evaluation
-        response = await self._call_llm(prompt, effective_model_id)
+        response = await self._call_llm(
+            prompt, effective_model_id, purpose="trigger_condition", trigger_context=trigger_context
+        )
 
         # Parse response
         return _parse_verdict(response)
@@ -449,19 +545,37 @@ class LLMConditionEvaluator:
             state["trigger_context"] = trigger_context
         if examples:
             state["examples"] = examples
-        model = await self.model_service.decision_model(model_id)
-        result = await model.evaluate(
-            state,
-            {
-                _CONDITION_QUESTION: {
-                    "type": DecisionQuestionType.CHOICE,
-                    "instructions": f"Is this condition met by the event: {description}",
-                    "criteria": {
-                        _MET: "The event meets the condition",
-                        _NOT_MET: "The event does not meet the condition",
-                    },
-                }
-            },
+        questions = {
+            _CONDITION_QUESTION: {
+                "type": DecisionQuestionType.CHOICE,
+                "instructions": f"Is this condition met by the event: {description}",
+                "criteria": {
+                    _MET: "The event meets the condition",
+                    _NOT_MET: "The event does not meet the condition",
+                },
+            }
+        }
+        target = await self.model_service.describe(model_id, ModelKind.DECISION)
+        await self.refuse_at_spend_cap(_trigger_agent(trigger_context))
+        funding = await fund_model_call(
+            target,
+            workspace_id=str(self.user_context.workspace_id),
+            estimate=decision_estimate(target, {"state": state, "questions": questions}),
+            idempotency_key=f"trigger:{uuid4().hex}",
+        )
+        try:
+            model = await self.model_service.decision_model(target, funding)
+            result = await model.evaluate(state, questions)
+        except BaseException:
+            await release_model_hold(funding, "the decision call did not complete")
+            raise
+        charge = await charge_model_call(funding=funding, vendor_cost=result.cost_usd)
+        await self._record(
+            charge,
+            model_name=target.model_name,
+            provider_cost_usd=result.cost_usd,
+            purpose="trigger_condition",
+            trigger_context=trigger_context,
         )
         choice = result.answers[_CONDITION_QUESTION][DecisionQuestionType.CHOICE]
         if choice not in (_MET, _NOT_MET):
@@ -543,7 +657,9 @@ class LLMConditionEvaluator:
             )
 
             # Call LLM for parameter extraction
-            response = await self._call_llm(prompt, model_id)
+            response = await self._call_llm(
+                prompt, model_id, purpose="trigger_parameters", trigger_context=trigger_context
+            )
 
             # Parse response as JSON
             try:
@@ -711,16 +827,12 @@ class LLMConditionEvaluator:
     async def _call_llm(
         self,
         prompt: str,
-        model_id: UUID | None = None,
+        model_id: UUID | None,
+        *,
+        purpose: str,
+        trigger_context: dict[str, Any] | None,
     ) -> str:
-        """Call LLM with the given prompt.
-
-        Args:
-            prompt: The prompt to send to the LLM
-            model_id: The model instance ID to use; there is no default
-
-        Returns:
-            The LLM response content
+        """Call a chat model with the prompt, held and written to the ledger like any call.
 
         Raises:
             LLMConditionEvaluationError: If LLM call fails
@@ -728,41 +840,64 @@ class LLMConditionEvaluator:
         try:
             if model_id is None:
                 raise LLMConditionEvaluationError("No model instance named for this LLM call")
-            effective_model_id = model_id
 
-            # The credential is read by reference from the workspace that owns
-            # it; the configuration only stores the secret's name.
-            endpoint = await self.model_service.resolve(effective_model_id, ModelKind.CHAT)
-            provider_type = endpoint.provider_type
-
-            if not endpoint.endpoint_url and profile_for(provider_type).requires_endpoint_url:
+            target = await self.model_service.describe(model_id, ModelKind.CHAT)
+            if not target.endpoint_url and profile_for(target.provider_type).requires_endpoint_url:
                 # Self-hosted provider: there is no public address to fall back
                 # to, so the call would go nowhere.
                 raise ValueError(
-                    f"model instance {effective_model_id} uses self-hosted provider "
-                    f"{provider_type!r} but has no endpoint_url configured"
+                    f"model instance {model_id} uses self-hosted provider "
+                    f"{target.provider_type!r} but has no endpoint_url configured"
                 )
-
-            model = LLMModel(
-                provider_type=provider_type,
-                model_name=endpoint.model_name,
-                api_key=endpoint.api_key,
-                endpoint_url=endpoint.endpoint_url,
-                endpoint_policy=endpoint_policy_for(endpoint.managed_by),
+            messages = [{"role": "user", "content": prompt}]
+            await self.refuse_at_spend_cap(_trigger_agent(trigger_context))
+            funding = await fund_model_call(
+                target,
+                workspace_id=str(self.user_context.workspace_id),
+                estimate=chat_estimate(target, messages, _CONDITION_MAX_TOKENS),
+                idempotency_key=f"trigger:{uuid4().hex}",
             )
-            logger.debug(f"Calling LLM for condition evaluation with model {endpoint.model_name}")
-            response = await model.complete(
-                LLMRequest(
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.1,  # Low temperature for consistent evaluation
-                    max_tokens=1000,
+            try:
+                endpoint = await self.model_service.connect(target, funding)
+                model = LLMModel(
+                    provider_type=endpoint.provider_type,
+                    model_name=endpoint.model_name,
+                    api_key=endpoint.api_key,
+                    endpoint_url=endpoint.endpoint_url,
+                    input_cost_per_token=endpoint.input_cost_per_token,
+                    output_cost_per_token=endpoint.output_cost_per_token,
+                    endpoint_policy=endpoint_policy_for(endpoint.managed_by),
                 )
+                logger.debug(f"Calling LLM for {purpose} with model {endpoint.model_name}")
+                response = await model.complete(
+                    LLMRequest(
+                        messages=messages,
+                        temperature=0.1,  # Low temperature for consistent evaluation
+                        max_tokens=_CONDITION_MAX_TOKENS,
+                    )
+                )
+            except BaseException:
+                await release_model_hold(funding, f"the {purpose} call did not complete")
+                raise
+            provider_cost = Decimal(str(response.cost)) if response.cost else None
+            charge = await charge_model_call(funding=funding, vendor_cost=provider_cost)
+            await self._record(
+                charge,
+                model_name=target.model_name,
+                provider_cost_usd=provider_cost,
+                purpose=purpose,
+                trigger_context=trigger_context,
             )
             content = response.content or ""
 
             logger.debug(f"LLM condition evaluation response: {content[:100]}...")
             return content.strip()
 
+        except LLMConditionEvaluationError:
+            raise
+        except (ModelCallRefusedError, SpendCapReachedError) as refused:
+            # Billing's or the spend cap's own words, not the provider's: safe to repeat.
+            raise LLMConditionEvaluationError(f"model call refused: {refused}") from refused
         except Exception as e:
             logger.exception(f"LLM call failed: {e}")
             # The provider's answer stays in the log: the endpoint may be a member's,

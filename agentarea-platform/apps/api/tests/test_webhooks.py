@@ -1,5 +1,6 @@
 """Unit tests for webhook endpoints."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -95,28 +96,13 @@ class TestWebhookEndpoints:
         assert call_args[1]["webhook_id"] == "test123"
         assert call_args[1]["method"] == "POST"
         assert call_args[1]["body"] == {"message": "test data"}
+        assert json.loads(call_args[1]["raw_body"]) == {"message": "test data"}
 
-    def test_handle_webhook_get_success(self, client, mock_webhook_manager):
-        """Test successful GET webhook handling."""
-        # Setup mock response
-        mock_webhook_manager.handle_webhook_request.return_value = {
-            "status_code": 200,
-            "body": {"status": "success", "message": "Webhook processed successfully"},
-        }
-
-        # Make request
+    def test_a_get_never_reaches_the_intake(self, client, mock_webhook_manager):
         response = client.get("/webhooks/test123?param=value")
 
-        # Verify response
-        assert response.status_code == 200
-        assert response.json()["status"] == "success"
-
-        # Verify webhook manager was called
-        mock_webhook_manager.handle_webhook_request.assert_called_once()
-        call_args = mock_webhook_manager.handle_webhook_request.call_args
-        assert call_args[1]["webhook_id"] == "test123"
-        assert call_args[1]["method"] == "GET"
-        assert call_args[1]["query_params"] == {"param": "value"}
+        assert response.status_code == 405
+        mock_webhook_manager.handle_webhook_request.assert_not_called()
 
     def test_handle_webhook_form_data(self, client, mock_webhook_manager):
         """Test webhook handling with form data."""
@@ -174,27 +160,16 @@ class TestWebhookEndpoints:
         assert "internal server error" in response.json()["message"].lower()
 
     def test_handle_webhook_invalid_json(self, client, mock_webhook_manager):
-        """Test webhook handling with invalid JSON."""
-        # Setup mock response
-        mock_webhook_manager.handle_webhook_request.return_value = {
-            "status_code": 200,
-            "body": {"status": "success"},
-        }
-
-        # Make request with invalid JSON
+        """A JSON body that does not parse is refused before the intake sees it."""
         response = client.post(
             "/webhooks/test123",
             content='{"invalid": json}',
             headers={"content-type": "application/json"},
         )
 
-        # Should still process (body will be None)
-        assert response.status_code == 200
-
-        # Verify webhook manager was called with None body
-        mock_webhook_manager.handle_webhook_request.assert_called_once()
-        call_args = mock_webhook_manager.handle_webhook_request.call_args
-        assert call_args[1]["body"] is None
+        assert response.status_code == 400
+        assert response.json()["status"] == "error"
+        mock_webhook_manager.handle_webhook_request.assert_not_called()
 
     def test_webhook_health_check_healthy(self, client, mock_webhook_manager):
         """Test webhook health check when healthy."""
@@ -238,46 +213,16 @@ class TestWebhookEndpoints:
         assert data["status"] == "unhealthy"
         assert data["service"] == "webhook-manager"
 
-    def test_handle_webhook_all_methods(self, client, mock_webhook_manager):
-        """Test that webhook endpoint accepts all HTTP methods."""
-        # Setup mock response
+    def test_only_post_reaches_the_intake(self, client, mock_webhook_manager):
         mock_webhook_manager.handle_webhook_request.return_value = {
-            "status_code": 200,
-            "body": {"status": "success"},
+            "status_code": 202,
+            "body": {"status": "accepted"},
         }
 
-        methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
-
-        for method in methods:
-            response = client.request(method, "/webhooks/test123")
-
-            # All methods should be accepted by the endpoint
-            # (actual method validation happens in webhook manager)
-            assert response.status_code == 200
-
-    def test_handle_webhook_with_query_params(self, client, mock_webhook_manager):
-        """Test webhook handling with query parameters."""
-        # Setup mock response
-        mock_webhook_manager.handle_webhook_request.return_value = {
-            "status_code": 200,
-            "body": {"status": "success"},
-        }
-
-        # Make request with query parameters
-        response = client.get("/webhooks/test123?param1=value1&param2=value2&param1=value3")
-
-        # Verify response
-        assert response.status_code == 200
-
-        # Verify webhook manager was called with query params
-        mock_webhook_manager.handle_webhook_request.assert_called_once()
-        call_args = mock_webhook_manager.handle_webhook_request.call_args
-        query_params = call_args[1]["query_params"]
-
-        # FastAPI handles multiple values for same param differently
-        # but we should get the query params
-        assert "param1" in query_params
-        assert "param2" in query_params
+        for method in ["GET", "PUT", "PATCH", "DELETE"]:
+            assert client.request(method, "/webhooks/test123").status_code == 405
+        assert client.post("/webhooks/test123", json={}).status_code == 202
+        mock_webhook_manager.handle_webhook_request.assert_awaited_once()
 
     def test_handle_webhook_with_custom_headers(self, client, mock_webhook_manager):
         """Test webhook handling with custom headers."""
@@ -341,8 +286,7 @@ def test_webhook_rate_limit_returns_429_after_limit(client, mock_webhook_manager
     }
 
     first = client.post("/webhooks/long-enough-webhook-key", json={"event": "first"})
-    # The bucket is per webhook, not per method: any verb reaching the sink spends it.
-    second = client.put("/webhooks/long-enough-webhook-key", json={"event": "second"})
+    second = client.post("/webhooks/long-enough-webhook-key", json={"event": "second"})
     independent = client.post(
         "/webhooks/another-long-enough-webhook-key",
         json={"event": "independent"},

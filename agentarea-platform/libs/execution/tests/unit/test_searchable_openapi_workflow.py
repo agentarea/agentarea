@@ -135,9 +135,7 @@ async def test_load_tools_handles_malformed_arguments():
     await wf._execute_load_openapi_tools(bad_call)
     # No reveals, no crash; message indicates nothing happened.
     assert wf.state.revealed_openapi_tools == []
-    assert all(
-        not t["function"]["name"].startswith("op_") for t in wf.state.available_tools
-    )
+    assert all(not t["function"]["name"].startswith("op_") for t in wf.state.available_tools)
 
 
 @pytest.mark.asyncio

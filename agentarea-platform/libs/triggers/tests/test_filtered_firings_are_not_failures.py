@@ -4,11 +4,11 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 from agentarea_triggers.domain.enums import ExecutionStatus
-from agentarea_triggers.domain.models import ConditionVerdict, TriggerExecution, WebhookTrigger
+from agentarea_triggers.domain.models import ConditionVerdict, StreamTrigger, TriggerExecution
 from agentarea_triggers.trigger_service import TriggerService
 
 
-def _service(trigger: WebhookTrigger) -> TriggerService:
+def _service(trigger: StreamTrigger) -> TriggerService:
     service = TriggerService(
         repository_factory=MagicMock(), event_broker=AsyncMock(), task_service=AsyncMock()
     )
@@ -22,14 +22,13 @@ def _service(trigger: WebhookTrigger) -> TriggerService:
     return service
 
 
-def _trigger(**overrides) -> WebhookTrigger:
-    return WebhookTrigger(
+def _trigger(**overrides) -> StreamTrigger:
+    return StreamTrigger(
         **{
             "name": "t",
             "agent_id": uuid4(),
             "created_by": "u",
             "workspace_id": "w",
-            "webhook_id": "wh-1234567890abcd",
             "conditions": {"type": "llm", "description": "only invoices"},
             "failure_threshold": 5,
             **overrides,

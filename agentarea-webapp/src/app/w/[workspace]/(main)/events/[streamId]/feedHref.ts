@@ -17,3 +17,8 @@ export function feedHref(
   const query = params.toString();
   return `/events/${streamId}${query ? `?${query}` : ""}`;
 }
+
+/** An event by its id, opened in the feed of whichever stream holds it. */
+export function eventHref(eventId: string): string {
+  return `/events/event/${encodeURIComponent(eventId)}`;
+}

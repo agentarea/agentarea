@@ -65,6 +65,10 @@ configured. Delete them; there is no replacement.
 | `DATABASE_URL` | A second way to name the database next to `AGENTAREA_DB_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_NAME` / `_SSLMODE`, and the Go services disagreed on which one won. Every service now reads only the parts. |
 | `API_HOST`, `API_PORT`, `API_AUTH_ENABLED`, `API_AUTH_HEADER_NAME`, `API_AUTH_HEADER_VALUE`, `HEALTH_CHECK_ENABLED`, `HEALTH_CHECK_PORT` | Set by the Helm chart; nothing has read them. The API listens on `PORT` and serves `/health` there. |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Only `AGENTAREA_REDIS_URL` is read. The Helm chart still assembles it from host, port and password internally. |
+| `AGENTAREA_EVENT_DISPATCH_EVERY`, `AGENTAREA_EVENT_DISPATCH_BATCH`, `AGENTAREA_EVENT_LEASE` | The Postgres stream dispatcher they tuned is gone; stream events are consumed by broker consumer groups, which hold positions and redelivery themselves. |
+| `AGENTAREA_CHANNEL_IN_STREAM`, `AGENTAREA_CHANNEL_IN_GROUP`, `AGENTAREA_CHANNEL_IN_DLQ`, `AGENTAREA_EVENT_STREAM` | The `channel.inbound` stream is gone. The event service publishes polled items to `streams.ingest`, read by the `ingest` consumer group (dead letters in `streams.ingest.ingest.dlq`); the names are fixed like every other topic. |
+| `AGENTAREA_EVENT_TELEGRAM_ENABLED` | Telegram is no longer polled by a switch on the event service. A Telegram source of kind `poll` (or `webhook`) is created through the streams source API; the event service polls every poll source the catalog describes. |
+| `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP`, `AGENTAREA_CHANNEL_OUT_DLQ` | The outbound stream is gone. Replies are sent by the `delivery` consumer group on `tasks.events`, whose names are fixed (`tasks.events`, `delivery`, `tasks.events.delivery.dlq`) like every other topic. |
 
 ## Renamed
 
@@ -304,12 +308,12 @@ configured. Delete them; there is no replacement.
 
 | Was | Is |
 |---|---|
-| `CHANNEL_DELIVERY_INBOUND_STREAM` | `AGENTAREA_CHANNEL_IN_STREAM` |
-| `CHANNEL_DELIVERY_INBOUND_GROUP` | `AGENTAREA_CHANNEL_IN_GROUP` |
-| `CHANNEL_DELIVERY_INBOUND_DLQ` | `AGENTAREA_CHANNEL_IN_DLQ` |
-| `CHANNEL_DELIVERY_OUTBOUND_STREAM` | `AGENTAREA_CHANNEL_OUT_STREAM` |
-| `CHANNEL_DELIVERY_OUTBOUND_GROUP` | `AGENTAREA_CHANNEL_OUT_GROUP` |
-| `CHANNEL_DELIVERY_OUTBOUND_DLQ` | `AGENTAREA_CHANNEL_OUT_DLQ` |
+| `CHANNEL_DELIVERY_INBOUND_STREAM` | removed: see `AGENTAREA_CHANNEL_IN_STREAM` under Removed |
+| `CHANNEL_DELIVERY_INBOUND_GROUP` | removed: see `AGENTAREA_CHANNEL_IN_GROUP` under Removed |
+| `CHANNEL_DELIVERY_INBOUND_DLQ` | removed: see `AGENTAREA_CHANNEL_IN_DLQ` under Removed |
+| `CHANNEL_DELIVERY_OUTBOUND_STREAM` | removed: see `AGENTAREA_CHANNEL_OUT_STREAM` under Removed |
+| `CHANNEL_DELIVERY_OUTBOUND_GROUP` | removed: see `AGENTAREA_CHANNEL_OUT_GROUP` under Removed |
+| `CHANNEL_DELIVERY_OUTBOUND_DLQ` | removed: see `AGENTAREA_CHANNEL_OUT_DLQ` under Removed |
 | `CHANNEL_DELIVERY_AUTOCLAIM_MIN_IDLE_MS` | `AGENTAREA_CHANNEL_AUTOCLAIM_IDLE` |
 | `CHANNEL_DELIVERY_AUTOCLAIM_INTERVAL_SECONDS` | `AGENTAREA_CHANNEL_AUTOCLAIM_EVERY` |
 | `CHANNEL_DELIVERY_DEDUP_TTL_SECONDS` | `AGENTAREA_CHANNEL_DEDUP_TTL` |
@@ -317,14 +321,24 @@ configured. Delete them; there is no replacement.
 | `CHANNEL_DELIVERY_CONSUMER_BATCH_SIZE` | `AGENTAREA_CHANNEL_BATCH_SIZE` |
 | `CHANNEL_DELIVERY_MAX_DELIVERY_ATTEMPTS` | `AGENTAREA_CHANNEL_MAX_ATTEMPTS` |
 
+### Event bus
+
+`AGENTAREA_KAFKA_PREFIX` named a topic prefix for a Kafka backend that never
+shipped. Its successor applies to every broker: the namespace in front of every
+topic and broker key.
+
+| Was | Is |
+|---|---|
+| `AGENTAREA_KAFKA_PREFIX` | `AGENTAREA_EVENT_NAMESPACE` |
+
 ### Event service
 
 | Was | Is |
 |---|---|
-| `AGENTAREA_EVENTS_INBOUND_STREAM` | `AGENTAREA_EVENT_STREAM` |
+| `AGENTAREA_EVENTS_INBOUND_STREAM` | removed: see `AGENTAREA_EVENT_STREAM` under Removed |
 | `AGENTAREA_EVENTS_MAX_POLLERS` | `AGENTAREA_EVENT_MAX_POLLERS` |
 | `AGENTAREA_EVENTS_POLL_INTERVAL` | `AGENTAREA_EVENT_POLL_INTERVAL` |
-| `AGENTAREA_EVENTS_TELEGRAM_POLLING_ENABLED` | `AGENTAREA_EVENT_TELEGRAM_ENABLED` |
+| `AGENTAREA_EVENTS_TELEGRAM_POLLING_ENABLED` | removed: see `AGENTAREA_EVENT_TELEGRAM_ENABLED` under Removed |
 | `AGENTAREA_EVENTS_WORKER_ID` | `AGENTAREA_EVENT_WORKER_ID` |
 | `MAX_POLLERS` | `AGENTAREA_EVENT_MAX_POLLERS` |
 | `POLL_INTERVAL` | `AGENTAREA_EVENT_POLL_INTERVAL` |

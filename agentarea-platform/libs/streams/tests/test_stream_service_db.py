@@ -1,10 +1,11 @@
-"""A webhook trigger's stream, source and subscription, written together.
+"""Streams, their sources and subscriptions.
 
 Set STREAMS_TEST_DATABASE_URL.
 """
 
 import asyncio
 import os
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
@@ -13,12 +14,12 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config.streams import EventStreamSettings
-from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.application.stream_service import StreamService
 from agentarea_streams.domain import (
     EventFilter,
     NotAForwardError,
-    SourceFedByTriggerError,
+    SourceKind,
+    StreamEvent,
     StreamInUseError,
     StreamNameTakenError,
     StreamNotFoundError,
@@ -26,7 +27,8 @@ from agentarea_streams.domain import (
     SubscriptionNotFoundError,
     TriggerSubscriptionNotFoundError,
 )
-from agentarea_streams.infrastructure.journal_repository import StreamJournal
+from agentarea_streams.domain.keys import event_id_for
+from agentarea_streams.infrastructure.event_repository import StreamEventRepository
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -42,8 +44,8 @@ async def _trigger_row(session, ws: str) -> UUID:
         text(
             "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
             "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
-            "consecutive_failures, validation_rules, created_at, updated_at) VALUES (:id, :ws, "
-            "'u', 't', '', :agent, 'webhook', true, '{}', '{}', 5, 0, '{}', now(), now())"
+            "consecutive_failures, created_at, updated_at) VALUES (:id, :ws, "
+            "'u', 't', '', :agent, 'stream', true, '{}', '{}', 5, 0, now(), now())"
         ),
         {"id": trigger_id, "ws": ws, "agent": uuid4()},
     )
@@ -55,60 +57,6 @@ async def _delete_trigger_row(session, trigger_id: UUID) -> None:
     await session.execute(text("DELETE FROM triggers WHERE id = :id"), {"id": trigger_id})
 
 
-async def test_a_webhook_trigger_gets_a_stream_a_source_and_a_subscription():
-    engine = create_async_engine(TEST_DATABASE_URL)
-    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
-    async with maker() as session:
-        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
-            trigger_id = await _trigger_row(session, ctx.workspace_id)
-            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            webhook_id = f"wh{uuid4().hex}"
-            stream, source, sub = await service.create_webhook_stream_for_trigger(
-                trigger_id=trigger_id,
-                trigger_name="GitHub pushes",
-                webhook_id=webhook_id,
-                webhook_type="github",
-                allowed_methods=["POST"],
-                validation_rules={},
-                webhook_config=None,
-                event_types=["push"],
-            )
-            await session.commit()
-            assert source.webhook_id == webhook_id
-            assert source.credential_key == trigger_id
-            assert sub.trigger_id == trigger_id
-            assert EventFilter.model_validate(sub.filter).kinds == ["push"]
-            found = await service.webhook_source_for_trigger(trigger_id)
-            assert found is not None and found.id == source.id
-            await service.remove_trigger_webhook_sources(trigger_id)
-            await session.commit()
-            assert await service.webhook_source_for_trigger(trigger_id) is None
-            assert (await service.get_stream(stream.id)).id == stream.id
-    await engine.dispose()
-
-
-async def test_a_new_subscription_starts_after_the_events_already_there():
-    engine = create_async_engine(TEST_DATABASE_URL)
-    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
-    async with maker() as session:
-        with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
-            service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            stream = await service.create_stream(name="feed", description="", retention_days=7)
-            journal = StreamJournal(session, ctx, EventStreamSettings())
-            appended = await journal.append(
-                stream.id, IntegrationEvent(type="x", source="s"), event_key="old"
-            )
-            trigger_id = await _trigger_row(session, ctx.workspace_id)
-            sub = await service.subscribe_trigger(
-                stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
-            )
-            await session.commit()
-            assert sub.cursor_sequence == appended.sequence
-    await engine.dispose()
-
-
 async def test_a_second_stream_with_a_taken_name_is_refused_and_the_session_survives():
     engine = create_async_engine(TEST_DATABASE_URL)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -116,10 +64,10 @@ async def test_a_second_stream_with_a_taken_name_is_refused_and_the_session_surv
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            first = await service.create_stream(name="orders", description="", retention_days=7)
+            first = await service.create_stream(name="orders", description="")
             with pytest.raises(StreamNameTakenError, match="orders"):
-                await service.create_stream(name="orders", description="", retention_days=7)
-            other = await service.create_stream(name="refunds", description="", retention_days=7)
+                await service.create_stream(name="orders", description="")
+            other = await service.create_stream(name="refunds", description="")
             await session.commit()
             assert (await service.get_stream(first.id)).name == "orders"
             assert (await service.get_stream(other.id)).name == "refunds"
@@ -147,9 +95,7 @@ async def test_updating_another_workspaces_trigger_filter_raises():
         with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
             trigger_id = await _trigger_row(session, owner.workspace_id)
             owner_service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
-            stream = await owner_service.create_stream(
-                name="feed3", description="", retention_days=7
-            )
+            stream = await owner_service.create_stream(name="feed3", description="")
             await owner_service.subscribe_trigger(
                 stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
             )
@@ -165,7 +111,7 @@ async def test_updating_another_workspaces_trigger_filter_raises():
     await engine.dispose()
 
 
-async def test_bindings_report_stream_filter_url_and_last_event():
+async def test_bindings_report_stream_filter_and_last_event():
     engine = create_async_engine(TEST_DATABASE_URL)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
@@ -173,23 +119,26 @@ async def test_bindings_report_stream_filter_url_and_last_event():
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             trigger_id = await _trigger_row(session, ctx.workspace_id)
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            stream, _, _ = await service.create_webhook_stream_for_trigger(
-                trigger_id=trigger_id,
-                trigger_name="t",
-                webhook_id=f"wh{uuid4().hex}",
-                webhook_type="generic",
-                allowed_methods=["POST"],
-                validation_rules={},
-                webhook_config=None,
-                event_types=[],
+            stream = await service.create_stream(name="t", description="")
+            await service.subscribe_trigger(
+                stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter(kinds=["x"])
             )
-            await StreamJournal(session, ctx, EventStreamSettings()).append(
-                stream.id, IntegrationEvent(type="x", source="s"), event_key="one"
+            await StreamEventRepository(session, ctx).record(
+                StreamEvent(
+                    id=event_id_for(stream.id, "one"),
+                    type="x",
+                    source="s",
+                    stream_id=stream.id,
+                    workspace_id=ctx.workspace_id,
+                    created_by=ctx.user_id,
+                    event_key="one",
+                    received_at=datetime.now(UTC),
+                )
             )
             await session.commit()
             binding = (await service.trigger_bindings([trigger_id]))[trigger_id]
             assert binding.stream_id == stream.id
-            assert binding.webhook_id is not None
+            assert binding.event_filter == EventFilter(kinds=["x"]).model_dump()
             assert binding.last_event_at is not None
     await engine.dispose()
 
@@ -203,15 +152,9 @@ async def test_bindings_leave_out_another_workspaces_triggers():
         with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
             trigger_id = await _trigger_row(session, owner.workspace_id)
             owner_service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
-            await owner_service.create_webhook_stream_for_trigger(
-                trigger_id=trigger_id,
-                trigger_name="t",
-                webhook_id=f"wh{uuid4().hex}",
-                webhook_type="generic",
-                allowed_methods=["POST"],
-                validation_rules={},
-                webhook_config=None,
-                event_types=[],
+            stream = await owner_service.create_stream(name="t", description="")
+            await owner_service.subscribe_trigger(
+                stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
             )
             await session.commit()
 
@@ -228,16 +171,20 @@ async def test_a_standalone_source_holds_its_credentials_under_its_own_id():
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            stream = await service.create_stream(name="payments", description="", retention_days=7)
-            source = await service.add_webhook_source(
-                stream_id=stream.id, webhook_type="yookassa", validation_rules={"shop_id": "1"}
+            stream = await service.create_stream(name="payments", description="")
+            source = await service.add_source(
+                stream_id=stream.id,
+                kind=SourceKind.WEBHOOK,
+                source_type="example_pay",
+                webhook_config={"shop_id": "1"},
+                event_templates=None,
             )
             await session.commit()
             assert source.credential_key == source.id
             assert source.webhook_id and len(source.webhook_id) >= 16
-            assert source.allowed_methods == ["POST"]
+            assert source.webhook_type == "example_pay"
+            assert source.webhook_config == {"shop_id": "1"}
             assert [s.id for s in await service.list_sources(stream.id)] == [source.id]
-            assert await service.triggers_feeding(stream.id) == {}
             removed = await service.delete_source(stream.id, source.id)
             await session.commit()
             assert removed.id == source.id
@@ -253,7 +200,7 @@ async def test_a_stream_is_found_by_its_id_or_its_name_in_its_workspace_only():
     async with maker() as session:
         with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
-            stream = await service.create_stream(name="sentry", description="", retention_days=7)
+            stream = await service.create_stream(name="sentry", description="")
             await session.commit()
             assert (await service.find_stream("sentry")).id == stream.id
             assert (await service.find_stream(str(stream.id))).id == stream.id
@@ -274,22 +221,30 @@ async def test_a_source_of_another_stream_is_not_found():
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            one = await service.create_stream(name="one", description="", retention_days=7)
-            two = await service.create_stream(name="two", description="", retention_days=7)
-            source = await service.add_webhook_source(
-                stream_id=one.id, webhook_type="generic", validation_rules={}
+            one = await service.create_stream(name="one", description="")
+            two = await service.create_stream(name="two", description="")
+            source = await service.add_source(
+                stream_id=one.id,
+                kind=SourceKind.WEBHOOK,
+                source_type="generic_webhook",
+                webhook_config={},
+                event_templates=None,
             )
             await session.commit()
             with pytest.raises(StreamSourceNotFoundError):
                 await service.delete_source(two.id, source.id)
             with pytest.raises(StreamNotFoundError):
-                await service.add_webhook_source(
-                    stream_id=uuid4(), webhook_type="generic", validation_rules={}
+                await service.add_source(
+                    stream_id=uuid4(),
+                    kind=SourceKind.WEBHOOK,
+                    source_type="generic_webhook",
+                    webhook_config={},
+                    event_templates=None,
                 )
     await engine.dispose()
 
 
-async def test_a_live_triggers_source_and_its_stream_cannot_be_deleted():
+async def test_a_source_goes_freely_and_its_stream_waits_for_the_trigger_on_it():
     engine = create_async_engine(TEST_DATABASE_URL)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
@@ -297,29 +252,21 @@ async def test_a_live_triggers_source_and_its_stream_cannot_be_deleted():
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             trigger_id = await _trigger_row(session, ctx.workspace_id)
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            stream, source, _ = await service.create_webhook_stream_for_trigger(
-                trigger_id=trigger_id,
-                trigger_name="deploys",
-                webhook_id=f"wh{uuid4().hex}",
-                webhook_type="github",
-                allowed_methods=["POST"],
-                validation_rules={},
-                webhook_config=None,
-                event_types=[],
+            stream = await service.create_stream(name="deploys", description="")
+            source = await service.add_source(
+                stream_id=stream.id,
+                kind=SourceKind.WEBHOOK,
+                source_type="github",
+                webhook_config={},
+                event_templates=None,
             )
-            standalone = await service.add_webhook_source(
-                stream_id=stream.id, webhook_type="sentry", validation_rules={}
+            await service.subscribe_trigger(
+                stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
             )
             await session.commit()
-            assert await service.triggers_feeding(stream.id) == {source.id: trigger_id}
-            with pytest.raises(SourceFedByTriggerError) as refused:
-                await service.delete_source(stream.id, source.id)
-            assert str(trigger_id) in str(refused.value)
-            with pytest.raises(SourceFedByTriggerError):
-                await service.delete_stream(stream.id)
-            await service.delete_source(stream.id, standalone.id)
-            await service.remove_trigger_webhook_sources(trigger_id)
+            await service.delete_source(stream.id, source.id)
             await session.commit()
+            assert await service.list_sources(stream.id) == []
             with pytest.raises(StreamInUseError):
                 await service.delete_stream(stream.id)
             await _delete_trigger_row(session, trigger_id)
@@ -337,7 +284,7 @@ async def test_a_stream_a_trigger_subscribes_to_cannot_be_deleted():
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            stream = await service.create_stream(name="orders", description="", retention_days=7)
+            stream = await service.create_stream(name="orders", description="")
             trigger_id = await _trigger_row(session, ctx.workspace_id)
             await service.subscribe_trigger(
                 stream_id=stream.id, trigger_id=trigger_id, event_filter=EventFilter()
@@ -367,9 +314,9 @@ async def test_a_stream_a_forward_writes_into_cannot_be_deleted_until_the_forwar
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            source = await service.create_stream(name="in", description="", retention_days=7)
-            kept = await service.create_stream(name="kept", description="", retention_days=7)
-            target = await service.create_stream(name="target", description="", retention_days=7)
+            source = await service.create_stream(name="in", description="")
+            kept = await service.create_stream(name="kept", description="")
+            target = await service.create_stream(name="target", description="")
             forward = await service.create_forward(
                 stream_id=source.id,
                 output_stream_ids=[kept.id, target.id],
@@ -400,8 +347,8 @@ async def test_the_input_of_a_forward_can_be_deleted_and_takes_the_forward_with_
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            source = await service.create_stream(name="in", description="", retention_days=7)
-            output = await service.create_stream(name="out", description="", retention_days=7)
+            source = await service.create_stream(name="in", description="")
+            output = await service.create_stream(name="out", description="")
             await service.create_forward(
                 stream_id=source.id, output_stream_ids=[output.id], event_filter=EventFilter()
             )
@@ -419,9 +366,9 @@ async def test_a_forward_lists_each_output_once():
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            source = await service.create_stream(name="in", description="", retention_days=7)
-            one = await service.create_stream(name="one", description="", retention_days=7)
-            two = await service.create_stream(name="two", description="", retention_days=7)
+            source = await service.create_stream(name="in", description="")
+            one = await service.create_stream(name="one", description="")
+            two = await service.create_stream(name="two", description="")
             forward = await service.create_forward(
                 stream_id=source.id,
                 output_stream_ids=[two.id, one.id, two.id, one.id],
@@ -446,8 +393,8 @@ async def test_only_a_forward_of_this_stream_is_removed_as_a_forward():
     async with maker() as session:
         with workspace_scope(owner.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, owner), EventStreamSettings())
-            source = await service.create_stream(name="in", description="", retention_days=7)
-            output = await service.create_stream(name="out", description="", retention_days=7)
+            source = await service.create_stream(name="in", description="")
+            output = await service.create_stream(name="out", description="")
             trigger_id = await _trigger_row(session, owner.workspace_id)
             trigger_sub = await service.subscribe_trigger(
                 stream_id=source.id, trigger_id=trigger_id, event_filter=EventFilter()
@@ -485,9 +432,9 @@ async def test_a_forward_whose_output_was_deleted_before_the_guard_can_be_remove
     async with maker() as session:
         with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
             service = StreamService(RepositoryFactory(session, ctx), EventStreamSettings())
-            source = await service.create_stream(name="in", description="", retention_days=7)
-            gone = await service.create_stream(name="gone", description="", retention_days=7)
-            live = await service.create_stream(name="live", description="", retention_days=7)
+            source = await service.create_stream(name="in", description="")
+            gone = await service.create_stream(name="gone", description="")
+            live = await service.create_stream(name="live", description="")
             forward = await service.create_forward(
                 stream_id=source.id,
                 output_stream_ids=[gone.id, live.id],
@@ -512,8 +459,8 @@ async def test_a_delete_waits_for_a_forward_being_created_into_the_stream_and_is
     with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
         async with maker() as creating, maker() as deleting:
             creator = StreamService(RepositoryFactory(creating, ctx), EventStreamSettings())
-            source = await creator.create_stream(name="in", description="", retention_days=7)
-            target = await creator.create_stream(name="target", description="", retention_days=7)
+            source = await creator.create_stream(name="in", description="")
+            target = await creator.create_stream(name="target", description="")
             await creating.commit()
 
             forward = await creator.create_forward(

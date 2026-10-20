@@ -24,7 +24,7 @@ import json
 import logging
 import posixpath
 import zipfile
-from typing import Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -32,6 +32,8 @@ from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.resource_visibility import readable_resource_ids
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
+from pydantic import BaseModel, Field
 
 from agentarea_agents.application.skill_parser import parse_frontmatter
 from agentarea_agents.infrastructure.github_skill_importer import extract_skill_package
@@ -52,6 +54,94 @@ MAX_INLINE_BYTES = 5 * 1024 * 1024  # 5 MB total across the file map
 MAX_PATH_DEPTH = 10
 MAX_GITHUB_SKILL_CANDIDATES = 50
 MAX_GITHUB_IMPORTS = 10
+
+SkillId = Annotated[str, Field(description="Skill id (UUID), from `skills_list` or a create call.")]
+FileMap = Annotated[
+    dict[str, str],
+    Field(
+        description=(
+            "Package files as {relative path: UTF-8 text}, e.g. "
+            '{"SKILL.md": "<markdown with YAML frontmatter>", "scripts/run.py": "<code>"}. '
+            f"Must include SKILL.md at the root; at most {MAX_FILES} files, "
+            f"{MAX_INLINE_BYTES // (1024 * 1024)} MB total, {MAX_PATH_DEPTH} path segments deep."
+        )
+    ),
+]
+
+
+class SkillSummary(BaseModel):
+    id: str = Field(description="Skill id (UUID).")
+    name: str = Field(description="Skill name.")
+    description: str | None = Field(default=None, description="What the skill is for.")
+    source_type: str = Field(description="How the skill was created: content, zip, github or path.")
+
+
+class SkillDetail(SkillSummary):
+    source_url: str | None = Field(
+        default=None, description="Where the skill was imported from, e.g. a GitHub URL."
+    )
+    content: str | None = Field(default=None, description="The skill's SKILL.md markdown.")
+
+
+class SkillCreated(SkillSummary):
+    file_count: int = Field(description="Number of files stored in the package.")
+
+
+class ImportedSkill(SkillSummary):
+    source_url: str = Field(description="The GitHub URL the import was asked for.")
+    resolved_source_url: str | None = Field(
+        default=None, description="Raw URL of the SKILL.md this package was built from."
+    )
+    package_path: str | None = Field(
+        default=None, description="Package directory inside the repository; empty for the root."
+    )
+
+
+class ImportedSkills(BaseModel):
+    created: list[ImportedSkill] = Field(description="One entry per imported package.")
+    count: int = Field(description="Number of skills created.")
+
+
+class SkillMetadata(BaseModel):
+    id: str = Field(description="Skill id (UUID).")
+    name: str = Field(description="Skill name after the edit.")
+    description: str | None = Field(default=None, description="Skill description after the edit.")
+
+
+class SkillContentEdit(BaseModel):
+    id: str = Field(description="Skill id (UUID).")
+    mode: Literal["content", "package"] = Field(
+        description="content: a single SKILL.md stored inline; package: a file tree in storage."
+    )
+    files_written: list[str] = Field(description="Paths written, sorted.")
+
+
+class SkillDeleted(BaseModel):
+    deleted: bool = Field(description="True when a skill was deleted; false when none matched.")
+
+
+class SkillFileEntry(BaseModel):
+    path: str = Field(description="Path inside the package, e.g. SKILL.md or scripts/run.py.")
+    size: int = Field(description="Size in bytes.")
+    url: str | None = Field(
+        default=None, description="Presigned download URL; present only with include_urls=true."
+    )
+
+
+SkillFileEntries = list[SkillFileEntry]
+
+
+class SkillFile(BaseModel):
+    path: str = Field(description="Path inside the package.")
+    content: str | None = Field(
+        default=None, description="UTF-8 text of the file; present when as_url=false."
+    )
+    url: str | None = Field(
+        default=None, description="Presigned download URL; present when as_url=true."
+    )
+    expires_in: int | None = Field(
+        default=None, description="Seconds until the URL expires; present when as_url=true."
+    )
 
 
 def _validate_files_payload(files: Any) -> str | None:
@@ -232,7 +322,9 @@ class SkillsToolset(Toolset):
     metadata or content (mode-aware), browse and read package files, delete.
     """
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List skills", effect="read", output=list[SkillSummary])
     @enforced_in_handler("rows the graph says this caller may read; see readable_resource_ids")
     async def list(self) -> str:
         """List all skills in the workspace."""
@@ -246,9 +338,9 @@ class SkillsToolset(Toolset):
                 [_skill_summary(s) for s in skills if str(s.id) in readable], default=str
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get skill", effect="read", output=SkillDetail)
     @requires("read", "skill", id_param="skill_id")
-    async def get(self, skill_id: str) -> str:
+    async def get(self, skill_id: SkillId) -> str:
         """Get details of a skill, including its primary SKILL.md content."""
         async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
@@ -258,16 +350,30 @@ class SkillsToolset(Toolset):
             if not skill:
                 raise ToolError("Skill not found")
             payload = _skill_summary(skill)
-            payload.update({"source_url": skill.source_url, "content": skill.content})
+            payload.update(
+                {"source_url": skill.source_url, "content": await service.read_skill_md(skill)}
+            )
             return json.dumps(payload, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create skill from files", effect="write", output=SkillCreated)
     @unrestricted("any member may create a skill, as POST /v1/skills allows")
     async def create(
         self,
-        files: dict[str, str],
-        name: str = "",
-        description: str = "",
+        files: FileMap,
+        name: Annotated[
+            str,
+            Field(
+                description="Skill name, at most 255 characters; empty takes `name` "
+                "from the SKILL.md frontmatter."
+            ),
+        ] = "",
+        description: Annotated[
+            str,
+            Field(
+                description="What the skill is for, at most 1000 characters; empty takes "
+                "`description` from the SKILL.md frontmatter."
+            ),
+        ] = "",
     ) -> str:
         """Create a manually authored skill from inline files; do not use for URL/GitHub installs.
 
@@ -315,13 +421,31 @@ class SkillsToolset(Toolset):
             summary["file_count"] = len(payload.files)
             return json.dumps(summary, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create skill from archive", effect="write", output=SkillSummary)
     @unrestricted("any member may create a skill, as POST /v1/skills/upload allows")
     async def create_from_archive(
         self,
-        zip_base64: str,
-        name: str = "",
-        description: str = "",
+        zip_base64: Annotated[
+            str,
+            Field(
+                description="Standard base64 of a ZIP archive holding SKILL.md (at the root "
+                "or in a single top-level folder) and any helper files."
+            ),
+        ],
+        name: Annotated[
+            str,
+            Field(
+                description="Skill name, at most 255 characters; empty takes `name` "
+                "from the archive's SKILL.md frontmatter."
+            ),
+        ] = "",
+        description: Annotated[
+            str,
+            Field(
+                description="What the skill is for, at most 1000 characters; empty takes "
+                "`description` from the archive's SKILL.md frontmatter."
+            ),
+        ] = "",
     ) -> str:
         """Create a skill from a base64-encoded ZIP archive. Use for binary
         helpers or pre-built bundles. For inline text-only packages prefer create().
@@ -353,15 +477,53 @@ class SkillsToolset(Toolset):
             )
             return json.dumps(_skill_summary(skill), default=str)
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Import skill from GitHub",
+        effect="write",
+        open_world=True,
+        output=ImportedSkill | ImportedSkills,
+    )
     @unrestricted("any member may create a skill, as POST /v1/skills allows")
     async def import_from_github(
         self,
-        github_url: str,
-        name: str = "",
-        description: str = "",
-        skill_name: str = "",
-        import_all: bool = False,
+        github_url: Annotated[
+            str,
+            Field(
+                description="Public GitHub URL: a repository "
+                "(https://github.com/owner/repo), a tree path "
+                "(https://github.com/owner/repo/tree/main/skills/foo) or a SKILL.md blob."
+            ),
+        ],
+        name: Annotated[
+            str,
+            Field(
+                description="Skill name, at most 255 characters; applies only when one "
+                "package is imported. Empty takes the SKILL.md frontmatter. Also used to "
+                "select a package when skill_name is empty."
+            ),
+        ] = "",
+        description: Annotated[
+            str,
+            Field(
+                description="Skill description, at most 1000 characters; applies only when "
+                "one package is imported. Empty takes the SKILL.md frontmatter."
+            ),
+        ] = "",
+        skill_name: Annotated[
+            str,
+            Field(
+                description="Which package to import when the URL holds several SKILL.md "
+                "files: a frontmatter name or package path, case-insensitive, from the "
+                "`candidates` of a multiple_skills_found error."
+            ),
+        ] = "",
+        import_all: Annotated[
+            bool,
+            Field(
+                description=f"Import every SKILL.md package under the URL, at most "
+                f"{MAX_GITHUB_IMPORTS}."
+            ),
+        ] = False,
     ) -> str:
         """Import skill package(s) from a public GitHub repository URL.
 
@@ -438,6 +600,10 @@ class SkillsToolset(Toolset):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=_user_ctx)
+            try:
+                await service.require_github_import_allowed()
+            except CatalogInstallRefusedError as exc:
+                raise ToolError(str(exc)) from exc
             repo = service._get_repository()
             for candidate in selected:
                 try:
@@ -469,13 +635,18 @@ class SkillsToolset(Toolset):
             return json.dumps(created[0], default=str)
         return json.dumps({"created": created, "count": len(created)}, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Edit skill metadata", effect="write", output=SkillMetadata)
     @requires("edit", "skill", id_param="skill_id")
     async def edit_metadata(
         self,
-        skill_id: str,
-        name: str = "",
-        description: str = "",
+        skill_id: SkillId,
+        name: Annotated[
+            str, Field(description="New skill name, at most 255 characters; empty keeps it.")
+        ] = "",
+        description: Annotated[
+            str,
+            Field(description="New skill description, at most 1000 characters; empty keeps it."),
+        ] = "",
     ) -> str:
         """Update a skill's name and/or description. Never touches files."""
         # Build patch with only the fields the caller actually set so we get
@@ -502,9 +673,11 @@ class SkillsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Edit skill files", effect="write", idempotent=True, output=SkillContentEdit
+    )
     @requires("edit", "skill", id_param="skill_id")
-    async def edit_content(self, skill_id: str, files: dict[str, str]) -> str:
+    async def edit_content(self, skill_id: SkillId, files: FileMap) -> str:
         """Edit a skill's file content. Mode-aware:
 
         - Content-mode skill (single SKILL.md, no S3 package): only accepts a
@@ -568,9 +741,11 @@ class SkillsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete skill", effect="destructive", idempotent=True, output=SkillDeleted
+    )
     @requires("delete", "skill", id_param="skill_id")
-    async def delete(self, skill_id: str) -> str:
+    async def delete(self, skill_id: SkillId) -> str:
         """Delete a skill and its file storage."""
         async with platform_context() as (_session, user_ctx, repo_factory, _broker, _secret):
             from agentarea_agents.application.skill_service import SkillService
@@ -579,9 +754,16 @@ class SkillsToolset(Toolset):
             deleted = await service.delete(UUID(skill_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method(effect="read")
+    @tool_method(display_name="List skill files", effect="read", output=SkillFileEntries)
     @unrestricted("package files, as GET /v1/skills/{id}/files serves them")
-    async def list_files(self, skill_id: str, include_urls: bool = False) -> str:
+    async def list_files(
+        self,
+        skill_id: SkillId,
+        include_urls: Annotated[
+            bool,
+            Field(description="Add a presigned download URL to each file, valid for 1 hour."),
+        ] = False,
+    ) -> str:
         """List files inside a skill package. Set include_urls=True for bulk
         hydration with a presigned download URL per file (one round-trip).
         """
@@ -589,7 +771,12 @@ class SkillsToolset(Toolset):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
-            files = await service.get_skill_files(UUID(skill_id), include_urls=include_urls)
+            try:
+                files = await service.get_skill_files(
+                    UUID(skill_id), include_urls=include_urls, to_run=True
+                )
+            except CatalogInstallRefusedError as exc:
+                raise ToolError(str(exc)) from exc
             return json.dumps(
                 [
                     {"path": f.path, "size": f.size, **({"url": f.url} if f.url else {})}
@@ -598,14 +785,28 @@ class SkillsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Read skill file", effect="read", output=SkillFile)
     @unrestricted("package files, as GET /v1/skills/{id}/files/{path} serves them")
     async def get_file(
         self,
-        skill_id: str,
-        path: str,
-        as_url: bool = False,
-        expires_in: int = 3600,
+        skill_id: SkillId,
+        path: Annotated[
+            str,
+            Field(
+                description="File path inside the package, from `skills_list_files`, "
+                "e.g. SKILL.md or scripts/run.py."
+            ),
+        ],
+        as_url: Annotated[
+            bool,
+            Field(
+                description="Return a presigned download URL instead of the text; needed "
+                "for binary files."
+            ),
+        ] = False,
+        expires_in: Annotated[
+            int, Field(description="Lifetime of the URL in seconds; used only with as_url=true.")
+        ] = 3600,
     ) -> str:
         """Read one file from a skill package. Returns inline UTF-8 text by
         default; set as_url=True to receive a presigned download URL instead
@@ -618,15 +819,15 @@ class SkillsToolset(Toolset):
             if as_url:
                 try:
                     url = await service.get_skill_file_url(
-                        UUID(skill_id), path, expires_in=expires_in
+                        UUID(skill_id), path, expires_in=expires_in, to_run=True
                     )
-                except ValueError as exc:
+                except (ValueError, CatalogInstallRefusedError) as exc:
                     raise ToolError(str(exc)) from exc
                 return json.dumps({"url": url, "path": path, "expires_in": expires_in})
 
             try:
-                raw = await service.get_skill_file_content(UUID(skill_id), path)
-            except (ValueError, FileNotFoundError) as exc:
+                raw = await service.get_skill_file_content(UUID(skill_id), path, to_run=True)
+            except (ValueError, FileNotFoundError, CatalogInstallRefusedError) as exc:
                 raise ToolError(str(exc)) from exc
             try:
                 text = raw.decode("utf-8")

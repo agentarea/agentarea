@@ -2,10 +2,10 @@
 name = "agentarea-operator"
 version = "0.1.1"
 description = "K8s operator for managing AgentArea LLM provider configs via CRDs"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "kopf>=1.37",
-    "aiohttp>=3.14.3",
+    "aiohttp>=3.14.4",
     "anyio>=4.14.2",
     "kubernetes>=29.0",
     "sqlalchemy>=2.0",
@@ -20,6 +20,7 @@ dependencies = [
 ]
 
 [tool.uv]
+required-version = ">=0.13.3"
 constraint-dependencies = [
     "click==8.3.3",
     "multidict>=6.9.1",
@@ -31,10 +32,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-include = ["handler.py", "registry_sync.py"]
+include = ["handler.py"]
 
 [tool.hatch.build.targets.sdist]
-include = ["handler.py", "registry_sync.py", "crds", "tests"]
+include = ["handler.py", "crds", "tests"]
 
 [dependency-groups]
 dev = [

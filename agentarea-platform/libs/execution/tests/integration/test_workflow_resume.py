@@ -26,6 +26,8 @@ from agentarea_execution.models import (
     ArtifactValidationRequest,
     ArtifactValidationResult,
     LLMCallRequest,
+    RecordRequest,
+    RecordResult,
     ResolveModelRequest,
     ToolDiscoveryRequest,
     UpdateTaskStatusRequest,
@@ -36,9 +38,11 @@ from agentarea_execution.workflows.agent.patches import CONVERSATION_RESUME_SNAP
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_tasks.conversation_resume import reconstruct_conversation
 from agentarea_tasks.domain.models import ConversationEntry
+from agentarea_tasks.infrastructure.task_log import model_window
 from temporalio import activity, workflow
 from temporalio.common import WorkflowIDReusePolicy
 from temporalio.contrib.pydantic import pydantic_data_converter
+from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Replayer, UnsandboxedWorkflowRunner, Worker
 
@@ -97,18 +101,12 @@ async def _resolve_model(request: ResolveModelRequest) -> dict[str, Any]:
 
 @activity.defn(name="call_llm_activity")
 async def _call_llm(request: LLMCallRequest) -> dict[str, Any]:
-    """Write the pending entries and answer from the window the log holds, as the real one."""
+    """Answer from the window the log holds, then the pending entries, as the real one."""
     window = request.conversation
     assert window is not None
-    _write(window.next_seq, request.messages)
-    end_seq = window.next_seq + len(request.messages)
-    head = [_log[seq] for seq in window.head_seqs]
-    tail = [
-        _log[seq]
-        for seq in sorted(_log)
-        if window.tail_start <= seq < end_seq and seq not in window.head_seqs
-    ]
-    _model_windows.append([entry.as_message() for entry in (*head, *tail)])
+    logged = [entry for seq, entry in sorted(_log.items()) if seq < window.next_seq]
+    unwritten = pending_entries(window.next_seq, request.messages)
+    _model_windows.append([entry.as_message() for entry in (*model_window(logged), *unwritten)])
     turn = len(_model_windows)
     return {
         "content": "",
@@ -147,12 +145,31 @@ async def _validate_artifacts(_request: ArtifactValidationRequest) -> ArtifactVa
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+@activity.defn(name="record_activity")
+async def _record(request: RecordRequest) -> RecordResult:
+    """Write the rows as the task log does: once per event id, one row per seq."""
+    for row in request.rows:
+        held = _log.get(row.seq)
+        if held is not None and str(held.event_id) != str(row.event_id):
+            raise ApplicationError(
+                f"seq {row.seq} is already held by another row", non_retryable=True
+            )
+        _log.setdefault(
+            row.seq,
+            ConversationEntry(**row.model_dump(exclude={"event_id"}), event_id=row.event_id),
+        )
+    if request.status is not None:
+        await _update_task_status(request.status)
+    return RecordResult(rows=len(request.rows), events=len(request.events_json))
+
+
 _ACTIVITIES = [
     _build_config,
     _discover_tools,
     _resolve_model,
     _call_llm,
     _publish_events,
+    _record,
     _update_task_status,
     _validate_artifacts,
 ]
@@ -237,13 +254,17 @@ async def test_follow_up_after_close_continues_the_same_conversation():
                 snapshot = closing.conversation_resume
                 assert snapshot is not None
                 assert closing.total_cost is not None
-                assert [_log[seq].role for seq in sorted(_log)] == [
+                first_messages = [_log[seq] for seq in sorted(_log) if _log[seq].kind != "event"]
+                assert [entry.role for entry in first_messages] == [
                     "system",
                     "user",
                     "assistant",
                     "tool",
                 ]
-                assert snapshot.next_seq == len(_log)
+                # Only the run's closing events follow the snapshot; the task
+                # service resumes the conversation after them.
+                assert all(_log[seq].kind == "event" for seq in _log if seq >= snapshot.next_seq)
+                snapshot = snapshot.model_copy(update={"next_seq": len(_log)})
                 assert snapshot.current_iteration == 1
 
                 resumed = await _start(
@@ -268,15 +289,16 @@ async def test_follow_up_after_close_continues_the_same_conversation():
     first_window, resumed_window = _model_windows
     assert resumed_window == [
         *first_window,
-        _log[2].as_message(),
-        _log[3].as_message(),
+        first_messages[2].as_message(),
+        first_messages[3].as_message(),
         {"role": "user", "content": "What was the number?"},
     ]
     assert resumed_window[2]["tool_calls"][0]["id"] == resumed_window[3]["tool_call_id"]
     assert result.reasoning_iterations_used == 2
     assert _status_requests[-1].total_cost == Decimal("0.02")
-    assert _status_requests[-1].conversation_resume is not None
-    assert _status_requests[-1].conversation_resume.next_seq == len(_log)
+    resumed_snapshot = _status_requests[-1].conversation_resume
+    assert resumed_snapshot is not None
+    assert all(_log[seq].kind == "event" for seq in _log if seq >= resumed_snapshot.next_seq)
     await _replay(first_history)
     await _replay(resumed_history)
 
@@ -355,10 +377,10 @@ async def test_task_older_than_the_log_resumes_with_a_fresh_system_prompt():
         {"role": "assistant", "content": "Noted: 42."},
         {"role": "user", "content": "What was the number?"},
     ]
-    # The logged system prompt stays at the head of the stored window.
-    snapshot = _status_requests[-1].conversation_resume
-    assert snapshot is not None
-    assert _log[snapshot.head_seqs[0]].role == "system"
+    # The fresh system prompt is the log's first system row, which the window leads with.
+    assert _status_requests[-1].conversation_resume is not None
+    written = [entry for seq, entry in sorted(_log.items()) if seq > 1 and entry.kind != "event"]
+    assert [entry.seq for entry in _log.values() if entry.role == "system"] == [written[0].seq]
 
 
 @pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
@@ -383,4 +405,25 @@ async def test_run_recorded_before_the_snapshot_replays(monkeypatch: pytest.Monk
 
     assert _status_requests[-1].status == "completed"
     assert _status_requests[-1].conversation_resume is None
+    await _replay(history)
+
+
+@pytest.mark.flow(MainFlow.AGENT_LIFECYCLE)
+@pytest.mark.asyncio
+async def test_a_booked_run_marks_its_task_running_when_it_starts():
+    request = _request(uuid.uuid4()).model_copy(
+        update={"workflow_metadata": {"scheduled_at": "2026-10-19T10:00:00+00:00"}}
+    )
+    env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
+    async with env:
+        task_queue = f"resume-{uuid.uuid4()}"
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            async with _worker(env, task_queue, executor):
+                handle = await _start(env, task_queue, request)
+                assert (await handle.result()).success is True
+                history = await handle.fetch_history()
+
+    statuses = [status.status for status in _status_requests]
+    assert statuses[0] == "running"
+    assert statuses[-1] == "completed"
     await _replay(history)

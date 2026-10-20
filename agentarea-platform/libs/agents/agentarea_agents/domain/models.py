@@ -59,7 +59,7 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     registry_item_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
 
     # Relationships
-    skills: Mapped[list["Skill"]] = relationship(
+    skills: Mapped[list[Skill]] = relationship(
         "Skill",
         secondary="agent_skills",
         back_populates="agents",

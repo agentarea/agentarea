@@ -5,13 +5,13 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from typing import cast as type_cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
-from agentarea_common.events.contract import APPROVAL_REQUEST, APPROVAL_RESPONSE
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
-from sqlalchemy import func, literal, or_, select, tuple_, update
+from agentarea_common.utils.pg_text import pg_storable
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..domain.base_service import TaskNotFoundError
 from ..domain.costs import CostCategory, CostEntry
 from ..domain.models import ConversationEntry, Task, TaskCreate, TaskEvent, TaskUpdate
+from ..domain.statuses import ENDED_TASK_STATUSES
 from .cost_repository import CostEntryRepository, SpendScope
 from .orm import TaskConversationEntryORM, TaskEventORM, TaskORM
 
@@ -41,11 +42,22 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             return None
         return self._orm_to_domain(task_orm)
 
+    async def statuses(self, ids: list[UUID]) -> dict[UUID, str]:
+        if not ids:
+            return {}
+        result = await self.session.execute(
+            select(TaskORM.id, TaskORM.status).where(
+                TaskORM.id.in_(ids), self._get_workspace_filter()
+            )
+        )
+        return dict(result.tuples().all())
+
     async def list_tasks(
-        self, limit: int = 100, offset: int = 0, creator_scoped: bool = False
+        self, limit: int = 100, offset: int = 0, created_by: str | None = None
     ) -> list[Task]:
-        """List all tasks in workspace and convert to domain models."""
-        task_orms = await self.list_all(creator_scoped=creator_scoped, limit=limit, offset=offset)
+        """List the workspace's tasks, or only those ``created_by`` started."""
+        filters: dict[str, Any] = {} if created_by is None else {"created_by": created_by}
+        task_orms = await self.list_all(limit=limit, offset=offset, **filters)
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
     async def list_page(
@@ -57,18 +69,22 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         created_by: str | None = None,
         search: str | None = None,
         agent_ids: Sequence[UUID] = (),
+        agent_id: UUID | None = None,
     ) -> list[TaskORM]:
         """One page of the workspace's tasks, newest first, filtered in SQL.
 
         ``search`` matches the description case-insensitively, or any task of an
         agent in ``agent_ids`` — agent names live in another table, so the caller
-        passes the ids of the agents whose name matched.
+        passes the ids of the agents whose name matched. ``agent_id`` keeps only
+        that agent's tasks.
         """
         query = select(TaskORM).where(self._get_workspace_filter())
         if statuses:
             query = query.where(TaskORM.status.in_(statuses))
         if created_by:
             query = query.where(TaskORM.created_by == created_by)
+        if agent_id:
+            query = query.where(TaskORM.agent_id == agent_id)
         if search:
             matches = TaskORM.description.icontains(search, autoescape=True)
             if agent_ids:
@@ -104,9 +120,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "task_metadata": metadata,
             "origin_type": entity.provenance.origin_type,
             "origin_id": entity.provenance.origin_id,
-            "correlation_id": entity.provenance.correlation_id,
+            # A task no event started (the API, A2A, a schedule) begins its own chain.
+            "correlation_id": entity.provenance.correlation_id or str(entity.id),
             "causation_id": entity.provenance.causation_id,
             "parent_task_id": entity.provenance.parent_task_id,
+            "depth": entity.provenance.depth,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -216,24 +234,15 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         if not update_data:
             return await self.get_task(task_id)
 
-        stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
+        stmt = (
+            update(TaskORM)
+            .where(TaskORM.id == task_id, self._get_workspace_filter())
+            .values(**update_data)
+        )
         await self.session.execute(stmt)
         await self.session.flush()
 
         return await self.get_task(task_id)
-
-    async def list_by_agent(self, agent_id: UUID, limit: int = 100) -> list[Task]:
-        """List tasks for an agent."""
-        stmt = (
-            select(TaskORM)
-            .where(TaskORM.agent_id == agent_id)
-            .order_by(TaskORM.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        task_orms = result.scalars().all()
-
-        return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
     async def get_by_agent_id(
         self, agent_id: UUID, limit: int = 100, offset: int = 0
@@ -241,6 +250,7 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         """Get tasks by agent ID with pagination."""
         stmt = (
             select(TaskORM)
+            .where(self._get_workspace_filter())
             .where(TaskORM.agent_id == agent_id)
             .order_by(TaskORM.created_at.desc())
             .limit(limit)
@@ -253,7 +263,12 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
 
     async def get_by_status(self, status: str) -> list[Task]:
         """Get tasks by status."""
-        stmt = select(TaskORM).where(TaskORM.status == status).order_by(TaskORM.created_at.desc())
+        stmt = (
+            select(TaskORM)
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status == status)
+            .order_by(TaskORM.created_at.desc())
+        )
         result = await self.session.execute(stmt)
         task_orms = result.scalars().all()
 
@@ -266,12 +281,24 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         limit: int = 100,
         offset: int = 0,
     ) -> list[Task]:
-        """List tasks matching any of the given statuses, ordered by updated_at desc."""
+        """List tasks matching any of the given statuses, newest call for attention first.
+
+        An ended task called for attention when its run ended, a waiting one when
+        it began to wait. ``updated_at`` alone moves on any later write, such as
+        a follow-up wait expiring half an hour after the run ended.
+        """
+        attention_at = case(
+            (
+                TaskORM.status.in_(ENDED_TASK_STATUSES),
+                func.coalesce(TaskORM.completed_at, TaskORM.updated_at),
+            ),
+            else_=TaskORM.updated_at,
+        )
         stmt = (
             select(TaskORM)
             .where(self._get_workspace_filter())
             .where(TaskORM.status.in_(statuses))
-            .order_by(TaskORM.updated_at.desc())
+            .order_by(attention_at.desc(), TaskORM.id)
             .limit(limit)
             .offset(offset)
         )
@@ -282,13 +309,31 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         task_orms = result.scalars().all()
         return [self._orm_to_domain(task_orm) for task_orm in task_orms]
 
-    async def find_active_by_agent_and_chat(
-        self, agent_id: UUID, chat_id: str, limit: int = 5
-    ) -> list[Task]:
-        """Find recent active tasks for an agent + chat_id combination.
+    async def list_scheduled_until(
+        self, statuses: Sequence[str], until: datetime
+    ) -> list[tuple[UUID, UUID, str | None, datetime]]:
+        """Runs booked for a later moment that fire no later than ``until``.
 
-        Used for follow-up routing: if an active workflow exists for the same
-        channel conversation, we route the message there instead of creating a new task.
+        Each row is (task id, agent id, description, scheduled_at), soonest first.
+        """
+        stmt = (
+            select(TaskORM.id, TaskORM.agent_id, TaskORM.description, TaskORM.scheduled_at)
+            .where(self._get_workspace_filter())
+            .where(TaskORM.status.in_(statuses))
+            .where(TaskORM.scheduled_at.isnot(None))
+            .where(TaskORM.scheduled_at <= until)
+            .order_by(TaskORM.scheduled_at)
+        )
+        result = await self.session.execute(stmt)
+        return [(row.id, row.agent_id, row.description, row.scheduled_at) for row in result.all()]
+
+    async def find_active_in_session(
+        self, agent_id: UUID, trigger_id: str, session_key: str, limit: int = 5
+    ) -> list[Task]:
+        """Recent live tasks of a trigger and agent in one session, newest first.
+
+        Used for follow-up routing: the next event of a session joins the task
+        waiting in it instead of starting a new one.
         """
         stmt = (
             select(TaskORM)
@@ -297,7 +342,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                 TaskORM.agent_id == agent_id,
                 TaskORM.status.in_(["running", "completed"]),
                 TaskORM.execution_id.isnot(None),
-                TaskORM.parameters["channel_origin"]["chat_id"].as_string() == chat_id,
+                TaskORM.parameters["trigger_id"].as_string() == trigger_id,
+                TaskORM.parameters["session"]["key"].as_string() == session_key,
             )
             .order_by(TaskORM.created_at.desc())
             .limit(limit)
@@ -335,8 +381,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         )
 
     async def monthly_llm_cap_reached(
-        self, budget: "BudgetPolicy | None", agent_id: UUID | None = None
-    ) -> "LlmCapReached | None":
+        self, budget: BudgetPolicy | None, agent_id: UUID | None = None
+    ) -> LlmCapReached | None:
         """The first monthly cap on LLM spend that this month's model lines reached."""
         from ..spend_gate import monthly_llm_cap_reached
 
@@ -353,6 +399,14 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             datetime(1970, 1, 1, tzinfo=UTC),
             currency=get_customer_pricing().currency(),
             scope=SpendScope(task_id=task_id, category=CostCategory.MODEL),
+        )
+
+    async def sum_task_spend(self, task_id: UUID) -> Decimal:
+        """What a task cost over all its runs, every line of it, in the billing currency."""
+        return await CostEntryRepository(self.session, self.user_context).sum_since(
+            datetime(1970, 1, 1, tzinfo=UTC),
+            currency=get_customer_pricing().currency(),
+            scope=SpendScope(task_id=task_id),
         )
 
     async def record_costs(self, entries: Sequence[CostEntry]) -> None:
@@ -380,8 +434,21 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         return await self.sum_spend_since(datetime(now.year, now.month, now.day, tzinfo=UTC))
 
     async def update_status(self, task_id: UUID, status: str, **additional_fields) -> Task | None:
-        """Update task status atomically with optional additional fields."""
-        update_data = {"status": status, "updated_at": datetime.utcnow()}
+        """Update task status atomically with optional additional fields.
+
+        Entering ``running`` stamps when the run first started; ending stamps when it
+        last ended. Writing an ended status the task already has keeps that stamp:
+        the run ended then, not when its workflow later closed.
+        """
+        now = datetime.now(UTC).replace(tzinfo=None)
+        update_data: dict[str, Any] = {"status": status, "updated_at": now}
+        if status == "running":
+            update_data["started_at"] = func.coalesce(TaskORM.started_at, now)
+        elif status in ENDED_TASK_STATUSES:
+            update_data["completed_at"] = case(
+                (TaskORM.status == status, func.coalesce(TaskORM.completed_at, now)),
+                else_=now,
+            )
 
         # Add any additional fields provided
         for field, value in additional_fields.items():
@@ -394,7 +461,11 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             else:
                 update_data[field] = value
 
-        stmt = update(TaskORM).where(TaskORM.id == task_id).values(**update_data)
+        stmt = (
+            update(TaskORM)
+            .where(TaskORM.id == task_id, self._get_workspace_filter())
+            .values(**update_data)
+        )
         result = await self.session.execute(stmt)
 
         if type_cast(CursorResult[Any], result).rowcount == 0:
@@ -455,13 +526,17 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                     "correlation_id": task_orm.correlation_id,
                     "causation_id": task_orm.causation_id,
                     "parent_task_id": task_orm.parent_task_id,
+                    "depth": task_orm.depth,
                 },
             }
         )
 
 
 class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
-    """Repository for task event persistence."""
+    """Writes the old ``task_events`` table, which only the enterprise usage emitter reads.
+
+    The task feed reads the task log (``task_log.TaskFeedReader``).
+    """
 
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, TaskEventORM, user_context)
@@ -484,8 +559,8 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
                 task_id=event.task_id,
                 event_type=event.event_type,
                 timestamp=event.timestamp,
-                data=event.data,
-                event_metadata=event.metadata,
+                data=pg_storable(event.data),
+                event_metadata=pg_storable(event.metadata),
                 workspace_id=event.workspace_id,
                 created_by=event.created_by,
             )
@@ -499,169 +574,6 @@ class TaskEventRepository(WorkspaceScopedRepository[TaskEventORM]):
         if stored is None or stored.task_id != event.task_id:
             raise ValueError(f"Task event id {event.id} is already stored for another task")
         return self._orm_to_domain(stored)
-
-    async def get_events_for_task(
-        self, task_id: UUID, limit: int = 100, offset: int = 0
-    ) -> list[TaskEvent]:
-        """Get events for a specific task."""
-        stmt = (
-            select(TaskEventORM)
-            .where(TaskEventORM.task_id == task_id)
-            .where(TaskEventORM.workspace_id == self.user_context.workspace_id)
-            .order_by(TaskEventORM.timestamp.asc())
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self.session.execute(stmt)
-        event_orms = result.scalars().all()
-
-        return [self._orm_to_domain(event_orm) for event_orm in event_orms]
-
-    async def get_task_event(self, task_id: UUID, event_id: UUID) -> TaskEvent | None:
-        """One stored event of this task in this workspace, or None."""
-        result = await self.session.execute(
-            select(TaskEventORM).where(
-                TaskEventORM.id == event_id,
-                TaskEventORM.task_id == task_id,
-                self._get_workspace_filter(),
-            )
-        )
-        orm = result.scalar_one_or_none()
-        return self._orm_to_domain(orm) if orm else None
-
-    async def page_for_task(
-        self,
-        task_id: UUID,
-        *,
-        after: tuple[datetime, UUID] | None,
-        limit: int,
-    ) -> list[TaskEvent]:
-        """A keyset page of a task's events in ``(timestamp, id)`` order, after ``after``."""
-        conditions = [TaskEventORM.task_id == task_id, self._get_workspace_filter()]
-        if after is not None:
-            conditions.append(
-                tuple_(TaskEventORM.timestamp, TaskEventORM.id)
-                > tuple_(
-                    literal(after[0], TaskEventORM.timestamp.type),
-                    literal(after[1], TaskEventORM.id.type),
-                )
-            )
-        result = await self.session.execute(
-            select(TaskEventORM)
-            .where(*conditions)
-            .order_by(TaskEventORM.timestamp.asc(), TaskEventORM.id.asc())
-            .limit(limit)
-        )
-        return [self._orm_to_domain(orm) for orm in result.scalars().all()]
-
-    async def list_for_task(
-        self,
-        task_id: UUID,
-        *,
-        event_type: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> tuple[list[TaskEvent], int]:
-        """Return one workspace-scoped page of a task's events, plus the total.
-
-        Readers of ``task_events`` must come through here rather than hand-writing
-        SQL: the event payload carries message content and tool arguments, and a
-        query filtered on ``task_id`` alone reads across every workspace.
-        """
-        conditions = [TaskEventORM.task_id == task_id, self._get_workspace_filter()]
-        if event_type:
-            conditions.append(TaskEventORM.event_type == event_type)
-
-        total = (
-            await self.session.scalar(
-                select(func.count()).select_from(TaskEventORM).where(*conditions)
-            )
-        ) or 0
-
-        result = await self.session.execute(
-            select(TaskEventORM)
-            .where(*conditions)
-            .order_by(TaskEventORM.timestamp.asc())
-            .limit(limit)
-            .offset(offset)
-        )
-        return [self._orm_to_domain(orm) for orm in result.scalars().all()], total
-
-    async def get_events_by_type(
-        self, event_type: str, limit: int = 100, offset: int = 0
-    ) -> list[TaskEvent]:
-        """Get events by type."""
-        stmt = (
-            select(TaskEventORM)
-            .where(TaskEventORM.event_type == event_type)
-            .where(TaskEventORM.workspace_id == self.user_context.workspace_id)
-            .order_by(TaskEventORM.timestamp.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        result = await self.session.execute(stmt)
-        event_orms = result.scalars().all()
-
-        return [self._orm_to_domain(event_orm) for event_orm in event_orms]
-
-    async def unanswered_approval_requests(self, task_ids: Sequence[UUID]) -> dict[UUID, TaskEvent]:
-        """Each task's latest ``approval.request`` that no ``approval.response`` answered.
-
-        A response answers the request that carries the same ``escalation_id``.
-        """
-        if not task_ids:
-            return {}
-        result = await self.session.execute(
-            select(TaskEventORM)
-            .where(
-                TaskEventORM.task_id.in_(task_ids),
-                TaskEventORM.event_type.in_((APPROVAL_REQUEST, APPROVAL_RESPONSE)),
-                self._get_workspace_filter(),
-            )
-            .order_by(TaskEventORM.timestamp.asc(), TaskEventORM.id.asc())
-        )
-        events = [self._orm_to_domain(orm) for orm in result.scalars().all()]
-        answered = {
-            (event.task_id, event.data.get("escalation_id"))
-            for event in events
-            if event.event_type == APPROVAL_RESPONSE
-        }
-        unanswered: dict[UUID, TaskEvent] = {}
-        for event in events:
-            if (
-                event.event_type == APPROVAL_REQUEST
-                and (event.task_id, event.data.get("escalation_id")) not in answered
-            ):
-                unanswered[event.task_id] = event
-        return unanswered
-
-    async def approval_decisions(
-        self, *, limit: int, offset: int
-    ) -> tuple[list[tuple[TaskEvent, str | None]], int]:
-        """One newest-first page of the workspace's ``approval.response`` events.
-
-        Each decision comes with its task's description (None once the task is
-        gone), plus the total number of decisions.
-        """
-        conditions = [TaskEventORM.event_type == APPROVAL_RESPONSE, self._get_workspace_filter()]
-        total = (
-            await self.session.scalar(
-                select(func.count()).select_from(TaskEventORM).where(*conditions)
-            )
-        ) or 0
-        result = await self.session.execute(
-            select(TaskEventORM, TaskORM.description)
-            .outerjoin(
-                TaskORM,
-                (TaskORM.id == TaskEventORM.task_id)
-                & (TaskORM.workspace_id == self.user_context.workspace_id),
-            )
-            .where(*conditions)
-            .order_by(TaskEventORM.timestamp.desc(), TaskEventORM.id.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        return [(self._orm_to_domain(orm), description) for orm, description in result.all()], total
 
     def _orm_to_domain(self, event_orm: TaskEventORM) -> TaskEvent:
         """Convert ORM model to domain model."""
@@ -698,13 +610,16 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
             {
                 "task_id": task_id,
                 "seq": entry.seq,
+                "event_id": entry.event_id or uuid4(),
                 "kind": entry.kind,
                 "role": entry.role,
-                "content": entry.content,
-                "tool_calls": entry.tool_calls,
-                "tool_call_id": entry.tool_call_id,
-                "name": entry.name,
-                "attachments": entry.attachments,
+                "content": pg_storable(entry.content),
+                "tool_calls": pg_storable(entry.tool_calls),
+                "tool_call_id": pg_storable(entry.tool_call_id),
+                "name": pg_storable(entry.name),
+                "attachments": pg_storable(entry.attachments),
+                "iteration": entry.iteration,
+                "meta": pg_storable(entry.meta),
                 "workspace_id": self.user_context.workspace_id,
                 "created_by": self.user_context.user_id,
             }
@@ -724,6 +639,8 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
                         "tool_call_id",
                         "name",
                         "attachments",
+                        "iteration",
+                        "meta",
                     )
                 },
                 where=TaskConversationEntryORM.workspace_id == self.user_context.workspace_id,
@@ -766,6 +683,20 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
         )
         return 0 if last is None else last + 1
 
+    async def has_messages_from(self, task_id: UUID, seq: int) -> bool:
+        """Whether the log holds a message, not an event row, at ``seq`` or after it."""
+        found = await self.session.scalar(
+            select(TaskConversationEntryORM.seq)
+            .where(
+                TaskConversationEntryORM.task_id == task_id,
+                self._get_workspace_filter(),
+                TaskConversationEntryORM.seq >= seq,
+                TaskConversationEntryORM.kind != "event",
+            )
+            .limit(1)
+        )
+        return found is not None
+
     async def read_all(self, task_id: UUID) -> list[ConversationEntry]:
         """Every entry of the task's conversation, in log order."""
         result = await self.session.execute(
@@ -777,13 +708,26 @@ class TaskConversationRepository(WorkspaceScopedRepository[TaskConversationEntry
 
     @staticmethod
     def _orm_to_entry(row: TaskConversationEntryORM) -> ConversationEntry:
-        return ConversationEntry(
-            seq=row.seq,
-            kind=row.kind,
-            role=row.role,
-            content=row.content,
-            tool_calls=row.tool_calls,
-            tool_call_id=row.tool_call_id,
-            name=row.name,
-            attachments=row.attachments,
-        )
+        return entry_from_row(row)
+
+
+def entry_from_row(row: TaskConversationEntryORM) -> ConversationEntry:
+    """A stored log row as the domain entry; an offloaded body stays a reference."""
+    return ConversationEntry(
+        seq=row.seq,
+        kind=row.kind,
+        role=row.role,
+        content=row.content,
+        tool_calls=row.tool_calls,
+        tool_call_id=row.tool_call_id,
+        name=row.name,
+        attachments=row.attachments,
+        event_id=row.event_id,
+        execution_id=row.execution_id,
+        iteration=row.iteration,
+        meta=row.meta,
+        correlation_id=row.correlation_id,
+        causation_id=row.causation_id,
+        body_ref=row.body_ref,
+        occurred_at=row.created_at,
+    )

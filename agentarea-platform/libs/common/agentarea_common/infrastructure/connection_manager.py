@@ -8,7 +8,7 @@ import asyncio
 import logging
 from inspect import isawaitable
 from threading import Lock
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +16,10 @@ logger = logging.getLogger(__name__)
 class ConnectionManager:
     """Thread-safe singleton connection manager that reuses expensive connections."""
 
-    _instance: Optional["ConnectionManager"] = None
+    _instance: ConnectionManager | None = None
     _lock = Lock()
 
-    def __new__(cls) -> "ConnectionManager":
+    def __new__(cls) -> ConnectionManager:
         """Return the thread-safe singleton instance."""
         if cls._instance is None:
             with cls._lock:

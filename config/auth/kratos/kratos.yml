@@ -1,6 +1,6 @@
 # Ory Kratos Configuration for AgentArea
 
-version: v1.3.1
+version: v26.2.0
 
 # DSN is overridden via docker-compose environment variable via -c flag
 # The docker-compose passes DSN through the environment variable
@@ -70,6 +70,9 @@ selfservice:
       ui_url: http://localhost:3000/auth/registration
       after:
         default_browser_return_url: http://localhost:3000/workplace
+        password:
+          hooks:
+            - hook: show_verification_ui
         oidc:
           hooks:
             - hook: session

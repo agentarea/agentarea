@@ -1,4 +1,5 @@
 import {
+  Activity,
   AppWindow,
   Bot,
   Boxes,
@@ -29,6 +30,7 @@ export const ENTITY_ICONS = {
   tool: Wrench,
   trigger: Zap,
   stream: Radio,
+  platformStream: Activity,
   sandbox: Boxes,
   app: AppWindow,
 } satisfies Record<string, LucideIcon>;

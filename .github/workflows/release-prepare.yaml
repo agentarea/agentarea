@@ -39,14 +39,14 @@ jobs:
       version: ${{ steps.get-version.outputs.VERSION }}
       branch: ${{ steps.get-version.outputs.BRANCH }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Verify version sync before bump
         shell: bash
@@ -90,7 +90,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare-and-bump.outputs.branch }}
 

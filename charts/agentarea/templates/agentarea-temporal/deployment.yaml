@@ -20,6 +20,26 @@ spec:
     spec:
       serviceAccountName: {{ include "agentarea.serviceAccountName" . }}
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
+      initContainers:
+        - name: schema
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.adminTools.image.repository }}:{{ .Values.temporal.adminTools.image.tag }}"
+          imagePullPolicy: {{ .Values.global.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              until nc -z -w 5 "$POSTGRES_SEEDS" "$DB_PORT"; do echo "waiting for database"; sleep 2; done
+              export SQL_PASSWORD="$POSTGRES_PWD"
+              sql() { temporal-sql-tool --plugin "$DB" --ep "$POSTGRES_SEEDS" -p "$DB_PORT" -u "$POSTGRES_USER" "$@"; }
+              sql --db "$DBNAME" create
+              sql --db "$DBNAME" setup-schema -v 0.0
+              sql --db "$DBNAME" update-schema --schema-name postgresql/v12/temporal
+              sql --db temporal_visibility create
+              sql --db temporal_visibility setup-schema -v 0.0
+              sql --db temporal_visibility update-schema --schema-name postgresql/v12/visibility
+          env:
+            {{- include "agentarea.temporalServer.envs" . | nindent 12 }}
+            {{- include "agentarea.temporalServer.secrets.envs" . | nindent 12 }}
       containers:
         - name: temporal
           image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.temporal.image.repository }}:{{ default .Chart.AppVersion .Values.temporal.image.tag }}"

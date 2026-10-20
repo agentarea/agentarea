@@ -24,7 +24,7 @@ MAX_SEGMENTS_AFTER_DOMAIN = 3
 DOMAINS = {
     "DB", "S3", "AUTH", "AUTHZ", "SECRET", "MCP", "SANDBOX", "TEMPORAL", "WORKER",
     "TASK", "TRIGGER", "CHANNEL", "EVENT", "CORS", "LOG", "REDIS", "KAFKA", "TOOL",
-    "K8S", "API", "HTTP", "OTEL", "BILLING", "METRICS", "A2A",
+    "K8S", "API", "HTTP", "OTEL", "BILLING", "METRICS", "A2A", "SPEND",
 }
 
 # App-level names that carry no domain segment.
@@ -56,7 +56,7 @@ WHITELIST = {
     "TEMPORAL_PROFILE", "TEMPORAL_CONFIG_FILE",
     # temporal image
     "DB", "DB_PORT", "DBNAME", "POSTGRES_PWD", "POSTGRES_SEEDS",
-    "DYNAMIC_CONFIG_FILE_PATH", "TEMPORAL_CLI_ADDRESS",
+    "DYNAMIC_CONFIG_FILE_PATH",
     "TEMPORAL_CORS_ORIGINS", "BIND_ON_IP", "TEMPORAL_DB", "KRATOS_DB",
     "HYDRA_DB", "KETO_DB", "OPENFGA_DB", "INFISICAL_DB",
     # ory images
@@ -94,7 +94,7 @@ WHITELIST = {
     "OTEL_RESOURCE_ATTRIBUTES", "OTEL_TRACES_EXPORTER",
     # llm vendor sdks
     "OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
-    "OLLAMA_API_BASE", "LITELLM_CALLBACKS",
+    "OLLAMA_API_BASE", "LITELLM_CALLBACKS", "LITELLM_LOCAL_MODEL_COST_MAP",
     # vendored @ory SDK reads these from the environment itself
     "ORY_SDK_URL", "NEXT_PUBLIC_ORY_SDK_URL", "ORY_PROJECT_API_TOKEN",
     # Deliberately not NEXT_PUBLIC_: Next inlines those at build time, and one
@@ -183,10 +183,7 @@ def iter_files(*suffixes: str):
 
 def pydantic_env_names(path: Path) -> list[str]:
     """Env names a pydantic-settings class declares (env_prefix + field, or alias)."""
-    try:
-        tree = ast.parse(path.read_text())
-    except SyntaxError:
-        return []
+    tree = ast.parse(path.read_text(), filename=str(path))
     names: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
@@ -276,7 +273,7 @@ THIRD_PARTY_CONFIG = (
     "charts/agentarea/templates/hydra/",
     "charts/agentarea/templates/openfga",
     "charts/agentarea/templates/rustfs/",
-    "charts/agentarea/templates/temporal",
+    "charts/agentarea/templates/agentarea-temporal/",
     "charts/agentarea/templates/configs/temporalServer.env.tpl",
     "docs/self-host/env-migration.md",
 )

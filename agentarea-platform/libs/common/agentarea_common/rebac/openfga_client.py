@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from ..observability.metrics import AUTHZ_DURATION
+from ..outbound import Destination, outbound_client
 from .models import CheckResult, RelationQuery, RelationTuple, SubjectSet
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class OpenFGAClient:
 
     async def _http(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self._timeout)
+            self._client = outbound_client(Destination.INTERNAL, timeout=self._timeout)
         return self._client
 
     async def aclose(self) -> None:

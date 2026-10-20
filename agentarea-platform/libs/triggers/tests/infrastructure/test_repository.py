@@ -10,14 +10,14 @@ from agentarea_common.rebac.models import RelationTuple
 from agentarea_triggers.domain.enums import (
     ExecutionStatus,
     TriggerType,
-    WebhookType,
 )
 from agentarea_triggers.domain.models import (
     CronTrigger,
+    StreamTrigger,
     TriggerCreate,
     TriggerExecution,
+    TriggerSession,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from agentarea_triggers.infrastructure.orm import TriggerExecutionORM, TriggerORM
 from agentarea_triggers.infrastructure.repository import (
@@ -56,10 +56,10 @@ class TestTriggerRepository:
         created_at = datetime.utcnow()
         trigger_orm = TriggerORM(
             id=uuid4(),
-            name="Skewed Webhook",
+            name="Skewed Stream",
             description="",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK.value,
+            trigger_type=TriggerType.STREAM.value,
             is_active=True,
             task_parameters={},
             conditions={},
@@ -70,16 +70,11 @@ class TestTriggerRepository:
             failure_threshold=5,
             consecutive_failures=0,
             last_execution_at=created_at - timedelta(minutes=1),
-            webhook_id="hook-1",
-            allowed_methods=["POST"],
-            webhook_type=WebhookType.GENERIC.value,
-            validation_rules={},
-            event_types=[],
         )
 
         domain = repository._orm_to_domain(trigger_orm)
 
-        assert isinstance(domain, WebhookTrigger)
+        assert isinstance(domain, StreamTrigger)
         assert domain.last_execution_at < domain.created_at
 
     @pytest.fixture
@@ -102,9 +97,6 @@ class TestTriggerRepository:
             last_execution_at=None,
             cron_expression="0 9 * * *",
             timezone="UTC",
-            data_extractor=None,
-            data_extractor_config=None,
-            data_extractor_state=None,
         )
 
     @pytest.fixture
@@ -163,7 +155,9 @@ class TestTriggerRepository:
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_trigger(self, repository, mock_session, sample_trigger, sample_trigger_orm):
+    async def test_create_trigger(
+        self, repository, mock_session, sample_trigger, sample_trigger_orm
+    ):
         """Test creating a new trigger."""
         # Setup mock - base class create returns ORM after add/flush/refresh
         sample_trigger_orm.id = sample_trigger.id
@@ -185,75 +179,36 @@ class TestTriggerRepository:
         assert result.name == sample_trigger.name
 
     @pytest.mark.asyncio
-    async def test_list_by_agent(self, repository, mock_session, sample_trigger_orm):
-        """Test listing triggers by agent ID."""
-        # Setup
-        agent_id = uuid4()
+    async def test_list_triggers_filters_and_returns_domain_models(
+        self, repository, mock_session, sample_trigger_orm
+    ):
+        """The service hands these to REST and MCP, which read them as domain triggers."""
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_trigger_orm]
         mock_session.execute.return_value = mock_result
 
-        # Execute
-        result = await repository.list_by_agent(agent_id, limit=50)
+        result = await repository.list_triggers(limit=50, agent_id=sample_trigger_orm.agent_id)
 
-        # Verify
         assert len(result) == 1
+        assert isinstance(result[0], CronTrigger)
         assert result[0].id == sample_trigger_orm.id
-        mock_session.execute.assert_called_once()
+        with pytest.raises(TypeError, match="no field 'creator_scoped'"):
+            await repository.list_triggers(creator_scoped=True)
 
-    @pytest.mark.asyncio
-    async def test_list_by_type(self, repository, mock_session, sample_trigger_orm):
-        """Test listing triggers by type."""
-        # Setup
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [sample_trigger_orm]
-        mock_session.execute.return_value = mock_result
+    def test_orm_to_domain_stream_trigger_keeps_its_session(self, repository, sample_trigger_orm):
+        sample_trigger_orm.trigger_type = TriggerType.STREAM.value
+        sample_trigger_orm.session = {"continue": True, "idle_timeout": "30m"}
 
-        # Execute
-        result = await repository.list_by_type(TriggerType.CRON, limit=50)
+        result = repository._orm_to_domain(sample_trigger_orm)
 
-        # Verify
-        assert len(result) == 1
-        assert result[0].trigger_type == TriggerType.CRON
-        mock_session.execute.assert_called_once()
+        assert isinstance(result, StreamTrigger)
+        assert result.session == TriggerSession(continue_=True, idle_timeout="30m")
 
-    @pytest.mark.asyncio
-    async def test_get_by_webhook_id(self, repository, mock_session):
-        """Test getting trigger by webhook ID."""
-        # Setup webhook trigger ORM
-        webhook_orm = TriggerORM(
-            id=uuid4(),
-            name="Webhook Test",
-            description="Webhook description",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK.value,
-            is_active=True,
-            task_parameters={"param1": "value1"},
-            conditions={"condition1": "value1"},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            created_by="test_user",
-            failure_threshold=5,
-            consecutive_failures=0,
-            last_execution_at=None,
-            webhook_id="webhook_123",
-            allowed_methods=["POST"],
-            webhook_type=WebhookType.TELEGRAM.value,
-            validation_rules={"rule1": "value1"},
-        )
+    def test_orm_to_domain_refuses_an_unknown_type(self, repository, sample_trigger_orm):
+        sample_trigger_orm.trigger_type = "webhook"
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = webhook_orm
-        mock_session.execute.return_value = mock_result
-
-        # Execute
-        result = await repository.get_by_webhook_id("webhook_123")
-
-        # Verify
-        assert result is not None
-        assert isinstance(result, WebhookTrigger)
-        assert result.webhook_id == "webhook_123"
-        mock_session.execute.assert_called_once()
+        with pytest.raises(ValueError, match="unknown type 'webhook'"):
+            repository._orm_to_domain(sample_trigger_orm)
 
     def test_orm_to_domain_cron_trigger(self, repository, sample_trigger_orm):
         """Test converting CronTrigger ORM to domain model."""
@@ -269,49 +224,46 @@ class TestTriggerRepository:
         assert result.timezone == sample_trigger_orm.timezone
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("event_types", [["message"], []])
-    async def test_update_webhook_preserves_event_filter(
-        self, repository, mock_session, sample_trigger_orm, event_types
+    async def test_update_session_is_written_by_alias(
+        self, repository, mock_session, sample_trigger_orm
     ):
-        sample_trigger_orm.trigger_type = TriggerType.WEBHOOK.value
-        sample_trigger_orm.webhook_id = "webhook_123"
-        sample_trigger_orm.event_types = event_types
+        sample_trigger_orm.trigger_type = TriggerType.STREAM.value
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = sample_trigger_orm
         mock_session.execute.return_value = mock_result
 
-        result = await repository.update_by_id(
-            sample_trigger_orm.id, TriggerUpdate(event_types=event_types)
+        await repository.update_by_id(
+            sample_trigger_orm.id,
+            TriggerUpdate(session=TriggerSession(continue_=False, idle_timeout="5m")),
         )
 
         update_statement = mock_session.execute.call_args_list[0].args[0]
-        assert update_statement.compile().params["event_types"] == event_types
-        assert result.event_types == event_types
+        assert update_statement.compile().params["session"] == {
+            "continue": False,
+            "idle_timeout": "5m",
+        }
 
     @pytest.mark.asyncio
-    async def test_create_from_model_persists_event_filter(
+    async def test_create_from_model_persists_the_session(
         self, repository, mock_session, sample_trigger_orm, monkeypatch
     ):
         monkeypatch.setattr(
             "agentarea_common.base.workspace_scoped_repository.grant_resource_owner",
             AsyncMock(),
         )
-        sample_trigger_orm.trigger_type = TriggerType.WEBHOOK.value
-        sample_trigger_orm.webhook_id = "webhook_123"
-        sample_trigger_orm.event_types = ["message"]
         repository._orm_to_domain = MagicMock(return_value=sample_trigger_orm)
         trigger_data = TriggerCreate(
-            name="Filtered webhook",
+            name="Chat",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="webhook_123",
+            trigger_type=TriggerType.STREAM,
+            stream_id=uuid4(),
             created_by="test_user",
-            event_types=["message"],
+            session=TriggerSession(continue_=True),
         )
 
         await repository.create_from_model(trigger_data)
 
-        assert mock_session.add.call_args.args[0].event_types == ["message"]
+        assert mock_session.add.call_args.args[0].session == {"continue": True}
 
     @pytest.mark.asyncio
     async def test_create_from_model_persists_a_disabled_trigger_inactive(
@@ -364,10 +316,10 @@ class TestTriggerRepository:
         mock_session.refresh = AsyncMock(side_effect=mock_refresh)
 
         trigger_data = TriggerCreate(
-            name="Ownership webhook",
+            name="Ownership stream",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="webhook_own",
+            trigger_type=TriggerType.STREAM,
+            stream_id=uuid4(),
             created_by=mock_user_context.user_id,
         )
 
@@ -446,7 +398,9 @@ class TestTriggerExecutionRepository:
         mock_session.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_execution(self, repository, mock_session, sample_execution, sample_execution_orm):
+    async def test_create_execution(
+        self, repository, mock_session, sample_execution, sample_execution_orm
+    ):
         """Test creating a new execution."""
         # Setup mock - patch base class create to return ORM directly
         sample_execution_orm.id = sample_execution.id

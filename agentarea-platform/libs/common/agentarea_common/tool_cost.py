@@ -7,13 +7,25 @@ A connector is a definition, not code: an OpenAPI connection carries
 
     {"source": "free" | "rate" | "reported" | "settled" | "unknown",
      "unit": "request",
+     "exact": true | false,
      "rate": {"amount": "0.488", "currency": "RUB",
               "quantity": 1 | {"arg": "num_phrases", "default": 50}
                           | {"count": "$.items"} | {"path": "$.usage.pages"}},
-     "reported": {"path": "$.cost" | "meta": "<_meta key>", "currency": "USD"}}
+     "reported": {"path": "$.cost" | "meta": "<_meta key>" [+ "path"], "currency": "USD"},
+     "estimate": {"amount": "0.05", "currency": "USD"},
+     "settled": {"fetch": {"url": "https://api.apify.com/v2/actor-runs/{run_id}",
+                           "params": {"run_id": "$.data.id" | {"meta": "<_meta key>"}},
+                           "cost": "$.data.usageTotalUsd", "currency": "USD",
+                           "done": {"path": "$.data.status", "in": ["SUCCEEDED"]}}}}
 
-``meter`` turns one call's arguments and response into what the vendor charged
-the payer, or None when nothing is known at call time.
+``exact`` says the figure is what the vendor bills: true by default for a reported or
+settled cost, false for a rate. ``estimate`` is the figure before the call for a cost
+known only afterwards. A settled cost is read later with the connection's own
+credential, from ``fetch.url`` with ``params`` taken from the call's response.
+
+``pre_call_cost`` is what a call will cost before it runs, ``meter`` what one call
+cost from its arguments and response, and ``settled_cost`` what a settlement fetch
+says it finally cost.
 """
 
 import re
@@ -21,11 +33,15 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
+from urllib.parse import quote
 
 DEFAULT_UNIT = "call"
 _CURRENCY = re.compile(r"[A-Z]{3}")
 _PATH_STEP = re.compile(r"\.([A-Za-z_][A-Za-z0-9_\-]*)|\[(\d+)\]")
 _PATH = re.compile(r"\$(?:\.[A-Za-z_][A-Za-z0-9_\-]*|\[\d+\])*")
+_URL_PARAM = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+# Currencies that are another's under a different name: a USD stablecoin is USD.
+_SAME_CURRENCY = {"USDC": "USD"}
 
 
 class ToolCostError(ValueError):
@@ -95,6 +111,7 @@ def _required[T](value: T | None, where: str) -> T:
 
 
 def _currency(value: Any, where: str) -> str:
+    value = _SAME_CURRENCY.get(value, value) if isinstance(value, str) else value
     if not isinstance(value, str) or not _CURRENCY.fullmatch(value):
         raise ToolCostError(f"{where} must be an ISO 4217 code like RUB, got {value!r}")
     return value
@@ -151,6 +168,33 @@ def _quantity(raw: Any) -> Quantity:
 
 
 @dataclass(frozen=True)
+class ValueRef:
+    """Where a value is read from in a call's result: a path in its body, or a _meta key."""
+
+    path: str | None = None
+    meta: str | None = None
+
+    def read(self, body: Any, meta: dict[str, Any] | None) -> Any:
+        if self.meta is not None:
+            if self.meta not in (meta or {}):
+                raise ToolCostError(f"the result's _meta carries no {self.meta}")
+            return (meta or {})[self.meta]
+        return _read(body, _required(self.path, "path"))
+
+
+@dataclass(frozen=True)
+class SettleFetch:
+    """How the cost of a call is read later: one GET with the connection's credential."""
+
+    url: str
+    params: tuple[tuple[str, ValueRef], ...]
+    cost_path: str
+    currency: str
+    done_path: str | None = None
+    done_in: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ToolCostModel:
     source: CostSourceKind
     unit: str = DEFAULT_UNIT
@@ -159,9 +203,60 @@ class ToolCostModel:
     quantity: Quantity = field(default_factory=Quantity)
     reported_path: str | None = None
     reported_meta: str | None = None
+    exact: bool = False
+    estimate_amount: Decimal | None = None
+    estimate_currency: str | None = None
+    settle: SettleFetch | None = None
 
 
 UNKNOWN_COST = ToolCostModel(CostSourceKind.UNKNOWN)
+
+
+def _value_ref(raw: Any, where: str) -> ValueRef:
+    if isinstance(raw, dict) and set(raw) == {"meta"}:
+        if not isinstance(raw["meta"], str) or not raw["meta"]:
+            raise ToolCostError(f"{where}.meta must name a _meta key")
+        return ValueRef(meta=raw["meta"])
+    return ValueRef(path=_valid_path(raw, where))
+
+
+def _settle_fetch(raw: Any) -> SettleFetch:
+    fetch = raw.get("fetch") if isinstance(raw, dict) else None
+    if not isinstance(fetch, dict):
+        raise ToolCostError(
+            "a settled cost declares settled: {fetch: {url, params, cost, currency}}"
+        )
+    url = fetch.get("url")
+    if not isinstance(url, str) or not url.startswith("https://"):
+        raise ToolCostError(f"settled.fetch.url must be an https URL, got {url!r}")
+    params = fetch.get("params") or {}
+    if not isinstance(params, dict):
+        raise ToolCostError("settled.fetch.params must map URL parameters to result paths")
+    missing = set(_URL_PARAM.findall(url)) - set(params)
+    if missing:
+        raise ToolCostError(f"settled.fetch.url names {sorted(missing)} that params do not read")
+    done = fetch.get("done")
+    done_path: str | None = None
+    done_in: tuple[str, ...] = ()
+    if done is not None:
+        values = done.get("in") if isinstance(done, dict) else None
+        if (
+            not isinstance(values, list)
+            or not values
+            or not all(isinstance(v, str) for v in values)
+        ):
+            raise ToolCostError("settled.fetch.done declares {path, in: [values]}")
+        done_path, done_in = _valid_path(done.get("path"), "settled.fetch.done.path"), tuple(values)
+    return SettleFetch(
+        url=url,
+        params=tuple(
+            (name, _value_ref(ref, f"settled.fetch.params.{name}")) for name, ref in params.items()
+        ),
+        cost_path=_valid_path(fetch.get("cost"), "settled.fetch.cost"),
+        currency=_currency(fetch.get("currency"), "settled.fetch.currency"),
+        done_path=done_path,
+        done_in=done_in,
+    )
 
 
 def parse_cost_model(raw: Any) -> ToolCostModel:
@@ -177,6 +272,21 @@ def parse_cost_model(raw: Any) -> ToolCostModel:
     unit = raw.get("unit") or DEFAULT_UNIT
     if not isinstance(unit, str):
         raise ToolCostError("unit must be a string")
+    exact = raw.get("exact", source in (CostSourceKind.REPORTED, CostSourceKind.SETTLED))
+    if not isinstance(exact, bool):
+        raise ToolCostError("exact must be true or false")
+    estimate = raw.get("estimate")
+    estimate_amount = estimate_currency = None
+    if estimate is not None:
+        if not isinstance(estimate, dict):
+            raise ToolCostError("estimate declares {amount, currency}")
+        estimate_amount = _decimal(estimate.get("amount"), "estimate.amount")
+        estimate_currency = _currency(estimate.get("currency"), "estimate.currency")
+    common: dict[str, Any] = {
+        "exact": exact,
+        "estimate_amount": estimate_amount,
+        "estimate_currency": estimate_currency,
+    }
     if source is CostSourceKind.RATE:
         rate = raw.get("rate")
         if not isinstance(rate, dict):
@@ -187,11 +297,14 @@ def parse_cost_model(raw: Any) -> ToolCostModel:
             rate_amount=_decimal(rate.get("amount"), "rate.amount"),
             currency=_currency(rate.get("currency"), "rate.currency"),
             quantity=_quantity(rate.get("quantity")),
+            **common,
         )
     if source is CostSourceKind.REPORTED:
         reported = raw.get("reported")
-        if not isinstance(reported, dict) or ("path" in reported) == ("meta" in reported):
-            raise ToolCostError("a reported cost declares reported: {path | meta, currency}")
+        if not isinstance(reported, dict) or ("path" not in reported and "meta" not in reported):
+            raise ToolCostError(
+                "a reported cost declares reported: {path | meta [+ path], currency}"
+            )
         meta = reported.get("meta")
         if "meta" in reported and (not isinstance(meta, str) or not meta):
             raise ToolCostError("reported.meta must name a _meta key")
@@ -203,8 +316,16 @@ def parse_cost_model(raw: Any) -> ToolCostModel:
                 _valid_path(reported["path"], "reported.path") if "path" in reported else None
             ),
             reported_meta=meta,
+            **common,
         )
-    return ToolCostModel(source, unit)
+    if source is CostSourceKind.SETTLED:
+        settle = _settle_fetch(raw.get("settled"))
+        if estimate_currency is not None and estimate_currency != settle.currency:
+            raise ToolCostError(
+                f"estimate is in {estimate_currency} but the settled cost in {settle.currency}"
+            )
+        return ToolCostModel(source, unit, currency=settle.currency, settle=settle, **common)
+    return ToolCostModel(source, unit, **common)
 
 
 def resolve_cost_model(default: Any, own: Any) -> ToolCostModel:
@@ -251,16 +372,45 @@ def tool_connection(
     platform_managed: bool,
     payers: Any,
     cost: Any,
+    override: Any = None,
+    from_catalog: bool = False,
 ) -> ToolConnection:
     """A call's connection as its connector declares it; a payer it does not allow raises.
 
     A platform-managed connection runs on the platform's key, any other on the
-    workspace's. Wallet payments are metered from the call, not declared here.
+    workspace's. ``override`` is the cost a member set on a connection the workspace
+    pays for, which wins over the connector's. Wallet payments are metered from the
+    call, not declared here. ``from_catalog`` says ``cost`` is a catalog entry's: only
+    one may be settled, since the settle URL receives the connection's credential.
     """
     payer = Payer.PLATFORM if platform_managed else Payer.WORKSPACE
     if payer not in connector_payers(payers):
         raise ToolCostError(f"{connector} does not allow calls paid by the {payer.value}")
-    return ToolConnection(connection_id, connector, tool, payer, parse_cost_model(cost))
+    if override is None:
+        model = parse_cost_model(cost)
+        if model.source is CostSourceKind.SETTLED and not from_catalog:
+            raise ToolCostError(
+                "only a catalog entry may declare a settled cost: its URL receives the "
+                + "connection's credential"
+            )
+        return ToolConnection(connection_id, connector, tool, payer, model)
+    if payer is Payer.PLATFORM:
+        raise ToolCostError("the cost of a connection the platform pays for is not set on it")
+    return ToolConnection(connection_id, connector, tool, payer, parse_connection_cost(override))
+
+
+def parse_connection_cost(raw: Any) -> ToolCostModel:
+    """A cost a member sets on a connection: a rate, a reported field, or free.
+
+    A settled cost is not one: it would send the connection's credential to the URL
+    the declaration names, which only a catalog entry may name.
+    """
+    model = parse_cost_model(raw)
+    if model.source not in (CostSourceKind.RATE, CostSourceKind.REPORTED, CostSourceKind.FREE):
+        raise ToolCostError(
+            f"a connection's own cost is a rate, a reported field or free, not {model.source.value}"
+        )
+    return model
 
 
 def manual_connector(connection_id: Any) -> str:
@@ -270,13 +420,47 @@ def manual_connector(connection_id: Any) -> str:
 
 @dataclass(frozen=True)
 class MeteredCost:
-    """What one call cost the payer, as the vendor charged it."""
+    """What one call cost the payer, as the vendor charged it.
+
+    ``exact`` is False for an estimate. ``settle_params`` are what a settled cost is
+    fetched with later, read from the call's result.
+    """
 
     quantity: Decimal
     unit: str
     vendor_cost: Decimal
     currency: str
     source: CostSourceKind
+    exact: bool = True
+    settle_params: dict[str, str] | None = None
+
+
+def _estimate(model: ToolCostModel) -> MeteredCost | None:
+    if model.estimate_amount is None or model.estimate_currency is None:
+        return None
+    return MeteredCost(
+        Decimal(1),
+        model.unit,
+        model.estimate_amount,
+        model.estimate_currency,
+        model.source,
+        exact=False,
+    )
+
+
+def pre_call_cost(model: ToolCostModel, *, args: dict[str, Any]) -> MeteredCost | None:
+    """What a call will cost before it runs, or None when nothing says.
+
+    A rate counted from a constant or an argument is known; any other cost is its
+    declared estimate.
+    """
+    if model.source is CostSourceKind.RATE and (
+        model.quantity.constant is not None or model.quantity.arg is not None
+    ):
+        return meter(model, args=args, body=None)
+    if model.source in (CostSourceKind.FREE, CostSourceKind.UNKNOWN):
+        return None
+    return _estimate(model)
 
 
 def _read(body: Any, path: str) -> Any:
@@ -307,6 +491,7 @@ def meter(
             amount * quantity,
             _required(model.currency, "rate.currency"),
             model.source,
+            exact=model.exact,
         )
     if model.source is CostSourceKind.REPORTED:
         currency = _required(model.currency, "reported.currency")
@@ -315,8 +500,64 @@ def meter(
                 raise ToolCostError(f"the result's _meta carries no {model.reported_meta}")
             value = (meta or {})[model.reported_meta]
             where = model.reported_meta
+            if model.reported_path is not None:
+                # A path inside that _meta value, e.g. Apify's {"com.apify/ActorRun": {...}}.
+                value = _read(value, model.reported_path)
+                where = f"{model.reported_meta}{model.reported_path[1:]}"
         else:
             where = _required(model.reported_path, "reported.path")
             value = _read(body, where)
-        return MeteredCost(Decimal(1), model.unit, _decimal(value, where), currency, model.source)
+        return MeteredCost(
+            Decimal(1),
+            model.unit,
+            _decimal(value, where),
+            currency,
+            model.source,
+            exact=model.exact,
+        )
+    if model.source is CostSourceKind.SETTLED:
+        settle = _required(model.settle, "settled.fetch")
+        params = {}
+        for name, ref in settle.params:
+            value = ref.read(body, meta)
+            if not isinstance(value, str | int) or isinstance(value, bool) or value == "":
+                raise ToolCostError(f"settled.fetch.params.{name} read {value!r}, not an id")
+            params[name] = str(value)
+        return MeteredCost(
+            Decimal(1),
+            model.unit,
+            model.estimate_amount or Decimal(0),
+            settle.currency,
+            model.source,
+            exact=False,
+            settle_params=params,
+        )
     return None
+
+
+def settle_url(model: ToolCostModel, params: dict[str, str]) -> str:
+    """The URL a settled cost is fetched from, with the parameters the call returned."""
+    settle = _required(model.settle, "settled.fetch")
+
+    def fill(match: re.Match[str]) -> str:
+        name = match.group(1)
+        if name not in params:
+            raise ToolCostError(f"the line keeps no {name} to settle with")
+        return quote(params[name], safe="")
+
+    return _URL_PARAM.sub(fill, settle.url)
+
+
+def settled_cost(model: ToolCostModel, body: Any) -> MeteredCost | None:
+    """What a settlement fetch says the call cost, or None while it is not done."""
+    settle = _required(model.settle, "settled.fetch")
+    if settle.done_path is not None and _read(body, settle.done_path) not in settle.done_in:
+        return None
+    return MeteredCost(
+        Decimal(1),
+        model.unit,
+        _decimal(_read(body, settle.cost_path), settle.cost_path),
+        settle.currency,
+        model.source,
+        exact=model.exact,
+    )

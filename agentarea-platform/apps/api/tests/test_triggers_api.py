@@ -10,17 +10,14 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_api.api.deps.services import (
-    get_secret_manager,
-    get_trigger_health_check,
-    get_trigger_service,
-)
+from agentarea_api.api.deps.services import get_trigger_health_check, get_trigger_service
 from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.config.database import get_db_session
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
 from agentarea_common.testing.flows import MainFlow
+from agentarea_streams.domain.models import TriggerBinding
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
@@ -38,14 +35,14 @@ def _graph_ownership(monkeypatch):
 
 # Mock trigger system components when not available
 try:
-    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
+    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
     from agentarea_triggers.domain.models import (
         CronTrigger,
+        StreamTrigger,
         Trigger,
         TriggerCreate,
         TriggerExecution,
         TriggerUpdate,
-        WebhookTrigger,
     )
     from agentarea_triggers.trigger_service import (
         TriggerNotFoundError,
@@ -56,16 +53,12 @@ except ImportError:
     # Create mock classes for testing
     class TriggerType:
         CRON = "cron"
-        WEBHOOK = "webhook"
+        STREAM = "stream"
 
     class ExecutionStatus:
         SUCCESS = "success"
         FAILED = "failed"
         TIMEOUT = "timeout"
-
-    class WebhookType:
-        GENERIC = "generic"
-        TELEGRAM = "telegram"
 
     class Trigger:
         def __init__(self, **kwargs):
@@ -81,7 +74,7 @@ except ImportError:
     class CronTrigger(Trigger):
         pass
 
-    class WebhookTrigger(Trigger):
+    class StreamTrigger(Trigger):
         pass
 
     class TriggerExecution:
@@ -181,25 +174,17 @@ def override_trigger_dependencies(
     async def _override_health_checker():
         return mock_health_checker
 
-    async def _override_secret_manager():
-        # An empty store: nothing configured for any trigger yet.
-        manager = AsyncMock()
-        manager.get_secret.return_value = None
-        return manager
-
     async def _override_db_session():
         return mock_db_session
 
     app.dependency_overrides[get_trigger_service] = _override_trigger_service
     app.dependency_overrides[require_a2a_execute_auth] = _override_auth
     app.dependency_overrides[get_trigger_health_check] = _override_health_checker
-    app.dependency_overrides[get_secret_manager] = _override_secret_manager
     app.dependency_overrides[get_db_session] = _override_db_session
     yield
     app.dependency_overrides.pop(get_trigger_service, None)
     app.dependency_overrides.pop(require_a2a_execute_auth, None)
     app.dependency_overrides.pop(get_trigger_health_check, None)
-    app.dependency_overrides.pop(get_secret_manager, None)
     app.dependency_overrides.pop(get_db_session, None)
 
 
@@ -229,14 +214,14 @@ def sample_trigger_data():
 
 
 @pytest.fixture
-def sample_webhook_trigger_data():
-    """Sample webhook trigger data for testing."""
+def sample_stream_trigger_data():
+    """Sample stream trigger data for testing."""
     return {
         "id": uuid4(),
-        "name": "Test Webhook Trigger",
-        "description": "A test webhook trigger",
+        "name": "Test Stream Trigger",
+        "description": "A test stream trigger",
         "agent_id": uuid4(),
-        "trigger_type": TriggerType.WEBHOOK,
+        "trigger_type": TriggerType.STREAM,
         "is_active": True,
         "task_parameters": {"param1": "value1"},
         "conditions": {"condition1": "value1"},
@@ -247,11 +232,6 @@ def sample_webhook_trigger_data():
         "failure_threshold": 5,
         "consecutive_failures": 0,
         "last_execution_at": None,
-        "webhook_id": "test_webhook_123",
-        "allowed_methods": ["POST"],
-        "webhook_type": WebhookType.GENERIC,
-        "validation_rules": {},
-        "webhook_config": None,
     }
 
 
@@ -323,57 +303,41 @@ class TestTriggersAPI:
         # Verify service was called
         mock_trigger_service.create_trigger.assert_called_once()
 
-    @patch("agentarea_api.api.deps.services.get_trigger_service")
-    @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
     @pytest.mark.asyncio
-    async def test_create_webhook_trigger_success(
+    async def test_create_stream_trigger_success(
         self,
-        mock_auth,
-        mock_get_service,
         async_client,
         mock_trigger_service,
-        mock_auth_context,
-        sample_webhook_trigger_data,
+        sample_stream_trigger_data,
     ):
-        """Test successful webhook trigger creation."""
-        # Setup mocks
-        mock_auth.return_value = mock_auth_context
-        mock_get_service.return_value = mock_trigger_service
-
-        # Create trigger object
-        trigger = WebhookTrigger(**sample_webhook_trigger_data)
+        """A stream trigger is created on its stream and reports the binding."""
+        trigger = StreamTrigger(**sample_stream_trigger_data)
         mock_trigger_service.create_trigger.return_value = trigger
-
-        # Test data
-        request_data = {
-            "name": "Test Webhook Trigger",
-            "description": "A test webhook trigger",
-            "agent_id": str(sample_webhook_trigger_data["agent_id"]),
-            "trigger_type": "webhook",
-            "webhook_id": "test_webhook_123",
-            "allowed_methods": ["POST"],
-            "webhook_type": "generic",
+        stream_id = uuid4()
+        mock_trigger_service.stream_service.trigger_bindings.return_value = {
+            trigger.id: TriggerBinding(stream_id=stream_id, event_filter={}, last_event_at=None)
         }
 
-        # Make request
-        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
+        response = await async_client.post(
+            "/v1/workspaces/acme/triggers/",
+            json={
+                "name": "Test Stream Trigger",
+                "description": "A test stream trigger",
+                "agent_id": str(sample_stream_trigger_data["agent_id"]),
+                "trigger_type": "stream",
+                "stream_id": str(stream_id),
+                "session": {"continue": True, "idle_timeout": "30m"},
+            },
+        )
 
-        # Assertions
-        assert response.status_code == 201
+        assert response.status_code == 201, response.text
         data = response.json()
-        assert data["name"] == "Test Webhook Trigger"
-        assert data["trigger_type"] == "webhook"
-        assert data["webhook_id"] == "test_webhook_123"
-        assert data["allowed_methods"] == ["POST"]
-        # An unsigned generic webhook starts the agent for anyone who learns
-        # its URL, so creating one hands back a generated signing secret.
-        assert len(data["signing_secret"]) >= 32
-        assert data["webhook_signing"] == "signed"
-        assert data["signature_scheme"] == {
-            "header": "X-Webhook-Signature",
-            "algorithm": "sha256",
-            "prefix": "",
-        }
+        assert data["name"] == "Test Stream Trigger"
+        assert data["trigger_type"] == "stream"
+        assert data["stream_id"] == str(stream_id)
+        created = mock_trigger_service.create_trigger.await_args.args[0]
+        assert created.stream_id == stream_id
+        assert created.session is not None and created.session.continue_ is True
 
     @patch("agentarea_api.api.deps.services.get_trigger_service")
     @patch("agentarea_api.api.v1.a2a_auth.require_a2a_execute_auth")
@@ -530,7 +494,7 @@ class TestTriggersAPI:
         updated_data["name"] = "Updated Trigger"
         updated_data["description"] = "Updated description"
         updated_trigger = CronTrigger(**updated_data)
-        mock_trigger_service.update_trigger.return_value = updated_trigger
+        mock_trigger_service.update_trigger_from_payload.return_value = updated_trigger
 
         # Test data
         request_data = {
@@ -560,7 +524,9 @@ class TestTriggersAPI:
         # Setup mocks
         mock_auth.return_value = mock_auth_context
         mock_get_service.return_value = mock_trigger_service
-        mock_trigger_service.update_trigger.side_effect = TriggerNotFoundError("Trigger not found")
+        mock_trigger_service.update_trigger_from_payload.side_effect = TriggerNotFoundError(
+            "Trigger not found"
+        )
 
         # Test data
         request_data = {"name": "Updated Trigger"}
@@ -846,47 +812,15 @@ class TestTriggersAPI:
         assert response.status_code == 422
         assert "Invalid trigger type" in str(response.json())
 
-    async def test_invalid_webhook_type(self, async_client):
-        """Test trigger creation with invalid webhook type."""
-        request_data = {
-            "name": "Test Trigger",
-            "agent_id": str(uuid4()),
-            "trigger_type": "webhook",
-            "webhook_id": "test_webhook_123",
-            "webhook_type": "invalid_webhook_type",
-        }
-
-        response = await async_client.post("/v1/workspaces/acme/triggers/", json=request_data)
-
-        # Should fail validation
-        assert response.status_code == 422
-        assert "Invalid webhook type" in str(response.json())
-
-    async def test_short_custom_webhook_id_is_rejected_with_422(self, async_client):
+    async def test_webhook_is_not_a_trigger_type(self, async_client):
+        """A webhook is a source of a stream now, not a trigger."""
         response = await async_client.post(
             "/v1/workspaces/acme/triggers/",
-            json={
-                "name": "Webhook",
-                "agent_id": str(uuid4()),
-                "trigger_type": "webhook",
-                "webhook_id": "short-id",
-            },
+            json={"name": "Webhook", "agent_id": str(uuid4()), "trigger_type": "webhook"},
         )
 
         assert response.status_code == 422
-
-    async def test_custom_webhook_id_rejects_non_url_safe_chars_with_422(self, async_client):
-        response = await async_client.post(
-            "/v1/workspaces/acme/triggers/",
-            json={
-                "name": "Webhook",
-                "agent_id": str(uuid4()),
-                "trigger_type": "webhook",
-                "webhook_id": "unsafe/hook-id_123",
-            },
-        )
-
-        assert response.status_code == 422
+        assert "Invalid trigger type" in str(response.json())
 
     async def test_missing_required_fields(self, async_client):
         """Test trigger creation with missing required fields."""
@@ -900,106 +834,6 @@ class TestTriggersAPI:
 
 if __name__ == "__main__":
     pytest.main([__file__])
-
-
-@pytest.mark.asyncio
-async def test_create_telegram_webhook_trigger_registers_webhook(
-    async_client, mock_trigger_service, sample_webhook_trigger_data
-):
-    """Creating a Telegram webhook trigger with a bot token auto-registers the
-    webhook with Telegram at {base}/webhooks/{webhook_id}."""
-    data = dict(sample_webhook_trigger_data)
-    data["webhook_type"] = WebhookType.TELEGRAM
-    data["webhook_id"] = "test_webhook_123"
-    mock_trigger_service.create_trigger.return_value = WebhookTrigger(**data)
-
-    class _Settings:
-        TELEGRAM_WEBHOOK_URL = "https://gw.example"
-        API_URL = "http://localhost:8000"
-
-    with (
-        patch(
-            "agentarea_triggers.channels.telegram.set_webhook", new=AsyncMock(return_value=True)
-        ) as mock_sw,
-        patch("agentarea_api.api.v1._trigger_creation.get_app_settings", return_value=_Settings()),
-    ):
-        resp = await async_client.post(
-            "/v1/workspaces/acme/triggers/",
-            json={
-                "name": "TG Webhook",
-                "agent_id": str(data["agent_id"]),
-                "trigger_type": "webhook",
-                "webhook_id": "test_webhook_123",
-                "allowed_methods": ["POST"],
-                "webhook_type": "telegram",
-                "channel_credentials": {"bot_token": "123:ABC"},
-            },
-        )
-
-    assert resp.status_code == 201, resp.text
-    mock_sw.assert_awaited_once()
-    blob = " ".join(map(str, mock_sw.call_args.args)) + " " + str(mock_sw.call_args.kwargs)
-    assert "https://gw.example/webhooks/test_webhook_123" in blob
-    assert "123:ABC" in blob
-
-
-@pytest.mark.asyncio
-async def test_delete_telegram_webhook_trigger_deregisters_webhook(
-    async_client, mock_trigger_service
-):
-    """Deleting a Telegram webhook trigger clears the bot's webhook (best-effort)."""
-    import json as _json
-
-    from agentarea_api.api.deps.services import get_secret_manager
-    from agentarea_api.main import app as _app
-
-    mock_trigger_service.delete_trigger.return_value = True
-    _tg = dict(_sample_webhook_trigger_data())
-    _tg["webhook_type"] = WebhookType.TELEGRAM
-    mock_trigger_service.get_trigger.return_value = WebhookTrigger(**_tg)
-    sm = AsyncMock()
-    sm.get_secret = AsyncMock(return_value=_json.dumps({"bot_token": "123:ABC"}))
-
-    async def _override_sm():
-        return sm
-
-    _app.dependency_overrides[get_secret_manager] = _override_sm
-    try:
-        with patch(
-            "agentarea_triggers.channels.telegram.delete_webhook",
-            new=AsyncMock(return_value=True),
-        ) as mock_dw:
-            resp = await async_client.delete(f"/v1/workspaces/acme/triggers/{uuid4()}")
-        assert resp.status_code == 204, resp.text
-        mock_dw.assert_awaited_once()
-        assert "123:ABC" in " ".join(map(str, mock_dw.call_args.args))
-    finally:
-        _app.dependency_overrides.pop(get_secret_manager, None)
-
-
-def _sample_webhook_trigger_data():
-    return {
-        "id": uuid4(),
-        "name": "Test Webhook Trigger",
-        "description": "A test webhook trigger",
-        "agent_id": uuid4(),
-        "trigger_type": TriggerType.WEBHOOK,
-        "is_active": True,
-        "task_parameters": {},
-        "conditions": {},
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
-        "created_by": "test_user",
-        "max_executions_per_hour": 60,
-        "failure_threshold": 5,
-        "consecutive_failures": 0,
-        "last_execution_at": None,
-        "webhook_id": "test_webhook_123",
-        "allowed_methods": ["POST"],
-        "webhook_type": WebhookType.GENERIC,
-        "validation_rules": {},
-        "webhook_config": None,
-    }
 
 
 class TestExecuteTrigger:

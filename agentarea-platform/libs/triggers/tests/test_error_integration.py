@@ -8,11 +8,8 @@ from agentarea_triggers.domain.enums import TriggerType
 from agentarea_triggers.domain.models import TriggerCreate
 from agentarea_triggers.logging_utils import (
     TriggerExecutionError,
-    get_correlation_id,
-    set_correlation_id,
 )
 from agentarea_triggers.trigger_service import TriggerService
-from agentarea_triggers.webhook_manager import DefaultWebhookManager
 
 from .conftest import make_trigger_repository_factory
 
@@ -63,8 +60,9 @@ class TestErrorHandlingIntegration:
             name="Test Trigger",
             description="Test",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="test_webhook",
+            trigger_type=TriggerType.CRON,
+            cron_expression="0 9 * * *",
+            task_parameters={"text": "Send the morning report"},
             created_by="test_user",
         )
 
@@ -76,37 +74,6 @@ class TestErrorHandlingIntegration:
         assert "Failed to create trigger" in str(exc_info.value)
         assert "Database connection lost" in str(exc_info.value)
         assert exc_info.value.correlation_id is not None
-
-    async def test_webhook_error_handling_with_correlation(self, fake_secret_reader):
-        """Test webhook error handling with correlation ID tracking."""
-        # Setup
-        execution_callback = AsyncMock()
-        webhook_manager = DefaultWebhookManager(
-            execution_callback, secret_reader=fake_secret_reader
-        )
-
-        # Set an initial correlation ID
-        set_correlation_id("test-correlation-123")
-
-        # Test webhook not found scenario
-        response = await webhook_manager.handle_webhook_request(
-            webhook_id="nonexistent",
-            method="POST",
-            headers={"content-type": "application/json"},
-            body={"test": "data"},
-            query_params={},
-        )
-
-        # Verify error response
-        assert response["status_code"] == 400
-        assert "not found" in response["body"]["message"]
-
-        # The service now generates its own correlation ID per request, so the
-        # caller's pre-set id is not guaranteed to survive. Verify only that a
-        # correlation id is present (non-empty) for tracing.
-        current_correlation_id = get_correlation_id()
-        assert current_correlation_id is not None
-        assert current_correlation_id != ""
 
     async def test_graceful_degradation_scenario(self, mock_dependencies):
         """Test graceful degradation when multiple dependencies are unavailable."""
@@ -129,6 +96,7 @@ class TestErrorHandlingIntegration:
             agent_id=uuid4(),
             trigger_type=TriggerType.CRON,
             cron_expression="0 9 * * *",
+            task_parameters={"text": "Send the morning report"},
             created_by="test_user",
         )
 
@@ -148,8 +116,9 @@ class TestErrorHandlingIntegration:
             name="Test Trigger",
             description="Test",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="test_webhook",
+            trigger_type=TriggerType.CRON,
+            cron_expression="0 9 * * *",
+            task_parameters={"text": "Send the morning report"},
             created_by="test_user",
         )
 
@@ -187,8 +156,9 @@ class TestErrorHandlingIntegration:
                 name=f"Test Trigger {i}",
                 description="Test",
                 agent_id=uuid4(),
-                trigger_type=TriggerType.WEBHOOK,
-                webhook_id=f"test_webhook_{i}",
+                trigger_type=TriggerType.CRON,
+                cron_expression="0 9 * * *",
+                task_parameters={"text": "Send the morning report"},
                 created_by="test_user",
             )
             tasks.append(trigger_service.create_trigger(trigger_data))

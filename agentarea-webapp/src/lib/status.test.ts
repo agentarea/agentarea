@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import ru from "../../messages/ru.json";
 import {
+  getEventProcessingStatusPresentation,
   getStreamOutcomeStatusPresentation,
   getTaskStatusPresentation,
   getTriggerStatusPresentation,
@@ -37,6 +38,22 @@ describe("a stream subscriber's verdict", () => {
   });
 });
 
+describe("what the platform did with an event", () => {
+  it("is in flight until every subscriber reacted, and an error is a failure", () => {
+    expect(getEventProcessingStatusPresentation("processing").kind).toBe(
+      "running"
+    );
+    expect(getEventProcessingStatusPresentation("error").kind).toBe("failed");
+    expect(getEventProcessingStatusPresentation("handled").kind).toBe("done");
+  });
+
+  it("asks for a look at a status this build does not know", () => {
+    expect(getEventProcessingStatusPresentation("later").kind).toBe(
+      "attention"
+    );
+  });
+});
+
 // A labelKey that is not a message key renders the raw key on screen; this
 // happened to `needs_owner` on the trigger page.
 describe("status labels are translated", () => {
@@ -54,10 +71,23 @@ describe("status labels are translated", () => {
     },
     {
       section: "EventsPage.filter",
-      keys: ["reacted", "skipped", "error", "unheard", "pending"].map(
+      keys: ["reacted", "skipped", "error", "unheard", "batched", "pending"].map(
         (s) => getStreamOutcomeStatusPresentation(s).labelKey ?? ""
       ),
       messages: (m) => m.EventsPage.filter,
+    },
+    {
+      section: "EventsPage.result",
+      keys: [
+        "queued",
+        "processing",
+        "handled",
+        "error",
+        "no_handlers",
+        "skipped",
+        "later",
+      ].map((s) => getEventProcessingStatusPresentation(s).labelKey ?? ""),
+      messages: (m) => m.EventsPage.result,
     },
   ];
 

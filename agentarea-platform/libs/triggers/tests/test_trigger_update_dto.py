@@ -5,7 +5,7 @@ from uuid import uuid4
 from agentarea_triggers.schemas.dto import TriggerUpdate
 
 
-def test_edit_payload_preserves_agent_task_and_events():
+def test_edit_payload_preserves_agent_task_and_filter():
     agent_id = uuid4()
     payload = TriggerUpdate.model_validate(
         {
@@ -13,7 +13,7 @@ def test_edit_payload_preserves_agent_task_and_events():
             "description": "Updated description",
             "agent_id": str(agent_id),
             "task_parameters": {"text": "Generate the weekly report", "budget": "2.50"},
-            "event_types": ["message"],
+            "event_filter": {"fields": {"chat.id": 42}},
         }
     )
 
@@ -23,15 +23,15 @@ def test_edit_payload_preserves_agent_task_and_events():
     assert domain.name == "Updated automation"
     assert domain.description == "Updated description"
     assert domain.task_parameters == payload.task_parameters
-    assert domain.event_types == ["message"]
+    assert domain.event_filter == {"fields": {"chat.id": 42}}
 
 
 def test_edit_payload_can_clear_event_filter():
-    assert TriggerUpdate(event_types=[]).to_domain().event_types == []
+    assert TriggerUpdate(event_filter={}).to_domain().event_filter == {}
 
 
-def test_omitted_agent_and_events_remain_unchanged():
+def test_omitted_agent_and_filter_remain_unchanged():
     domain = TriggerUpdate(name="Renamed").to_domain()
 
     assert domain.agent_id is None
-    assert domain.event_types is None
+    assert domain.event_filter is None

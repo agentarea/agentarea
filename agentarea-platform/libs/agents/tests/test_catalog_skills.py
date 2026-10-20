@@ -14,8 +14,10 @@ from agentarea_agents.application.skill_service import (
     SkillService,
     _project_catalog_skill,
 )
+from agentarea_agents.infrastructure.skill_repository import ANY_PACKAGE, SkillPackageMovedError
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.catalog_skill_repository import (
+    CatalogProvenance,
     CatalogSkillItem,
     CatalogSkillRepository,
     CatalogSkillSummary,
@@ -36,6 +38,16 @@ def _item(item_id=None, name="Built-in", version="1", installed_version=None, sp
         created_at=now,
         updated_at=now,
     )
+
+
+class AllowInstalls:
+    """The install policy with no rule in it: every install proceeds."""
+
+    async def require_allowed(self, *, registry_id, trust):
+        pass
+
+    async def run_time_rules(self):
+        return []
 
 
 class FakeSkillRepo:
@@ -104,10 +116,53 @@ class FakeSkillRepo:
             setattr(skill, k, v)
         return skill
 
+    async def set_package(
+        self, skill_id, s3_path, *, reason, catalog_version=None, expect=ANY_PACKAGE, **fields
+    ):
+        current = await self.get_by_id(skill_id)
+        if current is not None and expect is not ANY_PACKAGE and current.s3_path != expect:
+            raise SkillPackageMovedError(str(skill_id), current.s3_path)
+        skill = await self.update(skill_id, s3_path=s3_path, content=None, **fields)
+        if skill is not None:
+            await self.add_version(skill, reason=reason, catalog_version=catalog_version)
+        return skill
+
+    async def add_version(self, skill, *, reason, catalog_version=None):
+        from agentarea_agents.domain.skill_models import SkillVersion
+        from agentarea_agents.infrastructure.skill_storage_service import package_digest_of
+
+        versions = getattr(self, "versions", None)
+        if versions is None:
+            versions = self.versions = []
+        latest = next((v for v in reversed(versions) if v.skill_id == skill.id), None)
+        if not skill.s3_path or (latest is not None and latest.s3_path == skill.s3_path):
+            return latest
+        version = SkillVersion(
+            id=uuid4(),
+            skill_id=skill.id,
+            s3_path=skill.s3_path,
+            digest=package_digest_of(skill.s3_path),
+            reason=reason,
+            catalog_version=catalog_version,
+            workspace_id="w1",
+            created_by="u1",
+        )
+        versions.append(version)
+        return version
+
+    async def list_versions(self, skill_id):
+        return [v for v in getattr(self, "versions", []) if str(v.skill_id) == str(skill_id)]
+
+    async def get_version(self, skill_id, version_id):
+        return next(
+            (v for v in await self.list_versions(skill_id) if str(v.id) == str(version_id)), None
+        )
+
 
 class FakeCatalogRepo:
-    def __init__(self, items=None):
+    def __init__(self, items=None, provenance=None):
         self._items = items or []
+        self.provenance = provenance or {}
         self.installed = []
         self.list_items_calls = 0
         self.page_calls = []
@@ -159,6 +214,21 @@ class FakeCatalogRepo:
         wanted = {str(i) for i in item_ids}
         return {i.id: (i.version, i.installed_version) for i in self._items if i.id in wanted}
 
+    async def provenance_for(self, item_ids):
+        wanted = {str(i) for i in item_ids}
+        found = {
+            i.id: CatalogProvenance(
+                registry_id=str(i.registry_id),
+                registry_name="registry",
+                registry_scope="platform",
+                registry_trust=i.registry_trust,
+                removed_upstream=False,
+            )
+            for i in self._items
+            if i.id in wanted and i.registry_id
+        }
+        return {**found, **{k: v for k, v in self.provenance.items() if k in wanted}}
+
     async def get_item(self, item_id):
         return next((i for i in self._items if i.id == item_id), None)
 
@@ -185,8 +255,12 @@ class FakeFactory:
 
 
 def _service(repo, catalog, workspace_id="w1"):
+    from .fake_s3 import fake_storage
+
     uc = UserContext(user_id="u1", workspace_id=workspace_id)
-    svc = SkillService(FakeFactory(repo, uc), uc)
+    svc = SkillService(
+        FakeFactory(repo, uc), uc, storage_service=fake_storage()[0], install_guard=AllowInstalls()
+    )
     svc._get_repository = lambda: repo
     svc._get_catalog_repository = lambda: catalog
     return svc
@@ -206,7 +280,9 @@ def test_project_catalog_skill_marks_read_only_with_provenance():
     assert skill.registry_item_id == item.id
     assert skill.is_catalog is True
     assert skill.update_available is False
-    assert skill.content == "# Hello"
+    # The body is read from the package built from the spec, never the row.
+    assert skill.content is None
+    assert skill.catalog_spec == item.spec
     assert skill.source_type == "content"
     assert skill.source_url == "https://example.com"
     assert skill.created_at == item.created_at
@@ -274,7 +350,9 @@ async def test_fork_creates_owned_copy_and_marks_installed():
     assert skill.registry_item_id == item.id
     kw = repo.created_kwargs[0]
     assert kw["registry_item_id"] == item.id
-    assert kw["content"] == "# C"
+    assert kw["content"] is None
+    assert kw["s3_path"].startswith("skills/catalog/")
+    assert await svc.read_skill_md(skill) == "# C"
     assert kw["source_type"] == "content"
     assert kw["source_url"] == "https://x"
     # The install is recorded on the catalog item with the new skill id + version.
@@ -329,7 +407,7 @@ async def test_update_on_catalog_id_forks_tenant_copy():
     # A new tenant row was created (id differs from the catalog item id).
     assert str(updated.id) != item.id
     assert updated.registry_item_id == item.id
-    assert updated.content == "# Orig"
+    assert await svc.read_skill_md(updated) == "# Orig"
     assert updated.description == "new desc"
     assert catalog.installed
     assert catalog.installed[0][0] == item.id
@@ -346,7 +424,7 @@ async def test_set_content_on_catalog_id_forks_tenant_copy():
     assert updated is not None
     assert str(updated.id) != item.id
     assert updated.registry_item_id == item.id
-    assert updated.content == "# New content"
+    assert await svc.read_skill_md(updated) == "# New content"
 
 
 async def test_list_paginated_merges_catalog_and_dedups():
@@ -478,11 +556,22 @@ async def test_list_paginated_flags_update_available_on_returned_page():
         source_type="content",
         registry_item_id=forked_item.id,
     )
-    svc = _service(FakeSkillRepo([tenant_copy]), FakeCatalogRepo([forked_item]))
+    provenance = CatalogProvenance(
+        registry_id=str(uuid4()),
+        registry_name="community",
+        registry_scope="platform",
+        registry_trust="community",
+        removed_upstream=True,
+    )
+    svc = _service(
+        FakeSkillRepo([tenant_copy]),
+        FakeCatalogRepo([forked_item], provenance={forked_item.id: provenance}),
+    )
 
     page, _ = await svc.list_paginated(limit=10, offset=0)
 
     assert getattr(page[0], "update_available", False) is True
+    assert page[0].catalog_provenance == provenance
 
 
 async def test_list_paginated_from_registry_false_skips_the_catalog():

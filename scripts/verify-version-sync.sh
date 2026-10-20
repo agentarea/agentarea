@@ -24,13 +24,15 @@ else
 fi
 
 # Check Chart.yaml appVersion (NOT version - that's independent)
-CHART_APP_VERSION=$(grep "^appVersion:" "$PROJECT_ROOT/charts/agentarea/Chart.yaml" | sed 's/appVersion: //' | tr -d '"' | tr -d '[:space:]')
-if [ "$CHART_APP_VERSION" != "$EXPECTED_VERSION" ]; then
-  echo "❌ Chart.yaml appVersion: $CHART_APP_VERSION (expected: $EXPECTED_VERSION)"
-  ERRORS=$((ERRORS + 1))
-else
-  echo "✅ Chart.yaml appVersion: $CHART_APP_VERSION"
-fi
+for CHART in agentarea agentarea-dataplane; do
+  CHART_APP_VERSION=$(grep "^appVersion:" "$PROJECT_ROOT/charts/$CHART/Chart.yaml" | sed 's/appVersion: //' | tr -d '"' | tr -d '[:space:]')
+  if [ "$CHART_APP_VERSION" != "$EXPECTED_VERSION" ]; then
+    echo "❌ charts/$CHART/Chart.yaml appVersion: $CHART_APP_VERSION (expected: $EXPECTED_VERSION)"
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "✅ charts/$CHART/Chart.yaml appVersion: $CHART_APP_VERSION"
+  fi
+done
 
 # Check pyproject.toml files (exclude node_modules and .venv)
 while IFS= read -r file; do

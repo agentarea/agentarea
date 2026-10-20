@@ -1,8 +1,9 @@
-"""Channel delivery configuration.
+"""Consumer settings the broker consumers share: task-event delivery and polled-item ingest.
 
-The outbound stream / consumer group / DLQ names are config — not module
-globals — so deployments can rename them per environment (e.g. dev vs
-prod, sharded streams, tenant-isolated DLQs) without touching code.
+Replies go out through the ``delivery`` group on ``tasks.events``; polled items
+come in through the ``ingest`` group on ``streams.ingest``
+(``agentarea_common.broker.topics``). The timings, batch size and attempt cap
+here apply to both.
 """
 
 from datetime import timedelta
@@ -14,39 +15,9 @@ from .duration import Duration
 
 
 class ChannelDeliverySettings(BaseSettings):
-    """Configuration for durable channel pipelines."""
+    """Configuration for the broker consumers: task-event delivery and polled-item ingest."""
 
     model_config = SettingsConfigDict(env_prefix="AGENTAREA_CHANNEL_", extra="ignore")
-
-    IN_STREAM: str = Field(
-        default="agentarea.channel.inbound",
-        description="Broker stream that carries normalized inbound channel events.",
-    )
-
-    IN_GROUP: str = Field(
-        default="inbound",
-        description="Consumer group on IN_STREAM. All worker replicas share one group.",
-    )
-
-    IN_DLQ: str = Field(
-        default="agentarea.channel.inbound.dlq",
-        description="Stream that catches inbound events that exhausted retries or are malformed.",
-    )
-
-    OUT_STREAM: str = Field(
-        default="agentarea.channel.outbound",
-        description="Broker stream that carries pending outbound channel jobs.",
-    )
-
-    OUT_GROUP: str = Field(
-        default="delivery",
-        description="Consumer group on OUT_STREAM. All worker replicas share one group.",
-    )
-
-    OUT_DLQ: str = Field(
-        default="agentarea.channel.outbound.dlq",
-        description="Stream that catches messages that exhausted retries or hit a fatal error.",
-    )
 
     AUTOCLAIM_IDLE: Duration = Field(
         default=timedelta(minutes=1),

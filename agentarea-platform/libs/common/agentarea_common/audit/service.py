@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import UserContext
+from ..auth.credential import Credential
 from ..extensions.registry import ExtensionRegistry
 from .context import get_audit_context
 from .models import AuditEventORM
@@ -107,11 +108,14 @@ class AuditService:
     ) -> AuditEventORM:
         ctx = get_audit_context()
         metadata = dict(event_metadata or {})
-        # A key acts as its creator, so the actor is that user either way; the
-        # key that did it is the one thing the actor alone cannot tell.
-        api_key_id = getattr(self._user_context, "api_key_id", None)
-        if isinstance(api_key_id, str):
-            metadata.setdefault("api_key_id", api_key_id)
+        # A key acts as its creator, so the actor is that user either way; what
+        # they authenticated with, and where, is what the actor alone cannot tell.
+        credential = getattr(self._user_context, "credential", None)
+        if isinstance(credential, Credential):
+            metadata.setdefault("credential", credential.kind)
+            metadata.setdefault("surface", credential.surface)
+            if credential.key_id is not None:
+                metadata.setdefault("api_key_id", credential.key_id)
         return AuditEventORM(
             actor_id=actor_id or self._user_context.user_id,
             actor_type=actor_type,

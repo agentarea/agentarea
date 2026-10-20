@@ -97,6 +97,15 @@ spec:
                       outputCostPerToken:
                         type: number
                         description: "Provider cost per output token"
+                      # What a prompt token costs when the provider reads it from its
+                      # cache, and when it writes it there. Omitted: priced as any
+                      # other input token, which overstates a cached prompt.
+                      cachedInputCostPerToken:
+                        type: number
+                        description: "Provider cost per prompt token read from cache"
+                      cacheCreationInputCostPerToken:
+                        type: number
+                        description: "Provider cost per prompt token written to cache"
                       # Labels the webapp reads. "default" is the model a new agent
                       # starts on; tag exactly one. Written on every reconcile, so
                       # removing a tag here removes it from the model.

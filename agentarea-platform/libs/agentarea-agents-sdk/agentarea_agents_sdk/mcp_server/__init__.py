@@ -11,6 +11,7 @@ Usage:
     app.mount("/mcp", mcp.streamable_http_app())
 """
 
+from mcp.types import Icon
 from starlette.applications import Starlette
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -41,9 +42,14 @@ __all__ = [
 def create_mcp_server(
     toolsets: list[Toolset | BaseTool],
     name: str = "AgentArea",
-    description: str = "",
     *,
     workspace_argument: bool,
+    title: str | None = None,
+    description: str | None = None,
+    instructions: str | None = None,
+    version: str = "",
+    website_url: str | None = None,
+    icons: list[Icon] | None = None,
 ) -> ToolsetMCPServer:
     """Factory: create an MCP server from toolsets/tools.
 
@@ -54,10 +60,18 @@ def create_mcp_server(
     *workspace_argument* selects how a tool call finds its workspace: True for a
     mount that spans workspaces (each workspace-scoped tool takes a required
     ``workspace``), False for a mount whose URL pins one.
+
+    The remaining arguments are the server's identity, as ``initialize``
+    reports it to a client.
     """
     server = ToolsetMCPServer(
         name=name,
-        instructions=description,
+        title=title,
+        description=description,
+        instructions=instructions,
+        version=version,
+        website_url=website_url,
+        icons=icons,
     )
     adapter = MCPToolAdapter(server, workspace_argument=workspace_argument)
 

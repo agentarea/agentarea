@@ -9,6 +9,7 @@ from uuid import UUID
 
 import httpx
 from agentarea_common.config import get_database, get_settings
+from agentarea_common.outbound import Destination, outbound_client
 
 from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.infrastructure.repository import (
@@ -79,7 +80,7 @@ async def retire_runtime_before_mutation(
     last_error: Exception | None = None
     saw_conflict = False
 
-    async with httpx.AsyncClient(timeout=settings.TIMEOUT) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=settings.TIMEOUT) as client:
         for attempt in range(_MCP_RETIRE_RETRIES):
             try:
                 response = await client.delete(url, headers=headers)
@@ -166,7 +167,9 @@ async def _run_import(session, instance_id: UUID) -> None:
     manager_url = f"{settings.MANAGER_URL.rstrip('/')}/packages/import"
     headers = settings.manager_gateway_headers()
     try:
-        async with httpx.AsyncClient(timeout=_PACKAGE_IMPORT_TIMEOUT_SECONDS) as client:
+        async with outbound_client(
+            Destination.INTERNAL, timeout=_PACKAGE_IMPORT_TIMEOUT_SECONDS
+        ) as client:
             response = await client.post(
                 manager_url,
                 headers=headers,

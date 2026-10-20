@@ -23,9 +23,13 @@ export default function KeyMetrics({
   formattedEnd,
 }: KeyMetricsProps) {
   const t = useTranslations("TaskInfoPanel");
+  // A run booked for later has a workflow already, which reports as running.
+  const scheduled = currentStatus === "scheduled";
   // Under the status, in words: what the run is doing. A completed task that
   // waits is waiting for a follow-up; any other wait is for a reply.
-  const execution = !executionStatus
+  const execution = scheduled
+    ? t("execution.scheduled")
+    : !executionStatus
     ? isActive
       ? t("taskActive")
       : t("taskNotRunning")
@@ -69,7 +73,7 @@ export default function KeyMetrics({
       <div className="space-y-1">
         <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           <Clock className="h-3 w-3 text-primary" />
-          {t("started")}
+          {scheduled ? t("startsAt") : t("started")}
         </div>
         <div className="text-[12px] font-normal text-foreground">
           {formattedStart}

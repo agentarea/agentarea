@@ -6,7 +6,7 @@ fail() {
     exit 1
 }
 
-for command in pip pip3 pip3.12 npm npx corepack yarn pnpm; do
+for command in pip pip3 pip3.14 npm npx corepack yarn pnpm; do
     if command -v "$command" >/dev/null 2>&1; then
         fail "$command remains on PATH"
     fi

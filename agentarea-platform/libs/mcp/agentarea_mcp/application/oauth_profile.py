@@ -40,7 +40,7 @@ class OAuthProfile:
     authorization_scheme: str = "Bearer"
     client_auth_method: str = "client_secret_post"
 
-    def served_by(self, app: MCPOAuthApp) -> "OAuthProfile":
+    def served_by(self, app: MCPOAuthApp) -> OAuthProfile:
         """This profile with the platform app's endpoints, which alone receive its secret."""
         return replace(
             self,

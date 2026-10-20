@@ -87,23 +87,6 @@ def test_secrets_access_is_scoped_by_a_namespaced_rolebinding():
         ), f"{role_name} must never be bound via a ClusterRoleBinding"
 
 
-def test_registrysyncs_is_granted():
-    docs = _load_docs()
-    agentarea_rules = [
-        r
-        for d in docs
-        if d.get("kind") == "ClusterRole"
-        for r in _rules_for(d)
-        if r.get("apiGroups") == ["agentarea.io"]
-    ]
-    resources: set[str] = set()
-    for rule in agentarea_rules:
-        resources.update(rule.get("resources", []))
-
-    assert "registrysyncs" in resources
-    assert "registrysyncs/status" in resources
-
-
 def test_platformconnections_is_granted():
     resources: set[str] = set()
     for d in _load_docs():

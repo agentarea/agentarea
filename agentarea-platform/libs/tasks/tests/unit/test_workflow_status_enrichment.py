@@ -158,3 +158,25 @@ async def test_the_closed_runs_result_keeps_the_cost_and_tokens_stored_with_the_
         "own_cost": "0.02",
         "tokens_used": 900,
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored", ["blocked", "failed", "cancelled", "completed"])
+async def test_an_ended_task_keeps_its_own_status_and_reason_over_the_engines(stored):
+    task = _task(status=stored)
+    task.error_message = "The model provider's account is out of credits"
+    task.metadata = {"failure_reason": "provider_out_of_credits"}
+    service = _service(
+        {
+            "execution_status": "failed",
+            "status": "failed",
+            "success": False,
+            "error": "Workflow execution failed",
+        }
+    )
+
+    enriched = await service._enrich_task_with_workflow_status(task)
+
+    assert enriched.status == stored
+    assert enriched.error_message == "The model provider's account is out of credits"
+    assert enriched.metadata == {"failure_reason": "provider_out_of_credits"}
