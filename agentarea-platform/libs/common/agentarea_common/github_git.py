@@ -251,6 +251,9 @@ async def _download_archive(
             raise GitHubGitError(f"{what}: {e}") from e
     data = bytes(body)
     if len(data) <= ARCHIVE_CACHE_MAX_BYTES:
+        replaced = _archives.pop((repo, commit), None)
+        if replaced is not None:
+            _archive_bytes -= len(replaced)
         _archives[(repo, commit)] = data
         _archive_bytes += len(data)
         while _archive_bytes > ARCHIVE_CACHE_MAX_BYTES:
@@ -280,6 +283,12 @@ def _unpack(
                     raise GitHubArchiveTooLargeError(
                         f"{what} holds more than {MAX_ARCHIVE_MEMBERS} entries"
                     )
+                if member.isfile():
+                    # Skipping a member of a gzip stream still inflates it, so
+                    # every file counts, inside the prefix or not.
+                    unpacked += member.size
+                    if unpacked > MAX_ARCHIVE_UNPACKED_BYTES:
+                        raise GitHubArchiveTooLargeError(f"{what} unpacks to too much")
                 if root is None:
                     root = member.name.split("/", 1)[0] + "/"
                 if not member.name.startswith(root):
@@ -292,9 +301,6 @@ def _unpack(
                     content = member.linkname.encode("utf-8")
                     mode = SYMLINK_MODE
                 else:
-                    unpacked += member.size
-                    if unpacked > MAX_ARCHIVE_UNPACKED_BYTES:
-                        raise GitHubArchiveTooLargeError(f"{what} unpacks to too much")
                     stream = tar.extractfile(member)
                     content = stream.read() if stream is not None else b""
                     mode = "100755" if member.mode & 0o111 else "100644"

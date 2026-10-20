@@ -176,3 +176,29 @@ async def test_a_repository_import_downloads_the_archive_without_the_rest_api():
 
     assert data == b"PK zip"
     assert github.requests == ["https://codeload.github.com/owner/repo/zip/develop"]
+
+
+@pytest.mark.parametrize("token", [None, "t0k"])
+async def test_a_repository_zip_over_the_cap_is_refused_while_it_streams(monkeypatch, token):
+    from agentarea_agents.infrastructure import github_skill_importer as module
+
+    monkeypatch.setattr(module, "MAX_GITHUB_REPO_ZIP_BYTES", 1000)
+    sent: list[int] = []
+
+    async def chunks():
+        for _ in range(100):
+            sent.append(1)
+            yield b"x" * 500
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=chunks())
+
+    def client(**kwargs):
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(module, "safe_async_client", client)
+    reader = GitHubSkillImporter(github_token=token, transport=httpx.MockTransport(handler))
+
+    with pytest.raises(ValueError, match="exceeds"):
+        await reader.download_repo("https://github.com/owner/repo/tree/main")
+    assert len(sent) < 100

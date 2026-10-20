@@ -62,7 +62,7 @@ def _service(db_session, upstream) -> RegistryService:
         RegistryRepository(db_session),
         RegistryItemRepository(db_session),
         server_repo=None,
-        pointer_version=upstream,
+        pointer_versions=lambda: upstream,
     )
 
 
@@ -215,9 +215,68 @@ async def test_a_mirrored_pointer_without_a_tree_sha_is_versioned_by_the_tree_it
         RegistryItemRepository(db_session),
         server_repo=None,
         content_mirror=mirror,
-        pointer_version=Upstream({}),
+        pointer_versions=lambda: Upstream({}),
     )
 
     await service.sync_registry(registry.id)
 
     assert await _versions(db_session, registry) == {"pdf": "f" * 40, "xlsx": "f" * 40}
+
+
+async def test_the_checks_run_after_the_sync_on_their_own_time_budget(
+    db_session, community, monkeypatch
+):
+    # A slow GitHub must not roll the index sync back: it is committed first,
+    # and what the checks found before their budget ran out is kept.
+    import asyncio
+
+    registry, index = community
+    index["data"] = _index("a", "b")
+    monkeypatch.setattr(service_module, "POINTER_CHECK_DEADLINE_SECONDS", 0.2)
+
+    class Slow(Upstream):
+        async def __call__(self, source):
+            self.asked.append(source["path"])
+            if source["path"] == "skills/b":
+                await asyncio.sleep(5)
+            return "f" * 40
+
+    upstream = Slow({})
+    service = _service(db_session, upstream)
+    await service.sync_registry(registry.id)
+    for name in ("a", "b"):
+        await _install(db_session, registry, name, PINNED)
+
+    stats = await service.sync_registry(registry.id)
+
+    assert stats["total"] == 2
+    assert upstream.asked == ["skills/a", "skills/b"]
+    assert (await _versions(db_session, registry))["a"] == "f" * 40
+    reloaded = await RegistryRepository(db_session).get_by_id(registry.id)
+    assert reloaded.last_sync_error is None
+
+
+async def test_one_lookup_serves_every_check_of_a_sync(db_session, community):
+    registry, index = community
+    index["data"] = _index("a", "b")
+    made: list[Upstream] = []
+
+    def lookups():
+        made.append(Upstream({"skills/a": "1" * 40, "skills/b": "2" * 40}))
+        return made[-1]
+
+    service = RegistryService(
+        RegistryRepository(db_session),
+        RegistryItemRepository(db_session),
+        server_repo=None,
+        pointer_versions=lookups,
+    )
+    await service.sync_registry(registry.id)
+    for name in ("a", "b"):
+        await _install(db_session, registry, name, PINNED)
+    made.clear()
+
+    await service.sync_registry(registry.id)
+
+    assert len(made) == 1
+    assert made[0].asked == ["skills/a", "skills/b"]

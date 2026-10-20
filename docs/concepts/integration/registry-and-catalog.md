@@ -126,10 +126,12 @@ at a time or all at once. An update moves the pointer to the new package.
 
 For an installed pointer whose index names no tree SHA, every sync of an
 `upstream` registry asks the source which tree the folder is now and keeps that
-as the item's version, even when the index itself did not change. It asks about
-at most 50 installed items a sync, in `external_id` order: one `ls-refs` request
-each, and the commit's archive when the branch moved. A `mirror` registry
-versions such a pointer by the tree it stored.
+as the item's version, even when the index itself did not change. The checks run
+after the sync has committed, within their own 120-second budget, so a slow
+GitHub costs checks and never the sync. They cover at most 50 installed items a
+sync, in `external_id` order: one `ls-refs` request per repository and branch,
+and the commit's archive, unpacked once for every folder of it, when the branch
+moved. A `mirror` registry versions such a pointer by the tree it stored.
 
 Editing an installed skill copies its package into the workspace's own prefix,
 `skills/<workspace>/<skill id>/`, and edits the copy. The catalog package is

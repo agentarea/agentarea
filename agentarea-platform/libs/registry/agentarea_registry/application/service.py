@@ -66,7 +66,7 @@ from agentarea_registry.domain.models import (
 )
 from agentarea_registry.infrastructure.github_client import (
     GitHubApiError,
-    folder_tree_sha,
+    PointerTrees,
     github_source,
 )
 from agentarea_registry.infrastructure.repository import (
@@ -103,6 +103,8 @@ WORKSPACE_SYNC_DEADLINE_SECONDS = 120.0
 # Installed pointers without a tree SHA a sync asks the source about. Each is a
 # git ref read, and an archive download when the folder's branch moved.
 MAX_POINTER_CHECKS = 50
+# Their own budget, after the sync committed: a slow GitHub costs checks, not the sync.
+POINTER_CHECK_DEADLINE_SECONDS = 120.0
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -500,10 +502,10 @@ class RegistryService:
         github_source_factory: Callable[[str | None], GitHubSource] = github_source,
         content_mirror: ContentMirror | None = None,
         untrusted_client: Callable[..., httpx.AsyncClient] = _member_client,
-        pointer_version: PointerVersion = folder_tree_sha,
+        pointer_versions: Callable[[], PointerVersion] = PointerTrees,
     ):
         self.untrusted_client = untrusted_client
-        self.pointer_version = pointer_version
+        self.pointer_versions = pointer_versions
         self.credentials_resolver = credentials_resolver
         self.content_mirror = content_mirror
         self.github_source_factory = github_source_factory
@@ -879,7 +881,7 @@ class RegistryService:
         try:
             try:
                 async with asyncio.timeout(deadline):
-                    return await self._sync(registry, force)
+                    stats = await self._sync(registry, force)
             except TimeoutError as e:
                 raise RegistrySyncError(f"the sync took longer than {deadline:g} s") from e
         except Exception as e:
@@ -890,6 +892,32 @@ class RegistryService:
             except Exception:
                 logger.exception("Could not record why registry %s failed to sync", registry_id)
             raise
+        stats["pointers_checked"] = await self._check_pointers_within_budget(registry)
+        return stats
+
+    async def _check_pointers_within_budget(self, registry: Registry) -> int:
+        """Run the pointer checks after the sync committed, within their own deadline.
+
+        Each found change is committed as it is found, so a deadline or a
+        failure keeps what was checked before it and never undoes the sync.
+        """
+        progress = {"checked": 0}
+        try:
+            async with asyncio.timeout(POINTER_CHECK_DEADLINE_SECONDS):
+                await self._check_unpinned_pointers(registry, progress)
+        except TimeoutError:
+            logger.warning(
+                "Pointer checks of registry %s took longer than %g s; %d checked, the rest "
+                "wait for the next sync",
+                registry.id,
+                POINTER_CHECK_DEADLINE_SECONDS,
+                progress["checked"],
+            )
+            await self.item_repo.session.rollback()
+        except Exception:
+            logger.exception("Pointer checks of registry %s failed", registry.id)
+            await self.item_repo.session.rollback()
+        return progress["checked"]
 
     async def _sync(self, registry: Registry, force: bool) -> dict[str, Any]:
         registry_id = registry.id
@@ -917,7 +945,6 @@ class RegistryService:
             source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
         etag = f"{SYNC_FORMAT}:{source_etag}" if source_etag else None
         if not force and etag is not None and etag == registry.source_etag:
-            pointers_checked = await self._check_unpinned_pointers(registry)
             await self.registry_repo.update(
                 registry_id, last_synced_at=datetime.utcnow(), last_sync_error=None
             )
@@ -930,7 +957,6 @@ class RegistryService:
                 "skipped_items": [],
                 "out_of_source": None,
                 "deleted": 0,
-                "pointers_checked": pointers_checked,
                 "source_unchanged": True,
             }
 
@@ -1116,7 +1142,6 @@ class RegistryService:
                 out_of_source -= deleted
 
         total = new_specs + updates_flagged + unchanged
-        pointers_checked = await self._check_unpinned_pointers(registry)
         await self.registry_repo.update(
             registry_id,
             last_synced_at=datetime.utcnow(),
@@ -1136,10 +1161,9 @@ class RegistryService:
             "skipped_items": skipped_items,
             "out_of_source": out_of_source,
             "deleted": deleted,
-            "pointers_checked": pointers_checked,
         }
 
-    async def _check_unpinned_pointers(self, registry: Registry) -> int:
+    async def _check_unpinned_pointers(self, registry: Registry, progress: dict[str, int]) -> None:
         """Keep, as its version, the tree an installed pointer without a tree SHA is now.
 
         An install pins such an item to the tree SHA of what it fetched; with
@@ -1147,20 +1171,20 @@ class RegistryService:
         the two as it does for an index that carries tree SHAs. Asked of the
         source for at most ``MAX_POINTER_CHECKS`` installed items per sync, in
         ``external_id`` order; a failed check leaves that item as it was.
-        Returns how many were checked.
+        ``progress["checked"]`` counts them as they go.
         """
         if registry.registry_type != "skills" or registry.mode != "upstream":
-            return 0
-        checked = changed = 0
+            return
+        lookup = self.pointer_versions()
         for item in await self.item_repo.list_installed(registry.id):
             pointer = _unpinned_pointer(item.spec)
             if pointer is None:
                 continue
-            if checked >= MAX_POINTER_CHECKS:
+            if progress["checked"] >= MAX_POINTER_CHECKS:
                 break
-            checked += 1
+            progress["checked"] += 1
             try:
-                current = await self.pointer_version(dict((item.spec or {})["source"]))
+                current = await lookup(dict((item.spec or {})["source"]))
             except GitHubGitRateLimitError:
                 logger.warning(
                     "GitHub throttled the check of catalog skill %s; the rest wait for the "
@@ -1186,10 +1210,7 @@ class RegistryService:
                     item.version,
                 )
                 item.version = current
-                changed += 1
-        if changed:
-            await self.item_repo.session.commit()
-        return checked
+                await self.item_repo.session.commit()
 
     async def retire_registry(self, registry_id: UUID, replacements: Collection[UUID] = ()) -> int:
         """Retire a registry no source feeds any more: everything in it is out of

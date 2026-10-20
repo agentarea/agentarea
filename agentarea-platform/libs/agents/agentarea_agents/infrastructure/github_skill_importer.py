@@ -483,10 +483,7 @@ class GitHubSkillImporter:
 
         async with safe_async_client(timeout=self.DEFAULT_TIMEOUT, follow_redirects=True) as client:
             try:
-                response = await client.get(zipball_url, headers=headers)
-                self._check_response(response)
-                return response.content
-
+                return await self._bounded_download(client, zipball_url, headers)
             except httpx.TimeoutException as e:
                 raise GitHubSkillImporterError(f"Timeout downloading repository: {e}") from e
             except httpx.RequestError as e:
@@ -509,16 +506,27 @@ class GitHubSkillImporter:
             Destination.VENDOR, timeout=self.DEFAULT_TIMEOUT, transport=self._transport
         ) as client:
             try:
-                response = await client.get(url)
+                return await self._bounded_download(client, url, {})
             except httpx.TimeoutException as e:
                 raise GitHubSkillImporterError(f"Timeout downloading repository: {e}") from e
             except httpx.RequestError as e:
                 raise GitHubSkillImporterError(f"Error downloading repository: {e}") from e
-        self._check_response(response)
-        if len(response.content) > MAX_GITHUB_REPO_ZIP_BYTES:
-            mb = MAX_GITHUB_REPO_ZIP_BYTES // (1024 * 1024)
-            raise ValueError(f"GitHub repository ZIP exceeds {mb} MB limit")
-        return response.content
+
+    async def _bounded_download(
+        self, client: httpx.AsyncClient, url: str, headers: dict[str, str]
+    ) -> bytes:
+        """The body at ``url``, refused as soon as it passes the repository ZIP cap."""
+        body = bytearray()
+        async with client.stream("GET", url, headers=headers) as response:
+            if response.status_code != 200:
+                await response.aread()
+                self._check_response(response)
+            async for chunk in response.aiter_bytes():
+                body += chunk
+                if len(body) > MAX_GITHUB_REPO_ZIP_BYTES:
+                    mb = MAX_GITHUB_REPO_ZIP_BYTES // (1024 * 1024)
+                    raise ValueError(f"GitHub repository ZIP exceeds {mb} MB limit")
+        return bytes(body)
 
     async def get_repo_info(self, github_url: str) -> dict:
         """Get repository information from GitHub API.

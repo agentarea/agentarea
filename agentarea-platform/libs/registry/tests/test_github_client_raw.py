@@ -8,11 +8,13 @@ import pytest
 from agentarea_common import github_git
 from agentarea_common.github_git import git_blob_sha, git_tree_shas
 from agentarea_registry.application.github_index import build_github_skill_index
+from agentarea_registry.infrastructure import github_client
 from agentarea_registry.infrastructure.github_client import (
     RAW_READ_BYTES,
     ArchiveGitHubSource,
     GitHubApiError,
     HttpGitHubSource,
+    PointerTrees,
     github_source,
 )
 
@@ -22,8 +24,10 @@ COMMIT = "c" * 40
 @pytest.fixture(autouse=True)
 def _fresh_archives():
     github_git.clear_archive_cache()
+    github_client.clear_commit_trees()
     yield
     github_git.clear_archive_cache()
+    github_client.clear_commit_trees()
 
 
 async def test_a_file_is_read_raw_at_the_commit_with_the_token():
@@ -116,3 +120,41 @@ async def test_a_repository_the_archive_cannot_find_is_a_404():
     with pytest.raises(GitHubApiError) as error:
         await source.head("acme/gone", None)
     assert error.value.status_code == 404
+
+
+async def test_pointers_of_one_repository_cost_one_ref_read_and_one_unpack(monkeypatch):
+    requests: list[str] = []
+    unpacks: list[str] = []
+    line = f"{COMMIT} refs/heads/main\n".encode()
+    real_read = github_git.read_archive
+
+    async def counting_read(repo, commit, **kwargs):
+        unpacks.append(commit)
+        return await real_read(repo, commit, **kwargs)
+
+    monkeypatch.setattr(github_git, "read_archive", counting_read)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.host)
+        if request.url.host == "github.com":
+            return httpx.Response(200, content=b"%04x" % (len(line) + 4) + line + b"0000")
+        return httpx.Response(200, content=_tarball())
+
+    lookup = PointerTrees(transport=httpx.MockTransport(handler))
+    pdf = await lookup({"type": "github", "repo": "acme/skills", "path": "skills/pdf", "ref": "main"})
+    xlsx = await lookup({"type": "github", "repo": "acme/skills", "path": "skills/xlsx", "ref": "main"})
+
+    expected = git_tree_shas(
+        {
+            p[len("skills/pdf/") :]: ("100644", git_blob_sha(d))
+            for p, d in FILES.items()
+            if p.startswith("skills/pdf/")
+        }
+    )[""]
+    assert pdf == expected
+    assert xlsx != pdf
+    assert requests == ["github.com", "codeload.github.com"]
+    assert unpacks == [COMMIT]
+    with pytest.raises(GitHubApiError) as gone:
+        await lookup({"type": "github", "repo": "acme/skills", "path": "absent", "ref": "main"})
+    assert gone.value.status_code == 404

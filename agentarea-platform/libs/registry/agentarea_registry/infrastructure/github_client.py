@@ -7,6 +7,7 @@ the listing, the tree SHAs and the SKILL.md files come from the commit's archive
 (``agentarea_common.github_git``).
 """
 
+import asyncio
 import posixpath
 from collections import OrderedDict
 from typing import Any
@@ -24,9 +25,9 @@ RAW_READ_BYTES = 64 * 1024
 SKILL_FILE = "SKILL.md"
 # SKILL.md bodies an archive listing keeps, at most RAW_READ_BYTES each read.
 MAX_ARCHIVE_SKILL_BYTES = 64 * 1024 * 1024
-# A folder's tree at a commit never changes: (repo, commit, path) -> tree SHA.
-FOLDER_TREE_CACHE_ENTRIES = 4096
-_folder_trees: OrderedDict[tuple[str, str, str], str] = OrderedDict()
+# A commit's folder trees never change: (repo, commit) -> {folder: tree SHA}.
+COMMIT_TREE_CACHE_ENTRIES = 32
+_commit_trees: OrderedDict[tuple[str, str], dict[str, str]] = OrderedDict()
 
 
 class GitHubApiError(RuntimeError):
@@ -159,28 +160,55 @@ def github_source(token: str | None) -> HttpGitHubSource | ArchiveGitHubSource:
     return HttpGitHubSource(token) if token else ArchiveGitHubSource()
 
 
-async def folder_tree_sha(
-    source: dict[str, Any], *, transport: httpx.AsyncBaseTransport | None = None
-) -> str:
-    """The tree SHA a GitHub pointer's folder is now, read token-free.
+def clear_commit_trees() -> None:
+    _commit_trees.clear()
 
-    One git ref read when the pointer names a branch (or none); the commit's
-    archive only the first time a folder is asked about at that commit.
+
+async def commit_tree_shas(
+    repo: str, commit: str, *, transport: httpx.AsyncBaseTransport | None = None
+) -> dict[str, str]:
+    """The tree SHA of every folder of ``repo`` at ``commit`` (``""`` the root), token-free.
+
+    A commit never changes, so its archive is unpacked once per process and
+    the answer is kept for the last ``COMMIT_TREE_CACHE_ENTRIES`` commits.
     """
-    repo, path = str(source["repo"]), str(source.get("path") or "").strip("/")
-    commit = await github_git.resolve_commit(repo, source.get("ref"), transport=transport)
-    key = (repo, commit, path)
-    cached = _folder_trees.get(key)
+    key = (repo, commit)
+    cached = _commit_trees.get(key)
     if cached is not None:
-        _folder_trees.move_to_end(key)
+        _commit_trees.move_to_end(key)
         return cached
     files = await github_git.read_archive(
-        repo, commit, prefix=path, keep=lambda _path, _mode: False, transport=transport
+        repo, commit, prefix="", keep=lambda _path, _mode: False, transport=transport
     )
-    if not files:
-        raise GitHubApiError(f"{repo}/{path} is not in {repo} at {commit}", 404)
-    tree = github_git.git_tree_shas({p: (f.mode, f.sha) for p, f in files.items()})[""]
-    _folder_trees[key] = tree
-    while len(_folder_trees) > FOLDER_TREE_CACHE_ENTRIES:
-        _folder_trees.popitem(last=False)
-    return tree
+    trees = await asyncio.to_thread(
+        github_git.git_tree_shas, {p: (f.mode, f.sha) for p, f in files.items()}
+    )
+    _commit_trees[key] = trees
+    while len(_commit_trees) > COMMIT_TREE_CACHE_ENTRIES:
+        _commit_trees.popitem(last=False)
+    return trees
+
+
+class PointerTrees:
+    """The tree a GitHub pointer's folder is now, read token-free; one per run of checks.
+
+    Each ``(repo, ref)`` is resolved once per instance (one git ref read for
+    every pointer at that branch) and each commit unpacked once per process.
+    """
+
+    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
+        self._commits: dict[tuple[str, str | None], str] = {}
+
+    async def __call__(self, source: dict[str, Any]) -> str:
+        repo, path = str(source["repo"]), str(source.get("path") or "").strip("/")
+        ref = source.get("ref")
+        commit = self._commits.get((repo, ref))
+        if commit is None:
+            commit = self._commits[(repo, ref)] = await github_git.resolve_commit(
+                repo, ref, transport=self._transport
+            )
+        tree = (await commit_tree_shas(repo, commit, transport=self._transport)).get(path)
+        if tree is None:
+            raise GitHubApiError(f"{repo}/{path} is not in {repo} at {commit}", 404)
+        return tree

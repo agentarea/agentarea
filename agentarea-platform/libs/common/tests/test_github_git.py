@@ -229,3 +229,14 @@ async def test_kept_content_over_its_cap_is_refused():
 async def test_an_archive_that_is_not_there_is_not_found():
     with pytest.raises(GitHubGitNotFoundError):
         await read_archive("owner/repo", "d" * 40, prefix="", transport=transport(FakeGitHub()))
+
+
+async def test_what_is_unpacked_outside_the_prefix_counts_against_the_cap(monkeypatch):
+    # Skipping a member of a gzip stream still inflates it: a small archive of
+    # zeros beside the folder must not make a worker inflate gigabytes.
+    monkeypatch.setattr(github_git, "MAX_ARCHIVE_UNPACKED_BYTES", 10_000)
+    big = {"pdf/SKILL.md": ("100644", b"# s"), "other/zeros.bin": ("100644", b"\0" * 20_000)}
+    github = FakeGitHub(tarball=archive(big))
+
+    with pytest.raises(GitHubArchiveTooLargeError, match="unpacks"):
+        await read_archive("owner/repo", COMMIT, prefix="pdf", transport=transport(github))
