@@ -136,7 +136,7 @@ async def limit_a2a_rpc(
     """
     if subject is None:
         identity = f"ip:{_client_ip(request)}"
-    elif subject.credential.key_id is not None:
+    elif subject.credential is not None and subject.credential.key_id is not None:
         identity = f"api-key:{subject.credential.key_id}"
     else:
         identity = f"user:{subject.user_id}"

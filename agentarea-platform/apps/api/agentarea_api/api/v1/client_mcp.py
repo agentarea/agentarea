@@ -254,7 +254,8 @@ async def _effective_tool_policy(session: AsyncSession, user_ctx: UserContext) -
 def _actor_type(principal, client_id: str) -> str:
     if principal.client_id == client_id:
         return "client"
-    return "api_key" if principal.credential.kind == "api_key" else "user"
+    credential = principal.credential
+    return "api_key" if credential is not None and credential.kind == "api_key" else "user"
 
 
 async def _enter_client(session: AsyncSession, client_id: str) -> UserContext | None:

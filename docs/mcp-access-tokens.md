@@ -325,7 +325,7 @@ Base path: `/v1/workspaces/{workspace}/api-keys`
 A PAT grants access to **all MCP instances in its workspace**. Treat it with the same care as a root API key. If a token is compromised, revoke it immediately via `DELETE /v1/workspaces/{workspace}/api-keys/{id}` — revocation takes effect instantly.
 </Warning>
 
-A token acts as the user who created it, with that user's roles, in the one workspace it was issued for. If the creator may invite members or grant access, so may the token. A token cannot create or revoke tokens, link a messenger account, or create or join a workspace: those need a signed-in session, so a leaked token cannot outlive its own revocation. Audit events name the token in `event_metadata.api_key_id`.
+A token acts as the user who created it, with that user's roles, in the one workspace it was issued for. If the creator may invite members or grant access, so may the token, and what it did stays done after it is revoked, as it would had the creator done it by hand. A token cannot create or revoke tokens, link a messenger account, or create or join a workspace, so it cannot mint a credential that outlives it. Audit events name the token in `event_metadata.api_key_id`; review them after revoking a leaked one.
 
 ---
 

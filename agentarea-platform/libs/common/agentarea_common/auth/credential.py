@@ -37,9 +37,15 @@ class Credential:
 
     @property
     def scopes(self) -> frozenset[Scope]:
-        if self.kind == "api_key":
-            return frozenset()
-        return frozenset(Scope)
+        return _SCOPES_BY_KIND.get(self.kind, frozenset())
+
+
+# Named per kind, so a kind added without an entry is granted nothing.
+_SCOPES_BY_KIND: dict[str, frozenset[Scope]] = {
+    "session": frozenset(Scope),
+    "oauth": frozenset(Scope),
+    "api_key": frozenset(),
+}
 
 
 # A user signed in through the identity provider.

@@ -31,8 +31,11 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from agentarea_common.auth.credential import Scope
 
 from .base_tool import ToolError
 
@@ -105,7 +108,7 @@ def requires_workspace_admin() -> Callable[[Any], Any]:
     return _enforcing({"action": "administer", "resource_type": "workspace"}, check)
 
 
-def requires_scope(scope: Any, action: str) -> Callable[[Any], Any]:
+def requires_scope(scope: Scope, action: str) -> Callable[[Any], Any]:
     """Demand that the call's credential grants ``scope``.
 
     The tool counterpart of ``route_authz.requires_scope``. It narrows the

@@ -7,7 +7,7 @@ must raise rather than invent one.
 
 from dataclasses import dataclass
 
-from .credential import SESSION, Credential, Scope, ScopeRequiredError
+from .credential import Credential, Scope, ScopeRequiredError
 
 
 @dataclass
@@ -83,7 +83,8 @@ class UserPrincipal:
     bound_workspace_id: str | None = None
     # An agent's key reaches that one agent over A2A and no workspace at all.
     bound_agent_id: str | None = None
-    credential: Credential = SESSION
+    # Set by authentication; a principal built without one is granted no scopes.
+    credential: Credential | None = None
     # ``None`` until resolved per request; ``[]`` means resolved and none.
     accessible_workspaces: list[str] | None = None
     admin_workspaces: list[str] | None = None

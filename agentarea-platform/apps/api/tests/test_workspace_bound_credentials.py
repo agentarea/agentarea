@@ -8,9 +8,12 @@ cannot create new workspaces or join others on its owner's behalf.
 from unittest.mock import MagicMock
 
 import pytest
+from agentarea_agents_sdk.mcp_server.auth import use_mcp_user_context
+from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.api.v1 import workspace_invitations, workspaces
+from agentarea_api.tools.workspaces_toolset import WorkspacesToolset
 from agentarea_api.main import app
-from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.context import UserContext, UserPrincipal
 from agentarea_common.auth.credential import Credential
 from agentarea_common.auth.dependencies import authenticate_principal, get_principal
 from fastapi.testclient import TestClient
@@ -61,3 +64,25 @@ def test_an_api_key_cannot_accept_an_invitation(client):
 
     assert response.status_code == 403, response.text
     service.accept.assert_not_called()
+
+
+def test_an_api_key_cannot_link_a_messenger_account(client):
+    http, _ = client
+
+    response = http.post("/v1/me/external-identities/telegram/link", json={"bot": "aa_bot"})
+
+    assert response.status_code == 403, response.text
+    assert "This credential cannot link a messenger account" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "caller",
+    [API_KEY, UserContext(user_id="alice", workspace_id="ws-issued")],
+    ids=["api-key", "agent-run"],
+)
+async def test_the_mcp_tool_refuses_to_create_a_workspace(caller):
+    with (
+        use_mcp_user_context(caller),
+        pytest.raises(ToolError, match="This credential cannot create workspaces"),
+    ):
+        await WorkspacesToolset().create(name="Elsewhere")

@@ -21,7 +21,7 @@ from agentarea_api.api.v1.api_keys import get_api_key_service
 from agentarea_api.main import app
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserPrincipal
-from agentarea_common.auth.credential import Credential
+from agentarea_common.auth.credential import Credential, SESSION
 from agentarea_common.auth.dependencies import authenticate_principal
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.config.database import get_db_session
@@ -43,7 +43,7 @@ def _api_key() -> UserPrincipal:
 
 
 def _signed_in() -> UserPrincipal:
-    return UserPrincipal(user_id="alice")
+    return UserPrincipal(user_id="alice", credential=SESSION)
 
 
 @pytest.fixture(autouse=True)

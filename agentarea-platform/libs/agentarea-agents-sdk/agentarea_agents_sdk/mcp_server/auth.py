@@ -222,7 +222,8 @@ class MCPAuthMiddleware:
                 logger.info("MCP auth: refused a key bound to agent %s", principal.bound_agent_id)
                 return False
             # What the caller does here is recorded as done over MCP.
-            principal.credential = replace(principal.credential, surface="mcp")
+            if principal.credential is not None:
+                principal.credential = replace(principal.credential, surface="mcp")
             caller = await _select_workspace(principal, pinned_workspace)
             if caller is None:
                 return True

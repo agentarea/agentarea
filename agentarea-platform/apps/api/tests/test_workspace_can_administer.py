@@ -19,7 +19,7 @@ from agentarea_api.tools import workspaces_toolset
 from agentarea_api.tools.workspaces_toolset import WorkspacesToolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext, UserPrincipal
-from agentarea_common.auth.credential import Credential
+from agentarea_common.auth.credential import Credential, SESSION
 from agentarea_common.auth.dependencies import get_principal
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import get_container
@@ -41,6 +41,7 @@ def _alice(**overrides) -> UserPrincipal:
         "user_id": "alice",
         "accessible_workspaces": ["alice", "ws-acme", "ws-other"],
         "admin_workspaces": ["ws-acme"],
+        "credential": SESSION,
     }
     fields.update(overrides)
     return UserPrincipal(**fields)
