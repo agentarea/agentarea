@@ -14,11 +14,12 @@ on:
         default: false
   # A push whose event GitHub never delivered builds nothing, and the next push builds
   # only what that one changed (the paths filter compares against the previous commit).
-  # Dispatch on main with rebuild-images to build and push every image for its HEAD.
+  # Dispatch on main with rebuild-images to build and push every image for its HEAD;
+  # on any other ref it builds every image without pushing (Dockerfile changes on a PR).
   workflow_dispatch:
     inputs:
       rebuild-images:
-        description: 'Build and push every image for this ref'
+        description: 'Build every image for this ref (pushed only on main)'
         required: false
         type: boolean
         default: false
@@ -100,10 +101,12 @@ jobs:
 
   version-check:
     runs-on: ubuntu-latest
-    # Only run when Docker builds would run: on main, release PRs, or when called as reusable workflow
+    # Only run when Docker builds would run: on main, release PRs, a dispatch (rebuild-images
+    # off main builds without pushing), or when called as reusable workflow
     if: |
       github.ref == 'refs/heads/main' ||
       (github.event_name == 'pull_request' && startsWith(github.event.pull_request.head.ref, 'release/')) ||
+      github.event_name == 'workflow_dispatch' ||
       github.event_name == 'workflow_call'
     steps:
       - uses: actions/checkout@v7
