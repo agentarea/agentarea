@@ -681,9 +681,7 @@ async def test_malformed_workflow_command_is_rejected_and_the_run_finishes(comma
                 result = await asyncio.wait_for(handle.result(), timeout=30)
 
                 assert result.success is True
-                rejected = [
-                    e for e in _published if e.get("event_type") == "command.rejected"
-                ]
+                rejected = [e for e in _published if e.get("event_type") == "command.rejected"]
                 assert [e["data"]["command"] for e in rejected] == [command]
                 assert rejected[0]["data"]["reason"]
                 published_types = {e.get("event_type") for e in _published}

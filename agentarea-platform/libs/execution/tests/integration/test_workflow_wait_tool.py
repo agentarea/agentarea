@@ -377,7 +377,9 @@ async def test_wait_runs_in_the_position_the_model_called_it():
 
     assert result.success is True
     assert _mcp_calls == ["get_video"]
-    order = [m["tool_call_id"] for m in _TASK_LOG.messages(_llm_requests[1]) if m.get("role") == "tool"]
+    order = [
+        m["tool_call_id"] for m in _TASK_LOG.messages(_llm_requests[1]) if m.get("role") == "tool"
+    ]
     assert order == ["call_wait", "call_poll"]
 
 

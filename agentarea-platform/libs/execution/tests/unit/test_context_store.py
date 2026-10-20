@@ -26,12 +26,15 @@ def mock_aws_settings():
 @pytest.fixture
 def store(mock_s3_client, mock_aws_settings):
     """Create a ContextStore with mocked dependencies."""
-    with patch(
-        "agentarea_execution.workflows.context_store.ContextStore.client",
-        new_callable=lambda: property(lambda self: mock_s3_client),
-    ), patch(
-        "agentarea_execution.workflows.context_store.ContextStore.bucket",
-        new_callable=lambda: property(lambda self: "test-bucket"),
+    with (
+        patch(
+            "agentarea_execution.workflows.context_store.ContextStore.client",
+            new_callable=lambda: property(lambda self: mock_s3_client),
+        ),
+        patch(
+            "agentarea_execution.workflows.context_store.ContextStore.bucket",
+            new_callable=lambda: property(lambda self: "test-bucket"),
+        ),
     ):
         s = ContextStore(workspace_id="ws-1", task_id="task-1")
         s._client = mock_s3_client
@@ -123,8 +126,7 @@ class TestSearchHistory:
         """Setup paginator to return chunk objects and get_object for each."""
         paginator = MagicMock()
         contents = [
-            {"Key": f"tasks/ws-1/task-1/history/chunk_{i}.json"}
-            for i in range(len(chunks))
+            {"Key": f"tasks/ws-1/task-1/history/chunk_{i}.json"} for i in range(len(chunks))
         ]
         paginator.paginate.return_value = [{"Contents": contents}]
         mock_s3_client.get_paginator.return_value = paginator
@@ -140,12 +142,15 @@ class TestSearchHistory:
 
     @pytest.mark.asyncio
     async def test_search_by_grep(self, store, mock_s3_client):
-        self._setup_history_chunks(mock_s3_client, [
+        self._setup_history_chunks(
+            mock_s3_client,
             [
-                {"role": "user", "content": "find the error"},
-                {"role": "tool", "content": "success: ok", "name": "run"},
+                [
+                    {"role": "user", "content": "find the error"},
+                    {"role": "tool", "content": "success: ok", "name": "run"},
+                ],
             ],
-        ])
+        )
 
         result = await store.search_history(grep="error")
         assert "find the error" in result
@@ -153,12 +158,15 @@ class TestSearchHistory:
 
     @pytest.mark.asyncio
     async def test_search_by_tool_name(self, store, mock_s3_client):
-        self._setup_history_chunks(mock_s3_client, [
+        self._setup_history_chunks(
+            mock_s3_client,
             [
-                {"role": "tool", "content": "result1", "name": "github"},
-                {"role": "tool", "content": "result2", "name": "jira"},
+                [
+                    {"role": "tool", "content": "result1", "name": "github"},
+                    {"role": "tool", "content": "result2", "name": "jira"},
+                ],
             ],
-        ])
+        )
 
         result = await store.search_history(tool_name="github")
         assert "result1" in result

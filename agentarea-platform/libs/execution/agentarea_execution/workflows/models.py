@@ -3,6 +3,7 @@
 This module contains all dataclasses and type definitions used by the agent execution workflow.
 """
 
+from datetime import datetime
 from typing import Any
 
 from agentarea_common.money import ZERO, Money
@@ -132,6 +133,8 @@ class ContinueAsNewState(BaseModel):
     activated_skills: list[str] = Field(default_factory=list)
     # The tokens the activated skills' entries take in the window, all together.
     skill_tokens_used: int = 0
+    # When the continue-as-new chain's execution timeout ends it, set by its first run.
+    chain_expires_at: datetime | None = None
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
@@ -233,6 +236,8 @@ class AgentExecutionState(BaseModel):
     activated_skills: list[str] = Field(default_factory=list)
     # The tokens the activated skills' entries take in the window, all together.
     skill_tokens_used: int = 0
+    # When the continue-as-new chain's execution timeout ends it, set by its first run.
+    chain_expires_at: datetime | None = None
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0

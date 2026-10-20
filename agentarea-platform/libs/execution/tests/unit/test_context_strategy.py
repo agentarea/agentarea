@@ -1,6 +1,5 @@
 """Unit tests for ContextStrategy enum and guard functions."""
 
-
 from agentarea_execution.workflows.context_strategy import (
     ContextStrategy,
     allows_history_preservation,

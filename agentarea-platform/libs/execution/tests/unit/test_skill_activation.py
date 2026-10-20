@@ -379,3 +379,27 @@ async def test_a_run_recorded_before_the_change_activates_from_the_carried_body(
 
     assert flow.state.messages[-1].content.startswith('<skill_content name="pdf">\n# Old body')
     assert seen == [Activities.MATERIALIZE_SKILL_FILES]
+
+
+def test_the_outage_cap_counts_from_the_chains_first_run(monkeypatch):
+    # A continued run reports its own start; the execution timeout runs from the chain's.
+    from datetime import UTC, datetime, timedelta
+
+    from agentarea_execution.workflows.agent import outage
+
+    chain_start = datetime(2026, 1, 1, tzinfo=UTC)
+    run_start = chain_start + timedelta(hours=4)
+    info = SimpleNamespace(
+        execution_timeout=timedelta(hours=6),
+        workflow_start_time=run_start,
+        run_timeout=None,
+        start_time=run_start,
+    )
+    monkeypatch.setattr(outage.workflow, "info", lambda: info)
+    flow = workflow_module.AgentExecutionWorkflow()
+    flow.state.chain_expires_at = chain_start + timedelta(hours=6)
+
+    assert flow._outage_hard_cap() == chain_start + timedelta(hours=6) - timedelta(minutes=10)
+
+    flow.state.chain_expires_at = None  # a run from before the chain's expiry was carried
+    assert flow._outage_hard_cap() == run_start + timedelta(hours=6) - timedelta(minutes=10)

@@ -132,9 +132,7 @@ async def _mock_call_llm(request: LLMCallRequest) -> dict[str, Any]:
             msg.get("role") == "tool" for msg in _TASK_LOG.messages(request)
         )
         final_text = (
-            f"The weather in Berlin is: {_FAKE_TOOL_RESULT}"
-            if tool_result_in_messages
-            else "Done"
+            f"The weather in Berlin is: {_FAKE_TOOL_RESULT}" if tool_result_in_messages else "Done"
         )
         return {
             "content": "",
@@ -277,9 +275,7 @@ class TestAgentToolUseFlow:
                         f"Expected at least 2 LLM calls (tool + completion), got {len(_llm_calls)}"
                     )
                     second_call_messages = _llm_calls[1]["messages"]
-                    tool_messages = [
-                        m for m in second_call_messages if m.get("role") == "tool"
-                    ]
+                    tool_messages = [m for m in second_call_messages if m.get("role") == "tool"]
                     assert tool_messages, (
                         "Second LLM call must include a tool-role message with the tool result"
                     )

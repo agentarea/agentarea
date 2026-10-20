@@ -99,17 +99,21 @@ class OutageWaitMixin(AgentWorkflowBase):
         recorded = self.state.agent_config.get("outage_wait")
         return OutageWait.model_validate(recorded) if recorded else LEGACY_OUTAGE_WAIT
 
-    def _outage_give_up_at(self, since: datetime, wait: OutageWait) -> datetime:
-        give_up_at = since + wait.deadline
+    def _outage_hard_cap(self) -> datetime | None:
+        """The last moment the run can still record its own failure before Temporal ends it.
+
+        The execution timeout runs from the first run of a continue-as-new
+        chain, whose expiry the run carries; the run timeout from this run.
+        """
         info = workflow.info()
-        if info.execution_timeout:
-            end = info.workflow_start_time + info.execution_timeout
-            give_up_at = min(give_up_at, end - OUTAGE_FINALIZE_MARGIN)
+        ends = []
+        if self.state.chain_expires_at is not None:
+            ends.append(self.state.chain_expires_at)
+        elif info.execution_timeout:
+            ends.append(info.workflow_start_time + info.execution_timeout)
         if info.run_timeout:
-            give_up_at = min(
-                give_up_at, info.start_time + info.run_timeout - OUTAGE_FINALIZE_MARGIN
-            )
-        return give_up_at
+            ends.append(info.start_time + info.run_timeout)
+        return min(ends) - OUTAGE_FINALIZE_MARGIN if ends else None
 
     async def _execute_through_outage(
         self,
@@ -161,8 +165,16 @@ class OutageWaitMixin(AgentWorkflowBase):
             "schedule_to_close_timeout": wait.retry_window,
             "retry_policy": outage_policy(),
         }
-        give_up_at: datetime | None = None
+        deadline_at: datetime | None = None
+        hard_cap = self._outage_hard_cap()
+        paused = timedelta(0)
         tries = 0
+
+        def give_up_at() -> datetime:
+            if deadline_at is None:
+                raise RuntimeError("the outage wait has no deadline before its first failure")
+            return deadline_at if hard_cap is None else min(deadline_at, hard_cap)
+
         while True:
             # Cleared before the try, so a resume during it retries right after.
             self._retry_outage_now = False
@@ -180,26 +192,32 @@ class OutageWaitMixin(AgentWorkflowBase):
                     raise
                 reason = failure_text(error)
                 now = workflow.now()
-                if give_up_at is None:
-                    give_up_at = self._outage_give_up_at(now, wait)
+                if deadline_at is None:
+                    deadline_at = now + wait.deadline
                     await self._enter_outage_wait(outage_service(error), what, reason, wait)
-                if now >= give_up_at:
-                    raise self._gave_up(what, reason, give_up_at) from error
-            delay = min(wait.backoff[min(tries, len(wait.backoff) - 1)], give_up_at - now)
+                if now >= give_up_at():
+                    raise self._gave_up(what, reason, now, paused) from error
+            delay = min(wait.backoff[min(tries, len(wait.backoff) - 1)], give_up_at() - now)
             tries += 1
-            await self._hold_between_tries(delay)
+            held = await self._hold_between_tries(delay)
+            # Paused time is not the service's: the deadline moves with it, the
+            # run's own timeout does not.
+            paused += held
+            deadline_at = (deadline_at or now) + held
             now = workflow.now()
-            if now > give_up_at:
-                raise self._gave_up(what, reason, give_up_at)
-            window = max(give_up_at - now, OUTAGE_LAST_TRY)
+            if now > give_up_at() and not (held and (hard_cap is None or now < hard_cap)):
+                raise self._gave_up(what, reason, now, paused)
+            window = max(give_up_at() - now, OUTAGE_LAST_TRY)
             try_timeout = min(ACTIVITY_TIMEOUT, wait.retry_window, window)
             options = {
                 "schedule_to_close_timeout": window,
                 "retry_policy": make_retry_policy(OUTAGE_TRY_ATTEMPTS),
             }
 
-    def _gave_up(self, what: str, reason: str, give_up_at: datetime) -> ApplicationError:
-        waited = give_up_at - (self._outage_since or give_up_at)
+    def _gave_up(
+        self, what: str, reason: str, now: datetime, paused: timedelta
+    ) -> ApplicationError:
+        waited = now - (self._outage_since or now) - paused
         service = self._outage_service or "A service"
         return ApplicationError(
             f"{service} stayed unreachable for {_span(waited)} while {what}: {reason}",
@@ -207,16 +225,19 @@ class OutageWaitMixin(AgentWorkflowBase):
             non_retryable=True,
         )
 
-    async def _hold_between_tries(self, delay: timedelta) -> None:
-        """Sleep ``delay``, or less on a resume; never retry while the run is paused."""
+    async def _hold_between_tries(self, delay: timedelta) -> timedelta:
+        """Sleep ``delay``, or less on a resume; never retry while paused. The time paused."""
         try:
             await workflow.wait_condition(
                 lambda: self._retry_outage_now and not self._paused, timeout=delay
             )
         except TimeoutError:
             pass
-        if self._paused:
-            await workflow.wait_condition(lambda: not self._paused)
+        if not self._paused:
+            return timedelta(0)
+        paused_at = workflow.now()
+        await workflow.wait_condition(lambda: not self._paused)
+        return workflow.now() - paused_at
 
     def _clear_outage_wait(self) -> None:
         self._waiting_for_outage = False

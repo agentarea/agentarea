@@ -79,6 +79,11 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             await self._restore_from_continued_state(request.continued_state)
             return
 
+        # A continued run reports its own start; the chain's timeout runs from this one.
+        info = workflow.info()
+        if info.execution_timeout:
+            self.state.chain_expires_at = info.workflow_start_time + info.execution_timeout
+
         # Populate state attributes
         self.state.execution_id = workflow.info().workflow_id
         self.state.agent_id = str(request.agent_id)

@@ -50,12 +50,8 @@ class TestServerIconFromInstance:
             _server_icon_from_instance,
         )
 
-        instance = SimpleNamespace(
-            json_spec={"icons": [{"src": "https://example.com/icon.png"}]}
-        )
-        assert (
-            _server_icon_from_instance(instance) == "https://example.com/icon.png"
-        )
+        instance = SimpleNamespace(json_spec={"icons": [{"src": "https://example.com/icon.png"}]})
+        assert _server_icon_from_instance(instance) == "https://example.com/icon.png"
 
     def test_returns_first_when_multiple_icons(self):
         from agentarea_execution.activities.agent.tools import (

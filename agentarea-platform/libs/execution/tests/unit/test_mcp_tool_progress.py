@@ -43,9 +43,7 @@ def harness(monkeypatch):
     broker = MagicMock(submit=AsyncMock(), notify=AsyncMock())
     deps = MagicMock(broker_client=broker)
     fns = {fn.__name__: fn for fn in activities.make_agent_activities(deps)}
-    return SimpleNamespace(
-        ctx=ctx, broker=broker, activity=fns["execute_mcp_tool_activity"]
-    )
+    return SimpleNamespace(ctx=ctx, broker=broker, activity=fns["execute_mcp_tool_activity"])
 
 
 @pytest.mark.asyncio

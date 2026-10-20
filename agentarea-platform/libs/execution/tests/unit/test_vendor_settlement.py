@@ -24,7 +24,10 @@ APIFY = {
             "params": {"run_id": "$.runId"},
             "cost": "$.data.usageTotalUsd",
             "currency": "USD",
-            "done": {"path": "$.data.status", "in": ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"]},
+            "done": {
+                "path": "$.data.status",
+                "in": ["SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"],
+            },
         }
     },
 }
@@ -54,7 +57,10 @@ def apify(monkeypatch):
         return answers.get(request.url.path, httpx.Response(404, json={"error": "not found"}))
 
     connection = ToolConnection(
-        "conn", "com.apify/apify-mcp-server", "apify--rag-web-browser", Payer.WORKSPACE,
+        "conn",
+        "com.apify/apify-mcp-server",
+        "apify--rag-web-browser",
+        Payer.WORKSPACE,
         parse_cost_model(APIFY),
     )
 
@@ -72,7 +78,9 @@ def apify(monkeypatch):
         "safe_async_client",
         lambda **kw: httpx.AsyncClient(transport=httpx.MockTransport(handle), **kw),
     )
-    return SimpleNamespace(seen=seen, answers=answers, settle=vendor_settlement.make_vendor_settle(None))
+    return SimpleNamespace(
+        seen=seen, answers=answers, settle=vendor_settlement.make_vendor_settle(None)
+    )
 
 
 async def test_a_running_run_is_not_settled_and_a_finished_one_is_its_usage(apify):

@@ -68,9 +68,7 @@ async def test_terminal_control_flow_does_not_consume_tool_call_budget(tool_name
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "tool_name", sorted(CONTROL_FLOW_TOOL_NAMES - UNMETERED_TOOL_CALL_NAMES)
-)
+@pytest.mark.parametrize("tool_name", sorted(CONTROL_FLOW_TOOL_NAMES - UNMETERED_TOOL_CALL_NAMES))
 async def test_repeatable_control_flow_still_consumes_budget(tool_name: str) -> None:
     """Disclosure exempts these from policy; the quota still has to bound them.
 

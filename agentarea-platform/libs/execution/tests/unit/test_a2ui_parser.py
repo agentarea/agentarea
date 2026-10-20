@@ -23,13 +23,17 @@ class TestParseA2UIResponse:
         assert result.a2ui_events == []
 
     def test_valid_create_surface(self):
-        content = f"Here is your form.\n\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [{
-                "type": "A2UICreateSurface",
-                "surface_id": "s1",
-                "catalog_id": "https://a2ui.org/specification/v0_9/basic_catalog.json",
-            }]
-        })
+        content = f"Here is your form.\n\n{A2UI_DELIMITER}\n" + json.dumps(
+            {
+                "events": [
+                    {
+                        "type": "A2UICreateSurface",
+                        "surface_id": "s1",
+                        "catalog_id": "https://a2ui.org/specification/v0_9/basic_catalog.json",
+                    }
+                ]
+            }
+        )
         result = parse_a2ui_response(content)
         assert result.text_content == "Here is your form."
         assert len(result.a2ui_events) == 1
@@ -38,25 +42,27 @@ class TestParseA2UIResponse:
         assert result.parse_error is None
 
     def test_valid_multiple_events(self):
-        content = f"UI ready.\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [
-                {"type": "A2UICreateSurface", "surface_id": "s1"},
-                {
-                    "type": "A2UIUpdateComponents",
-                    "surface_id": "s1",
-                    "components": [
-                        {"id": "root", "component": "Column", "children": ["title"]},
-                        {"id": "title", "component": "Text", "text": "Hello"},
-                    ],
-                },
-                {
-                    "type": "A2UIUpdateDataModel",
-                    "surface_id": "s1",
-                    "path": "/user/name",
-                    "value": "Jane",
-                },
-            ]
-        })
+        content = f"UI ready.\n{A2UI_DELIMITER}\n" + json.dumps(
+            {
+                "events": [
+                    {"type": "A2UICreateSurface", "surface_id": "s1"},
+                    {
+                        "type": "A2UIUpdateComponents",
+                        "surface_id": "s1",
+                        "components": [
+                            {"id": "root", "component": "Column", "children": ["title"]},
+                            {"id": "title", "component": "Text", "text": "Hello"},
+                        ],
+                    },
+                    {
+                        "type": "A2UIUpdateDataModel",
+                        "surface_id": "s1",
+                        "path": "/user/name",
+                        "value": "Jane",
+                    },
+                ]
+            }
+        )
         result = parse_a2ui_response(content)
         assert result.text_content == "UI ready."
         assert len(result.a2ui_events) == 3
@@ -87,39 +93,43 @@ class TestParseA2UIResponse:
         assert "'events' must be a list" in result.parse_error
 
     def test_unknown_event_type_skipped(self):
-        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [
-                {"type": "A2UICreateSurface", "surface_id": "s1"},
-                {"type": "UnknownType", "surface_id": "s1"},
-            ]
-        })
+        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps(
+            {
+                "events": [
+                    {"type": "A2UICreateSurface", "surface_id": "s1"},
+                    {"type": "UnknownType", "surface_id": "s1"},
+                ]
+            }
+        )
         result = parse_a2ui_response(content)
         assert len(result.a2ui_events) == 1
         assert result.a2ui_events[0]["type"] == "A2UICreateSurface"
 
     def test_missing_surface_id_skipped(self):
-        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [
-                {"type": "A2UICreateSurface"},  # no surface_id
-                {"type": "A2UIDeleteSurface", "surface_id": "s1"},
-            ]
-        })
+        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps(
+            {
+                "events": [
+                    {"type": "A2UICreateSurface"},  # no surface_id
+                    {"type": "A2UIDeleteSurface", "surface_id": "s1"},
+                ]
+            }
+        )
         result = parse_a2ui_response(content)
         assert len(result.a2ui_events) == 1
         assert result.a2ui_events[0]["type"] == "A2UIDeleteSurface"
 
     def test_delimiter_at_start_empty_text(self):
-        content = f"{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [{"type": "A2UICreateSurface", "surface_id": "s1"}]
-        })
+        content = f"{A2UI_DELIMITER}\n" + json.dumps(
+            {"events": [{"type": "A2UICreateSurface", "surface_id": "s1"}]}
+        )
         result = parse_a2ui_response(content)
         assert result.text_content == ""
         assert len(result.a2ui_events) == 1
 
     def test_text_whitespace_trimmed(self):
-        content = f"Hello world   \n\n\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [{"type": "A2UICreateSurface", "surface_id": "s1"}]
-        })
+        content = f"Hello world   \n\n\n{A2UI_DELIMITER}\n" + json.dumps(
+            {"events": [{"type": "A2UICreateSurface", "surface_id": "s1"}]}
+        )
         result = parse_a2ui_response(content)
         assert result.text_content == "Hello world"
 
@@ -130,12 +140,14 @@ class TestParseA2UIResponse:
         assert "must be a JSON object" in result.parse_error
 
     def test_non_dict_event_skipped(self):
-        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [
-                "not an object",
-                {"type": "A2UICreateSurface", "surface_id": "s1"},
-            ]
-        })
+        content = f"text\n{A2UI_DELIMITER}\n" + json.dumps(
+            {
+                "events": [
+                    "not an object",
+                    {"type": "A2UICreateSurface", "surface_id": "s1"},
+                ]
+            }
+        )
         result = parse_a2ui_response(content)
         assert len(result.a2ui_events) == 1
 
@@ -159,9 +171,9 @@ class TestParseA2UIResponse:
         assert result.parse_error is None
 
     def test_delete_surface_event(self):
-        content = f"Removing UI.\n{A2UI_DELIMITER}\n" + json.dumps({
-            "events": [{"type": "A2UIDeleteSurface", "surface_id": "s1"}]
-        })
+        content = f"Removing UI.\n{A2UI_DELIMITER}\n" + json.dumps(
+            {"events": [{"type": "A2UIDeleteSurface", "surface_id": "s1"}]}
+        )
         result = parse_a2ui_response(content)
         assert result.text_content == "Removing UI."
         assert len(result.a2ui_events) == 1

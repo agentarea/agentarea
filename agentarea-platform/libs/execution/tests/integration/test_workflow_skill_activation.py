@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import json
+import re
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -63,6 +64,9 @@ class Scenario:
         self.skills = ["pdf"]
         self.skills_window_share: float | None = None
         self.withheld: list[dict[str, str]] = []
+        # An outage per skill, from that skill's first activation attempt.
+        self.outage_by_skill: dict[str, timedelta] = {}
+        self.outage_started_by_skill: dict[str, datetime] = {}
         # Configs built before activation read the package carried the body.
         self.carry_body = False
         self.attempts = 0
@@ -149,6 +153,14 @@ async def _activate_skill(request: ActivateSkillRequest) -> ActivateSkillResult:
     if S.refusal is not None:
         raise ApplicationError(S.refusal, type="SkillActivationRefused", non_retryable=True)
     now = activity.info().current_attempt_scheduled_time
+    if request.skill_name in S.outage_by_skill:
+        started = S.outage_started_by_skill.setdefault(request.skill_name, now)
+        if now - started < S.outage_by_skill[request.skill_name]:
+            raise ApplicationError(
+                "Object storage is unreachable: connection refused",
+                {"service": "Object storage"},
+                type="ServiceUnreachable",
+            )
     if S.outage is not None:
         if S.outage_started is None:
             S.outage_started = now
@@ -502,3 +514,56 @@ async def test_a_skill_the_policy_withholds_is_named_in_the_runs_feed():
     [withheld] = [e for e in S.published if e["event_type"] == "skill.withheld"]
     assert withheld["data"]["skill_name"] == "community-pdf"
     assert withheld["data"]["reason"] == "denied by registry_trust:community"
+
+
+async def test_a_pause_across_the_deadline_tries_again_before_giving_up():
+    # Storage is back after 8 min; the run was paused for 26 h meanwhile.
+    S.outage = timedelta(minutes=8)
+
+    async def pause_past_the_deadline(env, handle):
+        await env.sleep(timedelta(minutes=6))
+        await handle.signal(AgentExecutionWorkflow.pause_execution, "hold on")
+        await env.sleep(timedelta(hours=26))
+        await handle.signal(AgentExecutionWorkflow.resume_execution, "go on")
+
+    result, _ = await _run(during=pause_past_the_deadline)
+
+    assert result.success is True
+    assert _skill_messages(1)[0].startswith('<skill_content name="pdf">')
+    assert "failed" not in _status_values()
+
+
+async def test_after_a_continue_as_new_the_wait_still_ends_before_the_chains_timeout(
+    monkeypatch,
+):
+    # A delegated agent under a 3 h execution timeout: the first run waits out a
+    # 2 h outage and continues as new; the next run's wait must end before the
+    # chain's timeout, not 3 h after its own start.
+    from temporalio import workflow as temporal_workflow
+
+    S.skills = ["pdf", "docx"]
+    S.outage_by_skill = {"pdf": timedelta(hours=2), "docx": timedelta(hours=100)}
+    suggested = []
+
+    def continue_as_new_suggested(_info):
+        if "pdf" in S.outage_started_by_skill and not suggested and len(S.model_saw) == 1:
+            suggested.append(True)
+            return True
+        return False
+
+    monkeypatch.setattr(
+        temporal_workflow.Info, "is_continue_as_new_suggested", continue_as_new_suggested
+    )
+
+    result, history = await _run(execution_timeout=timedelta(hours=3))
+
+    assert suggested
+    assert isinstance(result, WorkflowFailureError)
+    assert getattr(result.cause, "type", None) == "DependencyUnavailable"
+    failed = [request for request in S.statuses if request.status == "failed"]
+    assert failed and failed[-1].failure_reason == "dependency_unavailable"
+    # The second wait began past 2 h, so it ends within the hour left, not 24 h on.
+    waited = re.search(r"stayed unreachable for (\d+) (h|min|s) ", failed[-1].error_message or "")
+    assert waited is not None, failed[-1].error_message
+    seconds = int(waited.group(1)) * {"h": 3600, "min": 60, "s": 1}[waited.group(2)]
+    assert seconds < 3600, waited.group(0)
