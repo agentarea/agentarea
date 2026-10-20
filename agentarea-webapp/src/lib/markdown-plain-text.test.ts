@@ -21,6 +21,10 @@ describe("markdownToPlainText", () => {
     ).toBe("Open a new issue. · title is required · labels are optional · first");
   });
 
+  it("leaves no tag behind when stripping one joins the halves of another", () => {
+    expect(markdownToPlainText("a <scr<script>ipt>alert(1)</script> b")).not.toMatch(/[<>]/);
+  });
+
   it("keeps link labels and drops images, headings and HTML", () => {
     expect(
       markdownToPlainText(

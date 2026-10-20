@@ -10,6 +10,9 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links: keep the label
     .replace(/<[^>]+>/g, "") // inline HTML
+    // Whatever angle brackets are left: removing a tag can join the halves of
+    // a nested one ("<scr<script>ipt>") into a new one.
+    .replace(/[<>]/g, "")
     .replace(/`([^`]*)`/g, "$1") // inline code
     .replace(/(\*\*|__)(.+?)\1/g, "$2") // bold
     .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?=[^\w*]|$)/g, "$1$2") // italic
