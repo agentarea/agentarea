@@ -55,12 +55,12 @@ describe("listCatalogSuggestionsAction", () => {
       data: [
         {
           id: REGISTRY_ID,
-          name: "skills-catalog",
+          name: "system-skills-curated",
           description: "Curated skills",
           registry_type: "skills",
           source_type: "url",
           source_url:
-            "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json",
+            "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json",
           is_active: true,
           scope: "platform",
           mode: "mirror",
