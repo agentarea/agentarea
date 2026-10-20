@@ -20,6 +20,7 @@ from agentarea_tasks.domain.task_definitions import (
 )
 from agentarea_tasks.infrastructure.task_definition_repository import TaskDefinitionRepository
 from agentarea_tasks.schemas.dto import TaskDefinitionCreate, TaskDefinitionUpdate
+from agentarea_triggers.infrastructure.repository import TriggerRepository
 from fastapi import HTTPException
 from pydantic import ValidationError
 
@@ -110,20 +111,37 @@ def _started(payload, **kwargs) -> AgentTask:
 
 
 class _Session:
+    """Takes the audit events the service writes."""
+
+    def __init__(self) -> None:
+        self.added: list = []
+
+    def add(self, row) -> None:
+        self.added.append(row)
+
+    async def flush(self) -> None:
+        pass
+
+
+class _Triggers:
     """Answers the one count the service asks: how many triggers run a definition."""
 
     def __init__(self, triggers_running: int) -> None:
         self.triggers_running = triggers_running
 
-    async def execute(self, _statement):
-        return SimpleNamespace(scalar_one=lambda: self.triggers_running)
+    async def count(self, *, task_definition_id: UUID) -> int:
+        return self.triggers_running
 
 
 def _service(triggers_running: int = 0) -> tuple[TaskDefinitionService, _Definitions, AsyncMock]:
     definitions = _Definitions()
-    repositories = {TaskDefinitionRepository: definitions, AgentRepository: _Agents()}
+    repositories = {
+        TaskDefinitionRepository: definitions,
+        AgentRepository: _Agents(),
+        TriggerRepository: _Triggers(triggers_running),
+    }
     factory = SimpleNamespace(
-        session=_Session(triggers_running),
+        session=_Session(),
         user_context=CALLER,
         create_repository=lambda cls: repositories[cls],
     )

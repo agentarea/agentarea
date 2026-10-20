@@ -27,10 +27,12 @@ class TaskDefinitionService:
 
     def __init__(self, repository_factory: RepositoryFactory, task_service: TaskService):
         from agentarea_agents.infrastructure.repository import AgentRepository
+        from agentarea_triggers.infrastructure.repository import TriggerRepository
 
         self.repository_factory = repository_factory
         self.repository = repository_factory.create_repository(TaskDefinitionRepository)
         self.agent_repository = repository_factory.create_repository(AgentRepository)
+        self.trigger_repository = repository_factory.create_repository(TriggerRepository)
         self.task_service = task_service
 
     async def _require_agent(self, agent_id: UUID) -> None:
@@ -39,23 +41,8 @@ class TaskDefinitionService:
                 f"Agent {agent_id} does not exist in this workspace"
             )
 
-    async def _triggers_running(self, definition_id: UUID) -> int:
-        """How many triggers of this workspace run the definition."""
-        from agentarea_triggers.infrastructure.orm import TriggerORM
-        from sqlalchemy import func, select
-
-        result = await self.repository_factory.session.execute(
-            select(func.count())
-            .select_from(TriggerORM)
-            .where(
-                TriggerORM.workspace_id == self.repository_factory.user_context.workspace_id,
-                TriggerORM.task_definition_id == definition_id,
-            )
-        )
-        return int(result.scalar_one())
-
     async def _require_unused(self, definition_id: UUID, what: str) -> None:
-        if count := await self._triggers_running(definition_id):
+        if count := await self.trigger_repository.count(task_definition_id=definition_id):
             raise TaskDefinitionInUseError(
                 f"{count} trigger(s) run this saved task; point them elsewhere before you {what}"
             )

@@ -27,12 +27,13 @@ except ImportError:
     TRIGGERS_AVAILABLE = False
     pytest.skip("Triggers not available", allow_module_level=True)
 
+from agentarea_agents.domain.models import Agent
 from agentarea_common.auth.test_utils import create_test_user_context
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
 from agentarea_tasks.task_service import TaskService
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.usefixtures("permissive_pdp")]
 
 
 def _rule(field: str, value: object) -> dict:
@@ -66,19 +67,6 @@ class TestTriggerLifecycleManagement:
         return task_service
 
     @pytest.fixture
-    def mock_agent_repository(self):
-        """Mock agent repository for testing."""
-        agent_repo = AsyncMock()
-
-        # Mock agent existence check
-        mock_agent = MagicMock()
-        mock_agent.id = uuid4()
-        mock_agent.name = "Lifecycle Test Agent"
-        agent_repo.get.return_value = mock_agent
-
-        return agent_repo
-
-    @pytest.fixture
     def mock_temporal_schedule_manager(self):
         """Mock temporal schedule manager for testing."""
         return AsyncMock(spec=TemporalScheduleManager)
@@ -100,7 +88,6 @@ class TestTriggerLifecycleManagement:
         self,
         repository_factory,
         mock_event_broker,
-        mock_agent_repository,
         mock_task_service,
         mock_temporal_schedule_manager,
     ):
@@ -112,15 +99,22 @@ class TestTriggerLifecycleManagement:
             llm_condition_evaluator=None,
             temporal_schedule_manager=mock_temporal_schedule_manager,
         )
-        # Swap in the mock agent repository so agent-existence validation
-        # doesn't require a real Agent row in the test database.
-        service.agent_repository = mock_agent_repository
         return service
 
     @pytest.fixture
-    def sample_agent_id(self):
-        """Sample agent ID for testing."""
-        return uuid4()
+    async def sample_agent_id(self, db_session, user_context):
+        """An agent of the workspace that exists and is active, so its triggers may fire."""
+        agent = Agent(
+            id=uuid4(),
+            name="Lifecycle Test Agent",
+            slug=f"agent-{uuid4().hex[:8]}",
+            status="active",
+            workspace_id=user_context.workspace_id,
+            created_by=user_context.user_id,
+        )
+        db_session.add(agent)
+        await db_session.flush()
+        return agent.id
 
     @pytest.fixture
     async def stream_id(self, trigger_service):

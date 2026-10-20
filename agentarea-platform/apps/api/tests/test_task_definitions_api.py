@@ -18,6 +18,7 @@ from agentarea_tasks.application.task_definition_service import TaskDefinitionSe
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.domain.task_definitions import TaskDefinition
 from agentarea_tasks.infrastructure.task_definition_repository import TaskDefinitionRepository
+from agentarea_triggers.infrastructure.repository import TriggerRepository
 from httpx import ASGITransport, AsyncClient
 
 CALLER = UserContext(user_id="user-1", workspace_id="ws-1")
@@ -59,13 +60,26 @@ class _Agents:
 
 
 class _Session:
+    """Takes the audit events the service writes."""
+
+    def __init__(self) -> None:
+        self.added: list = []
+
+    def add(self, row) -> None:
+        self.added.append(row)
+
+    async def flush(self) -> None:
+        pass
+
+
+class _Triggers:
     """Answers how many triggers run a saved task."""
 
     def __init__(self) -> None:
         self.triggers_running = 0
 
-    async def execute(self, _statement):
-        return SimpleNamespace(scalar_one=lambda: self.triggers_running)
+    async def count(self, *, task_definition_id: UUID) -> int:
+        return self.triggers_running
 
 
 class _Permissions(PermissionService):
@@ -101,10 +115,16 @@ async def client():
 def wired():
     container = get_container()
     saved = dict(container._singletons)
-    repositories = {TaskDefinitionRepository: _Definitions(), AgentRepository: _Agents()}
-    session = _Session()
+    triggers = _Triggers()
+    repositories = {
+        TaskDefinitionRepository: _Definitions(),
+        AgentRepository: _Agents(),
+        TriggerRepository: triggers,
+    }
     factory = SimpleNamespace(
-        session=session, user_context=CALLER, create_repository=lambda cls: repositories[cls]
+        session=_Session(),
+        user_context=CALLER,
+        create_repository=lambda cls: repositories[cls],
     )
     task_service = AsyncMock()
     task_service.start_run.side_effect = _started
@@ -116,7 +136,7 @@ def wired():
         container.register_singleton(PermissionService, _Permissions(allowed))
         return task_service
 
-    allow_execute.session = session  # type: ignore[attr-defined]
+    allow_execute.triggers = triggers  # type: ignore[attr-defined]
     yield allow_execute
     app.dependency_overrides.pop(get_user_context, None)
     app.dependency_overrides.pop(get_task_definition_service, None)
@@ -188,7 +208,7 @@ async def test_an_unknown_saved_task_is_not_found(client, wired):
 async def test_a_saved_task_a_trigger_runs_cannot_change_agent_or_be_deleted(client, wired):
     wired(True)
     saved = await _save(client)
-    wired.session.triggers_running = 1
+    wired.triggers.triggers_running = 1
 
     moved = await client.put(f"{BASE}/{saved['id']}", json={"agent_id": str(OTHER_AGENT)})
     deleted = await client.delete(f"{BASE}/{saved['id']}")

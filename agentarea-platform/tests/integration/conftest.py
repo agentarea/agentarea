@@ -47,6 +47,19 @@ def _graph_ownership(monkeypatch):
     return install_graph_ownership_stub(monkeypatch)
 
 
+@pytest.fixture
+def permissive_pdp():
+    """A PDP that allows, for tests where who may bind or start an agent is scenery."""
+    from agentarea_common.di.container import get_container
+    from agentarea_common.testing import allow_all_permissions
+
+    container = get_container()
+    saved = dict(container._singletons)
+    yield allow_all_permissions()
+    container._singletons.clear()
+    container._singletons.update(saved)
+
+
 # SQLite foreign key support (mirrors tests/integration/repositories/conftest.py)
 @event.listens_for(Engine, "connect")
 def _set_sqlite_pragma(dbapi_connection, connection_record):
