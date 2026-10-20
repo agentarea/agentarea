@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import posixpath
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ from agentarea_agents.application.skill_packages import (
     legacy_catalog_s3_path,
 )
 from agentarea_agents.application.skill_parser import SkillParser
+from agentarea_agents.application.skill_stub import bare_stub
 from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType, SkillVersion
 from agentarea_agents.infrastructure.catalog_skill_repository import (
     CatalogSkillItem,
@@ -975,8 +977,10 @@ class SkillService:
 
         Such an install copied its item's body (the stub an index carried)
         into the row, so it reads as edited. When the body is still exactly
-        what the item gave it, it is pinned to the item's current package in
-        place: same id, same agents. An edited body, or one the item no longer
+        what the item gave it, or the bare stub of the GitHub folder the item
+        now points at, it is pinned to the item's current package in place:
+        same id, same agents. An install pinned to a package that is such a
+        stub moves the same way. An edited body, or one the item no longer
         carries to compare with, is left alone; a gone item is reported.
 
         Raises:
@@ -992,16 +996,22 @@ class SkillService:
 
         if skill.registry_item_id is None:
             return result("not_installed")
-        if is_catalog_package(skill.s3_path):
-            return result("pinned")
         item = await self._get_catalog_repository().get_item(str(skill.registry_item_id))
-        if item is None:
+        if is_catalog_package(skill.s3_path):
+            if (
+                item is None
+                or item.version == item.installed_version
+                or not await self._holds_the_stub_of(skill, item)
+            ):
+                return result("pinned")
+        elif item is None:
             return result("gone", "its catalog item is no longer listed")
-        as_installed = await self._holds_what_its_item_gave(skill, item)
-        if as_installed is None:
-            return result("unverified", "its catalog item no longer carries the body it gave")
-        if not as_installed:
-            return result("edited")
+        else:
+            as_installed = await self._holds_what_its_item_gave(skill, item)
+            if as_installed is None:
+                return result("unverified", "its catalog item no longer carries the body it gave")
+            if not as_installed:
+                return result("edited")
         if dry_run:
             return result("would_repin")
         try:
@@ -1022,13 +1032,35 @@ class SkillService:
             return True
         body = spec.get("content")
         if not isinstance(body, str) or not body:
-            return None
+            return True if await self._holds_the_stub_of(skill, item) else None
         if skill.s3_path is None:
             return skill.content == body
         if not (is_own_copy(skill) or is_workspace_package(skill.s3_path)):
             return False
         files = await self.storage_service.read_package(skill.s3_path)
         return files == {SKILL_MANIFEST: body.encode("utf-8")}
+
+    async def _holds_the_stub_of(self, skill: Skill, item: CatalogSkillItem) -> bool:
+        """Whether ``skill`` holds nothing but an old index's stub of the folder ``item`` points at.
+
+        Matched by repository and folder name: the old curated index recorded
+        some folders under a parent they do not live in.
+        """
+        source = (item.spec or {}).get("source")
+        if not isinstance(source, dict) or source.get("type") != "github":
+            return False
+        files = await self.storage_service.read_package(skill.s3_path) if skill.s3_path else {}
+        if skill.content is not None:
+            files = {**files, SKILL_MANIFEST: skill.content.encode("utf-8")}
+        if list(files) != [SKILL_MANIFEST]:
+            return False
+        stub = bare_stub(files[SKILL_MANIFEST].decode("utf-8", errors="replace"))
+        folder = str(source.get("path") or "").strip("/")
+        return (
+            stub is not None
+            and stub.repo == source.get("repo")
+            and posixpath.basename(stub.folder) == posixpath.basename(folder)
+        )
 
     async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
         """Resolve a skill id to an editable tenant row, forking if needed.

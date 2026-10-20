@@ -422,10 +422,12 @@ def repin_catalog_installs(dry_run: bool):
     """Repin catalog installs made before packages existed, if nobody edited them (ADR-0044).
 
     Such a skill holds the body its install copied, so it reads as edited.
-    One whose body is still what its catalog item gave it is re-installed from
-    the item's current package (pinned), keeping its id and agents. Edited
-    skills are left alone and reported; so is a skill whose item is gone.
-    Run after ``move-bodies-to-packages`` and the reconcile.
+    One whose body is still what its catalog item gave it, or the bare stub of
+    the GitHub folder the item now points at, is re-installed from the item's
+    current package (pinned), keeping its id and agents; so is an install
+    pinned to such a stub's package. Edited skills are left alone and
+    reported; so is a skill whose item is gone. Run after
+    ``move-bodies-to-packages`` and the reconcile.
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     asyncio.run(_repin_catalog_installs(dry_run=dry_run))
