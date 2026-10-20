@@ -115,7 +115,7 @@ rejected by the API server.
 | image.pullPolicy | string | `"IfNotPresent"` | Pull policy for the data plane image. |
 | imagePullSecrets | list | `[]` | Pull secrets for the data plane's own image. MCP server images are pulled by the nodes of this cluster; give them registry credentials there. |
 | mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` | mcp-base image pre-pulled on every node before package workloads start. |
-| mcpBase.image.tag | string | `"latest"` |  |
+| mcpBase.image.tag | string | `""` | Defaults to the chart's appVersion. |
 | dataPlane.id | required | `""` | Stamped on every instance this data plane creates. A data plane refuses instances without its own id, so two data planes never claim each other's workloads. |
 | dataPlane.auth.existingSecret | string | `""` | Secret holding the shared token: the value the control plane sends. |
 | dataPlane.auth.existingSecretKey | string | `"token"` | Key in existingSecret. |
@@ -144,15 +144,15 @@ rejected by the API server.
 | workloads.networkPolicy.extraEgress | list | `[]` | Additional egress rules, as NetworkPolicy egress entries. For a host that REDIRECTs some traffic to a local proxy, allow the redirect target here. |
 | workloads.networkPolicy.egressProxy | object | `{}` | Proxy that MCP servers labelled agentarea.io/egress may reach; those servers get DNS and this proxy only, and DNS only while it is empty. Shape: {namespaceSelector: {matchLabels: ...}, podSelector: {matchLabels: ...}, port: 3128} |
 | sandboxes.enabled | bool | `false` | Run the sandbox server and confine the sandboxes it creates. |
-| sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The mcp-manager adapter is tested against v0.2.2. |
-| sandboxes.server.image.tag | string | `"v0.2.2@sha256:8f8762af7565ed9c6f9dbcf009dd56727aa1fef8ce58a17f2b007b88cfe542bb"` | Tag, optionally with a digest. |
+| sandboxes.server.image.repository | string | `"opensandbox/server"` | OpenSandbox server image. The mcp-manager adapter is tested against release-1.1.1. |
+| sandboxes.server.image.tag | string | `"release-1.1.1@sha256:bcd5f264101262cebfa7e1ff9cd0424403e42f31a6596e4364cf90d8cb5c936b"` | Tag, optionally with a digest. |
 | sandboxes.server.image.pullPolicy | string | `"IfNotPresent"` | Pull policy for the server image. |
 | sandboxes.server.port | int | `8081` | Port the sandbox API listens on. |
 | sandboxes.server.logLevel | string | `"INFO"` | Server log level. |
 | sandboxes.server.auth.existingSecret | string | `""` | Secret holding the API key the control plane sends as OPEN-SANDBOX-API-KEY. |
 | sandboxes.server.auth.existingSecretKey | string | `"api-key"` | Key in existingSecret. |
 | sandboxes.server.auth.apiKey | string | `""` | Creates the Secret from this value when existingSecret is empty. For development only. |
-| sandboxes.server.execdImage | string | `"opensandbox/execd:v1.0.21@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"` | Image the server copies execd from into every sandbox. The runtime identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY) names this digest. |
+| sandboxes.server.execdImage | string | `"opensandbox/execd:release-1.1.1@sha256:cda2bc35409bbf57561599b316cafb899598f7dce671332e7ceda14eb1cfeded"` | Image the server copies execd from into every sandbox. The runtime identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY) names this digest. |
 | sandboxes.server.maxSandboxTimeoutSeconds | int | `21600` | Longest lifetime a sandbox may be created with. |
 | sandboxes.server.createTimeoutSeconds | int | `120` | How long a create waits for the pod to run, image pull included. The control plane's AGENTAREA_SANDBOX_PROVISION_TIMEOUT should be longer. |
 | sandboxes.server.resources | object | `{"limits":{"cpu":"1","memory":"1Gi"},"requests":{"cpu":"50m","memory":"128Mi"}}` | Resources of the server itself. |
@@ -170,11 +170,16 @@ rejected by the API server.
 | sandboxes.networkPolicy.denyCIDRs | list | `["169.254.0.0/16","10.0.0.0/8","172.16.0.0/12","192.168.0.0/16","100.64.0.0/10"]` | Destinations sandboxes may not open connections to. |
 | sandboxes.networkPolicy.dns | object | `{"namespace":"kube-system","podLabels":{"k8s-app":"kube-dns"}}` | Labels of the cluster DNS pods sandboxes may query. |
 | sandboxes.networkPolicy.extraEgress | list | `[]` | Additional egress rules, as NetworkPolicy egress entries. |
-| opensandbox-controller.enabled | bool | `false` | Install the controller and its CRDs. One per cluster. |
+| opensandbox-base.rbac.create | bool | `false` |  |
+| opensandbox-base.fastSandbox.crds.install | bool | `false` |  |
+| opensandbox-base.fastSandbox.namespaces.createSystem | bool | `false` |  |
+| opensandbox-base.fastSandbox.namespaces.create | bool | `false` |  |
+| opensandbox-base.fastSandbox.rbac.create | bool | `false` |  |
+| opensandbox-controller.enabled | bool | `false` | Install the controller and the CRDs of opensandbox-base. One per cluster. |
 | opensandbox-controller.namespaceOverride | string | `"agentarea-system"` | Namespace of the controller. The subchart does not follow the release namespace; keep this equal to it. |
 | opensandbox-controller.controller.image.repository | string | `"opensandbox/controller"` | Controller image, from Docker Hub rather than the upstream default registry. |
-| opensandbox-controller.controller.image.tag | string | `"v0.2.0@sha256:a9a5f73c1785ebd955336ffa313973a35c1a1b662cb7afc4ea82d92021b3532a"` | Tag, optionally with a digest. |
-| opensandbox-controller.controller.snapshot.imageCommitterImage | string | `"opensandbox/image-committer:v0.1.1"` | Only used for snapshots, which AgentArea does not take. |
+| opensandbox-controller.controller.image.tag | string | `"release-1.1.1@sha256:aca5cda09a0fbc5867e6028f8b6aaa60fdcd78ebee634f71a263d45d5f6c2bab"` | Tag, optionally with a digest. |
+| opensandbox-controller.controller.snapshot.imageCommitterImage | string | `"opensandbox/image-committer:release-1.1.1@sha256:0ef67b7852daa304fa24c0ff971e682444e28c8eed1ada18ef211d30152717be"` | Only used for snapshots, which AgentArea does not take. |
 | sandboxPolicy | object | `{"providerProvisioningTimeout":"5m","providerSessionTTL":"24h","taskIdleTTL":"15m","taskLeaseTTL":"10m"}` | Required by the Kubernetes backend at start although a data plane runs no agent sandboxes: the task lease is read unconditionally. |
 | extraEnv | list | `[]` | Extra environment for the data plane container. |
 | resources | object | `{"limits":{"cpu":"1","memory":"512Mi"},"requests":{"cpu":"50m","memory":"64Mi"}}` | Resources of the data plane itself. |

@@ -154,7 +154,7 @@ groups:
       AGENTAREA_MCP_SWEEP_INTERVAL: '{{ .Values.mcpManager.serverless.sweepInterval }}'
       AGENTAREA_MCP_LEASE_TTL: '{{ .Values.mcpManager.serverless.requestLeaseTTL }}'
       AGENTAREA_MCP_STARTUP_TIMEOUT: '{{ .Values.mcpManager.serverless.startupTimeout }}'
-      AGENTAREA_MCP_BASE_IMAGE: '{{ .Values.mcpManager.mcpBase.image.repository }}:{{ .Values.mcpManager.mcpBase.image.tag }}'
+      AGENTAREA_MCP_BASE_IMAGE: '{{ .Values.mcpManager.mcpBase.image.repository }}:{{ default .Chart.AppVersion .Values.mcpManager.mcpBase.image.tag }}'
       AGENTAREA_MCP_PACKAGE_REPO: '{{ .Values.mcpManager.packageImages.repository }}'
       AGENTAREA_MCP_IMPORT_TIMEOUT: '{{ .Values.mcpManager.packageImages.importTimeout }}'
     secrets:

@@ -1,4 +1,4 @@
-{{- $mcpBaseImage := printf "%s:%s" .Values.mcpBase.image.repository .Values.mcpBase.image.tag }}
+{{- $mcpBaseImage := printf "%s:%s" .Values.mcpBase.image.repository (default .Chart.AppVersion .Values.mcpBase.image.tag) }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -42,7 +42,7 @@ spec:
           command: ["/bin/sh", "-c", "true"]
       containers:
         - name: pause
-          image: registry.k8s.io/pause:3.10
+          image: registry.k8s.io/pause:3.10.2
           imagePullPolicy: IfNotPresent
           resources:
             requests:

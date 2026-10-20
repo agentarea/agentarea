@@ -18,7 +18,8 @@ mcpBase:
   image:
     # -- mcp-base image pre-pulled on every node before package workloads start.
     repository: agentarea/agentarea-mcp-base
-    tag: "latest"
+    # -- Defaults to the chart's appVersion.
+    tag: ""
 
 dataPlane:
   # -- (required) Stamped on every instance this data plane creates. A data plane
@@ -135,10 +136,10 @@ sandboxes:
   enabled: false
   server:
     image:
-      # -- OpenSandbox server image. The mcp-manager adapter is tested against v0.2.2.
+      # -- OpenSandbox server image. The mcp-manager adapter is tested against release-1.1.1.
       repository: opensandbox/server
       # -- Tag, optionally with a digest.
-      tag: "v0.2.2@sha256:8f8762af7565ed9c6f9dbcf009dd56727aa1fef8ce58a17f2b007b88cfe542bb"
+      tag: "release-1.1.1@sha256:bcd5f264101262cebfa7e1ff9cd0424403e42f31a6596e4364cf90d8cb5c936b"
       # -- Pull policy for the server image.
       pullPolicy: IfNotPresent
     # -- Port the sandbox API listens on.
@@ -156,7 +157,7 @@ sandboxes:
     # -- Image the server copies execd from into every sandbox. The runtime
     # identity the control plane pins (AGENTAREA_SANDBOX_OSB_IDENTITY)
     # names this digest.
-    execdImage: "opensandbox/execd:v1.0.21@sha256:1dc98c7de10b9a73450ac75aa0f200ad7972f2c40f5225f6a8998e166b45d6dd"
+    execdImage: "opensandbox/execd:release-1.1.1@sha256:cda2bc35409bbf57561599b316cafb899598f7dce671332e7ceda14eb1cfeded"
     # -- Longest lifetime a sandbox may be created with.
     maxSandboxTimeoutSeconds: 21600
     # -- How long a create waits for the pod to run, image pull included. The
@@ -214,10 +215,25 @@ sandboxes:
     # -- Additional egress rules, as NetworkPolicy egress entries.
     extraEgress: []
 
-# The BatchSandbox CRDs and controller (vendored OpenSandbox chart). Values here
-# are passed to it unchanged; see charts/opensandbox-controller/values.yaml.
+# The BatchSandbox CRDs (vendored OpenSandbox base chart), installed with the
+# controller. Only the OpenSandbox CRDs: no fast-sandbox CRDs, namespaces or RBAC,
+# and no user-facing CRD roles.
+opensandbox-base:
+  rbac:
+    create: false
+  fastSandbox:
+    crds:
+      install: false
+    namespaces:
+      createSystem: false
+      create: false
+    rbac:
+      create: false
+
+# The BatchSandbox controller (vendored OpenSandbox chart). Values here are
+# passed to it unchanged; see charts/opensandbox-controller/values.yaml.
 opensandbox-controller:
-  # -- Install the controller and its CRDs. One per cluster.
+  # -- Install the controller and the CRDs of opensandbox-base. One per cluster.
   enabled: false
   # -- Namespace of the controller. The subchart does not follow the release
   # namespace; keep this equal to it.
@@ -227,10 +243,10 @@ opensandbox-controller:
       # -- Controller image, from Docker Hub rather than the upstream default registry.
       repository: opensandbox/controller
       # -- Tag, optionally with a digest.
-      tag: "v0.2.0@sha256:a9a5f73c1785ebd955336ffa313973a35c1a1b662cb7afc4ea82d92021b3532a"
+      tag: "release-1.1.1@sha256:aca5cda09a0fbc5867e6028f8b6aaa60fdcd78ebee634f71a263d45d5f6c2bab"
     snapshot:
       # -- Only used for snapshots, which AgentArea does not take.
-      imageCommitterImage: opensandbox/image-committer:v0.1.1
+      imageCommitterImage: "opensandbox/image-committer:release-1.1.1@sha256:0ef67b7852daa304fa24c0ff971e682444e28c8eed1ada18ef211d30152717be"
 
 # -- Required by the Kubernetes backend at start although a data plane runs no
 # agent sandboxes: the task lease is read unconditionally.

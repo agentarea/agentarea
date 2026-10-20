@@ -22,7 +22,7 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: rustfs
-          image: "{{ default "rustfs/rustfs" .Values.rustfs.image.repository }}:{{ default "latest" .Values.rustfs.image.tag }}"
+          image: "{{ .Values.rustfs.image.repository }}:{{ .Values.rustfs.image.tag }}"
           imagePullPolicy: {{ .Values.global.image.pullPolicy }}
           args: ["/data", "--console-enable"]
           ports:
@@ -139,7 +139,7 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       containers:
         - name: s3-client
-          image: "amazon/aws-cli:2.17.51"
+          image: "amazon/aws-cli:2.38.2"
           command:
             - sh
             - -c

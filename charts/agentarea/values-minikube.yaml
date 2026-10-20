@@ -10,7 +10,7 @@ global:
 backend:
   image:
     repository: agentarea/agentarea-api
-    tag: "latest"
+    tag: ""
   resources:
     limits:
       cpu: 500m
@@ -26,7 +26,7 @@ backend:
 worker:
   image:
     repository: agentarea/agentarea-worker
-    tag: "latest"
+    tag: ""
   resources:
     limits:
       cpu: 500m

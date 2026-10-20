@@ -56,7 +56,7 @@ WHITELIST = {
     "TEMPORAL_PROFILE", "TEMPORAL_CONFIG_FILE",
     # temporal image
     "DB", "DB_PORT", "DBNAME", "POSTGRES_PWD", "POSTGRES_SEEDS",
-    "DYNAMIC_CONFIG_FILE_PATH", "TEMPORAL_CLI_ADDRESS",
+    "DYNAMIC_CONFIG_FILE_PATH",
     "TEMPORAL_CORS_ORIGINS", "BIND_ON_IP", "TEMPORAL_DB", "KRATOS_DB",
     "HYDRA_DB", "KETO_DB", "OPENFGA_DB", "INFISICAL_DB",
     # ory images
@@ -183,10 +183,7 @@ def iter_files(*suffixes: str):
 
 def pydantic_env_names(path: Path) -> list[str]:
     """Env names a pydantic-settings class declares (env_prefix + field, or alias)."""
-    try:
-        tree = ast.parse(path.read_text())
-    except SyntaxError:
-        return []
+    tree = ast.parse(path.read_text(), filename=str(path))
     names: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef):
@@ -276,7 +273,7 @@ THIRD_PARTY_CONFIG = (
     "charts/agentarea/templates/hydra/",
     "charts/agentarea/templates/openfga",
     "charts/agentarea/templates/rustfs/",
-    "charts/agentarea/templates/temporal",
+    "charts/agentarea/templates/agentarea-temporal/",
     "charts/agentarea/templates/configs/temporalServer.env.tpl",
     "docs/self-host/env-migration.md",
 )

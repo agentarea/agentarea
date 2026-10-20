@@ -260,9 +260,7 @@ global:
       sidecarContainerImagePullPolicy: IfNotPresent
       # Container images
       images:
-        socat: "alpine/socat:latest"
-        busybox: "busybox:latest"
-        curl: "curlimages/curl:latest"
+        busybox: "busybox:1.38.0"
 
   # Workload configuration - Main application workloads
   workloads:
@@ -362,7 +360,7 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
-    # MinIO-compatible object storage, for presigned browser uploads/downloads.
+    # S3-compatible object storage, for presigned browser uploads/downloads.
     rustfs:
       host: ""  # e.g., s3.example.com
       paths:
@@ -406,7 +404,7 @@ backend:
   terminationGracePeriodSeconds: 30
   image:
     repository: agentarea/agentarea-api
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
 
   service:
@@ -455,7 +453,7 @@ backend:
 
   extraInitContainers: []
   # - name: init
-  #   image: busybox:latest
+  #   image: busybox:1.38.0
   #   command: ['sh', '-c', 'echo initializing']
 
   # Security context
@@ -486,7 +484,7 @@ frontend:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-frontend
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   service:
     type: ClusterIP
@@ -532,7 +530,7 @@ worker:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-worker
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
 
   # -- Port of the worker's health endpoint, passed to the container as
@@ -628,7 +626,7 @@ eventService:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-events
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
     pullPolicy: ""  # Overrides global.image.pullPolicy if set
   # Service port
   port: 8002
@@ -689,7 +687,7 @@ mcpManager:
   replicaCount: 1
   image:
     repository: agentarea/agentarea-mcp-manager
-    tag: "latest"
+    tag: ""  # Defaults to the chart appVersion
   service:
     type: ClusterIP
     port: 80
@@ -741,7 +739,7 @@ mcpManager:
   mcpBase:
     image:
       repository: agentarea/agentarea-mcp-base
-      tag: "latest"
+      tag: ""  # Defaults to the chart appVersion
   packageImages:
     # -- Registry repository where immutable images built from npm/PyPI packages
     # are stored. Leave empty to use the local Docker daemon with the Docker
@@ -942,7 +940,7 @@ mcpManager:
     # not select images or runtime policy.
     image:
       repository: agentarea/agentarea-mcp-runner
-      tag: "latest"
+      tag: ""  # Defaults to the chart appVersion
       pullPolicy: IfNotPresent
 
     # Explicit zero disables process-local idle exit; pod retirement is owned
@@ -1147,15 +1145,22 @@ temporal:
   enabled: true
   replicaCount: 1
   image:
-    repository: temporalio/auto-setup
-    tag: "1.29.1"
-  
+    repository: temporalio/server
+    tag: "1.32.1"
+  # Runs the schema init container (creates and migrates the temporal and
+  # temporal_visibility databases) and the namespace job. Keep its tag equal
+  # to image.tag: the schema it applies is the one that server version needs.
+  adminTools:
+    image:
+      repository: temporalio/admin-tools
+      tag: "1.32.1"
+  # Retention of global.temporal.namespace when the namespace job creates it.
+  namespaceRetention: 24h
+
   # Database configuration
   database:
     name: "temporal"
-    createJob:
-      enabled: true
-  
+
   service:
     type: ClusterIP
     port: 7233
@@ -1168,7 +1173,7 @@ postgresql:
   enabled: true
   image:
     repository: postgres
-    tag: "16-alpine"
+    tag: "16.15-alpine"
   resources:
     limits:
       cpu: 500m
@@ -1227,7 +1232,7 @@ rustfs:
   enabled: true
   image:
     repository: "rustfs/rustfs"
-    tag: "latest"
+    tag: "1.0.3"
   auth:
     existingSecret: "agentarea-rustfs-secret"
   # Optional bootstrap override. Empty means global.storage.bucket, keeping
@@ -1321,7 +1326,7 @@ openfga:
   replicaCount: 1
   image:
     repository: openfga/openfga
-    tag: "v1.18.0"
+    tag: "v1.22.0"
   database:
     name: "openfga"
     createJob:
@@ -1349,7 +1354,7 @@ kratos:
   replicaCount: 1
   image:
     repository: oryd/kratos
-    tag: "v1.3.1"
+    tag: "v26.2.0"
   
   # URL configuration
   # If not set, these default to internal Kubernetes service DNS names
@@ -1439,7 +1444,7 @@ kratos:
   # Provide a pure YAML map here (no Helm templating). Dynamic fields (URLs, SMTP, cookie domain,
   # whoami tokenizer) are injected by the chart at render time.
   config:
-    version: v1.3.1
+    version: v26.2.0
     serve:
       public:
         cors:
