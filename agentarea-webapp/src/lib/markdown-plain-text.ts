@@ -5,14 +5,11 @@
  * line break becomes a space.
  */
 export function markdownToPlainText(markdown: string): string {
-  return markdown
+  const unlinked = markdown
     .replace(/```[^\n]*\n([\s\S]*?)```/g, "$1") // fenced code: keep the code
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links: keep the label
-    .replace(/<[^>]+>/g, "") // inline HTML
-    // Whatever angle brackets are left: removing a tag can join the halves of
-    // a nested one ("<scr<script>ipt>") into a new one.
-    .replace(/[<>]/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1"); // links: keep the label
+  return stripTags(unlinked)
     .replace(/`([^`]*)`/g, "$1") // inline code
     .replace(/(\*\*|__)(.+?)\1/g, "$2") // bold
     .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?=[^\w*]|$)/g, "$1$2") // italic
@@ -23,6 +20,21 @@ export function markdownToPlainText(markdown: string): string {
     .replace(/\s+/g, " ")
     .replace(/^· /, "")
     .trim();
+}
+
+/**
+ * Inline HTML without its tags, and without any angle bracket left over. One
+ * pass is not enough: removing a tag can join the halves of a nested one
+ * ("<scr<script>ipt>") into a new tag, so it repeats until none is found.
+ */
+function stripTags(text: string): string {
+  let current = text;
+  let previous: string;
+  do {
+    previous = current;
+    current = current.replace(/<[^<>]*>/g, "");
+  } while (current !== previous);
+  return current.replace(/[<>]/g, "");
 }
 
 /**
