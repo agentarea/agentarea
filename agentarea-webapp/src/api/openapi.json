@@ -11300,12 +11300,6 @@
             "description": "Registry source URL; omitted when source_type is 'managed'",
             "title": "Source Url"
           },
-          "sync_mode": {
-            "default": "manual",
-            "description": "'auto' or 'manual'",
-            "title": "Sync Mode",
-            "type": "string"
-          },
           "trust": {
             "default": "official",
             "description": "Trust label on every catalog card",
@@ -11664,10 +11658,6 @@
             "title": "Source Url",
             "type": "string"
           },
-          "sync_mode": {
-            "title": "Sync Mode",
-            "type": "string"
-          },
           "trust": {
             "enum": [
               "official",
@@ -11702,7 +11692,6 @@
           "registry_type",
           "source_type",
           "source_url",
-          "sync_mode",
           "is_active",
           "scope",
           "mode",
@@ -11789,17 +11778,6 @@
               }
             ],
             "title": "Source Url"
-          },
-          "sync_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Mode"
           },
           "trust": {
             "anyOf": [

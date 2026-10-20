@@ -11,7 +11,6 @@ const platformRegistry: RegistryResponse = {
   source_url: "internal-org/private-skills",
   source_ref: "main",
   source_path: "skills",
-  sync_mode: "auto",
   is_active: true,
   scope: "platform",
   workspace_id: null,

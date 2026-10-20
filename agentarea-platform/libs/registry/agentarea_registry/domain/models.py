@@ -107,7 +107,6 @@ class Registry(BaseModel):
     registry_type: Mapped[str] = mapped_column(String(50), nullable=False)
     source_type: Mapped[str] = mapped_column(String(50), nullable=False)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
-    sync_mode: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -147,7 +146,6 @@ class Registry(BaseModel):
         source_type: str,
         source_url: str,
         description: str | None = None,
-        sync_mode: str = "manual",
         is_active: bool = True,
         recommendation_priority: int = DEFAULT_REGISTRY_PRIORITY,
         scope: str = "platform",
@@ -172,7 +170,6 @@ class Registry(BaseModel):
         self.registry_type = registry_type
         self.source_type = source_type
         self.source_url = source_url
-        self.sync_mode = sync_mode
         self.is_active = is_active
         self.recommendation_priority = recommendation_priority
         self.last_synced_at = None

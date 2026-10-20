@@ -500,7 +500,6 @@ class RegistryService:
         source_type: str,
         source_url: str | None,
         description: str | None = None,
-        sync_mode: str = "manual",
         recommendation_priority: int | None = None,
         *,
         scope: str = "platform",
@@ -540,7 +539,6 @@ class RegistryService:
             source_type=source_type,
             source_url=source_url,
             description=description,
-            sync_mode=sync_mode,
             recommendation_priority=validated_registry_priority(recommendation_priority),
             scope=scope,
             workspace_id=workspace_id,
@@ -564,7 +562,10 @@ class RegistryService:
         return await self.registry_repo.list_all()
 
     async def update_registry(self, registry_id: UUID, **fields) -> Registry | None:
+        if fields.get("source_type", VALID_SOURCE_TYPES[0]) not in VALID_SOURCE_TYPES:
+            raise ValueError(f"source_type must be one of {VALID_SOURCE_TYPES}")
         if {
+            "source_type",
             "source_url",
             "source_ref",
             "source_path",
@@ -578,7 +579,7 @@ class RegistryService:
             await asyncio.to_thread(
                 validate_registry_source,
                 registry_type=current.registry_type,
-                source_type=current.source_type,
+                source_type=fields.get("source_type", current.source_type),
                 source_url=fields.get("source_url", current.source_url),
                 scope=current.scope,
                 workspace_id=current.workspace_id,
@@ -589,7 +590,7 @@ class RegistryService:
                 source_ref=fields.get("source_ref", current.source_ref),
                 source_path=fields.get("source_path", current.source_path),
             )
-        if {"source_url", "source_ref", "source_path", "mode"} & fields.keys():
+        if {"source_type", "source_url", "source_ref", "source_path", "mode"} & fields.keys():
             # Another source, or one now mirrored: what the last sync applied
             # says nothing about it.
             fields["source_etag"] = None

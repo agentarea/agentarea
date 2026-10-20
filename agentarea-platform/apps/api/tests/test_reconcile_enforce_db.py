@@ -71,9 +71,9 @@ async def _registry(conn, name: str, **fields) -> uuid.UUID:
     await conn.execute(
         text(
             "INSERT INTO registries (id, name, registry_type, source_type, source_url, scope, "
-            "workspace_id, mode, trust, is_active, sync_mode, recommendation_priority, item_count) "
+            "workspace_id, mode, trust, is_active, recommendation_priority, item_count) "
             "VALUES (:id, :name, :registry_type, :source_type, :source_url, :scope, "
-            ":workspace_id, :mode, :trust, true, 'manual', 100, 0)"
+            ":workspace_id, :mode, :trust, true, 100, 0)"
         ),
         {"id": registry_id, "name": name, **values},
     )
@@ -240,6 +240,105 @@ async def test_a_registry_another_reconcile_is_syncing_is_skipped(
             text("SELECT count(*) FROM registries WHERE name = :n"), {"n": f"{PREFIX}busy"}
         )
         assert created.scalar_one() == 0
+
+
+async def test_a_moved_source_is_synced_from_its_new_place(engine, monkeypatch, tmp_path):
+    moved_url = "https://moved.example/skills.json"
+    async with engine.begin() as conn:
+        registry = await _registry(conn, f"{PREFIX}moved")
+        await _item(conn, registry, "old-only")
+        await conn.execute(
+            text("UPDATE registries SET source_etag = 'v2:unchanged' WHERE id = :id"),
+            {"id": registry},
+        )
+    _enforced_reconcile(
+        engine, monkeypatch, {moved_url: {"skills": [{"name": "fresh", "content": "# F"}]}}
+    )
+    manifest = tmp_path / "registries.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "name": f"{PREFIX}moved",
+                    "type": "skills",
+                    "source_url": moved_url,
+                    "mode": "upstream",
+                    "trust": "community",
+                }
+            ]
+        )
+    )
+
+    await cli._reconcile(None, (), str(manifest))
+
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text("SELECT source_url FROM registries WHERE id = :id"), {"id": registry}
+            )
+        ).one()
+        assert row.source_url == moved_url
+        assert await _external_ids(conn, registry) == {"fresh": True}
+
+
+async def test_platform_credentials_are_a_platform_secret_named_in_the_manifest(
+    engine, monkeypatch, tmp_path
+):
+    secret_id = uuid.uuid4()
+    name = f"{PREFIX}github-token"
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO encrypted_secrets (id, workspace_id, secret_name, encrypted_value, "
+                "created_by) VALUES (:id, 'platform', :name, 'ciphertext', 'test')"
+            ),
+            {"id": secret_id, "name": name},
+        )
+    url = "https://private.example/agents.json"
+    _enforced_reconcile(engine, monkeypatch, {url: {"agents": []}})
+    entry = {"name": f"{PREFIX}private", "type": "agents", "source_url": url}
+    manifest = tmp_path / "registries.json"
+    try:
+        manifest.write_text(json.dumps([{**entry, "credentials_secret_ref": name}]))
+        await cli._reconcile(None, (), str(manifest))
+
+        async with engine.connect() as conn:
+            stored = (
+                await conn.execute(
+                    text("SELECT id, credentials_secret_ref FROM registries WHERE name = :n"),
+                    {"n": entry["name"]},
+                )
+            ).one()
+            assert stored.credentials_secret_ref == secret_id
+            consumers = await conn.execute(
+                text("SELECT consumer_id FROM secret_references WHERE secret_id = :s"),
+                {"s": secret_id},
+            )
+            assert consumers.scalars().all() == [str(stored.id)]
+
+        manifest.write_text(json.dumps([entry]))
+        await cli._reconcile(None, (), str(manifest))
+
+        async with engine.connect() as conn:
+            dropped = await conn.execute(
+                text("SELECT credentials_secret_ref FROM registries WHERE name = :n"),
+                {"n": entry["name"]},
+            )
+            assert dropped.scalar_one() is None
+            left = await conn.execute(
+                text("SELECT count(*) FROM secret_references WHERE secret_id = :s"),
+                {"s": secret_id},
+            )
+            assert left.scalar_one() == 0
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM registries WHERE name = :n"), {"n": entry["name"]}
+            )
+            await conn.execute(
+                text("DELETE FROM secret_references WHERE secret_id = :s"), {"s": secret_id}
+            )
+            await conn.execute(text("DELETE FROM encrypted_secrets WHERE id = :s"), {"s": secret_id})
 
 
 def _enforced_reconcile(engine, monkeypatch, payloads) -> None:

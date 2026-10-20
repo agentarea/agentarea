@@ -5,10 +5,13 @@ value is read from the owning workspace's secret store for one sync and then
 dropped.
 """
 
+from uuid import UUID
+
 from agentarea_common.auth.context import UserContext
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from agentarea_registry.application.service import CredentialsResolver
 from agentarea_registry.domain.models import Registry
+from agentarea_secrets.catalog_service import SecretCatalogService, SecretNotFoundError
 from agentarea_secrets.models import EncryptedSecret
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
 from sqlalchemy import select
@@ -49,3 +52,38 @@ def registry_credentials_resolver(session: AsyncSession) -> CredentialsResolver:
         return value
 
     return resolve
+
+
+def _platform_secrets(session: AsyncSession) -> SecretCatalogService:
+    context = UserContext(user_id=PLATFORM_PRINCIPAL_ID, workspace_id=PLATFORM_WORKSPACE_ID)
+    return SecretCatalogService(session, context, get_real_secret_manager(session, context))
+
+
+async def platform_secret_id(session: AsyncSession, ref: str) -> UUID:
+    """The id of the platform workspace's secret a manifest names, by id or by name.
+
+    A platform registry's credentials are such a secret; the manifest names it
+    and the registry keeps its id, never its value.
+    """
+    catalog = _platform_secrets(session)
+    try:
+        try:
+            return (await catalog.get(UUID(ref))).id
+        except ValueError:
+            return (await catalog.get_by_name(ref)).id
+    except SecretNotFoundError as e:
+        raise RegistryCredentialsError(
+            f"credentials_secret_ref {ref!r} names no secret of the platform workspace"
+        ) from e
+
+
+async def record_registry_secret_reference(
+    session: AsyncSession, registry_id: UUID, secret_id: UUID | None
+) -> None:
+    """List the registry among the platform secret's consumers, or nowhere without one."""
+    catalog = _platform_secrets(session)
+    await catalog.clear_references(REGISTRY_SECRET_CONSUMER, str(registry_id))
+    if secret_id is not None:
+        await catalog.add_reference(
+            secret_id, REGISTRY_SECRET_CONSUMER, str(registry_id), REGISTRY_SECRET_FIELD
+        )

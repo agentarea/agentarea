@@ -2534,7 +2534,6 @@ export const zRegistryCreate = z.object({
   source_ref: z.string().max(255).nullish(),
   source_type: z.string(),
   source_url: z.string().nullish(),
-  sync_mode: z.string().optional().default("manual"),
   trust: z
     .enum(["official", "verified", "community", "private"])
     .optional()
@@ -2613,7 +2612,6 @@ export const zRegistryResponse = z.object({
   source_ref: z.string().nullish(),
   source_type: z.string(),
   source_url: z.string(),
-  sync_mode: z.string(),
   trust: z.enum(["official", "verified", "community", "private"]),
   updated_at: z.string().datetime(),
   workspace_id: z.string().nullish(),
@@ -2629,7 +2627,6 @@ export const zRegistryUpdate = z.object({
   name: z.string().nullish(),
   recommendation_priority: z.number().int().gte(0).nullish(),
   source_url: z.string().nullish(),
-  sync_mode: z.string().nullish(),
   trust: z.enum(["official", "verified", "community", "private"]).nullish(),
 });
 

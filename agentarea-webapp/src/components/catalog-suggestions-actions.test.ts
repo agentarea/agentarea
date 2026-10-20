@@ -61,7 +61,6 @@ describe("listCatalogSuggestionsAction", () => {
           source_type: "url",
           source_url:
             "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json",
-          sync_mode: "manual",
           is_active: true,
           scope: "platform",
           mode: "mirror",

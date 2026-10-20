@@ -71,7 +71,6 @@ class RegistryCreate(BaseModel):
         None,
         description="Registry source URL; omitted when source_type is 'managed'",
     )
-    sync_mode: str = Field(default="manual", description="'auto' or 'manual'")
     recommendation_priority: int | None = Field(
         None,
         ge=0,
@@ -98,7 +97,6 @@ class RegistryUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     source_url: str | None = None
-    sync_mode: str | None = None
     is_active: bool | None = None
     recommendation_priority: int | None = Field(None, ge=0)
     mode: RegistryMode | None = None
@@ -114,7 +112,6 @@ class RegistryResponse(BaseModel):
     source_url: str
     source_ref: str | None = None
     source_path: str | None = None
-    sync_mode: str
     is_active: bool
     scope: RegistryScope
     # The owning workspace of a workspace registry; null for the platform's.
@@ -141,7 +138,6 @@ class RegistryResponse(BaseModel):
             source_url=r.source_url,
             source_ref=r.source_ref,
             source_path=r.source_path,
-            sync_mode=r.sync_mode,
             is_active=r.is_active,
             scope=type_cast(RegistryScope, r.scope),
             workspace_id=r.workspace_id,
@@ -400,7 +396,6 @@ async def create_registry(
             source_type=data.source_type,
             source_url=data.source_url,
             description=data.description,
-            sync_mode=data.sync_mode,
             recommendation_priority=data.recommendation_priority,
             mode=data.mode,
             trust=data.trust,

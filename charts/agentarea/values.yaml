@@ -1286,7 +1286,11 @@ registryReconcile:
   # `mode` is `mirror` (the default: a skills registry's content is copied into
   # object storage at sync, so the Job needs the storage credentials) or
   # `upstream` (content is fetched on first install); `trust` is `official`
-  # (default), `verified` or `community`. An entry with `active: false` and no
+  # (default), `verified` or `community`. `credentials_secret_ref` names a
+  # secret of the `platform` workspace (by name or id) a sync reads a private
+  # source with; only the reference is stored. Every field is applied to an
+  # existing registry on each run (a moved source is read again in full); a
+  # changed `type` is refused. An entry with `active: false` and no
   # `source_url` retires that registry: what nothing uses is deleted.
   registries:
     - name: system-llm-providers
