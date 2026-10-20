@@ -1,7 +1,7 @@
 """State, lifecycle flags and event publishing shared by every part of the agent workflow."""
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from temporalio import workflow
@@ -83,6 +83,12 @@ class AgentWorkflowBase:
         # The model-call failure _call_llm already reported as llm.call.failed.
         self._reported_llm_failure: BaseException | None = None
         self._waiting_for_continuation = False
+        # A service the run needs is down; the run waits for it (see OutageWaitMixin).
+        self._waiting_for_outage = False
+        self._outage_reason: str | None = None
+        self._outage_service: str | None = None
+        self._outage_since: datetime | None = None
+        self._retry_outage_now = False
         # A continuation grant is persisting its policy revision; a second grant is refused.
         self._continuation_in_flight = False
         self._continuation_failure_reason: str | None = None
@@ -433,6 +439,42 @@ class AgentWorkflowBase:
         self._remember_external_urls()
         del self.state.messages[: len(messages)]
         self.state.conversation_next_seq = first_seq + len(rows)
+
+    async def _record_at(self, seq: int, event_id: str, message: Message) -> None:
+        """Write one row at a position the run reserved earlier, under the id it chose there.
+
+        Whatever else was meant to fill that position (an activity the run gave
+        up on) shares the id, so the log keeps exactly one of them.
+        """
+        await workflow.execute_activity(
+            Activities.RECORD,
+            args=[
+                RecordRequest(
+                    task_id=self.state.task_id,
+                    workspace_id=self.state.workspace_id,
+                    user_id=self.state.user_id,
+                    execution_id=self.state.execution_id,
+                    rows=[
+                        LogRow(
+                            seq=seq,
+                            event_id=event_id,
+                            kind=message.kind,
+                            role=message.role,
+                            content=message.content,
+                            tool_call_id=message.tool_call_id,
+                            name=message.name,
+                            iteration=self.state.current_iteration,
+                        )
+                    ],
+                    events_json=[],
+                )
+            ],
+            start_to_close_timeout=ACTIVITY_TIMEOUT,
+            schedule_to_close_timeout=EVENT_PUBLISH_WINDOW,
+            retry_policy=make_retry_policy(0, maximum_interval=EVENT_PUBLISH_TIMEOUT),
+        )
+        if message.tool_call_id:
+            self._recorded_turn_answered.add(message.tool_call_id)
 
     async def _persist_task_status(self, request: UpdateTaskStatusRequest) -> None:
         """Store the task's status: with the pending log rows on the task log, else alone."""

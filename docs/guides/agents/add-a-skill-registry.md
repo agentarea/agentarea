@@ -166,8 +166,13 @@ In the web app, everything below is on **Settings → Registries**
     levels, registries or **Direct GitHub imports**.
 
     The rules apply to new installs, updates, edits of catalog items, direct
-    GitHub imports, and tasks that use a catalog skill or agent the workspace
-    never installed. A skill installed before the rule keeps working.
+    GitHub imports, and every task that uses a skill from a registry or a
+    GitHub import, installed or not. A skill installed before the rule is not
+    offered to new tasks once the rule denies its registry (the task's feed
+    shows `skill.withheld`), and activating it fails with the rule; it stays in
+    the workspace and comes back when the rule is lifted. Tasks are held to the
+    workspace's rules only; rules on a user apply to what that user installs.
+    Skills the workspace wrote itself are not affected.
   </Step>
 </Steps>
 

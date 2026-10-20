@@ -47,8 +47,8 @@ async def session():
     await engine.dispose()
 
 
-async def _deny_community(session) -> None:
-    await PolicyRuleRepository(session, CALLER).create(
+async def _deny_community(session) -> PolicyRule:
+    rule = await PolicyRuleRepository(session, CALLER).create(
         PolicyRule(
             subject_type=PolicySubjectType.WORKSPACE,
             subject_id=CALLER.workspace_id,
@@ -57,6 +57,7 @@ async def _deny_community(session) -> None:
         )
     )
     await session.commit()
+    return rule
 
 
 def _from(item, trust: str):
@@ -290,3 +291,103 @@ async def test_the_skills_toolset_reads_package_files_as_a_run(monkeypatch):
             await call
 
     assert asked == [("files", True), ("url", True), ("content", True)]
+
+
+async def test_an_installed_skill_is_refused_at_run_time_once_its_registry_trust_is_denied(
+    session, community_skill
+):
+    # An install was decided once; a rule written later holds for it at run time.
+    svc, _, _ = _skills(session, [community_skill])
+    skill = await svc.install_catalog_skill(UUID(community_skill.id))
+    assert await svc.get_with_catalog(skill.id, to_run=True) is not None
+
+    rule = await _deny_community(session)
+    with pytest.raises(CatalogInstallRefusedError, match="registry_trust:community"):
+        await svc.get_with_catalog(skill.id, to_run=True)
+    with pytest.raises(CatalogInstallRefusedError):
+        await svc.require_runnable(skill)
+    # Outside a run the workspace still sees and manages its install.
+    assert await svc.get_with_catalog(skill.id) is not None
+
+    await PolicyRuleRepository(session, CALLER).set_enabled(rule.id, False)
+    await session.commit()
+    assert await svc.get_with_catalog(skill.id, to_run=True) is not None
+
+
+async def test_a_skill_imported_from_github_is_refused_at_run_time_once_community_is_denied(
+    session,
+):
+    svc, repo, _ = _skills(session, [])
+    imported = await repo.create(
+        slug="pdf", name="pdf", source_type="github", source_url="https://github.com/o/r/pdf"
+    )
+    await svc.require_runnable(imported)
+
+    await _deny_community(session)
+    with pytest.raises(CatalogInstallRefusedError, match="registry_trust:community"):
+        await svc.require_runnable(imported)
+
+
+async def test_a_skill_the_workspace_wrote_is_not_asked_about(session):
+    await _deny_community(session)
+    svc, repo, _ = _skills(session, [])
+    own = await repo.create(slug="mine", name="mine", source_type="content")
+
+    await svc.require_runnable(own)
+    assert await svc.get_with_catalog(own.id, to_run=True) is own
+
+
+async def test_an_installed_skill_whose_registry_item_is_gone_keeps_working(
+    session, community_skill
+):
+    # Its package is the workspace's own; only a rule on its registry drops it.
+    svc, _, catalog = _skills(session, [community_skill])
+    skill = await svc.install_catalog_skill(UUID(community_skill.id))
+    catalog._items = []
+    await _deny_community(session)
+
+    assert await svc.get_with_catalog(skill.id, to_run=True) is not None
+
+
+async def test_a_members_own_rule_does_not_change_what_a_run_may_use(session, community_skill):
+    # A run uses the agent's skills whoever started it: user rules apply to installs only.
+    another = _from(_skill_item(name="Another"), "community")
+    svc, _, _ = _skills(session, [community_skill, another])
+    skill = await svc.install_catalog_skill(UUID(community_skill.id))
+    await PolicyRuleRepository(session, CALLER).create(
+        PolicyRule(
+            subject_type=PolicySubjectType.USER,
+            subject_id=CALLER.user_id,
+            target="registry_trust:community",
+            effect=PolicyEffect.DENY,
+        )
+    )
+    await session.commit()
+
+    assert await svc.get_with_catalog(skill.id, to_run=True) is not None
+    with pytest.raises(CatalogInstallRefusedError):
+        await svc.install_catalog_skill(UUID(another.id))
+
+
+async def test_one_read_of_provenance_and_rules_decides_every_skill(session, community_skill):
+    official = _from(_skill_item(), "official")
+    svc, _, catalog = _skills(session, [community_skill, official])
+    installed = [
+        await svc.install_catalog_skill(UUID(community_skill.id)),
+        await svc.install_catalog_skill(UUID(official.id)),
+    ]
+    await _deny_community(session)
+    calls = []
+    provenance_for = catalog.provenance_for
+
+    async def counted(item_ids):
+        calls.append(list(item_ids))
+        return await provenance_for(item_ids)
+
+    catalog.provenance_for = counted
+
+    refusals = await svc.run_refusals(installed)
+
+    assert list(refusals) == [str(installed[0].id)]
+    assert "registry_trust:community" in refusals[str(installed[0].id)]
+    assert len(calls) == 1

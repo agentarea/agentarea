@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from agentarea_agents_sdk.tools.tool_manager import DiscoveryResult, ProviderDiscovery
 from agentarea_common.auth.context import UserContext
+from agentarea_common.config.app import AppSettings
 from agentarea_execution.activities import agent_execution_activities as activities
 from agentarea_execution.activities.agent import config as config_activities
 from agentarea_execution.models import (
@@ -179,6 +180,7 @@ def activity_context(monkeypatch):
     skills = ctx.get_skill_service.return_value
     skills.read_skill_md = AsyncMock(side_effect=lambda skill: skill.content)
     skills.packages.list_paths = AsyncMock(return_value=["SKILL.md"])
+    skills.run_refusals = AsyncMock(return_value={})
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     monkeypatch.setattr(
@@ -188,7 +190,9 @@ def activity_context(monkeypatch):
     )
     monkeypatch.setattr(config_activities, "_record_task_config_hash", AsyncMock())
     monkeypatch.setattr(config_activities, "_load_project_instructions", AsyncMock(return_value=[]))
-    all_activities = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
+    dependencies_ = MagicMock()
+    dependencies_.settings.app = AppSettings()
+    all_activities = {fn.__name__: fn for fn in activities.make_agent_activities(dependencies_)}
     return ctx, all_activities
 
 
@@ -219,7 +223,7 @@ async def test_config_activity_uses_selected_skills_and_mcp_in_run_hash(activity
 
     assert result.tools == [{"type": "mcp", "name": str(instance.id)}]
     assert result.skills[0].name == selected_skill.name
-    assert result.skills[0].content == selected_skill.content
+    assert result.skills[0].content == ""
     assert result.config_hash != inherited.config_hash
     assert saved.skills == []
     assert saved.tools == []
@@ -493,15 +497,19 @@ async def test_a_large_trigger_event_is_written_whole_into_the_runs_own_inputs(f
     ]
     assert json.loads(content) == data
     assert content_type == "application/json"
-    assert first == second == [
-        {
-            "relative_path": "inputs/attachments/trigger-event-9.json",
-            "filename": "trigger-event-9.json",
-            "size": len(content),
-            "content_type": "application/json",
-            "sha256": hashlib.sha256(content).hexdigest(),
-        }
-    ]
+    assert (
+        first
+        == second
+        == [
+            {
+                "relative_path": "inputs/attachments/trigger-event-9.json",
+                "filename": "trigger-event-9.json",
+                "size": len(content),
+                "content_type": "application/json",
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+        ]
+    )
     assert repository.put_files.await_count == 1
     assert "inputs/attachments/trigger-event-9.json" in _render_workspace_attachment_prompt(first)
 
@@ -648,31 +656,6 @@ async def test_workflow_forwards_selections_and_keeps_policy_filtering(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_a_selected_skill_whose_source_is_gone_fails_the_run_without_retries(
-    activity_context,
-):
-    from agentarea_agents.infrastructure.github_skill_importer import GitHubSourceGoneError
-
-    ctx, functions = activity_context
-    saved = agent()
-    selected_skill = skill()
-    ctx.get_agent_service.return_value.get_with_skills.return_value = saved
-    ctx.get_skill_service.return_value.get_with_catalog.return_value = selected_skill
-    ctx.get_skill_service.return_value.read_skill_md.side_effect = GitHubSourceGoneError(
-        "The skill was removed upstream: o/r/pdf"
-    )
-    request = AgentConfigRequest(
-        agent_id=saved.id,
-        user_context_data={"user_id": "user", "workspace_id": "workspace"},
-        task_parameters={"skills": [{"id": str(selected_skill.id)}]},
-    )
-
-    with pytest.raises(ApplicationError, match="removed upstream") as error:
-        await functions["build_agent_config_activity"](request)
-    assert error.value.non_retryable
-
-
-@pytest.mark.asyncio
 async def test_a_skill_the_install_policy_refuses_fails_the_run_without_retries(activity_context):
     from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 
@@ -716,29 +699,56 @@ async def test_a_catalog_agent_the_install_policy_refuses_fails_the_run_without_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("bodies", "message"),
-    [
-        (["x" * 101], "Skill 'S0' has a SKILL.md of 101 bytes"),
-        (["x" * 60, "y" * 60], "together exceed 100 bytes"),
-    ],
-)
-async def test_skill_bodies_too_large_for_the_run_config_fail_without_retries(
-    activity_context, monkeypatch, bodies, message
-):
-    # Every body rides in the config activity's result, a Temporal payload
-    # (2 MB warn, 4 MB hard): a large SKILL.md fails the run at config time.
-    monkeypatch.setattr(config_activities, "MAX_SKILL_CONTENT_BYTES", 100)
-    monkeypatch.setattr(config_activities, "MAX_SKILLS_CONTENT_BYTES", 100)
+async def test_the_config_result_carries_no_skill_body_and_reads_no_package(activity_context):
     ctx, functions = activity_context
-    skills = [skill(f"S{i}") for i in range(len(bodies))]
-    for selected, body in zip(skills, bodies, strict=True):
-        selected.content = body
+    skills = [skill(f"S{i}") for i in range(5)]
+    skills[0].content = "x" * (2 * 1024 * 1024)
+    skills[1].s3_path = "skills/catalog/" + "a" * 64 + "/"
     ctx.get_agent_service.return_value.get_with_skills.return_value = agent(skills=skills)
+    ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
+    )
     request = AgentConfigRequest(
         agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
     )
 
-    with pytest.raises(ApplicationError, match=message) as error:
-        await functions["build_agent_config_activity"](request)
-    assert error.value.non_retryable
+    result = await functions["build_agent_config_activity"](request)
+
+    assert [s.name for s in result.skills] == [s.name for s in skills]
+    assert all(s.content == "" for s in result.skills)
+    assert result.skills[1].package == skills[1].s3_path
+    assert len(result.model_dump_json()) < 10_000
+    service = ctx.get_skill_service.return_value
+    service.read_skill_md.assert_not_awaited()
+    service.packages.list_paths.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_attached_skill_the_install_policy_now_denies_is_not_offered(activity_context):
+    ctx, functions = activity_context
+    allowed, denied = skill("Allowed"), skill("Community")
+
+    refusals = AsyncMock(return_value={str(denied.id): "denied by registry_trust:community"})
+    ctx.get_skill_service.return_value.run_refusals = refusals
+    ctx.get_agent_service.return_value.get_with_skills.return_value = agent(
+        skills=[allowed, denied]
+    )
+    ctx.get_model_instance_service.return_value.get.return_value = SimpleNamespace(
+        model_spec=SimpleNamespace(
+            kind="chat", context_window=64000, default_context_strategy="static"
+        )
+    )
+    request = AgentConfigRequest(
+        agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
+    )
+
+    result = await functions["build_agent_config_activity"](request)
+
+    assert [s.name for s in result.skills] == ["Allowed"]
+    assert [(s.name, s.reason) for s in result.withheld_skills] == [
+        ("Community", "denied by registry_trust:community")
+    ]
+    # One decision for every skill of the run.
+    refusals.assert_awaited_once()

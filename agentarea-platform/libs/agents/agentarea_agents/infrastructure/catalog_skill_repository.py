@@ -57,6 +57,7 @@ class CatalogSkillItem:
 class CatalogProvenance:
     """Where an installed skill's catalog item comes from, as its page shows it."""
 
+    registry_id: str
     registry_name: str
     registry_scope: str
     registry_trust: str
@@ -212,7 +213,7 @@ class CatalogSkillRepository:
         if not item_ids:
             return {}
         stmt = text(
-            "SELECT ri.id, r.name AS registry_name, r.scope AS registry_scope, "
+            "SELECT ri.id, ri.registry_id, r.name AS registry_name, r.scope AS registry_scope, "
             "ri.registry_trust, (NOT ri.in_source OR NOT ri.registry_active) AS removed "
             "FROM registry_items ri JOIN registries r ON r.id = ri.registry_id "
             "WHERE ri.registry_type = 'skills' AND " + _VISIBLE + " "
@@ -227,6 +228,7 @@ class CatalogSkillRepository:
         )
         return {
             str(row.id): CatalogProvenance(
+                registry_id=str(row.registry_id),
                 registry_name=row.registry_name,
                 registry_scope=row.registry_scope,
                 registry_trust=row.registry_trust,

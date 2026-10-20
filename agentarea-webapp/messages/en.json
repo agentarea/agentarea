@@ -1396,6 +1396,7 @@
       "error": "Error",
       "cancelled": "Cancelled",
       "paused": "Paused",
+      "waitingForInfrastructure": "Waiting for a service",
       "pending": "Pending",
       "scheduled": "Scheduled"
     },
@@ -1705,6 +1706,9 @@
       "taskAwaitingFollowUp": "Waiting for a follow-up",
       "taskAwaitingContinuation": "Waiting to continue",
       "taskContinued": "Task continued",
+      "taskAwaitingInfrastructure": "Waiting for a service",
+      "taskInfrastructureRecovered": "Service is back",
+      "skillWithheld": "Skill withheld by policy",
       "taskRetried": "Task retried",
       "executionFinished": "Run finished",
       "executionContinuedAsNew": "Run restarted with fresh history",

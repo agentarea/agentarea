@@ -53,7 +53,7 @@ different set of defaults.
 
 ### The status machine
 
-Eleven values pass validation (`BaseTaskService._validate_task`). Ten are
+Twelve values pass validation (`BaseTaskService._validate_task`). Eleven are
 written by some path today:
 
 | Status | Written by |
@@ -64,6 +64,7 @@ written by some path today:
 | `running` | `TemporalTaskManager.submit_task`, once the workflow has started, together with `execution_id`. |
 | `waiting_for_input` | The workflow, when the agent calls `request_user_input`. It waits 30 minutes for an answer. |
 | `waiting_for_continuation` | The workflow, on the iteration limit or the budget ceiling. It waits up to 24 hours. |
+| `waiting_for_infrastructure` | The workflow, while a service it needs (skill storage) is unreachable. It retries on its own and goes back to `running`. |
 | `completed` | The workflow, as soon as the completion gate passes — not at workflow exit. |
 | `failed` | The workflow, on an unsuccessful termination or an unhandled error. |
 | `blocked` | The workflow, when a required capability is unavailable. |
@@ -139,6 +140,29 @@ both, as a Temporal update that returns whether the grant was accepted. The
 grant must match the reason: additional iterations for `iteration_limit`,
 additional budget for `budget_exceeded`. A mismatched or late grant returns 409.
 If the window expires, the task ends `failed`.
+
+### Waiting for a service
+
+An activity that cannot reach a service it needs retries with backoff (2 s
+growing to 60 s) for `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW`, 5 minutes by
+default; a short outage goes unnoticed. If the service is still down, the
+workflow writes `waiting_for_infrastructure`, emits
+`task.awaiting_infrastructure` with the service and the error, and retries
+after each step of `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` (1, 5, then every 10
+minutes). When the service answers it emits `task.infrastructure_recovered`,
+writes `running` and goes on by itself; the service answering with a final
+error (the skill was deleted meanwhile) ends the wait the same way, and the
+error goes to the model. Resuming the task retries at once and lifts a pause; a
+paused task does not retry, and the time it spends paused does not count toward
+the deadline; cancelling stops the wait. Once
+`AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` (24 hours) has passed, or ten minutes
+before the run's own execution timeout (a delegated agent's is six hours,
+counted from its first run across continue-as-new),
+the task ends `failed` with failure reason `dependency_unavailable` and a
+message naming the service; a retry continues it from there. Only an
+unreachable service is waited out (object storage, the database, GitHub); any
+other error is final at once. A 24-hour wait adds about 1,700 events to the
+run's history. Skill activation is the one call that waits this way today.
 
 ## Why not derive status from Temporal
 

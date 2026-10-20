@@ -10,10 +10,6 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agentarea_agents.domain.config_hash import compute_agent_config_hash
-from agentarea_agents.infrastructure.github_skill_importer import (
-    GitHubSourceGoneError,
-    GitHubTreeMismatchError,
-)
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
 from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
@@ -30,6 +26,7 @@ from ...models import (
     AgentConfigResult,
     DiscoverToolProvidersResult,
     McpToolRoute,
+    OutageWait,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
     RuntimeDiscoveryResult,
@@ -39,6 +36,7 @@ from ...models import (
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     ToolProviderData,
+    WithheldSkill,
 )
 from ..runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
 
@@ -47,11 +45,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Every SKILL.md rides in this activity's result, a Temporal payload (2 MB warns,
-# 4 MB fails the workflow task): one large body, or many, must fail the run
-# here with the reason rather than as an opaque payload error.
-MAX_SKILL_CONTENT_BYTES = 256 * 1024
-MAX_SKILLS_CONTENT_BYTES = 1024 * 1024
+
+def _package_pointer(skill: Any) -> str | None:
+    """Where the skill's package is, as far as the row says without reading storage."""
+    if skill.s3_path:
+        return skill.s3_path
+    mirrored = (getattr(skill, "catalog_spec", None) or {}).get("package")
+    return mirrored.get("s3_path") if isinstance(mirrored, dict) else None
 
 
 def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
@@ -84,6 +84,23 @@ def _task_resource_ids(parameters: dict[str, Any], kind: str) -> list[UUID]:
         if resource_id not in ids:
             ids.append(resource_id)
     return ids
+
+
+async def _runnable_skills(skills: list[Any], ctx: Any) -> tuple[list[Any], list[WithheldSkill]]:
+    """The run's skills the install policy still lets it use, and those it withholds."""
+    if not skills:
+        return [], []
+    refusals = await (await ctx.get_skill_service()).run_refusals(skills)
+    withheld = [
+        WithheldSkill(id=str(skill.id), name=skill.name, reason=refusals[str(skill.id)])
+        for skill in skills
+        if str(skill.id) in refusals
+    ]
+    for skill in withheld:
+        logger.warning(
+            "Skill %s (%s) is not offered to this run: %s", skill.name, skill.id, skill.reason
+        )
+    return [skill for skill in skills if str(skill.id) not in refusals], withheld
 
 
 async def _resolve_task_resources(
@@ -384,45 +401,18 @@ def make_config_activities(
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
             tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
+            skills, withheld_skills = await _runnable_skills(skills, ctx)
             runtime = await discover_runtime_manifest_activity()
 
-            # Build skill information
-            skills_info = []
-            if skills:
-                skill_service = await ctx.get_skill_service()
-                total_bytes = 0
-                for skill in skills:
-                    try:
-                        content = await skill_service.read_skill_md(skill)
-                        paths = await skill_service.packages.list_paths(skill)
-                    except (GitHubSourceGoneError, GitHubTreeMismatchError) as exc:
-                        # Retrying cannot bring an upstream folder back.
-                        raise ApplicationError(
-                            f"Skill '{skill.name}' cannot be read: {exc}", non_retryable=True
-                        ) from exc
-                    size = len(content.encode("utf-8"))
-                    total_bytes += size
-                    if size > MAX_SKILL_CONTENT_BYTES:
-                        raise ApplicationError(
-                            f"Skill '{skill.name}' has a SKILL.md of {size} bytes; a run takes "
-                            f"at most {MAX_SKILL_CONTENT_BYTES} per skill",
-                            non_retryable=True,
-                        )
-                    if total_bytes > MAX_SKILLS_CONTENT_BYTES:
-                        raise ApplicationError(
-                            f"The SKILL.md files of this run's skills together exceed "
-                            f"{MAX_SKILLS_CONTENT_BYTES} bytes",
-                            non_retryable=True,
-                        )
-                    skills_info.append(
-                        SkillInfo(
-                            id=str(skill.id),
-                            name=skill.name,
-                            description=skill.description or "",
-                            content=content,
-                            files=["(additional files available)"] if len(paths) > 1 else [],
-                        )
-                    )
+            skills_info = [
+                SkillInfo(
+                    id=str(skill.id),
+                    name=skill.name,
+                    description=skill.description or "",
+                    package=_package_pointer(skill),
+                )
+                for skill in skills
+            ]
 
             # Fetch model context window and context strategy from ModelSpec
             model_id_str = request.override_model or agent.model_id
@@ -517,6 +507,13 @@ def make_config_activities(
                 execution_context=execution_context,
                 step_type=request.step_type,
                 skills=skills_info,
+                outage_wait=OutageWait(
+                    retry_window=dependencies.settings.app.TASK_OUTAGE_RETRY_WINDOW,
+                    backoff=dependencies.settings.app.TASK_OUTAGE_WAIT_BACKOFF,
+                    deadline=dependencies.settings.app.TASK_OUTAGE_WAIT_DEADLINE,
+                ),
+                skills_window_share=dependencies.settings.app.TASK_SKILLS_WINDOW_SHARE,
+                withheld_skills=withheld_skills,
                 runtime=runtime,
                 runtime_event_data=runtime_event_data(runtime),
                 openapi_operation_tools=openapi_operation_tools,

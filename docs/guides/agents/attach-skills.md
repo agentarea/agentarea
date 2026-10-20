@@ -123,6 +123,13 @@ next model turn.
     or on `registry_trust:community`. An admin changes the rule under
     **Policies**, or installs from a registry the rules allow.
   </Accordion>
+  <Accordion title="An installed skill is no longer offered to tasks">
+    A workspace install rule written after the install denies the skill's
+    registry or trust level; the task's feed shows a `skill.withheld` event
+    naming the rule. Activating it in a running task
+    returns a tool error naming the rule. Lift or narrow the rule under
+    **Policies** and the next task offers the skill again.
+  </Accordion>
   <Accordion title="Update answers 409 skill_customized">
     The skill was edited in this workspace. Pass `discard_changes=true` to
     replace the edit with the catalog's version, or leave it as it is.

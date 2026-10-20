@@ -10,6 +10,7 @@ with workflow.unsafe.imports_passed_through():
 
 from ...llm_failures import LLM_FAILURE_DETAIL
 from .base import AgentWorkflowBase
+from .outage import DEPENDENCY_UNAVAILABLE
 
 # failure_reason of a gate denial that carries no entitlement code of its own.
 GOVERNANCE_DENIED_FAILURE_REASON = "governance_denied"
@@ -77,6 +78,8 @@ class ErrorReportingMixin(AgentWorkflowBase):
     @staticmethod
     def _failure_cause(error: Exception) -> str | None:
         """The stable code of a classified model-call failure, for failure_reason."""
+        if isinstance(error, ApplicationError) and error.type == DEPENDENCY_UNAVAILABLE:
+            return "dependency_unavailable"
         failure = ErrorReportingMixin._llm_failure(error)
         return failure.get("cause") if failure else None
 
@@ -89,7 +92,10 @@ class ErrorReportingMixin(AgentWorkflowBase):
         failure = ErrorReportingMixin._llm_failure(error)
         if failure and failure.get("message"):
             return failure["message"]
-        if isinstance(error, ApplicationError) and error.type == RUN_INPUT_EXCEEDS_CONTEXT_WINDOW:
+        if isinstance(error, ApplicationError) and error.type in (
+            RUN_INPUT_EXCEEDS_CONTEXT_WINDOW,
+            DEPENDENCY_UNAVAILABLE,
+        ):
             return error.message
 
         msg = str(error).lower()
@@ -140,6 +146,8 @@ class ErrorReportingMixin(AgentWorkflowBase):
             return "GovernanceDenied"
         if isinstance(error, ApplicationError) and error.type == RUN_INPUT_EXCEEDS_CONTEXT_WINDOW:
             return "ContextWindowExceeded"
+        if isinstance(error, ApplicationError) and error.type == DEPENDENCY_UNAVAILABLE:
+            return DEPENDENCY_UNAVAILABLE
         failure = ErrorReportingMixin._llm_failure(error)
         if failure and failure.get("error_type"):
             return failure["error_type"]

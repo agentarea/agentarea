@@ -111,8 +111,7 @@ class _Harness:
             self.execute,
             ExecuteTriggerRequest(
                 trigger_id=self.trigger.id,
-                execution_data=execution_data
-                or {"execution_time": datetime.utcnow().isoformat()},
+                execution_data=execution_data or {"execution_time": datetime.utcnow().isoformat()},
             ),
             *patches,
         )

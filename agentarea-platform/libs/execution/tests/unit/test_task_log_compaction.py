@@ -56,7 +56,9 @@ def test_the_summarizer_is_told_a_skill_is_active_and_a_repeat_is_not_carried_as
     already = "Skill 'pirate-codeword' is already active in this session."
     window = [
         ConversationEntry(seq=0, role="system", content="Agent instructions"),
-        ConversationEntry(seq=1, role="tool", content=skill, tool_call_id="a", name="activate_skill"),
+        ConversationEntry(
+            seq=1, role="tool", content=skill, tool_call_id="a", name="activate_skill"
+        ),
         ConversationEntry(
             seq=2, role="tool", content=already, tool_call_id="b", name="activate_skill"
         ),

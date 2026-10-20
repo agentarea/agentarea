@@ -323,9 +323,7 @@ async def test_a_decision_less_approval_response_is_not_a_second_decision():
 
     await publish(
         _request(
-            _tool_event(
-                str(uuid4()), str(uuid4()), "approval.decided", tool_name="x", comment="no"
-            )
+            _tool_event(str(uuid4()), str(uuid4()), "approval.decided", tool_name="x", comment="no")
         )
     )
 

@@ -72,6 +72,8 @@ class ContinueAsNewMixin(CompactionMixin):
         self.state.context_window = state.context_window
         self.state.user_context_data = state.user_context_data
         self.state.activated_skills = state.activated_skills
+        self.state.skill_tokens_used = state.skill_tokens_used
+        self.state.chain_expires_at = state.chain_expires_at
         self.state.context_strategy = state.context_strategy
         self.state.history_chunk_counter = state.history_chunk_counter
         self.state.activated_tool_sources = state.activated_tool_sources
@@ -270,6 +272,8 @@ class ContinueAsNewMixin(CompactionMixin):
             continued_from_run_id=workflow.info().run_id,
             agent_tool_registry=self._agent_tool_registry,
             activated_skills=self.state.activated_skills,
+            skill_tokens_used=self.state.skill_tokens_used,
+            chain_expires_at=self.state.chain_expires_at,
             context_strategy=self.state.context_strategy,
             history_chunk_counter=self.state.history_chunk_counter,
             activated_tool_sources=self.state.activated_tool_sources,

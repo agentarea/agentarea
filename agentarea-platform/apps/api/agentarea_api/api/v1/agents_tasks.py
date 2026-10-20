@@ -2059,7 +2059,12 @@ async def resume_agent_task(
             )
 
         live_state = await workflow_task_service.get_live_state(execution_id)
-        if live_state is not None and not live_state.get("paused"):
+        # A run waiting out an outage takes a resume as "retry now".
+        if (
+            live_state is not None
+            and not live_state.get("paused")
+            and not live_state.get("waiting_for_infrastructure")
+        ):
             raise HTTPException(status_code=400, detail="Task is not paused")
 
         # Resume the workflow

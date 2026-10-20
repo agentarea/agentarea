@@ -108,7 +108,9 @@ async def test_a_run_stopped_at_its_llm_cap_does_not_wait_for_a_grant(monkeypatc
 
 def test_a_resumed_run_carries_the_tasks_llm_spend_on(monkeypatch):
     workflow = _workflow(monkeypatch)
-    snapshot = ConversationResumeSnapshot(head_seqs=[], tail_start=0, next_seq=4, current_iteration=2)
+    snapshot = ConversationResumeSnapshot(
+        head_seqs=[], tail_start=0, next_seq=4, current_iteration=2
+    )
 
     workflow._adopt_resume(
         AgentExecutionResume(snapshot=snapshot, total_cost=Decimal("3"), llm_cost=Decimal("1.2"))

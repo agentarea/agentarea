@@ -39,4 +39,3 @@ def test_the_floor_is_the_first_prompt_measured_after_a_compaction(instance):
     instance._note_prompt_tokens(5_000)
 
     assert instance._compaction_floor_tokens == 3_000
-

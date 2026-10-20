@@ -4,6 +4,18 @@ from ..tools.decorator_tool import Toolset, tool_method
 from .skill_catalog_builder import SkillEntry
 
 
+def wrap_skill_content(skill_name: str, body: str, files: list[str] | None = None) -> str:
+    """An activated skill's instructions as the model reads them, and compaction keeps them."""
+    result = f'<skill_content name="{skill_name}">\n'
+    result += body
+    if files:
+        result += "\n\nSkill files:\n"
+        for f in files:
+            result += f"- {f}\n"
+    result += "</skill_content>"
+    return result
+
+
 class SkillActivationTool(Toolset):
     """Load full instructions for an available skill. Call this when a task matches a skill's description."""
 
@@ -24,24 +36,28 @@ class SkillActivationTool(Toolset):
         Args:
             skill_name: Name of the skill to activate from the available skills catalog
         """
+        refusal = self.refusal(skill_name)
+        if refusal is not None:
+            return refusal
+        return self.render(skill_name, self._skills_registry[skill_name].content)
+
+    def refusal(self, skill_name: str) -> str | None:
+        """Why ``skill_name`` cannot be activated now, or ``None`` when it can."""
         if skill_name in self._activated:
             return f"Skill '{skill_name}' is already active in this session."
-
-        entry = self._skills_registry.get(skill_name)
-        if not entry:
+        if skill_name not in self._skills_registry:
             available = ", ".join(self._skills_registry.keys())
             return f"Unknown skill '{skill_name}'. Available: {available}"
+        return None
 
+    def mark_active(self, skill_name: str) -> None:
+        """Record ``skill_name`` as active, its instructions delivered by the caller."""
         self._activated.add(skill_name)
 
-        result = f'<skill_content name="{skill_name}">\n'
-        result += entry.content
-        if entry.files:
-            result += "\n\nSkill files:\n"
-            for f in entry.files:
-                result += f"- {f}\n"
-        result += "</skill_content>"
-        return result
+    def render(self, skill_name: str, body: str) -> str:
+        """Mark ``skill_name`` active and wrap its body for the model."""
+        self.mark_active(skill_name)
+        return wrap_skill_content(skill_name, body, self._skills_registry[skill_name].files)
 
     def get_schema(self) -> dict:
         """Override to constrain skill_name to valid enum values."""

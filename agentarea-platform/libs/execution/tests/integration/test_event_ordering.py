@@ -126,9 +126,7 @@ class TestEventOrdering:
     @pytest.mark.asyncio
     async def test_normal_iteration_emits_iteration_completed(self):
         """Plain text response (no completion tool) still emits turn.completed."""
-        result, capture = await _run_workflow(
-            [llm_response_text()], max_iterations=1
-        )
+        result, capture = await _run_workflow([llm_response_text()], max_iterations=1)
 
         types = capture.event_types
         assert "turn.completed" in types, f"Missing turn.completed in {types}"
@@ -136,10 +134,12 @@ class TestEventOrdering:
     @pytest.mark.asyncio
     async def test_multi_iteration_event_ordering(self):
         """Tool call then completion: two turn.completed, task.completed last."""
-        result, capture = await _run_workflow([
-            llm_response_tool_call("search"),
-            llm_response_completion(),
-        ])
+        result, capture = await _run_workflow(
+            [
+                llm_response_tool_call("search"),
+                llm_response_completion(),
+            ]
+        )
 
         assert result.success is True
 
@@ -167,8 +167,8 @@ class TestEventOrdering:
         assert types.count("turn.started") == 1, types
         assert "turn.completed" not in types, types
         assert types.count("turn.aborted") == 1, types
-        assert types.index("turn.started") < types.index("turn.aborted") < types.index(
-            "task.failed"
+        assert (
+            types.index("turn.started") < types.index("turn.aborted") < types.index("task.failed")
         ), types
         (aborted,) = [e for e in capture.events if e["event_type"] == "turn.aborted"]
         assert aborted["data"]["iteration"] == 1

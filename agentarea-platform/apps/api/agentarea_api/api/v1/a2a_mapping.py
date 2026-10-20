@@ -50,6 +50,7 @@ _TASK_STATES: dict[str, TaskState] = {
     "waiting_for_input": TaskState.TASK_STATE_INPUT_REQUIRED,
     "waiting_for_approval": TaskState.TASK_STATE_INPUT_REQUIRED,
     "waiting_for_continuation": TaskState.TASK_STATE_INPUT_REQUIRED,
+    "waiting_for_infrastructure": TaskState.TASK_STATE_WORKING,
     "completed": TaskState.TASK_STATE_COMPLETED,
     "failed": TaskState.TASK_STATE_FAILED,
     "blocked": TaskState.TASK_STATE_FAILED,

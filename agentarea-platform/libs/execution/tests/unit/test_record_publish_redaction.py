@@ -91,9 +91,7 @@ async def test_a_secret_in_tool_arguments_is_never_published(monkeypatch):
         _database=SimpleNamespace(async_session_factory=_session),
         log_body_store=lambda: None,
     )
-    [record_activity] = make_record_activities(
-        SimpleNamespace(broker_client=broker), container
-    )
+    [record_activity] = make_record_activities(SimpleNamespace(broker_client=broker), container)
 
     await record_activity(request)
 

@@ -4,7 +4,6 @@ Tests the full compaction lifecycle: large conversations triggering compaction,
 boundary preservation, tool pair safety, multiple compactions, orphan repair.
 """
 
-
 from agentarea_execution.workflows.context_manager import (
     ContextWindowManager,
     estimate_tokens_for_messages,
@@ -191,10 +190,7 @@ class TestToolPairIntegrity:
         repaired = [
             msg
             for msg in messages
-            if not (
-                msg.get("role") == "tool"
-                and msg.get("tool_call_id") not in tool_use_ids
-            )
+            if not (msg.get("role") == "tool" and msg.get("tool_call_id") not in tool_use_ids)
         ]
         assert validate_tool_pairs(repaired) is True
         assert len(repaired) == 3  # system + assistant + user

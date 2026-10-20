@@ -174,6 +174,10 @@ groups:
       AGENTAREA_ENV: 'production'
       AGENTAREA_MCP_MANAGER_URL: 'http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}'
       AGENTAREA_WORKER_HEALTH_PORT: '{{ .Values.worker.healthPort }}'
+      AGENTAREA_TASK_OUTAGE_RETRY_WINDOW: '{{ .Values.worker.outageWait.retryWindow }}'
+      AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF: '{{ .Values.worker.outageWait.backoff }}'
+      AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE: '{{ .Values.worker.outageWait.deadline }}'
+      AGENTAREA_TASK_SKILLS_WINDOW_SHARE: '{{ .Values.worker.skillsWindowShare }}'
       # Links the worker sends out, e.g. a Telegram bot's "link your account" reply.
       AGENTAREA_APP_URL: '{{ include "agentarea.frontendUrl" . }}'
 

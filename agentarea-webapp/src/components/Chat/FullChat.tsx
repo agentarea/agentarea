@@ -3,12 +3,12 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import type { PolicyDocument } from "@/api/client/types.gen";
+import { scheduleTask } from "@/components/actions";
 import type { HumanInputSecretValue } from "@/components/Chat/types";
 import FormError from "@/components/FormError";
 import type { TaskResourceRef } from "@/components/ResourcePicker/TaskResourceAttach";
 import { TaskRetryButton } from "@/components/TaskRetryButton";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { scheduleTask } from "@/components/actions";
 import { useMentions } from "@/hooks/useMentions";
 import { useTaskActions } from "@/hooks/useTaskActions";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -51,11 +51,11 @@ import { useTaskLifecycle } from "./hooks/useTaskLifecycle";
 import { createTaskWithAttachments } from "./utils/createTaskWithAttachments";
 import { deliverTaskMessage } from "./utils/deliverTaskMessage";
 import { openTaskEventStream } from "./utils/openTaskEventStream";
-import { uploadAttachments } from "./utils/uploadAttachments";
 import {
   adoptCreatedTaskId,
   routeComposerMessage,
 } from "./utils/routeComposerMessage";
+import { uploadAttachments } from "./utils/uploadAttachments";
 
 /** What the runtime needs to look a resource up; the rest is presentation. */
 const toRunRef = ({ id, name }: TaskResourceRef) => ({
@@ -545,6 +545,10 @@ export default function FullChat({
       } else if (canonical === "task.continued") {
         setTaskLifecycleStatus("running");
         setIsLoading(true);
+      } else if (canonical === "task.awaiting_infrastructure") {
+        setTaskLifecycleStatus("waiting_for_infrastructure");
+      } else if (canonical === "task.infrastructure_recovered") {
+        setTaskLifecycleStatus("running");
       } else if (canonical === "execution.paused") {
         setTaskLifecycleStatus("paused");
       } else if (canonical === "execution.resumed") {

@@ -7309,6 +7309,7 @@ export const zGetAllTasksV1TasksGetQuery = z.object({
         "waiting_for_input",
         "waiting_for_approval",
         "waiting_for_continuation",
+        "waiting_for_infrastructure",
         "blocked",
         "completed",
         "failed",

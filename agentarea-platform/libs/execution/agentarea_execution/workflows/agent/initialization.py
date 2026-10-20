@@ -79,6 +79,11 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
             await self._restore_from_continued_state(request.continued_state)
             return
 
+        # A continued run reports its own start; the chain's timeout runs from this one.
+        info = workflow.info()
+        if info.execution_timeout:
+            self.state.chain_expires_at = info.workflow_start_time + info.execution_timeout
+
         # Populate state attributes
         self.state.execution_id = workflow.info().workflow_id
         self.state.agent_id = str(request.agent_id)
@@ -212,6 +217,18 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
 
         if self.state.agent_config.get("execution_context") is not None:
             self._workflow_metadata = dict(self.state.agent_config["execution_context"])
+
+        # The install policy keeps these attached skills from the run; the run's
+        # feed says which and by what rule (recorded with the next rows).
+        for withheld in self.state.agent_config.get("withheld_skills") or []:
+            self._events.add_event(
+                EventTypes.SKILL_WITHHELD,
+                {
+                    "skill_id": withheld["id"],
+                    "skill_name": withheld["name"],
+                    "reason": withheld["reason"],
+                },
+            )
 
         if self._interaction_contract_enabled:
             self.state.interaction_capabilities = resolve_interaction_capabilities(
