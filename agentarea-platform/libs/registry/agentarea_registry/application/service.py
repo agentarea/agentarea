@@ -32,6 +32,7 @@ from uuid import UUID
 import httpx
 import yaml
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID, REGISTRY_TRUST_LEVELS
+from agentarea_common.github_git import GitHubGitRateLimitError
 from agentarea_common.money import to_optional_money
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
@@ -65,6 +66,7 @@ from agentarea_registry.domain.models import (
 )
 from agentarea_registry.infrastructure.github_client import (
     GitHubApiError,
+    folder_tree_sha,
     github_source,
 )
 from agentarea_registry.infrastructure.repository import (
@@ -98,6 +100,9 @@ MAX_SOURCE_REDIRECTS = 5
 MAX_WORKSPACE_GITHUB_SKILLS = 200
 # A whole sync of one workspace registry, so one cannot hold up the next.
 WORKSPACE_SYNC_DEADLINE_SECONDS = 120.0
+# Installed pointers without a tree SHA a sync asks the source about. Each is a
+# git ref read, and an archive download when the folder's branch moved.
+MAX_POINTER_CHECKS = 50
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -123,6 +128,8 @@ CredentialsResolver = Callable[[Registry], Awaitable[str]]
 ItemContentMirror = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 # Opened once per sync of a registry, with the token its credentials resolve to.
 ContentMirror = Callable[[Registry, str | None], ItemContentMirror]
+# The tree SHA a GitHub pointer's folder is now, at its ref or the branch head.
+PointerVersion = Callable[[dict[str, Any]], Awaitable[str]]
 
 # Top-level catalog key -> registry type. Each catalog document carries exactly
 # one of these keys, so the registry type can be inferred from the payload shape
@@ -190,6 +197,18 @@ def sync_error_message(error: BaseException) -> str:
         # Our own validation of an entry, naming what the index published.
         return str(error)
     return "the sync failed; the server log has the cause"
+
+
+# The index version of a pointer that names no tree SHA.
+UNPINNED_VERSION = "latest"
+
+
+def _unpinned_pointer(spec: dict[str, Any] | None) -> tuple[str, str, str | None] | None:
+    """``(repo, path, ref)`` of a GitHub pointer that names no tree SHA, else ``None``."""
+    source = (spec or {}).get("source")
+    if not isinstance(source, dict) or source.get("type") != "github" or source.get("tree_sha"):
+        return None
+    return str(source.get("repo")), str(source.get("path") or ""), source.get("ref")
 
 
 def _parse_untrusted(body: bytes) -> Any:
@@ -481,8 +500,10 @@ class RegistryService:
         github_source_factory: Callable[[str | None], GitHubSource] = github_source,
         content_mirror: ContentMirror | None = None,
         untrusted_client: Callable[..., httpx.AsyncClient] = _member_client,
+        pointer_version: PointerVersion = folder_tree_sha,
     ):
         self.untrusted_client = untrusted_client
+        self.pointer_version = pointer_version
         self.credentials_resolver = credentials_resolver
         self.content_mirror = content_mirror
         self.github_source_factory = github_source_factory
@@ -896,6 +917,7 @@ class RegistryService:
             source_etag = await asyncio.to_thread(self._source_etag, registry.source_url)
         etag = f"{SYNC_FORMAT}:{source_etag}" if source_etag else None
         if not force and etag is not None and etag == registry.source_etag:
+            pointers_checked = await self._check_unpinned_pointers(registry)
             await self.registry_repo.update(
                 registry_id, last_synced_at=datetime.utcnow(), last_sync_error=None
             )
@@ -908,6 +930,7 @@ class RegistryService:
                 "skipped_items": [],
                 "out_of_source": None,
                 "deleted": 0,
+                "pointers_checked": pointers_checked,
                 "source_unchanged": True,
             }
 
@@ -965,6 +988,10 @@ class RegistryService:
                     item_data["spec"] = await self._mirrored_spec(
                         mirror, item_data.get("spec", {}), existing
                     )
+                    stored_tree = (item_data["spec"].get("package") or {}).get("tree_sha")
+                    if stored_tree and (item_data.get("version") or "latest") == UNPINNED_VERSION:
+                        # A pointer with no tree SHA is the tree that was stored.
+                        item_data["version"] = stored_tree
 
                 if existing:
                     previous_spec = dict(existing.spec or {})
@@ -986,6 +1013,14 @@ class RegistryService:
                     apply_facets(existing, registry.registry_type)
 
                     new_version = item_data.get("version") or "latest"
+                    pointer = _unpinned_pointer(existing.spec)
+                    if (
+                        new_version == UNPINNED_VERSION
+                        and pointer is not None
+                        and pointer == _unpinned_pointer(previous_spec)
+                    ):
+                        # The same pointer: keep what the last check found it is.
+                        new_version = existing.version or new_version
                     existing.version = new_version
 
                     if existing.installed_version and existing.installed_version != new_version:
@@ -1081,6 +1116,7 @@ class RegistryService:
                 out_of_source -= deleted
 
         total = new_specs + updates_flagged + unchanged
+        pointers_checked = await self._check_unpinned_pointers(registry)
         await self.registry_repo.update(
             registry_id,
             last_synced_at=datetime.utcnow(),
@@ -1100,7 +1136,60 @@ class RegistryService:
             "skipped_items": skipped_items,
             "out_of_source": out_of_source,
             "deleted": deleted,
+            "pointers_checked": pointers_checked,
         }
+
+    async def _check_unpinned_pointers(self, registry: Registry) -> int:
+        """Keep, as its version, the tree an installed pointer without a tree SHA is now.
+
+        An install pins such an item to the tree SHA of what it fetched; with
+        the item's version the folder's current tree, the update check compares
+        the two as it does for an index that carries tree SHAs. Asked of the
+        source for at most ``MAX_POINTER_CHECKS`` installed items per sync, in
+        ``external_id`` order; a failed check leaves that item as it was.
+        Returns how many were checked.
+        """
+        if registry.registry_type != "skills" or registry.mode != "upstream":
+            return 0
+        checked = changed = 0
+        for item in await self.item_repo.list_installed(registry.id):
+            pointer = _unpinned_pointer(item.spec)
+            if pointer is None:
+                continue
+            if checked >= MAX_POINTER_CHECKS:
+                break
+            checked += 1
+            try:
+                current = await self.pointer_version(dict((item.spec or {})["source"]))
+            except GitHubGitRateLimitError:
+                logger.warning(
+                    "GitHub throttled the check of catalog skill %s; the rest wait for the "
+                    "next sync",
+                    item.id,
+                    exc_info=True,
+                )
+                break
+            except Exception:
+                logger.warning(
+                    "Could not check the current tree of catalog skill %s (%s)",
+                    item.id,
+                    pointer,
+                    exc_info=True,
+                )
+                continue
+            if current != item.version:
+                logger.info(
+                    "Catalog skill %s (%s) is now tree %s (was %s)",
+                    item.id,
+                    pointer,
+                    current,
+                    item.version,
+                )
+                item.version = current
+                changed += 1
+        if changed:
+            await self.item_repo.session.commit()
+        return checked
 
     async def retire_registry(self, registry_id: UUID, replacements: Collection[UUID] = ()) -> int:
         """Retire a registry no source feeds any more: everything in it is out of
@@ -1920,7 +2009,7 @@ class RegistryService:
                         f"{source.get('ref', 'HEAD')}{folder}"
                     ),
                 }
-                version = source.get("tree_sha") or "latest"
+                version = source.get("tree_sha") or UNPINNED_VERSION
                 if "provenance" not in entry:
                     entry = {
                         **entry,

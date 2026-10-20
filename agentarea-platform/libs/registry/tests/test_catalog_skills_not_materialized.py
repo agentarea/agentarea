@@ -24,6 +24,7 @@ async def test_a_new_catalog_skill_gets_no_skill_row():
     item = SimpleNamespace(id=uuid4(), version="latest", spec={}, name="pdf")
     item_repo = SimpleNamespace(
         list_by_registry=AsyncMock(return_value=[]),
+        list_installed=AsyncMock(return_value=[]),
         mark_in_source=AsyncMock(return_value=0),
         delete_unreferenced_out_of_source=AsyncMock(return_value=0),
         create=AsyncMock(return_value=item),

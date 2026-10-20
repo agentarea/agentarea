@@ -8,6 +8,7 @@ the listing, the tree SHAs and the SKILL.md files come from the commit's archive
 """
 
 import posixpath
+from collections import OrderedDict
 from typing import Any
 from urllib.parse import quote
 
@@ -23,6 +24,9 @@ RAW_READ_BYTES = 64 * 1024
 SKILL_FILE = "SKILL.md"
 # SKILL.md bodies an archive listing keeps, at most RAW_READ_BYTES each read.
 MAX_ARCHIVE_SKILL_BYTES = 64 * 1024 * 1024
+# A folder's tree at a commit never changes: (repo, commit, path) -> tree SHA.
+FOLDER_TREE_CACHE_ENTRIES = 4096
+_folder_trees: OrderedDict[tuple[str, str, str], str] = OrderedDict()
 
 
 class GitHubApiError(RuntimeError):
@@ -153,3 +157,30 @@ def _api_error(error: github_git.GitHubGitError) -> GitHubApiError:
 def github_source(token: str | None) -> HttpGitHubSource | ArchiveGitHubSource:
     """The REST API with a registry's token, or the token-free archive without one."""
     return HttpGitHubSource(token) if token else ArchiveGitHubSource()
+
+
+async def folder_tree_sha(
+    source: dict[str, Any], *, transport: httpx.AsyncBaseTransport | None = None
+) -> str:
+    """The tree SHA a GitHub pointer's folder is now, read token-free.
+
+    One git ref read when the pointer names a branch (or none); the commit's
+    archive only the first time a folder is asked about at that commit.
+    """
+    repo, path = str(source["repo"]), str(source.get("path") or "").strip("/")
+    commit = await github_git.resolve_commit(repo, source.get("ref"), transport=transport)
+    key = (repo, commit, path)
+    cached = _folder_trees.get(key)
+    if cached is not None:
+        _folder_trees.move_to_end(key)
+        return cached
+    files = await github_git.read_archive(
+        repo, commit, prefix=path, keep=lambda _path, _mode: False, transport=transport
+    )
+    if not files:
+        raise GitHubApiError(f"{repo}/{path} is not in {repo} at {commit}", 404)
+    tree = github_git.git_tree_shas({p: (f.mode, f.sha) for p, f in files.items()})[""]
+    _folder_trees[key] = tree
+    while len(_folder_trees) > FOLDER_TREE_CACHE_ENTRIES:
+        _folder_trees.popitem(last=False)
+    return tree

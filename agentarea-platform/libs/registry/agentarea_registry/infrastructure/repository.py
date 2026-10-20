@@ -284,6 +284,21 @@ class RegistryItemRepository:
         result = await self.session.execute(query)
         return list(result.scalars().all())
 
+    async def list_installed(self, registry_id: UUID | str) -> list[RegistryItem]:
+        """The registry's items some workspace installed, by ``external_id``.
+
+        Installs are not tenant-scoped rows, so every workspace's count.
+        """
+        result = await self.session.execute(
+            select(RegistryItem)
+            .where(
+                RegistryItem.registry_id == registry_id,
+                exists().where(RegistryItemInstall.registry_item_id == RegistryItem.id),
+            )
+            .order_by(RegistryItem.external_id)
+        )
+        return list(result.scalars().all())
+
     async def count_by_registry(self, registry_id: UUID | str) -> int:
         """Return the exact number of catalog items owned by a registry."""
         query = (

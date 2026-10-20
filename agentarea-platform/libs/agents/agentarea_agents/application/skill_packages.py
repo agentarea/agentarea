@@ -57,7 +57,7 @@ CATALOG_CACHE_MAX_BYTES = 64 * 1024 * 1024
 # Per process, shared by every tenant's reads, so bounded. A tree SHA names its
 # content for good; a pointer without one (the index has no tree SHA yet) is
 # read at the branch head, and that answer is reused for a while so previews
-# do not spend the GitHub budget every tenant shares.
+# do not download the folder again. An install pins the tree it read.
 GITHUB_CACHE_MAX_ENTRIES = 4096
 GITHUB_HEAD_TTL_SECONDS = 3600.0
 
@@ -135,10 +135,15 @@ class FolderSource(Protocol):
 
 @dataclass(frozen=True)
 class CatalogPackage:
-    """Where a catalog item's package was stored, and the source it was read from."""
+    """Where a catalog item's package was stored, and the source it was read from.
+
+    ``tree_sha`` is the GitHub folder's tree the package was built from, the
+    version an install pins; ``None`` for content that did not come from GitHub.
+    """
 
     s3_path: str
     source_url: str | None
+    tree_sha: str | None = None
 
 
 class SkillPackages:
@@ -279,7 +284,13 @@ class SkillPackages:
                 raise ValueError(
                     f"Catalog skill's mirrored package {s3_path!r} is outside its registry's store"
                 )
-            return CatalogPackage(s3_path, mirrored.get("source_url") or spec.get("source_url"))
+            pointer = spec.get("source")
+            return CatalogPackage(
+                s3_path,
+                mirrored.get("source_url") or spec.get("source_url"),
+                mirrored.get("tree_sha")
+                or (pointer.get("tree_sha") if isinstance(pointer, dict) else None),
+            )
         source = spec.get("source")
         if isinstance(source, dict) and source.get("type") == "github":
             return await self._store_github_source(source, workspace_id)
@@ -317,7 +328,9 @@ class SkillPackages:
             if s3_path:
                 _remember(_github_trees, (workspace_id, tree_sha), s3_path)
                 ref = source.get("ref")
-                return CatalogPackage(s3_path, _github_url(repo, path, ref) if ref else None)
+                return CatalogPackage(
+                    s3_path, _github_url(repo, path, ref) if ref else None, tree_sha
+                )
         folder = await self._github.download_folder(
             repo, path, ref=source.get("ref"), tree_sha=tree_sha
         )
@@ -326,7 +339,7 @@ class SkillPackages:
             folder.tree_sha, s3_path, workspace_id=workspace_id
         )
         _remember(_github_trees, (workspace_id, folder.tree_sha), s3_path)
-        package = CatalogPackage(s3_path, _github_url(repo, path, folder.commit))
+        package = CatalogPackage(s3_path, _github_url(repo, path, folder.commit), folder.tree_sha)
         if not tree_sha:
             _remember(
                 _github_heads, head_key, (time.monotonic() + GITHUB_HEAD_TTL_SECONDS, package)
@@ -375,7 +388,10 @@ class CatalogMirror:
 
     async def __call__(self, spec: dict[str, Any]) -> dict[str, Any]:
         package = await self._packages.store_catalog_item(spec, workspace_id=self._workspace_id)
-        return {"s3_path": package.s3_path, "source_url": package.source_url}
+        stored = {"s3_path": package.s3_path, "source_url": package.source_url}
+        if package.tree_sha:
+            stored["tree_sha"] = package.tree_sha
+        return stored
 
 
 class _StopOnRateLimit:

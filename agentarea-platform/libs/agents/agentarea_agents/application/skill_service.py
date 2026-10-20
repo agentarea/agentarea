@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_packages import (
     SKILL_MANIFEST,
+    CatalogPackage,
     SkillPackages,
     legacy_catalog_s3_path,
 )
@@ -154,6 +155,16 @@ def _project_catalog_skill(item: CatalogSkillItem) -> Skill:
     skill.catalog_spec = spec
     skill.catalog_workspace_id = item.registry_workspace_id
     return skill
+
+
+def _pinned_version(item: CatalogSkillItem, package: CatalogPackage) -> str | None:
+    """The version an install of ``item`` records: the tree it fetched, when it read GitHub.
+
+    An index pointer that names no tree SHA has the version ``latest``; the
+    tree of what was fetched is what the update check compares with what the
+    folder is now.
+    """
+    return package.tree_sha or item.version
 
 
 def is_customized(skill: Skill) -> bool:
@@ -831,7 +842,9 @@ class SkillService:
             network_scope=spec.get("network_scope") or "private",
             registry_item_id=item.id,
         )
-        await self._get_catalog_repository().mark_installed(item.id, str(skill.id), item.version)
+        await self._get_catalog_repository().mark_installed(
+            item.id, str(skill.id), _pinned_version(item, package)
+        )
         logger.info(
             "Forked catalog skill '%s' (item=%s) into tenant skill %s",
             item.name,
@@ -944,7 +957,8 @@ class SkillService:
         package = await self.packages.store_catalog_item(
             item.spec, workspace_id=item.registry_workspace_id
         )
-        await self._get_catalog_repository().mark_installed(item.id, str(skill.id), item.version)
+        pinned = _pinned_version(item, package)
+        await self._get_catalog_repository().mark_installed(item.id, str(skill.id), pinned)
         updated = await self._get_repository().update(
             str(skill.id),
             s3_path=package.s3_path,
@@ -968,7 +982,7 @@ class SkillService:
             "Pinned skill %s to catalog item %s version %s (%s)",
             skill.id,
             item.id,
-            item.version,
+            pinned,
             package.s3_path,
         )
         return updated
