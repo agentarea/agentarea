@@ -6,7 +6,7 @@ for cron triggers, handling schedule creation, updates, and deletion.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import timedelta
 from typing import Any, cast
 from uuid import UUID
 
@@ -14,9 +14,11 @@ from temporalio.client import (
     Client,
     Schedule,
     ScheduleActionStartWorkflow,
+    SchedulePolicy,
     ScheduleSpec,
     ScheduleState,
     ScheduleUpdate,
+    ScheduleUpdateInput,
 )
 from temporalio.exceptions import TemporalError
 
@@ -31,6 +33,10 @@ from .logging_utils import (
 logger = TriggerLogger(__name__)
 
 DEFAULT_TASK_QUEUE = "trigger-execution-queue"
+SCHEDULE_ID_PREFIX = "cron-trigger-"
+# How late a slot missed while Temporal was down still fires; Temporal's own
+# default is a year, which would replay a long outage as a burst of runs.
+CATCHUP_WINDOW = timedelta(hours=1)
 
 
 class TemporalScheduleManager:
@@ -95,7 +101,7 @@ class TemporalScheduleManager:
         count = 0
         async for description in await list_schedules():
             schedule_id = getattr(description, "id", "")
-            if str(schedule_id).startswith("cron-trigger-"):
+            if str(schedule_id).startswith(SCHEDULE_ID_PREFIX):
                 count += 1
         return count
 
@@ -124,7 +130,7 @@ class TemporalScheduleManager:
         """
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
-        schedule_id = f"cron-trigger-{trigger_id}"
+        schedule_id = f"{SCHEDULE_ID_PREFIX}{trigger_id}"
 
         await self._ensure_client()
 
@@ -146,21 +152,9 @@ class TemporalScheduleManager:
 
             # Create the schedule
             schedule = Schedule(
-                action=ScheduleActionStartWorkflow(
-                    "TriggerExecutionWorkflow",
-                    args=[
-                        trigger_id,
-                        {
-                            "execution_time": datetime.utcnow().isoformat(),
-                            "source": "cron",
-                            "cron_expression": cron_expression,
-                            "timezone": timezone,
-                        },
-                    ],
-                    id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
-                    task_queue=self._task_queue,
-                ),
+                action=self._action(trigger_id, cron_expression, timezone),
                 spec=ScheduleSpec(cron_expressions=[cron_expression], time_zone_name=timezone),
+                policy=SchedulePolicy(catchup_window=CATCHUP_WINDOW),
                 state=ScheduleState(
                     note=f"Cron trigger schedule for trigger {trigger_id}", paused=paused
                 ),
@@ -221,7 +215,7 @@ class TemporalScheduleManager:
             Exception: If schedule update fails
         """
         client = await self._ensure_client()
-        schedule_id = f"cron-trigger-{trigger_id}"
+        schedule_id = f"{SCHEDULE_ID_PREFIX}{trigger_id}"
 
         try:
             # Get the schedule handle
@@ -231,23 +225,11 @@ class TemporalScheduleManager:
             await handle.update(
                 updater=lambda input: ScheduleUpdate(
                     schedule=Schedule(
-                        action=ScheduleActionStartWorkflow(
-                            "TriggerExecutionWorkflow",
-                            args=[
-                                trigger_id,
-                                {
-                                    "execution_time": datetime.utcnow().isoformat(),
-                                    "source": "cron",
-                                    "cron_expression": cron_expression,
-                                    "timezone": timezone,
-                                },
-                            ],
-                            id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
-                            task_queue=self._task_queue,
-                        ),
+                        action=self._action(trigger_id, cron_expression, timezone),
                         spec=ScheduleSpec(
                             cron_expressions=[cron_expression], time_zone_name=timezone
                         ),
+                        policy=SchedulePolicy(catchup_window=CATCHUP_WINDOW),
                         state=input.description.schedule.state,
                     )
                 )
@@ -269,7 +251,7 @@ class TemporalScheduleManager:
             Exception: If schedule deletion fails
         """
         client = await self._ensure_client()
-        schedule_id = f"cron-trigger-{trigger_id}"
+        schedule_id = f"{SCHEDULE_ID_PREFIX}{trigger_id}"
 
         try:
             # Get the schedule handle
@@ -317,7 +299,7 @@ class TemporalScheduleManager:
             Exception: If schedule pause fails
         """
         client = await self._ensure_client()
-        schedule_id = f"cron-trigger-{trigger_id}"
+        schedule_id = f"{SCHEDULE_ID_PREFIX}{trigger_id}"
 
         try:
             # Get the schedule handle
@@ -342,7 +324,7 @@ class TemporalScheduleManager:
             Exception: If schedule unpause fails
         """
         client = await self._ensure_client()
-        schedule_id = f"cron-trigger-{trigger_id}"
+        schedule_id = f"{SCHEDULE_ID_PREFIX}{trigger_id}"
 
         try:
             # Get the schedule handle
@@ -371,27 +353,78 @@ class TemporalScheduleManager:
         if spec_crons:
             return spec_crons
 
+        cron = (self._action_payload(description) or {}).get("cron_expression")
+        return [cron] if cron else []
+
+    def _action_payload(self, description: Any) -> dict[str, Any] | None:
+        """The firing data ``_action`` gave the schedule's workflow."""
         action = getattr(description.schedule, "action", None)
         args = getattr(action, "args", None) or []
         if len(args) < 2:
-            return []
+            return None
 
         payload = args[1]
         # Action args come back as raw payloads from a real server, but already
         # decoded (e.g. a plain dict) from mocked tests -- handle both.
         if not isinstance(payload, dict):
             if self.client is None:
-                return []
+                return None
             try:
                 payload = self.client.data_converter.payload_converter.from_payloads([payload])[0]
             except Exception:
-                return []
+                logger.warning("Could not decode a schedule's action payload", exc_info=True)
+                return None
+        return payload if isinstance(payload, dict) else None
 
-        if isinstance(payload, dict):
-            cron = payload.get("cron_expression")
-            if cron:
-                return [cron]
-        return []
+    def _action(
+        self, trigger_id: UUID, cron_expression: str, timezone: str
+    ) -> ScheduleActionStartWorkflow:
+        # The slot a firing is for is Temporal's TemporalScheduledStartTime,
+        # which the workflow reads; anything time-bound here is fixed when saved.
+        return ScheduleActionStartWorkflow(
+            "TriggerExecutionWorkflow",
+            args=[
+                trigger_id,
+                {"source": "cron", "cron_expression": cron_expression, "timezone": timezone},
+            ],
+            id=f"trigger-execution-{trigger_id}-{{.ScheduledTime}}",
+            task_queue=self._task_queue,
+        )
+
+    async def reconcile_cron_schedules(self) -> int:
+        """Bring every trigger schedule to the current action and catch-up window.
+
+        Returns how many schedules were changed; one already current is left alone.
+        """
+        client = await self._ensure_client()
+        changed = 0
+        async for listed in await client.list_schedules():
+            if not listed.id.startswith(SCHEDULE_ID_PREFIX):
+                continue
+            trigger_id = UUID(listed.id.removeprefix(SCHEDULE_ID_PREFIX))
+
+            def bring_up_to_date(
+                input: ScheduleUpdateInput, trigger_id: UUID = trigger_id
+            ) -> ScheduleUpdate | None:
+                nonlocal changed
+                schedule = input.description.schedule
+                [cron_expression] = self._cron_expressions_from_description(input.description)
+                timezone = schedule.spec.time_zone_name or "UTC"
+                action = self._action(trigger_id, cron_expression, timezone)
+                current_args = [trigger_id, self._action_payload(input.description)]
+                if (
+                    schedule.policy.catchup_window == CATCHUP_WINDOW
+                    and current_args == action.args
+                    and getattr(schedule.action, "task_queue", None) == self._task_queue
+                ):
+                    return None
+                schedule.action = action
+                schedule.policy.catchup_window = CATCHUP_WINDOW
+                changed += 1
+                return ScheduleUpdate(schedule=schedule)
+
+            await client.get_schedule_handle(listed.id).update(bring_up_to_date)
+        return changed
 
     async def get_schedule_info(self, trigger_id: UUID) -> dict[str, Any] | None:
         """Get information about a Temporal Schedule.
@@ -403,7 +436,7 @@ class TemporalScheduleManager:
             Dictionary containing schedule information, or None if not found
         """
         client = await self._ensure_client()
-        schedule_id = f"cron-trigger-{trigger_id}"
+        schedule_id = f"{SCHEDULE_ID_PREFIX}{trigger_id}"
 
         try:
             # Get the schedule handle

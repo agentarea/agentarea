@@ -8,7 +8,7 @@ from datetime import timedelta
 from typing import Any
 
 from temporalio import workflow
-from temporalio.common import RetryPolicy
+from temporalio.common import RetryPolicy, SearchAttributeKey
 from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
@@ -33,6 +33,10 @@ from ..models import (  # noqa: E402
     TriggerOutcome,
     TriggerSkipReason,
 )
+
+# Temporal stamps every workflow a schedule starts with the slot it is for, a
+# backfilled or caught-up slot included.
+SCHEDULED_START_TIME = SearchAttributeKey.for_datetime("TemporalScheduledStartTime")
 
 
 @workflow.defn
@@ -78,6 +82,14 @@ class TriggerExecutionWorkflow:
         workflow_timeout = min(timedelta(minutes=custom_timeout_minutes), max_execution_timeout)
 
         self.execution_start_time = workflow.now()
+
+        scheduled_time = workflow.info().typed_search_attributes.get(SCHEDULED_START_TIME)
+        if scheduled_time is None:
+            raise ApplicationError(
+                f"Trigger {trigger_id} execution was not started by its schedule",
+                non_retryable=True,
+            )
+        execution_data = {**execution_data, "scheduled_time": scheduled_time.isoformat()}
 
         try:
             # Check for cancellation before starting
@@ -203,9 +215,7 @@ class TriggerExecutionWorkflow:
                             "status": "failed",
                             "error_message": str(e),
                             "execution_time_ms": execution_time_ms,
-                            "executed_at": execution_data.get(
-                                "execution_time", workflow.now().isoformat()
-                            ),
+                            "executed_at": workflow.now().isoformat(),
                             "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                             "error_type": type(e).__name__,
                         },
@@ -245,9 +255,7 @@ class TriggerExecutionWorkflow:
                             "status": "failed",
                             "error_message": f"Unexpected error: {e!s}",
                             "execution_time_ms": execution_time_ms,
-                            "executed_at": execution_data.get(
-                                "execution_time", workflow.now().isoformat()
-                            ),
+                            "executed_at": workflow.now().isoformat(),
                             "workflow_timeout_minutes": workflow_timeout.total_seconds() / 60,
                             "error_type": type(e).__name__,
                             "is_unexpected_error": True,

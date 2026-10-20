@@ -122,3 +122,129 @@ async def test_delete_missing_schedule_is_noop(temporal_sqlite_client):
     """Deleting a non-existent schedule is a no-op (no raise) on a real server."""
     manager = TemporalScheduleManager(temporal_sqlite_client)
     await manager.delete_cron_schedule(uuid.uuid4())
+
+
+async def test_a_backfilled_slot_reaches_the_trigger_as_its_scheduled_time(temporal_sqlite_client):
+    """The firing carries the slot it was scheduled for, not when the schedule was saved."""
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    from agentarea_common.workflow.sandbox import create_workflow_runner
+    from agentarea_execution.models import (
+        EvaluateTriggerConditionsRequest,
+        EvaluateTriggerConditionsResult,
+    )
+    from agentarea_execution.workflows.trigger_execution_workflow import TriggerExecutionWorkflow
+    from agentarea_triggers.temporal_schedule_manager import DEFAULT_TASK_QUEUE
+    from temporalio import activity
+    from temporalio.client import ScheduleBackfill, ScheduleOverlapPolicy
+    from temporalio.worker import Worker
+
+    seen: asyncio.Queue[dict] = asyncio.Queue()
+
+    @activity.defn(name="evaluate_trigger_conditions_activity")
+    async def evaluate(
+        request: EvaluateTriggerConditionsRequest,
+    ) -> EvaluateTriggerConditionsResult:
+        await seen.put(request.event_data)
+        return EvaluateTriggerConditionsResult(conditions_met=False, trigger_id=request.trigger_id)
+
+    manager = TemporalScheduleManager(temporal_sqlite_client)
+    trigger_id = uuid.uuid4()
+    slot = datetime(2026, 1, 5, 9, tzinfo=UTC)
+    await manager.create_cron_schedule(trigger_id, "0 9 * * *", "UTC", paused=True)
+    try:
+        async with Worker(
+            temporal_sqlite_client,
+            task_queue=DEFAULT_TASK_QUEUE,
+            workflows=[TriggerExecutionWorkflow],
+            activities=[evaluate],
+            workflow_runner=create_workflow_runner(),
+        ):
+            await temporal_sqlite_client.get_schedule_handle(
+                f"cron-trigger-{trigger_id}"
+            ).backfill(
+                ScheduleBackfill(
+                    start_at=slot - timedelta(minutes=1),
+                    end_at=slot + timedelta(minutes=1),
+                    overlap=ScheduleOverlapPolicy.ALLOW_ALL,
+                )
+            )
+            event_data = await asyncio.wait_for(seen.get(), timeout=30)
+    finally:
+        await manager.delete_cron_schedule(trigger_id)
+
+    assert event_data["scheduled_time"] == slot.isoformat()
+    assert "execution_time" not in event_data
+
+
+async def test_a_schedule_catches_up_missed_slots_only_within_the_window(temporal_sqlite_client):
+    from agentarea_triggers.temporal_schedule_manager import CATCHUP_WINDOW
+
+    manager = TemporalScheduleManager(temporal_sqlite_client)
+    trigger_id = uuid.uuid4()
+    handle = temporal_sqlite_client.get_schedule_handle(f"cron-trigger-{trigger_id}")
+    await manager.create_cron_schedule(trigger_id, "0 9 * * *", "UTC")
+    try:
+        created = (await handle.describe()).schedule.policy.catchup_window
+        await manager.update_cron_schedule(trigger_id, "0 10 * * *", "UTC")
+        updated = (await handle.describe()).schedule.policy.catchup_window
+    finally:
+        await manager.delete_cron_schedule(trigger_id)
+
+    assert (created, updated) == (CATCHUP_WINDOW, CATCHUP_WINDOW)
+
+
+async def test_reconcile_brings_a_schedule_of_the_old_shape_up_to_date(temporal_sqlite_client):
+    """A schedule saved before the slot time and catch-up window gains both, and keeps the rest."""
+    from agentarea_triggers.temporal_schedule_manager import CATCHUP_WINDOW, DEFAULT_TASK_QUEUE
+    from temporalio.client import (
+        Schedule,
+        ScheduleActionStartWorkflow,
+        ScheduleSpec,
+        ScheduleState,
+    )
+
+    manager = TemporalScheduleManager(temporal_sqlite_client)
+    trigger_id = uuid.uuid4()
+    schedule_id = f"cron-trigger-{trigger_id}"
+    await temporal_sqlite_client.create_schedule(
+        schedule_id,
+        Schedule(
+            action=ScheduleActionStartWorkflow(
+                "TriggerExecutionWorkflow",
+                args=[
+                    trigger_id,
+                    {
+                        "execution_time": "2025-01-01T00:00:00",
+                        "source": "cron",
+                        "cron_expression": "0 9 * * *",
+                        "timezone": "Europe/Berlin",
+                    },
+                ],
+                id=f"trigger-execution-{trigger_id}-{{{{.ScheduledTime}}}}",
+                task_queue=DEFAULT_TASK_QUEUE,
+            ),
+            spec=ScheduleSpec(cron_expressions=["0 9 * * *"], time_zone_name="Europe/Berlin"),
+            state=ScheduleState(paused=True),
+        ),
+    )
+    try:
+        brought_up_to_date = await manager.reconcile_cron_schedules()
+        again = await manager.reconcile_cron_schedules()
+        description = await temporal_sqlite_client.get_schedule_handle(schedule_id).describe()
+        info = await manager.get_schedule_info(trigger_id)
+    finally:
+        await manager.delete_cron_schedule(trigger_id)
+
+    payload = temporal_sqlite_client.data_converter.payload_converter.from_payloads(
+        [description.schedule.action.args[1]]
+    )[0]
+    assert (brought_up_to_date, again) == (1, 0)
+    assert description.schedule.policy.catchup_window == CATCHUP_WINDOW
+    assert payload == {"source": "cron", "cron_expression": "0 9 * * *", "timezone": "Europe/Berlin"}
+    assert (info["cron_expressions"], info["timezone"], info["paused"]) == (
+        ["0 9 * * *"],
+        "Europe/Berlin",
+        True,
+    )

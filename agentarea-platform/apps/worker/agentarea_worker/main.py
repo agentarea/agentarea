@@ -45,6 +45,7 @@ from agentarea_execution.workflows.undispatched_task_reconciler_workflow import 
     ensure_undispatched_task_schedule,
 )
 from agentarea_mcp.activities import make_mcp_activities
+from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -311,6 +312,9 @@ class AgentAreaWorker:
         )
 
         await ensure_undispatched_task_schedule(self.client, settings.temporal.QUEUE)
+        await TemporalScheduleManager(
+            self.client, task_queue=settings.triggers.QUEUE
+        ).reconcile_cron_schedules()
 
         # The delivery group sending task events out.
         await self._setup_channel_subscribers(dependencies)
