@@ -267,18 +267,17 @@ async def receive(
 
 
 async def finish(
-    session: AsyncSession, *, token: str, user_id: str, bound_workspace_id: str | None
+    session: AsyncSession, *, token: str, user_id: str, reachable_workspaces: list[str]
 ) -> str:
     """Redeem a returned flow's code for the person who started it; returns where they go.
 
-    ``bound_workspace_id`` is set when the caller is an API key: it acts only in
-    the workspace it was issued for.
+    The caller must also still reach the flow's workspace.
     """
     returned = await oauth_state.pop_returned(token)
     if returned is None:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth sign-in")
     flow, code = returned.flow, returned.code
-    if flow.user_id != user_id or bound_workspace_id not in (None, flow.workspace_id):
+    if flow.user_id != user_id or flow.workspace_id not in reachable_workspaces:
         logger.warning(
             "OAuth finish refused: %s %s in workspace %s was started by %s, finished by %s",
             flow.target_kind,

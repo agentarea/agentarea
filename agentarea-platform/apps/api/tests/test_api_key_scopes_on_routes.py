@@ -1,13 +1,13 @@
-"""An API key cannot mint keys, invite members or manage access (#716).
+"""An API key cannot mint keys (#716), and otherwise acts with its creator's roles (#725).
 
-A key acts as its creator, and a key issued for a workspace its creator owns
-kept the owner's admin rights. So a leaked key could mint a ten-year key and
-an invitation, and both outlived the revocation of the key that made them.
-Every route that hands out or takes away access now needs a signed-in user.
+A leaked one-day key that could mint a ten-year key would outlive its own
+revocation, so a key lacks the credentials scope. Inviting members and granting
+access are decided by roles alone: a key issued by the workspace owner may do
+them, as the owner may.
 
 The caller is resolved through the real ``get_user_context``: the key here is
-bound to a workspace its creator owns, so it does reach admin, and the refusal
-is what stops it -- not a missing grant.
+bound to a workspace its creator owns, so it does reach admin, and the missing
+scope is what stops it from minting -- not a missing grant.
 """
 
 from types import SimpleNamespace
@@ -21,6 +21,7 @@ from agentarea_api.api.v1.api_keys import get_api_key_service
 from agentarea_api.main import app
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.credential import Credential, SESSION
 from agentarea_common.auth.dependencies import authenticate_principal
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.config.database import get_db_session
@@ -34,11 +35,15 @@ INVITATION_ID = uuid4()
 
 
 def _api_key() -> UserPrincipal:
-    return UserPrincipal(user_id="alice", bound_workspace_id=ACME.id, api_key_id=KEY_ID)
+    return UserPrincipal(
+        user_id="alice",
+        bound_workspace_id=ACME.id,
+        credential=Credential(kind="api_key", key_id=KEY_ID),
+    )
 
 
 def _signed_in() -> UserPrincipal:
-    return UserPrincipal(user_id="alice")
+    return UserPrincipal(user_id="alice", credential=SESSION)
 
 
 @pytest.fixture(autouse=True)
@@ -155,43 +160,39 @@ GRANT = {
 REFUSED = [
     ("post", "/v1/workspaces/acme/api-keys/", {"name": "backdoor", "expires_in_days": 3650}),
     ("delete", f"/v1/workspaces/acme/api-keys/{TOKEN_ID}", None),
-    ("post", "/v1/workspaces/acme/invitations", {}),
-    ("delete", f"/v1/workspaces/acme/invitations/{INVITATION_ID}", None),
-    ("delete", "/v1/workspaces/acme/members/bob", None),
-    ("post", "/v1/workspaces/acme/access-control/relationships", GRANT),
-    ("delete", "/v1/workspaces/acme/access-control/relationships", GRANT),
 ]
 
 
-@pytest.mark.parametrize(
-    ("method", "path", "body"),
-    REFUSED,
-    ids=[
-        "create-key",
-        "revoke-key",
-        "create-invitation",
-        "revoke-invitation",
-        "remove-member",
-        "grant-access",
-        "revoke-access",
-    ],
-)
-def test_an_api_key_is_refused(stand, method, path, body) -> None:
+@pytest.mark.parametrize(("method", "path", "body"), REFUSED, ids=["create-key", "revoke-key"])
+def test_an_api_key_cannot_mint_or_revoke_keys(stand, method, path, body) -> None:
     s = stand(_api_key())
 
     response = s.http.request(method.upper(), path, json=body)
 
     assert response.status_code == 403, response.text
-    assert "An API key cannot" in response.json()["detail"]
+    assert "This credential cannot" in response.json()["detail"]
     assert "sign in as a user" in response.json()["detail"]
     s.keys.create_token.assert_not_awaited()
     s.keys.revoke_token.assert_not_awaited()
-    s.invitations.create_invitation.assert_not_awaited()
-    s.invitations.revoke.assert_not_awaited()
-    s.memberships.remove.assert_not_awaited()
-    s.graph.write_tuple.assert_not_called()
-    s.graph.delete_tuple.assert_not_called()
     s.audit.record.assert_not_awaited()
+
+
+def test_an_owners_key_invites_a_member(stand) -> None:
+    s = stand(_api_key())
+
+    response = s.http.post("/v1/workspaces/acme/invitations", json={})
+
+    assert response.status_code == 201, response.text
+    s.invitations.create_invitation.assert_awaited_once()
+
+
+def test_an_owners_key_revokes_an_invitation(stand) -> None:
+    s = stand(_api_key())
+
+    response = s.http.delete(f"/v1/workspaces/acme/invitations/{INVITATION_ID}")
+
+    assert response.status_code == 204, response.text
+    s.invitations.revoke.assert_awaited_once()
 
 
 def test_the_key_still_reaches_what_it_was_issued_for(stand) -> None:

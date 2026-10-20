@@ -247,6 +247,6 @@ async def oauth_finish(
         db_session,
         token=body.token,
         user_id=principal.user_id,
-        bound_workspace_id=principal.bound_workspace_id,
+        reachable_workspaces=principal.accessible_workspaces or [],
     )
     return OAuthFinishResponse(location=location)

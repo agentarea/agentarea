@@ -16,6 +16,7 @@ from agentarea_api.api.v1.api_keys import router
 from agentarea_common.auth import dependencies
 from agentarea_common.auth.access import authorize_agent_action
 from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.credential import SESSION
 from agentarea_common.auth.context import UserContext, UserPrincipal
 from agentarea_common.auth.dependencies import _validate_api_key, get_user_context
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -30,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 OWNER = "owner-user"
 WORKSPACE = "ws-acme"
-MEMBER = UserContext(user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE])
+MEMBER = UserContext(user_id=OWNER, workspace_id=WORKSPACE, admin_workspaces=[WORKSPACE], credential=SESSION)
 
 
 @pytest.fixture(autouse=True)

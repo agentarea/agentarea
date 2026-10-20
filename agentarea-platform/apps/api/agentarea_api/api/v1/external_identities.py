@@ -10,8 +10,9 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from agentarea_common.auth.dependencies import PrincipalDep, ensure_user_session
-from agentarea_common.auth.route_authz import enforced_in_handler
+from agentarea_common.auth.credential import Scope
+from agentarea_common.auth.dependencies import PrincipalDep
+from agentarea_common.auth.route_authz import enforced_in_handler, requires_principal_scope
 from agentarea_common.config import RedisSettings, get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.identity import LINK_TTL_SECONDS, ExternalIdentityRepository, LinkCodes
@@ -53,13 +54,15 @@ def _redis_url() -> str:
 @router.post(
     "/telegram/link",
     response_model=TelegramLinkResponse,
-    dependencies=[enforced_in_handler(_OWN_IDENTITY)],
+    dependencies=[
+        requires_principal_scope(Scope.CREDENTIALS, "link a messenger account"),
+        enforced_in_handler(_OWN_IDENTITY),
+    ],
 )
 async def start_telegram_link(
     body: TelegramLinkRequest, user: PrincipalDep
 ) -> TelegramLinkResponse:
     """A deep link that offers the caller's account to whoever opens it in Telegram."""
-    ensure_user_session(user, "link a messenger account")
     codes = LinkCodes(_redis_url())
     try:
         code = await codes.issue(user.user_id)
@@ -93,12 +96,14 @@ async def list_external_identities(
 @router.delete(
     "/{identity_id}",
     status_code=204,
-    dependencies=[enforced_in_handler(_OWN_IDENTITY)],
+    dependencies=[
+        requires_principal_scope(Scope.CREDENTIALS, "unlink a messenger account"),
+        enforced_in_handler(_OWN_IDENTITY),
+    ],
 )
 async def unlink_external_identity(
     identity_id: UUID, user: PrincipalDep, session: DatabaseSessionDep
 ) -> Response:
-    ensure_user_session(user, "unlink a messenger account")
     if not await ExternalIdentityRepository(session).revoke(
         user_id=user.user_id, identity_id=identity_id
     ):

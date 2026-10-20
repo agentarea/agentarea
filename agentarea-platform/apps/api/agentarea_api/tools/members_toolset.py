@@ -19,7 +19,6 @@ from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import (
     enforced_in_handler,
-    requires_user_session,
     requires_workspace_admin,
     unrestricted,
 )
@@ -183,7 +182,6 @@ class MembersToolset(Toolset):
         open_world=True,
         output=InvitationCreated,
     )
-    @requires_user_session("invite members")
     @requires_workspace_admin()
     async def invite(
         self,
@@ -250,7 +248,6 @@ class MembersToolset(Toolset):
         idempotent=True,
         output=InvitationRevoked,
     )
-    @requires_user_session("revoke invitations")
     @requires_workspace_admin()
     async def revoke_invitation(
         self,
@@ -285,7 +282,6 @@ class MembersToolset(Toolset):
         idempotent=True,
         output=MemberRemoved,
     )
-    @requires_user_session("remove members")
     @enforced_in_handler("owner-only, enforced by WorkspaceMembershipService.remove")
     async def remove(
         self,

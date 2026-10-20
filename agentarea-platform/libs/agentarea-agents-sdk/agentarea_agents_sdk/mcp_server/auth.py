@@ -19,6 +19,7 @@ import re
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
+from dataclasses import replace
 from typing import Any
 
 from starlette.requests import Request
@@ -220,6 +221,9 @@ class MCPAuthMiddleware:
             if principal.bound_agent_id is not None:
                 logger.info("MCP auth: refused a key bound to agent %s", principal.bound_agent_id)
                 return False
+            # What the caller does here is recorded as done over MCP.
+            if principal.credential is not None:
+                principal.credential = replace(principal.credential, surface="mcp")
             caller = await _select_workspace(principal, pinned_workspace)
             if caller is None:
                 return True

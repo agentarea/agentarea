@@ -20,6 +20,7 @@ from agentarea_api.tools import members_toolset
 from agentarea_api.tools.members_toolset import MembersToolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.credential import Credential
 from agentarea_common.auth.identity_directory import IdentityRecord
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -325,24 +326,26 @@ async def test_list_invitations_never_returns_tokens(harness):
     assert "token" not in result[0]
 
 
-@pytest.mark.parametrize(
-    ("tool", "arguments"),
-    [
-        ("invite", {"email": "mallory@example.com"}),
-        ("revoke_invitation", {"invitation_id": str(INVITATION_ID)}),
-        ("remove", {"user_id": "user-2"}),
-    ],
-)
-async def test_an_api_key_cannot_change_who_is_in_the_workspace(harness, tool, arguments):
-    """As on the REST surface (#716): the key administers the workspace, and is still refused."""
+async def test_an_api_key_invites_with_the_roles_of_the_user_who_issued_it(harness):
+    """A key acts as its creator (#725): their roles decide, not what they signed in with."""
     key = UserContext(
-        user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"], api_key_id="key-1"
+        user_id="user-1",
+        workspace_id="ws-1",
+        admin_workspaces=["ws-1"],
+        credential=Credential(kind="api_key", key_id="key-1"),
     )
 
-    with use_mcp_user_context(key), pytest.raises(ToolError, match="An API key cannot"):
-        await getattr(MembersToolset(), tool)(**arguments)
+    with use_mcp_user_context(key):
+        await MembersToolset().invite(email="new@example.com")
 
-    assert harness.service.created == []
-    assert harness.service.revoked == []
-    assert harness.memberships.calls == []
-    assert harness.audit == []
+    assert len(harness.service.created) == 1
+
+
+async def test_a_run_context_invites_with_the_roles_of_its_user(harness):
+    """A context minted outside a request carries no credential and needs none here."""
+    run = UserContext(user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"])
+
+    with use_mcp_user_context(run):
+        await MembersToolset().invite(email="new@example.com")
+
+    assert len(harness.service.created) == 1
