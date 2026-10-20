@@ -125,6 +125,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "causation_id": entity.provenance.causation_id,
             "parent_task_id": entity.provenance.parent_task_id,
             "depth": entity.provenance.depth,
+            "task_definition_id": entity.provenance.task_definition_id,
+            "source_identity": entity.provenance.source_identity,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -527,6 +529,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                     "causation_id": task_orm.causation_id,
                     "parent_task_id": task_orm.parent_task_id,
                     "depth": task_orm.depth,
+                    "task_definition_id": task_orm.task_definition_id,
+                    "source_identity": task_orm.source_identity,
                 },
             }
         )

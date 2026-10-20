@@ -65,6 +65,12 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     )
     # The causation depth of the event that started the task; 0 when none did.
     depth: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # The saved task definition this run was asked from, if any.
+    task_definition_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True, index=True
+    )
+    # Who started the run, as ``<kind>:<id>``; none for a run nothing human started.
+    source_identity: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):

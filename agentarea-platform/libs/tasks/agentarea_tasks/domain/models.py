@@ -33,6 +33,12 @@ class TaskProvenance(BaseModel):
     parent_task_id: UUID | None = None
     #: The causation depth of the event that started the task; 0 when none did.
     depth: int = 0
+    #: The saved task definition the run was asked from, if any.
+    task_definition_id: UUID | None = None
+    #: Who started the run, as ``<kind>:<id>`` (``user:<id>``, ``client:<id>``);
+    #: ``None`` when nothing human did (a schedule, an event). It narrows the run
+    #: and is recorded; it never lends the run its own authority.
+    source_identity: str | None = None
 
 
 class Task(BaseModel):
