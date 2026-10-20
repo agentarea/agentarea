@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   credentialUpdateSpec,
   declaredCredentialFields,
+  headersUpdateSpec,
   missingSecretFields,
   requiredSecretFields,
+  storedHeaders,
 } from "./credential-fields";
 
 describe("declaredCredentialFields", () => {
@@ -91,5 +93,42 @@ describe("credentialUpdateSpec", () => {
     expect(credentialUpdateSpec({}, "docker", { TOKEN: "t" })).toEqual({
       environment: { TOKEN: "t" },
     });
+  });
+});
+
+describe("storedHeaders", () => {
+  it("tells a masked secret from a plain value", () => {
+    expect(storedHeaders({ headers: { Authorization: "******", Accept: "json" } })).toEqual([
+      { name: "Authorization", secret: true },
+      { name: "Accept", secret: false, value: "json" },
+    ]);
+    expect(storedHeaders({})).toEqual([]);
+  });
+});
+
+describe("headersUpdateSpec", () => {
+  const spec = {
+    endpoint_url: "https://mcp.example.com",
+    env_vars: ["Authorization", "X-Team"],
+    headers: { Authorization: "******", "X-Team": "******" },
+    environment: { Authorization: "******", "X-Team": "******" },
+  };
+
+  it("keeps a blank secret, adds a new header and removes a dropped one", () => {
+    expect(
+      headersUpdateSpec(spec, [
+        { name: "Authorization", value: "" },
+        { name: " X-New ", value: " v " },
+        { name: "", value: "orphan" },
+      ])
+    ).toEqual({
+      env_vars: ["Authorization"],
+      headers: { Authorization: "******", "X-New": "v" },
+      environment: { Authorization: "******" },
+    });
+  });
+
+  it("skips a new header with no value", () => {
+    expect(headersUpdateSpec({}, [{ name: "X-Empty", value: "" }])).toEqual({ headers: {} });
   });
 });

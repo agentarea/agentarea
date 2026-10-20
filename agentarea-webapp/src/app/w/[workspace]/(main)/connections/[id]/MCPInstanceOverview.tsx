@@ -11,7 +11,6 @@ import {
   Globe,
   KeyRound,
   Link2,
-  Pencil,
   ShieldCheck,
   TriangleAlert,
   Users,
@@ -42,8 +41,11 @@ import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { mcpIdentity } from "@/lib/entity-identity";
 import { useClientApiUrl } from "@/lib/use-client-api-url";
-import { CredentialFields } from "../components/CredentialFields";
-import { credentialUpdateSpec, remoteHeaderFields } from "../credential-fields";
+import { CustomHeadersEditor, toHeaderRows } from "../components/CustomHeadersEditor";
+import { CustomHeadersList } from "../components/CustomHeadersList";
+import type { HeaderRow } from "../components/HeaderRows";
+import { SectionEditAction } from "../components/SectionEditAction";
+import { headersUpdateSpec, remoteHeaderFields, storedHeaders } from "../credential-fields";
 import { OAuthConnectPanel } from "../OAuthConnectPanel";
 import { summarizeAuthorization, type OAuthConnectState } from "../oauth-connect-state";
 import { getMcpConnectionState } from "../state";
@@ -98,7 +100,7 @@ export default function MCPInstanceOverview({
 }: Props) {
   const t = useTranslations("MCPServersPage.instanceDetail");
   const tState = useTranslations("MCPServersPage.state");
-  const tCommon = useTranslations("Common");
+  const tConn = useTranslations("OpenAPIConnection");
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
   const router = useWorkspaceRouter();
@@ -152,36 +154,33 @@ export default function MCPInstanceOverview({
     }
   };
 
-  // Editable config state
-  const [isEditingConfig, setIsEditingConfig] = useState(false);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [editHeaders, setEditHeaders] = useState<Record<string, string>>(
-    (instance.json_spec?.headers ?? {}) as Record<string, string>
-  );
+  // The headers draft, null while they are not being edited.
+  const [headersDraft, setHeadersDraft] = useState<HeaderRow[] | null>(null);
+  const [isSavingHeaders, setIsSavingHeaders] = useState(false);
 
-  const handleSaveConfig = async () => {
-    setIsSavingConfig(true);
+  const handleSaveHeaders = async () => {
+    setIsSavingHeaders(true);
     setSaveConfigError(null);
     try {
       const { updateMCPServerInstanceAction } = await import(
         "@/lib/server-actions"
       );
-      // Not the spec as it came: the API refuses transport fields back, and a
-      // blank value keeps the stored secret.
+      // The update replaces json_spec; the helper leaves out the transport
+      // fields the API refuses back and keeps a secret left blank.
       const result = await updateMCPServerInstanceAction(instance.id, {
-        json_spec: credentialUpdateSpec(instance.json_spec ?? {}, "url", editHeaders),
+        json_spec: headersUpdateSpec(instance.json_spec ?? {}, headersDraft ?? []),
       });
       if (result.error) {
         setSaveConfigError(apiErrorMessage(result, t("errors.saveConfigFailed")));
         return;
       }
-      setIsEditingConfig(false);
+      setHeadersDraft(null);
       router.refresh();
     } catch (err) {
-      console.error("Failed to save MCP instance config", err);
+      console.error("Failed to save MCP instance headers", err);
       setSaveConfigError(`${t("errors.saveConfigFailed")}: ${formatApiError(err)}`);
     } finally {
-      setIsSavingConfig(false);
+      setIsSavingHeaders(false);
     }
   };
 
@@ -236,8 +235,17 @@ export default function MCPInstanceOverview({
     serverSpec?.remote_url ||
     (serverSpec?.json_spec as McpServerJsonSpec | undefined)?.remotes?.[0]
       ?.url) as string | undefined;
-  const customHeaders = (instance.json_spec?.headers ?? {}) as Record<string, string>;
-  const headerFields = remoteHeaderFields(serverSpec);
+  const headers = storedHeaders(instance.json_spec ?? {});
+  // Nothing stored yet: start from the headers the server declares, if any.
+  const openHeaders = () => {
+    const declared = remoteHeaderFields(serverSpec);
+    setSaveConfigError(null);
+    setHeadersDraft(
+      headers.length === 0 && declared.length > 0
+        ? declared.map((field) => ({ name: field.name, value: "" }))
+        : toHeaderRows(headers)
+    );
+  };
 
   // The one way in, for every transport: AgentArea's demand gateway, keyed by
   // instance id. It is what gives on-demand start, the request lease and idle
@@ -269,22 +277,6 @@ export default function MCPInstanceOverview({
     consumer.enabled_tools == null
       ? t("consumers.allTools")
       : t("consumers.toolCount", { count: consumer.enabled_tools.length });
-
-  const editHeadersButton = isUrlType && !isEditingConfig && (
-    <Button
-      variant="ghost"
-      size="xs"
-      className="text-muted-foreground"
-      onClick={() => {
-        // From what the page shows now, not from what it showed on mount.
-        setEditHeaders(customHeaders);
-        setIsEditingConfig(true);
-      }}
-    >
-      <Pencil />
-      {tCommon("edit")}
-    </Button>
-  );
 
   return (
     <div className="font-inter md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
@@ -462,7 +454,6 @@ export default function MCPInstanceOverview({
               <SectionCardHead
                 icon={<Link2 />}
                 title={t("connection.title")}
-                action={editHeadersButton || undefined}
               />
               <CardField label={t("connection.connectUrl")}>
                 <CopyableText text={agentareaProxyUrl} />
@@ -472,72 +463,6 @@ export default function MCPInstanceOverview({
               {isUrlType && endpointUrl && (
                 <CardField label={t("connection.endpoint")}>
                   <CopyableText text={endpointUrl} />
-                </CardField>
-              )}
-
-              {isUrlType && (
-                <CardField label={t("connection.headers")}>
-                  {isEditingConfig ? (
-                    <div className="space-y-3">
-                      <CredentialFields
-                        idPrefix="header"
-                        fields={Object.keys(editHeaders).map((key) => {
-                          const fieldMeta = headerFields.find((h) => h.name === key);
-                          return {
-                            name: key,
-                            description: fieldMeta?.description,
-                            placeholder: fieldMeta?.placeholder,
-                            isSecret: fieldMeta?.isSecret !== false,
-                            isRequired: false,
-                          };
-                        })}
-                        bind={(key) => ({
-                          value: editHeaders[key] ?? "",
-                          onChange: (e) => {
-                            setSaveConfigError(null);
-                            setEditHeaders((prev) => ({
-                              ...prev,
-                              [key]: e.target.value,
-                            }));
-                          },
-                        })}
-                      />
-                      {saveConfigError && <FormError>{saveConfigError}</FormError>}
-                      <div className="flex gap-2">
-                        <Button
-                          size="xs"
-                          onClick={handleSaveConfig}
-                          isLoading={isSavingConfig}
-                          disabled={isSavingConfig}
-                        >
-                          {tCommon("save")}
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => {
-                            setIsEditingConfig(false);
-                            setEditHeaders(customHeaders);
-                            setSaveConfigError(null);
-                          }}
-                        >
-                          {tCommon("cancel")}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : Object.keys(customHeaders).length > 0 ? (
-                    <div className="space-y-0.5">
-                      {Object.keys(customHeaders).map((key) => (
-                        <div key={key} className="font-mono text-xs">
-                          {key}: ••••••
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[12.5px] text-muted-foreground">
-                      {t("connection.noHeaders")}
-                    </p>
-                  )}
                 </CardField>
               )}
 
@@ -559,6 +484,45 @@ export default function MCPInstanceOverview({
                 </CardField>
               )}
             </SectionCard>
+
+            {isUrlType && (
+              <SectionCard>
+                <SectionCardHead
+                  icon={<KeyRound />}
+                  title={t("connection.headers")}
+                  count={headers.length}
+                  action={
+                    <SectionEditAction
+                      open={headersDraft !== null}
+                      hasRows={headers.length > 0}
+                      busy={isSavingHeaders}
+                      onOpen={openHeaders}
+                      onCancel={() => setHeadersDraft(null)}
+                      onSave={handleSaveHeaders}
+                      saveLabel={tConn("saveHeaders")}
+                    />
+                  }
+                />
+                {headersDraft !== null ? (
+                  <div className="space-y-3 px-[15px] py-3">
+                    <CustomHeadersEditor
+                      rows={headersDraft}
+                      onChange={(rows) => {
+                        setSaveConfigError(null);
+                        setHeadersDraft(rows);
+                      }}
+                      stored={headers}
+                      alwaysSecret
+                    />
+                    {saveConfigError && <FormError>{saveConfigError}</FormError>}
+                  </div>
+                ) : headers.length > 0 ? (
+                  <CustomHeadersList headers={headers} />
+                ) : (
+                  <EmptyRow text={t("connection.noHeaders")} />
+                )}
+              </SectionCard>
+            )}
 
             {isUrlType && (
               <SectionCard>

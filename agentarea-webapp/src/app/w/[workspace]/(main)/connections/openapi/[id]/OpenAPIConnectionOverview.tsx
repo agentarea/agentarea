@@ -5,14 +5,11 @@ import { useLocale, useNow, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   Activity,
-  Check,
   ExternalLink,
   FileJson,
   Globe,
   KeyRound,
   Link2,
-  Pencil,
-  Plus,
   SlidersHorizontal,
   Wrench,
 } from "lucide-react";
@@ -26,7 +23,6 @@ import {
   Stat,
   StatStrip,
 } from "@/components/Overview/OverviewCard";
-import { Button } from "@/components/ui/button";
 import { CopyableText } from "@/components/ui/copyable-text";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
@@ -40,6 +36,7 @@ import {
   toHeaderRows,
 } from "../../components/CustomHeadersEditor";
 import { CustomHeadersList } from "../../components/CustomHeadersList";
+import { SectionEditAction } from "../../components/SectionEditAction";
 import {
   cleanQueryParamRows,
   CustomQueryParamsEditor,
@@ -74,7 +71,6 @@ export default function OpenAPIConnectionOverview({
   const t = useTranslations("MCPServersPage.openapiDetail");
   const tDetail = useTranslations("MCPServersPage.instanceDetail");
   const tState = useTranslations("MCPServersPage.state");
-  const tCommon = useTranslations("Common");
   const tConn = useTranslations("OpenAPIConnection");
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
@@ -139,67 +135,6 @@ export default function OpenAPIConnectionOverview({
   );
   const lastDispatch = readLastDispatch(connection.last_dispatch);
   const lastCallAt = relativeParts(lastDispatch?.at, now, locale);
-
-  /**
-   * The section card head's control: Edit (or Add on an empty list) while
-   * closed, Cancel and Save while its draft is open.
-   */
-  const headAction = ({
-    open,
-    hasRows,
-    busy,
-    onOpen,
-    onCancel,
-    onSave,
-    saveLabel,
-  }: {
-    open: boolean;
-    hasRows: boolean;
-    busy: boolean;
-    onOpen: () => void;
-    onCancel: () => void;
-    onSave: () => void;
-    saveLabel: string;
-  }) =>
-    open ? (
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="xs"
-          className="text-muted-foreground"
-          onClick={onCancel}
-          disabled={busy}
-        >
-          {tCommon("cancel")}
-        </Button>
-        {/* Light like Cancel; the accent text alone marks it as the commit. */}
-        <Button
-          variant="ghost"
-          size="xs"
-          className="px-2 font-medium text-primary hover:text-primary"
-          onClick={onSave}
-          isLoading={busy}
-          disabled={busy}
-          aria-label={saveLabel}
-        >
-          {!busy && <Check />}
-          {tCommon("save")}
-        </Button>
-      </div>
-    ) : (
-      <Button
-        variant="ghost"
-        size="xs"
-        className="text-muted-foreground"
-        onClick={() => {
-          setError(null);
-          onOpen();
-        }}
-      >
-        {hasRows ? <Pencil /> : <Plus />}
-        {hasRows ? tCommon("edit") : tCommon("add")}
-      </Button>
-    );
 
   return (
     <div className="font-inter md:flex md:h-full md:min-h-0 md:flex-col md:overflow-hidden">
@@ -319,20 +254,26 @@ export default function OpenAPIConnectionOverview({
                 icon={<KeyRound />}
                 title={t("headersTitle")}
                 count={headers.length}
-                action={headAction({
-                  open: headersDraft !== null,
-                  hasRows: headers.length > 0,
-                  busy: saving === "headers",
-                  onOpen: () => setHeadersDraft(toHeaderRows(headers)),
-                  onCancel: () => setHeadersDraft(null),
-                  onSave: () =>
-                    save(
-                      "headers",
-                      { custom_headers: cleanHeaderRows(headersDraft ?? []) },
-                      () => setHeadersDraft(null)
-                    ),
-                  saveLabel: tConn("saveHeaders"),
-                })}
+                action={
+                  <SectionEditAction
+                    open={headersDraft !== null}
+                    hasRows={headers.length > 0}
+                    busy={saving === "headers"}
+                    onOpen={() => {
+                      setError(null);
+                      setHeadersDraft(toHeaderRows(headers));
+                    }}
+                    onCancel={() => setHeadersDraft(null)}
+                    onSave={() =>
+                      save(
+                        "headers",
+                        { custom_headers: cleanHeaderRows(headersDraft ?? []) },
+                        () => setHeadersDraft(null)
+                      )
+                    }
+                    saveLabel={tConn("saveHeaders")}
+                  />
+                }
               />
               {headersDraft !== null ? (
                 <div className="px-[15px] py-3">
@@ -354,20 +295,26 @@ export default function OpenAPIConnectionOverview({
                 icon={<SlidersHorizontal />}
                 title={t("queryParamsTitle")}
                 count={queryParams.length}
-                action={headAction({
-                  open: queryDraft !== null,
-                  hasRows: queryParams.length > 0,
-                  busy: saving === "queryParams",
-                  onOpen: () => setQueryDraft(toQueryParamRows(queryParams)),
-                  onCancel: () => setQueryDraft(null),
-                  onSave: () =>
-                    save(
-                      "queryParams",
-                      { custom_query_params: cleanQueryParamRows(queryDraft ?? []) },
-                      () => setQueryDraft(null)
-                    ),
-                  saveLabel: tConn("saveQueryParams"),
-                })}
+                action={
+                  <SectionEditAction
+                    open={queryDraft !== null}
+                    hasRows={queryParams.length > 0}
+                    busy={saving === "queryParams"}
+                    onOpen={() => {
+                      setError(null);
+                      setQueryDraft(toQueryParamRows(queryParams));
+                    }}
+                    onCancel={() => setQueryDraft(null)}
+                    onSave={() =>
+                      save(
+                        "queryParams",
+                        { custom_query_params: cleanQueryParamRows(queryDraft ?? []) },
+                        () => setQueryDraft(null)
+                      )
+                    }
+                    saveLabel={tConn("saveQueryParams")}
+                  />
+                }
               />
               {queryDraft !== null ? (
                 <div className="px-[15px] py-3">

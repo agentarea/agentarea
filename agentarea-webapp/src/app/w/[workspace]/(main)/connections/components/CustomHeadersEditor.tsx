@@ -32,11 +32,14 @@ export function CustomHeadersEditor({
   rows,
   onChange,
   stored,
+  alwaysSecret,
 }: {
   rows: HeaderRow[];
   onChange: (rows: HeaderRow[]) => void;
   /** What is saved now: its secrets keep their value when left blank. */
   stored: CustomHeader[];
+  /** Every value is stored as a secret, whatever the header's name. */
+  alwaysSecret?: boolean;
 }) {
   const t = useTranslations("OpenAPIConnection");
   const storedSecrets = new Set(stored.filter((h) => h.secret).map((h) => h.name));
@@ -44,7 +47,12 @@ export function CustomHeadersEditor({
   return (
     <div className="space-y-3">
       {stored.length === 0 && <p className="note">{t("headersEditorHint")}</p>}
-      <HeaderRows rows={rows} onChange={onChange} keepSecretNames={storedSecrets} />
+      <HeaderRows
+        rows={rows}
+        onChange={onChange}
+        keepSecretNames={storedSecrets}
+        alwaysSecret={alwaysSecret}
+      />
       <div className="flex justify-end">
         <Button
           type="button"
