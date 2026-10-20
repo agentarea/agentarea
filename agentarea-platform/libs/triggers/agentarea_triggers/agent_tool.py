@@ -107,7 +107,7 @@ class TriggersAgentToolset(Toolset):
 
     async def _open(self):
         """Open a session + repo factory + trigger service for one call."""
-        from agentarea_common.auth.context import UserContext
+        from agentarea_common.auth.context import Subject, UserContext
         from agentarea_common.base.repository_factory import RepositoryFactory
         from agentarea_common.config import get_database, get_settings
 
@@ -123,9 +123,11 @@ class TriggersAgentToolset(Toolset):
 
         session = database.async_session_factory()
         try:
+            # It runs inside the agent's run, so it acts as the agent.
             user_context = UserContext(
                 user_id=self._require_user_id(),
                 workspace_id=self._require_workspace_id(),
+                subject=Subject(kind="agent", id=self._resolve_agent_id(None)),
             )
             repo_factory = RepositoryFactory(session, user_context)
 

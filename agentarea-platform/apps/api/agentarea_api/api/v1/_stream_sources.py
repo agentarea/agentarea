@@ -200,10 +200,10 @@ async def create_source(
     config = dict(payload.config)
     if _speaks_mcp_events(entry):
         instances = service.repository_factory.create_repository(MCPServerInstanceRepository)
-        user_id = service.repository_factory.user_context.user_id
+        caller = service.repository_factory.user_context
 
         async def authorize(instance_id: UUID) -> None:
-            await require_permission("use", "mcp_instance", str(instance_id), user_id)
+            await require_permission("use", "mcp_instance", str(instance_id), caller)
 
         config = await mcp_events_config(
             payload, load_instance=instances.get_by_id, authorize=authorize

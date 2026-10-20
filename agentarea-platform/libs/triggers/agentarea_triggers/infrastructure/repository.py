@@ -86,6 +86,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "name": entity.name,
             "description": entity.description,
             "agent_id": entity.agent_id,
+            "task_definition_id": entity.task_definition_id,
             "trigger_type": _value(entity.trigger_type),
             "is_active": entity.is_active,
             "task_parameters": entity.task_parameters,
@@ -118,6 +119,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "name": entity.name,
             "description": entity.description,
             "agent_id": entity.agent_id,
+            "task_definition_id": entity.task_definition_id,
             "trigger_type": _value(entity.trigger_type),
             "is_active": entity.is_active,
             "task_parameters": entity.task_parameters,
@@ -155,6 +157,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             name=trigger_data.name,
             description=trigger_data.description,
             agent_id=trigger_data.agent_id,
+            task_definition_id=trigger_data.task_definition_id,
             trigger_type=_value(trigger_data.trigger_type),
             task_parameters=trigger_data.task_parameters,
             conditions=trigger_data.conditions,
@@ -183,10 +186,12 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         update_data = {}
         # event_filter lives on the trigger's stream subscription, not on the row.
         for field, value in trigger_update.model_dump(
-            exclude_unset=True, exclude={"event_filter", "session", "batch"}
+            exclude_unset=True, exclude={"event_filter", "session", "batch", "task_definition_id"}
         ).items():
             if value is not None:
                 update_data[field] = value
+        if "task_definition_id" in trigger_update.model_fields_set:
+            update_data["task_definition_id"] = trigger_update.task_definition_id
         if "session" in trigger_update.model_fields_set:
             update_data["session"] = _session(trigger_update.session)
         if "batch" in trigger_update.model_fields_set:
@@ -285,8 +290,8 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
     async def enable_trigger(self, trigger_id: UUID) -> bool:
         """Enable a trigger in the current workspace.
 
-        Clears a "needs a new owner" stop: the next event re-checks the
-        configurer's access and stops the trigger again if it is still missing.
+        Clears a "needs attention" stop: the next firing re-checks the agent and
+        stops the trigger again if it is still gone or inactive.
         Starts the failure count over, so one failure after it does not stop it again.
         """
         stmt = (
@@ -305,7 +310,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return cast(CursorResult[Any], result).rowcount > 0
 
     async def mark_needs_new_owner(self, trigger_id: UUID) -> bool:
-        """Stop a trigger whose configurer can no longer run its agent, and say why."""
+        """Stop a trigger whose agent is gone or inactive, and say why."""
         stmt = (
             update(TriggerORM)
             .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
@@ -330,6 +335,7 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
             "name": trigger_orm.name,
             "description": trigger_orm.description,
             "agent_id": trigger_orm.agent_id,
+            "task_definition_id": trigger_orm.task_definition_id,
             "trigger_type": TriggerType(trigger_orm.trigger_type),
             "is_active": trigger_orm.is_active,
             "task_parameters": trigger_orm.task_parameters or {},

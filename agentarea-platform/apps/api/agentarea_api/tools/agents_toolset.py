@@ -90,7 +90,7 @@ class AgentsToolset(Toolset):
         async with platform_read_context() as (_s, user_ctx, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
             agents = await service.list()
-            readable = await readable_resource_ids(user_ctx.user_id)
+            readable = await readable_resource_ids(user_ctx)
             return json.dumps(
                 [
                     {"id": str(a.id), "name": a.name, "description": a.description}

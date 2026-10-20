@@ -6,8 +6,29 @@ must raise rather than invent one.
 """
 
 from dataclasses import dataclass
+from typing import Literal
 
 from .credential import Credential, Scope, ScopeRequiredError
+
+SubjectKind = Literal["user", "agent"]
+_GRAPH_TYPE: dict[str, str] = {"user": "User", "agent": "Agent"}
+
+
+@dataclass(frozen=True)
+class Subject:
+    """Who the authorization graph is asked about: a person, or the agent a run executes as."""
+
+    kind: SubjectKind
+    id: str
+
+    def __post_init__(self):
+        """Refuse a subject that names no one."""
+        if not self.id:
+            raise ValueError("a subject names no one without an id")
+
+    @property
+    def graph_subject(self) -> str:
+        return f"{_GRAPH_TYPE[self.kind]}:{self.id}"
 
 
 @dataclass
@@ -31,6 +52,14 @@ class UserContext:
     # What the request authenticated with; ``None`` for a context minted outside
     # one, which is granted no scopes.
     credential: Credential | None = None
+    # The principal the graph is asked about. A run executes as its agent; a
+    # request acts as its user, which is what ``None`` means.
+    subject: Subject | None = None
+
+    @property
+    def graph_subject(self) -> str:
+        """The graph reference reach is checked for: ``User:<id>`` or ``Agent:<id>``."""
+        return (self.subject or Subject(kind="user", id=self.user_id)).graph_subject
 
     def __post_init__(self):
         """Refuse a context that names no principal or no workspace."""
@@ -93,6 +122,10 @@ class UserPrincipal:
         """Refuse a principal that names nobody."""
         if not self.user_id:
             raise ValueError("user_id is required; refusing to build a principal without one")
+
+    @property
+    def graph_subject(self) -> str:
+        return Subject(kind="user", id=self.user_id).graph_subject
 
     def enter(self, workspace_id: str, workspace_slug: str) -> UserContext:
         """The context for acting in ``workspace_id``, which must be reachable."""

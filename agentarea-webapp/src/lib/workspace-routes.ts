@@ -28,6 +28,7 @@ export const WORKSPACE_ROUTES = [
   "network",
   "policies",
   "projects",
+  "saved-tasks",
   "secrets",
   "settings",
   "skills",

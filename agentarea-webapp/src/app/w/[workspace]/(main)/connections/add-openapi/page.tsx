@@ -1,19 +1,25 @@
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import ContentBlock from "@/components/ContentBlock";
 import { AddOpenAPIForm } from "./form";
+import AddOpenAPIHeaderControls from "./HeaderControls";
 
-export default function AddOpenAPIPage() {
+export const metadata: Metadata = {
+  title: "Add OpenAPI Connection",
+};
+
+export default async function AddOpenAPIPage() {
+  const t = await getTranslations("MCPServersPage");
+  const tForm = await getTranslations("OpenAPIForm");
+
   return (
     <ContentBlock
       header={{
         breadcrumb: [
-          { label: "Connections", href: "/connections" },
-          { label: "Add OpenAPI Connection" },
+          { label: t("title"), href: "/connections" },
+          { label: tForm("title") },
         ],
-        description: "Connect an OpenAPI-based REST API to your workspace",
-        backLink: {
-          label: "Back to Connections",
-          href: "/connections",
-        },
+        controls: <AddOpenAPIHeaderControls />,
       }}
     >
       <AddOpenAPIForm />

@@ -9,10 +9,34 @@ import pytest
 from agentarea_api.api.v1 import agents_tasks
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.di.container import get_container
 from agentarea_governance.domain.policies import PolicyValidationError
 from agentarea_tasks.domain.models import TaskProvenance
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+
+class _AllowAll(PermissionService):
+    """The PDP a run's start asks for ``execute`` on its agent; it allows, and remembers."""
+
+    def __init__(self):
+        self.checks: list[tuple[str, str, str, str]] = []
+
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        self.checks.append((subject, permission, resource_type, resource_id))
+        return True
+
+
+@pytest.fixture(autouse=True)
+def permissions():
+    container = get_container()
+    saved = dict(container._singletons)
+    allow = _AllowAll()
+    container.register_singleton(PermissionService, allow)
+    yield allow
+    container._singletons.clear()
+    container._singletons.update(saved)
 
 
 def _task(agent_id):
@@ -91,7 +115,7 @@ async def test_task_artifact_download_rejects_anything_but_an_opaque_id():
 
 
 @pytest.mark.asyncio
-async def test_task_sync_accepts_task_policy_and_passes_typed_payload():
+async def test_task_sync_accepts_task_policy_and_passes_typed_payload(permissions):
     agent_id = uuid4()
     context = UserContext(user_id="user-a", workspace_id="workspace-a")
     task_service = SimpleNamespace(start_run=AsyncMock(return_value=_task(agent_id)))
@@ -115,8 +139,10 @@ async def test_task_sync_accepts_task_policy_and_passes_typed_payload():
     assert task_service.start_run.await_args.kwargs == {
         "workspace_id": context.workspace_id,
         "user_id": context.user_id,
+        "provenance": TaskProvenance.started_by("user-a", via_api_key=False),
         "trusted_metadata": None,
     }
+    assert permissions.checks == [("User:user-a", "execute", "agent", str(agent_id))]
 
 
 @pytest.mark.asyncio

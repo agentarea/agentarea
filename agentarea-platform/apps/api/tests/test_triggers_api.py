@@ -130,6 +130,7 @@ def mock_auth_context():
     """Create mock authentication context."""
     context = MagicMock()
     context.user_id = "test_user"
+    context.graph_subject = "User:test_user"
     return context
 
 
@@ -870,6 +871,16 @@ class TestExecuteTrigger:
         assert body["status"] == "success"
         assert body["task_id"] == str(task_id)
 
+    def test_replaying_events_is_a_run_the_caller_started(self, client, mock_trigger_service):
+        """So the trigger service asks that the caller may run the agent."""
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=uuid4(), status=ExecutionStatus.SUCCESS, error_message=None
+        )
+
+        client.post(f"/v1/workspaces/acme/triggers/{uuid4()}/execute", json={})
+
+        assert mock_trigger_service.execute_trigger.call_args.kwargs["fired_by"] == "test_user"
+
 
 class TestRunTriggerNow:
     """POST /v1/workspaces/acme/triggers/{id}/run -- firing a trigger once by hand."""
@@ -932,8 +943,8 @@ class _StreamReaders:
         self.unreadable = set(unreadable)
         self.checks: list[tuple[str, str, str, str]] = []
 
-    async def check(self, user_id: str, permission: str, resource_type: str, resource_id: str):
-        self.checks.append((user_id, permission, resource_type, resource_id))
+    async def check(self, subject: str, permission: str, resource_type: str, resource_id: str):
+        self.checks.append((subject, permission, resource_type, resource_id))
         return not (
             permission == "read" and resource_type == "stream" and resource_id in self.unreadable
         )
@@ -985,9 +996,8 @@ async def test_a_stream_trigger_checks_its_creator_may_read_the_stream(
         workspace_id="w",
     )
 
-    response = await async_client.post(
-        "/v1/workspaces/acme/triggers/", json=_stream_trigger_body(stream_id)
-    )
+    body = _stream_trigger_body(stream_id)
+    response = await async_client.post("/v1/workspaces/acme/triggers/", json=body)
 
     assert response.status_code == 201, response.text
-    assert ("test_user", "read", "stream", stream_id) in pdp.checks
+    assert ("User:test_user", "read", "stream", stream_id) in pdp.checks

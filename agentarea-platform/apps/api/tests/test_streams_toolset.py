@@ -238,7 +238,9 @@ async def test_delete_forward_checks_every_output_then_removes_it(monkeypatch):
         )
     )
     assert result == {"deleted": True}
-    allowed.assert_awaited_once_with("edit", "stream", str(output), "u")
+    allowed.assert_awaited_once()
+    *question, caller = allowed.await_args.args
+    assert (question, caller.user_id) == (["edit", "stream", str(output)], "u")
     service.delete_forward.assert_awaited_once_with(stream, forward)
 
 

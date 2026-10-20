@@ -3540,6 +3540,53 @@ export const zTaskCommandPayload = z.object({
 });
 
 /**
+ * TaskDefinitionCreate
+ *
+ * A saved task: the agent, what to ask it, and the parameters to ask with.
+ */
+export const zTaskDefinitionCreate = z.object({
+  agent_id: z.string().uuid(),
+  description: z.string().min(1).max(20000),
+  name: z.string().min(1).max(255),
+  parameters: z.record(z.unknown()).optional(),
+});
+
+/**
+ * TaskDefinitionResponse
+ */
+export const zTaskDefinitionResponse = z.object({
+  agent_id: z.string().uuid(),
+  created_at: z.string().datetime(),
+  created_by: z.string(),
+  description: z.string(),
+  id: z.string().uuid(),
+  name: z.string(),
+  parameters: z.record(z.unknown()),
+  updated_at: z.string().datetime(),
+});
+
+/**
+ * TaskDefinitionRun
+ *
+ * One run of a saved task.
+ */
+export const zTaskDefinitionRun = z.object({
+  parameters: z.record(z.unknown()).nullish(),
+});
+
+/**
+ * TaskDefinitionUpdate
+ *
+ * Changes to a saved task; a field left out stays as it is.
+ */
+export const zTaskDefinitionUpdate = z.object({
+  agent_id: z.string().uuid().nullish(),
+  description: z.string().min(1).max(20000).nullish(),
+  name: z.string().min(1).max(255).nullish(),
+  parameters: z.record(z.unknown()).nullish(),
+});
+
+/**
  * TaskEvent
  *
  * Model for task execution events.
@@ -3592,8 +3639,10 @@ export const zTaskProvenance = z.object({
   correlation_id: z.string().nullish(),
   depth: z.number().int().optional().default(0),
   origin_id: z.string().nullish(),
-  origin_type: z.enum(["user", "trigger", "agent", "api"]).nullish(),
+  origin_type: z.enum(["user", "trigger", "agent", "api", "a2a"]).nullish(),
   parent_task_id: z.string().uuid().nullish(),
+  source_identity: z.string().nullish(),
+  task_definition_id: z.string().uuid().nullish(),
 });
 
 /**
@@ -4003,6 +4052,7 @@ export const zTriggerCreate = z.object({
   name: z.string().min(1).max(255),
   session: zTriggerSession.nullish(),
   stream_id: z.string().uuid().nullish(),
+  task_definition_id: z.string().uuid().nullish(),
   task_parameters: z.record(z.unknown()).optional(),
   timezone: z.string().optional().default("UTC"),
   trigger_type: z.enum(["cron", "stream"]),
@@ -4034,6 +4084,7 @@ export const zTriggerResponse = z.object({
   session: zTriggerSession.nullish(),
   status: z.enum(["active", "inactive", "needs_owner"]),
   stream_id: z.string().uuid().nullish(),
+  task_definition_id: z.string().uuid().nullish(),
   task_parameters: z.record(z.unknown()),
   timezone: z.string().nullish(),
   trigger_type: z.string(),
@@ -4062,6 +4113,7 @@ export const zTriggerSpec = z.object({
   name: z.string().min(1).max(255),
   session: zTriggerSession.nullish(),
   stream_id: z.string().uuid().nullish(),
+  task_definition_id: z.string().uuid().nullish(),
   task_parameters: z.record(z.unknown()).optional(),
   timezone: z.string().optional().default("UTC"),
   trigger_type: z.enum(["cron", "stream"]),
@@ -4154,6 +4206,7 @@ export const zTriggerUpdate = z.object({
   failure_threshold: z.number().int().gte(1).lte(100).nullish(),
   name: z.string().min(1).max(255).nullish(),
   session: zTriggerSession.nullish(),
+  task_definition_id: z.string().uuid().nullish(),
   task_parameters: z.record(z.unknown()).nullish(),
   timezone: z.string().nullish(),
 });
@@ -7341,6 +7394,81 @@ export const zListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGe
  */
 export const zListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponse =
   z.array(zOutcomeResponse);
+
+export const zListTaskDefinitionsV1TaskDefinitionsGetQuery = z.object({
+  agent_id: z.string().uuid().nullish(),
+  limit: z.number().int().gte(1).lte(1000).optional().default(100),
+});
+
+/**
+ * Response List Task Definitions V1 Task Definitions  Get
+ *
+ * Successful Response
+ */
+export const zListTaskDefinitionsV1TaskDefinitionsGetResponse = z.array(
+  zTaskDefinitionResponse
+);
+
+export const zCreateTaskDefinitionV1TaskDefinitionsPostBody =
+  zTaskDefinitionCreate;
+
+/**
+ * Successful Response
+ */
+export const zCreateTaskDefinitionV1TaskDefinitionsPostResponse =
+  zTaskDefinitionResponse;
+
+export const zDeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeletePath =
+  z.object({
+    definition_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zDeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponse =
+  z.void();
+
+export const zGetTaskDefinitionV1TaskDefinitionsDefinitionIdGetPath = z.object({
+  definition_id: z.string().uuid(),
+});
+
+/**
+ * Successful Response
+ */
+export const zGetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponse =
+  zTaskDefinitionResponse;
+
+export const zUpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutBody =
+  zTaskDefinitionUpdate;
+
+export const zUpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutPath =
+  z.object({
+    definition_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zUpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponse =
+  zTaskDefinitionResponse;
+
+/**
+ * Payload
+ */
+export const zRunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostBody =
+  zTaskDefinitionRun.nullable();
+
+export const zRunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostPath =
+  z.object({
+    definition_id: z.string().uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zRunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponse =
+  zTaskResponse;
 
 export const zGetAllTasksV1TasksGetQuery = z.object({
   status: z

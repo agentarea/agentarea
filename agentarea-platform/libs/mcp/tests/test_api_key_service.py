@@ -5,11 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
 from agentarea_mcp.application.access_token_service import (
+    _TOKEN_PREFIX,
     APIKeyService,
     hash_token,
-    _TOKEN_PREFIX,
 )
 from agentarea_mcp.domain.auth_models import APIKey
 

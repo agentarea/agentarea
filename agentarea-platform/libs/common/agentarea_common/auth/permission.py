@@ -2,10 +2,18 @@
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Protocol
 
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
+
+
+class GraphCaller(Protocol):
+    """Anything that names the subject a graph check is about."""
+
+    @property
+    def graph_subject(self) -> str: ...
 
 
 class PermissionService(ABC):
@@ -14,15 +22,15 @@ class PermissionService(ABC):
     @abstractmethod
     async def check(
         self,
-        user_id: str,
+        subject: str,
         permission: str,
         resource_type: str,
         resource_id: str,
     ) -> bool:
-        """Check if user has permission on a resource.
+        """Check if a subject has permission on a resource.
 
         Args:
-            user_id: The user requesting access.
+            subject: The graph subject asking: ``User:<id>`` or ``Agent:<id>``.
             permission: Action (view, edit, delete, execute).
             resource_type: Entity type (agent, mcp_server, skill, model, etc.).
             resource_id: ID of the specific resource.
@@ -37,20 +45,22 @@ async def require_permission(
     permission: str,
     resource_type: str,
     resource_id: str,
-    user_id: str,
+    caller: GraphCaller,
 ) -> None:
-    """Check permission and raise 403 if denied.
+    """Check the caller's subject has ``permission`` and raise 403 if not.
 
-    Resolves PermissionService from the DI container.
+    Resolves PermissionService from the DI container. A run asks as its agent,
+    a request as its user: the caller says which.
     """
     from agentarea_common.di.container import resolve
 
+    subject = caller.graph_subject
     perm_service = resolve(PermissionService)
-    allowed = await perm_service.check(user_id, permission, resource_type, resource_id)
+    allowed = await perm_service.check(subject, permission, resource_type, resource_id)
     if not allowed:
         logger.warning(
-            "Permission denied: user=%s permission=%s resource=%s/%s",
-            user_id,
+            "Permission denied: subject=%s permission=%s resource=%s/%s",
+            subject,
             permission,
             resource_type,
             resource_id,

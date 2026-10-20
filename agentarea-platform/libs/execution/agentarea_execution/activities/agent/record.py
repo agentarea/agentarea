@@ -80,7 +80,11 @@ def make_record_activities(
         fails the call for good: retrying would refuse it again and hold the run.
         """
         user_context = create_user_context(
-            {"user_id": request.user_id, "workspace_id": request.workspace_id}
+            {
+                "user_id": request.user_id,
+                "workspace_id": request.workspace_id,
+                "agent_id": request.agent_id,
+            }
         )
         try:
             sent = [json.loads(event_json) for event_json in request.events_json]

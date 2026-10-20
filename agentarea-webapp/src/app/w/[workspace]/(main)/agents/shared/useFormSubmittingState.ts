@@ -31,3 +31,19 @@ export function useFormSubmittingState(formId: string = "agent-form") {
   return isSubmitting;
 }
 
+
+/**
+ * The form side of {@link useFormSubmittingState}: tells a header button that
+ * targets `form` whether the form is saving.
+ */
+export function announceFormSubmitting(
+  form: HTMLFormElement | null,
+  isSubmitting: boolean
+) {
+  if (!form) return;
+  if (isSubmitting) form.setAttribute("data-submitting", "true");
+  else form.removeAttribute("data-submitting");
+  form.dispatchEvent(
+    new CustomEvent("form-submitting", { detail: { isSubmitting } })
+  );
+}

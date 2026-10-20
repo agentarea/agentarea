@@ -11,7 +11,7 @@ from agentarea_agents.application.agent_service import AgentService
 from agentarea_agents.application.skill_service import SkillService
 from agentarea_common.audit import AuditService
 from agentarea_common.auth.authorization import AuthorizationService
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import Subject, UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.config import get_database
@@ -200,9 +200,11 @@ def _default_accessible_workspaces(workspace_id: str) -> list[str]:
 def create_user_context(user_context_data: dict[str, Any] | None) -> UserContext:
     """Build the principal an activity runs as, from the workflow's context data.
 
-    Every activity runs as the task's owner. ``AgentExecutionRequest.user_id`` is
-    required, so the workflow always has a principal to pass down; a request that
-    arrives without one is a wiring bug, not a case to paper over.
+    Every activity runs as the run's agent: graph checks ask about the agent,
+    whose relations were granted to it, not about the person the run is
+    attributed to. ``user_id`` stays as that attribution (created_by, task
+    authority). A context missing either is a wiring bug, not a case to paper
+    over.
 
     Args:
         user_context_data: Dictionary containing user_id and workspace_id
@@ -220,11 +222,15 @@ def create_user_context(user_context_data: dict[str, Any] | None) -> UserContext
         raise ValueError("user_id is required in user_context_data")
     if not workspace_id:
         raise ValueError("workspace_id is required in user_context_data")
+    agent_id = user_context_data.get("agent_id")
+    if not agent_id:
+        raise ValueError("agent_id is required in user_context_data: a run acts as its agent")
 
     return UserContext(
         user_id=user_id,
         workspace_id=workspace_id,
         accessible_workspaces=_default_accessible_workspaces(workspace_id),
+        subject=Subject(kind="agent", id=agent_id),
     )
 
 

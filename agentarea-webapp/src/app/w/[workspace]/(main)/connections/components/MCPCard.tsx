@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   Box,
@@ -16,11 +17,14 @@ import {
   Search,
   Server,
   Terminal,
+  type LucideIcon,
 } from "lucide-react";
 import EntityMark from "@/components/EntityMark";
 import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import {
   getMCPConnectionIconSrc,
   openApiIdentity,
@@ -127,16 +131,30 @@ export function MCPInstanceCard({
   });
   // Granted beats available: a card that brags "400 tools" hides whether any
   // agent holds them, which is the fact worth scanning for.
-  const grantedLabel = usage
-    ? t("toolsGranted", {
-        granted:
-          usage.grantedTools === null
-            ? t("allTools")
-            : `${usage.grantedTools} / ${toolCount}`,
-      })
-    : toolCount > 0
-      ? t("toolsTotal", { total: toolCount })
-      : null;
+  const granted = usage
+    ? usage.grantedTools === null
+      ? t("allTools")
+      : `${usage.grantedTools} / ${toolCount}`
+    : null;
+  const facts: CardFact[] = [
+    {
+      key: "tools",
+      icon: ENTITY_ICONS.tool,
+      value: granted ?? String(toolCount),
+      label: granted
+        ? t("toolsGranted", { granted })
+        : t("toolsTotal", { total: toolCount }),
+    },
+  ];
+  if (usage) {
+    facts.push({
+      key: "agents",
+      icon: ENTITY_ICONS.agent,
+      value: String(usage.agents),
+      label:
+        usage.agents === 0 ? t("unused") : t("agentCount", { count: usage.agents }),
+    });
+  }
 
   const typeLabel = TRANSPORT_LABEL[instance.transport];
 
@@ -150,29 +168,72 @@ export function MCPInstanceCard({
       icon={providerIcon || getMCPIcon(instance.name)}
       type="view"
       subtitle={
-        <div className="flex items-center gap-1.5 w-full">
-          <StatusIndicator
-            size="sm"
-            kind={connectionState.kind}
-            className="shrink-0"
-          >
-            {tState(connectionState.key)}
-          </StatusIndicator>
-          <span className="truncate text-xs text-gray-500">{typeLabel}</span>
-          {grantedLabel && (
-            <span className="text-xs text-gray-400">· {grantedLabel}</span>
-          )}
-          {usage && (
-            <span className="shrink-0 text-xs text-gray-400">
-              ·{" "}
-              {usage.agents === 0
-                ? t("unused")
-                : t("agentCount", { count: usage.agents })}
-            </span>
-          )}
-        </div>
+        <CardSubtitle
+          status={
+            <StatusIndicator size="sm" kind={connectionState.kind}>
+              {tState(connectionState.key)}
+            </StatusIndicator>
+          }
+          // The type last: it is the one to drop when the card is narrow.
+          facts={[...facts, { key: "type", value: typeLabel, label: typeLabel }]}
+        />
       }
     />
+  );
+}
+
+interface CardFact {
+  key: string;
+  /** With an icon the value is a short count; the label spells it out. */
+  icon?: LucideIcon;
+  value: string;
+  label: string;
+}
+
+/**
+ * One line, so every card keeps the same height: the status, then the facts
+ * as icon + count like the project cards, the words in the tooltip. A fact
+ * that does not fit wraps onto a second line the box clips, so it is left out
+ * whole rather than cut to "un…".
+ */
+function CardSubtitle({
+  status,
+  badge,
+  facts,
+}: {
+  status: ReactNode;
+  badge?: ReactNode;
+  facts: CardFact[];
+}) {
+  return (
+    <div className="flex w-full min-w-0 items-center gap-2">
+      <span className="shrink-0 whitespace-nowrap">{status}</span>
+      {badge && <span className="shrink-0">{badge}</span>}
+      {facts.length > 0 && (
+        <span className="flex h-4 min-w-0 flex-1 flex-wrap gap-x-2.5 overflow-hidden text-xs leading-4 text-muted-foreground">
+          {facts.map(({ key, icon: Icon, value, label }) =>
+            Icon ? (
+              <Tooltip key={key}>
+                <TooltipTrigger asChild>
+                  <span className="flex items-center gap-1 whitespace-nowrap">
+                    <Icon className="h-3.5 w-3.5" aria-hidden />
+                    <span className="tabular-nums" aria-hidden>
+                      {value}
+                    </span>
+                    <span className="sr-only">{label}</span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">{label}</TooltipContent>
+              </Tooltip>
+            ) : (
+              <span key={key} className="whitespace-nowrap">
+                {value}
+              </span>
+            )
+          )}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -183,6 +244,7 @@ interface OpenAPIConnectionCardProps {
 export function OpenAPIConnectionCard({
   connection,
 }: OpenAPIConnectionCardProps) {
+  const t = useTranslations("MCPServersPage.table");
   const tState = useTranslations("MCPServersPage.state");
   const toolCount = connection.available_tools.length;
   const connectionState = getOpenApiConnectionState(
@@ -198,27 +260,30 @@ export function OpenAPIConnectionCard({
       icon={<OpenAPIConnectionMark connection={connection} />}
       type="view"
       subtitle={
-        <div className="flex items-center gap-1.5">
-          <StatusIndicator
-            size="sm"
-            kind={connectionState.kind}
-            className="shrink-0"
-          >
-            {tState(connectionState.key)}
-          </StatusIndicator>
-          <Badge
-            size="sm"
-            variant="outline"
-            className="h-5 px-1.5 font-normal text-orange-600 border-orange-300"
-          >
-            OpenAPI
-          </Badge>
-          {connection.available_tools.length > 0 && (
-            <span className="text-xs text-gray-500">
-              {connection.available_tools.length} tools
-            </span>
-          )}
-        </div>
+        <CardSubtitle
+          status={
+            <StatusIndicator size="sm" kind={connectionState.kind}>
+              {tState(connectionState.key)}
+            </StatusIndicator>
+          }
+          badge={
+            <Badge
+              size="sm"
+              variant="outline"
+              className="h-5 px-1.5 font-normal text-orange-600 border-orange-300"
+            >
+              OpenAPI
+            </Badge>
+          }
+          facts={[
+            {
+              key: "tools",
+              icon: ENTITY_ICONS.tool,
+              value: String(toolCount),
+              label: t("toolsTotal", { total: toolCount }),
+            },
+          ]}
+        />
       }
     />
   );

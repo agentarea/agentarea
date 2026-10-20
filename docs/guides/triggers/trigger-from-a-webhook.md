@@ -176,8 +176,8 @@ an execution record with a task — check the API logs for the rejection reason,
 which is deliberately not returned to the caller in detail. Three other things
 also never become an execution record, because the dispatcher stops them
 before `TriggerService` ever evaluates conditions: an event filtered out by
-`event_types`, a trigger that is paused or disabled, and a configurer who lost
-access to the agent. All three still show up as the stream's own record — read
+`event_types`, a trigger that is paused or disabled, and a trigger whose agent
+was deleted or deactivated. All three still show up as the stream's own record — read
 `stream_id` off the trigger (`GET .../triggers/$TRIGGER_ID` returns it), then:
 
 ```bash

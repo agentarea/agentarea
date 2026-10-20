@@ -9,7 +9,7 @@ from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import CronTrigger, TriggerExecution
 from agentarea_triggers.trigger_service import TriggerService
 
-from .conftest import make_trigger_repository_factory
+from .conftest import active_agent_repository, make_trigger_repository_factory
 
 pytestmark = pytest.mark.asyncio
 
@@ -83,7 +83,7 @@ class TestTriggerExecutionIntegration:
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
-        trigger_service.agent_repository = None
+        trigger_service.agent_repository = active_agent_repository()
 
         # Execute trigger
         execution_data = {
@@ -151,7 +151,7 @@ class TestTriggerExecutionIntegration:
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
-        trigger_service.agent_repository = None
+        trigger_service.agent_repository = active_agent_repository()
 
         # Test with matching conditions
         execution_data = {
@@ -198,7 +198,7 @@ class TestTriggerExecutionIntegration:
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
-        trigger_service.agent_repository = None
+        trigger_service.agent_repository = active_agent_repository()
 
         # Test with non-matching conditions
         execution_data = {
@@ -246,7 +246,7 @@ class TestTriggerExecutionIntegration:
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
-        trigger_service.agent_repository = None
+        trigger_service.agent_repository = active_agent_repository()
 
         execution_data = {
             "execution_time": datetime.utcnow().isoformat(),
@@ -303,7 +303,7 @@ class TestTriggerExecutionIntegration:
             llm_condition_evaluator=None,
             temporal_schedule_manager=None,
         )
-        trigger_service.agent_repository = None
+        trigger_service.agent_repository = active_agent_repository()
 
         # Execute trigger
         execution_data = {"execution_time": datetime.utcnow().isoformat()}

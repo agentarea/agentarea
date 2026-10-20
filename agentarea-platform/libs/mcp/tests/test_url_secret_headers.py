@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx2
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_common.testing.mocks import TestSecretManager as InMemorySecrets
 from agentarea_mcp.application import mcp_client
@@ -101,7 +102,7 @@ def _service(server: MagicMock) -> MCPServerInstanceService:
     service.mcp_server_repository = MagicMock()
     service.mcp_server_repository.get_server_by_id = AsyncMock(return_value=server)
     repository = MagicMock()
-    repository.user_context = MagicMock(user_id="user", workspace_id="ws")
+    repository.user_context = UserContext(user_id="user", workspace_id="ws")
     server.workspace_id = "ws"
     repository.session = MagicMock(
         commit=AsyncMock(), refresh=AsyncMock(), rollback=AsyncMock(), flush=AsyncMock()

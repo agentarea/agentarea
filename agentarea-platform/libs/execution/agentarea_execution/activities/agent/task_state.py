@@ -287,6 +287,7 @@ def make_task_state_activities(
                     task_manager=task_manager,
                 )
 
+                parent = await task_service.get_task(UUID(request.parent_task_id))
                 task = await task_service.create_task_with_policy(
                     agent_id=UUID(request.target_agent_id),
                     description=f"Delegated task to {request.target_agent_name}",
@@ -317,6 +318,9 @@ def make_task_state_activities(
                         origin_id=request.parent_task_id,
                         causation_id=request.parent_task_id,
                         parent_task_id=UUID(request.parent_task_id),
+                        # Who started the parent started this one too; the
+                        # delegate acts as itself all the same.
+                        source_identity=parent.provenance.source_identity if parent else None,
                     ),
                 )
 

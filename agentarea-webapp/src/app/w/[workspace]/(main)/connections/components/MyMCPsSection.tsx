@@ -1,17 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatDistanceToNow } from "date-fns";
-import { Server } from "lucide-react";
+import { Activity, CircleAlert, CircleDashed, Server } from "lucide-react";
 import CatalogSuggestions from "@/components/CatalogSuggestions";
 import EmptyState from "@/components/EmptyState";
 import Table from "@/components/Table/Table";
 import { Badge } from "@/components/ui/badge";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { CollapsibleGroup } from "@/components/ui/group-header";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
@@ -21,6 +22,8 @@ import {
   buildConnectionList,
   mcpConnectionListRow,
   openApiConnectionListRow,
+  type ConnectionGroupBy,
+  type ConnectionGroupKey,
   type ListFilter,
 } from "../list-sections";
 import {
@@ -56,6 +59,21 @@ function hostOf(url?: string | null): string {
   }
 }
 
+const MCP_MARK = (
+  <Image src="/mcp.svg" alt="" width={14} height={14} className="h-3.5 w-3.5" />
+);
+
+const GROUP_ICON: Record<ConnectionGroupKey, ReactNode> = {
+  attention: <CircleAlert />,
+  active: <Activity />,
+  idle: <CircleDashed />,
+  mcp: MCP_MARK,
+  openapi: (
+    <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
+  ),
+  all: null,
+};
+
 interface MyMCPsSectionProps {
   mcpInstances: MCPInstance[];
   mcpServers: MCPServer[];
@@ -65,6 +83,8 @@ interface MyMCPsSectionProps {
   viewMode?: string;
   /** Narrows the list; the tabs that set it live in the page subheader. */
   filter?: ListFilter;
+  /** How the rows are split; the Display menu in the subheader sets it. */
+  groupBy?: ConnectionGroupBy;
   searchQuery?: string;
   hasNoData?: boolean;
 }
@@ -76,6 +96,7 @@ export function MyMCPsSection({
   usage = {},
   viewMode = "grid",
   filter = "all",
+  groupBy = "state",
   searchQuery = "",
   hasNoData = false,
 }: MyMCPsSectionProps) {
@@ -130,8 +151,8 @@ export function MyMCPsSection({
   );
 
   const { visibleRows, sections, showSectionHeadings } = useMemo(
-    () => buildConnectionList(rows, filter),
-    [rows, filter]
+    () => buildConnectionList(rows, filter, groupBy),
+    [rows, filter, groupBy]
   );
 
   // Subtitle under the connection name — transport for MCP, host for OpenAPI.
@@ -147,6 +168,7 @@ export function MyMCPsSection({
     {
       accessor: "name",
       header: t("table.name"),
+      headerClassName: "w-[260px]",
       render: (value: string, item: TableRow) => {
         const providerIcon =
           item._type === "mcp" && item._instance
@@ -206,6 +228,7 @@ export function MyMCPsSection({
     {
       accessor: "usedBy",
       header: t("table.usedBy"),
+      headerClassName: "w-[170px]",
       // Who actually holds this connection, and how much of it. A bare tool
       // count says nothing: 400 available with 12 granted is a healthy
       // connection, 400 available with all granted is a blast radius.
@@ -253,6 +276,7 @@ export function MyMCPsSection({
     {
       accessor: "state",
       header: t("table.state"),
+      headerClassName: "w-[160px]",
       // One verdict from the two facts we record: the setup-time verification
       // probe and the outcome of the last real tool call. Never liveness —
       // workloads start on demand and are reaped when idle, so "connected" is
@@ -349,6 +373,7 @@ export function MyMCPsSection({
     {
       accessor: "type",
       header: t("filters.type"),
+      headerClassName: "w-[130px]",
       render: (value: string) => (
         <Badge
           variant="outline"
@@ -361,13 +386,7 @@ export function MyMCPsSection({
           {value === "OpenAPI" ? (
             <OpenAPIConnectionMark className="h-3.5 w-3.5 rounded-sm text-[6px]" />
           ) : (
-            <Image
-              src="/mcp.svg"
-              alt=""
-              width={14}
-              height={14}
-              className="h-3.5 w-3.5"
-            />
+            MCP_MARK
           )}
           {value}
         </Badge>
@@ -375,6 +394,10 @@ export function MyMCPsSection({
     },
     ...instanceColumns,
   ];
+
+  // Grouped by type, the heading already names the protocol of every row.
+  const columns =
+    groupBy === "type" && showSectionHeadings ? instanceColumns : unifiedColumns;
 
   const openRow = (row: TableRow) => {
     router.push(
@@ -401,42 +424,54 @@ export function MyMCPsSection({
     );
   }
 
-  return (
-    <div className="space-y-5">
-      {sections.map((section, index) => (
-        <div key={section.key}>
-          {showSectionHeadings && (
-            <h5 className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-              {t(`sections.${section.key}`)} ({section.rows.length})
-            </h5>
-          )}
-          {viewMode === "table" ? (
-            <Table
-              data={section.rows}
-              columns={unifiedColumns}
-              onRowClick={openRow}
-              hideHeader={index > 0}
+  const renderRows = (sectionRows: TableRow[]) =>
+    viewMode === "table" ? (
+      // Fixed widths: each group is its own table, and content-derived widths
+      // would make the columns jump from one group to the next.
+      <Table
+        data={sectionRows}
+        columns={columns}
+        onRowClick={openRow}
+        className="table-fixed"
+      />
+    ) : (
+      <div className={CARD_GRID_DENSE}>
+        {sectionRows.map((row) =>
+          row._type === "mcp" && row._instance ? (
+            <MCPInstanceCard
+              key={row.id}
+              instance={row._instance}
+              serverSpec={row._serverSpec}
+              usage={row._usage}
             />
-          ) : (
-            <div className={CARD_GRID_DENSE}>
-              {section.rows.map((row) =>
-                row._type === "mcp" && row._instance ? (
-                  <MCPInstanceCard
-                    key={row.id}
-                    instance={row._instance}
-                    serverSpec={row._serverSpec}
-                    usage={row._usage}
-                  />
-                ) : row._connection ? (
-                  <OpenAPIConnectionCard
-                    key={`openapi-${row.id}`}
-                    connection={row._connection}
-                  />
-                ) : null
-              )}
-            </div>
-          )}
-        </div>
+          ) : row._connection ? (
+            <OpenAPIConnectionCard
+              key={`openapi-${row.id}`}
+              connection={row._connection}
+            />
+          ) : null
+        )}
+      </div>
+    );
+
+  if (!showSectionHeadings) {
+    return renderRows(sections[0].rows);
+  }
+
+  // The 36px group header carries its own air above the label, so the list
+  // is pulled up into the content block's top padding.
+  return (
+    <div className="-mt-2 flex flex-col gap-1">
+      {sections.map((section) => (
+        <CollapsibleGroup
+          key={section.key}
+          variant="plain"
+          label={t(`sections.${section.key}`)}
+          count={section.rows.length}
+          icon={GROUP_ICON[section.key]}
+        >
+          {renderRows(section.rows)}
+        </CollapsibleGroup>
       ))}
     </div>
   );

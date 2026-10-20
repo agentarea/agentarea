@@ -20,7 +20,7 @@ def _svc(check_return=None, side_effect=None):
 @pytest.mark.asyncio
 async def test_skill_use_maps_to_resource_read_bit_and_user_subject():
     svc, openfga = _svc(check_return=True)
-    allowed = await svc.check("u1", "use", "skill", "copywriting")
+    allowed = await svc.check("User:u1", "use", "skill", "copywriting")
     assert allowed is True
     openfga.check.assert_awaited_once_with(
         namespace="resource", object="copywriting", relation="can_read", subject_id="User:u1"
@@ -30,7 +30,7 @@ async def test_skill_use_maps_to_resource_read_bit_and_user_subject():
 @pytest.mark.asyncio
 async def test_mcp_view_maps_to_resource_read_bit():
     svc, openfga = _svc(check_return=True)
-    await svc.check("u1", "view", "mcp_server", "github")
+    await svc.check("User:u1", "view", "mcp_server", "github")
     assert openfga.check.await_args.kwargs["namespace"] == "resource"
     assert openfga.check.await_args.kwargs["relation"] == "can_read"
 
@@ -38,7 +38,7 @@ async def test_mcp_view_maps_to_resource_read_bit():
 @pytest.mark.asyncio
 async def test_ungoverned_resource_type_allows_without_calling_openfga():
     svc, openfga = _svc(check_return=False)
-    allowed = await svc.check("u1", "view", "model_instance", "x")
+    allowed = await svc.check("User:u1", "view", "model_instance", "x")
     assert allowed is True
     openfga.check.assert_not_awaited()
 
@@ -46,7 +46,7 @@ async def test_ungoverned_resource_type_allows_without_calling_openfga():
 @pytest.mark.asyncio
 async def test_unmapped_permission_denies():
     svc, openfga = _svc(check_return=True)
-    allowed = await svc.check("u1", "frobnicate", "skill", "x")
+    allowed = await svc.check("User:u1", "frobnicate", "skill", "x")
     assert allowed is False
     openfga.check.assert_not_awaited()
 
@@ -56,4 +56,4 @@ async def test_openfga_error_propagates_to_fail_closed():
     svc, _ = _svc(side_effect=OpenFGAError("down"))
     # The service fails CLOSED by raising; the caller (require_permission) surfaces it.
     with pytest.raises(OpenFGAError):
-        await svc.check("u1", "use", "skill", "x")
+        await svc.check("User:u1", "use", "skill", "x")

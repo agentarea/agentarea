@@ -88,7 +88,13 @@ async def _ensure_admin_workspaces_resolved(user_context: UserContext) -> None:
 
 
 async def is_workspace_admin(user_context: UserContext) -> bool:
-    """Whether the caller administers the workspace they are acting in."""
+    """Whether the caller administers the workspace they are acting in.
+
+    Never a run: it acts as its agent, which administers nothing, whoever it
+    is attributed to.
+    """
+    if user_context.subject is not None and user_context.subject.kind == "agent":
+        return False
     await _ensure_admin_workspaces_resolved(user_context)
     from agentarea_common.di.container import resolve
 
@@ -123,6 +129,10 @@ async def assert_workspace_admin_of(user_context: UserContext, workspace_id: str
 
     if not workspace_id:
         raise HTTPException(status_code=422, detail="workspace_id is required")
+    if user_context.subject is not None and user_context.subject.kind == "agent":
+        raise HTTPException(
+            status_code=403, detail="Only a workspace admin may perform this action"
+        )
     await _ensure_admin_workspaces_resolved(user_context)
     authz = resolve(AuthorizationService)
     if not await authz.can_administer_workspace(user_context, workspace_id):

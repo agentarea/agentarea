@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Pencil } from "lucide-react";
+import { Wallet } from "lucide-react";
 import FormError from "@/components/FormError";
-import { Button } from "@/components/ui/button";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { SectionCard, SectionCardHead } from "@/components/Overview/OverviewCard";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -22,6 +22,7 @@ import {
   type CostForm,
   type CostMode,
 } from "../connection-cost";
+import { SectionEditAction } from "./SectionEditAction";
 
 const MODES: CostMode[] = [
   "connector",
@@ -36,6 +37,9 @@ const MODES: CostMode[] = [
  * (wiki ADR-0038 §2.3): per call, per unit, or read from a field of the response.
  * It wins over the connector's declaration and is what caps count. A connection
  * the platform pays for is priced by billing, so it shows nothing here.
+ *
+ * A section card of the connection overview, edited in place like its headers:
+ * Edit, Cancel and Save sit in the card head.
  */
 export function ConnectionCostSection({
   cost,
@@ -70,29 +74,43 @@ export function ConnectionCostSection({
       onSaved();
     });
 
+  const currencyField = (
+    <div className="space-y-1.5">
+      <FormLabel htmlFor="cost-currency">{t("currency")}</FormLabel>
+      <Input
+        id="cost-currency"
+        value={form.currency}
+        onChange={(e) => set({ currency: e.target.value })}
+        placeholder="USD"
+        maxLength={4}
+      />
+    </div>
+  );
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {t("title")}
-        </div>
-        {!editing && (
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => {
+    <SectionCard>
+      <SectionCardHead
+        icon={<Wallet />}
+        title={t("title")}
+        action={
+          <SectionEditAction
+            open={editing}
+            hasRows
+            busy={saving}
+            onOpen={() => {
               setForm(costToForm(cost));
+              setError(null);
               setEditing(true);
             }}
-          >
-            <Pencil className="mr-1" />
-            {t("edit")}
-          </Button>
-        )}
-      </div>
+            onCancel={() => setEditing(false)}
+            onSave={save}
+            saveLabel={t("saveCost")}
+          />
+        }
+      />
 
       {!editing ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="px-[15px] py-3 text-[12.5px]">
           {t(`summary.${current.mode}`, {
             amount: current.amount,
             currency: current.currency,
@@ -102,15 +120,15 @@ export function ConnectionCostSection({
           })}
         </p>
       ) : (
-        <div className="space-y-3 rounded-lg border p-4">
-          <p className="text-xs text-muted-foreground">{t("hint")}</p>
+        <div className="space-y-3 px-[15px] py-3">
+          <p className="note">{t("hint")}</p>
           <div className="space-y-1.5">
-            <Label>{t("mode")}</Label>
+            <FormLabel htmlFor="cost-mode">{t("mode")}</FormLabel>
             <Select
               value={form.mode}
               onValueChange={(mode) => set({ mode: mode as CostMode })}
             >
-              <SelectTrigger className="w-full sm:w-72">
+              <SelectTrigger id="cost-mode" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -126,39 +144,34 @@ export function ConnectionCostSection({
           {(form.mode === "per_call" || form.mode === "per_unit") && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{t("amount")}</Label>
+                <FormLabel htmlFor="cost-amount">{t("amount")}</FormLabel>
                 <Input
+                  id="cost-amount"
                   inputMode="decimal"
                   value={form.amount}
                   onChange={(e) => set({ amount: e.target.value })}
                   placeholder="0.01"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>{t("currency")}</Label>
-                <Input
-                  value={form.currency}
-                  onChange={(e) => set({ currency: e.target.value })}
-                  placeholder="USD"
-                  maxLength={4}
-                />
-              </div>
+              {currencyField}
             </div>
           )}
 
           {form.mode === "per_unit" && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{t("unit")}</Label>
+                <FormLabel htmlFor="cost-unit">{t("unit")}</FormLabel>
                 <Input
+                  id="cost-unit"
                   value={form.unit}
                   onChange={(e) => set({ unit: e.target.value })}
                   placeholder={t("unitPlaceholder")}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>{t("quantity")}</Label>
+                <FormLabel htmlFor="cost-quantity">{t("quantity")}</FormLabel>
                 <Input
+                  id="cost-quantity"
                   className="font-mono text-xs"
                   value={form.quantity}
                   onChange={(e) => set({ quantity: e.target.value })}
@@ -171,42 +184,22 @@ export function ConnectionCostSection({
           {form.mode === "from_response" && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>{t("path")}</Label>
+                <FormLabel htmlFor="cost-path">{t("path")}</FormLabel>
                 <Input
+                  id="cost-path"
                   className="font-mono text-xs"
                   value={form.path}
                   onChange={(e) => set({ path: e.target.value })}
                   placeholder="$.cost"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>{t("currency")}</Label>
-                <Input
-                  value={form.currency}
-                  onChange={(e) => set({ currency: e.target.value })}
-                  placeholder="USD"
-                  maxLength={4}
-                />
-              </div>
+              {currencyField}
             </div>
           )}
 
           {error && <FormError>{error}</FormError>}
-          <div className="flex justify-end gap-2">
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => setEditing(false)}
-              disabled={saving}
-            >
-              {t("cancel")}
-            </Button>
-            <Button size="xs" onClick={save} disabled={saving}>
-              {saving ? t("saving") : t("save")}
-            </Button>
-          </div>
         </div>
       )}
-    </div>
+    </SectionCard>
   );
 }

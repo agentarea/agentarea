@@ -107,7 +107,9 @@ async def _authorize_client_access(user_ctx, client_id: str) -> None:
     from agentarea_common.auth.permission import PermissionService
     from agentarea_common.di.container import resolve
 
-    allowed = await resolve(PermissionService).check(user_ctx.user_id, "use", "client", client_id)
+    allowed = await resolve(PermissionService).check(
+        user_ctx.graph_subject, "use", "client", client_id
+    )
     if not allowed:
         raise ClientAccessDeniedError(client_id)
 

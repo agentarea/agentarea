@@ -23,7 +23,7 @@ from agentarea_triggers.domain.models import (
 )
 from agentarea_triggers.infrastructure.reactions import CausedExecutionRepository
 from agentarea_triggers.stream_subscriber import (
-    ConfigurerAuthority,
+    InvokerAuthority,
     SubscriptionFollowUpClaim,
     TriggerSubscriptionHandler,
 )
@@ -66,8 +66,9 @@ def _trigger(**kw):
     )
 
 
-def _service():
+def _service(agent_stands=True):
     service = MagicMock()
+    service.agent_stands = AsyncMock(return_value=agent_stands)
     service.stream_service.get_stream = AsyncMock(return_value=SimpleNamespace(name="orders"))
     return service
 
@@ -88,11 +89,7 @@ class _Batches:
         self.added.append((spec, event_id, workflow_id))
 
 
-def _handler(
-    service, may_run=True, claim=None, sender_admission=None, contexts=None, batches=None
-):
-    authority = MagicMock()
-    authority.may_run = AsyncMock(return_value=may_run)
+def _handler(service, claim=None, sender_admission=None, contexts=None, batches=None):
     claim = claim or _Claim()
 
     def factory(_session, context):
@@ -104,7 +101,6 @@ def _handler(
         event_broker=AsyncMock(),
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
-        authority=authority,
         max_depth=8,
         trigger_service_factory=factory,
         follow_up_claim_factory=lambda _s, _sub, _e: cast(SubscriptionFollowUpClaim, claim),
@@ -176,27 +172,41 @@ async def test_a_reaction_records_the_task_and_the_verdict_score():
     assert told.data == service.fire.await_args.args[1] == event.data
 
 
-async def test_a_configurer_who_lost_access_stops_the_trigger():
+async def test_an_agent_that_is_gone_or_inactive_stops_the_trigger():
     trigger = _trigger()
-    service = _service()
+    service = _service(agent_stands=False)
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     service.trigger_repository.mark_needs_new_owner = AsyncMock(return_value=True)
-    result = await _handler(service, may_run=False).handle(_sub(trigger.id), _event(), AsyncMock())
+    result = await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
     assert result.verdict == Verdict.ERROR
-    assert "configurer_lost_access" in (result.reason or "")
+    assert (result.reason or "").startswith("agent_unavailable:")
+    service.agent_stands.assert_awaited_once_with(trigger.agent_id)
     service.trigger_repository.mark_needs_new_owner.assert_awaited_once_with(trigger.id)
     service.fire.assert_not_awaited()
 
 
+async def test_a_standing_agent_fires_whoever_configured_the_trigger():
+    trigger = _trigger()
+    service = _service(agent_stands=True)
+    service.get_trigger = AsyncMock(return_value=trigger)
+    service.fire = AsyncMock(return_value=TriggerFiring(outcome="reacted", task_id=uuid4()))
+    service.trigger_repository.mark_needs_new_owner = AsyncMock()
+    result = await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
+    assert result.verdict == Verdict.REACTED
+    service.agent_stands.assert_awaited_once_with(trigger.agent_id)
+    service.trigger_repository.mark_needs_new_owner.assert_not_awaited()
+    service.fire.assert_awaited_once()
+
+
 async def test_a_stop_that_updated_no_row_is_not_reported_as_a_stop():
     trigger = _trigger()
-    service = _service()
+    service = _service(agent_stands=False)
     service.get_trigger = AsyncMock(return_value=trigger)
     service.fire = AsyncMock()
     service.trigger_repository.mark_needs_new_owner = AsyncMock(return_value=False)
     with pytest.raises(RuntimeError, match="no row updated"):
-        await _handler(service, may_run=False).handle(_sub(trigger.id), _event(), AsyncMock())
+        await _handler(service).handle(_sub(trigger.id), _event(), AsyncMock())
     service.fire.assert_not_awaited()
 
 
@@ -223,11 +233,26 @@ async def test_membership_is_checked_before_the_agent_permission():
             AsyncMock(return_value=False),
         ),
     ):
-        allowed = await ConfigurerAuthority(graph=MagicMock(), permissions=permissions).may_run(
+        allowed = await InvokerAuthority(graph=MagicMock(), permissions=permissions).may_run(
             AsyncMock(), user_id="gone", workspace_id="w", agent_id=uuid4()
         )
     assert allowed is False
     permissions.check.assert_not_awaited()
+
+
+async def test_a_member_is_asked_about_the_agent_as_their_graph_subject():
+    permissions = AsyncMock()
+    permissions.check.return_value = True
+    agent_id = uuid4()
+    with patch(
+        "agentarea_triggers.stream_subscriber.is_workspace_owner",
+        AsyncMock(return_value=True),
+    ):
+        allowed = await InvokerAuthority(graph=MagicMock(), permissions=permissions).may_run(
+            AsyncMock(), user_id="alice", workspace_id="w", agent_id=agent_id
+        )
+    assert allowed is True
+    permissions.check.assert_awaited_once_with("User:alice", "execute", "agent", str(agent_id))
 
 
 async def test_a_graph_outage_raises_instead_of_denying():
@@ -242,7 +267,7 @@ async def test_a_graph_outage_raises_instead_of_denying():
         ),
         pytest.raises(RuntimeError),
     ):
-        await ConfigurerAuthority(graph=MagicMock(), permissions=AsyncMock()).may_run(
+        await InvokerAuthority(graph=MagicMock(), permissions=AsyncMock()).may_run(
             AsyncMock(), user_id="u", workspace_id="w", agent_id=uuid4()
         )
 
@@ -378,9 +403,7 @@ async def test_an_admitted_sender_gets_a_batch_of_their_own():
     service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     batches = _Batches()
-    handler = _handler(
-        service, sender_admission=_Admission(Admitted("alice")), batches=batches
-    )
+    handler = _handler(service, sender_admission=_Admission(Admitted("alice")), batches=batches)
     with _telegram_door():
         result = await handler.handle(_sub(trigger.id), _event(), AsyncMock())
     ((spec, _, workflow_id),) = batches.added
@@ -394,9 +417,7 @@ async def test_a_refused_sender_never_joins_a_batch():
     service = _service()
     service.get_trigger = AsyncMock(return_value=trigger)
     batches = _Batches()
-    handler = _handler(
-        service, sender_admission=_Admission(Refused("not linked")), batches=batches
-    )
+    handler = _handler(service, sender_admission=_Admission(Refused("not linked")), batches=batches)
     with _telegram_door():
         result = await handler.handle(_sub(trigger.id), _event(), AsyncMock())
     assert result.verdict == Verdict.SKIPPED

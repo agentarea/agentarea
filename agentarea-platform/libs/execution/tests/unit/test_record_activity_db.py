@@ -139,6 +139,7 @@ async def test_a_record_retried_after_a_stream_failure_writes_everything_once(ma
         "data": {"task_id": str(task.id)},
     }
     request = RecordRequest(
+        agent_id="agent-1",
         task_id=str(task.id),
         workspace_id=workspace_id,
         user_id="writer",
@@ -247,6 +248,7 @@ async def test_a_record_for_a_task_that_is_gone_is_not_retried(maker):
 
     workspace_id = str(uuid4())
     request = RecordRequest(
+        agent_id="agent-1",
         task_id=str(uuid4()),
         workspace_id=workspace_id,
         user_id="writer",
@@ -272,6 +274,7 @@ async def test_content_postgres_cannot_store_is_recorded_not_retried_forever(mak
     workspace_id = str(uuid4())
     task = await _task(maker, workspace_id)
     request = RecordRequest(
+        agent_id="agent-1",
         task_id=str(task.id),
         workspace_id=workspace_id,
         user_id="writer",

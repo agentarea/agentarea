@@ -92,7 +92,7 @@ def requires(
                 raise HTTPException(status_code=422, detail=f"{id_param} must be a UUID") from None
         else:
             resource_id = str(user_context.workspace_id)
-        await require_permission(action, resource_type, resource_id, user_context.user_id)
+        await require_permission(action, resource_type, resource_id, user_context)
 
     return _enforcing({"action": action, "resource_type": resource_type}, check)
 

@@ -391,7 +391,7 @@ async def test_call_dispatches_through_the_client_dispatch(harness):
         {"q": "why"},
     )
     connector_tools_toolset.require_permission.assert_awaited_once_with(
-        "use", "mcp_instance", str(wiki.id), CALLER.user_id
+        "use", "mcp_instance", str(wiki.id), CALLER
     )
 
 
@@ -561,7 +561,7 @@ async def test_call_runs_an_openapi_tool_through_the_openapi_dispatch(harness):
         {"pageSize": 5},
     )
     connector_tools_toolset.require_permission.assert_awaited_once_with(
-        "use", "openapi_connection", str(analytics.id), CALLER.user_id
+        "use", "openapi_connection", str(analytics.id), CALLER
     )
     harness.dispatch.assert_not_awaited()
 

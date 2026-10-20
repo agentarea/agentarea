@@ -57,6 +57,7 @@ def _request(**overrides):
             "user_context_data": {
                 "user_id": "test-user",
                 "workspace_id": "test-workspace",
+                "agent_id": "agent-1",
             },
             "effective_policy": {"tokens": {"max_tokens_per_call": 1000}},
             **overrides,

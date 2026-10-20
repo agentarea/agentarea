@@ -47,6 +47,8 @@ class Trigger(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="", max_length=1000)
     agent_id: UUID
+    # The saved task it runs; its text and parameters stand in for the trigger's own.
+    task_definition_id: UUID | None = None
     trigger_type: TriggerType
     is_active: bool = True
     task_parameters: dict[str, Any] = Field(default_factory=dict)
@@ -255,6 +257,7 @@ class TriggerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str = Field(default="", max_length=1000)
     agent_id: UUID
+    task_definition_id: UUID | None = None
     trigger_type: TriggerType
     task_parameters: dict[str, Any] = Field(default_factory=dict)
     conditions: dict[str, Any] = Field(default_factory=dict)
@@ -300,6 +303,7 @@ class TriggerUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=1000)
     agent_id: UUID | None = None
+    task_definition_id: UUID | None = None
     is_active: bool | None = None
     task_parameters: dict[str, Any] | None = None
     conditions: dict[str, Any] | None = None

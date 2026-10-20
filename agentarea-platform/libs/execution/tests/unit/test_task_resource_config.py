@@ -212,7 +212,7 @@ async def test_config_activity_uses_selected_skills_and_mcp_in_run_hash(activity
     )
     request = AgentConfigRequest(
         agent_id=saved.id,
-        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
     )
     inherited = await functions["build_agent_config_activity"](request)
     request.task_parameters = {
@@ -250,7 +250,11 @@ async def test_both_discovery_modes_use_resolved_run_tools(
     await functions[mode](
         ToolDiscoveryRequest(
             agent_id=saved.id,
-            user_context_data={"user_id": "user", "workspace_id": "workspace"},
+            user_context_data={
+                "user_id": "user",
+                "workspace_id": "workspace",
+                "agent_id": "agent-1",
+            },
             tools=run_tools,
         )
     )
@@ -277,7 +281,11 @@ async def test_file_toolset_is_discovered_with_workspace_scope(activity_context,
     result = await functions[mode](
         ToolDiscoveryRequest(
             agent_id=saved.id,
-            user_context_data={"user_id": "user", "workspace_id": "workspace"},
+            user_context_data={
+                "user_id": "user",
+                "workspace_id": "workspace",
+                "agent_id": "agent-1",
+            },
         )
     )
 
@@ -340,7 +348,7 @@ def file_request(paths):
         agent_id=uuid4(),
         task_id=uuid4(),
         task_parameters={"files": paths},
-        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
     )
 
 
@@ -478,7 +486,7 @@ def event_file_request(event_data, filename="trigger-event-9.json"):
             "trigger_event": event_data,
             "trigger_event_file": filename,
         },
-        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
     )
 
 
@@ -667,7 +675,7 @@ async def test_a_skill_the_install_policy_refuses_fails_the_run_without_retries(
     )
     request = AgentConfigRequest(
         agent_id=saved.id,
-        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
         task_parameters={"skills": [str(uuid4())]},
     )
 
@@ -689,7 +697,8 @@ async def test_a_catalog_agent_the_install_policy_refuses_fails_the_run_without_
         "Install refused by policy: registry_trust:community"
     )
     request = AgentConfigRequest(
-        agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
+        agent_id=uuid4(),
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
     )
 
     with pytest.raises(ApplicationError, match="refused by policy") as error:
@@ -711,7 +720,8 @@ async def test_the_config_result_carries_no_skill_body_and_reads_no_package(acti
         )
     )
     request = AgentConfigRequest(
-        agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
+        agent_id=uuid4(),
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
     )
 
     result = await functions["build_agent_config_activity"](request)
@@ -741,7 +751,8 @@ async def test_an_attached_skill_the_install_policy_now_denies_is_not_offered(ac
         )
     )
     request = AgentConfigRequest(
-        agent_id=uuid4(), user_context_data={"user_id": "user", "workspace_id": "workspace"}
+        agent_id=uuid4(),
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
     )
 
     result = await functions["build_agent_config_activity"](request)

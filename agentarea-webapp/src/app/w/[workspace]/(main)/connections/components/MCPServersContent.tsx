@@ -4,7 +4,7 @@ import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import SectionLoadError from "@/components/SectionLoadError";
 import { apiErrorMessage } from "@/lib/api-errors";
-import type { ListFilter } from "../list-sections";
+import type { ConnectionGroupBy, ListFilter } from "../list-sections";
 import { MCPServer } from "../types";
 import { getConnectionsFrom } from "./connectionsData";
 import MCPSkeleton, { mcpSkeletonColumns } from "./MCPSkeleton";
@@ -14,6 +14,7 @@ interface MCPServersContentProps {
   searchQuery?: string;
   viewMode?: string;
   filter?: ListFilter;
+  groupBy?: ConnectionGroupBy;
   /** A catalog item id: only the connections made from it. */
   source?: string | null;
 }
@@ -22,6 +23,7 @@ export default async function MCPServersContent({
   searchQuery = "",
   viewMode = "grid",
   filter = "all",
+  groupBy = "state",
   source = null,
 }: MCPServersContentProps) {
   const t = await getTranslations("MCPServersPage");
@@ -38,6 +40,7 @@ export default async function MCPServersContent({
           searchQuery={searchQuery}
           viewMode={viewMode}
           filter={filter}
+          groupBy={groupBy}
           source={source}
         />
       </Suspense>
@@ -49,11 +52,13 @@ async function MyConnectionsSectionServer({
   searchQuery,
   viewMode,
   filter,
+  groupBy,
   source,
 }: {
   searchQuery: string;
   viewMode: string;
   filter: ListFilter;
+  groupBy: ConnectionGroupBy;
   source: string | null;
 }) {
   const t = await getTranslations("MCPServersPage");
@@ -164,6 +169,7 @@ async function MyConnectionsSectionServer({
         usage={usage}
         viewMode={viewMode}
         filter={filter}
+        groupBy={groupBy}
         searchQuery={searchQuery}
         hasNoData={mcpInstances.length === 0 && openApiConnections.length === 0}
       />

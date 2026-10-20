@@ -6,9 +6,15 @@ import type { ConnectionUsage } from "./usage";
 function row(
   name: string,
   key: ConnectionStateKey,
-  usage?: ConnectionUsage
+  usage?: ConnectionUsage,
+  type: ConnectionListRow["_type"] = "mcp"
 ): ConnectionListRow {
-  return { name, _state: { key, kind: "draft", at: null }, _usage: usage };
+  return {
+    name,
+    _type: type,
+    _state: { key, kind: "draft", at: null },
+    _usage: usage,
+  };
 }
 
 const rows = [
@@ -99,6 +105,36 @@ describe("buildConnectionList", () => {
     );
 
     expect(sections).toHaveLength(1);
+    expect(showSectionHeadings).toBe(false);
+  });
+
+  it("groups by protocol, MCP first, worst verdict on top", () => {
+    const { sections } = buildConnectionList(
+      [
+        row("petstore", "ready", undefined, "openapi"),
+        ...rows,
+        row("billing", "broken", undefined, "openapi"),
+      ],
+      "all",
+      "type"
+    );
+
+    expect(sections.map((s) => [s.key, names(s.rows)])).toEqual([
+      ["mcp", ["stripe", "github", "slack"]],
+      ["openapi", ["billing", "petstore"]],
+    ]);
+  });
+
+  it("keeps one ordered list when grouping is off", () => {
+    const { sections, showSectionHeadings } = buildConnectionList(
+      rows,
+      "all",
+      "none"
+    );
+
+    expect(sections.map((s) => [s.key, names(s.rows)])).toEqual([
+      ["all", ["stripe", "github", "slack"]],
+    ]);
     expect(showSectionHeadings).toBe(false);
   });
 });

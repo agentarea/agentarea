@@ -54,6 +54,7 @@ def mock_skill_service(mock_user_context):
 def mock_user_context():
     context = MagicMock()
     context.user_id = "test_user"
+    context.graph_subject = "User:test_user"
     context.workspace_id = "test_workspace"
     return context
 
@@ -296,7 +297,7 @@ async def test_installing_a_skill_the_caller_forked_reasserts_their_ownership(
 
     assert response.status_code == 200
     grant.assert_awaited_once_with(
-        resource_id=skill.id, workspace_id="test_workspace", user_id="test_user"
+        resource_id=skill.id, workspace_id="test_workspace", owner="User:test_user"
     )
 
 
