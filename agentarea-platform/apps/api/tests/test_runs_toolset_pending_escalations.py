@@ -71,7 +71,9 @@ def _authz():
 def _harness(monkeypatch, caller: str, pending: list[dict] | Exception, task=...):
     workflow = FakeWorkflowService(pending)
     tasks = FakeTaskService(
-        SimpleNamespace(id=RUN_ID, user_id=STARTER, status="waiting_for_approval")
+        SimpleNamespace(
+            id=RUN_ID, user_id=STARTER, status="waiting_for_approval", execution_id=None
+        )
         if task is ...
         else task
     )
@@ -112,16 +114,25 @@ async def test_the_person_who_may_resolve_it_reads_the_real_command(monkeypatch)
     assert workflow.queried == [f"task-{RUN_ID}"]
 
 
-async def test_a_member_who_cannot_act_on_the_run_is_refused_before_the_workflow_is_asked(
+async def test_a_member_who_cannot_act_on_the_run_and_approves_nothing_is_refused(
     monkeypatch,
 ):
-    workflow = _harness(monkeypatch, "user-invited-yesterday", [_escalation("esc-1", [])])
+    _harness(monkeypatch, "user-invited-yesterday", [_escalation("esc-1", [])])
 
     with pytest.raises(ToolError) as error:
         await _list()
 
     assert COMMAND not in str(error.value)
-    assert workflow.queried == []
+
+
+async def test_a_named_approver_who_did_not_start_the_run_reads_their_escalation(monkeypatch):
+    _harness(
+        monkeypatch,
+        "security-lead",
+        [_escalation("esc-1", ["user:security-lead"]), _escalation("esc-2", [])],
+    )
+
+    assert [e["escalation_id"] for e in await _list()] == ["esc-1"]
 
 
 async def test_a_run_outside_the_workspace_is_not_found(monkeypatch):

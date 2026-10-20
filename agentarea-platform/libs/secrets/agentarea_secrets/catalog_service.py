@@ -55,7 +55,7 @@ class SecretAccessDeniedError(PermissionError):
 class SecretInUseError(RuntimeError):
     """Something still resolves this secret."""
 
-    def __init__(self, consumers: list["ConsumerRef"]) -> None:
+    def __init__(self, consumers: list[ConsumerRef]) -> None:
         self.consumers = consumers
         listed = ", ".join(f"{c.consumer_type}:{c.consumer_id}" for c in consumers) or "unknown"
         super().__init__(f"Secret is still used by {listed}")

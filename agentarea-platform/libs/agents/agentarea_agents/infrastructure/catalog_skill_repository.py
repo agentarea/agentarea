@@ -7,8 +7,8 @@ catalog items so the skill service can project them as read-only skills.
 
 It deliberately uses raw SQL against ``registry_items`` to avoid a
 cross-library dependency on ``agentarea-registry``. The catalog is global
-infrastructure (ADR-003): registries/registry_items are not workspace-scoped, so
-every tenant reads the same built-in skill definitions with no workspace filter.
+infrastructure (ADR-003): every tenant reads the platform registries' skills;
+a workspace registry's skills only its own workspace reads (ADR-0044).
 
 Every read filters on the registry type and active flag each item carries, as
 the bare ``registry_active`` column: that is the predicate of the partial browse
@@ -27,6 +27,11 @@ from agentarea_common.auth.context import UserContext
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# The platform's registries and the caller's own (ADR-0044); another
+# workspace's registry is invisible. ``registry_workspace_id`` is in the browse
+# indexes' INCLUDE, so totals stay index-only.
+_VISIBLE = "(ri.registry_workspace_id IS NULL OR ri.registry_workspace_id = :workspace_id)"
+
 
 @dataclass(frozen=True)
 class CatalogSkillItem:
@@ -41,6 +46,23 @@ class CatalogSkillItem:
     installed_version: str | None
     created_at: datetime
     updated_at: datetime
+    # The item's registry: what the install policy decides on, and whose
+    # package area a workspace registry's item is stored in (ADR-0044).
+    registry_id: str | None = None
+    registry_trust: str | None = None
+    registry_workspace_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CatalogProvenance:
+    """Where an installed skill's catalog item comes from, as its page shows it."""
+
+    registry_id: str
+    registry_name: str
+    registry_scope: str
+    registry_trust: str
+    # The source no longer publishes the item, or its registry was retired.
+    removed_upstream: bool
 
 
 @dataclass(frozen=True)
@@ -71,16 +93,17 @@ class CatalogSkillRepository:
         self.user_context = user_context
 
     async def list_items(self) -> list[CatalogSkillItem]:
-        """List all catalog skill items (global catalog, no workspace filter)."""
+        """List the catalog skill items the caller's workspace may see."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
             "ORDER BY ri.name"
         )
         result = await self.session.execute(query, {"workspace_id": self.user_context.workspace_id})
@@ -103,8 +126,8 @@ class CatalogSkillRepository:
         the workspace has already forked, so the tenant copy shadows them
         exactly as the merged list expects.
         """
-        where = ["ri.registry_type = 'skills'", "ri.registry_active"]
-        params: dict[str, Any] = {}
+        where = ["ri.registry_type = 'skills'", "ri.registry_active", _VISIBLE]
+        params: dict[str, Any] = {"workspace_id": self.user_context.workspace_id}
         expanding: list[str] = []
 
         if exclude_item_ids:
@@ -169,7 +192,8 @@ class CatalogSkillRepository:
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND ri.id IN :item_ids"
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
+            "AND ri.id IN :item_ids"
         ).bindparams(bindparam("item_ids", expanding=True))
         result = await self.session.execute(
             stmt,
@@ -180,17 +204,51 @@ class CatalogSkillRepository:
         )
         return {str(row.id): (row.version, row.installed_version) for row in result.fetchall()}
 
+    async def provenance_for(self, item_ids: Collection[str]) -> dict[str, CatalogProvenance]:
+        """Map catalog item id to its registry and whether its source still has it.
+
+        Unlike the other reads, an item of a retired registry is returned: an
+        install keeps it, and that is exactly what ``removed_upstream`` says.
+        """
+        if not item_ids:
+            return {}
+        stmt = text(
+            "SELECT ri.id, ri.registry_id, r.name AS registry_name, r.scope AS registry_scope, "
+            "ri.registry_trust, (NOT ri.in_source OR NOT ri.registry_active) AS removed "
+            "FROM registry_items ri JOIN registries r ON r.id = ri.registry_id "
+            "WHERE ri.registry_type = 'skills' AND " + _VISIBLE + " "
+            "AND ri.id IN :item_ids"
+        ).bindparams(bindparam("item_ids", expanding=True))
+        result = await self.session.execute(
+            stmt,
+            {
+                "workspace_id": self.user_context.workspace_id,
+                "item_ids": [UUID(str(i)) for i in item_ids],
+            },
+        )
+        return {
+            str(row.id): CatalogProvenance(
+                registry_id=str(row.registry_id),
+                registry_name=row.registry_name,
+                registry_scope=row.registry_scope,
+                registry_trust=row.registry_trust,
+                removed_upstream=bool(row.removed),
+            )
+            for row in result.fetchall()
+        }
+
     async def get_item(self, item_id: str) -> CatalogSkillItem | None:
         """Get a single catalog skill item by its registry-item id."""
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
             "AND ri.id = :item_id"
         )
         result = await self.session.execute(
@@ -210,12 +268,13 @@ class CatalogSkillRepository:
         query = text(
             "SELECT ri.id, ri.name, ri.description, ri.version, ri.spec, "
             "rii.installed_entity_id, rii.installed_version, "
+            "ri.registry_id, ri.registry_trust, ri.registry_workspace_id, "
             "ri.created_at, ri.updated_at "
             "FROM registry_items ri "
             "LEFT JOIN registry_item_installs rii "
             "  ON rii.registry_item_id = ri.id "
             " AND rii.workspace_id = :workspace_id "
-            "WHERE ri.registry_type = 'skills' AND ri.registry_active "
+            "WHERE ri.registry_type = 'skills' AND ri.registry_active AND " + _VISIBLE + " "
             "AND (ri.name = :key OR ri.name LIKE :prefix) "
             "ORDER BY ri.updated_at DESC, ri.id "
             "LIMIT 1"
@@ -285,4 +344,7 @@ class CatalogSkillRepository:
             installed_version=row.installed_version,
             created_at=created_at,
             updated_at=row.updated_at or created_at,
+            registry_id=str(row.registry_id),
+            registry_trust=row.registry_trust,
+            registry_workspace_id=row.registry_workspace_id,
         )

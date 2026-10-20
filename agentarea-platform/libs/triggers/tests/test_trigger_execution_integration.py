@@ -218,28 +218,24 @@ class TestTriggerExecutionIntegration:
         # Verify conditions are not met
         assert conditions_met is False
 
-    async def test_webhook_trigger_parameter_building(self, mock_repositories, mock_task_service):
-        """Test parameter building for webhook triggers."""
-        from agentarea_triggers.domain.models import WebhookTrigger
+    async def test_stream_trigger_parameter_building(self, mock_repositories, mock_task_service):
+        """Test parameter building for stream triggers."""
+        from agentarea_triggers.domain.models import StreamTrigger
 
         trigger_repo, execution_repo = mock_repositories
 
-        # Create webhook trigger
-        webhook_trigger = WebhookTrigger(
+        stream_trigger = StreamTrigger(
             id=uuid4(),
-            name="Webhook Test Trigger",
-            description="Test webhook trigger",
+            name="Stream Test Trigger",
+            description="Test stream trigger",
             agent_id=uuid4(),
-            webhook_id="test_webhook_123",
-            allowed_methods=["POST"],
-            task_parameters={"webhook_param": "webhook_value", "text": "Handle the call"},
-            created_by="webhook_test",
+            task_parameters={"stream_param": "stream_value", "text": "Handle the call"},
+            created_by="stream_test",
             is_active=True,
         )
 
-        trigger_repo.get_trigger.return_value = webhook_trigger
+        trigger_repo.get_trigger.return_value = stream_trigger
 
-        # Create trigger service
         trigger_service = TriggerService(
             repository_factory=make_trigger_repository_factory(
                 trigger_repo=trigger_repo,
@@ -252,32 +248,27 @@ class TestTriggerExecutionIntegration:
         )
         trigger_service.agent_repository = None
 
-        # Test webhook execution data
         execution_data = {
             "execution_time": datetime.utcnow().isoformat(),
-            "source": "webhook",
+            "source": "stream",
             "request": {
                 "method": "POST",
                 "headers": {"Content-Type": "application/json"},
-                "body": {"message": "Hello from webhook"},
-                "query_params": {"source": "external"},
+                "body": {"message": "Hello from a stream"},
             },
         }
 
-        # Build task parameters
-        params = await trigger_service._build_task_parameters(webhook_trigger, execution_data)
+        params = await trigger_service._build_task_parameters(stream_trigger, execution_data)
 
-        # Verify webhook-specific parameters
-        assert params["trigger_id"] == str(webhook_trigger.id)
-        assert params["trigger_type"] == "webhook"
-        assert params["trigger_name"] == webhook_trigger.name
-        assert params["webhook_param"] == "webhook_value"  # From trigger's task_parameters
+        assert params["trigger_id"] == str(stream_trigger.id)
+        assert params["trigger_type"] == "stream"
+        assert params["trigger_name"] == stream_trigger.name
+        assert params["stream_param"] == "stream_value"
         assert params["trigger_data"] == execution_data
         assert "execution_time" in params
 
-        # Verify webhook request data is preserved
         assert params["trigger_data"]["request"]["method"] == "POST"
-        assert params["trigger_data"]["request"]["body"]["message"] == "Hello from webhook"
+        assert params["trigger_data"]["request"]["body"]["message"] == "Hello from a stream"
 
     async def test_error_handling_in_execution_flow(
         self, mock_repositories, mock_task_service, sample_trigger

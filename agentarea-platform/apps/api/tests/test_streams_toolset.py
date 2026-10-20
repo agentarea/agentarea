@@ -1,6 +1,8 @@
 import json
 import re
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -9,6 +11,23 @@ import pytest
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_api.tools import get_platform_tools
 from agentarea_api.tools.streams_toolset import StreamsToolset
+from agentarea_streams.domain.source_types import SourceTypeEntry
+
+CATALOG = Path(__file__).resolve().parents[4] / "data" / "catalog" / "source-types.json"
+
+
+class _Catalog:
+    """The shipped catalog, as the registry sync writes it to registry_items."""
+
+    def __init__(self, _session):
+        raw = json.loads(CATALOG.read_text())["source_types"]
+        self.entries = {e["slug"]: SourceTypeEntry.model_validate(e) for e in raw}
+
+    async def get(self, slug):
+        return self.entries.get(slug)
+
+    async def list_entries(self):
+        return sorted(self.entries.values(), key=lambda e: e.name.lower())
 
 
 def test_the_streams_toolset_is_served():
@@ -93,9 +112,7 @@ async def test_list_refuses_a_limit_past_the_rest_bound():
 
 async def test_list_events_refuses_a_limit_past_the_rest_bound():
     with pytest.raises(ToolError, match="limit must be between 1 and 200"):
-        await StreamsToolset().list_events.__wrapped__(
-            StreamsToolset(), stream_id=str(uuid4()), limit=201
-        )
+        await StreamsToolset().list_events(stream_id=str(uuid4()), limit=201)
 
 
 def _write_ctx(session):
@@ -106,45 +123,84 @@ def _write_ctx(session):
     return ctx
 
 
-async def test_create_webhook_source_refuses_a_verifier_without_its_secret(monkeypatch):
+async def test_create_source_refuses_a_verifier_without_its_secret(monkeypatch):
     service = AsyncMock()
     session = AsyncMock()
     monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_context", _write_ctx(session))
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
     monkeypatch.setattr(
+        "agentarea_api.api.v1._stream_sources.CatalogSourceTypeRepository", _Catalog
+    )
+    monkeypatch.setattr(
         "agentarea_api.tools.streams_toolset._secret_ports",
-        lambda *_a: {
-            "secret_manager": AsyncMock(),
-            "secret_catalog": AsyncMock(),
-            "webhook_service": AsyncMock(),
-        },
+        lambda *_a: {"secret_manager": AsyncMock(), "secret_catalog": AsyncMock()},
     )
     with pytest.raises(ToolError, match="needs client_secret"):
-        await StreamsToolset().create_webhook_source.__wrapped__(
-            StreamsToolset(), stream_id=str(uuid4()), webhook_type="sentry"
+        await StreamsToolset().create_source.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), source_type="sentry"
         )
-    service.add_webhook_source.assert_not_called()
+    service.add_source.assert_not_called()
     session.rollback.assert_awaited_once()
 
 
-async def test_delete_webhook_source_refuses_a_source_a_live_trigger_owns(monkeypatch):
-    from agentarea_streams.domain import SourceFedByTriggerError
-
-    trigger_id = uuid4()
+async def test_create_source_refuses_a_type_the_catalog_lacks(monkeypatch):
     service = AsyncMock()
-    service.delete_source.side_effect = SourceFedByTriggerError("Source s", [trigger_id])
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
+    )
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr(
+        "agentarea_api.api.v1._stream_sources.CatalogSourceTypeRepository", _Catalog
+    )
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset._secret_ports",
+        lambda *_a: {"secret_manager": AsyncMock(), "secret_catalog": AsyncMock()},
+    )
+    with pytest.raises(ToolError, match="Unknown source type 'gitlab'"):
+        await StreamsToolset().create_source.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), source_type="gitlab"
+        )
+    service.add_source.assert_not_called()
+
+
+async def test_delete_source_of_an_unknown_source_releases_nothing(monkeypatch):
+    from agentarea_streams.domain import StreamSourceNotFoundError
+
+    source_id = uuid4()
+    service = AsyncMock()
+    service.delete_source.side_effect = StreamSourceNotFoundError(source_id)
     released = AsyncMock()
     monkeypatch.setattr(
         "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
     )
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
-    monkeypatch.setattr("agentarea_api.tools.streams_toolset.release_webhook_source", released)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.release_source", released)
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._secret_ports", lambda *_a: {})
-    with pytest.raises(ToolError, match=str(trigger_id)):
-        await StreamsToolset().delete_webhook_source.__wrapped__(
-            StreamsToolset(), stream_id=str(uuid4()), source_id=str(uuid4())
+    with pytest.raises(ToolError, match=str(source_id)):
+        await StreamsToolset().delete_source.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), source_id=str(source_id)
         )
     released.assert_not_called()
+
+
+async def test_delete_source_releases_its_credentials(monkeypatch):
+    source = SimpleNamespace(id=uuid4())
+    service = AsyncMock()
+    service.delete_source.return_value = source
+    released = AsyncMock()
+    monkeypatch.setattr(
+        "agentarea_api.tools.streams_toolset.platform_context", _write_ctx(AsyncMock())
+    )
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.release_source", released)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._secret_ports", lambda *_a: {})
+    result = json.loads(
+        await StreamsToolset().delete_source.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), source_id=str(source.id)
+        )
+    )
+    assert result == {"deleted": True}
+    released.assert_awaited_once_with(source)
 
 
 async def test_delete_refuses_a_stream_a_forward_writes_into(monkeypatch):
@@ -159,11 +215,7 @@ async def test_delete_refuses_a_stream_a_forward_writes_into(monkeypatch):
     monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
     monkeypatch.setattr(
         "agentarea_api.tools.streams_toolset._secret_ports",
-        lambda *_a: {
-            "secret_manager": AsyncMock(),
-            "secret_catalog": AsyncMock(),
-            "webhook_service": AsyncMock(),
-        },
+        lambda *_a: {"secret_manager": AsyncMock(), "secret_catalog": AsyncMock()},
     )
     with pytest.raises(ToolError, match=str(forward)):
         await StreamsToolset().delete.__wrapped__(StreamsToolset(), stream_id=str(stream))
@@ -207,6 +259,109 @@ async def test_delete_forward_refuses_a_triggers_subscription(monkeypatch):
     service.delete_forward.assert_not_called()
 
 
-async def test_source_types_are_served_to_mcp_callers_too():
+async def test_source_types_are_served_to_mcp_callers_too(monkeypatch):
+    @asynccontextmanager
+    async def ctx():
+        yield (AsyncMock(), SimpleNamespace(user_id="u", workspace_id="w"), AsyncMock(), None, None)
+
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_read_context", ctx)
+    monkeypatch.setattr("agentarea_api.api.v1.streams.CatalogSourceTypeRepository", _Catalog)
     types = json.loads(await StreamsToolset().list_source_types())
-    assert {"sentry", "yookassa", "github"} <= {t["webhook_type"] for t in types}
+    assert {"sentry", "stripe", "github", "generic_webhook"} <= {t["slug"] for t in types}
+
+
+def _toolset_world(monkeypatch, service, permission=None):
+    @asynccontextmanager
+    async def ctx():
+        yield (AsyncMock(), SimpleNamespace(user_id="u", workspace_id="w"), object(), None, None)
+
+    permission = permission or AsyncMock()
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.platform_context", ctx)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset._service", lambda _f: service)
+    monkeypatch.setattr("agentarea_api.tools.streams_toolset.require_permission", permission)
+    return permission
+
+
+def _processor_row(stream, outputs, code):
+    return SimpleNamespace(
+        id=uuid4(),
+        kind="processor",
+        trigger_id=None,
+        filter={"kinds": ["order"], "fields": {}},
+        output_stream_ids=[str(o) for o in outputs],
+        status="active",
+        code=code,
+        created_at=datetime(2026, 10, 19, tzinfo=UTC),
+    )
+
+
+CODE = "def process(event):\n    return None\n"
+
+
+async def test_an_agent_writes_a_processor_through_the_tool(monkeypatch):
+    stream, output = uuid4(), uuid4()
+    service = AsyncMock()
+    service.create_processor.return_value = _processor_row(stream, [output], CODE)
+    permission = _toolset_world(monkeypatch, service)
+    out = json.loads(
+        await StreamsToolset().create_processor.__wrapped__(
+            StreamsToolset(),
+            stream_id=str(stream),
+            output_stream_ids=[str(output)],
+            code=CODE,
+            event_filter={"kinds": ["order"]},
+        )
+    )
+    assert (out["kind"], out["code"]) == ("processor", CODE)
+    kwargs = service.create_processor.await_args.kwargs
+    assert kwargs["output_stream_ids"] == [output]
+    assert kwargs["event_filter"].kinds == ["order"]
+    assert [c.args[2] for c in permission.await_args_list] == [str(output)]
+
+
+async def test_a_processor_the_platform_refuses_is_a_tool_error(monkeypatch):
+    from agentarea_streams.domain.errors import ProcessorCodeError
+
+    service = AsyncMock()
+    service.create_processor.side_effect = ProcessorCodeError("The code does not parse")
+    _toolset_world(monkeypatch, service)
+    with pytest.raises(ToolError, match="does not parse"):
+        await StreamsToolset().create_processor.__wrapped__(
+            StreamsToolset(), stream_id=str(uuid4()), output_stream_ids=[str(uuid4())], code="x("
+        )
+
+
+async def test_updating_a_processor_needs_edit_on_its_outputs_old_and_new(monkeypatch):
+    stream, old, new = uuid4(), uuid4(), uuid4()
+    service = AsyncMock()
+    row = _processor_row(stream, [new], CODE)
+    service.get_processor.return_value = row
+    service.existing_outputs.return_value = [old]
+    service.update_processor.return_value = row
+    permission = _toolset_world(monkeypatch, service)
+    await StreamsToolset().update_processor.__wrapped__(
+        StreamsToolset(),
+        stream_id=str(stream),
+        subscription_id=str(row.id),
+        output_stream_ids=[str(new)],
+    )
+    assert {c.args[2] for c in permission.await_args_list} == {str(old), str(new)}
+    assert service.update_processor.await_args.kwargs == {
+        "code": None,
+        "output_stream_ids": [new],
+        "event_filter": None,
+    }
+
+
+async def test_deleting_a_processor(monkeypatch):
+    stream, output = uuid4(), uuid4()
+    service = AsyncMock()
+    row = _processor_row(stream, [output], CODE)
+    service.get_processor.return_value = row
+    service.existing_outputs.return_value = [output]
+    _toolset_world(monkeypatch, service)
+    out = await StreamsToolset().delete_processor.__wrapped__(
+        StreamsToolset(), stream_id=str(stream), subscription_id=str(row.id)
+    )
+    assert json.loads(out) == {"deleted": True}
+    service.delete_processor.assert_awaited_once_with(stream, row.id)

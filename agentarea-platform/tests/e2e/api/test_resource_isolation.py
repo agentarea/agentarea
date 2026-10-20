@@ -46,7 +46,6 @@ RESOURCES = [
             "registry_type": "mcp_servers",
             "source_type": "url",
             "source_url": f"https://example.com/nonexistent-{uuid.uuid4().hex[:8]}.json",
-            "sync_mode": "manual",
         },
     ),
     ResourceSpec(

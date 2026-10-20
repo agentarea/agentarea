@@ -10,7 +10,7 @@ related:
   - /self-host/kubernetes
   - /self-host/docker-compose
   - /self-host/troubleshooting
-last_updated: 2026-09-24
+last_updated: 2026-10-15
 ---
 
 An AgentArea upgrade is a schema migration plus a set of image replacements. The
@@ -108,6 +108,114 @@ Check the Job explicitly.
     ```
   </Step>
 
+  <Step title="Existing cluster: move Valkey onto a volume">
+    Charts released before Valkey became a store ran it on an `emptyDir` with a
+    256 MiB limit and no AOF. The first upgrade to a chart with
+    `valkey.dataStorage.enabled: true` creates a PVC and recreates the Valkey pod
+    on it, with `appendonly yes`, `appendfsync everysec`, and
+    `maxmemory-policy noeviction`.
+
+    Everything Valkey held in memory is lost at that moment. Today that is
+    transient state only: live task-event tails, sandbox execution requests,
+    channel inbound streams, and caches. Task events that matter are already in
+    PostgreSQL. Stream events run on Valkey from the release that moves the event
+    bus there (next step), so move Valkey onto a volume in an earlier upgrade, when
+    the loss is still a few unconsumed stream entries rather than undelivered
+    stream events.
+
+    Choose the StorageClass and size before you upgrade. An empty `className`
+    uses the cluster's default StorageClass; a node-local class such as
+    `local-path` pins Valkey to the node that holds its volume.
+
+    ```yaml
+    valkey:
+      dataStorage:
+        className: ""          # or the StorageClass name to use
+        requestedSize: "4Gi"
+    ```
+
+    See the Valkey step in [Deploy on Kubernetes](/self-host/kubernetes) for how
+    to size memory. After the upgrade, confirm AOF is on. The Deployment is
+    named `<release>-valkey`:
+
+    ```bash
+    REDIS_PASSWORD=$(kubectl get secret -n agentarea agentarea-redis-secret \
+      -o jsonpath='{.data.redis-password}' | base64 -d)
+    kubectl exec -n agentarea deploy/agentarea-valkey -- \
+      valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning CONFIG GET appendonly
+    ```
+
+    The reply is `appendonly` then `yes`. `CONFIG GET maxmemory-policy` returns
+    `noeviction`, and `kubectl get pvc -n agentarea` lists the Valkey claim as
+    `Bound`.
+  </Step>
+
+  <Step title="Existing cluster: stream events move onto Valkey">
+    Before this release, stream events were journaled in PostgreSQL and a worker
+    loop dispatched them to subscriptions. From it, intake publishes each event to
+    `<namespace>.streams.events.<partition>` in Valkey, and two worker consumer
+    groups, `router` and `events-view`, react to it and record it. The migration
+    drops the old per-subscription cursors, so an event received before the
+    upgrade and not yet dispatched is not reacted to after it. Upgrade when no
+    webhook or poller is sending, or accept that the last few seconds of events
+    get no reaction.
+
+    Every broker key now sits under one namespace, `AGENTAREA_EVENT_NAMESPACE`
+    (default `agentarea`), which replaces `AGENTAREA_KAFKA_PREFIX`:
+
+    | Before | After |
+    |---|---|
+    | `events:task.<id>` | `agentarea.tasks.events.<id>` |
+    | `events:<event type>` | `agentarea.domain.events.<event type>` |
+    | `agentarea.channel.inbound`, `agentarea.channel.outbound` | unchanged |
+
+    If you set `AGENTAREA_CHANNEL_IN_STREAM` or `AGENTAREA_CHANNEL_OUT_STREAM` with
+    an `agentarea.` prefix, drop the prefix: the namespace adds it. An open task
+    page loses its live tail at the switch and picks it up again on reload.
+
+    The API, worker, `agentarea-events` and `agentarea-mcp-manager` all publish
+    under the namespace. Roll them to the same release together; while versions
+    are mixed, old and new components write to different keys.
+
+    `AGENTAREA_EVENT_PARTITIONS` (default 16) maps each stream to one partition.
+    Choose it before the first start. Changing it later moves streams to other
+    partitions, so stop intake and let the `router` group drain first.
+  </Step>
+
+  <Step title="Existing cluster: task events move to one topic and a delivery group">
+    From this release a run publishes each event of its task once, to
+    `<namespace>.tasks.events`, after the task log stores it. Replies to chats,
+    mail, task webhooks and A2A push configs are sent by the `delivery` consumer
+    group on that topic, which reads each task's reply targets. Live-only signals
+    (a call started, reply chunks, tool progress) go over pub/sub
+    `<namespace>.tasks.live.<task id>` and are never kept.
+
+    | Before | After |
+    |---|---|
+    | `agentarea.tasks.events.<task id>` (one stream per task) | `agentarea.tasks.events` (one stream; the task id is each entry's subject) |
+    | `agentarea.channel.outbound`, `agentarea.channel.outbound.dlq` | removed; group `delivery` on `agentarea.tasks.events`, dead letters in `agentarea.tasks.events.delivery.dlq` |
+
+    Before you upgrade, let `agentarea.channel.outbound` drain: a reply still on it
+    is not sent after the upgrade. Check its pending count is 0
+    (`XPENDING agentarea.channel.outbound delivery`), then delete it and the
+    per-task streams:
+
+    ```bash
+    valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL agentarea.channel.outbound agentarea.channel.outbound.dlq
+    valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning --scan --pattern 'agentarea.tasks.events.*' \
+      | grep -v '\.delivery\.dlq$' | xargs -r valkey-cli -a "$REDIS_PASSWORD" --no-auth-warning DEL
+    ```
+
+    Remove `AGENTAREA_CHANNEL_OUT_STREAM`, `AGENTAREA_CHANNEL_OUT_GROUP` and
+    `AGENTAREA_CHANNEL_OUT_DLQ` if you set them; nothing reads them.
+
+    The task page, A2A and the CLI read a task's history from its log and resume
+    by its position (`seq`). An open task page loses its live tail at the switch
+    and picks it up again on reload. Every topic is now trimmed by age as it is
+    written: `streams.events` by `AGENTAREA_EVENT_RETENTION`, `tasks.events` and
+    `channel.inbound` after 72 hours, dead-letter topics after 14 days.
+  </Step>
+
   <Step title="Upgrade on Kubernetes">
     ```bash
     helm repo update
@@ -125,7 +233,7 @@ Check the Job explicitly.
     under a running deployment.
 
     `--wait` waits on the Deployments. It does not wait on the migration Job in a
-    way you should trust — verify it separately, in step 6.
+    way you should trust — verify it separately, in step 7.
   </Step>
 
   <Step title="Upgrade on Docker Compose">

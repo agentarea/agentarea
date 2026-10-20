@@ -116,7 +116,11 @@ async def test_continue_execution_raises_token_and_tool_call_ceilings():
     )
 
     assert result["accepted"] is True
-    requested = service._resolve_effective_policy.await_args.kwargs["task_policy"]
+    (requested,) = [
+        call.kwargs["task_policy"]
+        for call in service._resolve_effective_policy.await_args_list
+        if "task_policy" in call.kwargs
+    ]
     assert requested.tokens.max_tokens == 50_000
     assert requested.execution.max_tool_calls_total == 150
     assert requested.execution.max_model_turns is None
@@ -195,3 +199,34 @@ async def test_continue_execution_is_refused_once_the_monthly_cap_is_reached():
         await service.continue_execution(task_id, additional_iterations=2)
 
     service.workflow_service.continue_execution.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_grant_of_the_wrong_resource_names_the_one_the_run_needs():
+    task_id = uuid4()
+    task = _waiting_task(task_id, _policy(max_model_turns=3, run_budget_usd="1.00"))
+    task.metadata["failure_reason"] = "budget_exceeded"
+    service = _service(task, next_policy=_policy(max_model_turns=5, run_budget_usd="1.00"))
+
+    result = await service.continue_execution(task_id, additional_iterations=2)
+
+    assert result == {"accepted": False, "reason": "additional_budget_required"}
+    service._resolve_effective_policy.assert_not_awaited()
+    service.workflow_service.continue_execution.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_the_new_snapshot_carries_the_limit_ceilings_of_the_higher_policies():
+    task_id = uuid4()
+    task = _waiting_task(task_id, _policy(max_model_turns=3, run_budget_usd="1.00"))
+    next_policy = _policy(max_model_turns=5, run_budget_usd="1.00")
+    service = _service(task, next_policy=next_policy)
+
+    await service.continue_execution(task_id, additional_iterations=2)
+
+    _, payload = service.workflow_service.continue_execution.await_args.args
+    ceilings = payload["governance_snapshot"]["limit_ceilings"]
+    assert ceilings["iteration_limit"] == "5"
+    assert ceilings["tool_call_limit"] == "100"
+    assert ceilings["token_limit"] == "20000"
+    assert to_money(ceilings["budget_exceeded"]) == to_money("1.00")

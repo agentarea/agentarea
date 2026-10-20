@@ -292,7 +292,7 @@ def test_orchestrator_delegates_to_skill_file_agent_and_mcp_agent(
     events = wait_for_workflow(alice_client, coord_id, task_id, timeout=180.0)
     assert _tool_events(events, "activate_skill"), "coordinator did not activate its skill"
 
-    completed = [e for e in events if e["event_type"] == "AgentDelegationCompleted"]
+    completed = [e for e in events if e["event_type"] == "delegation.completed"]
     assert len(completed) == 2, [e["event_type"] for e in events]
     assert all(e["metadata"].get("success") is True for e in completed), [
         e["metadata"] for e in completed

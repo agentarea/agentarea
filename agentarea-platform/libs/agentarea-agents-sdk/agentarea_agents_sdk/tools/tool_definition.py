@@ -181,7 +181,7 @@ def build_method_schema(method: Callable) -> dict[str, Any]:
     """
     sig = inspect.signature(method)
     try:
-        hints = get_type_hints(method)
+        hints = get_type_hints(method, include_extras=True)
     except Exception:
         hints = {}
 

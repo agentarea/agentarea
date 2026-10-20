@@ -7,6 +7,7 @@ floor, which left /explore alphabetical no matter how the catalog was curated.
 """
 
 import pytest_asyncio
+from agentarea_common.auth.context import UserContext
 from agentarea_registry.application.service import RegistryService
 from agentarea_registry.domain.models import Registry
 from agentarea_registry.infrastructure.repository import (
@@ -23,7 +24,7 @@ def _catalog(*names: str) -> dict:
 
 @pytest_asyncio.fixture
 async def catalog(db_session, monkeypatch):
-    item_repo = RegistryItemRepository(db_session)
+    item_repo = RegistryItemRepository(db_session, UserContext(user_id="u", workspace_id="ws"))
     service = RegistryService(
         RegistryRepository(db_session), item_repo, server_repo=None
     )

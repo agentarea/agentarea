@@ -1,9 +1,10 @@
 """Audit event repository — append-only, workspace-scoped reads."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import literal, select, tuple_
+from sqlalchemy import func, literal, select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +47,37 @@ class AuditRepository:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none() is not None
+
+    async def resource_events_page(
+        self,
+        workspace_id: str,
+        *,
+        resource_type: str,
+        actions: Sequence[str],
+        limit: int,
+        offset: int,
+    ) -> tuple[list[AuditEventORM], int]:
+        """One newest-first page of the workspace's ``actions`` on a ``resource_type``.
+
+        Only events naming their resource count. Returns the page and the total.
+        """
+        conditions = (
+            AuditEventORM.workspace_id == workspace_id,
+            AuditEventORM.action.in_(actions),
+            AuditEventORM.resource_type == resource_type,
+            AuditEventORM.resource_id.isnot(None),
+        )
+        total = await self._session.scalar(
+            select(func.count()).select_from(AuditEventORM).where(*conditions)
+        )
+        result = await self._session.execute(
+            select(AuditEventORM)
+            .where(*conditions)
+            .order_by(AuditEventORM.created_at.desc(), AuditEventORM.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(result.scalars().all()), total or 0
 
     async def query(
         self,

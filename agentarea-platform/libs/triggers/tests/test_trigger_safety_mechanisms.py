@@ -17,6 +17,7 @@ from agentarea_triggers.domain.models import (
     CronTrigger,
     TriggerExecution,
 )
+from agentarea_triggers.infrastructure.repository import FailureCount
 from agentarea_triggers.trigger_service import (
     TriggerService,
 )
@@ -126,14 +127,14 @@ class TestTriggerSafetyMechanisms:
     # Test Automatic Trigger Disabling
 
     @pytest.mark.asyncio
-    async def test_record_execution_success_resets_failures(
+    async def test_record_execution_success_keeps_failures(
         self,
         trigger_service,
         mock_trigger_repository,
         mock_trigger_execution_repository,
         sample_trigger_with_failures,
     ):
-        """Test that successful execution resets consecutive failures."""
+        """A firing that started its task does not reset the count: the task may still fail."""
         # Setup mocks
         execution = TriggerExecution(
             trigger_id=sample_trigger_with_failures.id,
@@ -142,7 +143,9 @@ class TestTriggerSafetyMechanisms:
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
+        mock_trigger_repository.update_execution_tracking.return_value = (
+            sample_trigger_with_failures
+        )
 
         # Execute
         result = await trigger_service.record_execution(
@@ -153,7 +156,7 @@ class TestTriggerSafetyMechanisms:
 
         # Verify
         assert result.status == ExecutionStatus.SUCCESS
-        assert sample_trigger_with_failures.consecutive_failures == 0  # Reset to 0
+        assert sample_trigger_with_failures.consecutive_failures == 3
         mock_trigger_repository.update_execution_tracking.assert_called_once()
 
     @pytest.mark.asyncio
@@ -164,9 +167,7 @@ class TestTriggerSafetyMechanisms:
         mock_trigger_execution_repository,
         sample_trigger_with_failures,
     ):
-        """Test that failed execution increments consecutive failures."""
-        # Setup mocks
-        initial_failures = sample_trigger_with_failures.consecutive_failures
+        """A failed firing adds one failure in the database."""
         execution = TriggerExecution(
             trigger_id=sample_trigger_with_failures.id,
             status=ExecutionStatus.FAILED,
@@ -175,7 +176,7 @@ class TestTriggerSafetyMechanisms:
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
+        mock_trigger_repository.count_failure.return_value = FailureCount(4, 5, True)
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Execute
@@ -188,8 +189,11 @@ class TestTriggerSafetyMechanisms:
 
         # Verify
         assert result.status == ExecutionStatus.FAILED
-        assert sample_trigger_with_failures.consecutive_failures == initial_failures + 1
+        mock_trigger_repository.count_failure.assert_awaited_once_with(
+            sample_trigger_with_failures.id
+        )
         mock_trigger_repository.update_execution_tracking.assert_called_once()
+        mock_trigger_repository.disable_trigger.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_trigger_auto_disabled_at_threshold(
@@ -210,7 +214,7 @@ class TestTriggerSafetyMechanisms:
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get_trigger.return_value = sample_trigger_at_threshold
-        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.count_failure.return_value = FailureCount(6, 5, True)
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Execute
@@ -252,7 +256,7 @@ class TestTriggerSafetyMechanisms:
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
+        mock_trigger_repository.count_failure.return_value = FailureCount(4, 5, True)
 
         # Execute
         await trigger_service.record_execution(
@@ -284,7 +288,7 @@ class TestTriggerSafetyMechanisms:
         )
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get_trigger.return_value = sample_trigger_at_threshold
-        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_at_threshold
+        mock_trigger_repository.count_failure.return_value = FailureCount(6, 5, True)
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Make event broker fail
@@ -311,15 +315,15 @@ class TestTriggerSafetyMechanisms:
         """Test successful reset of trigger failure count."""
         # Setup mocks
         mock_trigger_repository.get_trigger.return_value = sample_trigger_with_failures
-        mock_trigger_repository.update_execution_tracking.return_value = sample_trigger_with_failures
 
         # Execute
         result = await trigger_service.reset_trigger_failure_count(sample_trigger_with_failures.id)
 
         # Verify
         assert result is True
-        assert sample_trigger_with_failures.consecutive_failures == 0
-        mock_trigger_repository.update_execution_tracking.assert_called_once()
+        mock_trigger_repository.reset_failures.assert_awaited_once_with(
+            sample_trigger_with_failures.id
+        )
 
     @pytest.mark.asyncio
     async def test_reset_trigger_failure_count_not_found(
@@ -335,7 +339,7 @@ class TestTriggerSafetyMechanisms:
 
         # Verify
         assert result is False
-        mock_trigger_repository.update_execution_tracking.assert_not_called()
+        mock_trigger_repository.reset_failures.assert_not_called()
 
     # Test Safety Status Monitoring
 
@@ -429,23 +433,14 @@ class TestTriggerSafetyMechanisms:
         """Test trigger domain model correctly identifies when it should not be disabled."""
         assert sample_trigger_with_failures.should_disable_due_to_failures() is False
 
-    def test_trigger_record_execution_success_resets_count(self, sample_trigger_with_failures):
-        """Test trigger domain model resets failure count on success."""
+    def test_trigger_record_execution_started_keeps_count(self, sample_trigger_with_failures):
+        """A started task leaves the count to how the task ends."""
         initial_failures = sample_trigger_with_failures.consecutive_failures
         assert initial_failures > 0
 
-        sample_trigger_with_failures.record_execution_success()
+        sample_trigger_with_failures.record_execution_started()
 
-        assert sample_trigger_with_failures.consecutive_failures == 0
-        assert sample_trigger_with_failures.last_execution_at is not None
-
-    def test_trigger_record_execution_failure_increments_count(self, sample_trigger_with_failures):
-        """Test trigger domain model increments failure count on failure."""
-        initial_failures = sample_trigger_with_failures.consecutive_failures
-
-        sample_trigger_with_failures.record_execution_failure()
-
-        assert sample_trigger_with_failures.consecutive_failures == initial_failures + 1
+        assert sample_trigger_with_failures.consecutive_failures == initial_failures
         assert sample_trigger_with_failures.last_execution_at is not None
 
     # Test Edge Cases

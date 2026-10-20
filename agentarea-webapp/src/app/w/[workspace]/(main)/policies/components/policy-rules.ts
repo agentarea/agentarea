@@ -5,7 +5,12 @@ import type {
   PolicyEffect,
   PolicyRule,
 } from "@/types/policies";
-import { isToolTarget, toolNameFromTarget } from "@/types/policies";
+import {
+  GITHUB_IMPORT_REGISTRY_ID,
+  isToolTarget,
+  parseInstallTarget,
+  toolNameFromTarget,
+} from "@/types/policies";
 
 // Enforcement-stage labels, grounded in the governance engine's phases
 // (PRE_LLM_CALL, POST_LLM_CALL, PRE_TOOL_CALL, TOOL_DISCOVERY, …). The phase is
@@ -16,6 +21,7 @@ const STAGE = {
   beforeTool: "Before tool call",
   toolDiscovery: "Tool discovery",
   sensitiveAction: "Before sensitive action",
+  catalogInstall: "On catalog install",
   llmInput: "On LLM input",
   llmOutput: "On LLM output",
   custom: "Custom enforcement",
@@ -238,6 +244,7 @@ export type MatrixDimensionKey =
   | "tools"
   | "approval"
   | "safety"
+  | "install"
   | "custom";
 
 // Classify a rule by effect + target into a matrix dimension. Unknown mappings
@@ -259,6 +266,7 @@ export function ruleDimension(policy: Policy): MatrixDimensionKey {
   }
   if (effect === "deny" || effect === "allow") {
     if (isToolTarget(target)) return "tools";
+    if (parseInstallTarget(target)) return "install";
     return "custom";
   }
   return "custom";
@@ -271,6 +279,7 @@ const CATEGORY_BY_DIMENSION: Record<MatrixDimensionKey, string> = {
   tools: "Tools",
   approval: "Approval",
   safety: "Safety",
+  install: "Catalog installs",
   custom: "Custom",
 };
 
@@ -280,6 +289,7 @@ const STAGE_BY_DIMENSION: Record<MatrixDimensionKey, string> = {
   tools: STAGE.beforeTool,
   approval: STAGE.sensitiveAction,
   safety: STAGE.llmInput,
+  install: STAGE.catalogInstall,
   custom: STAGE.custom,
 };
 
@@ -355,6 +365,20 @@ function describeRule(
     return {
       label: "Content safety",
       value: parts.length > 0 ? parts.join(", ") : "on",
+    };
+  }
+
+  if (dimension === "install") {
+    const install = parseInstallTarget(policy.target);
+    const verb = policy.effect === "deny" ? "Deny" : "Allow";
+    return {
+      label: `${verb} installs`,
+      value:
+        install?.kind === "registry_trust"
+          ? `from ${install.trust} registries`
+          : install?.registryId === GITHUB_IMPORT_REGISTRY_ID
+            ? "from GitHub URLs"
+            : `from registry ${install?.registryId ?? policy.target}`,
     };
   }
 

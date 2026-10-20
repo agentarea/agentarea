@@ -295,6 +295,18 @@ class TemporalScheduleManager:
             logger.error(f"Failed to delete schedule for trigger {trigger_id}: {e}", exc_info=True)
             raise
 
+    async def cancel_batch(self, workflow_id: str) -> None:
+        """Cancel an open batch of a windowed trigger; one already closed is left as it is."""
+        from temporalio.service import RPCError, RPCStatusCode
+
+        client = await self._ensure_client()
+        try:
+            await client.get_workflow_handle(workflow_id).cancel()
+        except RPCError as e:
+            if e.status != RPCStatusCode.NOT_FOUND:
+                raise
+            logger.info(f"Batch {workflow_id} had already closed: {e}")
+
     async def pause_cron_schedule(self, trigger_id: UUID) -> None:
         """Pause a Temporal Schedule for a cron trigger.
 

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def _positive_int_or_none(value) -> int | None:
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return parsed if parsed > 0 else None
 
@@ -23,7 +23,7 @@ def _positive_int_or_none(value) -> int | None:
 def _nonnegative_money_or_none(value) -> Decimal | None:
     try:
         parsed = Decimal(str(value))
-    except (InvalidOperation, ValueError):
+    except InvalidOperation, ValueError:
         return None
     return parsed if parsed.is_finite() and parsed >= 0 else None
 
@@ -66,6 +66,7 @@ class DiscoveredModel:
     input_cost_per_token: Decimal | None = None
     output_cost_per_token: Decimal | None = None
     cached_input_cost_per_token: Decimal | None = None
+    cache_creation_input_cost_per_token: Decimal | None = None
     supports_function_calling: bool = False
     supports_vision: bool = False
     supports_reasoning: bool = False
@@ -136,6 +137,9 @@ class ModelDiscoveryService:
                     output_cost_per_token=_nonnegative_money_or_none(pricing.get("completion")),
                     cached_input_cost_per_token=_nonnegative_money_or_none(
                         pricing.get("input_cache_read")
+                    ),
+                    cache_creation_input_cost_per_token=_nonnegative_money_or_none(
+                        pricing.get("input_cache_write")
                     ),
                     description=m.get("description", ""),
                     kind=_kind_from_listing(m),

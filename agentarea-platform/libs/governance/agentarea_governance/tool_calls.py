@@ -6,16 +6,17 @@ In order (wiki ADR-0038):
    answer disclosure and the workflow gate read. A held call returns to its caller,
    whose transport asks a person (a run's escalation, an /mcp approval link) and
    calls again once it is approved.
-2. The spend gate: the caller's caps over the spend ledger (agent, workspace,
-   client, connection, tool).
-3. For a call on the platform's key, the balance gate: the installed
-   ``entitlement_guard``, asked about the call's vendor cost metric and connector.
-   Without one installed the call is governed by policy and caps alone; one that is
-   installed but failed to load refuses.
-4. The call.
-5. The meter: one line per known cost, through the caller's ``ledger``, keyed on the
-   tool call so a retry writes it once. The connector's declared cost for a call
-   that succeeded, and every wallet payment (x402/MPP) the call settled.
+2. What the call will cost before it runs: a rate on a constant or an argument, else
+   the connector's declared estimate.
+3. For a call on the platform's key with billing installed, a hold: billing holds
+   what it will charge for that cost, or refuses. The platform never prices a call.
+4. The spend gate: the caller's caps over the spend ledger (agent, workspace, client,
+   connection, tool), told what the call will cost in the deployment currency.
+5. The call. A hold whose call did not run, failed or was already metered is voided.
+6. The meter: one line per known cost, through the caller's ``ledger``, keyed on the
+   tool call so a retry writes it once. A platform line carries the held amount and
+   the hold, which the settlement worker captures; a cost in another currency is
+   converted by billing, or left in its own currency and not covered by caps.
 
 Each path keeps its own audit trail and passes it in; the layer reports every verdict
 it reaches, including a refusal by a gate.
@@ -29,9 +30,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
-from functools import cache
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationAction,
@@ -39,8 +39,8 @@ from agentarea_common.auth.tool_authorization import (
     ToolAuthorizationRequest,
     authorize_tool_invocation,
 )
-from agentarea_common.extensions import customer_pricing
-from agentarea_common.extensions.registry import ExtensionRegistry
+from agentarea_common.extensions import tool_billing
+from agentarea_common.extensions.tool_billing import Converted
 from agentarea_common.money import ZERO, to_money
 from agentarea_common.tool_cost import (
     CostSourceKind,
@@ -49,20 +49,17 @@ from agentarea_common.tool_cost import (
     ToolConnection,
     ToolCostError,
     meter,
+    pre_call_cost,
 )
-
-from .domain.enums import InterceptorAction, Phase
-from .domain.models import InterceptorContext
 
 logger = logging.getLogger(__name__)
 
-ENTITLEMENT_GUARD_EXTENSION = "entitlement_guard"
-VENDOR_COST_METRIC = "tool.vendor_cost"
 WALLET_CURRENCY = "USD"
-_BILLABLE_ON_PLATFORM = frozenset(
-    {CostSourceKind.FREE, CostSourceKind.RATE, CostSourceKind.REPORTED}
-)
 _PAYMENT_EVIDENCE_KEYS = ("protocol", "recipient", "tx_hash")
+# What a line still needs before its figure is final, in ``evidence["settle"]``.
+SETTLE_CAPTURE = "capture"
+SETTLE_VENDOR = "vendor"
+SETTLE_CONVERT = "convert"
 
 
 @dataclass(frozen=True)
@@ -96,7 +93,11 @@ class ToolCallOutcome:
 
 @dataclass(frozen=True)
 class ToolUsage:
-    """One metered line: what a call cost, whom, and the amount caps count."""
+    """One metered line: what a call cost, whom, and the amount caps count.
+
+    ``estimate`` says ``amount`` is not final yet: a rate from a public price list, a
+    held amount billing has not captured, or a cost still to be settled or converted.
+    """
 
     line_key: str
     call_id: str
@@ -118,6 +119,7 @@ class ToolUsage:
     amount: Decimal
     currency: str
     occurred_at: datetime
+    estimate: bool = False
     evidence: dict[str, Any] = field(default_factory=dict)
 
 
@@ -136,83 +138,52 @@ class ToolCallResult:
     metered: bool = False
     # The call's lines were already in the ledger, or its answer is one given before.
     replayed: bool = False
+    # The deployment currency the run budget counts in.
+    currency: str | None = None
 
     @property
     def cost(self) -> Decimal:
-        """The run-budget amount of the call: every line but wallet payments."""
-        return sum((u.amount for u in self.usages if u.payer is not Payer.PER_CALL), ZERO)
+        """The run-budget amount of the call: its lines in the deployment currency.
+
+        A wallet payment is the wallet's, and a cost left in another currency is not
+        covered by any budget.
+        """
+        return sum(
+            (
+                u.amount
+                for u in self.usages
+                if u.payer is not Payer.PER_CALL and u.currency == self.currency
+            ),
+            ZERO,
+        )
 
 
 AuditHook = Callable[[ToolAuthorizationDecision], Awaitable[None]]
 # Returns how many lines it inserted (a line already stored is not), or None if unknown.
 UsageLedger = Callable[[list[ToolUsage]], Awaitable[int | None]]
-SpendGate = Callable[[GovernedToolCall], Awaitable[str | None]]
-
-
-@cache
-def entitlement_guard() -> Any | None:
-    """The installed entitlement gate, built once per process like the pipeline's."""
-    factory = ExtensionRegistry.get_factory(ENTITLEMENT_GUARD_EXTENSION)
-    return factory() if factory is not None else None
+# What the call will cost, in a currency, when that is known before it runs.
+PendingCost = tuple[Decimal, str]
+SpendGate = Callable[[GovernedToolCall, PendingCost | None], Awaitable[str | None]]
 
 
 def _denied(reason: str) -> ToolAuthorizationDecision:
     return ToolAuthorizationDecision(ToolAuthorizationAction.DENY, reason)
 
 
-async def _balance_gate(
-    call: GovernedToolCall, connection: ToolConnection
-) -> ToolAuthorizationDecision | None:
-    """A refusal by the balance gate, or None when the call may spend the platform's key."""
-    guard = entitlement_guard()
-    if guard is None:
-        failure = ExtensionRegistry.get_failure(ENTITLEMENT_GUARD_EXTENSION)
-        if failure is not None:
-            return _denied(f"the entitlement gate is installed but failed to load: {failure}")
-        return None
-    request = call.authorization
-    verdict = await guard.execute(
-        InterceptorContext(
-            agent_id=call.agent_id,
-            workspace_id=str(request.workspace_id or ""),
-            user_id=str(request.user_id or ""),
-            phase=Phase.PRE_TOOL_CALL,
-            action_type="tool_call",
-            action_name=request.tool_name,
-            action_params=dict(request.tool_args),
-            execution_state={
-                "paid_call": {
-                    "payer": Payer.PLATFORM.value,
-                    "metric_type": f"{VENDOR_COST_METRIC}.{connection.cost_model.currency}",
-                    "resource_ref": connection.resource_ref,
-                }
-            },
-        )
+def _billing() -> tuple[tool_billing.ToolBilling | None, str | None]:
+    return tool_billing.usable_tool_billing()
+
+
+async def convert_cost(payer: Payer, connector: str, tool: str, cost: MeteredCost) -> Converted:
+    """A tool cost in the deployment currency; see ``tool_billing.convert_cost``."""
+    converted = await tool_billing.convert_cost(
+        payer=payer.value,
+        connector=connector,
+        tool=tool,
+        vendor_cost=cost.vendor_cost,
+        vendor_currency=cost.currency,
     )
-    if verdict.action is InterceptorAction.DENY:
-        return _denied(f"{verdict.interceptor_name}: {verdict.reason}")
-    return None
-
-
-async def _amount(
-    payer: Payer, connector: str, tool: str, vendor_cost: Decimal, currency: str
-) -> tuple[Decimal, str]:
-    """The line's amount and currency: converted where a billing extension prices it.
-
-    An installed pricing that cannot convert the currency is a misconfiguration worth
-    a warning; the line keeps the vendor's currency and caps in that currency count it.
-    """
-    try:
-        return await customer_pricing.price_vendor_cost(
-            payer=payer.value,
-            connector=connector,
-            tool=tool,
-            vendor_cost=vendor_cost,
-            currency=currency,
-        )
-    except customer_pricing.FxUnavailableError:
-        logger.warning("Tool cost kept in %s for %s#%s", currency, connector, tool, exc_info=True)
-        return vendor_cost, currency
+    return Converted(to_money(converted.amount), converted.currency, converted.pending)
 
 
 def _usage(
@@ -224,6 +195,7 @@ def _usage(
     amount: Decimal,
     currency: str,
     connection: ToolConnection | None,
+    estimate: bool,
     evidence: dict[str, Any],
 ) -> ToolUsage:
     request = call.authorization
@@ -248,76 +220,223 @@ def _usage(
         amount=amount,
         currency=currency,
         occurred_at=datetime.now(UTC),
+        estimate=estimate,
         evidence=evidence,
     )
 
 
-async def _meter(call: GovernedToolCall, outcome: ToolCallOutcome) -> list[ToolUsage]:
-    usages: list[ToolUsage] = []
-    connection = call.connection
-    if connection is not None and outcome.success:
-        try:
-            cost = meter(
-                connection.cost_model,
-                args=dict(call.authorization.tool_args),
-                body=outcome.body,
-                meta=outcome.meta,
-            )
-        except ToolCostError:
+@dataclass(frozen=True)
+class _Before:
+    """What the layer learnt before the call: its cost, as converted, and any hold."""
+
+    cost: MeteredCost | None = None
+    converted: Converted | None = None
+    hold: Any = None
+
+
+async def _connection_line(
+    call: GovernedToolCall,
+    connection: ToolConnection,
+    outcome: ToolCallOutcome,
+    before: _Before,
+) -> ToolUsage | None:
+    try:
+        cost = meter(
+            connection.cost_model,
+            args=dict(call.authorization.tool_args),
+            body=outcome.body,
+            meta=outcome.meta,
+        )
+    except ToolCostError:
+        if before.hold is None:
             logger.error(
                 "Tool call %s on %s could not be metered; no line recorded",
                 call.call_id,
                 connection.resource_ref,
                 exc_info=True,
             )
-            cost = None
-        if cost is not None:
-            amount, currency = await _amount(
-                connection.payer,
-                connection.connector,
-                connection.tool,
-                cost.vendor_cost,
-                cost.currency,
-            )
-            usages.append(
-                _usage(
-                    call,
-                    line_key=call.call_id,
-                    payer=connection.payer,
-                    cost=cost,
-                    amount=amount,
-                    currency=currency,
-                    connection=connection,
-                    evidence={},
-                )
-            )
+            return None
+        # The call ran on a hold: what billing held is what it charges.
+        logger.error(
+            "Tool call %s on %s could not be metered; its hold is captured at the estimate",
+            call.call_id,
+            connection.resource_ref,
+            exc_info=True,
+        )
+        cost = before.cost
+    if cost is None:
+        return None
+    settle_params = {"settle_params": cost.settle_params} if cost.settle_params else {}
+    vendor_settles = cost.source is CostSourceKind.SETTLED
+    if before.hold is not None:
+        return _usage(
+            call,
+            line_key=call.call_id,
+            payer=connection.payer,
+            cost=cost,
+            amount=to_money(before.hold.amount),
+            currency=str(before.hold.currency),
+            connection=connection,
+            estimate=True,
+            evidence={
+                "hold_id": str(before.hold.hold_id),
+                "settle": SETTLE_VENDOR if vendor_settles else SETTLE_CAPTURE,
+                **settle_params,
+            },
+        )
+    converted = (
+        before.converted
+        if before.converted is not None
+        and before.cost is not None
+        and (before.cost.vendor_cost, before.cost.currency) == (cost.vendor_cost, cost.currency)
+        else await convert_cost(connection.payer, connection.connector, connection.tool, cost)
+    )
+    settle = SETTLE_VENDOR if vendor_settles else SETTLE_CONVERT if converted.pending else None
+    evidence: dict[str, Any] = {"settle": settle, **settle_params} if settle else {}
+    if settle == SETTLE_CONVERT:
+        evidence["vendor_exact"] = cost.exact
+    return _usage(
+        call,
+        line_key=call.call_id,
+        payer=connection.payer,
+        cost=cost,
+        amount=converted.amount,
+        currency=converted.currency,
+        connection=connection,
+        estimate=not cost.exact or settle is not None,
+        evidence=evidence,
+    )
+
+
+async def _meter(
+    call: GovernedToolCall, outcome: ToolCallOutcome, before: _Before
+) -> list[ToolUsage]:
+    usages: list[ToolUsage] = []
+    connection = call.connection
+    if connection is not None and outcome.success:
+        line = await _connection_line(call, connection, outcome, before)
+        if line is not None:
+            usages.append(line)
     for payment in outcome.payments:
         if not payment.get("success"):
             continue
-        vendor_cost = to_money(payment.get("amount_usd"))
         cost = MeteredCost(
-            Decimal(1), "payment", vendor_cost, WALLET_CURRENCY, CostSourceKind.REPORTED
-        )
-        amount, currency = await _amount(
-            Payer.PER_CALL,
-            connection.connector if connection else "",
-            connection.tool if connection else call.authorization.tool_name,
-            vendor_cost,
+            Decimal(1),
+            "payment",
+            to_money(payment.get("amount_usd")),
             WALLET_CURRENCY,
+            CostSourceKind.REPORTED,
         )
+        connector = connection.connector if connection else ""
+        tool = connection.tool if connection else call.authorization.tool_name
+        converted = await convert_cost(Payer.PER_CALL, connector, tool, cost)
+        evidence = {key: payment[key] for key in _PAYMENT_EVIDENCE_KEYS if payment.get(key)}
+        if converted.pending:
+            evidence.update(settle=SETTLE_CONVERT, vendor_exact=True)
         usages.append(
             _usage(
                 call,
                 line_key=f"{call.call_id}:payment:{payment.get('idempotency_key')}",
                 payer=Payer.PER_CALL,
                 cost=cost,
-                amount=amount,
-                currency=currency,
+                amount=converted.amount,
+                currency=converted.currency,
                 connection=connection,
-                evidence={key: payment[key] for key in _PAYMENT_EVIDENCE_KEYS if payment.get(key)},
+                estimate=converted.pending,
+                evidence=evidence,
             )
         )
     return usages
+
+
+async def _void(billing: tool_billing.ToolBilling | None, hold: Any, why: str) -> None:
+    """Release a hold whose call did not use it; a failure leaves it to its TTL."""
+    if billing is None or hold is None:
+        return
+    try:
+        await tool_billing.billing_call("void", billing.void(hold_id=str(hold.hold_id)))
+    except Exception:
+        logger.error(
+            "Hold %s (%s) could not be voided; it expires", hold.hold_id, why, exc_info=True
+        )
+
+
+async def _before(
+    call: GovernedToolCall,
+) -> tuple[_Before, tool_billing.ToolBilling | None, ToolAuthorizationDecision | None]:
+    """The call's cost before it runs and, on the platform's key, its hold — or a refusal."""
+    connection = call.connection
+    if connection is None:
+        return _Before(), None, None
+    model = connection.cost_model
+    try:
+        cost = pre_call_cost(model, args=dict(call.authorization.tool_args))
+    except ToolCostError as error:
+        return _Before(), None, _denied(f"the cost of this call cannot be known: {error}")
+    if connection.payer is not Payer.PLATFORM or model.source is CostSourceKind.FREE:
+        if cost is None:
+            return _Before(), None, None
+        converted = await convert_cost(
+            connection.payer, connection.connector, connection.tool, cost
+        )
+        return _Before(cost, converted), None, None
+    if model.source is CostSourceKind.UNKNOWN:
+        return (
+            _Before(),
+            None,
+            _denied(
+                f"{connection.resource_ref} runs on the platform's key but its connector "
+                "declares no cost"
+            ),
+        )
+    billing, failure = _billing()
+    if failure is not None:
+        return _Before(), None, _denied(f"tool billing is installed but failed to load: {failure}")
+    if billing is None:
+        converted = (
+            await convert_cost(connection.payer, connection.connector, connection.tool, cost)
+            if cost is not None
+            else None
+        )
+        return _Before(cost, converted), None, None
+    if cost is None:
+        return (
+            _Before(),
+            None,
+            _denied(
+                f"{connection.resource_ref} runs on the platform's key but declares neither a "
+                "rate nor an estimate to hold"
+            ),
+        )
+    try:
+        hold = await tool_billing.billing_call(
+            "authorize",
+            billing.authorize(
+                workspace_id=str(call.authorization.workspace_id or ""),
+                connector=connection.connector,
+                tool=connection.tool,
+                vendor_cost=cost.vendor_cost,
+                vendor_currency=cost.currency,
+                quantity=cost.quantity,
+                unit=cost.unit,
+                idempotency_key=f"hold:{call.call_id}:{uuid4().hex}",
+            ),
+        )
+    except Exception:
+        logger.error(
+            "Billing could not authorize %s for call %s",
+            connection.resource_ref,
+            call.call_id,
+            exc_info=True,
+        )
+        return _Before(), None, _denied("billing_unavailable: billing is temporarily unavailable")
+    if not hold.allowed:
+        return _Before(), None, _denied(f"{hold.code}: {hold.reason}")
+    return (
+        _Before(cost, Converted(to_money(hold.amount), str(hold.currency)), hold),
+        billing,
+        None,
+    )
 
 
 async def run_tool_call(
@@ -337,34 +456,26 @@ async def run_tool_call(
             return ToolCallResult(Verdict.HELD, decision)
         decision = ToolAuthorizationDecision(ToolAuthorizationAction.ALLOW, "approved")
 
-    connection = call.connection
-    refusal: ToolAuthorizationDecision | None = None
-    if (
-        connection is not None
-        and connection.payer is Payer.PLATFORM
-        and connection.cost_model.source not in _BILLABLE_ON_PLATFORM
-    ):
-        refusal = _denied(
-            f"{connection.resource_ref} runs on the platform's key but its connector "
-            f"declares no rate or reported cost ({connection.cost_model.source.value})"
-        )
+    before, billing, refusal = await _before(call)
     if refusal is None:
-        reason = await spend_gate(call)
+        pending = (before.converted.amount, before.converted.currency) if before.converted else None
+        reason = await spend_gate(call, pending)
         refusal = _denied(reason) if reason else None
-    if (
-        refusal is None
-        and connection is not None
-        and connection.payer is Payer.PLATFORM
-        and connection.cost_model.source is not CostSourceKind.FREE
-    ):
-        refusal = await _balance_gate(call, connection)
+        if refusal is not None:
+            await _void(billing, before.hold, "refused by a spend cap")
     if refusal is not None:
         await audit(refusal)
         return ToolCallResult(Verdict.DENIED, refusal)
 
     await audit(decision)
-    outcome = await invoke()
-    usages = await _meter(call, outcome)
+    try:
+        outcome = await invoke()
+    except BaseException:
+        await _void(billing, before.hold, "the call raised")
+        raise
+    if not outcome.success:
+        await _void(billing, before.hold, "the call failed")
+    usages = await _meter(call, outcome, before)
     metered = True
     replayed = outcome.replayed
     if usages:
@@ -374,11 +485,22 @@ async def run_tool_call(
         except Exception:
             # The vendor answered and may have been paid; failing the call now would
             # lose the answer without un-spending the money. Logged with the keys
-            # that replay it.
+            # that replay it; an uncaptured hold expires.
             metered = False
             logger.exception(
                 "Tool call %s ran but its cost lines were not recorded (%s)",
                 call.call_id,
-                [(u.line_key, u.vendor_cost, u.vendor_currency) for u in usages],
+                [(u.line_key, u.vendor_cost, u.vendor_currency, u.evidence) for u in usages],
             )
-    return ToolCallResult(Verdict.RAN, decision, outcome, tuple(usages), metered, replayed)
+        if replayed and outcome.success:
+            # An earlier attempt's line, with its own hold, is the one captured.
+            await _void(billing, before.hold, "the call's line was already recorded")
+    return ToolCallResult(
+        Verdict.RAN,
+        decision,
+        outcome,
+        tuple(usages),
+        metered,
+        replayed,
+        tool_billing.deployment_currency(),
+    )

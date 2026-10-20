@@ -125,7 +125,7 @@ class TemporalWorkflowService:
             return await self._execution_service.resolve_escalation(
                 execution_id, escalation_id, approved, comment, resolved_by
             )
-        except (EscalationNotPendingError, NotAnApproverError):
+        except EscalationNotPendingError, NotAnApproverError:
             raise
         except Exception:
             logger.error("Failed to resolve escalation", exc_info=True)

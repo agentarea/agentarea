@@ -11,18 +11,16 @@ from .conftest import make_trigger_repository_factory
 # Mark all async tests
 pytestmark = pytest.mark.asyncio
 
-from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
-from agentarea_triggers.domain.models import CronTrigger, TriggerCreate, WebhookTrigger
+from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
+from agentarea_triggers.domain.models import CronTrigger, TriggerCreate
 from agentarea_triggers.logging_utils import (
     DependencyUnavailableError,
     TriggerExecutionError,
     TriggerValidationError,
-    WebhookValidationError,
     set_correlation_id,
 )
 from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
 from agentarea_triggers.trigger_service import TriggerService
-from agentarea_triggers.webhook_manager import DefaultWebhookManager
 
 
 class TestTriggerServiceErrorHandling:
@@ -97,32 +95,6 @@ class TestTriggerServiceErrorHandling:
 
         assert "does not exist" in str(exc_info.value)
         assert exc_info.value.context["agent_id"] == str(sample_cron_trigger_data.agent_id)
-
-    async def test_create_webhook_trigger_refuses_a_webhook_id_already_in_use(
-        self, trigger_service, mock_dependencies
-    ):
-        """Inbound webhooks are routed by webhook_id alone, across every workspace.
-
-        A second trigger on the same id makes the lookup ambiguous (the owner's
-        endpoint starts failing) and later inherits the traffic, so the id is
-        refused rather than shared.
-        """
-        mock_dependencies["trigger_repository"].webhook_id_in_use.return_value = True
-        webhook = TriggerCreate(
-            name="Copycat",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="someone-elses-hook",
-            created_by="test_user",
-        )
-
-        with pytest.raises(TriggerValidationError, match="already in use"):
-            await trigger_service.create_trigger(webhook)
-
-        mock_dependencies["trigger_repository"].webhook_id_in_use.assert_awaited_once_with(
-            "someone-elses-hook"
-        )
-        mock_dependencies["trigger_repository"].create_from_model.assert_not_awaited()
 
     async def test_create_trigger_agent_repository_error(
         self, trigger_service, sample_cron_trigger_data, mock_dependencies
@@ -211,172 +183,6 @@ class TestTriggerServiceErrorHandling:
 
         assert "Temporal schedule manager not available" in str(exc_info.value)
         assert exc_info.value.context["dependency"] == "temporal_schedule_manager"
-
-
-class TestWebhookManagerErrorHandling:
-    """Test error handling in WebhookManager."""
-
-    @pytest.fixture
-    def execution_callback(self):
-        """Mock execution callback."""
-        return AsyncMock()
-
-    @pytest.fixture
-    def webhook_manager(self, execution_callback, fake_secret_reader):
-        """Create DefaultWebhookManager with mocked callback."""
-        return DefaultWebhookManager(execution_callback, secret_reader=fake_secret_reader)
-
-    @pytest.fixture
-    def sample_webhook_trigger(self):
-        """Sample webhook trigger."""
-        return WebhookTrigger(
-            id=uuid4(),
-            name="Test Webhook",
-            description="Test webhook trigger",
-            agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            is_active=True,
-            task_parameters={},
-            conditions={},
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            created_by="test",
-            webhook_id="test_webhook_123",
-            allowed_methods=["POST"],
-            webhook_type=WebhookType.GENERIC,
-            validation_rules={
-                "required_headers": ["content-type"],
-                "content_type": "application/json",
-                "body_format": "json",
-            },
-        )
-
-    async def test_handle_webhook_request_not_found(self, webhook_manager):
-        """Test webhook request handling when webhook is not found."""
-        # Execute
-        response = await webhook_manager.handle_webhook_request(
-            webhook_id="nonexistent",
-            method="POST",
-            headers={"content-type": "application/json"},
-            body={"test": "data"},
-            query_params={},
-        )
-
-        # Verify
-        assert response["status_code"] == 400
-        assert "not found" in response["body"]["message"]
-
-    async def test_handle_webhook_request_inactive_trigger(
-        self, webhook_manager, sample_webhook_trigger
-    ):
-        """Test webhook request handling when trigger is inactive."""
-        # Setup - inactive trigger
-        sample_webhook_trigger.is_active = False
-        await webhook_manager.register_webhook(sample_webhook_trigger)
-
-        # Execute
-        response = await webhook_manager.handle_webhook_request(
-            webhook_id=sample_webhook_trigger.webhook_id,
-            method="POST",
-            headers={"content-type": "application/json"},
-            body={"test": "data"},
-            query_params={},
-        )
-
-        # Verify
-        assert response["status_code"] == 400
-        assert "inactive" in response["body"]["message"]
-
-    async def test_handle_webhook_request_invalid_method(
-        self, webhook_manager, sample_webhook_trigger
-    ):
-        """Test webhook request handling with invalid HTTP method."""
-        # Setup
-        await webhook_manager.register_webhook(sample_webhook_trigger)
-
-        # Execute - use GET when only POST is allowed
-        response = await webhook_manager.handle_webhook_request(
-            webhook_id=sample_webhook_trigger.webhook_id,
-            method="GET",
-            headers={"content-type": "application/json"},
-            body={"test": "data"},
-            query_params={},
-        )
-
-        # Verify
-        assert response["status_code"] == 400
-        assert "not allowed" in response["body"]["message"]
-
-    async def test_handle_webhook_request_validation_failure(
-        self, webhook_manager, sample_webhook_trigger
-    ):
-        """Test webhook request handling when validation fails."""
-        # Setup
-        await webhook_manager.register_webhook(sample_webhook_trigger)
-
-        # Execute - missing required header
-        response = await webhook_manager.handle_webhook_request(
-            webhook_id=sample_webhook_trigger.webhook_id,
-            method="POST",
-            headers={},  # Missing content-type header
-            body={"test": "data"},
-            query_params={},
-        )
-
-        # Verify
-        assert response["status_code"] == 400
-        assert "validation failed" in response["body"]["message"]
-
-    async def test_handle_webhook_request_execution_callback_error(
-        self, webhook_manager, sample_webhook_trigger, execution_callback
-    ):
-        """Test webhook request handling when execution callback fails."""
-        # Setup
-        await webhook_manager.register_webhook(sample_webhook_trigger)
-        execution_callback.execute_webhook_trigger.side_effect = Exception("Execution failed")
-
-        # Execute
-        response = await webhook_manager.handle_webhook_request(
-            webhook_id=sample_webhook_trigger.webhook_id,
-            method="POST",
-            headers={"content-type": "application/json"},
-            body={"test": "data"},
-            query_params={},
-        )
-
-        # Verify
-        assert response["status_code"] == 400
-        assert "execution failed" in response["body"]["message"]
-
-    async def test_apply_validation_rules_json_parsing_error(
-        self, webhook_manager, sample_webhook_trigger
-    ):
-        """Test validation rules with invalid JSON body."""
-        # Setup - trigger expects JSON but body is invalid
-        sample_webhook_trigger.validation_rules = {"body_format": "json"}
-
-        # Execute
-        result = await webhook_manager.apply_validation_rules(
-            sample_webhook_trigger,
-            {"content-type": "application/json"},
-            "invalid json {",  # Invalid JSON
-        )
-
-        # Verify
-        assert result is False
-
-    async def test_apply_validation_rules_exception_handling(
-        self, webhook_manager, sample_webhook_trigger
-    ):
-        """Test validation rules exception handling."""
-        # Setup - trigger with malformed validation rules
-        sample_webhook_trigger.validation_rules = {"required_headers": None}  # Invalid type
-
-        # Execute and verify
-        with pytest.raises(WebhookValidationError):
-            await webhook_manager.apply_validation_rules(
-                sample_webhook_trigger, {"content-type": "application/json"}, {"test": "data"}
-            )
 
 
 class TestTemporalScheduleManagerErrorHandling:
@@ -536,8 +342,8 @@ class TestGracefulDegradation:
             name="Test Trigger",
             description="Test",
             agent_id=uuid4(),
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id="test_webhook",
+            trigger_type=TriggerType.STREAM,
+            stream_id=uuid4(),
             created_by="test",
         )
 

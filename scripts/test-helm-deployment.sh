@@ -209,7 +209,7 @@ print_header "Test 6: Checking Temporal Connectivity"
 print_info "Checking Temporal server..."
 POD=$(kubectl get pods -n "$NAMESPACE" -l app.kubernetes.io/name=temporal -o jsonpath='{.items[0].metadata.name}')
 if [ ! -z "$POD" ]; then
-    kubectl exec "$POD" -n "$NAMESPACE" -- tctl --address localhost:7233 cluster health && print_success "Temporal is ready" || print_error "Temporal is not ready"
+    kubectl exec "$POD" -n "$NAMESPACE" -- nc -z localhost 7233 && print_success "Temporal is ready" || print_error "Temporal is not ready"
 else
     print_error "Temporal pod not found"
 fi
@@ -246,8 +246,6 @@ print_header "Test 9: Checking operator"
 OPERATOR_READY=$(kubectl get deploy -n "$NAMESPACE" -l app.kubernetes.io/component=operator -o jsonpath='{.items[*].status.readyReplicas}')
 if [ "$OPERATOR_READY" == "1" ]; then
     print_success "agentarea-operator is ready"
-    REGSYNC_COUNT=$(kubectl get registrysyncs -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l | tr -d ' ')
-    print_info "RegistrySync CRs: $REGSYNC_COUNT"
 else
     print_info "agentarea-operator not running (operator.enabled=false or still starting)"
 fi

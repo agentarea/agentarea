@@ -28,6 +28,7 @@ def _item(**overrides):
         "installed_version": None,
         "category": "analytics",
         "featured": False,
+        "registry_trust": "official",
         "created_at": datetime(2026, 9, 9),
         "updated_at": datetime(2026, 9, 9),
     }

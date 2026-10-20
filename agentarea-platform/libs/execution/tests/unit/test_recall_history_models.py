@@ -52,8 +52,16 @@ class TestRecallHistoryResult:
 
     def test_with_events(self):
         events = [
-            {"event_type": "ToolCallCompleted", "data": {"tool": "search"}, "created_at": "2026-03-11"},
-            {"event_type": "LLMCallCompleted", "data": {"model": "gpt-4"}, "created_at": "2026-03-11"},
+            {
+                "event_type": "ToolCallCompleted",
+                "data": {"tool": "search"},
+                "created_at": "2026-03-11",
+            },
+            {
+                "event_type": "LLMCallCompleted",
+                "data": {"model": "gpt-4"},
+                "created_at": "2026-03-11",
+            },
         ]
         result = RecallHistoryResult(
             events=events,

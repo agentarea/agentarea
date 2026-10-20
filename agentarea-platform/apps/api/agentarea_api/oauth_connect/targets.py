@@ -150,7 +150,7 @@ class MCPInstanceTarget:
     @classmethod
     async def load(
         cls, instance_id: UUID, user_context: UserContext, session: AsyncSession
-    ) -> "MCPInstanceTarget":
+    ) -> MCPInstanceTarget:
         instance = await MCPServerInstanceRepository(session, user_context).get_by_id(instance_id)
         if instance is None:
             raise HTTPException(status_code=404, detail="MCP instance not found")
@@ -194,7 +194,7 @@ class MCPSpecTarget:
     @classmethod
     async def load(
         cls, server_id: UUID, user_context: UserContext, session: AsyncSession
-    ) -> "MCPSpecTarget":
+    ) -> MCPSpecTarget:
         server_spec = await MCPServerRepository(session, user_context).get_server_by_id(
             str(server_id)
         )
@@ -297,7 +297,7 @@ class CatalogItemTarget:
     @classmethod
     async def load(
         cls, item_id: UUID, user_context: UserContext, session: AsyncSession
-    ) -> "CatalogItemTarget":
+    ) -> CatalogItemTarget:
         item = await RegistryItemRepository(session, user_context).get_by_id(item_id)
         if item is None:
             raise HTTPException(status_code=404, detail="Catalog connection not found")

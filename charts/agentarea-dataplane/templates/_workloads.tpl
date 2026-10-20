@@ -42,6 +42,7 @@ automountServiceAccountToken: false
   ingressName   name of the ingress policy
   fromPods      matchLabels of the one pod allowed in, when it is not on the host network
   ingressPorts  ports it may connect to; empty allows all
+  egressLabel   pods labelled agentarea.io/egress get DNS and np.egressProxy only
 */}}
 {{- define "dataplane.workloadNetworkPolicies" -}}
 {{- $np := .np }}
@@ -87,7 +88,13 @@ metadata:
   labels:
     {{- include "dataplane.labels" .root | nindent 4 }}
 spec:
+  {{- if .egressLabel }}
+  podSelector:
+    matchExpressions:
+      - { key: agentarea.io/egress, operator: DoesNotExist }
+  {{- else }}
   podSelector: {}
+  {{- end }}
   policyTypes: [Egress]
   egress:
     - to:
@@ -110,6 +117,44 @@ spec:
             except:
               {{- toYaml . | nindent 14 }}
             {{- end }}
+{{- if .egressLabel }}
+---
+# Out, for pods labelled agentarea.io/egress: cluster DNS and the egress proxy.
+# With no proxy configured they reach DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: egress-dns-and-proxy-only
+  namespace: {{ .namespace }}
+  labels:
+    {{- include "dataplane.labels" .root | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: agentarea.io/egress, operator: Exists }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $np.dns.namespace }}
+          podSelector:
+            matchLabels:
+              {{- toYaml $np.dns.podLabels | nindent 14 }}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    {{- with $np.egressProxy }}
+    {{- $peer := pick . "namespaceSelector" "podSelector" }}
+    {{- if or (not $peer) (not .port) }}
+    {{- fail "workloads.networkPolicy.egressProxy needs port and namespaceSelector or podSelector" }}
+    {{- end }}
+    - to:
+        - {{ toYaml $peer | nindent 10 | trim }}
+      ports:
+        - { protocol: TCP, port: {{ .port }} }
+    {{- end }}
+{{- end }}
 {{- end -}}
 
 {{/*

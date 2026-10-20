@@ -138,7 +138,8 @@
     "showPassword": "Показать пароль",
     "hidePassword": "Скрыть пароль",
     "previousMonth": "Предыдущий месяц",
-    "nextMonth": "Следующий месяц"
+    "nextMonth": "Следующий месяц",
+    "newValue": "новое"
   },
   "admin": {
     "title": "Панель администратора",
@@ -361,7 +362,8 @@
     "workspace": "Рабочее пространство",
     "apiKeys": "API Ключи",
     "auditLog": "Журнал аудита",
-    "workspaceSettings": "Настройки воркспейса"
+    "workspaceSettings": "Настройки воркспейса",
+    "registries": "Реестры"
   },
   "LlmBrowsePage": {
     "title": "Модели LLM",
@@ -653,7 +655,6 @@
       "createConfiguration": "Создать конфигурацию",
       "triggerEnabled": "Включён",
       "removeTrigger": "Удалить триггер",
-      "triggerCredentialRequired": "Выберите секрет рабочего пространства",
       "noTriggers": "Триггеров нет. Агент запускается, только когда для него создают задачу.",
       "triggersManagedElsewhere": "Расписания и каналы этого агента настраиваются в разделе «Автоматизация».",
       "openTriggers": "Открыть автоматизацию",
@@ -673,7 +674,8 @@
       "loadOpenapiConnectionsFailed": "Не удалось загрузить OpenAPI-подключения",
       "loadingOpenapiConnections": "Загрузка OpenAPI-подключений...",
       "loadInstanceFailed": "Не удалось загрузить MCP-подключение для редактирования",
-      "updateInstanceFailed": "Не удалось обновить MCP-подключение"
+      "updateInstanceFailed": "Не удалось обновить MCP-подключение",
+      "triggerStreamRequired": "Выберите поток, который слушает триггер"
     },
     "browseCatalog": "Открыть каталог",
     "newTask": "Новая задача",
@@ -1257,7 +1259,13 @@
       "project": "Проект",
       "taskPolicy": "Политика задачи",
       "noProject": "Без проекта",
-      "defaultPolicy": "Политика по умолчанию"
+      "defaultPolicy": "Политика по умолчанию",
+      "when": "Когда",
+      "runNow": "Сейчас",
+      "runAt": "Запустить в",
+      "runNowAction": "Запустить сейчас",
+      "done": "Готово",
+      "scheduleTask": "Запланировать задачу"
     },
     "Messages": {
       "toolCall": "Использую инструмент",
@@ -1277,7 +1285,32 @@
       "pauseFailed": "Не удалось приостановить задачу",
       "resumeFailed": "Не удалось возобновить задачу",
       "stopFailed": "Не удалось остановить задачу",
-      "retryFailed": "Не удалось повторить задачу"
+      "retryFailed": "Не удалось повторить задачу",
+      "scheduleFailed": "Не удалось запланировать задачу",
+      "errorLoadingConversation": "Ошибка загрузки истории"
+    },
+    "ActivityGroup": {
+      "working": "Работает",
+      "workCompleted": "Работа завершена",
+      "workStopped": "Работа остановлена",
+      "workFailed": "Работа не удалась",
+      "paused": "Приостановлено",
+      "actions": "{count, plural, one {# действие} few {# действия} many {# действий} other {# действия}}",
+      "failed": "с ошибкой: {count}",
+      "toolGroup": {
+        "read": "прочитано файлов: {count}",
+        "edited": "изменено файлов: {count}",
+        "wrote": "создано файлов: {count}",
+        "ran": "выполнено команд: {count}",
+        "searched": "выполнено поисков: {count}",
+        "fetched": "загружено страниц: {count}",
+        "queried": "выполнено запросов: {count}",
+        "listed": "просмотрено каталогов: {count}",
+        "sent": "отправлено сообщений: {count}",
+        "skill": "использовано навыков: {count}",
+        "delegated": "передано агентам: {count}",
+        "other": "вызвано инструментов: {count}"
+      }
     },
     "continuation": {
       "title": {
@@ -1305,6 +1338,19 @@
         "tokens_required": "Выделите дополнительные токены, чтобы снять лимит токенов.",
         "toolCalls_required": "Выделите дополнительные вызовы инструментов, чтобы снять лимит вызовов."
       }
+    },
+    "conversation": {
+      "tryAgain": "Повторить",
+      "loadingHistory": "Загрузка истории",
+      "historyUnavailable": "История сообщений недоступна. Загрузите её заново перед отправкой.",
+      "historyLoading": "Загружается история. Можно начать писать; отправка станет доступна, когда загрузка завершится.",
+      "noExecutionEvents": "Событий выполнения пока нет.",
+      "messagePlaceholder": "Сообщение для {agent}...",
+      "followUpPlaceholder": "Продолжить с {agent}...",
+      "attachmentNotice": "Файлы будут отправлены в новой задаче для {agent}.",
+      "agentFallback": "агента",
+      "compacted": "Контекст сжат: ранние сообщения ({count}) заменены кратким пересказом",
+      "messageStoredSeparately": "Сообщение хранится отдельно и здесь не показано."
     }
   },
   "TasksPage": {
@@ -1350,6 +1396,7 @@
       "error": "Ошибка",
       "cancelled": "Отменено",
       "paused": "Пауза",
+      "waitingForInfrastructure": "Ждёт сервис",
       "pending": "Ожидание",
       "scheduled": "Запланировано"
     },
@@ -1377,6 +1424,14 @@
       "cancelConfirm": "Остановить",
       "retry": "Повторить",
       "retryFailed": "Не удалось повторить задачу"
+    },
+    "scheduledRunNotice": "Запустится {when}. Агент возьмёт задачу в это время; до тех пор её можно отменить.",
+    "sourceKind": {
+      "manualRun": "Ручной запуск",
+      "delegation": "Делегировано",
+      "schedule": "По расписанию",
+      "event": "Событие",
+      "trigger": "Триггер"
     }
   },
   "SkillsPage": {
@@ -1578,6 +1633,30 @@
       "loadOptionsFailed": "Не удалось загрузить список навыков для выбора",
       "addFailed": "Не удалось добавить вложенный навык",
       "removeFailed": "Не удалось удалить вложенный навык"
+    },
+    "update": {
+      "available": "Доступно обновление",
+      "customized": "Изменён",
+      "customizedHint": "Изменён в этом рабочем пространстве. Обновление заменит изменения версией из реестра.",
+      "update": "Обновить",
+      "updateAll": "Обновить все",
+      "failed": "Не удалось обновить навык",
+      "allFailed": "Не удалось обновить навыки",
+      "discardTitle": "Отменить ваши изменения?",
+      "discardDescription": "Навык {name} изменён в этом рабочем пространстве. Обновление до версии из реестра отменит эти изменения.",
+      "discardAndUpdate": "Отменить мои изменения и обновить",
+      "resultsTitle": "Результаты обновления",
+      "dismiss": "Скрыть",
+      "nothingToUpdate": "Обновлять было нечего.",
+      "customizedSkipped": "Изменён здесь, поэтому не тронут. Откройте его, чтобы обновить.",
+      "results": {
+        "updated": "Обновлён",
+        "up_to_date": "Актуален",
+        "customized": "Изменён",
+        "failed": "Ошибка"
+      },
+      "removedUpstream": "Удалён в источнике",
+      "removedUpstreamHint": "Реестр больше не публикует этот навык. Установленная копия продолжает работать."
     }
   },
   "TaskArtifactsPage": {
@@ -1626,37 +1705,57 @@
       "taskAwaitingFollowUp": "Ждёт продолжения от человека",
       "taskAwaitingContinuation": "Ждёт продолжения",
       "taskContinued": "Задача продолжена",
+      "taskAwaitingInfrastructure": "Ждёт недоступный сервис",
+      "taskInfrastructureRecovered": "Сервис снова доступен",
+      "skillWithheld": "Навык не предложен по политике",
+      "taskRetried": "Задача перезапущена",
       "executionFinished": "Запуск завершён",
+      "executionContinuedAsNew": "Запуск продолжен с новой историей",
+      "executionPaused": "Запуск приостановлен",
+      "executionResumed": "Запуск возобновлён",
+      "turnStarted": "Ход начат",
+      "turnCompleted": "Ход завершён",
+      "turnAborted": "Ход прерван",
       "llmCallStarted": "Запрос к модели",
       "llmCallCompleted": "Ответ модели",
       "llmCallFailed": "Ошибка модели",
       "llmCallChunk": "Фрагмент ответа модели",
       "toolCall": "Вызов инструмента",
       "toolResult": "Результат инструмента",
+      "toolProgress": "Ход работы инструмента",
       "inputRequest": "Запрошен ввод",
+      "inputSubmitted": "Ввод отправлен",
       "inputResponse": "Получен ввод",
       "approvalRequest": "Запрошено подтверждение",
       "approvalResponse": "Ответ на подтверждение",
+      "messageQueued": "Сообщение в очереди",
+      "messageReceived": "Сообщение получено",
+      "messageRemoved": "Сообщение убрано из очереди",
+      "commandReceived": "Получена команда",
+      "commandRejected": "Команда отклонена",
+      "budgetWarning": "Бюджет на исходе",
+      "budgetExceeded": "Бюджет превышен",
+      "budgetUpdated": "Бюджет изменён",
+      "servicePayment": "Оплата сервиса",
+      "serviceBudgetWarning": "Бюджет на сервисы на исходе",
+      "serviceBudgetExceeded": "Бюджет на сервисы превышен",
+      "contextWarning": "Контекст заполняется",
+      "contextCompacted": "Контекст сжат",
+      "answerChecked": "Ответ проверен",
+      "modelChanged": "Модель сменена",
+      "modelFallback": "Использована запасная модель",
+      "modelUnavailable": "Модель недоступна",
+      "runtimeDiscovered": "Окружение определено",
+      "delegationStarted": "Передано другому агенту",
+      "delegationCompleted": "Делегированная работа вернулась",
+      "delegationFailed": "Делегированная работа завершилась ошибкой",
+      "artifactValidationStarted": "Проверка артефактов",
+      "artifactValidationCompleted": "Артефакты проверены",
       "artifactCreated": "Артефакт создан",
       "artifactUpdated": "Артефакт обновлён",
       "uiCreated": "Интерфейс создан",
       "uiUpdated": "Интерфейс обновлён",
-      "uiDeleted": "Интерфейс удалён",
-      "iterationStarted": "Итерация началась",
-      "iterationCompleted": "Итерация завершена",
-      "budgetWarning": "Бюджет на исходе",
-      "budgetExceeded": "Бюджет превышен",
-      "contextCompacted": "Контекст сжат",
-      "contextWindowExceeded": "Контекст переполнен",
-      "runtimeDiscovered": "Окружение определено",
-      "runtimeError": "Ошибка окружения",
-      "workflowStarted": "Запуск начат",
-      "workflowCompleted": "Запуск завершён",
-      "workflowFailed": "Запуск завершился ошибкой",
-      "workflowCancelled": "Запуск отменён",
-      "workflowContinuedAsNew": "Запуск продолжен с новой историей",
-      "commandReceived": "Получена команда",
-      "commandRejected": "Команда отклонена"
+      "uiDeleted": "Интерфейс удалён"
     },
     "facts": {
       "tool": "Инструмент",
@@ -1697,7 +1796,8 @@
       "waitingInput": "Ждёт ответа",
       "waitingFollowUp": "Ждёт продолжения",
       "finished": "Агент закончил работу",
-      "other": "Запуск: {status}"
+      "other": "Запуск: {status}",
+      "scheduled": "Ждёт времени запуска"
     },
     "keyMetrics": "Ключевые метрики",
     "budget": "Бюджет",
@@ -1779,7 +1879,10 @@
     "selectModel": "Выберите модель",
     "changeModel": "Сменить",
     "executionInProgress": "Выполняется",
-    "executionAwaitingFollowUp": "Ждёт продолжения"
+    "executionAwaitingFollowUp": "Ждёт продолжения",
+    "startsAt": "Запуск",
+    "builtinTools": "Встроенные инструменты",
+    "toolFailed": "с ошибкой: {count}"
   },
   "Workplace": {
     "hero": {
@@ -1888,7 +1991,7 @@
     "noTriggers": "Триггеров пока нет",
     "noTriggersDescription": "Триггер запускает задачу без вас — по расписанию или когда во внешней системе что-то произошло.",
     "noTriggersHintCron": "Запускайте агента по расписанию — например, ночной отчёт",
-    "noTriggersHintWebhook": "Стартуйте задачу по входящему вебхуку",
+    "noTriggersHintWebhook": "Запускайте задачу по событиям, пришедшим в поток",
     "noTriggersHintHistory": "Каждое срабатывание пишется в историю — видно, что и почему запускалось",
     "noMatchingTriggers": "Нет триггеров, соответствующих поиску",
     "noMatchingTriggersDescription": "Нет триггеров, соответствующих поиску \"{query}\"",
@@ -1908,7 +2011,7 @@
     },
     "type": {
       "cron": "Cron",
-      "webhook": "Webhook"
+      "stream": "Поток"
     },
     "status": {
       "active": "Активен",
@@ -1925,30 +2028,14 @@
       "namePlaceholder": "напр., Ежедневный генератор отчётов",
       "triggerDescription": "Описание",
       "triggerDescriptionPlaceholder": "Что делает эта автоматизация",
-      "credentialsUnchanged": "Оставьте реквизиты пустыми, чтобы сохранить текущие. Для замены заполните все поля реквизитов.",
       "triggerType": "Тип триггера",
       "selectType": "Выберите тип триггера",
-      "catalogLoadFailed": "Не удалось загрузить типы триггеров. Обновите страницу или попробуйте позже.",
       "agent": "Агент",
       "selectAgent": "Выберите агента",
       "agentRequired": "Выберите агента, который будет выполнять автоматизацию",
       "cronExpression": "Выражение Cron",
       "cronPlaceholder": "напр., 0 9 * * 1-5",
       "timezone": "Часовой пояс",
-      "webhookType": "Тип Webhook",
-      "selectWebhookType": "Выберите тип webhook",
-      "webhookTypes": {
-        "generic": "Универсальный",
-        "slack": "Slack",
-        "discord": "Discord",
-        "telegram": "Telegram",
-        "github": "GitHub",
-        "gmail": "Gmail",
-        "teams": "Microsoft Teams",
-        "linear": "Linear",
-        "stripe": "Stripe"
-      },
-      "allowedMethods": "Разрешённые методы",
       "taskParameters": "Параметры задачи",
       "failureThreshold": "Порог ошибок",
       "failureThresholdPlaceholder": "напр., 3",
@@ -1956,16 +2043,12 @@
       "updateButton": "Обновить триггер",
       "editTitle": "Редактировать триггер",
       "schedule": "Расписание",
-      "eventTypes": "Типы событий",
-      "eventTypesHint": "Выберите, какие события запускают выполнение. Оставьте пустым, чтобы принимать все.",
       "automationName": "Название автоматизации",
       "automationNamePlaceholder": "Новая автоматизация",
       "suggestedName": "Автоматизация {type}",
       "taskInstructions": "Задача",
       "whenToRun": "Когда запускать",
       "runSettings": "Настройки запуска",
-      "allEvents": "Все события",
-      "selectedEventsCount": "Выбрано: {count}",
       "execution": {
         "title": "Контекст выполнения",
         "orchestrator": "Оркестратор",
@@ -2008,8 +2091,6 @@
       "taskFilesPlaceholder": "Выбрать файлы",
       "taskSkills": "Дополнительные навыки",
       "taskMcps": "Дополнительные MCP",
-      "taskTextFromChannel": "Текст здесь — это инструкция, которой следует агент; входящее сообщение прикладывается к задаче как событие. Оставьте его пустым, чтобы само сообщение стало заданием.",
-      "taskTextFromCall": "Текст здесь — это инструкция, которой следует агент; входящий вызов прикладывается к задаче как событие. Оставьте его пустым, чтобы сам вызов стал заданием.",
       "taskTextFromStream": "Данные события прикладываются к задаче автоматически. Текст здесь — это инструкция, которой следует агент.",
       "taskFilesHint": "Выберите файлы рабочего пространства для каждой задачи.",
       "taskMcpsHint": "Выберите MCP-серверы, доступные каждой задаче.",
@@ -2017,17 +2098,25 @@
       "loadingResources": "Загрузка…",
       "resourcesLoadFailed": "Не удалось загрузить ресурсы. Обновите список.",
       "removeResource": "Убрать {name}",
-      "selectCredentialsHint": "Выберите секреты рабочего пространства для подключения канала.",
-      "credentialsLaterHint": "Без подключения автоматизация создастся, но ничего не будет получать. Секреты можно добавить позже.",
-      "selectSecret": "Выбрать секрет",
-      "keepExistingSecret": "Оставить текущий секрет",
-      "noSecrets": "Секретов пока нет.",
-      "newSecret": "Новый секрет",
-      "createdWithSecretTitle": "Вебхук создан",
       "stream": "Поток",
       "streamHint": "Срабатывает на события, пришедшие в этот поток после создания триггера.",
       "noStreams": "Потоков пока нет",
       "streamsLoadFailed": "Не удалось загрузить потоки",
+      "session": {
+        "continue": "Продолжать разговор",
+        "continueHint": "Следующее событие той же сессии (чат, тред) попадает в задачу, которая его ждёт.",
+        "eachEventHint": "Каждое событие запускает свою задачу.",
+        "idleTimeout": "Сколько задача ждёт следующего события"
+      },
+      "batch": {
+        "title": "Собирать события в пачку",
+        "onHint": "Триггер срабатывает один раз со всеми событиями пачки: когда истекло окно или пачка заполнилась, что наступит раньше.",
+        "offHint": "Каждое событие запускает триггер отдельно.",
+        "window": "Окно",
+        "noWindow": "Без ограничения по времени",
+        "maxEvents": "Срабатывать на",
+        "maxEventsPlaceholder": "событиях"
+      },
       "cron": {
         "frequency": {
           "every_minute": "Минуты",
@@ -2054,11 +2143,7 @@
         "runsWeekly": "Запуск еженедельно: {day}, {time}",
         "runsMonthly": "Запуск {day}-го числа каждого месяца в {time}",
         "runsCustom": "Своё cron-выражение"
-      },
-      "typeKinds": "Виды",
-      "typeItems": "Типы",
-      "typeSearch": "Поиск по типам триггеров",
-      "typeNotFound": "Типы не найдены"
+      }
     },
     "detail": {
       "overview": "Обзор",
@@ -2104,18 +2189,12 @@
       "noneAttached": "Не прикреплено",
       "whenToRun": "Когда запускать",
       "timezone": "Часовой пояс",
-      "webhookUrl": "Webhook-эндпоинт",
-      "methods": "Методы",
-      "events": "События",
-      "allEvents": "Все события",
-      "eventsSelected": "выбрано: {count}",
       "failureThreshold": "Сбоев до отключения",
       "failureThresholdHint": "Сбоев подряд / порог",
       "ofRuns": "успешно {successful} из {total}",
       "noRuns": "Запусков ещё не было",
       "failedRuns": "сбоев: {count}",
       "failureWarning": "{count, plural, one {# сбой} few {# сбоя} other {# сбоев}} подряд из {threshold}",
-      "noSchedule": "Ожидает входящий запрос",
       "noScheduleStream": "Ожидает событий потока",
       "executionStatus": {
         "completed": "Завершено",
@@ -2126,7 +2205,8 @@
         "error": "Ошибка",
         "timeout": "Истекло время",
         "cancelled": "Отменено",
-        "skipped": "Пропущено"
+        "skipped": "Пропущено",
+        "batched": "В пачке"
       },
       "metricsLoadFailed": "Не удалось загрузить метрики",
       "executionsLoadFailed": "Не удалось загрузить список выполнений",
@@ -2137,20 +2217,19 @@
       "spendPerRun": "{cost} за запуск",
       "noCostedRuns": "Оплаченных запусков ещё не было",
       "cost": "Стоимость",
-      "signing": "Подпись запросов",
-      "signingStatus": {
-        "signed": "Подписан",
-        "unsigned": "Без подписи",
-        "unsupported": "Не проверяется"
-      },
-      "signingSignedHint": "Запросы без правильной подписи отклоняются.",
-      "signingUnsignedHint": "Любой, кто знает этот адрес, может запустить агента. Создайте секрет подписи и подписывайте им каждый запрос.",
-      "signingUnsignedChannelHint": "Любой, кто знает этот адрес, может запустить агента. Сохраните учётные данные канала ещё раз, чтобы зарегистрировать секрет.",
-      "signingUnsupportedHint": "AgentArea пока не проверяет запросы этого провайдера, поэтому любой, кто знает адрес, может запустить агента. Не публикуйте адрес.",
       "lastEvent": "Последнее событие",
       "noEventsYet": "Событий пока нет",
       "needsOwnerTitle": "Триггер остановлен",
       "needsOwnerBody": "Тот, кто его настроил, больше не может запускать этого агента. Верните ему доступ и снова включите триггер или создайте его заново от имени того, кто может.",
+      "session": "Разговор",
+      "sessionContinues": "Следующее событие сессии попадает в ту же задачу, она ждёт его {timeout}",
+      "sessionEachEvent": "Каждое событие запускает свою задачу",
+      "sessionDefault": "Как решают источники потока: чаты продолжают разговор, остальные запускают задачу на каждое событие",
+      "batch": "Пачка",
+      "batchOff": "Срабатывает на каждое событие",
+      "batchWindowOrCount": "Одна задача на события за {window}, или раньше, если набралось {count}",
+      "batchWindow": "Одна задача на события за каждые {window}",
+      "batchCount": "Одна задача на каждые {count} событий",
       "columnStatus": "Статус",
       "columnStarted": "Запуск",
       "columnDuration": "Длительность",
@@ -2179,42 +2258,22 @@
       "loadFailed": "Не удалось загрузить триггер",
       "enableFailed": "Не удалось включить триггер",
       "disableFailed": "Не удалось отключить триггер",
-      "runFailed": "Не удалось запустить триггер",
-      "rotateSigningSecretFailed": "Не удалось создать секрет подписи"
-    },
-    "signing": {
-      "sign": "Создать секрет подписи",
-      "rotate": "Сменить секрет",
-      "signTitle": "Требовать подпись запросов?",
-      "signDescription": "С этого момента запросы без правильной подписи будут отклоняться. Настройте всех отправителей на подпись новым секретом.",
-      "signConfirm": "Создать секрет",
-      "rotateTitle": "Сменить секрет подписи?",
-      "rotateDescription": "Запросы, подписанные текущим секретом, начнут отклоняться сразу после создания нового. Сразу обновите всех отправителей.",
-      "rotateConfirm": "Сменить секрет",
-      "issuedTitle": "Секрет подписи создан",
-      "issuedDescription": "Подписывайте этим секретом каждый запрос к вебхуку. Запросы без подписи отклоняются.",
-      "secretLabel": "Секрет подписи",
-      "secretWarning": "Показывается один раз. Скопируйте его сейчас и сохраните там, где работает отправитель.",
-      "headerLabel": "Заголовок",
-      "valueLabel": "Подпись",
-      "valueText": "HMAC-{algorithm} от исходного тела запроса с этим секретом, в шестнадцатеричном виде.",
-      "valueTextWithPrefix": "HMAC-{algorithm} от исходного тела запроса с этим секретом, в шестнадцатеричном виде, после префикса {prefix}.",
-      "exampleLabel": "Пример",
-      "done": "Готово"
+      "runFailed": "Не удалось запустить триггер"
     }
   },
   "EventsPage": {
     "title": "События",
-    "description": "Всё, что пришло, и что с этим сделал каждый подписчик",
+    "description": "Всё, что пришло, и что с этим сделала платформа",
     "searchPlaceholder": "Поиск потоков",
     "streams": {
       "name": "Поток",
-      "retention": "Хранится",
-      "retentionDays": "{count, plural, one {# день} few {# дня} many {# дней} other {# дня}}",
-      "created": "Создан"
+      "created": "Создан",
+      "platformName": "Платформа",
+      "platformLabel": "Пишет платформа",
+      "platformDescription": "Что произошло с задачами рабочего пространства: завершены, упали, отменены или ждут одобрения или ответа. Поставьте на него триггер, чтобы реагировать на исход работы другого агента."
     },
     "noStreams": "Потоков пока нет",
-    "noStreamsDescription": "Поток появляется у каждого вебхук-триггера, можно создать и свой.",
+    "noStreamsDescription": "Поток собирает события своих источников. Создайте поток и добавьте в него источник.",
     "noMatchingStreams": "Нет подходящих потоков",
     "feed": {
       "received": "Получено",
@@ -2231,7 +2290,8 @@
       "skipped": "Пропущено",
       "error": "Ошибка",
       "unheard": "Никто не слушал",
-      "unknown": "Неизвестный итог"
+      "unknown": "Неизвестный итог",
+      "batched": "В пачке"
     },
     "detail": {
       "title": "Событие {sequence}",
@@ -2248,7 +2308,20 @@
       "gone": "Это событие больше не хранится.",
       "triggersLoadFailed": "Не удалось загрузить названия триггеров",
       "subscriptionsLoadFailed": "Не удалось загрузить ссылки пересылки",
-      "streamsLoadFailed": "Не удалось загрузить названия потоков"
+      "streamsLoadFailed": "Не удалось загрузить названия потоков",
+      "source": "Источник",
+      "noSource": "Без источника",
+      "kind": "Тип",
+      "key": "Ключ",
+      "session": "Сессия",
+      "noSession": "Нет: каждое событие — своя задача",
+      "sender": "Отправитель",
+      "occurredAt": "Произошло",
+      "attachments": "Вложения",
+      "openAttachment": "Открыть",
+      "fetchedByTask": "Загружается, когда задача его откроет",
+      "bodyStored": "Тело сохранено файлом",
+      "processor": "Процессор"
     },
     "sources": {
       "title": "Источники",
@@ -2256,7 +2329,6 @@
       "add": "Добавить источник",
       "signedWith": "Подпись",
       "signedWithHeader": "Подпись в {header}",
-      "ownedByTrigger": "Принадлежит триггеру",
       "deleteTitle": "Удалить источник",
       "deleteDescription": "{name} перестанет доставлять события в этот поток, а его URL начнёт отвечать 400. Уже записанные события останутся.",
       "createFailed": "Не удалось добавить источник",
@@ -2271,16 +2343,145 @@
         "selectSecret": "Выберите секрет",
         "noSecrets": "Секретов пока нет",
         "newSecret": "Новый секрет",
-        "secretsLoadFailed": "Не удалось загрузить секреты воркспейса"
+        "secretsLoadFailed": "Не удалось загрузить секреты воркспейса",
+        "kind": "Как приходят события",
+        "kinds": {
+          "webhook": "Провайдер присылает их на URL",
+          "poll": "AgentArea забирает их сама"
+        },
+        "issuedHint": "Оставьте пустым — AgentArea сгенерирует значение и покажет его один раз после добавления.",
+        "templates": {
+          "kind": "Тип события",
+          "kindPlaceholder": "'{body:trigger.name}'.'{body:event.op}'",
+          "key": "Ключ события",
+          "keyPlaceholder": "'{body:id}'",
+          "session_key": "Сессия",
+          "session_keyPlaceholder": "'{body:conversation.id}'",
+          "hint": "Шаблоны читают запрос: '{body:a.b}' — поле тела, '{header:name}' — заголовок; текст между ними остаётся как есть.",
+          "noKeyHint": "Без ключа повторно отправленный запрос снова запустит агента."
+        },
+        "events": "События, которые может прислать провайдер",
+        "eventsHint": "Включите их у провайдера: всё, что он пришлёт, попадёт в поток.",
+        "mcp": {
+          "server": "MCP-сервер",
+          "serverPlaceholder": "Выберите сервер с событиями",
+          "loadingServers": "Загрузка MCP-серверов...",
+          "serversLoadFailed": "Не удалось загрузить MCP-серверы пространства",
+          "noServers": "Ни один подключённый MCP-сервер пока не предлагает событий. Подключите такой сервер или проверьте его, чтобы получить список событий.",
+          "noServersLink": "Открыть подключения",
+          "eventCount": "{count, plural, one {# событие} few {# события} many {# событий} other {# события}}",
+          "listingFailed": "Не удалось получить события: {error}",
+          "event": "Событие",
+          "eventPlaceholder": "Выберите событие",
+          "mode": "Как приходят события",
+          "modePlaceholder": "Выберите, как приходят события",
+          "noMode": "Это событие нельзя получить ни через вебхук, ни опросом, поэтому источник его не примет.",
+          "modes": {
+            "webhook": {
+              "label": "Вебхук",
+              "hint": "MCP-сервер сам отправляет каждое событие в AgentArea; AgentArea должна быть доступна по публичному HTTPS."
+            },
+            "poll": {
+              "label": "Опрос",
+              "hint": "AgentArea по расписанию запрашивает у MCP-сервера новые события; работает и за файрволом."
+            }
+          },
+          "arguments": "Аргументы",
+          "choicePlaceholder": "Выберите значение",
+          "notSet": "Не задано",
+          "jsonPlaceholder": "Значение в JSON",
+          "problems": {
+            "number": "Введите число",
+            "integer": "Введите целое число",
+            "json": "Некорректный JSON"
+          }
+        }
       },
       "created": {
         "title": "Источник добавлен",
         "description": "Передайте этот URL отправителю. Каждый запрос на него проверяется перед записью.",
         "done": "Готово",
         "urlLabel": "URL вебхука",
-        "secretLabel": "Секрет подписи",
-        "secretWarning": "Скопируйте его сейчас: больше он не будет показан."
-      }
+        "secretWarning": "Скопируйте его сейчас: больше он не будет показан.",
+        "mcpWebhook": "AgentArea подписалась на событие на MCP-сервере; каждое присланное событие проверяется и записывается в этот поток.",
+        "mcpPoll": "AgentArea опрашивает MCP-сервер; каждое новое событие записывается в этот поток."
+      },
+      "polledAt": "Опрошен {time}",
+      "notPolledYet": "Ещё не опрашивался",
+      "pollError": "Последний опрос не удался: {error}"
+    },
+    "streamsTitle": "Потоки",
+    "streamsDescription": "Именованные потоки событий, их источники и пересылки",
+    "live": {
+      "on": "В эфире",
+      "connecting": "Подключение",
+      "off": "Переподключение"
+    },
+    "streamsMenu": {
+      "button": "Потоки",
+      "all": "Все потоки",
+      "empty": "Потоков пока нет"
+    },
+    "result": {
+      "all": "Все",
+      "queued": "В очереди",
+      "processing": "Обрабатывается",
+      "handled": "Обработано",
+      "error": "Ошибка",
+      "no_handlers": "Нет обработчиков",
+      "skipped": "Пропущено",
+      "unknown": "Неизвестно"
+    },
+    "list": {
+      "filters": "Фильтры",
+      "stream": "Поток",
+      "provider": "Провайдер",
+      "kind": "Тип",
+      "kindPlaceholder": "order.* или order.paid",
+      "result": "Результат",
+      "session": "Сессия",
+      "sender": "Отправитель",
+      "clear": "Сбросить фильтры",
+      "all": "Все",
+      "noProvider": "Без источника",
+      "today": "Сегодня",
+      "yesterday": "Вчера",
+      "newEvents": "{count, plural, one {# новое событие} few {# новых события} many {# новых событий} other {# новых событий}}",
+      "empty": "В это рабочее пространство пока ничего не пришло.",
+      "noneMatching": "Нет событий под эти фильтры.",
+      "older": "Более ранние события",
+      "queuedFor": "в очереди · {age}",
+      "tasks": "{count, plural, one {# задача} few {# задачи} many {# задач} other {# задач}}",
+      "skipped": "пропущено: {count}",
+      "errors": "{count, plural, one {# ошибка} few {# ошибки} many {# ошибок} other {# ошибок}}",
+      "skippedOf": "пропущено {done}/{total}",
+      "filterSession": "Показать всю сессию",
+      "unknownStream": "Удалённый поток",
+      "showPlatform": "Показывать события платформы"
+    },
+    "panel": {
+      "handlers": "Обработчики",
+      "pending": "{count, plural, one {Ещё # подписчик не ответил} few {Ещё # подписчика не ответили} many {Ещё # подписчиков не ответили} other {Ещё # подписчиков не ответили}}",
+      "noHandlers": "Ни одна подписка этого потока не принимает это событие.",
+      "queued": "Ещё не маршрутизировано.",
+      "trigger": "Триггер",
+      "forward": "Пересылка",
+      "deleted": "Удалённая подписка",
+      "task": "Задача",
+      "derived": "Переслано как",
+      "openInStream": "Открыть в его потоке",
+      "close": "Закрыть",
+      "gone": "Это событие больше не хранится.",
+      "title": "Событие",
+      "processor": "Процессор"
+    },
+    "processors": {
+      "title": "Процессоры",
+      "writesTo": "Пишет в",
+      "kinds": "для {kinds}",
+      "everyEvent": "для каждого события",
+      "createdAt": "Добавлен {time}",
+      "code": "Код (processor.py)"
     }
   },
   "NetworkPage": {
@@ -2834,7 +3035,8 @@
     "perDay": "×{count}/день",
     "fromDate": "с {date}",
     "moreRuns": "ещё {count}",
-    "runCount": "Запланировано запусков: {count}"
+    "runCount": "Запланировано запусков: {count}",
+    "estimatePart": "в т. ч. ≈ {amount} — оценка"
   },
   "BudgetsPage": {
     "couldntLoadTitle": "Не удалось загрузить данные бюджета",
@@ -3228,7 +3430,8 @@
         "cap": "Лимит",
         "approval": "Согласование",
         "deny": "Запрет",
-        "safety": "Безопасность"
+        "safety": "Безопасность",
+        "install": "Установки"
       },
       "scope": {
         "policyDescription": "Политика распространяется на {scope}. Выдача доступа к инструментам настраивается на странице <accessView>«Доступ»</accessView>.",
@@ -3315,7 +3518,9 @@
         "toolRequired": "Добавьте инструмент.",
         "safetyCheckRequired": "Включите хотя бы одну проверку безопасности.",
         "approverUnsupported": "Согласовывать могут только участники рабочего пространства — удалите роли и группы из согласующих.",
-        "ruleInvalid": "Правило № {number} («{effect}»): {error}"
+        "ruleInvalid": "Правило № {number} («{effect}»): {error}",
+        "installTargetRequired": "Выберите хотя бы один реестр или уровень доверия.",
+        "installWorkspaceOnly": "Правила установки действуют на всё рабочее пространство, а не на агентов. Переключите область на всех агентов."
       },
       "summary": {
         "agentScopePending": "агенты не выбраны",
@@ -3332,6 +3537,18 @@
         "rules": "Правила",
         "pending": "ожидает",
         "compiledOutput": "Сформированная политика"
+      },
+      "install": {
+        "effect": "Правило",
+        "deny": "Запретить установку из",
+        "allow": "Разрешить установку только из",
+        "semantics": "Запрет всегда сильнее. Если есть хотя бы одно разрешающее правило, устанавливать можно только из того, что в нём названо.",
+        "trustLevels": "Уровни доверия",
+        "registries": "Реестры",
+        "githubImport": "Импорт напрямую с GitHub",
+        "githubImportType": "ссылка на навык",
+        "workspaceOnly": "Действует на каждую установку в этом рабочем пространстве.",
+        "manageRegistries": "Управление реестрами"
       }
     }
   },
@@ -3514,7 +3731,9 @@
       "computeCpu": "CPU",
       "computeMemory": "Память",
       "computePerHour": "В час, пока запущен",
-      "computePerMonth": "В месяц, если работает постоянно"
+      "computePerMonth": "В месяц, если работает постоянно",
+      "vendorCost": "{price} — стоимость у поставщика, без наценки",
+      "priceUnavailable": "{price} · цена недоступна, стоимость у поставщика без наценки"
     }
   },
   "BundleInstall": {
@@ -3613,6 +3832,168 @@
   "ToolPart": {
     "blockedByPolicy": "Заблокировано политикой",
     "rejectedByApprover": "Отклонено согласующим"
+  },
+  "ConnectionCost": {
+    "title": "Стоимость вызова",
+    "edit": "Изменить",
+    "save": "Сохранить",
+    "saving": "Сохраняем…",
+    "cancel": "Отмена",
+    "saveFailed": "Не удалось сохранить стоимость",
+    "hint": "Сколько стоит вызов этого подключения на вашем ключе. Лимиты расходов учитывают её; счёт выставляет поставщик.",
+    "mode": "Стоимость",
+    "amount": "Сумма",
+    "currency": "Валюта",
+    "unit": "Единица",
+    "unitPlaceholder": "страница, фраза, элемент",
+    "quantity": "Откуда считать единицы (аргумент или $.path в ответе)",
+    "path": "Поле в ответе ($.path)",
+    "modes": {
+      "connector": "Как объявляет коннектор",
+      "per_call": "За вызов",
+      "per_unit": "За единицу",
+      "from_response": "Из поля ответа",
+      "free": "Бесплатно"
+    },
+    "summary": {
+      "connector": "Как объявляет коннектор.",
+      "per_call": "{amount} {currency} за вызов.",
+      "per_unit": "{amount} {currency} за {unit}, количество из {quantity}.",
+      "from_response": "Берётся из {path} в ответе, в {currency}.",
+      "free": "Бесплатно."
+    }
+  },
+  "Registries": {
+    "trust": {
+      "official": "Официальный",
+      "verified": "Проверенный",
+      "community": "Сообщество",
+      "private": "Приватный"
+    },
+    "title": "Реестры",
+    "description": "Источники, из которых каталог берёт навыки и агентов, помимо реестров платформы. Установки из них закрепляются за версией и подчиняются политикам.",
+    "add": "Добавить реестр",
+    "loadFailed": "Не удалось загрузить реестры",
+    "adminOnly": "Добавлять, изменять, синхронизировать и удалять реестры может только администратор рабочего пространства.",
+    "syncDone": "{name} синхронизирован: элементов {total}, новых {added}.",
+    "retired": "{name} выведен из каталога. Установленных элементов, которые им пользуются и продолжают работать: {count}.",
+    "table": {
+      "name": "Название",
+      "source": "Источник",
+      "type": "Тип",
+      "trust": "Доверие",
+      "items": "Элементы",
+      "sync": "Синхронизация"
+    },
+    "sync": {
+      "off": "Выключен",
+      "failed": "Ошибка синхронизации",
+      "synced": "Синхронизирован",
+      "never": "Не синхронизирован"
+    },
+    "actions": {
+      "sync": "Синхронизировать",
+      "edit": "Изменить",
+      "delete": "Удалить"
+    },
+    "delete": {
+      "title": "Удалить реестр?",
+      "description": "{name} исчезнет из каталога. Уже установленные из него навыки продолжат работать; если такие есть, реестр будет выведен из каталога, а не удалён."
+    },
+    "empty": {
+      "title": "Реестров пока нет",
+      "description": "Добавьте свой источник навыков или агентов, и каталог покажет их рядом с реестрами платформы.",
+      "hintGithub": "Репозиторий GitHub, папки которого — навыки: owner/repo, при желании с веткой и папкой.",
+      "hintIndex": "URL индекса в формате платформы, например файл в вашем бакете.",
+      "hintPolicy": "Из каких реестров можно устанавливать, задаётся в политиках."
+    },
+    "errors": {
+      "invalid": "Проверьте выделенные поля.",
+      "createFailed": "Не удалось добавить реестр",
+      "updateFailed": "Не удалось сохранить реестр",
+      "deleteFailed": "Не удалось удалить реестр",
+      "syncFailed": "Не удалось синхронизировать реестр"
+    },
+    "form": {
+      "createTitle": "Добавить реестр",
+      "editTitle": "Изменить реестр",
+      "description": "Источник, из которого каталог берёт навыки или агентов.",
+      "create": "Добавить реестр",
+      "save": "Сохранить",
+      "createFailed": "Не удалось добавить реестр",
+      "updateFailed": "Не удалось сохранить реестр",
+      "name": "Название",
+      "namePlaceholder": "acme-skills",
+      "nameRequired": "Укажите название реестра",
+      "descriptionLabel": "Описание",
+      "sourceType": "Источник",
+      "sourceTypes": {
+        "github": "Репозиторий GitHub",
+        "url": "URL индекса"
+      },
+      "repository": "Репозиторий",
+      "repositoryPlaceholder": "owner/repo",
+      "indexUrl": "URL индекса",
+      "indexUrlPlaceholder": "https://example.com/registry/skills.json",
+      "sourceRequired": "Укажите, откуда читать реестр",
+      "ref": "Ветка, тег или коммит",
+      "refPlaceholder": "Ветка по умолчанию",
+      "path": "Папка",
+      "pathPlaceholder": "Корень репозитория",
+      "registryType": "Содержит",
+      "registryTypes": {
+        "skills": "Навыки",
+        "agents": "Агенты"
+      },
+      "trust": "Доверие",
+      "credentials": "Учётные данные",
+      "credentialsHint": "Секрет рабочего пространства с токеном для чтения приватного источника. Реестр хранит ссылку на него, а не копию.",
+      "credentialsNone": "Нет (публичный источник)",
+      "credentialsLoading": "Загрузка секретов…",
+      "credentialsSearch": "Поиск секретов…",
+      "credentialsEmpty": "Секреты не найдены.",
+      "credentialsCreate": "Создать секрет",
+      "credentialsClear": "Очистить",
+      "active": "Активен: показывается в каталоге и синхронизируется",
+      "mode": "Содержимое",
+      "modes": {
+        "mirror": "Зеркало: копировать навыки при синхронизации",
+        "upstream": "Источник: загружать при первой установке"
+      },
+      "modeHint": "Зеркало хранит содержимое каждого навыка у нас, поэтому установки и запуски не обращаются к источнику. Режим источника хранит только индекс и загружает навык при первой установке.",
+      "modeLocked": "Реестр навыков с учётными данными всегда зеркалируется: учётные данные используются для синхронизации, а не для установки."
+    },
+    "modes": {
+      "mirror": "Зеркало",
+      "upstream": "Загрузка при установке"
+    },
+    "workspaceSection": {
+      "title": "Реестры рабочего пространства",
+      "description": "Источники, которые добавили администраторы этого рабочего пространства. Их видит только оно."
+    },
+    "platformSection": {
+      "title": "Реестры платформы",
+      "description": "Их видит каждое рабочее пространство. Ими управляет оператор платформы в конфигурации развёртывания, поэтому изменить их здесь нельзя.",
+      "empty": "У платформы нет своих реестров.",
+      "loadFailed": "Не удалось загрузить реестры платформы"
+    },
+    "types": {
+      "mcp_servers": "Серверы MCP",
+      "skills": "Навыки",
+      "llm_providers": "Провайдеры LLM",
+      "llm_models": "Модели LLM",
+      "agents": "Агенты",
+      "bundles": "Бандлы"
+    }
+  },
+  "CatalogFetchErrors": {
+    "removedUpstream": "Удалён в источнике",
+    "moved": "Перемещён или изменён в источнике",
+    "rateLimited": "Превышен лимит запросов, повторите позже",
+    "refusedByPolicy": "Запрещено политикой",
+    "customized": "Изменён в этом рабочем пространстве",
+    "notFromCatalog": "Установлен не из каталога",
+    "sourceUnreachable": "Источник недоступен"
   },
   "ModelSelector": {
     "placeholder": "Выберите модель",

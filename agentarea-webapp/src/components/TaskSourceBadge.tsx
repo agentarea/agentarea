@@ -10,8 +10,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
-import { getTaskSource } from "@/lib/taskSource";
+import { sourceTypeBySlug, type SourceType } from "@/lib/sourceTypes";
+import { getTaskSource, type TaskSourceKind } from "@/lib/taskSource";
+
+/** Kinds whose label is a word to translate; the rest are product names. */
+const KIND_LABEL_KEYS: Partial<Record<TaskSourceKind, string>> = {
+  manual_run: "manualRun",
+  delegation: "delegation",
+  schedule: "schedule",
+  event: "event",
+  trigger: "trigger",
+};
 
 interface TaskSourceBadgeProps {
   parameters?: Record<string, unknown> | null;
@@ -23,8 +32,8 @@ interface TaskSourceBadgeProps {
    * delegating agent). An id missing from the map is one nothing could resolve.
    */
   principalNames?: Record<string, string>;
-  /** Names and draws the channel. Which channels exist is its business, not ours. */
-  catalog?: TriggerCatalogEntry[];
+  /** Names and draws the event's provider. Which providers exist is its business, not ours. */
+  sourceTypes?: SourceType[];
   size?: "default" | "sm";
   className?: string;
 }
@@ -33,7 +42,7 @@ export function TaskSourceBadge({
   parameters,
   createdBy,
   principalNames = {},
-  catalog = [],
+  sourceTypes = [],
   size = "sm",
   className,
 }: TaskSourceBadgeProps) {
@@ -55,16 +64,16 @@ export function TaskSourceBadge({
     source.detail ??
     (source.principalId ? principalNames[source.principalId] : undefined);
 
-  const entry = source.channel
-    ? catalog.find(
-        (item) =>
-          item.webhook_type === source.channel || item.id === source.channel
-      )
-    : undefined;
+  const entry = sourceTypeBySlug(sourceTypes, source.sourceType);
   // One tone for every source. A per-source palette cannot survive an open set
   // — there is no colour to hand a channel that did not exist when this shipped
-  // — and it never encoded anything anyway.
-  const label = entry?.name ?? source.label;
+  // — and it never encoded anything anyway. A slug the catalog no longer has
+  // is still shown as the slug rather than as an anonymous "Event".
+  const kindKey = KIND_LABEL_KEYS[source.kind];
+  const label =
+    entry?.name ??
+    source.sourceType ??
+    (kindKey ? t(`sourceKind.${kindKey}`) : source.label);
 
   const badge = (
     <Badge variant="zinc" size={size} className={className}>

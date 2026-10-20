@@ -1,20 +1,15 @@
 """Simple integration tests for trigger management API endpoints."""
 
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from agentarea_api.api.deps.services import (
-    get_secret_manager,
-    get_trigger_health_check,
-    get_trigger_service,
-)
+from agentarea_api.api.deps.services import get_trigger_health_check, get_trigger_service
 from agentarea_api.api.v1.a2a_auth import require_a2a_execute_auth
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
-from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
+from agentarea_triggers.domain.models import CronTrigger
 from fastapi.testclient import TestClient
 
 
@@ -79,117 +74,27 @@ def override_trigger_dependencies(mock_trigger_service, mock_auth_context, mock_
     async def _override_health_checker():
         return mock_health_checker
 
-    async def _override_secret_manager():
-        return AsyncMock()
-
     app.dependency_overrides[get_trigger_service] = _override_trigger_service
     app.dependency_overrides[require_a2a_execute_auth] = _override_auth
     app.dependency_overrides[get_trigger_health_check] = _override_health_checker
-    app.dependency_overrides[get_secret_manager] = _override_secret_manager
     yield
     app.dependency_overrides.pop(get_trigger_service, None)
     app.dependency_overrides.pop(require_a2a_execute_auth, None)
     app.dependency_overrides.pop(get_trigger_health_check, None)
-    app.dependency_overrides.pop(get_secret_manager, None)
 
 
 def create_mock_trigger():
-    """Create a mock trigger object without rate limiting fields."""
-    mock_trigger = MagicMock()
-    mock_trigger.id = uuid4()
-    mock_trigger.name = "Test Trigger"
-    mock_trigger.trigger_type = "cron"
-    mock_trigger.is_active = True
-    mock_trigger.cron_expression = "0 9 * * *"
-    mock_trigger.agent_id = uuid4()
-    mock_trigger.description = "A test trigger"
-    mock_trigger.task_parameters = {"param1": "value1"}
-    mock_trigger.conditions = {"condition1": "value1"}
-    mock_trigger.created_at = datetime.utcnow()
-    mock_trigger.updated_at = datetime.utcnow()
-    mock_trigger.created_by = "test_user"
-    mock_trigger.failure_threshold = 5
-    mock_trigger.consecutive_failures = 0
-    mock_trigger.last_execution_at = None
-    mock_trigger.needs_new_owner_at = None
-    mock_trigger.timezone = "UTC"
-    mock_trigger.next_run_time = None
-    mock_trigger.webhook_id = None
-    mock_trigger.allowed_methods = None
-    mock_trigger.webhook_type = None
-    mock_trigger.validation_rules = None
-    mock_trigger.webhook_config = None
-    mock_trigger.event_types = []
-    mock_trigger.data_extractor = None
-    mock_trigger.has_channel_credentials = False
-    return mock_trigger
-
-
-class UnreadableSecretManager(BaseSecretManager):
-    """A store that still holds the credential but can no longer read it.
-
-    What a rotated ``AGENTAREA_SECRET_ENCRYPTION_KEY`` leaves behind: the row is
-    still there, its ciphertext no longer decrypts. Deliberately does not
-    override ``has_secret``, so the presence check falls back to reading the
-    value — the worst case a backend can put the endpoint in.
-    """
-
-    async def get_secret(self, secret_name: str) -> str | None:
-        raise ValueError("Failed to decrypt secret. Key may have changed.")
-
-    async def set_secret(self, secret_name: str, secret_value: str) -> None:
-        raise AssertionError("reading a trigger must not write secrets")
-
-    async def delete_secret(self, secret_name: str) -> bool:
-        raise AssertionError("reading a trigger must not delete secrets")
-
-    def external_ref(self, secret_name: str) -> str | None:
-        return None
-
-
-@pytest.fixture
-def unreadable_secrets():
-    """Point the API at a secret store whose values cannot be read."""
-
-    async def _override():
-        return UnreadableSecretManager()
-
-    app.dependency_overrides[get_secret_manager] = _override
-    yield
-    app.dependency_overrides.pop(get_secret_manager, None)
-
-
-class TestTriggerCredentialFlagFailures:
-    """A credential that cannot be read must not take the trigger down.
-
-    ``has_channel_credentials`` is a display flag. Resolving it used to decrypt
-    the stored credential, so one unreadable secret turned every read of that
-    trigger into a 500 — which the webapp surfaced as "Failed to load triggers".
-    """
-
-    def test_get_trigger_survives_unreadable_credential(
-        self, client, mock_trigger_service, unreadable_secrets
-    ):
-        mock_trigger = create_mock_trigger()
-        mock_trigger.webhook_type = "telegram"
-        mock_trigger_service.get_trigger.return_value = mock_trigger
-
-        response = client.get(f"/v1/workspaces/acme/triggers/{mock_trigger.id}")
-
-        assert response.status_code == 200
-        assert response.json()["has_channel_credentials"] is False
-
-    def test_list_triggers_survives_unreadable_credential(
-        self, client, mock_trigger_service, unreadable_secrets
-    ):
-        mock_trigger = create_mock_trigger()
-        mock_trigger.webhook_type = "telegram"
-        mock_trigger_service.list_triggers.return_value = [mock_trigger]
-
-        response = client.get("/v1/workspaces/acme/triggers/")
-
-        assert response.status_code == 200
-        assert len(response.json()) == 1
+    """A cron trigger as the service returns it."""
+    return CronTrigger(
+        name="Test Trigger",
+        description="A test trigger",
+        agent_id=uuid4(),
+        task_parameters={"param1": "value1"},
+        conditions={"condition1": "value1"},
+        created_by="test_user",
+        cron_expression="0 9 * * *",
+        timezone="UTC",
+    )
 
 
 class TestTriggersAPISimple:

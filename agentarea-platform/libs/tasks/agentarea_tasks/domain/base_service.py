@@ -289,7 +289,7 @@ class BaseTaskService(ABC):
         """
         if workspace_id and user_id:
             tasks = await self.task_repository.list_tasks(
-                creator_scoped=True, limit=limit, offset=offset
+                limit=limit, offset=offset, created_by=user_id
             )
         elif workspace_id:
             tasks = await self.task_repository.list_tasks(limit=limit, offset=offset)
@@ -297,7 +297,7 @@ class BaseTaskService(ABC):
             tasks = await self.task_repository.get_by_agent_id(agent_id, limit, offset)
         elif user_id:
             tasks = await self.task_repository.list_tasks(
-                creator_scoped=True, limit=limit, offset=offset
+                limit=limit, offset=offset, created_by=user_id
             )
         elif status:
             tasks = await self.task_repository.get_by_status(status)

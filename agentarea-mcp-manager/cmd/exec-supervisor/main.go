@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -93,6 +94,14 @@ type executionResult struct {
 }
 
 func supervise(command []string, uid, gid uint32, timeout time.Duration, maxFileBytes uint64) (executionResult, error) {
+	account, err := user.LookupId(strconv.FormatUint(uint64(uid), 10))
+	if err != nil {
+		return executionResult{}, fmt.Errorf("look up command uid %d: %w", uid, err)
+	}
+	env, err := commandEnvironment(os.Environ(), account)
+	if err != nil {
+		return executionResult{}, err
+	}
 	childArgs := make([]string, 0, 4+len(command))
 	childArgs = append(childArgs, "child", "--max-file-bytes", strconv.FormatUint(maxFileBytes, 10), "--")
 	childArgs = append(childArgs, command...)
@@ -103,7 +112,7 @@ func supervise(command []string, uid, gid uint32, timeout time.Duration, maxFile
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 		Credential: &syscall.Credential{
@@ -348,4 +357,21 @@ func writeStatus(statusPath string, status execsupervisor.Status) error {
 	syncErr := directory.Sync()
 	closeErr := directory.Close()
 	return errors.Join(syncErr, closeErr)
+}
+
+// commandEnvironment swaps the identity the root caller passed down for the
+// command account's own, so tools that write under ~ write where they can.
+func commandEnvironment(inherited []string, account *user.User) ([]string, error) {
+	if !filepath.IsAbs(account.HomeDir) {
+		return nil, fmt.Errorf("command uid %s has no absolute home directory", account.Uid)
+	}
+	env := make([]string, 0, len(inherited)+3)
+	for _, item := range inherited {
+		switch name, _, _ := strings.Cut(item, "="); name {
+		case "HOME", "USER", "LOGNAME":
+			continue
+		}
+		env = append(env, item)
+	}
+	return append(env, "HOME="+account.HomeDir, "USER="+account.Username, "LOGNAME="+account.Username), nil
 }

@@ -16,6 +16,7 @@ from ..constants import EventTypes
 from .completion import CompletionMixin
 from .delegation import DelegationMixin
 from .disclosure import ToolDisclosureMixin
+from .patches import REFUSED_TOOL_CALL_ANNOUNCED_PATCH
 from .tools import ToolExecutionMixin
 from .user_input import UserInputMixin
 from .wait import WaitMixin
@@ -64,6 +65,7 @@ class ToolDispatchMixin(
                 f"and the policy allows {max_per_turn} per turn. Request at most "
                 f"{max_per_turn} at once."
             )
+            announce = workflow.patched(REFUSED_TOOL_CALL_ANNOUNCED_PATCH)
             for tool_call in tool_calls:
                 self.state.messages.append(
                     Message(
@@ -73,6 +75,8 @@ class ToolDispatchMixin(
                         name=tool_call.function["name"],
                     )
                 )
+                if announce:
+                    self._announce_tool_call(tool_call)
                 self._events.add_event(
                     EventTypes.TOOL_CALL_FAILED,
                     {

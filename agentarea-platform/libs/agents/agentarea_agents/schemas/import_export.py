@@ -37,7 +37,7 @@ class SkillYAML(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_source(self) -> "SkillYAML":
+    def validate_source(self) -> SkillYAML:
         """Ensure exactly one source is provided."""
         sources = [self.content, self.github, self.path]
         provided = [s for s in sources if s is not None]

@@ -7,7 +7,7 @@ name = "agentarea-mcp"
 version = "0.1.1"
 description = "MCP functionality for AgentArea"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "agentarea-common",
     "agentarea-agents-sdk",
@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.25.0",
     "httpx2>=2.5.0",
     "mcp>=2.2.0,<3",
+    "jsonschema>=4.23",
     "pyjwt>=2.15.1",
 ]
 

@@ -268,3 +268,26 @@ def test_reconciling_a_workspace_resource_again_updates_its_rows(handler, provid
         assert [str(i.id) for i in instances] == [
             handler.workspace_instance_id(config_id, "test-model")
         ]
+
+
+def test_a_models_cache_prices_are_written_and_an_omitted_one_kept(handler, provider_spec):
+    """Cached-read and cache-write prices reach the model spec; leaving one out keeps it."""
+    spec = _spec(provider_spec)
+    spec["models"][0]["cachedInputCostPerToken"] = 1.0e-7
+    spec["models"][0]["cacheCreationInputCostPerToken"] = 1.25e-6
+    handler.sync_provider_config(spec, api_key="t", cr_name="test-cr", namespace="agentarea")
+    del spec["models"][0]["cachedInputCostPerToken"]
+    handler.sync_provider_config(spec, api_key="t", cr_name="test-cr", namespace="agentarea")
+
+    with handler.engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "SELECT ms.cached_input_cost_per_token, ms.cache_creation_input_cost_per_token "
+                "FROM model_specs ms JOIN provider_specs ps ON ps.id = ms.provider_spec_id "
+                "WHERE ps.provider_key = :key AND ms.model_name = 'test-model'"
+            ),
+            {"key": provider_spec},
+        ).fetchone()
+
+    assert float(row[0]) == pytest.approx(1.0e-7)
+    assert float(row[1]) == pytest.approx(1.25e-6)

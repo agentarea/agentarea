@@ -11,10 +11,13 @@ contract is unchanged; only the storage shape changed.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Literal
+from uuid import UUID
 
+from agentarea_common.constants import GITHUB_IMPORT_REGISTRY_ID, REGISTRY_TRUST_LEVELS
 from agentarea_common.money import to_money
 from pydantic import (
     BaseModel,
@@ -103,9 +106,15 @@ _TARGET_KINDS = frozenset(
         "tokens",
         "execution",
         "content",
+        # Where catalog items may be installed from (ADR-0044): one registry by
+        # id, or every registry of a trust level.
+        "registry",
+        "registry_trust",
         "all",
     }
 )
+
+_INSTALL_TARGET_KINDS = ("registry", "registry_trust")
 
 
 def parse_target(selector: str) -> tuple[str, str | None]:
@@ -349,6 +358,10 @@ def assert_enforceable(rule: PolicyRule) -> None:
                 "spend, service, tokens, or execution"
             )
         _validate_params(rule, model)
+        return
+
+    if kind in _INSTALL_TARGET_KINDS:
+        _assert_install_rule(rule, kind, value)
         return
 
     if effect in (PolicyEffect.DENY, PolicyEffect.ALLOW):
@@ -629,6 +642,70 @@ def egress_allowlist_from_rules(rules: list[PolicyRule]) -> dict[str, list[str]]
             continue
         result.setdefault(rule.target, []).extend(str(h) for h in hosts)
     return {target: _dedupe(hosts) for target, hosts in result.items()}
+
+
+def _assert_install_rule(rule: PolicyRule, kind: str, value: str | None) -> None:
+    if rule.effect not in (PolicyEffect.ALLOW, PolicyEffect.DENY):
+        raise ValueError(f"only allow or deny apply to {rule.target!r}")
+    if rule.subject_type not in (PolicySubjectType.WORKSPACE, PolicySubjectType.USER):
+        raise ValueError(
+            f"{rule.target!r} decides installs, so it binds to the workspace or a user"
+        )
+    if kind == "registry":
+        if value == GITHUB_IMPORT_REGISTRY_ID:
+            return
+        try:
+            UUID(str(value))
+        except ValueError:
+            raise ValueError(
+                f"registry:<id> needs a registry id or {GITHUB_IMPORT_REGISTRY_ID!r}, "
+                f"not {rule.target!r}"
+            ) from None
+    elif value not in REGISTRY_TRUST_LEVELS:
+        raise ValueError(
+            f"registry_trust:<level> needs one of {', '.join(REGISTRY_TRUST_LEVELS)}, "
+            f"not {rule.target!r}"
+        )
+
+
+@dataclass(frozen=True)
+class CatalogInstallDecision:
+    allowed: bool
+    reason: str
+
+
+def decide_catalog_install(
+    rules: list[PolicyRule], *, registry_id: str, trust: str
+) -> CatalogInstallDecision:
+    """Whether a catalog item of ``registry_id`` (labelled ``trust``) may be installed.
+
+    ``rules`` are the enabled rules of the layers that apply (the workspace, the
+    installing user). Allowed unless a rule says otherwise, like every other
+    policy decision. In each layer a deny on the registry or its trust level
+    wins, and a layer with any allow rule admits only what one of them names;
+    a lower layer cannot widen a higher one's allowlist.
+    """
+    targets = {f"registry:{registry_id}", f"registry_trust:{trust}"}
+    layers: dict[tuple[str, str], list[PolicyRule]] = {}
+    for rule in rules:
+        if not rule.enabled or rule.target.split(":", 1)[0] not in _INSTALL_TARGET_KINDS:
+            continue
+        layers.setdefault((str(rule.subject_type), rule.subject_id), []).append(rule)
+
+    for (subject_type, subject_id), layer in layers.items():
+        denied = [r for r in layer if r.effect == PolicyEffect.DENY and r.target in targets]
+        if denied:
+            return CatalogInstallDecision(
+                False, f"denied by {denied[0].target} for {subject_type} {subject_id}"
+            )
+        allows = [r for r in layer if r.effect == PolicyEffect.ALLOW]
+        if allows and not any(r.target in targets for r in allows):
+            return CatalogInstallDecision(
+                False,
+                f"registry {registry_id} ({trust}) is not among the registries "
+                f"{subject_type} {subject_id} allows installs from",
+            )
+    return CatalogInstallDecision(True, "allowed by install policy")
 
 
 def _dedupe(values: list[str]) -> list[str]:

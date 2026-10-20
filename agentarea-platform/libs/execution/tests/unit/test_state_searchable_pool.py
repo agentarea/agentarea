@@ -62,7 +62,15 @@ def test_agent_state_round_trips_pool_through_pydantic():
 
 
 def test_continue_as_new_round_trips_pool():
-    pool = [{"name": "x", "description": "y", "connection_id": "c", "schema": {}, "source_type": "openapi"}]
+    pool = [
+        {
+            "name": "x",
+            "description": "y",
+            "connection_id": "c",
+            "schema": {},
+            "source_type": "openapi",
+        }
+    ]
     s = ContinueAsNewState(
         execution_id="e",
         agent_id="a",

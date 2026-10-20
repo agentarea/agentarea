@@ -42,7 +42,7 @@ from agentarea_api.api.v1.oauth_app_credentials import (
     resolve_custom_oauth_app,
 )
 from agentarea_api.oauth_connect import state as oauth_state
-from agentarea_api.oauth_connect.pages import callback_uri, frontend_base
+from agentarea_api.oauth_connect.pages import callback_uri, finish_page_url, frontend_base
 from agentarea_api.oauth_connect.targets import (
     ConnectTarget,
     NotAuthorizableError,
@@ -227,18 +227,19 @@ def _with_query(url: str, **params: str) -> str:
     return f"{url}?{urllib.parse.urlencode(params)}"
 
 
-async def complete(
-    session: AsyncSession,
+async def receive(
     *,
     state: str | None,
     code: str | None,
     error: str | None,
     error_description: str | None,
 ) -> str:
-    """Finish a flow the provider sent back here; returns where the browser goes.
+    """Take the provider's redirect back; returns where the browser goes.
 
     The state token proves the flow was started by authorize, and says which
-    connection it is for.
+    connection it is for. It does not prove who followed the provider URL, so
+    the code is parked for the person who started the flow to finish in their
+    own session, never redeemed here.
     """
     flow = await oauth_state.pop(state) if state else None
     if flow is None:
@@ -250,26 +251,47 @@ async def complete(
             )
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state")
 
-    try:
-        workspace_slug = await workspace_slug_for(flow.workspace_id)
-    except LookupError:
-        # Deleted while the user was at the provider: no workspace page to return to.
+    if error or not code:
+        workspace_slug = await _workspace_slug(flow)
+        if workspace_slug is None:
+            return _workspace_gone(flow)
+        return _with_query(
+            landing_url(flow, workspace_slug),
+            oauth="error",
+            reason=error_description or error or "missing_code",
+        )
+
+    token = secrets.token_urlsafe(32)
+    await oauth_state.store_returned(token, oauth_state.ReturnedFlow(flow=flow, code=code))
+    return finish_page_url(flow.return_to, token)
+
+
+async def finish(
+    session: AsyncSession, *, token: str, user_id: str, reachable_workspaces: list[str]
+) -> str:
+    """Redeem a returned flow's code for the person who started it; returns where they go.
+
+    The caller must also still reach the flow's workspace.
+    """
+    returned = await oauth_state.pop_returned(token)
+    if returned is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth sign-in")
+    flow, code = returned.flow, returned.code
+    if flow.user_id != user_id or flow.workspace_id not in reachable_workspaces:
         logger.warning(
-            "OAuth callback for %s %s: workspace %s is gone",
+            "OAuth finish refused: %s %s in workspace %s was started by %s, finished by %s",
             flow.target_kind,
             flow.connection_id,
             flow.workspace_id,
-            exc_info=True,
+            flow.user_id,
+            user_id,
         )
-        return _with_query(
-            f"{frontend_base(flow.return_to)}/", oauth="error", reason="workspace_gone"
-        )
+        raise HTTPException(status_code=403, detail="This sign-in was started by someone else")
 
+    workspace_slug = await _workspace_slug(flow)
+    if workspace_slug is None:
+        return _workspace_gone(flow)
     landing = landing_url(flow, workspace_slug)
-    if error or not code:
-        return _with_query(
-            landing, oauth="error", reason=error_description or error or "missing_code"
-        )
 
     user_context = UserContext(
         user_id=flow.user_id, workspace_id=flow.workspace_id, workspace_slug=workspace_slug
@@ -299,3 +321,22 @@ async def complete(
     )
     after_connect(flow, user_context)
     return _with_query(landing, oauth="success")
+
+
+async def _workspace_slug(flow: oauth_state.OAuthState) -> str | None:
+    try:
+        return await workspace_slug_for(flow.workspace_id)
+    except LookupError:
+        # Deleted while the user was at the provider: no workspace page to return to.
+        logger.warning(
+            "OAuth flow for %s %s: workspace %s is gone",
+            flow.target_kind,
+            flow.connection_id,
+            flow.workspace_id,
+            exc_info=True,
+        )
+        return None
+
+
+def _workspace_gone(flow: oauth_state.OAuthState) -> str:
+    return _with_query(f"{frontend_base(flow.return_to)}/", oauth="error", reason="workspace_gone")

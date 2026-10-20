@@ -12,6 +12,13 @@ from agentarea_agents_sdk.runners import (
     Message,
     RunnerConfig,
 )
+from agentarea_common.events.contract import (
+    BUDGET_EXCEEDED,
+    BUDGET_WARNING,
+    TURN_ABORTED,
+    TURN_COMPLETED,
+    TURN_STARTED,
+)
 from temporalio import workflow
 
 logger = logging.getLogger(__name__)
@@ -105,7 +112,7 @@ class TemporalAgentRunner(BaseAgentRunner):
         # Log iteration start
         if self.event_manager:
             self.event_manager.add_event(
-                "iteration_started",
+                TURN_STARTED,
                 {
                     "iteration": iteration,
                     "budget_remaining": self.budget_tracker.get_remaining()
@@ -124,14 +131,14 @@ class TemporalAgentRunner(BaseAgentRunner):
             # Log iteration completion
             if self.event_manager:
                 self.event_manager.add_event(
-                    "iteration_completed", {"iteration": iteration, "success": True}
+                    TURN_COMPLETED, {"iteration": iteration, "success": True}
                 )
 
         except Exception as e:
             # Log iteration failure
             if self.event_manager:
                 self.event_manager.add_event(
-                    "iteration_failed", {"iteration": iteration, "error": str(e)}
+                    TURN_ABORTED, {"iteration": iteration, "error": str(e)}
                 )
             raise
 
@@ -238,7 +245,7 @@ class TemporalAgentRunner(BaseAgentRunner):
 
                 try:
                     tool_args = json.loads(tool_call["function"]["arguments"])
-                except (json.JSONDecodeError, KeyError):
+                except json.JSONDecodeError, KeyError:
                     tool_args = {}
 
                 # Extract workspace_id from agent_config.user_context_data
@@ -360,7 +367,7 @@ class TemporalAgentRunner(BaseAgentRunner):
         if self.budget_tracker.should_warn():
             if self.event_manager:
                 self.event_manager.add_event(
-                    "budget_warning",
+                    BUDGET_WARNING,
                     {
                         "usage_percentage": self.budget_tracker.get_usage_percentage(),
                         "cost": self.budget_tracker.cost,
@@ -373,7 +380,7 @@ class TemporalAgentRunner(BaseAgentRunner):
         if self.budget_tracker.is_exceeded():
             if self.event_manager:
                 self.event_manager.add_event(
-                    "budget_exceeded",
+                    BUDGET_EXCEEDED,
                     {
                         "cost": self.budget_tracker.cost,
                         "limit": self.budget_tracker.budget_limit,

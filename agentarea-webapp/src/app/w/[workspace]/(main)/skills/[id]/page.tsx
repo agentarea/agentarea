@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import FormError from "@/components/FormError";
+import { useCatalogFetchError } from "@/hooks/useCatalogFetchError";
 import type {
   Skill,
   SkillContent,
@@ -54,6 +55,8 @@ import {
   removeSkillMemberAction as removeSkillMember,
   updateSkillAction as updateSkill,
 } from "@/lib/server-actions";
+import SkillProvenance from "../components/SkillProvenance";
+import UpdateSkillButton from "../components/UpdateSkillButton";
 
 // The page title is the document's only h1, so SKILL.md headings render one
 // level below it.
@@ -97,6 +100,7 @@ export default function SkillDetailPage() {
   const tDetail = useTranslations("SkillsPage.detail");
   const tChildren = useTranslations("SkillsPage.children");
   const tCommon = useTranslations("Common");
+  const catalogFetchError = useCatalogFetchError();
   const skillId = params.id as string;
 
   const [skill, setSkill] = useState<Skill | null>(null);
@@ -347,7 +351,7 @@ export default function SkillDetailPage() {
       const installed = result.data as Skill | undefined;
 
       if (result.error || !installed?.id) {
-        setActionError(apiErrorMessage(result, t("error.installSkill")));
+        setActionError(catalogFetchError(result, t("error.installSkill")));
         return;
       }
 
@@ -497,6 +501,15 @@ export default function SkillDetailPage() {
               </Button>
             ) : (
               <>
+                <SkillProvenance skill={skill} />
+                <UpdateSkillButton
+                  skill={skill}
+                  onError={setActionError}
+                  onUpdated={() => {
+                    hasChangesRef.current = false;
+                    setReloadKey((key) => key + 1);
+                  }}
+                />
                 {saved && !hasChanges && (
                   <span className="text-xs text-muted-foreground">
                     {tCommon("saved")}

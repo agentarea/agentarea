@@ -6,10 +6,20 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from agentarea_common.channel_origin import drop_reserved_parameters, reject_reserved_parameters
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+from agentarea_common.reserved_task_parameters import (
+    drop_reserved_parameters,
+    reject_reserved_parameters,
+)
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
-from .enums import ExecutionStatus, TriggerType, WebhookType
+from .enums import ExecutionStatus, TriggerType
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +76,7 @@ class Trigger(BaseModel):
         return v.strip()
 
     @model_validator(mode="after")
-    def validate_datetime_fields(self, info: ValidationInfo) -> "Trigger":
+    def validate_datetime_fields(self, info: ValidationInfo) -> Trigger:
         """Validate datetime field relationships.
 
         Building a trigger this way out of order is a programming error and
@@ -99,16 +109,9 @@ class Trigger(BaseModel):
         """Check if trigger should be disabled due to consecutive failures."""
         return self.consecutive_failures >= self.failure_threshold
 
-    def record_execution_success(self) -> None:
-        """Record successful execution."""
+    def record_execution_started(self) -> None:
+        """Record that the trigger fired; failures are counted in the database, one at a time."""
         self.last_execution_at = datetime.utcnow()
-        self.consecutive_failures = 0
-        self.updated_at = datetime.utcnow()
-
-    def record_execution_failure(self) -> None:
-        """Record failed execution."""
-        self.last_execution_at = datetime.utcnow()
-        self.consecutive_failures += 1
         self.updated_at = datetime.utcnow()
 
 
@@ -118,11 +121,6 @@ class CronTrigger(Trigger):
     trigger_type: TriggerType = Field(default=TriggerType.CRON, frozen=True)
     cron_expression: str = Field(..., min_length=1)
     timezone: str = Field(default="UTC")
-
-    # Data extraction for poll-based channels (email, RSS, API polling)
-    data_extractor: str | None = None  # "imap", "rss", etc.
-    data_extractor_config: dict[str, Any] | None = None  # Connection/auth details
-    data_extractor_state: dict[str, Any] | None = None  # Cursor/checkpoint tracking
 
     @field_validator("cron_expression")
     @classmethod
@@ -147,42 +145,63 @@ class CronTrigger(Trigger):
         return v.strip()
 
 
-class WebhookTrigger(Trigger):
-    """Webhook-based event trigger."""
+class TriggerSession(BaseModel):
+    """What happens to the next event of the same session (ADR-0040 §4)."""
 
-    trigger_type: TriggerType = Field(default=TriggerType.WEBHOOK, frozen=True)
-    webhook_id: str = Field(..., min_length=1)
-    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
-    webhook_type: str = Field(default="generic")
-    validation_rules: dict[str, Any] = Field(default_factory=dict)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    # Generic webhook configuration - supports any webhook type
-    webhook_config: dict[str, Any] | None = None
+    continue_: bool | None = Field(
+        default=None,
+        alias="continue",
+        description=(
+            "The next event with the same session_key joins the same task; null takes "
+            "the source type's default (continue when it has sessions)."
+        ),
+    )
+    idle_timeout: str | None = Field(
+        default=None,
+        pattern=r"^[0-9]+[smhd]$",
+        description="How long the task waits for the next event, e.g. '30m'.",
+    )
 
-    # Event type filtering - empty list means accept all events
-    event_types: list[str] = Field(default_factory=list)
 
-    @field_validator("webhook_id")
-    @classmethod
-    def validate_webhook_id(cls, v: str) -> str:
-        """Validate webhook ID."""
-        if not v.strip():
-            raise ValueError("Webhook ID cannot be empty")
-        return v.strip()
+class TriggerBatchWindow(BaseModel):
+    """A stream trigger that fires once for the events of a batch (ADR-0040 §4).
 
-    @field_validator("allowed_methods")
-    @classmethod
-    def validate_allowed_methods(cls, v: list[str]) -> list[str]:
-        """Validate HTTP methods."""
-        if not v:
-            raise ValueError("At least one HTTP method must be allowed")
+    The batch opens with its first event and fires when ``window`` has passed or
+    ``max_events`` have joined, whichever comes first. Either may be left out;
+    a batch never holds more than the deployment's cap.
+    """
 
-        valid_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-        for method in v:
-            if method.upper() not in valid_methods:
-                raise ValueError(f"Invalid HTTP method: {method}")
+    model_config = ConfigDict(extra="forbid")
 
-        return [method.upper() for method in v]
+    window: str | None = Field(
+        default=None,
+        pattern=r"^[1-9][0-9]*[smhd]$",
+        description="How long a batch stays open after its first event, e.g. '1h'.",
+    )
+    max_events: int | None = Field(
+        default=None, ge=2, description="Fire as soon as this many events have joined."
+    )
+
+    @model_validator(mode="after")
+    def _a_window_or_a_count(self) -> TriggerBatchWindow:
+        if self.window is None and self.max_events is None:
+            raise ValueError("a batch needs a window or max_events")
+        return self
+
+    def window_seconds(self) -> float | None:
+        from agentarea_common.config.duration import parse_duration
+
+        return parse_duration(self.window).total_seconds() if self.window else None
+
+
+class StreamTrigger(Trigger):
+    """A trigger on the events of a stream; its subscription holds the stream and filter."""
+
+    trigger_type: TriggerType = Field(default=TriggerType.STREAM, frozen=True)
+    session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = None
 
 
 class TriggerExecution(BaseModel):
@@ -202,8 +221,8 @@ class TriggerExecution(BaseModel):
         default=None,
         description=(
             "Principal who asked for this one run, when a person did. Empty means "
-            "the trigger's own mechanism fired it -- the schedule came due, or the "
-            "webhook was called. Not the same as created_by, which records whose "
+            "the trigger's own mechanism fired it -- the schedule came due, or an "
+            "event arrived. Not the same as created_by, which records whose "
             "context wrote the row and is filled either way."
         ),
     )
@@ -249,32 +268,23 @@ class TriggerCreate(BaseModel):
     # Cron-specific fields
     cron_expression: str | None = None
     timezone: str = Field(default="UTC")
-    data_extractor: str | None = None
-    data_extractor_config: dict[str, Any] | None = None
-
-    # Webhook-specific fields
-    webhook_id: str | None = None
-    allowed_methods: list[str] = Field(default_factory=lambda: ["POST"])
-    webhook_type: str = Field(default="generic")
-    validation_rules: dict[str, Any] = Field(default_factory=dict)
-    webhook_config: dict[str, Any] | None = None
-    event_types: list[str] = Field(default_factory=list)
 
     # Stream-specific fields
     stream_id: UUID | None = None
     event_filter: dict[str, Any] | None = None
+    session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = None
 
     _reject_reserved_parameters = field_validator("task_parameters")(reject_reserved_parameters)
 
     @model_validator(mode="after")
-    def validate_trigger_type_fields(self) -> "TriggerCreate":
+    def validate_trigger_type_fields(self) -> TriggerCreate:
         """Validate that required fields are present for each trigger type."""
         if self.trigger_type == TriggerType.CRON:
             if not self.cron_expression:
                 raise ValueError("cron_expression is required for CRON triggers")
-        elif self.trigger_type == TriggerType.WEBHOOK:
-            if not self.webhook_id:
-                raise ValueError("webhook_id is required for WEBHOOK triggers")
+            if self.batch is not None:
+                raise ValueError("only a stream trigger takes a batch")
         elif self.trigger_type == TriggerType.STREAM:
             if not self.stream_id:
                 raise ValueError("stream_id is required for STREAM triggers")
@@ -300,16 +310,11 @@ class TriggerUpdate(BaseModel):
     # Cron-specific fields
     cron_expression: str | None = None
     timezone: str | None = None
-    data_extractor: str | None = None
-    data_extractor_config: dict[str, Any] | None = None
 
-    # Webhook-specific fields
-    allowed_methods: list[str] | None = None
-    webhook_type: WebhookType | None = None
-    validation_rules: dict[str, Any] | None = None
-    webhook_config: dict[str, Any] | None = None
-    event_types: list[str] | None = None
+    # Stream-specific fields
     event_filter: dict[str, Any] | None = None
+    session: TriggerSession | None = None
+    batch: TriggerBatchWindow | None = None
 
 
 @dataclass(frozen=True)

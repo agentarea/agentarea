@@ -14,6 +14,9 @@ from .constants import (
     TOKENS_PER_MESSAGE_OVERHEAD,
 )
 
+# The first line of a compaction row; the summary follows it.
+COMPACTION_SUMMARY_HEADER = "[Previous conversation summary]"
+
 
 def estimate_tokens(text: str) -> int:
     """Estimate token count for a string.
@@ -238,6 +241,11 @@ class ContextWindowManager:
     def effective_limit(self) -> int:
         """Tokens a prompt may take: the window less the share kept for output."""
         return self._effective_limit
+
+    @property
+    def current_tokens(self) -> int:
+        """The prompt tokens last measured or estimated."""
+        return self._current_tokens
 
     @property
     def warning_sent(self) -> bool:

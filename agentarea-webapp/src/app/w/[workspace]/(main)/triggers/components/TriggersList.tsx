@@ -9,12 +9,9 @@ import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
 import { cn } from "@/lib/utils";
 import TriggerCard from "./TriggerCard";
 import {
-  findTriggerCatalogEntry,
   getTriggerDisplayName,
-  getTriggerSourceKey,
   renderTriggerIcon,
   type EnrichedTrigger,
-  type TriggerCatalogEntry,
 } from "./triggerDisplay";
 import TriggersTable from "./TriggersTable";
 import TriggersEmptyState from "./TriggersEmptyState";
@@ -25,7 +22,6 @@ interface TriggersListProps {
   triggers: EnrichedTrigger[];
   /** Triggers in the workspace before the type filter and search. */
   totalCount: number;
-  catalog: TriggerCatalogEntry[];
   viewMode: "grid" | "table";
   searchQuery: string;
   groupBy: TriggersGroupBy;
@@ -34,7 +30,6 @@ interface TriggersListProps {
 interface TriggerGroup {
   key: string;
   label: string;
-  entry?: TriggerCatalogEntry;
   sample: EnrichedTrigger;
   items: EnrichedTrigger[];
 }
@@ -42,7 +37,6 @@ interface TriggerGroup {
 export default function TriggersList({
   triggers,
   totalCount,
-  catalog,
   viewMode,
   searchQuery,
   groupBy,
@@ -58,16 +52,14 @@ export default function TriggersList({
     if (groupBy !== "channel" || viewMode !== "table") return null;
     const map = new Map<string, TriggerGroup>();
     for (const trigger of triggers) {
-      const entry = findTriggerCatalogEntry(trigger, catalog);
-      const key = getTriggerSourceKey(entry, trigger);
+      const key = trigger.trigger_type;
       const existing = map.get(key);
       if (existing) {
         existing.items.push(trigger);
       } else {
         map.set(key, {
           key,
-          label: getTriggerDisplayName(trigger, entry),
-          entry: entry ?? undefined,
+          label: getTriggerDisplayName(trigger, (type) => t(`type.${type}`)),
           sample: trigger,
           items: [trigger],
         });
@@ -77,7 +69,7 @@ export default function TriggersList({
       (a, b) =>
         b.items.length - a.items.length || a.label.localeCompare(b.label)
     );
-  }, [groupBy, viewMode, triggers, catalog]);
+  }, [groupBy, viewMode, triggers, t]);
 
   const hasTriggers = triggers.length > 0;
 
@@ -118,14 +110,14 @@ export default function TriggersList({
     return (
       <div className={CARD_GRID_DENSE}>
         {triggers.map((trigger) => (
-          <TriggerCard key={trigger.id} trigger={trigger} catalog={catalog} />
+          <TriggerCard key={trigger.id} trigger={trigger} />
         ))}
       </div>
     );
   }
 
   if (!groups) {
-    return <TriggersTable triggers={triggers} catalog={catalog} />;
+    return <TriggersTable triggers={triggers} />;
   }
 
   return (
@@ -152,7 +144,7 @@ export default function TriggersList({
               )}
             />
             <span className="text-muted-foreground">
-              {renderTriggerIcon(group.entry, group.sample, "h-3.5 w-3.5")}
+              {renderTriggerIcon(group.sample, "h-3.5 w-3.5")}
             </span>
             <span className="text-[12.5px] font-semibold">{group.label}</span>
             <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
@@ -162,7 +154,6 @@ export default function TriggersList({
           {!collapsed[group.key] && (
             <TriggersTable
               triggers={group.items}
-              catalog={catalog}
               hideChannelColumn
             />
           )}

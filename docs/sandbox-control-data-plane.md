@@ -122,8 +122,9 @@ execution invariant, not an optional provider capability:
 
 - the provider verifies the supervisor binary through its authenticated file
   API before admitting the sandbox and again before execution;
-- the supervisor runs as root, drops the task command to the declared uid/gid,
-  becomes a child subreaper, and applies `RLIMIT_FSIZE`;
+- the supervisor runs as root, drops the task command to the declared uid/gid
+  with that account's `HOME`, `USER` and `LOGNAME` from the image's passwd
+  entry, becomes a child subreaper, and applies `RLIMIT_FSIZE`;
 - it returns success only after the command has ended and `wait4(-1)` proves
   there are no descendants left, including processes that escaped their
   original process group with `setsid` or a double fork;

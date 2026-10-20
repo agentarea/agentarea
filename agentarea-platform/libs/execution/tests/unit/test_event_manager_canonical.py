@@ -11,6 +11,7 @@ import json
 import logging
 
 import pytest
+from agentarea_common.events.contract import EVENT_TYPES, UnknownEventTypeError
 from agentarea_execution.workflows.constants import EventTypes
 from agentarea_execution.workflows.helpers import EventManager
 from temporalio import workflow
@@ -138,15 +139,22 @@ def test_workflow_started_emits_task_started():
     assert _only_event(mgr)["event_type"] == "task.started"
 
 
-def test_timeline_event_passes_through_unchanged():
-    # System/timeline events not in the part taxonomy keep their bare name.
+def test_timeline_event_carries_its_dotted_name():
     mgr = _mgr()
     mgr.add_event(EventTypes.BUDGET_WARNING, {"percentage": 80})
-    assert _only_event(mgr)["event_type"] == "BudgetWarning"
+    assert _only_event(mgr)["event_type"] == "budget.warning"
 
     mgr2 = _mgr()
-    mgr2.add_event(EventTypes.ITERATION_STARTED, {"iteration": 1})
-    assert _only_event(mgr2)["event_type"] == "IterationStarted"
+    mgr2.add_event(EventTypes.TURN_STARTED, {"iteration": 1})
+    assert _only_event(mgr2)["event_type"] == "turn.started"
+
+
+@pytest.mark.parametrize("bare", ["IterationStarted", "BudgetWarning", "MessageQueued", "nope"])
+def test_unknown_event_type_is_rejected(bare):
+    mgr = _mgr()
+    with pytest.raises(UnknownEventTypeError):
+        mgr.add_event(bare, {})
+    assert mgr.get_pending_events() == []
 
 
 def test_base_task_fields_preserved():
@@ -169,21 +177,35 @@ def test_event_types_constants_are_canonical():
     assert EventTypes.LLM_CALL_FAILED == "llm.call.failed"
     assert EventTypes.HUMAN_INPUT_REQUESTED == "input.request"
     assert EventTypes.HUMAN_INPUT_RECEIVED == "input.response"
-    assert EventTypes.HUMAN_APPROVAL_REQUESTED == "approval.request"
-    assert EventTypes.HUMAN_APPROVAL_RECEIVED == "approval.response"
-    assert EventTypes.HUMAN_APPROVAL_DENIED == "approval.response"
+    assert EventTypes.HUMAN_APPROVAL_REQUESTED == "approval.requested"
+    assert EventTypes.HUMAN_APPROVAL_RECEIVED == "approval.decided"
+    assert EventTypes.HUMAN_APPROVAL_DENIED == "approval.decided"
     assert EventTypes.WORKFLOW_STARTED == "task.started"
     assert EventTypes.WORKFLOW_COMPLETED == "task.completed"
     assert EventTypes.WORKFLOW_FAILED == "task.failed"
     assert EventTypes.WORKFLOW_CANCELLED == "task.cancelled"
 
 
-def test_timeline_constants_stay_bare():
-    # Timeline/system events are not in the part taxonomy; keep bare names.
-    assert EventTypes.BUDGET_WARNING == "BudgetWarning"
-    assert EventTypes.ITERATION_STARTED == "IterationStarted"
-    assert EventTypes.MODEL_CHANGED == "ModelChanged"
-    assert EventTypes.WORKFLOW_CONTINUED_AS_NEW == "WorkflowContinuedAsNew"
+def test_every_event_type_constant_is_in_the_vocabulary():
+    constants = {
+        name: value
+        for name, value in vars(EventTypes).items()
+        if name.isupper() and isinstance(value, str)
+    }
+    assert constants
+    unknown = {name: value for name, value in constants.items() if value not in EVENT_TYPES}
+    assert unknown == {}
+
+
+def test_timeline_constants_are_dotted():
+    assert EventTypes.TURN_STARTED == "turn.started"
+    assert EventTypes.TURN_COMPLETED == "turn.completed"
+    assert EventTypes.TURN_ABORTED == "turn.aborted"
+    assert EventTypes.BUDGET_WARNING == "budget.warning"
+    assert EventTypes.MODEL_CHANGED == "model.changed"
+    assert EventTypes.CONTINUED_AS_NEW == "execution.continued_as_new"
+    assert EventTypes.COMMAND_RECEIVED == "command.received"
+    assert EventTypes.DELEGATION_STARTED == "delegation.started"
 
 
 def test_workspace_id_is_carried_when_known():

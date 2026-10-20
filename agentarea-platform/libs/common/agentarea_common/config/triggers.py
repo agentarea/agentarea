@@ -28,3 +28,12 @@ class TriggerSettings(BaseSettings):
     )
 
     LLM_ENABLED: bool = Field(default=True, description="Enable LLM-based condition evaluation")
+
+    BATCH_MAX_EVENTS: int = Field(
+        default=100,
+        ge=2,
+        description=(
+            "The most events one batch of a windowed stream trigger holds; a batch that "
+            "reaches it fires at once, and a trigger's own count may not exceed it."
+        ),
+    )

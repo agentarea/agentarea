@@ -40,6 +40,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   model prices: a per-token price survives the numeric column exactly.
 #   platform-managed providers: a platform config is readable from every
 #     workspace and writable from none, a rule only the WHERE clause enforces.
+#   cache price resync: a catalog cache price reaches every workspace's copy of the
+#     model whose price is unset or the catalog's previous one, across workspaces.
 #   catalog model instances: a built-in model is added by copying it into the
 #     workspace's model_specs, the table the instance's foreign key references,
 #     and the catalog query is jsonb.
@@ -47,6 +49,11 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     is recorded saved (and billed) once by a conditional update.
 #   catalog browse plans: /explore is only fast while every browse query has an
 #     index that serves it, a property of the migrated indexes and the planner.
+#   catalog retire: a sync deletes what its source dropped unless a row of
+#     another module (install, fork, agent, connection) still references it.
+#   catalog visibility: a workspace registry's items reach only that workspace
+#     (browse, search, by id, the skill and agent projections), a CHECK keeps
+#     it to catalog-only types, and names are unique per scope (ADR-0044).
 #   agent presets: presets are a jsonb containment query on catalog tags, and a
 #     preset's skill key is matched against hashed catalog names with LIKE.
 #   MCP spec list: tenant specs and catalog items are paged, filtered and
@@ -55,38 +62,74 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     text-to-uuid join on its spec, unioned with OpenAPI connections.
 #   skill list: the catalog half, its total and the fork update check are
 #     served by the partial browse indexes and the primary key, never a scan.
+#   skill packages: an update's check joins the workspace's install row and
+#     moves the pin by upserting on its (item, workspace) key; moving bodies
+#     out of rows reads every workspace's skills and rewrites each in its own.
+#   skill mirror: a mirror registry's sync stores each item in its workspace's
+#     area and an install reads it offline; the catalog reads hand each item's
+#     registry and trust to the install policy's rule rows; the repin reads
+#     catalog installs across workspaces and moves each pin by upsert. Its
+#     sessions run the enforced tenant scope RU deploys with.
+#   skill stub refresh: every workspace's skills but the platform's are read
+#     for an old index's stub, and each is repointed under its own workspace,
+#     its install policy's rule rows deciding, under the enforced tenant scope.
+#   reconcile under enforce: a platform sync, a retire and a workspace
+#     registry's sync through the CLI, with sessions that refuse what the bound
+#     scope cannot confine; the cleanup still sees every workspace's forks.
 #   tenant scope: every workspace-scoped model stays in its workspace through
 #     the ORM hook, against the migrated schema rather than create_all.
 #   task events and conversation: a retried publish batch stores each event once
 #     under the workflow's id (the primary key decides); the SSE catch-up reads
 #     keyset batches ordered by (timestamp, id) and resumes after a given event;
 #     a conversation entry rewritten at its position replaces the first write.
+#   task log: one append writes the rows, the task's outcome, its spend and audit
+#     lines in the caller's transaction, once per event id (the unique key
+#     decides); the window is one query over the migrated ordering; a retried
+#     record call writes nothing twice.
 #   spend ledger: a retried event batch stores each paid line once (the
 #     (event, category) unique key decides), sums skip superseded lines and
 #     other currencies, and the backfill turns stored paid events into lines.
 #     The tool-call spend gate's caps reach only their scope's lines (agent,
 #     client, connection, tool), a query on the migrated table.
+#     A model call is refused at the workspace's or its agent's monthly cap from
+#     the same sums, the workspace's lines or the agent's alone.
+#     The settlement worker claims only lines marked for settlement that no line
+#     supersedes, through the partial index, and finalises each once.
 #   task provenance: a task's origin, correlation, causation and parent id are
 #     plain nullable columns the migrated schema must carry; a mocked session
 #     never catches a missing column.
 #   inbox counts: the inbox total narrows by agent in SQL exactly as its page does.
-#   event streams: the journal is partitioned by day and deduplicated by a
-#     separate key table; a webhook id belongs to one source and a trigger
-#     subscription names its trigger -- rules only the migrated schema holds.
-#     Partition maintenance creates and drops real daily partitions and trims
-#     a short-retention stream's rows, which a mocked session cannot exercise.
-#     The webhook backfill runs its own SQL against real trigger rows, JSON
-#     nulls included, and must keep every webhook_id through a roundtrip.
-#     The dispatcher leases subscriptions with FOR UPDATE SKIP LOCKED and commits
-#     each outcome with its cursor move under the lease; only real row locks and
-#     transactions show two dispatchers never serving one subscription twice.
+#   task summary: a task's spend is the sum of its current ledger lines in the
+#     billing currency, and a status update stamps when the run started and ended.
+#   undispatched tasks: the reconciler finds pending tasks with no execution in
+#     every workspace under the ENFORCE scope and starts each in its own.
+#   event streams: the events read model is partitioned by day and holds an
+#     event once per (event id, received_at); a webhook id belongs to one source
+#     and a trigger subscription names its trigger -- rules only the migrated
+#     schema holds. Partition maintenance creates and drops real daily
+#     partitions, which a mocked session cannot exercise, and archives an
+#     expired day before dropping it. Two inserts into one
+#     stream commit in sequence order, so a reader paging by sequence never
+#     skips the one that committed late: real locks between real transactions.
+#     Ingest checks the stream and the quota against the read model before
+#     publishing. The router
+#     re-reads each subscription before acting, and a reaction is one
+#     trigger_executions row per (subscription, event): a unique key, an
+#     upsert and a nullable trigger only the migrated schema holds.
 #     Enabling a trigger stopped for a new owner clears the stamp in the row.
-#     A re-created webhook trigger takes over the stream its predecessor left,
-#     whose name the per-workspace unique constraint would otherwise refuse.
-#     A stream trigger's row stores no webhook type, which the column's default
-#     would fill in, and its run is told the journaled event it fired on.
+#     A stream trigger's run is told the journaled event it fired on.
+#     A fired task's end counts towards its trigger's failure_threshold once,
+#     by a conditional update of its firing row, and disables the trigger.
 #     A source added without a trigger holds a picked workspace secret by a
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
+#     The phase-4 migration leaves a JSON-null webhook_config an object, not
+#     the array jsonb's null || {} makes.
+#     The workspace feed filters by what the platform did with an event in SQL
+#     over the router's routing and tally columns, and agrees with the status
+#     the API reports; the event-routing migration routes recorded events to
+#     the subscriptions that reacted. Its facet counts come from a rollup the
+#     recording transaction keeps and a partition drop cuts, backfilled by the
+#     migration, and equal a full count of the rows.
 #   OpenAPI dispatch: a connection's last call is stamped by a bare UPDATE that
 #     stays in the caller's workspace and leaves updated_at alone.
 #   MCP dispatch stamps: the stamp writer runs with no workspace bound under the
@@ -94,6 +137,9 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #   owned auth configs: an auth config a connect flow minted is deleted with its
 #     connection or instance by ON DELETE CASCADE, its credential and secret
 #     references first; a shared one survives, and the backfill names owners.
+#   catalog migration rerun: the ADR-0044 revisions run by the real alembic
+#     environment, refused a lock and killed mid index swap, then rerun to head.
+#     Last: it downgrades and upgrades the shared database.
 PY_SUITE_ENV=(SECRETS_TEST_DATABASE_URL AUDIT_TEST_DATABASE_URL WALLET_TEST_DATABASE_URL LLM_TEST_DATABASE_URL MEMBERSHIP_TEST_DATABASE_URL CATALOG_TEST_DATABASE_URL TENANT_SCOPE_TEST_DATABASE_URL TASKS_TEST_DATABASE_URL STREAMS_TEST_DATABASE_URL OPENAPI_TEST_DATABASE_URL MCP_TEST_DATABASE_URL)
 PY_SUITES=(
   libs/secrets/tests/test_catalog_service.py
@@ -105,40 +151,63 @@ PY_SUITES=(
   libs/llm/tests/test_model_spec_price_precision_db.py
   libs/llm/tests/test_platform_managed_providers_db.py
   libs/llm/tests/test_catalog_model_instance_db.py
+  libs/llm/tests/test_cache_price_resync_db.py
   libs/llm/tests/test_video_generation_jobs_db.py
   libs/registry/tests/test_catalog_browse_plans_db.py
+  libs/registry/tests/test_catalog_retire_db.py
+  libs/registry/tests/test_catalog_visibility_db.py
+  libs/agents/tests/test_catalog_workspace_registry_db.py
   libs/agents/tests/test_catalog_presets_db.py
   libs/mcp/tests/test_mcp_spec_list_db.py
   apps/api/tests/test_catalog_connections_db.py
   libs/agents/tests/test_catalog_skill_list_db.py
+  libs/agents/tests/test_skill_packages_db.py
+  apps/api/tests/test_skill_mirror_db.py
+  apps/api/tests/test_skill_stub_refresh_db.py
+  apps/api/tests/test_reconcile_enforce_db.py
   tests/unit/test_tenant_scope_isolation.py
   libs/tasks/tests/test_task_event_idempotency_db.py
+  libs/tasks/tests/test_task_event_recall_scoping_db.py
   libs/tasks/tests/test_task_conversation_db.py
+  libs/tasks/tests/test_task_log_db.py
   libs/tasks/tests/test_task_provenance_db.py
   libs/tasks/tests/test_cost_entries_db.py
   libs/tasks/tests/test_cost_entries_backfill_db.py
   libs/tasks/tests/test_spend_gate_db.py
+  libs/tasks/tests/test_model_spend_caps_db.py
+  libs/tasks/tests/test_cost_settlement_db.py
   libs/tasks/tests/test_inbox_counts_db.py
+  libs/tasks/tests/test_undispatched_tasks_db.py
   libs/execution/tests/unit/test_publish_workflow_events_db.py
+  libs/execution/tests/unit/test_record_activity_db.py
   apps/api/tests/test_task_event_feed_db.py
+  apps/api/tests/test_task_summary_db.py
   libs/streams/tests/test_schema_db.py
-  libs/streams/tests/test_journal_db.py
+  libs/streams/tests/test_ingest_and_view_db.py
   libs/streams/tests/test_stream_isolation_db.py
   libs/streams/tests/test_stream_service_db.py
-  libs/streams/tests/test_pg_journal_db.py
   libs/streams/tests/test_partitions_db.py
-  libs/streams/tests/test_backfill_db.py
-  libs/streams/tests/test_dispatcher_db.py
+  libs/streams/tests/test_sequence_readers_db.py
+  libs/streams/tests/test_partition_archive_db.py
+  libs/streams/tests/test_router_db.py
+  libs/streams/tests/test_event_feed_db.py
+  libs/streams/tests/test_event_counts_db.py
+  apps/api/tests/test_event_routing_migration_db.py
   apps/api/tests/test_webhook_source_intake_db.py
   apps/api/tests/test_stream_sources_db.py
+  apps/api/tests/test_phase4_sources_migration_db.py
+  libs/triggers/tests/test_reactions_db.py
   libs/triggers/tests/test_routed_follow_up_once_db.py
   libs/triggers/tests/test_needs_owner_db.py
-  libs/triggers/tests/test_webhook_stream_reuse_db.py
   libs/triggers/tests/test_trigger_event_context_db.py
+  libs/triggers/tests/test_platform_stream_db.py
+  libs/triggers/tests/test_trigger_batch_db.py
+  libs/triggers/tests/test_trigger_run_outcomes_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py
   apps/api/tests/test_owned_auth_configs_db.py
+  apps/api/tests/test_registry_migration_rerun_db.py
 )
 
 # MCP manager Go SQL: the demand gateway's lifecycle rules, the secret

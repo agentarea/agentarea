@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from agentarea_api.api.v1.streams import get_stream_service
+from agentarea_api.api.v1.streams import get_reactions, get_stream_service
 from agentarea_api.main import app
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -16,11 +16,17 @@ from agentarea_common.di.container import get_container
 from agentarea_common.rebac.openfga_client import OpenFGAClient
 from agentarea_streams.domain import (
     ForwardLoopError,
-    JournaledEvent,
     NotAForwardError,
+    RecordedEvent,
     StreamNameTakenError,
+    StreamManagedByPlatformError,
     StreamNotFoundError,
     SubscriptionNotFoundError,
+)
+from agentarea_streams.domain.errors import (
+    NotAProcessorError,
+    ProcessorCodeError,
+    ProcessorLoopError,
 )
 from httpx import ASGITransport, AsyncClient
 
@@ -33,7 +39,6 @@ def _stream(name="feed"):
         name=name,
         description="",
         kind="custom",
-        retention_days=30,
         workspace_id="ws",
         created_by="u",
         created_at=NOW,
@@ -54,13 +59,19 @@ def graph():
 
 
 @pytest.fixture
-def service():
+def reactions():
+    return AsyncMock()
+
+
+@pytest.fixture
+def service(reactions):
     svc = AsyncMock()
     app.dependency_overrides[get_stream_service] = lambda: svc
+    app.dependency_overrides[get_reactions] = lambda: reactions
     app.dependency_overrides[get_user_context] = lambda: UserContext(user_id="u", workspace_id="ws")
     app.dependency_overrides[get_db_session] = lambda: AsyncMock()
     yield svc
-    for dep in (get_stream_service, get_user_context, get_db_session):
+    for dep in (get_stream_service, get_reactions, get_user_context, get_db_session):
         app.dependency_overrides.pop(dep, None)
 
 
@@ -82,14 +93,16 @@ async def test_the_list_shows_only_streams_the_graph_allows(client, service, gra
 
 
 @pytest.mark.asyncio
-async def test_events_come_with_every_subscription_outcome(client, service, graph):
+async def test_events_come_with_every_subscription_outcome(client, service, reactions, graph):
     stream = _stream()
     sub_id, task_id = uuid4(), uuid4()
-    event = JournaledEvent(
+    event = RecordedEvent(
         type="push",
         source="webhook:github",
         data={"n": 1},
         stream_id=stream.id,
+        workspace_id="ws",
+        created_by="u",
         sequence=41,
         event_key="k",
         received_at=NOW,
@@ -103,23 +116,21 @@ async def test_events_come_with_every_subscription_outcome(client, service, grap
             trigger_id=uuid4(),
             filter={},
             output_stream_ids=[],
-            cursor_sequence=41,
             status="active",
-            attempts=0,
-            last_error=None,
-            next_attempt_at=None,
             created_at=NOW,
         )
     ]
-    service.outcomes_for.return_value = [
+    reactions.list_for_events.return_value = [
         SimpleNamespace(
             subscription_id=sub_id,
-            event_sequence=41,
+            trigger_id=None,
+            event_id=event.id,
+            status="success",
             verdict="reacted",
             reason="refund",
             score=0.8,
             task_id=task_id,
-            derived_sequences=[],
+            derived_event_ids=[],
             created_at=NOW,
         )
     ]
@@ -131,6 +142,8 @@ async def test_events_come_with_every_subscription_outcome(client, service, grap
     assert row["outcomes"][0]["verdict"] == "reacted"
     assert row["outcomes"][0]["task_id"] == str(task_id)
     assert row["outcomes"][0]["subscription_kind"] == "trigger"
+    assert row["outcomes"][0]["event_id"] == str(event.id)
+    assert reactions.list_for_events.await_args.args == (stream.id, [event.id])
     assert page["next_after"] is None
     one = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events?after=40&limit=1")
     assert one.json()["next_after"] == 41
@@ -234,14 +247,17 @@ async def test_a_webhook_source_shows_its_public_url(client, service, graph, mon
             kind="webhook",
             webhook_id="abc",
             webhook_type="github",
-            allowed_methods=["POST"],
-            validation_rules={},
-            credential_key=None,
+            event_templates={},
+            polled_at=None,
+            poll_error=None,
+            registered_url="https://api.example/webhooks/abc",
             created_at=NOW,
         )
     ]
     response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/sources")
-    assert response.json()[0]["webhook_url"] == "https://api.example/webhooks/abc"
+    (source,) = response.json()
+    assert source["webhook_url"] == "https://api.example/webhooks/abc"
+    assert source["registered"] is True
 
 
 @pytest.mark.asyncio
@@ -292,3 +308,101 @@ async def test_the_largest_sequence_is_still_looked_up(client, service, graph):
     response = await client.get(f"/v1/workspaces/acme/streams/{stream.id}/events/{largest}")
     assert response.status_code == 404, response.text
     assert service.list_events.await_args.kwargs["after"] == largest - 1
+
+
+def _processor(stream_id, outputs, code="def process(event):\n    return None\n"):
+    return SimpleNamespace(
+        id=uuid4(),
+        stream_id=stream_id,
+        kind="processor",
+        trigger_id=None,
+        filter={},
+        output_stream_ids=[str(o) for o in outputs],
+        status="active",
+        code=code,
+        created_at=NOW,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_processor_is_created_by_whoever_may_edit_its_streams(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    service.create_processor.return_value = _processor(stream, [output])
+    response = await client.post(
+        f"/v1/workspaces/acme/streams/{stream}/processors",
+        json={"output_stream_ids": [str(output)], "code": "def process(event):\n    return None\n"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["kind"] == "processor"
+    assert response.json()["code"].startswith("def process")
+    assert service.create_processor.await_args.kwargs["output_stream_ids"] == [output]
+    checked = {call.kwargs["object"] for call in graph.check.await_args_list}
+    assert {str(stream), str(output)} <= checked
+
+
+@pytest.mark.asyncio
+async def test_a_processor_into_a_stream_the_caller_may_not_edit_is_refused(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    graph.check.side_effect = lambda **kw: SimpleNamespace(allowed=kw["object"] != str(output))
+    response = await client.post(
+        f"/v1/workspaces/acme/streams/{stream}/processors",
+        json={"output_stream_ids": [str(output)], "code": "def process(event):\n    return None\n"},
+    )
+    assert response.status_code == 403, response.text
+    service.create_processor.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (ProcessorCodeError("The code does not parse: invalid syntax (line 1)"), 400),
+        (ProcessorLoopError("A processor may not write into its own input stream"), 400),
+        (StreamManagedByPlatformError("Only the platform writes to the platform stream"), 409),
+    ],
+)
+async def test_a_processor_that_cannot_run_is_refused(client, service, graph, error, status):
+    stream = uuid4()
+    service.create_processor.side_effect = error
+    response = await client.post(
+        f"/v1/workspaces/acme/streams/{stream}/processors",
+        json={"output_stream_ids": [str(stream)], "code": "def process(event:"},
+    )
+    assert response.status_code == status, response.text
+    assert response.json()["detail"] == str(error)
+
+
+@pytest.mark.asyncio
+async def test_a_processor_is_updated_and_deleted(client, service, graph):
+    stream, output = uuid4(), uuid4()
+    processor = _processor(stream, [output])
+    service.get_processor.return_value = processor
+    service.update_processor.return_value = processor
+    response = await client.patch(
+        f"/v1/workspaces/acme/streams/{stream}/processors/{processor.id}",
+        json={"code": "def process(event):\n    return []\n"},
+    )
+    assert response.status_code == 200, response.text
+    assert service.update_processor.await_args.kwargs == {
+        "code": "def process(event):\n    return []\n",
+        "output_stream_ids": None,
+        "event_filter": None,
+    }
+    service.existing_outputs.return_value = [output]
+    response = await client.delete(
+        f"/v1/workspaces/acme/streams/{stream}/processors/{processor.id}"
+    )
+    assert response.status_code == 204, response.text
+    service.delete_processor.assert_awaited_once_with(stream, processor.id)
+
+
+@pytest.mark.asyncio
+async def test_a_forward_is_not_changed_as_a_processor(client, service, graph):
+    stream, subscription = uuid4(), uuid4()
+    service.get_processor.side_effect = NotAProcessorError(subscription)
+    response = await client.patch(
+        f"/v1/workspaces/acme/streams/{stream}/processors/{subscription}",
+        json={"code": "def process(event):\n    return []\n"},
+    )
+    assert response.status_code == 409, response.text
+    service.update_processor.assert_not_called()

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27.3-alpine3.24 AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags
 # `--target dev` (docker-compose.dev.yaml does this). It is deliberately NOT the
 # last stage so a plain `docker build` / CI build without --target never ships
 # this image (it has no compiled binary and crash-loops in a pod).
-FROM golang:1.26-alpine AS dev
+FROM golang:1.27.3-alpine3.24 AS dev
 
 RUN apk add --no-cache git ca-certificates docker-cli dumb-init \
     && rm -rf /var/cache/apk/*
@@ -48,7 +48,7 @@ CMD ["sh", "-c", "if [ -f /app/.air.toml ] && command -v air >/dev/null 2>&1; th
 # given, so this is what CI publishes by default.
 # Slim runtime: ships only the docker CLI so the manager can drive containers
 # through the mounted Docker socket. No podman/buildah/skopeo, no privileged mode.
-FROM alpine:3.20 AS production
+FROM alpine:3.24.2 AS production
 
 RUN apk add --no-cache ca-certificates docker-cli dumb-init \
     && rm -rf /var/cache/apk/*

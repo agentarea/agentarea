@@ -27,6 +27,7 @@ import httpx
 from agentarea_agents_sdk.mcp_server.auth import WORKSPACE_REFERENCE_PATTERN
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.config import get_auth_settings, get_settings
+from agentarea_common.outbound import Destination, outbound_client
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -72,7 +73,7 @@ async def _hydra_discovery() -> dict | None:
         return _hydra_discovery_cache
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(5)) as client:
+        async with outbound_client(Destination.INTERNAL, timeout=httpx.Timeout(5)) as client:
             resp = await client.get(f"{_hydra_public_url()}/.well-known/openid-configuration")
             resp.raise_for_status()
             doc = resp.json()
@@ -199,15 +200,15 @@ async def oauth_protected_resource_metadata_by_path(resource_path: str) -> JSONR
 async def oauth_authorization_server_metadata() -> JSONResponse:
     """RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.
 
-    Hydra v2 only serves /.well-known/openid-configuration; we bridge the gap
-    so MCP clients (Cursor) that look for /.well-known/oauth-authorization-server
-    still get the Hydra endpoints, rewritten to point to our proxy paths.
+    MCP clients (Cursor) look for /.well-known/oauth-authorization-server on the
+    resource's AS URL, which is this API, so we serve Hydra's document here with
+    the endpoints we proxy rewritten to point at us.
     """
     settings = get_settings()
     api_base = settings.app.API_URL.rstrip("/")
     hydra_url = _hydra_public_url()
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(5)) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=httpx.Timeout(5)) as client:
         resp = await client.get(f"{hydra_url}/.well-known/openid-configuration")
         resp.raise_for_status()
         hydra_meta = resp.json()
@@ -452,7 +453,7 @@ async def hydra_dcr_proxy(request: Request) -> Response:
     # the descriptive fields plus what was forced above.
     registration = {key: client_data[key] for key in _DCR_FIELDS if key in client_data}
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(15)) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=httpx.Timeout(15)) as client:
         upstream = await client.post(
             f"{admin_url}/admin/clients",
             content=_json.dumps(registration).encode(),
@@ -510,7 +511,7 @@ async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
     forward_headers = {
         k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")
     }
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30)) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=httpx.Timeout(30)) as client:
         upstream = await client.request(
             method=request.method,
             url=target,
@@ -533,6 +534,6 @@ async def hydra_oauth2_proxy(path: str, request: Request) -> Response:
 async def hydra_jwks_proxy(request: Request) -> Response:
     """Proxy JWKS so token verification works against our API URL."""
     hydra_url = _hydra_public_url()
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10)) as client:
+    async with outbound_client(Destination.INTERNAL, timeout=httpx.Timeout(10)) as client:
         resp = await client.get(f"{hydra_url}/.well-known/jwks.json")
     return Response(content=resp.content, status_code=resp.status_code, headers=dict(resp.headers))

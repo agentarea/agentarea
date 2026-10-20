@@ -77,6 +77,6 @@ def timezone_error(timezone: str) -> str | None:
     """Why ``timezone`` is not an IANA time zone name, or ``None``."""
     try:
         ZoneInfo(timezone)
-    except (ZoneInfoNotFoundError, ValueError):
+    except ZoneInfoNotFoundError, ValueError:
         return f"Unknown time zone {timezone!r}; use an IANA name such as 'Europe/Berlin'"
     return None

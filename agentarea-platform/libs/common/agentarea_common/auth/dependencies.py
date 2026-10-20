@@ -33,11 +33,10 @@ from .authorization import AuthorizationService
 from .context import (
     UserContext,
     UserPrincipal,
-    UserSessionRequiredError,
-    WorkspaceBoundCredentialError,
     WorkspaceUnreachableError,
 )
 from .context_manager import ContextManager
+from .credential import SESSION, Credential
 from .interfaces import AuthResult
 from .providers.factory import AuthProviderFactory
 
@@ -140,7 +139,7 @@ async def _member_workspace_ids(user_id: str) -> list[str]:
 
 async def _owned_and_named_workspaces(
     user_id: str, *, slug: str | None = None, workspace_id: str | None = None
-) -> "tuple[list[Workspace], Workspace | None]":
+) -> tuple[list[Workspace], Workspace | None]:
     """The workspaces ``user_id`` owns and the one named by slug or id, in one query.
 
     Database errors propagate: a failed lookup must not read as "no such
@@ -168,7 +167,7 @@ async def _owned_and_named_workspaces(
 
 async def _resolve_access(
     principal: UserPrincipal, *, slug: str | None = None, workspace_id: str | None = None
-) -> "Workspace | None":
+) -> Workspace | None:
     """Fill the workspaces ``principal`` can reach and administer.
 
     Combines what the ``AuthorizationService`` grants, graph memberships, and
@@ -184,7 +183,7 @@ async def _resolve_access(
 
 async def _resolve_access_unobserved(
     principal: UserPrincipal, *, slug: str | None, workspace_id: str | None
-) -> "Workspace | None":
+) -> Workspace | None:
     from agentarea_common.di.container import resolve
 
     authz = resolve(AuthorizationService)
@@ -373,7 +372,7 @@ async def _validate_api_key(token: str, request: Request) -> UserPrincipal | Non
         user_id=user_id,
         bound_workspace_id=workspace_id,
         bound_agent_id=agent_id,
-        api_key_id=str(key_id),
+        credential=Credential(kind="api_key", key_id=str(key_id)),
     )
 
 
@@ -470,7 +469,7 @@ async def _try_hydra_token(token: str, request: Request) -> UserPrincipal | None
 
         # OAuth identifies the principal, never its active tenant: any
         # workspace claim in the token is ignored.
-        return UserPrincipal(user_id=subject)
+        return UserPrincipal(user_id=subject, credential=Credential(kind="oauth"))
 
     except Exception as e:
         logger.debug(f"Hydra token verification failed: {e}")
@@ -520,7 +519,9 @@ async def _verify_token(token: str, request: Request) -> UserPrincipal:
         ) from e
 
     if auth_result.is_authenticated and auth_result.token:
-        return UserPrincipal(user_id=auth_result.token.user_id, email=auth_result.token.email)
+        return UserPrincipal(
+            user_id=auth_result.token.user_id, email=auth_result.token.email, credential=SESSION
+        )
 
     # Kratos rejected — try a Hydra OAuth token before failing
     hydra_principal = await _try_hydra_token(token, request)
@@ -571,41 +572,6 @@ async def get_principal(
     """
     _refuse_agent_key(principal)
     await _resolve_access(principal)
-    return principal
-
-
-def ensure_not_workspace_bound(principal: UserPrincipal) -> None:
-    """Refuse a credential bound to one workspace on a route that names none.
-
-    An API key acts only in the workspace it was issued for. A route without a
-    workspace in its path cannot confine it, so actions there that reach
-    beyond that workspace (creating one, joining one) need a user session.
-    """
-    if principal.bound_workspace_id is not None:
-        raise WorkspaceBoundCredentialError(
-            "An API key acts only in the workspace it was issued for; "
-            "sign in as a user to create or join workspaces"
-        )
-
-
-def ensure_user_session(caller: UserPrincipal | UserContext, action: str) -> None:
-    """Refuse an API key on an action that hands out or takes away access.
-
-    A key acts as its creator, so the creator's authority alone would let it
-    mint more keys and invite members, and those would keep the access after
-    the key itself is revoked. Managing keys, invitations, members and access
-    grants therefore needs a signed-in user. ``action`` completes "An API key
-    cannot ...".
-    """
-    if caller.api_key_id is not None:
-        raise UserSessionRequiredError(f"An API key cannot {action}; sign in as a user to do it")
-
-
-async def get_unbound_principal(
-    principal: UserPrincipal = Depends(get_principal),
-) -> UserPrincipal:
-    """The caller, provided its credential is not confined to one workspace."""
-    ensure_not_workspace_bound(principal)
     return principal
 
 
@@ -725,5 +691,4 @@ async def get_optional_principal(
 # Type aliases for easier use in endpoint dependencies
 UserContextDep = Annotated[UserContext, Depends(get_user_context)]
 PrincipalDep = Annotated[UserPrincipal, Depends(get_principal)]
-UnboundPrincipalDep = Annotated[UserPrincipal, Depends(get_unbound_principal)]
 OptionalPrincipalDep = Annotated[UserPrincipal | None, Depends(get_optional_principal)]

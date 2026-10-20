@@ -53,7 +53,7 @@ build_and_push() {
     build_args+=(--build-arg "APP_VERSION=${VERSION}")
   fi
   if [[ -n "$managed_environment" ]]; then
-    build_args+=(--build-arg "MANAGED_ENVIRONMENT=${managed_environment}")
+    build_args+=(--build-arg "AGENTAREA_SANDBOX_MANAGED_ENV=${managed_environment}")
   fi
 
   docker buildx build \

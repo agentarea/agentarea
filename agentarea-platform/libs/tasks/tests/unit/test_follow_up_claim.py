@@ -14,7 +14,9 @@ class _Running:
     def __init__(self, task: Task):
         self.task = task
 
-    async def find_active_by_agent_and_chat(self, agent_id: UUID, chat_id: str, limit: int = 5):
+    async def find_active_in_session(
+        self, agent_id: UUID, trigger_id: str, session_key: str, limit: int = 5
+    ):
         return [self.task]
 
 
@@ -53,7 +55,7 @@ def _running_task() -> Task:
         id=task_id,
         agent_id=uuid4(),
         description="Chat",
-        parameters={"channel_origin": {"chat_id": "c-1"}},
+        parameters={"trigger_id": "trg-1", "session": {"key": "c-1", "continue": True}},
         status="running",
         execution_id=f"task-{task_id}",
         user_id="user-1",
@@ -87,7 +89,7 @@ def _delivery(running: Task, delivery_id: UUID) -> AgentTask:
         user_id="user-1",
         workspace_id="ws-1",
         agent_id=running.agent_id,
-        task_parameters={"channel_origin": {"chat_id": "c-1"}},
+        task_parameters={"trigger_id": "trg-1", "session": {"key": "c-1", "continue": True}},
     )
 
 
@@ -138,7 +140,7 @@ async def test_a_follow_up_sends_the_persons_message_not_the_first_run_message()
     delivery.query = "Answer politely\n\n## What started this run\n..."
     delivery.task_parameters = {**delivery.task_parameters, "follow_up_message": "hello again"}
 
-    routed = await service._try_route_to_active_workflow(delivery, "c-1")
+    routed = await service._try_route_to_active_workflow(delivery, "trg-1", "c-1")
 
     assert routed is not None and routed.status == "routed"
     assert executor.signals == [(running.execution_id, "queue_message", {"message": "hello again"})]
@@ -154,7 +156,7 @@ async def test_a_follow_up_whose_text_is_known_routes_even_with_an_event_file():
         "trigger_event_file": "trigger-event-3.json",
         "follow_up_message": "hello again",
     }
-    assert await service._try_route_to_active_workflow(delivery, "c-1") is not None
+    assert await service._try_route_to_active_workflow(delivery, "trg-1", "c-1") is not None
 
 
 async def test_a_message_whose_event_needs_a_file_starts_its_own_run():
@@ -168,5 +170,5 @@ async def test_a_message_whose_event_needs_a_file_starts_its_own_run():
         "trigger_event_file": "trigger-event-3.json",
     }
 
-    assert await service._try_route_to_active_workflow(delivery, "c-1") is None
+    assert await service._try_route_to_active_workflow(delivery, "trg-1", "c-1") is None
     assert executor.signals == []

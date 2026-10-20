@@ -1,5 +1,6 @@
 """Simple base repository for CRUD operations."""
 
+import builtins
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +24,7 @@ class BaseRepository[T]:
         """Compatibility alias for workspace-scoped repositories."""
         return await self.get(id)
 
-    async def list(self) -> list[T]:
+    async def list(self) -> builtins.list[T]:
         """List all records."""
         from sqlalchemy import select
 

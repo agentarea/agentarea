@@ -8,7 +8,6 @@ import Table from "@/components/Table/Table";
 import { TableDateDisplay } from "@/components/Table/TableDateDisplay";
 import { TableRowAction } from "@/components/Table/TableRowAction";
 import { StatusIndicator } from "@/components/ui/status-indicator";
-import { useCurrency } from "@/hooks/useCurrency";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { getTriggerExecutionStatusPresentation } from "@/lib/status";
 import { formatTriggerCost } from "../../components/triggerDisplay";
@@ -17,6 +16,8 @@ interface ExecutionsTableProps {
   executions: TriggerExecutionResponse[];
   /** Principal id -> display name, resolved by the page via GET /v1/principals. */
   principalNames?: Record<string, string>;
+  /** The workspace's billing currency, loaded by the page as the overview does. */
+  currency: string | null;
 }
 
 /**
@@ -63,11 +64,11 @@ function OpenTaskAction({ taskId }: { taskId: string }) {
 export default function ExecutionsTable({
   executions,
   principalNames = {},
+  currency,
 }: ExecutionsTableProps) {
   const t = useTranslations("TriggersPage.detail");
   const format = useFormatter();
   const locale = useLocale();
-  const { currency } = useCurrency();
   const fmtCost = (value: number) => formatTriggerCost(value, currency, locale);
   // Seconds below a minute, minutes above: "12.4 s", "2 min", in the UI locale.
   const fmtDuration = (ms: number) =>

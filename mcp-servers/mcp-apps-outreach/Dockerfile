@@ -1,7 +1,7 @@
 # Runtime image only: `bun run build` produces dist/server.js (all server
 # dependencies bundled) and dist/app/*.html (one single-file bundle per view).
 # The dataset is bound at start through DATA_PATH; it ships here as the default.
-FROM node:22-slim
+FROM node:24.22.0-trixie-slim
 
 WORKDIR /app
 COPY dist/server.js dist/server.js

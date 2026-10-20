@@ -75,7 +75,7 @@ forwarding failure is logged and does not fail the write.
 
 Everything a run does is published as events: `llm.call.started` and
 `llm.call.completed`, `tool.call` and `tool.result`, delegations, budget warnings,
-`approval.request` and `approval.response`, and the terminal states. Events are
+`approval.requested` and `approval.decided`, and the terminal states. Events are
 published to Redis for live streaming and persisted for history, which is what
 lets a client attach after a task finishes and still render the outcome.
 
@@ -116,8 +116,6 @@ are joined by workspace and timestamp, not by a shared identifier.
   relationship through `/v1/workspaces/{workspace}/access-control/relationships`, and the automatic owner
   grants written when a resource is created, produce no audit event. Who was given
   access to what is recorded in the graph itself, not in the audit log.
-- **API key lifecycle is not audited.** Creating and deleting API keys produces no
-  audit event.
 - **A failed audit write does not fail the action.** The decorator wraps the
   recording step in a try/except that logs a warning. If the audit insert fails,
   the mutation still succeeds and the event is lost.
@@ -128,8 +126,10 @@ are joined by workspace and timestamp, not by a shared identifier.
   missing.
 - **`actor_type` is effectively always `user`.** The service defaults it and no
   decorated call site overrides it, so an action taken with an API key is recorded
-  with the resolved user id and the type `user`. The key itself is named in
-  `event_metadata.api_key_id`; the column the distinction was meant for is not
+  with the resolved user id and the type `user`. How the caller authenticated is in
+  `event_metadata`: `credential` (`session`, `oauth` or `api_key`), `surface`
+  (`api` or `mcp`), and `api_key_id` when a key was used. An action taken inside an
+  agent run records none of them; the column the distinction was meant for is not
   populated.
 - **Append-only is a deployment instruction, not a code guarantee.** The
   repository only inserts and reads, and the model documents that only INSERT and

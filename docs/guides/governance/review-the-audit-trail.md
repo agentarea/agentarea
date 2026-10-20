@@ -146,8 +146,8 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 ```
 
 That stream carries `tool.call`, `tool.result` (including `denied_by_policy`),
-`llm.call.*`, `approval.request`, `approval.response`, `BudgetWarning`,
-`BudgetExceeded` and the terminal states.
+`llm.call.*`, `approval.requested`, `approval.decided`, `budget.warning`,
+`budget.exceeded` and the terminal states.
 
 **Authorization grant changes are not there.** Writing or revoking a relationship
 through `/v1/workspaces/{workspace}/access-control/relationships`, and the owner grants written

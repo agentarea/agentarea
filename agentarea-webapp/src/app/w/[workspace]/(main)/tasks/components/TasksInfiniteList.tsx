@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
+import type { SourceType } from "@/lib/sourceTypes";
 import LoadMoreSentinel from "@/components/LoadMoreSentinel";
 import { fetchTasksPage, type TasksPageResult, type TasksQuery } from "../actions";
 import TasksList from "./TasksList";
@@ -12,7 +12,7 @@ interface TasksInfiniteListProps {
   /** The query the first page loaded with, for the pages after it. */
   query: TasksQuery;
   viewMode: string;
-  catalog: TriggerCatalogEntry[];
+  sourceTypes: SourceType[];
 }
 
 /** The task list, the next page loading as its end scrolls into view. */
@@ -20,7 +20,7 @@ export default function TasksInfiniteList({
   firstPage,
   query,
   viewMode,
-  catalog,
+  sourceTypes,
 }: TasksInfiniteListProps) {
   const t = useTranslations("TasksPage");
   const [tasks, setTasks] = useState(firstPage.tasks);
@@ -56,7 +56,7 @@ export default function TasksInfiniteList({
       <TasksList
         initialTasks={tasks}
         viewMode={viewMode}
-        catalog={catalog}
+        sourceTypes={sourceTypes}
         principalNames={principalNames}
       />
       <LoadMoreSentinel

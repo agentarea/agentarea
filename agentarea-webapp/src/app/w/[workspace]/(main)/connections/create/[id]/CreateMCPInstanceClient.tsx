@@ -24,6 +24,7 @@ import Divider from "@/components/ui/divider";
 import { StartAgentButton } from "@/components/ui/start-agent-button";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import FormError from "@/components/FormError";
+import { apiErrorDetail } from "@/lib/api-errors";
 import { ToolsTable } from "../../components/ToolsTable";
 import {
   CredentialEncryptionNote,
@@ -397,14 +398,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     });
 
     if (instanceResult.error) {
-      const d = instanceResult.error.detail;
-      throw new Error(
-        typeof d === "string"
-          ? d
-          : Array.isArray(d) && d[0]?.msg
-            ? d[0].msg
-            : t("createFailed")
-      );
+      throw new Error(apiErrorDetail(instanceResult, t("createFailed")));
     }
     const created = instanceResult.data;
     if (!created) throw new Error(t("createFailed"));
@@ -745,14 +739,9 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
       });
 
       if (instanceResult.error) {
-        const errorDetail = instanceResult.error.detail;
-        const errorMessage =
-          typeof errorDetail === "string"
-            ? errorDetail
-            : Array.isArray(errorDetail) && errorDetail[0]?.msg
-              ? errorDetail[0].msg
-              : "Failed to create MCP instance";
-        throw new Error(errorMessage);
+        throw new Error(
+          apiErrorDetail(instanceResult, "Failed to create MCP instance")
+        );
       }
 
       const created = instanceResult.data;

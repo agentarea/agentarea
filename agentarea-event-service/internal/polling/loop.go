@@ -31,7 +31,7 @@ type PollFunc func(ctx context.Context) error
 
 // RunLoop executes fn repeatedly until ctx is cancelled.
 // On error it backs off before retrying. On panic it recovers and restarts with backoff.
-func RunLoop(ctx context.Context, triggerID string, fn PollFunc) {
+func RunLoop(ctx context.Context, sourceID string, fn PollFunc) {
 	attempts := 0
 	for {
 		select {
@@ -44,7 +44,7 @@ func RunLoop(ctx context.Context, triggerID string, fn PollFunc) {
 			defer func() {
 				if r := recover(); r != nil {
 					slog.Error("panic in poll loop, recovering",
-						"trigger_id", triggerID,
+						"source_id", sourceID,
 						"panic", r,
 					)
 				}
@@ -56,7 +56,7 @@ func RunLoop(ctx context.Context, triggerID string, fn PollFunc) {
 				}
 				wait := backoffWait(attempts)
 				slog.Warn("poll error, backing off",
-					"trigger_id", triggerID,
+					"source_id", sourceID,
 					"error", err,
 					"backoff", wait,
 				)

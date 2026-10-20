@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
+from agentarea_common.tool_cost import ToolCostError, parse_connection_cost
 from agentarea_common.utils.pg_text import require_pg_text
 from agentarea_common.utils.types import NotNull
 from pydantic import (
@@ -241,6 +242,25 @@ class MCPServerInstanceUpdate(BaseModel):
         default=None,
         description=f"{CONTEXT_SIGNING_HELP} Send null to remove it.",
     )
+    cost: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "What a call of this connection costs, set by a member on a connection the "
+            "workspace pays for: a rate (per call or per unit), a field of the response, "
+            "or free (wiki ADR-0038 §2.3). It wins over the connector's declaration. "
+            "Send null to go back to the connector's."
+        ),
+    )
+
+    @field_validator("cost")
+    @classmethod
+    def _validate_cost(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is not None:
+            try:
+                parse_connection_cost(v)
+            except ToolCostError as error:
+                raise ValueError(str(error)) from error
+        return v
 
     @field_validator("json_spec")
     @classmethod

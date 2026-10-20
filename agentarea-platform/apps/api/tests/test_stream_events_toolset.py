@@ -1,4 +1,4 @@
-"""An agent reads a stream from its own cursor: what arrived since its last run."""
+"""An agent reads a stream from its own cursor, or from a time: what arrived since."""
 
 import json
 from contextlib import asynccontextmanager
@@ -14,7 +14,7 @@ from agentarea_agents_sdk.tools.code_tools_loader import (
     get_code_tools_metadata,
 )
 from agentarea_api.tools.stream_events_toolset import StreamEventsToolset
-from agentarea_streams.domain import JournaledEvent, StreamNotFoundError
+from agentarea_streams.domain import RecordedEvent, StreamNotFoundError
 from agentarea_triggers.event_context import UNTRUSTED_DATA_NOTICE
 from fastapi import HTTPException
 
@@ -22,12 +22,14 @@ NOW = datetime(2026, 10, 6, 12, 0, tzinfo=UTC)
 MODULE = "agentarea_api.tools.stream_events_toolset"
 
 
-def _event(sequence: int, **data) -> JournaledEvent:
-    return JournaledEvent(
+def _event(sequence: int, **data) -> RecordedEvent:
+    return RecordedEvent(
         type="payment.succeeded",
-        source="webhook:yookassa",
+        source="webhook:example_pay",
         data=data or {"n": sequence},
         stream_id=uuid4(),
+        workspace_id="w",
+        created_by="u",
         sequence=sequence,
         event_key=f"k{sequence}",
         received_at=NOW,
@@ -96,6 +98,32 @@ async def test_nothing_new_keeps_the_cursor_where_it_was(env):
     assert page["events"] == []
     assert page["next_after"] == 99
     assert page["has_more"] is False
+
+
+async def test_since_reads_what_arrived_from_that_time_on(env):
+    env.service.list_events_since.return_value = [_event(7), _event(8)]
+    page = await _read(stream="payments", since="2026-10-06T11:00:00Z", limit=5)
+    assert env.service.list_events_since.await_args.kwargs == {
+        "since": datetime(2026, 10, 6, 11, 0, tzinfo=UTC),
+        "after": 0,
+        "limit": 6,
+    }
+    env.service.list_events.assert_not_called()
+    assert [e["sequence"] for e in page["events"]] == [7, 8]
+    assert page["next_after"] == 8
+    assert page["has_more"] is False
+
+
+async def test_since_pages_on_with_the_cursor(env):
+    env.service.list_events_since.return_value = [_event(9)]
+    await _read(stream="payments", since="2026-10-06T11:00:00+00:00", after_sequence=8)
+    assert env.service.list_events_since.await_args.kwargs["after"] == 8
+
+
+async def test_a_since_without_a_timezone_is_refused(env):
+    with pytest.raises(ToolError, match="since"):
+        await StreamEventsToolset().read_stream(stream="payments", since="2026-10-06T11:00:00")
+    env.service.find_stream.assert_not_called()
 
 
 async def test_credentials_in_an_event_never_reach_the_agent(env):

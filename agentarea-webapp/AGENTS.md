@@ -115,7 +115,8 @@ already on main included.
 
 The workspace lives in the URL: every workspace page is `/w/{slug}/...`, and the
 URL is the only thing that scopes it — no cookie, no fallback. `/`, `/workplace`
-(Kratos' post-login return) and `/invite` land in the personal workspace; any
+(Kratos' post-login return), `/invite`, and the landing's deep links
+`/skills/import` and `/bundles/import` land in the personal workspace; any
 other unprefixed path 404s. `/w/{slug}` for a workspace the caller is not a
 member of 404s (`w/[workspace]/layout.tsx`).
 

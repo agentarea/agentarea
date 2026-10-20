@@ -76,7 +76,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
 
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         # Single policy enforcement point (allow / deny / require-approval).
@@ -131,6 +131,8 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                 or {},
             )
 
+            started = workflow.now() if self._task_log_on() else None
+            started_at = started.isoformat() if started else None
             result_obj = await self._execute_governed_tool(
                 tool_call, tool_name, tool_args, mcp_request
             )
@@ -181,9 +183,14 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
             # whether its ledger lines are written (``cost_metered``), so they are
             # not derived from the event again. Absent in older histories.
             paid_cost = to_money(result_dict.get("cost"))
-            priced_cost_fields = (
+            priced_cost_fields: dict[str, Any] = (
                 {"model_cost": serialize_money(model_cost)} if model_cost > ZERO else {}
             )
+            # Absent in older histories, like model_cost.
+            if result_dict.get("model_billing"):
+                priced_cost_fields["model_billing"] = result_dict["model_billing"]
+            if result_dict.get("cost_unknown"):
+                priced_cost_fields["cost_unknown"] = True
             paid_call_fields: dict[str, Any] = {}
             if paid_cost > ZERO:
                 paid_call_fields["cost"] = serialize_money(paid_cost)
@@ -198,6 +205,15 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                 replay_fields["replayed"] = True
             if result_dict.get("attempt"):
                 replay_fields["attempt"] = result_dict["attempt"]
+            tool_meta = {
+                "exit_code": result_dict.get("exit_code"),
+                "duration": execution_time
+                if execution_time is not None or started is None
+                else (workflow.now() - started).total_seconds(),
+                "server": result_dict.get("server_name") or result_dict.get("server_instance_id"),
+                "started_at": started_at,
+                "artifact_paths": result_dict.get("artifact_paths") or [],
+            }
             if model_cost + paid_cost > ZERO:
                 if self.budget_tracker is None:
                     raise RuntimeError("Workflow budget tracker is not initialized")
@@ -216,6 +232,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                         content=f"Tool failed: {error_message}",
                         tool_call_id=tool_call.id,
                         name=tool_name,
+                        meta=tool_meta,
                     )
                 )
                 self._events.add_event(
@@ -258,6 +275,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
                     tool_call_id=tool_call.id,
                     name=tool_name,
                     attachments=result_dict.get("images") or None,
+                    meta=tool_meta,
                 )
             )
 
@@ -355,7 +373,7 @@ class ToolExecutionMixin(ToolApprovalMixin, ContextToolsMixin, ToolStopMixin):
         verdict_type, reason, ran = verdict
 
         if verdict_type == GovernanceDeniedError.__name__:
-            await self._deny_tool_call(tool_call, tool_name, reason, ran=ran)
+            await self._deny_tool_call(tool_call, tool_name, reason, ran=ran, announced=True)
             await self._publish_events_immediately()
             return None
 

@@ -4,7 +4,7 @@ import { Trash2, Zap } from "lucide-react";
 import type { TriggerSpec } from "@/api/client/types.gen";
 import AccordionControl from "@/components/AccordionControl";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { SecretSelect } from "@/components/SecretSelect";
+import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Note from "@/components/ui/note";
@@ -17,14 +17,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useAttachableResources } from "@/hooks/use-attachable-resources";
-import {
-  findTriggerCatalogEntry,
-  getTriggerLane,
-  renderTriggerIcon,
-} from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
+import { resolveSession } from "@/lib/sourceTypes";
+import { SessionSetting } from "@/app/w/[workspace]/(main)/triggers/components/SessionSetting";
+import { renderTriggerIcon } from "@/app/w/[workspace]/(main)/triggers/components/triggerDisplay";
 import { CronScheduler } from "@/app/w/[workspace]/(main)/triggers/create/CronScheduler";
+import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import { TIMEZONES } from "@/app/w/[workspace]/(main)/triggers/create/timezones";
 import { requiresTaskText } from "@/app/w/[workspace]/(main)/triggers/create/triggerShape";
 
@@ -35,67 +32,39 @@ let nextDraftKey = 0;
 export const toTriggerDrafts = (specs: TriggerSpec[]): TriggerDraft[] =>
   specs.map((spec) => ({ key: String(nextDraftKey++), spec }));
 
-const catalogEntryFor = (spec: TriggerSpec, catalog: TriggerCatalogEntry[]) =>
-  findTriggerCatalogEntry(spec, catalog) as TriggerCatalogEntry | undefined;
+/** What a trigger can be: a schedule, or a subscription to a stream. */
+const TRIGGER_TYPES = ["cron", "stream"] as const;
 
-const credentialSecretId = (spec: TriggerSpec, key: string): string => {
-  const value = spec.channel_credentials?.[key];
-  return value && typeof value === "object" && "secret_id" in value
-    ? String(value.secret_id)
-    : "";
-};
-
-/** A channel cannot receive anything until each of its credentials is picked. */
-function missingCredentials(
-  spec: TriggerSpec,
-  entry: TriggerCatalogEntry | undefined
-): string[] {
-  if (!entry) return [];
-  const required =
-    getTriggerLane(spec, entry) === "channel" || !!entry.data_extractor;
-  if (!required) return [];
-  return (entry.credential_fields ?? [])
-    .filter((field) => !credentialSecretId(spec, field.key))
-    .map((field) => field.key);
-}
-
-export function hasIncompleteTriggers(
-  drafts: TriggerDraft[],
-  catalog: TriggerCatalogEntry[]
-): boolean {
+/** A stream trigger cannot fire until it is bound to a stream. */
+export function hasIncompleteTriggers(drafts: TriggerDraft[]): boolean {
   return drafts.some(
-    ({ spec }) =>
-      missingCredentials(spec, catalogEntryFor(spec, catalog)).length > 0
+    ({ spec }) => spec.trigger_type === "stream" && !spec.stream_id
   );
 }
 
-function specFromEntry(entry: TriggerCatalogEntry): TriggerSpec {
+function specFor(
+  type: (typeof TRIGGER_TYPES)[number],
+  name: string
+): TriggerSpec {
   return {
-    name: entry.name,
-    trigger_type: entry.backend_type,
+    name,
+    trigger_type: type,
     enabled: true,
     task_parameters: {},
-    ...(entry.backend_type === "cron"
-      ? { cron_expression: entry.default_cron ?? null, timezone: "UTC" }
-      : {}),
-    ...(entry.backend_type === "webhook"
-      ? { webhook_type: entry.webhook_type || "generic" }
-      : {}),
-    ...(entry.default_methods ? { allowed_methods: entry.default_methods } : {}),
-    ...(entry.data_extractor ? { data_extractor: entry.data_extractor } : {}),
+    ...(type === "cron" ? { cron_expression: null, timezone: "UTC" } : {}),
   };
 }
 
 type TriggersConfigProps = {
-  /** `null` when the trigger catalog could not be loaded. */
-  catalog: TriggerCatalogEntry[] | null;
+  /** The streams a stream trigger can bind to. */
+  streams: StreamOptions;
   drafts: TriggerDraft[];
   onDraftsChange: React.Dispatch<React.SetStateAction<TriggerDraft[]>>;
   showErrors: boolean;
 };
 
 const TriggersConfig = ({
-  catalog,
+  streams,
   drafts,
   onDraftsChange,
   showErrors,
@@ -103,8 +72,7 @@ const TriggersConfig = ({
   const [accordionValue, setAccordionValue] = useState<string>("triggers");
   const t = useTranslations("AgentsPage.create");
   const tTrigger = useTranslations("TriggersPage.create");
-  const resources = useAttachableResources({ withSecrets: true });
-  const secretsFailed = resources.failed.includes("secrets");
+  const tType = useTranslations("TriggersPage.type");
 
   // Returns the previous list when nothing changed: CronScheduler reports its
   // value on every render.
@@ -125,20 +93,20 @@ const TriggersConfig = ({
 
   const dropdownItems = useMemo(
     () =>
-      (catalog ?? []).map((entry) => ({
-        id: entry.id,
-        label: entry.name,
-        icon: renderTriggerIcon(entry, undefined, "h-4 w-4"),
+      TRIGGER_TYPES.map((type) => ({
+        id: type,
+        label: tType(type),
+        icon: renderTriggerIcon({ trigger_type: type }, "h-4 w-4"),
       })),
-    [catalog]
+    [tType]
   );
 
-  const addTrigger = (entryId: string) => {
-    const entry = catalog?.find((e) => e.id === entryId);
-    if (!entry) return;
+  const addTrigger = (type: string) => {
+    const known = TRIGGER_TYPES.find((item) => item === type);
+    if (!known) return;
     onDraftsChange((previous) => [
       ...previous,
-      ...toTriggerDrafts([specFromEntry(entry)]),
+      ...toTriggerDrafts([specFor(known, tType(known))]),
     ]);
   };
 
@@ -160,20 +128,16 @@ const TriggersConfig = ({
       dropdownItems={dropdownItems}
     >
       <div className="space-y-3">
-        {catalog === null && (
-          <p role="alert" className="text-sm text-destructive">
-            {tTrigger("catalogLoadFailed")}
-          </p>
-        )}
+        {streams.error &&
+          drafts.some(({ spec }) => spec.trigger_type === "stream") && (
+            <SectionLoadError message={streams.error} />
+          )}
         {drafts.map(({ key, spec }) => {
-          const entry = catalogEntryFor(spec, catalog ?? []);
           const taskText = String(spec.task_parameters?.text ?? "");
-          const taskTextRequired = requiresTaskText(
-            spec.trigger_type,
-            spec.data_extractor
+          const taskTextRequired = requiresTaskText(spec.trigger_type);
+          const stream = streams.items.find(
+            (item) => item.id === spec.stream_id
           );
-          const missing = showErrors ? missingCredentials(spec, entry) : [];
-          const lane = getTriggerLane(spec, entry);
 
           return (
             <div
@@ -182,10 +146,10 @@ const TriggersConfig = ({
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                  {renderTriggerIcon(entry, spec, "h-4 w-4")}
+                  {renderTriggerIcon(spec, "h-4 w-4")}
                 </span>
                 <span className="truncate text-sm font-medium">
-                  {entry?.name ?? spec.webhook_type ?? spec.trigger_type}
+                  {tType(spec.trigger_type)}
                 </span>
                 <div className="ml-auto flex items-center gap-2">
                   <Switch
@@ -270,48 +234,49 @@ const TriggersConfig = ({
                 </>
               )}
 
-              {(entry?.credential_fields ?? []).map((field) => (
-                <div key={field.key} className="grid gap-2 md:max-w-sm">
-                  <FormLabel
-                    htmlFor={`trigger-credential-${key}-${field.key}`}
-                    required={lane === "channel" || !!entry?.data_extractor}
-                  >
-                    {field.label}
-                  </FormLabel>
-                  <SecretSelect
-                    id={`trigger-credential-${key}-${field.key}`}
-                    secrets={resources.secrets}
-                    value={credentialSecretId(spec, field.key)}
-                    onChange={(secretId) =>
-                      patch(key, {
-                        channel_credentials: {
-                          ...spec.channel_credentials,
-                          [field.key]: { secret_id: secretId },
-                        },
-                      })
-                    }
-                    disabled={resources.loading || secretsFailed}
-                    placeholder={
-                      resources.loading
-                        ? tTrigger("loadingResources")
-                        : tTrigger("selectSecret")
-                    }
-                    searchPlaceholder={tTrigger("selectSecret")}
-                    emptyMessage={tTrigger("noSecrets")}
-                    createLabel={tTrigger("newSecret")}
-                    onCreated={resources.refresh}
+              {spec.trigger_type === "stream" && (
+                <>
+                  <div className="grid gap-2 md:max-w-sm">
+                    <FormLabel htmlFor={`trigger-stream-${key}`} required>
+                      {tTrigger("stream")}
+                    </FormLabel>
+                    <Select
+                      value={spec.stream_id ?? ""}
+                      onValueChange={(stream_id) => patch(key, { stream_id })}
+                      disabled={streams.error !== null}
+                    >
+                      <SelectTrigger id={`trigger-stream-${key}`}>
+                        <SelectValue
+                          placeholder={
+                            streams.items.length === 0
+                              ? tTrigger("noStreams")
+                              : undefined
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {streams.items.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {showErrors && !spec.stream_id && (
+                      <p role="alert" className="text-sm text-destructive">
+                        {t("triggerStreamRequired")}
+                      </p>
+                    )}
+                  </div>
+                  <SessionSetting
+                    id={`trigger-session-${key}`}
+                    value={resolveSession(
+                      spec.session,
+                      stream?.continuesSessions ?? false
+                    )}
+                    onChange={(session) => patch(key, { session })}
                   />
-                  {missing.includes(field.key) && (
-                    <p role="alert" className="text-sm text-destructive">
-                      {t("triggerCredentialRequired")}
-                    </p>
-                  )}
-                </div>
-              ))}
-              {secretsFailed && (entry?.credential_fields ?? []).length > 0 && (
-                <p role="alert" className="text-xs text-destructive">
-                  {tTrigger("resourcesLoadFailed")}
-                </p>
+                </>
               )}
 
               <div className="grid gap-2">
@@ -322,13 +287,9 @@ const TriggersConfig = ({
                 >
                   {tTrigger("taskInstructions")}
                 </FormLabel>
-                {!taskTextRequired && (
+                {spec.trigger_type === "stream" && (
                   <p className="text-xs text-muted-foreground">
-                    {tTrigger(
-                      lane === "channel"
-                        ? "taskTextFromChannel"
-                        : "taskTextFromCall"
-                    )}
+                    {tTrigger("taskTextFromStream")}
                   </p>
                 )}
                 <Textarea

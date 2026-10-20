@@ -19,8 +19,10 @@ from agentarea_common.auth.tool_authorization import (
 )
 from agentarea_common.money import ZERO, serialize_money, to_money
 from agentarea_common.tool_cost import ToolConnection, ToolCostError
+from agentarea_governance.domain.policies import effective_policy_from_json
 from agentarea_governance.tool_calls import (
     GovernedToolCall,
+    PendingCost,
     ToolCallOutcome,
     ToolUsage,
     Verdict,
@@ -30,6 +32,7 @@ from agentarea_mcp.domain.metering import mcp_tool_connection
 from agentarea_mcp.tool_context import call_context_from_task
 from agentarea_tasks.domain.costs import tool_call_entry
 from agentarea_tasks.infrastructure.cost_repository import CostEntryRepository
+from agentarea_tasks.model_spend_caps import current_budget
 from agentarea_tasks.spend_gate import spend_cap_refusal
 from agentarea_wallet.domain.enums import settlement_status
 from prometheus_client import Counter
@@ -213,7 +216,7 @@ def _settled_payments(payment: dict[str, Any] | None) -> tuple[dict[str, Any], .
 
 
 def make_tools_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 
@@ -265,11 +268,10 @@ def make_tools_activities(
                 instance = await service.get(UUID(route.instance_id))
                 if instance is None:
                     return None
-                server = await service.mcp_server_repository.get_server_by_id(
-                    instance.server_spec_id
-                )
                 return mcp_tool_connection(
-                    instance, getattr(server, "json_spec", None), route.raw_name
+                    instance,
+                    await service.mcp_server_repository.catalog_json_spec(instance.server_spec_id),
+                    route.raw_name,
                 )
             openapi_configs = [
                 tc
@@ -302,6 +304,7 @@ def make_tools_activities(
                         connection,
                         await connection_service.catalog_connector(connection),
                         tool.operation_name,
+                        catalog_spec=await connection_service.catalog_spec(connection),
                     )
         return None
 
@@ -315,45 +318,43 @@ def make_tools_activities(
                 [tool_call_entry(usage) for usage in usages]
             )
 
-    async def _spend_gate(request: MCPToolRequest, call: GovernedToolCall) -> str | None:
+    async def _spend_gate(
+        request: MCPToolRequest, call: GovernedToolCall, pending: PendingCost | None
+    ) -> str | None:
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
-            return await spend_cap_refusal(CostEntryRepository(session, user_context), call)
+            budget = await current_budget(
+                session,
+                user_context,
+                call.agent_id,
+                effective_policy_from_json(call.authorization.effective_policy).budget,
+            )
+            return await spend_cap_refusal(
+                CostEntryRepository(session, user_context), call, pending, budget=budget
+            )
 
     async def _record_tool_progress(
         data: dict[str, Any], *, request: MCPToolRequest, user_context: Any
     ) -> None:
-        """Store a ``tool.progress`` event, then put it on the task's live stream.
-
-        Its own short transaction, so the row is visible while the call still runs.
-        """
+        """Broadcast a ``tool.progress`` signal to the task's live feeds; it is never kept."""
         from agentarea_common.events.contract import TOOL_PROGRESS
-        from agentarea_common.events.task_stream import publish_task_event
+        from agentarea_common.events.task_stream import broadcast_live, task_event
 
-        event_id = uuid4()
-        timestamp = datetime.now(UTC)
-        async with ActivityContext(container, user_context) as progress_ctx:
-            task_event_service = await progress_ctx.get_task_event_service()
-            await task_event_service.create_workflow_event(
-                task_id=UUID(str(request.task_id)),
-                event_id=event_id,
-                event_type=TOOL_PROGRESS,
-                data=data,
-                timestamp=timestamp,
-                workspace_id=str(request.workspace_id),
-                created_by=str(user_context.user_id),
-            )
-        if dependencies.broker_client is not None:
-            await publish_task_event(
-                dependencies.broker_client,
+        if dependencies.broker_client is None:
+            raise RuntimeError("tool progress is broadcast on the broker; no broker client is set")
+        await broadcast_live(
+            dependencies.broker_client,
+            task_event(
                 task_id=str(request.task_id),
+                workspace_id=str(request.workspace_id),
                 event_type=TOOL_PROGRESS,
+                event_id=str(uuid4()),
+                timestamp=datetime.now(UTC),
                 data=data,
-                event_id=str(event_id),
-                timestamp=timestamp.isoformat(),
-            )
+            ),
+        )
 
     @activity.defn
     @auto_heartbeater
@@ -411,8 +412,8 @@ def make_tools_activities(
             approval_granted=request.policy_approval_granted,
         )
 
-        async def spend_gate(governed: GovernedToolCall) -> str | None:
-            return await _spend_gate(request, governed)
+        async def spend_gate(governed: GovernedToolCall, pending: PendingCost | None) -> str | None:
+            return await _spend_gate(request, governed, pending)
 
         layered = await run_tool_call(
             call, invoke, audit=audit, ledger=ledger, spend_gate=spend_gate
@@ -533,15 +534,34 @@ def make_tools_activities(
                         from agentarea_llm.application.media_generation_service import (
                             MediaGenerationService,
                         )
+                        from agentarea_tasks.model_spend_caps import (
+                            refuse_model_call_at_spend_cap,
+                        )
 
+                        cap_session = container._database.async_session_factory()
+                        ctx._sessions.append(cap_session)
+                        media_budget = await current_budget(
+                            cap_session,
+                            user_context,
+                            request.agent_id,
+                            effective_policy_from_json(request.effective_policy).budget,
+                        )
                         extra_kwargs = {
                             "backend": MediaGenerationService(
                                 models=await ctx.get_model_service(),
                                 jobs=await ctx.get_video_generation_jobs(),
+                                workspace_id=str(request.workspace_id),
                                 task_id=str(request.task_id) if request.task_id else None,
                                 image_model_id=settings.get("image_model_id"),
                                 video_model_id=settings.get("video_model_id"),
                                 call_ref=_payment_call_ref(request),
+                                refuse_at_spend_cap=functools.partial(
+                                    refuse_model_call_at_spend_cap,
+                                    cap_session,
+                                    user_context,
+                                    media_budget,
+                                    request.agent_id,
+                                ),
                             ),
                             "storage": SandboxFileStore(
                                 mcp_manager_url=dependencies.settings.mcp.MANAGER_URL,
@@ -1028,6 +1048,10 @@ def make_tools_activities(
                     artifact_paths=[str(p) for p in (result.get("artifact_paths") or [])],
                     service_cost=to_money(result.get("service_cost")),
                     model_cost=to_money(result.get("model_cost")),
+                    model_billing=result.get("model_billing")
+                    if isinstance(result.get("model_billing"), dict)
+                    else None,
+                    cost_unknown=bool(result.get("cost_unknown")),
                     payment=result.get("payment")
                     if isinstance(result.get("payment"), dict)
                     else None,

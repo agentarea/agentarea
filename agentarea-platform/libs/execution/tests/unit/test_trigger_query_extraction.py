@@ -112,7 +112,10 @@ class TestNothingToAsk:
         ],
     )
     def test_a_trigger_with_nothing_to_say_resolves_to_nothing(self, trigger_data):
-        assert resolve_task_query(make_trigger(description="Monitor GitHub pushes"), trigger_data) is None
+        assert (
+            resolve_task_query(make_trigger(description="Monitor GitHub pushes"), trigger_data)
+            is None
+        )
 
     def test_whitespace_only_task_text_is_not_an_instruction(self):
         assert resolve_task_query(make_trigger({"text": "   "}), {"raw_data": {}}) is None

@@ -32,6 +32,12 @@ def update_chart_appversion(chart_path):
         f'appVersion: "{app_version}"',
         content
     )
+    # The artifacthub.io/images annotation lists our images at appVersion
+    updated_content = re.sub(
+        r'(image: agentarea/[a-z0-9-]+:)[^\s@]+',
+        rf'\g<1>{app_version}',
+        updated_content
+    )
 
     if updated_content == content:
         print(f"✅ Chart appVersion already set to {app_version}")
@@ -44,3 +50,4 @@ def update_chart_appversion(chart_path):
 
 if __name__ == '__main__':
     update_chart_appversion('charts/agentarea/Chart.yaml')
+    update_chart_appversion('charts/agentarea-dataplane/Chart.yaml')

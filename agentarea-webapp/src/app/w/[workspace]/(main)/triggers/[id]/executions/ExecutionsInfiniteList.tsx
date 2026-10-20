@@ -11,9 +11,12 @@ import ExecutionsTable from "./ExecutionsTable";
 export default function ExecutionsInfiniteList({
   triggerId,
   firstPage,
+  currency,
 }: {
   triggerId: string;
   firstPage: ExecutionsPage;
+  /** The workspace's billing currency, loaded by the page as the overview does. */
+  currency: string | null;
 }) {
   const t = useTranslations("TriggersPage.detail");
   const [executions, setExecutions] = useState(firstPage.executions);
@@ -52,6 +55,7 @@ export default function ExecutionsInfiniteList({
       <ExecutionsTable
         executions={executions}
         principalNames={principalNames}
+        currency={currency}
       />
       <LoadMoreSentinel
         hasMore={nextPage !== null}

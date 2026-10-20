@@ -21,7 +21,7 @@ spec:
       {{- include "agentarea.imagePullSecrets" . | nindent 6 }}
       initContainers:
         - name: wait-for-db
-          image: "postgres:alpine"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
           imagePullPolicy: IfNotPresent
           command: ['sh', '-c', 'until pg_isready -h {{ include "agentarea.database.host" . }} -U $AGENTAREA_DB_USER; do echo waiting for database; sleep 2; done;']
           env:
@@ -32,7 +32,7 @@ spec:
                   key: username
       containers:
         - name: create-db
-          image: "postgres:alpine"
+          image: "{{ .Values.global.image.registry }}{{ if .Values.global.image.registry }}/{{ end }}{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
           imagePullPolicy: IfNotPresent
           command: ["sh", "-c"]
           args:

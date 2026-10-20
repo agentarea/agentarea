@@ -7,7 +7,7 @@ import type {
   ModelInstanceResponse,
 } from "@/api/client/types.gen";
 import React from "react";
-import type { TriggerCatalogEntry } from "@/app/w/[workspace]/(main)/triggers/create/actions";
+import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import AgentForm from "../shared/AgentForm";
 import type { DelegationData } from "../shared/useAgentData";
@@ -24,7 +24,7 @@ export default function CreateAgentClient({
   mcpInstanceList,
   builtinTools,
   presets,
-  triggerCatalog,
+  streams,
   delegation,
 }: {
   suggestedName: string;
@@ -33,7 +33,7 @@ export default function CreateAgentClient({
   mcpInstanceList: McpServerInstanceResponse[];
   builtinTools: unknown[];
   presets: AgentPresetResponse[] | null;
-  triggerCatalog: TriggerCatalogEntry[] | null;
+  streams: StreamOptions;
   delegation: DelegationData;
 }) {
   const router = useWorkspaceRouter();
@@ -57,7 +57,7 @@ export default function CreateAgentClient({
       llmModelInstances={llmModelInstances}
       mcpInstanceList={mcpInstanceList}
       builtinTools={builtinTools}
-      create={{ presets, triggerCatalog }}
+      create={{ presets, streams }}
       delegation={delegation}
       initialData={{
         name: suggestedName,

@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import EmptyState from "@/components/EmptyState";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
+import { getPricingCurrency } from "@/lib/api-dashboard";
 import ExecutionsInfiniteList from "./ExecutionsInfiniteList";
 import { loadExecutionsPage } from "./executionsPage";
 
@@ -13,7 +14,10 @@ export default async function TriggerExecutionsPage({ params }: Props) {
   const { id } = await params;
   const t = await getTranslations("TriggersPage.detail");
 
-  const firstPage = await loadExecutionsPage(id, 1);
+  const [firstPage, pricingCurrency] = await Promise.all([
+    loadExecutionsPage(id, 1),
+    getPricingCurrency(),
+  ]);
 
   if (!firstPage) {
     return (
@@ -44,7 +48,11 @@ export default async function TriggerExecutionsPage({ params }: Props) {
 
   return (
     <div className="p-6">
-      <ExecutionsInfiniteList triggerId={id} firstPage={firstPage} />
+      <ExecutionsInfiniteList
+        triggerId={id}
+        firstPage={firstPage}
+        currency={pricingCurrency.ok ? pricingCurrency.currency : null}
+      />
     </div>
   );
 }

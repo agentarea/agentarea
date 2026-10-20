@@ -14,7 +14,7 @@ import pytest
 
 # Import trigger system components
 try:
-    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType, WebhookType
+    from agentarea_triggers.domain.enums import ExecutionStatus, TriggerType
     from agentarea_triggers.domain.models import (
         TriggerCreate,
     )
@@ -192,7 +192,12 @@ class TestTriggerSafetyIntegration:
         success_result = await trigger_service.execute_trigger(trigger_id, execution_data)
         assert success_result.status == ExecutionStatus.SUCCESS
 
-        # Verify failure count was reset
+        # Starting a task says nothing yet of how it ends
+        trigger_after_start = await trigger_service.get_trigger(trigger_id)
+        assert trigger_after_start.consecutive_failures == 3
+
+        # The task completing resets the count
+        await trigger_service.record_run_outcome(trigger_id, mock_task.id, failed=False)
         trigger_after_success = await trigger_service.get_trigger(trigger_id)
         assert trigger_after_success.consecutive_failures == 0
         assert trigger_after_success.is_active is True
@@ -408,26 +413,26 @@ class TestTriggerSafetyIntegration:
         result = await trigger_service.execute_trigger(trigger_id, execution_data)
         assert result.status == ExecutionStatus.SUCCESS
 
-    async def test_webhook_trigger_safety_mechanisms(
+    async def test_stream_trigger_safety_mechanisms(
         self, trigger_service, mock_task_service, sample_agent_id
     ):
-        """Test safety mechanisms for webhook triggers."""
-        # Create webhook trigger
+        """Test safety mechanisms for stream triggers."""
+        stream = await trigger_service.stream_service.create_stream(
+            name=f"safety-{uuid4().hex[:8]}", description=""
+        )
         trigger_data = TriggerCreate(
-            name="Webhook Safety Test",
+            name="Stream Safety Test",
             agent_id=sample_agent_id,
-            trigger_type=TriggerType.WEBHOOK,
-            webhook_id=str(uuid4()),
-            webhook_type=WebhookType.GENERIC,
+            trigger_type=TriggerType.STREAM,
+            stream_id=stream.id,
             failure_threshold=3,
             task_parameters={"text": "Summarize the open support tickets"},
-            created_by="webhook_safety_test",
+            created_by="stream_safety_test",
             workspace_id="safety-test-workspace",
         )
 
         trigger = await trigger_service.create_trigger(trigger_data)
         trigger_id = trigger.id
-        webhook_id = trigger.webhook_id
 
         # Make task service fail
         mock_task_service.route_or_submit_task.side_effect = Exception("Webhook failure")
@@ -451,7 +456,9 @@ class TestTriggerSafetyIntegration:
         disabled_trigger = await trigger_service.get_trigger(trigger_id)
         assert disabled_trigger.is_active is False
         assert disabled_trigger.consecutive_failures == 3
-        assert disabled_trigger.webhook_id == webhook_id  # Webhook ID preserved
+        subscription = await trigger_service.stream_service.trigger_subscription(trigger_id)
+        assert subscription is not None
+        assert subscription.stream_id == stream.id
 
         # Verify subsequent webhook requests to disabled trigger
         execution_data = {

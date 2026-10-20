@@ -21,6 +21,7 @@ const testGatewaySecret = "0123456789abcdef0123456789abcdef"
 type gatewayRepositoryStub struct {
 	mu            sync.Mutex
 	instance      *models.MCPServerInstance
+	target        *Target
 	lockErr       error
 	starting      int
 	failed        int
@@ -39,8 +40,11 @@ func (r *gatewayRepositoryStub) WithInstanceLock(ctx context.Context, _ string, 
 	}
 	return fn(ctx)
 }
-func (r *gatewayRepositoryStub) LoadInstance(context.Context, string) (*models.MCPServerInstance, error) {
-	return r.instance, nil
+func (r *gatewayRepositoryStub) LoadTarget(context.Context, string) (Target, error) {
+	if r.target != nil {
+		return *r.target, nil
+	}
+	return Target{InstanceID: r.instance.InstanceID, WorkspaceID: r.instance.WorkspaceID, Container: r.instance}, nil
 }
 func (r *gatewayRepositoryStub) MarkStarting(context.Context, string) error {
 	r.mu.Lock()
@@ -111,7 +115,7 @@ func testGateway(t *testing.T, repository *gatewayRepositoryStub, runtime Instan
 		IdleTimeout:     time.Minute,
 		SweepInterval:   time.Second,
 		AuthSecret:      testGatewaySecret,
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, URLUpstream{Secrets: &secretResolverStub{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +339,7 @@ func TestReaperTreatsAConcurrentStartAsASkipNotAFailure(t *testing.T) {
 		IdleTimeout:     time.Minute,
 		SweepInterval:   time.Second,
 		AuthSecret:      testGatewaySecret,
-	}, slog.New(slog.NewTextHandler(logs, nil)), nil)
+	}, slog.New(slog.NewTextHandler(logs, nil)), nil, URLUpstream{Secrets: &secretResolverStub{}})
 	if err != nil {
 		t.Fatal(err)
 	}

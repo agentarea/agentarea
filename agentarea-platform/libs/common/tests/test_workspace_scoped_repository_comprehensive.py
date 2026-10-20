@@ -7,8 +7,10 @@ import pytest
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
+from sqlalchemy import String
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Mapped, mapped_column
 
 # Mark all async tests in this module
 pytestmark = pytest.mark.asyncio
@@ -18,6 +20,8 @@ class MockModel(BaseModel, WorkspaceScopedMixin):
     """Mock model for testing."""
 
     __tablename__ = "mock_model"
+
+    name: Mapped[str] = mapped_column(String)
 
     def __init__(self, **kwargs):
         self.id = kwargs.get("id", uuid4())
@@ -180,25 +184,13 @@ class TestWorkspaceScopedRepository:
         assert "user1" in creators
         assert "user2" in creators
 
-    async def test_list_all_creator_scoped_returns_only_user_records(
-        self, repository_workspace1, mock_session
-    ):
-        """Test that list_all(creator_scoped=True) returns only current user's records."""
-        # Arrange
-        mock_records = [
-            MockModel(id=uuid4(), workspace_id="workspace1", created_by="user1"),
-        ]
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = mock_records
-        mock_session.execute.return_value = mock_result
+    @pytest.mark.parametrize("call", ["list_all", "count", "find_by", "find_one_by"])
+    async def test_unknown_filter_raises(self, repository_workspace1, mock_session, call):
+        """A filter naming no column fails instead of widening the read to the workspace."""
+        with pytest.raises(TypeError, match="MockModel has no field 'creator_scoped'"):
+            await getattr(repository_workspace1, call)(creator_scoped=True)
 
-        # Act
-        result = await repository_workspace1.list_all(creator_scoped=True)
-
-        # Assert
-        assert len(result) == 1
-        assert result[0].workspace_id == "workspace1"
-        assert result[0].created_by == "user1"
+        mock_session.execute.assert_not_called()
 
     async def test_list_all_with_filters(self, repository_workspace1, mock_session):
         """Test that list_all() applies additional filters correctly."""
@@ -245,21 +237,6 @@ class TestWorkspaceScopedRepository:
 
         # Assert
         assert result == 5
-
-    async def test_count_creator_scoped_returns_user_record_count(
-        self, repository_workspace1, mock_session
-    ):
-        """Test that count(creator_scoped=True) returns count for current user."""
-        # Arrange
-        mock_result = MagicMock()
-        mock_result.scalar.return_value = 3
-        mock_session.execute.return_value = mock_result
-
-        # Act
-        result = await repository_workspace1.count(creator_scoped=True)
-
-        # Assert
-        assert result == 3
 
     async def test_update_workspace_scoped_allows_any_workspace_record(
         self, repository_workspace1, mock_session
@@ -479,7 +456,7 @@ class TestWorkspaceScopedRepository:
         result = await repository_workspace1.find_one_by(name="test")
 
         # Assert
-        repository_workspace1.find_by.assert_called_once_with(creator_scoped=False, name="test")
+        repository_workspace1.find_by.assert_called_once_with(name="test")
         assert result == mock_record
 
     async def test_find_one_by_returns_none_for_no_matches(

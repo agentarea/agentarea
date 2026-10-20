@@ -37,6 +37,15 @@ type Config struct {
 	Features FeaturesConfig `json:"features"`
 	// Package image import configuration
 	PackageImages PackageImageConfig `json:"package_images"`
+	// Outbound URL policy for member-chosen hosts
+	Egress EgressConfig `json:"egress"`
+}
+
+// EgressConfig is the platform's outbound URL policy, applied to the URL MCP
+// servers the gateway reaches.
+type EgressConfig struct {
+	AllowPrivate     bool     `json:"allow_private"`
+	PrivateAllowlist []string `json:"private_allowlist"`
 }
 
 // FeaturesConfig holds feature flag configuration
@@ -105,6 +114,8 @@ type LoggingConfig struct {
 // RedisConfig holds Redis configuration for event handling
 type RedisConfig struct {
 	URL string `json:"url"`
+	// EventNamespace is the first segment of every event topic: <namespace>.<domain>.<dataset>.
+	EventNamespace string `json:"event_namespace"`
 }
 
 // PackageImageConfig controls the manager's package-to-image import flow.
@@ -158,7 +169,8 @@ func Load() *Config {
 			Format: getEnv("AGENTAREA_LOG_FORMAT", "json"),
 		},
 		Redis: RedisConfig{
-			URL: getEnv("AGENTAREA_REDIS_URL", "redis://localhost:6379"),
+			URL:            getEnv("AGENTAREA_REDIS_URL", "redis://localhost:6379"),
+			EventNamespace: getEnv("AGENTAREA_EVENT_NAMESPACE", "agentarea"),
 		},
 		CoreAPIURL:  getEnv("AGENTAREA_API_URL", "http://localhost:8000"),
 		Kubernetes:  loadKubernetesConfig(),
@@ -169,6 +181,10 @@ func Load() *Config {
 			ImportTimeout:  getEnvDuration("AGENTAREA_MCP_IMPORT_TIMEOUT", 15*time.Minute),
 			NPMRegistryURL: getEnv("AGENTAREA_MCP_NPM_REGISTRY", "https://registry.npmjs.org"),
 			PyPIURL:        getEnv("AGENTAREA_MCP_PYPI_URL", "https://pypi.org"),
+		},
+		Egress: EgressConfig{
+			AllowPrivate:     getEnvBool("AGENTAREA_HTTP_ALLOW_PRIVATE", false),
+			PrivateAllowlist: nonEmpty(getEnvStringSlice("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", nil)),
 		},
 	}
 	if config.Server.Port <= 0 || config.Server.ReadTimeout <= 0 || config.Server.WriteTimeout <= 0 {
@@ -237,6 +253,16 @@ func getEnvStringSlice(key string, defaultValue []string) []string {
 		return values
 	}
 	return defaultValue
+}
+
+func nonEmpty(values []string) []string {
+	kept := []string{}
+	for _, value := range values {
+		if value != "" {
+			kept = append(kept, value)
+		}
+	}
+	return kept
 }
 
 // loadKubernetesConfig loads Kubernetes configuration from environment variables

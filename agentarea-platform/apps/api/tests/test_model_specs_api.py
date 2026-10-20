@@ -37,6 +37,7 @@ def _spec(provider_spec_id, model_name="gpt-4"):
     spec.input_cost_per_token = 0.0
     spec.output_cost_per_token = 0.0
     spec.cached_input_cost_per_token = None
+    spec.cache_creation_input_cost_per_token = None
     spec.supports_function_calling = True
     spec.supports_vision = False
     spec.supports_reasoning = False

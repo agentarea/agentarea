@@ -31,6 +31,7 @@ services:
       # MCP settings
       - AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:80
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_MCP_TIMEOUT=30
       - AGENTAREA_SANDBOX_FILE_SECRET=${AGENTAREA_SANDBOX_FILE_SECRET:?AGENTAREA_SANDBOX_FILE_SECRET is required; run scripts/gen-dev-secrets.sh}
       - AGENTAREA_SANDBOX_CONTROL_SECRET=${AGENTAREA_SANDBOX_CONTROL_SECRET:?AGENTAREA_SANDBOX_CONTROL_SECRET is required; run scripts/gen-dev-secrets.sh}
@@ -40,6 +41,8 @@ services:
       # OpenAI-compatible router). localhost is what a config stores; calls
       # rewrite it to host.docker.internal.
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
       # Hydra OAuth2 AS
       - AGENTAREA_AUTH_HYDRA_URL=http://hydra:4444
       - AGENTAREA_AUTH_HYDRA_ADMIN_URL=http://hydra:4445
@@ -173,6 +176,7 @@ services:
       - AGENTAREA_AUTHZ_FGA_API_TOKEN=${OPENFGA_AUTHN_PRESHARED_KEY:?OPENFGA_AUTHN_PRESHARED_KEY is required; run scripts/gen-dev-secrets.sh}
     volumes:
       - ./agentarea-platform/libs:/app/libs
+      - ./data/catalog:/app/data/catalog:ro
     depends_on:
       app:
         condition: service_healthy
@@ -186,15 +190,17 @@ services:
         "${CATALOG_MODELS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json}",
         "--source",
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json}",
+        "--registries-config",
+        '[{"name": "system-skills-curated", "source_url": "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json}", "recommendation_priority": 10}, {"name": "skills.json", "active": false}]',
         "--source",
-        "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json}",
+        "/app/data/catalog/source-types.json",
       ]
     working_dir: /app/apps/api
     restart: "no"
 
   # Create the main app database and auxiliary databases — idempotent.
   postgres_init:
-    image: postgres:18
+    image: postgres:18.6
     environment:
       - PGHOST=db
       - PGPORT=5432
@@ -253,7 +259,7 @@ services:
   #   command: sh -c "npx pnpm dev"
 
   rustfs:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:1.0.3
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -277,7 +283,7 @@ services:
       - mcp-network
 
   db:
-    image: postgres:18
+    image: postgres:18.6
     # One Postgres is shared by the app, Temporal, and the Ory stack — each keeps
     # a warm idle pool, so the default max_connections=100 is exhausted. Raise it.
     command: ["postgres", "-c", "max_connections=300"]
@@ -298,7 +304,7 @@ services:
       - auth-network
 
   valkey:
-    image: valkey/valkey:8
+    image: valkey/valkey:9.1.2
     container_name: agentarea-valkey
     env_file: .env
     restart: always
@@ -308,10 +314,11 @@ services:
     # containers on mcp-network must not be able to reach it.
     networks:
       - default
-    command: ["valkey-server", "--save", "", "--appendonly", "no"] # Disable persistence for dev
+    # A store for the event bus, not a cache: AOF on, nothing evicted.
+    command: ["valkey-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "768mb", "--maxmemory-policy", "noeviction"]
 
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.7.15
     container_name: agentarea-traefik
     restart: unless-stopped
     command:
@@ -367,6 +374,7 @@ services:
       PORT: 80
       AGENTAREA_MCP_NETWORK: agentarea_mcp-network
       AGENTAREA_REDIS_URL: redis://valkey:6379
+      AGENTAREA_EVENT_NAMESPACE: agentarea
       AGENTAREA_API_URL: http://agentarea-backend:8000
       AGENTAREA_MCP_RUNTIME: docker
       # Where MCP servers and agent sandboxes run.
@@ -407,6 +415,8 @@ services:
       # instance would fail to create with a bare "exit status 125"; this dev
       # stack runs them at standard, on the host kernel.
       AGENTAREA_MCP_ISOLATION: ${AGENTAREA_MCP_ISOLATION:-standard}
+      # URL MCP servers reached through the gateway may be on the host, as for the app.
+      AGENTAREA_HTTP_PRIVATE_ALLOWLIST: ${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       # Run the sandbox execution consumer in-process (no standalone runner in
       # compose) and route code-execution to the sandbox-executor container.
       AGENTAREA_SANDBOX_EMBEDDED_RUNNER: "true"
@@ -495,10 +505,10 @@ services:
       AGENTAREA_SANDBOX_ACTIVATION_SECRET: ${AGENTAREA_SANDBOX_ACTIVATION_SECRET:?AGENTAREA_SANDBOX_ACTIVATION_SECRET is required; run scripts/gen-dev-secrets.sh}
 
   # Temporal Infrastructure Services
-  temporal:
-    image: temporalio/auto-setup:1.29.1
-    container_name: agentarea-temporal
-    restart: unless-stopped
+  # Creates and migrates the temporal and temporal_visibility databases; the
+  # server image does neither. Keep its tag equal to the server's.
+  temporal-schema:
+    image: temporalio/admin-tools:1.32.1
     depends_on:
       db:
         condition: service_healthy
@@ -511,9 +521,37 @@ services:
       - POSTGRES_PWD=${AGENTAREA_DB_PASSWORD}
       - POSTGRES_SEEDS=db
       - DBNAME=${TEMPORAL_DB:-temporal}
+    networks:
+      - temporal-network
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        export SQL_PASSWORD="$$POSTGRES_PWD"
+        sql() { temporal-sql-tool --plugin "$$DB" --ep "$$POSTGRES_SEEDS" -p "$$DB_PORT" -u "$$POSTGRES_USER" "$$@"; }
+        sql --db "$$DBNAME" create
+        sql --db "$$DBNAME" setup-schema -v 0.0
+        sql --db "$$DBNAME" update-schema --schema-name postgresql/v12/temporal
+        sql --db temporal_visibility create
+        sql --db temporal_visibility setup-schema -v 0.0
+        sql --db temporal_visibility update-schema --schema-name postgresql/v12/visibility
+
+  temporal:
+    image: temporalio/server:1.32.1
+    container_name: agentarea-temporal
+    restart: unless-stopped
+    depends_on:
+      temporal-schema:
+        condition: service_completed_successfully
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${AGENTAREA_DB_USER}
+      - POSTGRES_PWD=${AGENTAREA_DB_PASSWORD}
+      - POSTGRES_SEEDS=db
+      - DBNAME=${TEMPORAL_DB:-temporal}
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CLI_ADDRESS=temporal:7233
       - BIND_ON_IP=0.0.0.0
     networks:
       - temporal-network
@@ -525,19 +563,38 @@ services:
     volumes:
       - ./agentarea-platform/temporal-config:/etc/temporal/config/dynamicconfig
     healthcheck:
-      test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
+      test: ["CMD", "nc", "-z", "localhost", "7233"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 120s
 
+  # Registers the namespace the platform runs in; the server image does not.
+  temporal-namespace:
+    image: temporalio/admin-tools:1.32.1
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_NAMESPACE=default
+    networks:
+      - temporal-network
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until temporal operator namespace describe -n "$$TEMPORAL_NAMESPACE" >/dev/null 2>&1; do
+          temporal operator namespace create -n "$$TEMPORAL_NAMESPACE" --retention 24h || sleep 5
+        done
+
   temporal-admin-tools:
-    image: temporalio/admin-tools:1.28
+    image: temporalio/admin-tools:1.32.1
     container_name: agentarea-temporal-admin-tools
     depends_on:
       - temporal
     environment:
-      - TEMPORAL_CLI_ADDRESS=temporal:7233
+      - TEMPORAL_ADDRESS=temporal:7233
     networks:
       - temporal-network
     stdin_open: true
@@ -555,8 +612,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_started
-      temporal:
-        condition: service_healthy
+      temporal-namespace:
+        condition: service_completed_successfully
     environment:
       # Database
       - AGENTAREA_DB_HOST=db
@@ -568,6 +625,8 @@ services:
       - LLM_DOCKER_HOST=host.docker.internal
       # Same host model servers as the app (see AGENTAREA_HTTP_PRIVATE_ALLOWLIST there).
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # Currency spend caps count and tool costs are declared in (ISO 4217).
+      - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
 
       # S3 / RustFS (file tool artifacts land here, keyed by workspace+task)
       - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
@@ -580,6 +639,7 @@ services:
 
       # Redis
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       # Links the worker sends out (the Telegram account-link reply)
       - AGENTAREA_APP_URL=${AGENTAREA_APP_URL:-http://localhost:3000}
       # PEM file of CA certificates trusted on outbound TLS on top of the public
@@ -621,6 +681,7 @@ services:
       - mcp-network
     volumes:
       - ./agentarea-platform/apps/worker/agentarea_worker:/app/apps/worker/agentarea_worker
+      - ./agentarea-platform/apps/api/agentarea_api:/app/apps/api/agentarea_api
       - ./agentarea-platform/libs:/app/libs
     restart: unless-stopped
     command: ["agentarea-worker", "dev"]
@@ -666,8 +727,17 @@ services:
       - AGENTAREA_DB_NAME=${AGENTAREA_DB_NAME}
       - AGENTAREA_DB_SSLMODE=disable
       - AGENTAREA_REDIS_URL=redis://valkey:6379
+      - AGENTAREA_EVENT_NAMESPACE=agentarea
       - AGENTAREA_EVENT_POLL_INTERVAL=30s
       - AGENTAREA_EVENT_MAX_POLLERS=10
+      # The public base of /webhooks/{webhook_id}, as the app advertises it.
+      - AGENTAREA_API_URL=http://localhost:8000
+      # Source credentials are read from the database secret store.
+      - AGENTAREA_SECRET_ENCRYPTION_KEY=${AGENTAREA_SECRET_ENCRYPTION_KEY}
+      - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
+      # MCP Events sources are polled and subscribed through the manager's gateway.
+      - AGENTAREA_MCP_MANAGER_URL=http://mcp-manager:80
+      - AGENTAREA_MCP_GATEWAY_SECRET=${AGENTAREA_MCP_GATEWAY_SECRET:?AGENTAREA_MCP_GATEWAY_SECRET is required; run scripts/gen-dev-secrets.sh}
     volumes:
       - ./agentarea-event-service:/app
     networks:
@@ -676,10 +746,10 @@ services:
 
   # Ory Kratos Migration
   kratos-migrate:
-    image: oryd/kratos:v1.3.1
+    image: oryd/kratos:v26.2.0
     environment:
       DSN: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${KRATOS_DB:-kratos}?sslmode=disable&max_conns=20&max_idle_conns=4
-    command: migrate sql -e --yes
+    command: migrate sql up -e --yes
     volumes:
       - ./config/auth/kratos:/etc/config/kratos
     networks:
@@ -692,7 +762,7 @@ services:
 
   # Ory Kratos Identity Server
   kratos:
-    image: oryd/kratos:v1.3.1
+    image: oryd/kratos:v26.2.0
     ports:
       - "4433:4433" # public API
       - "4434:4434" # admin API
@@ -726,7 +796,7 @@ services:
 
   # OpenFGA migration (ReBAC backend for agent/task authorization)
   openfga-migrate:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:latest}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
     command: migrate
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
@@ -741,7 +811,7 @@ services:
 
   # OpenFGA ReBAC permission server
   openfga:
-    image: ${OPENFGA_IMAGE:-openfga/openfga:latest}
+    image: ${OPENFGA_IMAGE:-openfga/openfga:v1.22.0}
     command: run
     ports:
       - "8088:8080" # HTTP API
@@ -767,7 +837,7 @@ services:
 
   # Ory Hydra OAuth2/OIDC Server
   hydra:
-    image: oryd/hydra:v2.2.0
+    image: oryd/hydra:v26.2.0
     ports:
       - "4444:4444" # public API
       - "4445:4445" # admin API
@@ -803,7 +873,7 @@ services:
   # ./data/mailpit so it survives container recreation. Nothing depends_on this
   # service: Kratos' courier retries delivery, so a slow mailpit start is harmless.
   mailpit:
-    image: axllent/mailpit:v1.30.2
+    image: axllent/mailpit:v1.31.6
     ports:
       - "8025:8025" # web UI + REST API (GET /api/v1/messages)
       # SMTP (1025) stays internal on auth-network; Kratos reaches it as mailpit:1025
@@ -820,10 +890,10 @@ services:
 
   # Hydra DB Migration
   hydra-migrate:
-    image: oryd/hydra:v2.2.0
+    image: oryd/hydra:v26.2.0
     environment:
       DSN: postgres://${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@db:5432/${HYDRA_DB:-hydra}?sslmode=disable&max_conns=20&max_idle_conns=4
-    command: migrate sql -e --yes
+    command: migrate sql up -e --yes
     networks:
       - auth-network
     depends_on:
@@ -834,7 +904,7 @@ services:
 
   # # Register OAuth2 client for frontend
   # hydra-client-setup:
-  #   image: oryd/hydra:v2.2.0
+  #   image: oryd/hydra:v26.2.0
   #   environment:
   #     ORY_SDK_URL: http://hydra:4445
   #   entrypoint: ["sh", "-c"]

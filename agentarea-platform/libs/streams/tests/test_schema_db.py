@@ -1,4 +1,4 @@
-"""The migrated stream schema: partitioning, dedup keys, one trigger per subscription.
+"""The migrated stream schema: partitioning, one row per event, one trigger per subscription.
 
 Set STREAMS_TEST_DATABASE_URL to a postgresql+asyncpg URL of a disposable,
 already-migrated database (scripts/check-db.sh does).
@@ -47,18 +47,19 @@ async def test_a_webhook_id_belongs_to_one_source(session):
     await session.execute(
         text(
             "INSERT INTO streams (id, workspace_id, created_by, name, description, kind, "
-            "retention_days, created_at, updated_at) VALUES (:id, :ws, 'u', 'n', '', 'custom', 30, "
-            "now(), now())"
+            "created_at, updated_at) VALUES (:id, :ws, 'u', 'n', '', 'custom', now(), now())"
         ),
         {"id": stream_id, "ws": ws},
     )
     insert_source = text(
         "INSERT INTO stream_sources (id, workspace_id, created_by, stream_id, kind, webhook_id, "
-        "webhook_type, allowed_methods, validation_rules, credential_key, created_at, updated_at) "
-        "VALUES (:id, :ws, 'u', :stream, 'webhook', 'same-webhook-id-0001', 'generic', "
-        "'[\"POST\"]', '{}', :key, now(), now())"
+        "webhook_type, credential_key, created_at, updated_at) "
+        "VALUES (:id, :ws, 'u', :stream, 'webhook', 'same-webhook-id-0001', 'generic_webhook', "
+        ":key, now(), now())"
     )
-    await session.execute(insert_source, {"id": uuid4(), "ws": ws, "stream": stream_id, "key": uuid4()})
+    await session.execute(
+        insert_source, {"id": uuid4(), "ws": ws, "stream": stream_id, "key": uuid4()}
+    )
     with pytest.raises(IntegrityError):
         await session.execute(
             insert_source, {"id": uuid4(), "ws": ws, "stream": stream_id, "key": uuid4()}
@@ -70,8 +71,7 @@ async def test_a_trigger_subscription_must_name_its_trigger(session):
     await session.execute(
         text(
             "INSERT INTO streams (id, workspace_id, created_by, name, description, kind, "
-            "retention_days, created_at, updated_at) VALUES (:id, :ws, 'u', 'n2', '', 'custom', 30, "
-            "now(), now())"
+            "created_at, updated_at) VALUES (:id, :ws, 'u', 'n2', '', 'custom', now(), now())"
         ),
         {"id": stream_id, "ws": ws},
     )
@@ -79,9 +79,59 @@ async def test_a_trigger_subscription_must_name_its_trigger(session):
         await session.execute(
             text(
                 "INSERT INTO stream_subscriptions (id, workspace_id, created_by, stream_id, kind, "
-                "filter, output_stream_ids, cursor_sequence, status, attempts, created_at, "
-                "updated_at) VALUES (:id, :ws, 'u', :s, 'trigger', '{}', '[]', 0, 'active', 0, "
-                "now(), now())"
+                "filter, output_stream_ids, status, created_at, updated_at) VALUES (:id, :ws, "
+                "'u', :s, 'trigger', '{}', '[]', 'active', now(), now())"
             ),
             {"id": uuid4(), "ws": ws, "s": stream_id},
         )
+
+
+async def test_the_journal_and_dispatcher_tables_and_columns_are_gone(session):
+    for table in ("stream_event_keys", "subscription_outcomes"):
+        found = await session.execute(text("SELECT to_regclass(:t) IS NOT NULL"), {"t": table})
+        assert not found.scalar_one(), table
+    columns = await session.execute(
+        text(
+            "SELECT table_name, column_name FROM information_schema.columns "
+            "WHERE (table_name = 'stream_subscriptions' AND column_name IN ('cursor_sequence', "
+            "'attempts', 'next_attempt_at', 'leased_until', 'lease_owner')) "
+            "OR (table_name = 'streams' AND column_name = 'retention_days')"
+        )
+    )
+    assert columns.all() == []
+
+
+async def test_the_events_view_holds_an_event_once_per_received_time(session):
+    ws, stream_id, event_id = str(uuid4()), uuid4(), uuid4()
+    await session.execute(
+        text(
+            "INSERT INTO streams (id, workspace_id, created_by, name, description, kind, "
+            "created_at, updated_at) VALUES (:id, :ws, 'u', 'n3', '', 'custom', now(), now())"
+        ),
+        {"id": stream_id, "ws": ws},
+    )
+    insert_event = text(
+        "INSERT INTO stream_events (received_at, stream_id, event_id, event_key, kind, source, "
+        "occurred_at, data, workspace_id, created_by) VALUES (date_trunc('second', now()), :s, "
+        ":e, 'k', 'push', 'test', now(), '{}', :ws, 'u')"
+    )
+    await session.execute(insert_event, {"s": stream_id, "e": event_id, "ws": ws})
+    with pytest.raises(IntegrityError, match="duplicate key"):
+        await session.execute(insert_event, {"s": stream_id, "e": event_id, "ws": ws})
+
+
+async def test_a_subscription_reacts_to_an_event_once(session):
+    found = await session.execute(
+        text(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+            "WHERE conname = 'uq_trigger_executions_subscription_event'"
+        )
+    )
+    assert found.scalar_one() == "UNIQUE (subscription_id, event_id)"
+    nullable = await session.execute(
+        text(
+            "SELECT is_nullable FROM information_schema.columns "
+            "WHERE table_name = 'trigger_executions' AND column_name = 'trigger_id'"
+        )
+    )
+    assert nullable.scalar_one() == "YES"

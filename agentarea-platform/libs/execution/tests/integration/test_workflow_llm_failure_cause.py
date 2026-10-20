@@ -26,6 +26,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from temporalio import activity
 from temporalio.client import WorkflowFailureError
@@ -123,6 +124,9 @@ def _of_type(event_type: str) -> list[dict[str, Any]]:
     return [e["data"] for e in _published if e.get("event_type") == event_type]
 
 
+_RECORD = make_record_activity(publish=_mock_publish_events, update_status=_mock_update_status)
+
+
 async def _run() -> None:
     env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
     async with env:
@@ -138,6 +142,7 @@ async def _run() -> None:
                     _mock_resolve_model,
                     _mock_call_llm,
                     _mock_publish_events,
+                    _RECORD,
                     _mock_update_status,
                 ],
                 activity_executor=executor,

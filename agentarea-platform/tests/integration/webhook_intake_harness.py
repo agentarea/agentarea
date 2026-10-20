@@ -1,11 +1,11 @@
 """The public webhook intake over the hermetic test session.
 
 Intake finds the webhook's stream source, verifies and parses the request, and
-appends one event to the stream journal; firing the trigger is the dispatcher's
-job, later. The journal's append is PostgreSQL (a global sequence, partitions,
-ON CONFLICT), so these tests stand a recording journal in its place: what it
-records is exactly what the real one would store, keyed and deduplicated the
-same way. ``fire`` then plays the dispatcher's part on a recorded event.
+puts one event on the stream's bus; firing the trigger is the router's job,
+later. Ingest checks the stream and the quota in PostgreSQL and publishes to the
+broker, so these tests stand a recording ingest in its place: what it records
+is exactly what the real one would publish, keyed and deduplicated the same
+way. ``fire`` then plays the router's part on a recorded event.
 """
 
 from collections.abc import AsyncIterator
@@ -18,18 +18,20 @@ from agentarea_api.api.v1._webhook_intake import WebhookSourceIntake
 from agentarea_common.config import get_settings
 from agentarea_common.events.ports import IntegrationEvent
 from agentarea_streams.domain import AppendResult
-from agentarea_streams.domain.ports import StreamWaker
+from agentarea_streams.domain.keys import event_id_for
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class RecordingJournal:
-    """Stands in for StreamJournal: one event per (stream, event_key), in order."""
+    """Stands in for StreamIngest: one event per (stream, event_key), in order."""
 
     def __init__(self) -> None:
         self.events: list[tuple[UUID, IntegrationEvent, str]] = []
-        self._sequences: dict[tuple[UUID, str], int] = {}
+        self._seen: set[tuple[UUID, str]] = set()
 
-    def bind(self, _session: AsyncSession, _context: Any, _settings: Any) -> "RecordingJournal":
+    def bind(
+        self, _session: AsyncSession, _context: Any, _settings: Any, _bus: Any
+    ) -> "RecordingJournal":
         return self
 
     async def append(
@@ -40,25 +42,17 @@ class RecordingJournal:
         event_key: str,
         source_id: UUID | None = None,
         depth: int = 0,
+        event_id: UUID | None = None,
     ) -> AppendResult:
-        known = self._sequences.get((stream_id, event_key))
-        if known is not None:
-            return AppendResult(sequence=known, appended=False)
+        named = event_id or event_id_for(stream_id, event_key)
+        if (stream_id, event_key) in self._seen:
+            return AppendResult(event_id=named, appended=False)
         self.events.append((stream_id, event, event_key))
-        sequence = len(self.events)
-        self._sequences[(stream_id, event_key)] = sequence
-        return AppendResult(sequence=sequence, appended=True)
+        self._seen.add((stream_id, event_key))
+        return AppendResult(event_id=named, appended=True)
 
     def data(self, index: int = -1) -> dict[str, Any]:
         return self.events[index][1].data
-
-
-class RecordingWaker(StreamWaker):
-    def __init__(self) -> None:
-        self.woken: list[UUID] = []
-
-    async def wake(self, stream_id: UUID) -> None:
-        self.woken.append(stream_id)
 
 
 class _NoSecrets:
@@ -69,7 +63,7 @@ class _NoSecrets:
 @pytest.fixture
 def journal(monkeypatch) -> RecordingJournal:
     recorder = RecordingJournal()
-    monkeypatch.setattr("agentarea_api.api.v1._webhook_intake.StreamJournal", recorder.bind)
+    monkeypatch.setattr("agentarea_api.api.v1._webhook_intake.StreamIngest", recorder.bind)
     return recorder
 
 
@@ -83,7 +77,7 @@ def intake(db_session, journal) -> WebhookSourceIntake:
         lookup_session=db_session,
         session_scope=same_session,
         secret_reader_for=lambda _session, _context: _NoSecrets(),
-        waker=RecordingWaker(),
+        bus=None,  # type: ignore[arg-type]
         event_broker=None,
         settings=get_settings(),
     )

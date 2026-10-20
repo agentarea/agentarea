@@ -1,0 +1,66 @@
+{
+  "slug": "example_pay",
+  "name": "Example Pay",
+  "description": "Payment and refund notifications, checked against the provider's API",
+  "icon": "webhook",
+  "delivery": "webhook",
+  "credentials": [
+    {
+      "key": "secret_key",
+      "label": "Secret Key",
+      "placeholder": "API key of the shop",
+      "required": true,
+      "issued": false
+    }
+  ],
+  "config": [
+    {
+      "key": "shop_id",
+      "label": "Shop ID",
+      "placeholder": "123456",
+      "required": true,
+      "issued": false
+    }
+  ],
+  "verification": {
+    "scheme": "api_lookup",
+    "request": {
+      "method": "GET",
+      "url": "https://api.payments.example/v3/{collection}/{body:object.id}",
+      "auth": {
+        "username": "{config.shop_id}",
+        "password": "{credentials.secret_key}"
+      }
+    },
+    "collection_from": "{body:event}",
+    "collections": {
+      "payment": "payments",
+      "refund": "refunds"
+    },
+    "expect": {
+      "id": "{body:object.id}",
+      "status": "{notified.state}"
+    },
+    "later": {
+      "waiting_for_capture": [
+        "succeeded",
+        "canceled"
+      ]
+    },
+    "record": {
+      "object": "{fetched}",
+      "event": "{notified.object}.{fetched.status}"
+    }
+  },
+  "event": {
+    "kind": "{body:event}",
+    "key": "{body:event}:{body:object.id}",
+    "occurred_at": "{body:object.created_at}"
+  },
+  "events": [
+    "payment.succeeded",
+    "payment.waiting_for_capture",
+    "payment.canceled",
+    "refund.succeeded"
+  ]
+}

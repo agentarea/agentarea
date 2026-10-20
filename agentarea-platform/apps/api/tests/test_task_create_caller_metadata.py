@@ -6,10 +6,13 @@ from uuid import uuid4
 import pytest
 from agentarea_api.api.v1.agents_tasks import TASK_METADATA_MAX_BYTES, TaskCreate, TaskResponse
 from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.credential import Credential
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-API_KEY_CALLER = UserContext(user_id="u", workspace_id="w", api_key_id="key-1")
+API_KEY_CALLER = UserContext(
+    user_id="u", workspace_id="w", credential=Credential(kind="api_key", key_id="key-1")
+)
 SESSION_CALLER = UserContext(user_id="u", workspace_id="w")
 
 

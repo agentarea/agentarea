@@ -37,6 +37,7 @@ function item(
       content: "full skill content must not reach the client DTO",
     },
     tags: [`repo:${repo.replaceAll("/", "-")}`, "category:development"],
+    registry_trust: "official",
     installed_entity_id: null,
     update_available: false,
     installed_version: null,
@@ -54,14 +55,16 @@ describe("listCatalogSuggestionsAction", () => {
       data: [
         {
           id: REGISTRY_ID,
-          name: "skills-catalog",
+          name: "system-skills-curated",
           description: "Curated skills",
           registry_type: "skills",
           source_type: "url",
           source_url:
-            "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json",
-          sync_mode: "manual",
+            "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json",
           is_active: true,
+          scope: "platform",
+          mode: "mirror",
+          trust: "official",
           last_synced_at: NOW,
           last_sync_error: null,
           item_count: 4,

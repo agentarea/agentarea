@@ -83,6 +83,7 @@ When deploying AgentArea, please follow these security best practices:
 - Use HTTPS/TLS for all communications
 - Keep all dependencies up to date
 - Use strong, unique passwords and API keys
+- Restrict egress from the backend, worker and event-service: they call addresses workspace members set, and AgentArea expects your cloud network (or the chart's `platformNetworkPolicy`) to block the cloud metadata endpoint and private ranges for them. See [Configure networking and ingress](https://docs.agentarea.ai/self-host/networking)
 - Enable audit logging
 - Regularly backup your data
 - Use a Web Application Firewall (WAF)

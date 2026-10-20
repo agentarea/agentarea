@@ -19,6 +19,7 @@ import type {
   ProviderConfigUpdate,
   SecretResponse,
   SkillResponse,
+  TriggerType,
   UpdateWalletRequest,
   UploadPlanEntry,
 } from "@/api/client/types.gen";
@@ -26,6 +27,7 @@ import {
   zCreateWorkspaceDirectoryRequest,
   zListSecretsV1SecretsGetResponse,
   zOAuthAuthorizeResponse,
+  zOAuthFinishResponse,
   zOAuthPreflightResponse,
   zProjectCreate,
   zProjectUpdate,
@@ -124,7 +126,9 @@ import {
   sendTaskCommand,
   submitTaskInput,
   updateAgentWallet,
+  updateAllSkills,
   updateClient,
+  updateInstalledSkill,
   updateMCPServerInstance,
   updateOpenAPIConnection,
   updateProject,
@@ -432,6 +436,17 @@ export async function installSkillAction(skillId: string) {
   return await installSkill(skillId);
 }
 
+export async function updateInstalledSkillAction(
+  skillId: string,
+  options: { discardChanges?: boolean } = {}
+) {
+  return await updateInstalledSkill(skillId, options);
+}
+
+export async function updateAllSkillsAction() {
+  return await updateAllSkills();
+}
+
 export async function deleteSkillAction(skillId: string) {
   return await deleteSkill(skillId);
 }
@@ -499,7 +514,7 @@ export async function getNetworkTopologyAction() {
 
 export async function listTriggersAction(params?: {
   agent_id?: string;
-  trigger_type?: string;
+  trigger_type?: TriggerType;
   active_only?: boolean;
 }) {
   return await listTriggers(params);
@@ -666,6 +681,31 @@ export async function oauthAuthorizeAction(body: OAuthAuthorizeRequest) {
     };
   }
   return { data: parsed.data, error: null, code: null };
+}
+
+/**
+ * Finish a sign-in the provider sent back: the API exchanges the code only
+ * for the person who started it. Returns where to land, a failure included.
+ */
+export async function oauthFinishAction(token: string): Promise<string> {
+  const base = new URL(env.AGENTAREA_API_URL);
+  base.pathname = "/v1/oauth/finish";
+
+  const res = await workspaceFetch(base.href, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  const parsed = res.ok
+    ? zOAuthFinishResponse.safeParse(await res.json())
+    : null;
+  if (parsed?.success) {
+    return parsed.data.location;
+  }
+  const reason = parsed
+    ? "Unexpected OAuth finish response"
+    : await readApiError(res);
+  return `/?${new URLSearchParams({ oauth: "error", reason })}`;
 }
 
 /**

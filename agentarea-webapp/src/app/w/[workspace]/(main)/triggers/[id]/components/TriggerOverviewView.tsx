@@ -8,8 +8,6 @@ import {
   Gauge,
   ListChecks,
   Wallet,
-  Webhook,
-  Zap,
 } from "lucide-react";
 import type {
   TriggerExecutionResponse,
@@ -27,15 +25,14 @@ import {
   StatStrip,
 } from "@/components/Overview/OverviewCard";
 import { OverviewHero } from "@/components/Overview/OverviewHero";
-import { CopyableText } from "@/components/ui/copyable-text";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import Link from "@/components/WorkspaceLink";
 import { getPricingCurrency } from "@/lib/api-dashboard";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { DEFAULT_SESSION_IDLE_TIMEOUT } from "@/lib/sourceTypes";
 import {
   getTriggerExecutionStatusPresentation,
-  getWebhookSigningPresentation,
   type StatusPresentation,
 } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -45,7 +42,6 @@ import {
   formatCompactDistance,
   formatTriggerCost,
 } from "../../components/triggerDisplay";
-import { WebhookSigningControl } from "../../components/WebhookSigning";
 import { TriggerStatusBadge } from "../TriggerDetailStatus";
 
 /**
@@ -57,9 +53,7 @@ export type TriggerOverviewModel = {
   triggerId: string;
   name: string;
   description?: string | null;
-  /** Catalog artwork for the event source; null falls back to the bolt icon. */
-  iconUrl: string | null;
-  /** Catalog name of the event source, e.g. "Cron", "Telegram". */
+  /** The trigger's type in the active locale, e.g. "Cron", "Stream". */
   sourceName: string;
   /** Human phrase for when it fires, e.g. "Every day at 9:00 AM". */
   scheduleText: string;
@@ -70,15 +64,10 @@ export type TriggerOverviewModel = {
   mcps: TaskParameterRef[];
   files: string[];
   cron: { expression: string | null; timezone: string | null } | null;
-  webhook: {
-    url: string | null;
-    methods: string[];
-    events: string[];
-    /** Null when the stored secret could not be read. */
-    signing: TriggerResponse["webhook_signing"];
-    /** Whether its signing secret is generated here and can be rotated. */
-    rotatable: boolean;
-  } | null;
+  /** A stream trigger's session setting; null leaves it to the source's default. */
+  session: TriggerResponse["session"];
+  /** A stream trigger's batch window; null fires on every event. */
+  batch: TriggerResponse["batch"];
   failure: { consecutive: number; threshold: number };
   /** The person who configured it can no longer run its agent; it is stopped. */
   needsOwner: boolean;
@@ -197,20 +186,10 @@ export async function TriggerOverviewView({
       <OverviewHero
         mark={
           <span className="mt-0.5 grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[5px] border border-border/60 bg-muted/50">
-            {model.iconUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={model.iconUrl}
-                alt=""
-                aria-hidden
-                className="h-[19px] w-[19px] shrink-0"
-              />
-            ) : (
-              <Zap
-                className="h-[19px] w-[19px] text-foreground/80"
-                strokeWidth={1.9}
-              />
-            )}
+            <SourceGlyph
+              cron={Boolean(model.cron)}
+              className="h-[19px] w-[19px] text-foreground/80"
+            />
           </span>
         }
         title={model.name}
@@ -225,21 +204,7 @@ export async function TriggerOverviewView({
         showLessLabel={t("showLess")}
         meta={
           <>
-            <HeroMeta
-              icon={
-                model.iconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={model.iconUrl}
-                    alt=""
-                    aria-hidden
-                    className="h-3.5 w-3.5 shrink-0"
-                  />
-                ) : (
-                  <Zap />
-                )
-              }
-            >
+            <HeroMeta icon={<SourceGlyph cron={Boolean(model.cron)} />}>
               <b className="font-medium text-foreground/80">
                 {model.scheduleText}
               </b>
@@ -349,11 +314,7 @@ export async function TriggerOverviewView({
             unit={relUnit(next, t)}
             bar={null}
             sub={
-              model.cron
-                ? model.scheduleText
-                : model.isStream
-                  ? t("noScheduleStream")
-                  : t("noSchedule")
+              model.cron ? model.scheduleText : t("noScheduleStream")
             }
           />
         </StatStrip>
@@ -452,7 +413,7 @@ export async function TriggerOverviewView({
 
             <SectionCard>
               <SectionCardHead
-                icon={model.cron ? <Clock /> : <Webhook />}
+                icon={<SourceGlyph cron={Boolean(model.cron)} />}
                 title={t("whenToRun")}
               />
               <FactRow
@@ -483,14 +444,6 @@ export async function TriggerOverviewView({
                   trailing={model.cron.timezone ?? "UTC"}
                 />
               )}
-              {model.webhook?.url && (
-                <div className="space-y-2 border-b border-border/60 px-[15px] py-3 last:border-b-0">
-                  <div className="text-[11.5px] text-muted-foreground">
-                    {t("webhookUrl")}
-                  </div>
-                  <CopyableText text={model.webhook.url} />
-                </div>
-              )}
               {model.stream && (
                 <FactRow
                   title={t("lastEvent")}
@@ -506,35 +459,38 @@ export async function TriggerOverviewView({
                   }
                 />
               )}
-              {model.webhook?.signing && (
-                <SigningRow
-                  triggerId={triggerId}
-                  signing={model.webhook.signing}
-                  rotatable={model.webhook.rotatable}
-                  t={t}
-                />
-              )}
-              {model.webhook && (
+              {model.isStream && (
                 <FactRow
-                  title={t("methods")}
-                  trailing={
-                    <code className="font-mono text-[11px]">
-                      {model.webhook.methods.length > 0
-                        ? model.webhook.methods.join(" ")
-                        : "POST"}
-                    </code>
+                  title={t("session")}
+                  sub={
+                    model.session?.continue == null
+                      ? t("sessionDefault")
+                      : model.session.continue
+                        ? t("sessionContinues", {
+                            timeout:
+                              model.session.idle_timeout ??
+                              DEFAULT_SESSION_IDLE_TIMEOUT,
+                          })
+                        : t("sessionEachEvent")
                   }
                 />
               )}
-              {model.webhook && (
+              {model.isStream && (
                 <FactRow
-                  title={t("events")}
-                  trailing={
-                    model.webhook.events.length > 0
-                      ? t("eventsSelected", {
-                          count: model.webhook.events.length,
-                        })
-                      : t("allEvents")
+                  title={t("batch")}
+                  sub={
+                    !model.batch
+                      ? t("batchOff")
+                      : model.batch.window && model.batch.max_events
+                        ? t("batchWindowOrCount", {
+                            window: model.batch.window,
+                            count: model.batch.max_events,
+                          })
+                        : model.batch.window
+                          ? t("batchWindow", { window: model.batch.window })
+                          : t("batchCount", {
+                              count: model.batch.max_events ?? 0,
+                            })
                   }
                 />
               )}
@@ -556,48 +512,16 @@ export async function TriggerOverviewView({
 }
 
 /* ------------------------- subcomponents ------------------------- */
-/**
- * Whether a request to the webhook has to prove where it came from. An
- * unprotected URL is called out, because anyone who learns it starts the agent.
- */
-function SigningRow({
-  triggerId,
-  signing,
-  rotatable,
-  t,
+/** What fires the trigger: the clock, or the stream it listens to. */
+function SourceGlyph({
+  cron,
+  className,
 }: {
-  triggerId: string;
-  signing: NonNullable<TriggerResponse["webhook_signing"]>;
-  rotatable: boolean;
-  t: Translator;
+  cron: boolean;
+  className?: string;
 }) {
-  const presentation = getWebhookSigningPresentation(signing);
-  const hint = {
-    signed: t("signingSignedHint"),
-    unsigned: rotatable
-      ? t("signingUnsignedHint")
-      : t("signingUnsignedChannelHint"),
-    unsupported: t("signingUnsupportedHint"),
-  }[signing];
-  return (
-    <div className="space-y-2 border-b border-border/60 px-[15px] py-3 last:border-b-0">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[12.5px] font-medium">{t("signing")}</span>
-        <StatusIndicator kind={presentation.kind} size="sm">
-          {t(`signingStatus.${presentation.labelKey ?? signing}`)}
-        </StatusIndicator>
-      </div>
-      <p className="m-0 text-[11.5px] leading-[1.5] text-muted-foreground">
-        {hint}
-      </p>
-      {rotatable && (
-        <WebhookSigningControl
-          triggerId={triggerId}
-          signed={signing === "signed"}
-        />
-      )}
-    </div>
-  );
+  const Icon = cron ? Clock : ENTITY_ICONS.stream;
+  return <Icon aria-hidden className={className} strokeWidth={1.9} />;
 }
 
 /**

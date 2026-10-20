@@ -4,34 +4,28 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   AlertTriangle,
-  ArrowLeftRight,
   CalendarClock,
   ChevronDown,
   FileText,
   Globe,
-  KeyRound,
   MessageSquare,
   Paperclip,
   SlidersHorizontal,
   Tag,
-  Webhook,
 } from "lucide-react";
-import type { AgentResponse, TriggerResponse } from "@/api/client/types.gen";
+import type {
+  AgentResponse,
+  TriggerBatchWindow,
+  TriggerResponse,
+} from "@/api/client/types.gen";
 import { AgentSelect } from "@/components/AgentSelect";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { FilePickerPanel } from "@/components/ResourcePicker/FilePickerPanel";
-import { SecretSelect } from "@/components/SecretSelect";
 import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import Divider from "@/components/ui/divider";
-import {
-  GroupedSelect,
-  type GroupedSelectGroup,
-} from "@/components/ui/grouped-select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -44,42 +38,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { resolveSession } from "@/lib/sourceTypes";
+import { BatchSetting } from "../components/BatchSetting";
+import {
+  SessionSetting,
+  type TriggerSession,
+} from "../components/SessionSetting";
 import {
   composeTaskParameters,
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
-import { LANE_ICON } from "../components/TriggersTypeFilter";
-import { SigningSecretIssuedDialog } from "../components/WebhookSigning";
+import { renderTriggerIcon } from "../components/triggerDisplay";
 import {
   createTriggerAction,
   updateTriggerAction,
-  type TriggerCatalogEntry,
   type TriggerFormState,
 } from "./actions";
 import { CronScheduler } from "./CronScheduler";
 import type { StreamOptions } from "./streamOptions";
 import { TIMEZONES } from "./timezones";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
-import { triggerShape } from "./triggerShape";
+import { requiresTaskText } from "./triggerShape";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
-  /** `null` when the trigger catalog could not be loaded. */
-  catalog: TriggerCatalogEntry[] | null;
   streams: StreamOptions;
   initialData?: TriggerResponse;
 }
 
-const HTTP_METHODS = [
-  "GET",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "HEAD",
-  "OPTIONS",
-] as const;
 const INLINE_ERROR_FIELDS = new Set([
   "name",
   "trigger_type",
@@ -89,52 +76,21 @@ const INLINE_ERROR_FIELDS = new Set([
   "agent_id",
   "stream_id",
   "failure_threshold",
-  "allowed_methods",
+  "batch",
 ]);
+/** What a trigger can be: a schedule, or a subscription to a stream. */
+const TRIGGER_TYPES = ["cron", "stream"] as const;
 
 type SelectableResource = TaskParameterRef;
 
-/** The picker's groups, in the trigger list's lane order and names. */
-const TYPE_KINDS = [
-  { kind: "schedule", label: "schedules", lane: "schedule" },
-  { kind: "messaging", label: "channels", lane: "channel" },
-  { kind: "event", label: "events", lane: "event" },
-] as const satisfies readonly {
-  kind: TriggerCatalogEntry["kind"];
-  label: string;
-  lane: string;
-}[];
-
-function resolveInitialId(
-  catalog: TriggerCatalogEntry[],
-  initialData?: TriggerResponse
-): string {
-  if (!initialData) return "";
-  if (initialData.trigger_type === "cron") {
-    return (
-      catalog.find(
-        (entry) =>
-          entry.backend_type === "cron" &&
-          (entry.data_extractor ?? null) ===
-            (initialData.data_extractor ?? null)
-      )?.id ?? "cron"
-    );
-  }
-  if (initialData.trigger_type === "stream") return "stream";
-  const wt = initialData.webhook_type;
-  if (!wt) return "webhook";
-  return catalog.find((e) => e.webhook_type === wt)?.id ?? "webhook";
-}
-
 export function CreateTriggerForm({
   agents,
-  catalog: loadedCatalog,
   streams,
   initialData,
 }: CreateTriggerFormProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("TriggersPage.create");
-  const tFilter = useTranslations("TriggersPage.filter");
+  const tType = useTranslations("TriggersPage.type");
   const tError = useTranslations("TriggersPage.error");
 
   const isEditing = !!initialData;
@@ -143,12 +99,8 @@ export function CreateTriggerForm({
   const initialState: TriggerFormState = { message: "" };
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  // A failed load used to leave an empty type dropdown that looked like the
-  // product simply had no trigger types, so the failure is said out loud.
-  const catalogFailed = loadedCatalog === null;
-  const catalog = useMemo(() => loadedCatalog ?? [], [loadedCatalog]);
-  const [selectedId, setSelectedId] = useState(() =>
-    resolveInitialId(catalog, initialData)
+  const [triggerType, setTriggerType] = useState<string>(
+    initialData?.trigger_type ?? ""
   );
   // A new trigger starts with a name, as a new agent or model does: generic
   // until a type is picked, then named after the type. Once someone types
@@ -160,35 +112,27 @@ export function CreateTriggerForm({
   const [selectedAgentId, setSelectedAgentId] = useState(
     initialData?.agent_id ?? ""
   );
-  const [credentialSecrets, setCredentialSecrets] = useState<
-    Record<string, string>
-  >({});
+  const [streamId, setStreamId] = useState(initialData?.stream_id ?? "");
+  // Null until someone changes it: then it follows the chosen stream's default.
+  const [session, setSession] = useState<TriggerSession | null>(
+    initialData?.session ?? null
+  );
+  const [batch, setBatch] = useState<TriggerBatchWindow | null>(
+    initialData?.batch ?? null
+  );
   const [runSettingsOpen, setRunSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (
-      state.errors?.failure_threshold ||
-      state.errors?.allowed_methods ||
-      state.errors?.description
-    )
+    if (state.errors?.failure_threshold || state.errors?.description)
       setRunSettingsOpen(true);
   }, [state.errors]);
   // Field errors the form has no inline slot for (e.g. `config.*` from the
   // schema) are listed in the banner with their path, not dropped.
   const unplacedErrors = Object.entries(state.errors ?? {}).filter(
-    ([key]) =>
-      key !== "_form" &&
-      !INLINE_ERROR_FIELDS.has(key) &&
-      !key.startsWith("credential_secret_")
+    ([key]) => key !== "_form" && !INLINE_ERROR_FIELDS.has(key)
   );
   const [typeMissing, setTypeMissing] = useState(false);
   const [agentMissing, setAgentMissing] = useState(false);
-  const [selectedMethods, setSelectedMethods] = useState<string[]>(
-    initialData?.allowed_methods ?? ["POST"]
-  );
-  const [selectedEvents, setSelectedEvents] = useState<string[]>(
-    initialData?.event_types || []
-  );
   const initialTaskParameters = useMemo(
     () => normalizeTaskParameters(initialData?.task_parameters),
     [initialData?.task_parameters]
@@ -201,14 +145,10 @@ export function CreateTriggerForm({
   const [taskMcps, setTaskMcps] = useState<TaskParameterRef[]>(
     initialTaskParameters.mcps
   );
-  const resources = useAttachableResources({
-    withFiles: true,
-    withSecrets: true,
-  });
+  const resources = useAttachableResources({ withFiles: true });
   const {
     mcpInstances: availableMcps,
     files: availableFiles,
-    secrets: availableSecrets,
     loading: resourcesLoading,
     failed: resourceErrors,
   } = resources;
@@ -222,49 +162,18 @@ export function CreateTriggerForm({
     [resources.skills]
   );
 
-  const selected = catalog.find((e) => e.id === selectedId);
-  const webhookType = initialData?.webhook_type ?? selected?.webhook_type ?? "";
-  const { triggerType, isChannel, taskTextRequired } = triggerShape({
-    selected,
-    initialData,
-  });
+  const taskTextRequired = requiresTaskText(triggerType);
+  const stream = streams.items.find((item) => item.id === streamId);
+  const effectiveSession = resolveSession(
+    session,
+    stream?.continuesSessions ?? false
+  );
   const timezones = Array.from(
     new Set([
       ...TIMEZONES,
       ...(initialData?.timezone ? [initialData.timezone] : []),
     ])
   );
-
-  // Reset methods and events when selection changes
-  useEffect(() => {
-    if (selected && !isEditing) {
-      setSelectedMethods(selected.default_methods ?? ["POST"]);
-      setSelectedEvents([]);
-    }
-  }, [isEditing, selected]);
-
-  const availableEvents = Array.from(
-    new Set([...(selected?.events ?? []), ...(initialData?.event_types ?? [])])
-  );
-  const credentialFields = selected?.credential_fields ?? [];
-  const credentialsRequired =
-    !!selected?.data_extractor && !initialData?.has_channel_credentials;
-  const showEvents =
-    triggerType === "webhook" && !isChannel && availableEvents.length > 0;
-
-  const toggleEvent = (event: string) => {
-    setSelectedEvents((prev) =>
-      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]
-    );
-  };
-
-  const toggleMethod = (method: string) => {
-    setSelectedMethods((prev) =>
-      prev.includes(method)
-        ? prev.filter((m) => m !== method)
-        : [...prev, method]
-    );
-  };
 
   const taskParametersValue = useMemo(
     () =>
@@ -294,50 +203,15 @@ export function CreateTriggerForm({
   }, [isPending]);
 
   useEffect(() => {
-    // A generated signing secret is shown first: navigating away would lose it.
-    if (state.success && !state.signing) {
+    if (state.success) {
       // The action revalidated both paths, so the destination renders fresh.
       // A `router.refresh()` here cancels this navigation instead.
       router.push(initialData ? `/triggers/${initialData.id}` : "/triggers");
     }
   }, [state, router, initialData]);
 
-  // The catalog grows a type per integration, so the types are picked like
-  // models are: kinds on the left, that kind's types on the right, a search
-  // over both. The kinds and their icons are the trigger list's lanes.
-  const typeGroups: GroupedSelectGroup[] = TYPE_KINDS.filter(({ kind }) =>
-    catalog.some((entry) => entry.kind === kind)
-  ).map(({ kind, label, lane }) => {
-    const Icon = LANE_ICON[lane] ?? ENTITY_ICONS.trigger;
-    return {
-      id: kind,
-      label: tFilter(label),
-      icon: <Icon className="h-4 w-4 text-muted-foreground" />,
-      items: catalog
-        .filter((entry) => entry.kind === kind)
-        .map((entry) => ({
-          id: entry.id,
-          label: entry.name,
-          description: entry.description,
-          searchText: entry.id,
-          // The catalog owns the artwork, as on the trigger cards: drawing it
-          // from a map here is how channels the map never heard of ended up
-          // as dots.
-          icon: entry.icon_url ? (
-            <span className="avatar-plate grid h-5 w-5 flex-shrink-0 place-items-center rounded-[5px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={entry.icon_url}
-                alt=""
-                className="h-[13px] w-[13px] object-contain"
-              />
-            </span>
-          ) : undefined,
-        })),
-    };
-  });
   // The type's own fields wait for a type; an edit always has one.
-  const hasType = isEditing || !!selected;
+  const hasType = isEditing || !!triggerType;
 
   // A new trigger cannot be saved without a type or an agent; both are
   // checked here, before the post, rather than left to the server's 422.
@@ -349,7 +223,7 @@ export function CreateTriggerForm({
     }
     // Scrolled to after the agent's focus: on a phone both share one scroll,
     // and the type is the field further up.
-    if (!selected) {
+    if (!triggerType) {
       setTypeMissing(true);
       document
         .getElementById("trigger-type-field")
@@ -358,7 +232,7 @@ export function CreateTriggerForm({
         .getElementById("trigger_type_select")
         ?.focus({ preventScroll: true });
     }
-    if (!selected || !selectedAgentId) event.preventDefault();
+    if (!triggerType || !selectedAgentId) event.preventDefault();
   };
 
   const fileControl = (
@@ -398,18 +272,6 @@ export function CreateTriggerForm({
   );
   return (
     <>
-      {state.success && state.signing && (
-        <SigningSecretIssuedDialog
-          title={t("createdWithSecretTitle")}
-          secret={state.signing.secret}
-          scheme={state.signing.scheme}
-          onDone={() =>
-            router.push(
-              state.triggerId ? `/triggers/${state.triggerId}` : "/triggers"
-            )
-          }
-        />
-      )}
       <form
         id="create-trigger-form"
         action={formAction}
@@ -424,41 +286,11 @@ export function CreateTriggerForm({
       >
         {isEditing && <input type="hidden" name="id" value={initialData.id} />}
         <input type="hidden" name="trigger_type" value={triggerType} />
-        {triggerType === "webhook" && (
-          <input type="hidden" name="webhook_type" value={webhookType} />
-        )}
-        {selected?.data_extractor && (
-          <input
-            type="hidden"
-            name="data_extractor"
-            value={selected.data_extractor}
-          />
-        )}
         <input
           type="hidden"
           name="task_parameters"
           value={taskParametersValue}
         />
-        {triggerType === "webhook" && (
-          <input
-            type="hidden"
-            name="event_types"
-            value={JSON.stringify(selectedEvents)}
-          />
-        )}
-        {/* A channel shows no method checkboxes, and the update action reads the
-          methods straight off them with no fallback — carrying them hidden is
-          what keeps an edit from saving an empty allowed_methods. */}
-        {triggerType === "webhook" &&
-          isChannel &&
-          selectedMethods.map((method) => (
-            <input
-              key={method}
-              type="hidden"
-              name={`method_${method}`}
-              value="on"
-            />
-          ))}
         <div className="min-w-0 flex-1 px-4 py-5 lg:overflow-auto">
           <div className="form-content mx-auto w-full max-w-4xl pb-5">
             {state.errors && (
@@ -515,16 +347,8 @@ export function CreateTriggerForm({
               >
                 {t("taskInstructions")}
               </FormLabel>
-              {Boolean(triggerType) && !taskTextRequired && (
-                <p className="note">
-                  {t(
-                    triggerType === "stream"
-                      ? "taskTextFromStream"
-                      : isChannel
-                        ? "taskTextFromChannel"
-                        : "taskTextFromCall"
-                  )}
-                </p>
+              {triggerType === "stream" && (
+                <p className="note">{t("taskTextFromStream")}</p>
               )}
               <Textarea
                 id="task_text"
@@ -554,36 +378,37 @@ export function CreateTriggerForm({
                   {state.errors?.trigger_type?.[0] ?? t("selectType")}
                 </p>
               )}
-              {catalogFailed && (
-                <p role="alert" className="form-error">
-                  {t("catalogLoadFailed")}
-                </p>
-              )}
-              <GroupedSelect
-                id="trigger_type_select"
-                groups={typeGroups}
-                value={selectedId}
-                onValueChange={(id) => {
-                  const entry = catalog.find((item) => item.id === id);
-                  if (!entry) return;
-                  setSelectedId(entry.id);
+              <Select
+                value={triggerType}
+                onValueChange={(type) => {
+                  setTriggerType(type);
                   if (!nameEdited)
-                    setName(t("suggestedName", { type: entry.name }));
+                    setName(t("suggestedName", { type: tType(type) }));
                   setTypeMissing(false);
                 }}
-                placeholder={
-                  isEditing ? initialData.trigger_type : t("selectType")
-                }
-                groupsTitle={t("typeKinds")}
-                itemsTitle={t("typeItems")}
-                searchPlaceholder={t("typeSearch")}
-                noResults={t("typeNotFound")}
-                emptyMessage={t("catalogLoadFailed")}
-                showGroupInValue={false}
                 // An edit cannot change the type: shown, not offered.
-                disabled={isEditing || catalogFailed}
-                invalid={typeMissing || !!state.errors?.trigger_type}
-              />
+                disabled={isEditing}
+              >
+                <SelectTrigger
+                  id="trigger_type_select"
+                  className="md:max-w-sm"
+                  aria-invalid={typeMissing || !!state.errors?.trigger_type}
+                >
+                  <SelectValue placeholder={t("selectType")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRIGGER_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      <span className="flex items-center gap-2">
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
+                          {renderTriggerIcon({ trigger_type: type }, "h-4 w-4")}
+                        </span>
+                        {tType(type)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {hasType && triggerType === "stream" && (
@@ -599,7 +424,8 @@ export function CreateTriggerForm({
                   trigger to another stream. */}
                 <Select
                   name="stream_id"
-                  defaultValue={initialData?.stream_id ?? undefined}
+                  value={streamId}
+                  onValueChange={setStreamId}
                   disabled={isEditing || streams.error !== null}
                   required
                 >
@@ -628,6 +454,29 @@ export function CreateTriggerForm({
               </div>
             )}
 
+            {hasType && triggerType === "stream" && (
+              <SessionSetting
+                id="session"
+                name="session"
+                value={effectiveSession}
+                onChange={setSession}
+              />
+            )}
+
+            {hasType && triggerType === "stream" && (
+              <div className="space-y-2">
+                <BatchSetting
+                  id="batch"
+                  name="batch"
+                  value={batch}
+                  onChange={setBatch}
+                />
+                {state.errors?.batch && (
+                  <p className="form-error">{state.errors.batch[0]}</p>
+                )}
+              </div>
+            )}
+
             {hasType && triggerType === "cron" && (
               <>
                 <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
@@ -636,11 +485,7 @@ export function CreateTriggerForm({
                   </FormLabel>
                   <CronScheduler
                     name="cron_expression"
-                    defaultValue={
-                      initialData?.cron_expression ??
-                      selected?.default_cron ??
-                      ""
-                    }
+                    defaultValue={initialData?.cron_expression ?? ""}
                   />
                   {state.errors?.cron_expression && (
                     <p className="form-error">
@@ -669,107 +514,6 @@ export function CreateTriggerForm({
                   </Select>
                 </div>
               </>
-            )}
-
-            {hasType && credentialFields.length > 0 && (
-              <div className="space-y-2">
-                <div className="grid gap-5 sm:grid-cols-2">
-                  {credentialFields.map((field) => (
-                    <div
-                      key={`${selectedId}:${field.key}`}
-                      className="grid content-start gap-2"
-                    >
-                      <FormLabel
-                        htmlFor={`cred_${field.key}`}
-                        icon={KeyRound}
-                        required={credentialsRequired}
-                      >
-                        {field.label}
-                      </FormLabel>
-                      <SecretSelect
-                        id={`cred_${field.key}`}
-                        name={`credential_secret_${field.key}`}
-                        secrets={availableSecrets}
-                        value={credentialSecrets[field.key] ?? ""}
-                        onChange={(secretId) =>
-                          setCredentialSecrets((previous) => ({
-                            ...previous,
-                            [field.key]: secretId,
-                          }))
-                        }
-                        disabled={
-                          resourcesLoading || resourceErrors.includes("secrets")
-                        }
-                        required={credentialsRequired}
-                        placeholder={
-                          resourcesLoading
-                            ? t("loadingResources")
-                            : isEditing && initialData.has_channel_credentials
-                              ? t("keepExistingSecret")
-                              : t("selectSecret")
-                        }
-                        searchPlaceholder={t("selectSecret")}
-                        emptyMessage={t("noSecrets")}
-                        createLabel={t("newSecret")}
-                        onCreated={resources.refresh}
-                      />
-                      {state.errors?.[`credential_secret_${field.key}`] && (
-                        <p role="alert" className="form-error">
-                          {state.errors[`credential_secret_${field.key}`][0]}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <p className="note">{t("selectCredentialsHint")}</p>
-                {/* Nothing here is required: a trigger saved without its
-                  connection exists but receives nothing until one is added. */}
-                {!isEditing && (
-                  <p className="note">{t("credentialsLaterHint")}</p>
-                )}
-                {resourceErrors.includes("secrets") && (
-                  <p role="alert" className="form-error">
-                    {t("resourcesLoadFailed")}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {hasType && showEvents && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <FormLabel icon={Webhook}>{t("eventTypes")}</FormLabel>
-                  <span className="note">
-                    {selectedEvents.length
-                      ? t("selectedEventsCount", {
-                          count: selectedEvents.length,
-                        })
-                      : t("allEvents")}
-                  </span>
-                </div>
-                <p className="note">{t("eventTypesHint")}</p>
-                <div className="grid max-h-56 gap-x-4 gap-y-2.5 overflow-y-auto rounded-md border p-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {availableEvents.map((event) => (
-                    <div
-                      key={event}
-                      className="flex min-w-0 items-center gap-2"
-                    >
-                      <Checkbox
-                        id={`event_${event}`}
-                        checked={selectedEvents.includes(event)}
-                        onCheckedChange={() => toggleEvent(event)}
-                      />
-                      <Label
-                        htmlFor={`event_${event}`}
-                        className="cursor-pointer truncate font-mono text-xs font-normal"
-                        title={event}
-                      >
-                        {event}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
             )}
 
             <Divider />
@@ -818,37 +562,6 @@ export function CreateTriggerForm({
                     </p>
                   )}
                 </div>
-
-                {triggerType === "webhook" && !isChannel && (
-                  <div className="space-y-2">
-                    <FormLabel icon={ArrowLeftRight}>
-                      {t("allowedMethods")}
-                    </FormLabel>
-                    <div className="flex flex-wrap gap-x-4 gap-y-2">
-                      {HTTP_METHODS.map((method) => (
-                        <div key={method} className="flex items-center gap-2">
-                          <Checkbox
-                            id={`method_${method}`}
-                            name={`method_${method}`}
-                            checked={selectedMethods.includes(method)}
-                            onCheckedChange={() => toggleMethod(method)}
-                          />
-                          <Label
-                            htmlFor={`method_${method}`}
-                            className="cursor-pointer font-mono text-xs font-normal"
-                          >
-                            {method}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                    {state.errors?.allowed_methods && (
-                      <p className="form-error">
-                        {state.errors.allowed_methods[0]}
-                      </p>
-                    )}
-                  </div>
-                )}
 
                 <div className="space-y-2">
                   <FormLabel htmlFor="description" icon={FileText} optional>

@@ -86,6 +86,13 @@ class OpenAPIConnectionRepository(WorkspaceScopedRepository[OpenAPIConnection]):
             select(items.c.external_id).where(items.c.id == registry_item_id)
         )
 
+    async def catalog_spec_content(self, registry_item_id: UUID) -> dict[str, Any] | None:
+        """The OpenAPI spec the registry item a connection was made from carries inline."""
+        items = table("registry_items", column("id"), column("spec"))
+        spec = await self.session.scalar(select(items.c.spec).where(items.c.id == registry_item_id))
+        content = spec.get("spec_content") if isinstance(spec, dict) else None
+        return content if isinstance(content, dict) else None
+
     async def record_dispatch(self, connection_id: UUID, dispatch: dict[str, Any]) -> None:
         """Write ``last_dispatch`` alone; a call is not an edit, so ``updated_at`` stays.
 

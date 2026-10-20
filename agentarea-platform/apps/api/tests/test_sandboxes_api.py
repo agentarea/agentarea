@@ -58,8 +58,8 @@ async def test_list_sandboxes_uses_authenticated_workspace(monkeypatch):
         lambda: _settings("inspection-secret"),
     )
     monkeypatch.setattr(
-        "agentarea_api.api.v1.sandboxes.httpx.AsyncClient",
-        lambda **_kwargs: _AsyncClient(response, capture),
+        "agentarea_api.api.v1.sandboxes.outbound_client",
+        lambda *_args, **_kwargs: _AsyncClient(response, capture),
     )
 
     result = await list_sandboxes(SimpleNamespace(user_id="user-a", workspace_id="workspace-a"))
@@ -110,8 +110,8 @@ async def test_list_sandboxes_rejects_cross_workspace_upstream_item(monkeypatch)
         lambda: _settings("inspection-secret"),
     )
     monkeypatch.setattr(
-        "agentarea_api.api.v1.sandboxes.httpx.AsyncClient",
-        lambda **_kwargs: _AsyncClient(response, {}),
+        "agentarea_api.api.v1.sandboxes.outbound_client",
+        lambda *_args, **_kwargs: _AsyncClient(response, {}),
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -127,8 +127,8 @@ async def test_list_sandboxes_maps_manager_failure_to_unavailable(monkeypatch):
         lambda: _settings("inspection-secret"),
     )
     monkeypatch.setattr(
-        "agentarea_api.api.v1.sandboxes.httpx.AsyncClient",
-        lambda **_kwargs: _AsyncClient(httpx.Response(503, text="not ready"), {}),
+        "agentarea_api.api.v1.sandboxes.outbound_client",
+        lambda *_args, **_kwargs: _AsyncClient(httpx.Response(503, text="not ready"), {}),
     )
 
     with pytest.raises(HTTPException) as exc:

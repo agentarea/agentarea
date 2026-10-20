@@ -299,7 +299,7 @@ describe("business status and execution lifecycle", () => {
         eventType: "input.request",
         data: { input_request_id: "input", question: "Which project?" },
       },
-      { eventType: "approval.request", data: { escalation_id: "approval" } },
+      { eventType: "approval.requested", data: { escalation_id: "approval" } },
     ]);
     expect(state.status).toBe("waiting_for_input");
     expect(state.executionStatus).toBe("waiting");
@@ -315,7 +315,7 @@ describe("business status and execution lifecycle", () => {
     });
     expect(state.status).toBe("waiting_for_approval");
     state = applyEvent(state, {
-      eventType: "approval.response",
+      eventType: "approval.decided",
       data: { escalation_id: "approval", approved: true },
     });
     expect(state.status).toBe("running");
@@ -377,5 +377,39 @@ describe("business status and execution lifecycle", () => {
     expect(state.status).toBe("completed");
     expect(state.executionStatus).toBe("finished");
     expect(state.completedRuns).toHaveLength(2);
+  });
+});
+
+// A paused task read "Running / Working" because the reducer ignored the pause.
+describe("reducer pause", () => {
+  const started = { eventType: "task.started", data: {} };
+
+  it("holds a running task as paused until it resumes", () => {
+    const paused = feed([started, { eventType: "execution.paused", data: {} }]);
+    expect(paused.status).toBe("paused");
+
+    const resumed = applyEvent(paused, {
+      eventType: "execution.resumed",
+      data: {},
+    });
+    expect(resumed.status).toBe("running");
+  });
+
+  it("lets a stop end a paused task", () => {
+    const state = feed([
+      started,
+      { eventType: "execution.paused", data: {} },
+      { eventType: "task.cancelled", data: {} },
+    ]);
+    expect(state.status).toBe("cancelled");
+  });
+
+  it("does not turn a finished task into a paused one", () => {
+    const state = feed([
+      started,
+      { eventType: "task.completed", data: { result: "done" } },
+      { eventType: "execution.paused", data: {} },
+    ]);
+    expect(state.status).toBe("completed");
   });
 });

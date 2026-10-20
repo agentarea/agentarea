@@ -231,13 +231,19 @@ class E2ETemporalTest:
             async def get_accessible_workspaces(self, user_context: UserContext) -> list[str]:
                 return [user_context.workspace_id]
 
-            async def can_write_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
+            async def can_write_workspace(
+                self, user_context: UserContext, workspace_id: str
+            ) -> bool:
                 return True
 
         db = Database(self.settings.database)
         async with db.get_db() as session:
             agent_repository = AgentRepository(session)
-            agent_service = AgentService(agent_repository, DummyEventBroker(), authorization_service=DummyAuthorizationService())
+            agent_service = AgentService(
+                agent_repository,
+                DummyEventBroker(),
+                authorization_service=DummyAuthorizationService(),
+            )
             existing_agents = await agent_repository.list()
             test_agents = [a for a in existing_agents if "test" in a.name.lower()]
             agent = (test_agents or existing_agents or [None])[0]
@@ -275,13 +281,19 @@ class E2ETemporalTest:
             async def get_accessible_workspaces(self, user_context: UserContext) -> list[str]:
                 return [user_context.workspace_id]
 
-            async def can_write_workspace(self, user_context: UserContext, workspace_id: str) -> bool:
+            async def can_write_workspace(
+                self, user_context: UserContext, workspace_id: str
+            ) -> bool:
                 return True
 
         db = Database(self.settings.database)
         async with db.get_db() as session:
             agent_repository = AgentRepository(session)
-            agent_service = AgentService(agent_repository, DummyEventBroker(), authorization_service=DummyAuthorizationService())
+            agent_service = AgentService(
+                agent_repository,
+                DummyEventBroker(),
+                authorization_service=DummyAuthorizationService(),
+            )
             existing_agents = await agent_repository.list()
             tool_agents = [
                 a for a in existing_agents if "tool" in a.name.lower() and "test" in a.name.lower()

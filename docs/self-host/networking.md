@@ -1,7 +1,7 @@
 ---
 title: Configure networking and ingress
 type: guide
-description: "Expose AgentArea over ingress, set the public URLs the platform advertises, and restrict egress from pods running untrusted code."
+description: "Expose AgentArea over ingress, set the public URLs the platform advertises, and restrict egress from untrusted pods and the platform services."
 prerequisites:
   - /self-host/kubernetes
 related:
@@ -9,7 +9,7 @@ related:
   - /self-host/requirements
   - /self-host/kubernetes
   - /self-host/troubleshooting
-last_updated: 2026-10-03
+last_updated: 2026-10-14
 ---
 
 Getting AgentArea onto a hostname takes more than an Ingress resource. Three
@@ -18,9 +18,9 @@ advertises for itself, and what URL the browser is redirected to for
 authentication. Set only the first and you get a site that loads and cannot log
 in.
 
-This guide also covers egress restriction for the pods that run code the
-platform did not write — MCP server instances and agent sandboxes — which is a
-different problem with a different mechanism.
+This guide also covers egress restriction: for the pods that run code the
+platform did not write — MCP server instances and agent sandboxes — and for the
+platform services that call addresses workspace members set.
 
 ## Prerequisites
 
@@ -240,17 +240,6 @@ different problem with a different mechanism.
     - **This is a no-op on a cluster whose CNI does not enforce NetworkPolicy.** The chart cannot detect that, and nothing warns you. The policy object exists, and untrusted pods reach the metadata endpoint anyway.
     - **This is not kernel isolation.** Egress rules constrain the network; they do nothing about a container escape. That is what `mcpManager.runtimeClass` is for, and it defaults to `""`.
 
-    The backend and the worker are not covered by a chart policy. They send
-    requests to addresses workspace members set. URL MCP servers, OpenAPI
-    connections, A2A delegates and bundle sources are checked against private
-    addresses in code; LLM provider endpoints used for runs, model tests and
-    compaction are not. Restrict their egress with a NetworkPolicy written for
-    your cluster: allow DNS, the services they depend on (Postgres, Valkey,
-    Temporal, Kratos, Hydra, OpenFGA, the MCP manager, object storage) wherever
-    those run, and the public internet, and deny link-local and every other
-    private range. The chart cannot ship that policy: where those services live
-    differs per install.
-
     The policy selects pods by both `app.kubernetes.io/managed-by: mcp-manager` and
     `app.kubernetes.io/component: mcp-server`. The component constraint is
     deliberate: workflow sandboxes are also manager-created, and locked sandboxes
@@ -258,6 +247,65 @@ different problem with a different mechanism.
     `mcpManager.warmPool.lockedNetworkPolicy` instead, which grants no public egress
     at all — add stable S3 endpoint CIDRs to `s3EgressCIDRs` if your object store is
     outside the cluster. The template rejects broad public routes there.
+  </Step>
+
+  <Step title="Restrict egress from the platform services">
+    Restricting the backend, worker and event-service egress is your
+    responsibility: in your cloud network, or with the chart policy below. These
+    services send requests to addresses workspace members set — LLM provider
+    endpoints, URL MCP servers, OpenAPI connections, A2A delegates, bundle
+    sources. AgentArea checks those addresses in code and refuses private,
+    loopback and link-local destinations. The network control is what still
+    holds when a code path misses the check, or when a public address redirects
+    to an internal one.
+
+    The chart ships the policy off:
+
+    ```yaml
+    platformNetworkPolicy:
+      enabled: true
+      blockedEgressCIDRs:
+        - 169.254.0.0/16
+      extraEgress: []
+    ```
+
+    Enabled, it keeps every pod in the cluster reachable — Postgres, Valkey,
+    Temporal, Kratos, OpenFGA, the MCP manager and DNS, wherever they run
+    in-cluster — and allows every other destination except `blockedEgressCIDRs`.
+    The default blocks link-local, which holds the cloud metadata endpoint at
+    `169.254.169.254`.
+
+    Private ranges are not blocked by default: a managed database or an object
+    store inside your VPC usually sits in one, and the chart cannot know which.
+    Block them in your cloud network (security groups, a VPC firewall, an egress
+    gateway), or add them to `blockedEgressCIDRs` and allow each external
+    dependency through `extraEgress`:
+
+    ```yaml
+    platformNetworkPolicy:
+      enabled: true
+      blockedEgressCIDRs:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 169.254.0.0/16
+      extraEgress:
+        - to:
+            - ipBlock:
+                cidr: 10.20.0.15/32
+          ports:
+            - protocol: TCP
+              port: 5432
+    ```
+
+    <Warning>
+    If the cluster runs NodeLocal DNSCache, it answers on `169.254.20.10`, inside
+    the default block. Narrow the block to `169.254.169.254/32` or DNS fails for
+    the platform pods.
+    </Warning>
+
+    The same limit as for MCP instances applies: on a CNI that does not enforce
+    NetworkPolicy, the policy exists and blocks nothing.
   </Step>
 </Steps>
 
@@ -304,6 +352,15 @@ kubectl run egress-check --rm -it -n agentarea \
 
 The request must time out. If it returns metadata, your CNI is not enforcing the
 policy and the protection you think you have does not exist.
+
+With `platformNetworkPolicy.enabled`, run the same check from a worker pod:
+
+```bash
+kubectl exec -n agentarea deploy/agentarea-worker -- \
+  python -c "import urllib.request; urllib.request.urlopen('http://169.254.169.254/', timeout=5)"
+```
+
+It must fail with a timeout.
 
 ## Troubleshooting
 

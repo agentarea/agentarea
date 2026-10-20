@@ -12,6 +12,7 @@ from uuid import UUID
 from agentarea_agents.domain.config_hash import compute_agent_config_hash
 from agentarea_agents_sdk import ToolManager
 from agentarea_common.auth.context import UserContext
+from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_llm.domain.model_kind import ModelKind
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
@@ -25,6 +26,7 @@ from ...models import (
     AgentConfigResult,
     DiscoverToolProvidersResult,
     McpToolRoute,
+    OutageWait,
     ResolveAgentToolsRequest,
     ResolveAgentToolsResult,
     RuntimeDiscoveryResult,
@@ -34,6 +36,7 @@ from ...models import (
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     ToolProviderData,
+    WithheldSkill,
 )
 from ..runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
 
@@ -41,6 +44,14 @@ if TYPE_CHECKING:
     from ..dependencies import ActivityServiceContainer
 
 logger = logging.getLogger(__name__)
+
+
+def _package_pointer(skill: Any) -> str | None:
+    """Where the skill's package is, as far as the row says without reading storage."""
+    if skill.s3_path:
+        return skill.s3_path
+    mirrored = (getattr(skill, "catalog_spec", None) or {}).get("package")
+    return mirrored.get("s3_path") if isinstance(mirrored, dict) else None
 
 
 def _as_tool_config_list(value: Any) -> list[dict[str, Any]]:
@@ -73,6 +84,23 @@ def _task_resource_ids(parameters: dict[str, Any], kind: str) -> list[UUID]:
         if resource_id not in ids:
             ids.append(resource_id)
     return ids
+
+
+async def _runnable_skills(skills: list[Any], ctx: Any) -> tuple[list[Any], list[WithheldSkill]]:
+    """The run's skills the install policy still lets it use, and those it withholds."""
+    if not skills:
+        return [], []
+    refusals = await (await ctx.get_skill_service()).run_refusals(skills)
+    withheld = [
+        WithheldSkill(id=str(skill.id), name=skill.name, reason=refusals[str(skill.id)])
+        for skill in skills
+        if str(skill.id) in refusals
+    ]
+    for skill in withheld:
+        logger.warning(
+            "Skill %s (%s) is not offered to this run: %s", skill.name, skill.id, skill.reason
+        )
+    return [skill for skill in skills if str(skill.id) not in refusals], withheld
 
 
 async def _resolve_task_resources(
@@ -113,7 +141,10 @@ async def _resolve_task_resources(
         for skill_id in skill_ids:
             if any(str(skill.id) == str(skill_id) for skill in skills):
                 continue
-            skill = await skill_service.get_with_catalog(skill_id)
+            try:
+                skill = await skill_service.get_with_catalog(skill_id, to_run=True)
+            except CatalogInstallRefusedError as exc:
+                raise ApplicationError(str(exc), non_retryable=True) from exc
             if skill is None:
                 raise ApplicationError("Selected task skill is unavailable", non_retryable=True)
             if any(existing.name == skill.name for existing in skills):
@@ -337,7 +368,7 @@ async def _record_task_config_hash(ctx: Any, task_id: UUID, config_hash: str) ->
 
 
 def make_config_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 
@@ -362,33 +393,26 @@ def make_config_activities(
             # tenant agent for this id.
             agent = await agent_service.get_with_skills(request.agent_id)
             if not agent:
-                agent = await agent_service.get_with_catalog(request.agent_id)
+                try:
+                    agent = await agent_service.get_with_catalog(request.agent_id, to_run=True)
+                except CatalogInstallRefusedError as exc:
+                    raise ApplicationError(str(exc), non_retryable=True) from exc
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
             tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
+            skills, withheld_skills = await _runnable_skills(skills, ctx)
             runtime = await discover_runtime_manifest_activity()
 
-            # Build skill information
-            skills_info = []
-            if skills:
-                for skill in skills:
-                    # Get file list for multi-file skills
-                    files = []
-                    if skill.s3_path:
-                        # For multi-file skills, we would list files from S3
-                        # For now, just note it has additional files
-                        files = ["(additional files available)"]
-
-                    skills_info.append(
-                        SkillInfo(
-                            id=str(skill.id),
-                            name=skill.name,
-                            description=skill.description or "",
-                            content=skill.content or "",
-                            files=files,
-                        )
-                    )
+            skills_info = [
+                SkillInfo(
+                    id=str(skill.id),
+                    name=skill.name,
+                    description=skill.description or "",
+                    package=_package_pointer(skill),
+                )
+                for skill in skills
+            ]
 
             # Fetch model context window and context strategy from ModelSpec
             model_id_str = request.override_model or agent.model_id
@@ -483,6 +507,13 @@ def make_config_activities(
                 execution_context=execution_context,
                 step_type=request.step_type,
                 skills=skills_info,
+                outage_wait=OutageWait(
+                    retry_window=dependencies.settings.app.TASK_OUTAGE_RETRY_WINDOW,
+                    backoff=dependencies.settings.app.TASK_OUTAGE_WAIT_BACKOFF,
+                    deadline=dependencies.settings.app.TASK_OUTAGE_WAIT_DEADLINE,
+                ),
+                skills_window_share=dependencies.settings.app.TASK_SKILLS_WINDOW_SHARE,
+                withheld_skills=withheld_skills,
                 runtime=runtime,
                 runtime_event_data=runtime_event_data(runtime),
                 openapi_operation_tools=openapi_operation_tools,

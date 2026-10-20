@@ -11,6 +11,7 @@ from collections import Counter
 import pytest
 from agentarea_api.api import rate_limit
 from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.credential import SESSION, Credential
 from agentarea_common.auth.dependencies import get_optional_principal
 from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
@@ -33,7 +34,10 @@ def _principal(request: Request) -> UserPrincipal | None:
     key = request.headers.get("x-test-key")
     if key is None:
         return None
-    return UserPrincipal(user_id="user-shared", api_key_id=key)
+    return UserPrincipal(
+        user_id="user-shared",
+        credential=Credential(kind="api_key", key_id=key) if key else SESSION,
+    )
 
 
 @pytest.fixture

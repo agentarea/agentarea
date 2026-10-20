@@ -10,7 +10,7 @@ import difflib
 import json
 import logging
 import re
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from agentarea_agents_sdk.mcp_server.elicitation import url_elicitation
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -28,13 +28,14 @@ from agentarea_mcp.application.auth_service import (
 from agentarea_openapi.application.spec_parser import parse_openapi_operations
 from fastapi import HTTPException
 from mcp.types import CallToolResult, InputRequiredResult
+from pydantic import BaseModel, Field
 
 from ..api.deps.services import get_openapi_connection_service
 from ..api.v1 import _catalog_connections, client_mcp
 from ..api.v1._catalog_connections import with_existing_connections
 from ..oauth_connect.pages import catalog_connect_page_url
 from .base import platform_context, platform_read_context
-from .mcp_servers_toolset import _connect_action, _tool_safety_hint
+from .mcp_servers_toolset import ConnectAction, _connect_action, _tool_safety_hint
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,73 @@ _CONFIRM_MESSAGE = (
     "This tool is marked destructive. Ask the user to confirm, then call again with confirm=true."
 )
 _METHOD_HINTS = {"DELETE": "destructive", "GET": "read-only", "HEAD": "read-only"}
+_CONNECTOR = (
+    "The connector's id or name, as `tools_search` returns it in `connector_id`/`connector`."
+)
+
+
+class ToolMatch(BaseModel):
+    connector_id: str = Field(description="Id of the connector the tool belongs to.")
+    connector: str = Field(description="Name of the connector.")
+    tool: str = Field(description="Tool name to pass to `tools_call`.")
+    description: str = Field(description="What the tool does.")
+    hint: Literal["destructive", "read-only"] | None = Field(
+        description="Safety marker; a destructive tool needs confirm=true in `tools_call`."
+    )
+    input_schema: dict[str, Any] = Field(
+        alias="inputSchema", description="JSON Schema of the tool's arguments."
+    )
+
+
+class ToolSearchOutput(BaseModel):
+    results: list[ToolMatch] = Field(description="Best matches first.")
+    searched_connectors: int = Field(description="Connectors the search covered.")
+
+
+class ApprovalRequiredOutput(BaseModel):
+    approval_id: str = Field(description="Id of the pending approval.")
+    url: str = Field(description="Page where a person approves the call.")
+    message: str = Field(description="Text to show the user.")
+
+
+class ToolCallOutput(BaseModel):
+    """What a connector's tool answered, or why it has not run yet.
+
+    Exactly one of ``content``, ``confirmation_required``, ``approval_required`` or
+    ``action_required`` is set.
+    """
+
+    connector_id: str | None = Field(default=None, description="Id of the connector.")
+    connector: str = Field(description="Name of the connector.")
+    tool: str | None = Field(default=None, description="Name of the tool called.")
+    content: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="The tool's MCP content blocks, e.g. {'type': 'text', 'text': ...}.",
+    )
+    structured_content: dict[str, Any] | None = Field(
+        default=None,
+        alias="structuredContent",
+        description="The tool's structured result, when it returned one.",
+    )
+    is_error: bool | None = Field(
+        default=None, description="True when the tool itself reported a failure."
+    )
+    confirmation_required: bool | None = Field(
+        default=None,
+        description="True when the tool is destructive: confirm with the user, then call "
+        "again with confirm=true.",
+    )
+    message: str | None = Field(
+        default=None, description="What to tell the user when confirmation is required."
+    )
+    approval_required: ApprovalRequiredOutput | None = Field(
+        default=None,
+        description="The workspace policy holds the call: the user approves it at the link, "
+        "then call again with the same arguments.",
+    )
+    action_required: ConnectAction | None = Field(
+        default=None, description="The connector waits on a sign-in or key."
+    )
 
 
 def _tokens(text: str) -> set[str]:
@@ -117,7 +185,7 @@ async def _openapi_connect_action(
     if connection.auth_config_id is not None:
         try:
             await service.resolve_headers(connection)
-        except (OAuthReauthRequiredError, MissingCredentialsError):
+        except OAuthReauthRequiredError, MissingCredentialsError:
             logger.info(
                 "OpenAPI connection %s needs signing in again", connection.id, exc_info=True
             )
@@ -228,15 +296,32 @@ def _instance_service(repo_factory: Any, event_broker: Any, secret_mgr: Any) -> 
 class ConnectorToolsToolset(Toolset):
     """Search and call the tools of the workspace's MCP and OpenAPI connectors."""
 
+    open_world = False
+
     @property
     def name(self) -> str:
         return "tools"
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Search connector tools", effect="read", output=ToolSearchOutput)
     @enforced_in_handler(
         "searches only the workspace's connectors the graph says the caller may read"
     )
-    async def search(self, query: str, connector: str | None = None, limit: int = 8) -> str:
+    async def search(
+        self,
+        query: Annotated[
+            str,
+            Field(description="Words describing what the tool should do, or a tool name."),
+        ],
+        connector: Annotated[
+            str | None,
+            Field(
+                description="Search only this connector: an MCP server instance id or name "
+                "(`mcp_servers_list`) or an OpenAPI connection id or name "
+                "(`openapi_connections_list`). Omit to search all."
+            ),
+        ] = None,
+        limit: Annotated[int, Field(description="Most matches to return, 1-50.")] = 8,
+    ) -> str:
         """Find tools across the workspace's connected connectors.
 
         Matches tool names and descriptions; only the matches carry their
@@ -308,17 +393,30 @@ class ConnectorToolsToolset(Toolset):
             default=str,
         )
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Call connector tool",
+        effect="write",
+        open_world=True,
+        output=ToolCallOutput,
+    )
     @enforced_in_handler(
         "resolves the connector first, then demands use on it; the workspace policy "
         "judges the call in the client dispatch"
     )
     async def call(
         self,
-        connector: str,
-        tool: str,
-        arguments: dict[str, Any] | None = None,
-        confirm: bool = False,
+        connector: Annotated[str, Field(description=_CONNECTOR)],
+        tool: Annotated[
+            str, Field(description="The tool's name, exactly as `tools_search` returned it.")
+        ],
+        arguments: Annotated[
+            dict[str, Any] | None,
+            Field(description="The tool's arguments, matching its `inputSchema`."),
+        ] = None,
+        confirm: Annotated[
+            bool,
+            Field(description="True once the user confirmed running a destructive tool."),
+        ] = False,
     ) -> str | InputRequiredResult:
         """Run a tool of a workspace connector, as found by ``tools_search``.
 

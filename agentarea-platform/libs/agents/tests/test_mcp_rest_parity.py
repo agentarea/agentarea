@@ -56,7 +56,13 @@ from agentarea_openapi.schemas.dto import (
     OpenAPIConnectionUpdate,
 )
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
-from agentarea_streams.schemas import ForwardCreate, StreamCreate, WebhookSourceCreate
+from agentarea_streams.schemas import (
+    ForwardCreate,
+    ProcessorCreate,
+    ProcessorUpdate,
+    SourceCreate,
+    StreamCreate,
+)
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_triggers.schemas.dto import TriggerCreate
 
@@ -107,15 +113,12 @@ PAIRS: list[Pair] = [
     Pair("skills.edit_metadata", SkillsToolset.edit_metadata, SkillEditMetadata),
     Pair("skills.edit_content", SkillsToolset.edit_content, SkillEditContent),
     Pair("triggers.create_cron", TriggersToolset.create_cron, TriggerCreate),
-    Pair("triggers.create_webhook", TriggersToolset.create_webhook, TriggerCreate),
     Pair("triggers.create_stream", TriggersToolset.create_stream, TriggerCreate),
     Pair("streams.create", StreamsToolset.create, StreamCreate),
     Pair("streams.create_forward", StreamsToolset.create_forward, ForwardCreate),
-    Pair(
-        "streams.create_webhook_source",
-        StreamsToolset.create_webhook_source,
-        WebhookSourceCreate,
-    ),
+    Pair("streams.create_source", StreamsToolset.create_source, SourceCreate),
+    Pair("streams.create_processor", StreamsToolset.create_processor, ProcessorCreate),
+    Pair("streams.update_processor", StreamsToolset.update_processor, ProcessorUpdate),
 ]
 
 # DTO fields intentionally NOT exposed as toolset kwargs. Per-pair so omissions
@@ -171,52 +174,16 @@ UNCOVERED_FIELDS: dict[str, set[str]] = {
     "skills.import_from_github": set(),
     "skills.edit_metadata": set(),
     "skills.edit_content": set(),
-    # ``TriggerCreate`` is a unified DTO covering cron + webhook + polling; each
-    # toolset method exposes only its variant's relevant fields and hardcodes
+    # ``TriggerCreate`` is a unified DTO covering cron + stream; each toolset
+    # method exposes only its variant's relevant fields and hardcodes
     # ``trigger_type``.
-    "triggers.create_cron": {
-        "trigger_type",
-        "data_extractor",
-        "data_extractor_config",
-        "webhook_id",
-        "allowed_methods",
-        "webhook_type",
-        "validation_rules",
-        "webhook_config",
-        "event_types",
-        "channel_credentials",
-        "stream_id",
-        "event_filter",
-    },
-    "triggers.create_webhook": {
-        "trigger_type",
-        "cron_expression",
-        "timezone",
-        "data_extractor",
-        "data_extractor_config",
-        "validation_rules",
-        "webhook_config",
-        "channel_credentials",
-        "stream_id",
-        "event_filter",
-    },
-    "triggers.create_stream": {
-        "trigger_type",
-        "cron_expression",
-        "timezone",
-        "data_extractor",
-        "data_extractor_config",
-        "webhook_id",
-        "allowed_methods",
-        "webhook_type",
-        "validation_rules",
-        "webhook_config",
-        "event_types",
-        "channel_credentials",
-    },
+    "triggers.create_cron": {"trigger_type", "stream_id", "event_filter", "session", "batch"},
+    "triggers.create_stream": {"trigger_type", "cron_expression", "timezone"},
     "streams.create": set(),
     "streams.create_forward": set(),
-    "streams.create_webhook_source": set(),
+    "streams.create_source": set(),
+    "streams.create_processor": set(),
+    "streams.update_processor": set(),
 }
 
 # Path-like kwargs that name an entity ID rather than a body field. Allowed
@@ -235,6 +202,7 @@ PATH_LIKE_KWARGS = {
     "skill_id",
     "spec_id",
     "stream_id",
+    "subscription_id",
     "trigger_id",
 }
 

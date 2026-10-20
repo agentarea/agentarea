@@ -140,7 +140,7 @@ class WorkspaceExportService:
         agent_service: AgentService,
         repository_factory: RepositoryFactory,
         mcp_instance_service: Any | None = None,
-        skill_service: "SkillService | None" = None,
+        skill_service: SkillService | None = None,
         trigger_repository: Any | None = None,
     ):
         self.agent_service = agent_service
@@ -171,7 +171,7 @@ class WorkspaceExportService:
         )
 
         skills = await self.skill_service.list() if self.skill_service else []
-        bundle_skills, skill_keys = self._skills_to_bundle(skills, BundleSkill)
+        bundle_skills, skill_keys = await self._skills_to_bundle(skills, BundleSkill)
 
         agents = await self.agent_service.list()
         workspace_agents: list[Agent] = []
@@ -220,7 +220,7 @@ class WorkspaceExportService:
             sort_keys=False,
         )
 
-    def _skills_to_bundle(
+    async def _skills_to_bundle(
         self, skills: list[Any], bundle_skill_type: Any
     ) -> tuple[list[Any], dict[str, str]]:
         result = []
@@ -239,17 +239,15 @@ class WorkspaceExportService:
                     source_type="github",
                     source_url=skill.source_url,
                 )
-            elif skill.content:
+            elif self.skill_service is not None:
                 bundle_skill = bundle_skill_type(
                     key=key,
                     name=skill.name,
                     source_type="content",
-                    content=skill.content,
+                    content=await self.skill_service.read_skill_md(skill),
                 )
             else:
-                raise ValueError(
-                    f"Skill '{skill.name}' has no inline content for bundle installation"
-                )
+                raise ValueError(f"Skill '{skill.name}' cannot be exported without the skill store")
 
             result.append(bundle_skill)
             skill_keys[str(skill.id)] = key
@@ -471,15 +469,6 @@ class WorkspaceExportService:
 
             task_parameters = trigger.task_parameters or {}
             if trigger_kind == "cron":
-                if (
-                    getattr(trigger, "data_extractor", None)
-                    or getattr(trigger, "data_extractor_config", None)
-                    or getattr(trigger, "data_extractor_state", None)
-                ):
-                    logger.warning(
-                        "Skipping polling trigger '%s' not represented in bundles", trigger.name
-                    )
-                    continue
                 prompt = task_parameters.get("text")
                 if not isinstance(prompt, str) or not prompt.strip():
                     logger.warning("Skipping cron trigger '%s' without task text", trigger.name)
@@ -496,69 +485,11 @@ class WorkspaceExportService:
                 )
                 continue
 
-            if trigger_kind != "webhook":
-                logger.warning(
-                    "Skipping unsupported trigger '%s' of type '%s'",
-                    trigger.name,
-                    trigger_kind,
-                )
-                continue
-
-            webhook_kind = getattr(trigger.webhook_type, "value", trigger.webhook_type)
-            if webhook_kind not in {"generic", "telegram"}:
-                logger.warning(
-                    "Skipping unsupported webhook '%s' of type '%s'",
-                    trigger.name,
-                    webhook_kind,
-                )
-                continue
-            allowed_methods = [
-                method.upper() for method in getattr(trigger, "allowed_methods", ["POST"])
-            ]
-            if (
-                getattr(trigger, "validation_rules", None)
-                or getattr(trigger, "webhook_config", None)
-                or getattr(trigger, "event_types", None)
-                or allowed_methods != ["POST"]
-            ):
-                logger.warning(
-                    "Skipping webhook trigger '%s' with configuration not represented in bundles",
-                    trigger.name,
-                )
-                continue
-
-            prompt = task_parameters.get("text")
-            if not isinstance(prompt, str) or not prompt.strip():
-                if webhook_kind == "telegram":
-                    prompt = "Handle the incoming message: {{ message_text }}"
-                else:
-                    logger.warning("Skipping webhook trigger '%s' without task text", trigger.name)
-                    continue
-
-            bindings = {}
-            if webhook_kind == "telegram":
-                setup_key = _setup_key(f"telegram_bot_token_{trigger.id}")
-                setup_fields.append(
-                    setup_field_type(
-                        key=setup_key,
-                        label=f"Telegram bot token for {trigger.name}",
-                        type=setup_field_enum.SECRET,
-                        required=True,
-                        help="Provide the bot token for the destination workspace.",
-                    )
-                )
-                bindings["bot_token"] = f"${{setup.{setup_key}}}"
-
-            channels.append(
-                channel_type(
-                    key=_bundle_key("channel", trigger.name, trigger.id),
-                    type=webhook_kind,
-                    name=trigger.name,
-                    agent=agent_key,
-                    bindings=bindings,
-                    prompt=prompt,
-                    enabled=trigger.is_active,
-                )
+            # A stream trigger's sources live on its stream, which bundles do not carry.
+            logger.warning(
+                "Skipping unsupported trigger '%s' of type '%s'",
+                trigger.name,
+                trigger_kind,
             )
 
         return automations, channels, setup_fields

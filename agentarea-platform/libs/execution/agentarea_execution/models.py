@@ -3,6 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Literal
@@ -42,6 +43,7 @@ class ResolvedModelInfo(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cache_creation_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     # The model spec says the model reads images; None in states resolved before.
@@ -86,9 +88,12 @@ class ChangeModelPayload(BaseModel):
     input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     output_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     cached_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
+    cache_creation_input_cost_per_token: Money | None = Field(default=None, ge=ZERO)
     display_name: str | None = None
     provider_display_name: str | None = None
     resolved_at: str | None = None
+    # Who asked for the change; recorded on the task log, not part of the model.
+    changed_by: str | None = None
 
 
 class BudgetUpdatePayload(BaseModel):
@@ -111,12 +116,13 @@ class ContinueExecutionPayload(BaseModel):
 class ConversationResumeSnapshot(BaseModel):
     """Where a completed task's conversation stands, so a later run can continue it.
 
-    The cursors are a ``ConversationWindow`` without the task; the counters are the
-    run's totals, which a resumed run carries on instead of starting from zero.
+    ``next_seq`` is where the log ends; the counters are the run's totals, which a
+    resumed run carries on instead of starting from zero. The window cursors
+    are only set by runs recorded before the window was read from the log.
     """
 
-    head_seqs: list[int]
-    tail_start: int = Field(ge=0)
+    head_seqs: list[int] = Field(default_factory=list)
+    tail_start: int = Field(default=0, ge=0)
     next_seq: int = Field(ge=0)
     current_iteration: int = Field(ge=1)
     tool_calls_used: int = Field(default=0, ge=0)
@@ -292,14 +298,44 @@ class AgentConfigRequest(BaseModel):
     task_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
-class SkillInfo(BaseModel):
-    """Skill information for execution context."""
+class OutageWait(BaseModel):
+    """How a run rides out a dependency it cannot reach, read from the worker's settings.
+
+    An activity retries for ``retry_window``; then the run waits, retrying after
+    each ``backoff`` step (the last one repeats), and fails after ``deadline``.
+    """
+
+    retry_window: timedelta
+    backoff: list[timedelta] = Field(min_length=1)
+    deadline: timedelta
+
+    @model_validator(mode="after")
+    def _positive(self) -> OutageWait:
+        if min(self.retry_window, self.deadline, *self.backoff) <= timedelta(0):
+            raise ValueError("outage wait durations must be positive")
+        return self
+
+
+class WithheldSkill(BaseModel):
+    """An attached skill the install policy keeps from this run, and the rule that does."""
 
     id: str
     name: str
-    description: str = ""  # For catalog display (progressive disclosure)
-    content: str  # Markdown body
-    files: list[str] = Field(default_factory=list)  # Available file paths
+    reason: str
+
+
+class SkillInfo(BaseModel):
+    """What a run's prompt lists of a skill; its body is read when it is activated."""
+
+    id: str
+    name: str
+    description: str = ""
+    # The skill's package when the run was configured: a catalog package's path
+    # is its digest, a workspace's own copy is keyed by the skill.
+    package: str | None = None
+    # Histories recorded before bodies were read at activation carry them here.
+    content: str = ""
+    files: list[str] = Field(default_factory=list)
 
 
 class RuntimePython(BaseModel):
@@ -327,7 +363,7 @@ class RuntimeExecutionSupervisor(BaseModel):
     command_gid: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def validate_path(self) -> "RuntimeExecutionSupervisor":
+    def validate_path(self) -> RuntimeExecutionSupervisor:
         parsed = PurePosixPath(self.path)
         if not parsed.is_absolute() or str(parsed) != self.path or self.path == "/":
             raise ValueError("execution supervisor path must be an absolute clean file path")
@@ -346,7 +382,7 @@ class RuntimeManifest(BaseModel):
     execution_supervisor: RuntimeExecutionSupervisor
 
     @model_validator(mode="after")
-    def validate_profile_features(self) -> "RuntimeManifest":
+    def validate_profile_features(self) -> RuntimeManifest:
         expected_mutation = self.managed_environment == "mutable"
         if self.features.managed_environment_mutation != expected_mutation:
             raise ValueError("managed environment feature disagrees with profile")
@@ -428,6 +464,11 @@ class AgentConfigResult(BaseModel):
     runtime_event_data: dict[str, Any] = Field(default_factory=dict)
     # Hash of the agent's declared config as resolved for this run.
     config_hash: str | None = None
+    # How long the run waits out a dependency outage; None in histories recorded before.
+    outage_wait: OutageWait | None = None
+    # The share of the window all activated skills may take; None before it existed.
+    skills_window_share: float | None = Field(default=None, gt=0, le=1)
+    withheld_skills: list[WithheldSkill] = Field(default_factory=list)
     # OpenAPI attachment config name -> the operation tools it gives the model.
     # Resolved here so policy can govern a connection's every operation by its
     # name without workflow code looking the connection up.
@@ -485,7 +526,7 @@ class McpToolRoute(BaseModel):
     attachment_ref: str
 
     @classmethod
-    def from_identity(cls, identity: McpToolIdentity) -> "McpToolRoute":
+    def from_identity(cls, identity: McpToolIdentity) -> McpToolRoute:
         return cls(
             instance_id=identity.instance_id,
             raw_name=identity.raw_name,
@@ -515,15 +556,16 @@ class ToolDiscoveryResult(BaseModel):
 class ConversationWindow(BaseModel):
     """Where a task's conversation lives in its log and which part the model sees.
 
-    The model sees the ``head_seqs`` entries in that order (system prompt,
-    carried skills, the latest summary), then every other entry from
-    ``tail_start`` on. ``next_seq`` is where the messages a request carries
-    that are not written yet go.
+    The model sees the log's system prompt, its latest compaction and every
+    message after it, up to ``next_seq``: where the messages a request carries
+    that are not written yet go. Runs recorded before that rule carry the window
+    as cursors: the ``head_seqs`` entries in that order, then every other entry
+    from ``tail_start`` on.
     """
 
     task_id: str
-    head_seqs: list[int]
-    tail_start: int
+    head_seqs: list[int] | None = None
+    tail_start: int | None = None
     next_seq: int
 
 
@@ -564,6 +606,11 @@ class LLMUsage(BaseModel):
     total_tokens: int = 0
     cached_prompt_tokens: int = 0
     cache_creation_tokens: int = 0
+    # How the call's spend line is settled (wiki ADR-0038 rev 2): its amount and
+    # currency as billing said them, the vendor cost, and the hold still to capture.
+    # Rides inside ``usage`` so the event carries it with no workflow change. None on
+    # calls recorded before it existed.
+    billing: dict[str, Any] | None = None
 
 
 class LLMCallResult(BaseModel):
@@ -643,6 +690,12 @@ class MCPToolResult(BaseModel):
     # in the billing currency; it counts toward the run budget and task total the
     # way an LLM call's cost does.
     model_cost: Money = ZERO
+    # The rest of that model call's spend line (ModelCharge.as_billing(): currency,
+    # the hold to capture, who pays). None in older histories.
+    model_billing: dict[str, Any] | None = None
+    # The tool ran a model and paid for it, but no cost was reported: a held call
+    # comes to its held amount; otherwise the ledger records it at no amount.
+    cost_unknown: bool = False
     # What the call's connector declares it cost, as the tool-call layer metered it
     # and wrote its ledger lines: ``cost`` in the billing currency (wallet payments
     # aside, which are ``service_cost``), on whose key (``payer``). Like an LLM
@@ -676,7 +729,7 @@ class MCPToolResult(BaseModel):
     _metered_meta: dict[str, Any] | None = PrivateAttr(default=None)
 
     @classmethod
-    def metered(cls, body: Any, meta: dict[str, Any] | None, **fields: Any) -> "MCPToolResult":
+    def metered(cls, body: Any, meta: dict[str, Any] | None, **fields: Any) -> MCPToolResult:
         result = cls(**fields)
         result._metered_body = body
         result._metered_meta = meta if isinstance(meta, dict) else None
@@ -749,6 +802,8 @@ class UpdateTaskStatusRequest(BaseModel):
     status: str  # completed, failed, cancelled
     result: str | None = None
     error_message: str | None = None
+    # The stable code of why the run stopped (iteration_limit, provider_out_of_credits...).
+    failure_reason: str | None = None
     workspace_id: str
     total_cost: Money | None = None
     own_cost: Money | None = None
@@ -760,6 +815,53 @@ class UpdateTaskStatusRequest(BaseModel):
     conversation_pending: list[dict[str, Any]] = Field(default_factory=list)
     # Set when a conversation ends completed, so a later message can continue it.
     conversation_resume: ConversationResumeSnapshot | None = None
+
+
+class LogRow(BaseModel):
+    """One row a run appends to its task's log, at the position and id the workflow gave it.
+
+    ``kind`` is ``message``, ``compaction`` or ``event``; an event's type is its
+    ``name`` and its details its ``meta``.
+    """
+
+    seq: int
+    event_id: str
+    kind: str = "message"
+    role: str
+    content: str = ""
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
+    attachments: list[dict[str, Any]] | None = None
+    meta: dict[str, Any] | None = None
+    iteration: int | None = None
+    # When an event row's moment happened (ISO 8601); None for the store's clock.
+    timestamp: str | None = None
+
+
+class RecordRequest(BaseModel):
+    """What a run records at once: log rows, the task's status, then the events it publishes.
+
+    The rows, the status and the spend and audit lines the events stand for are
+    written in one transaction; every event row and every person's message is
+    then published to ``tasks.events``. ``events_json`` carries the live-only
+    signals to broadcast, and, from a run that predates event rows, its events.
+    """
+
+    task_id: str
+    workspace_id: str
+    user_id: str
+    execution_id: str | None = None
+    rows: list[LogRow] = Field(default_factory=list)
+    events_json: list[str] = Field(default_factory=list)
+    status: UpdateTaskStatusRequest | None = None
+
+
+class RecordResult(BaseModel):
+    """How many rows and events a record call carried."""
+
+    rows: int
+    events: int
 
 
 class UpdateTaskStatusResult(BaseModel):
@@ -783,12 +885,24 @@ class UpdateTaskGovernanceSnapshotResult(BaseModel):
     error: str | None = None
 
 
+class DelegatedSpendRequest(BaseModel):
+    """What a delegated agent's task spent, read from the spend ledger."""
+
+    task_id: UUID
+    user_context_data: dict[str, Any]
+
+
+class DelegatedSpendResult(BaseModel):
+    spent: Money = Field(ge=ZERO)
+
+
 class MonthlySpendCapRequest(BaseModel):
     """Compare month-to-date spend with the run's monthly caps.
 
     ``cap_usd`` is the workspace cap; ``agent_cap_usd`` the cap on ``agent_id``'s
     own spend; ``llm_caps`` the monthly caps on LLM spend, as the policy's
-    ``budget.spend_caps`` entries. At least one is set.
+    ``budget.spend_caps`` entries. With ``current_caps`` those fields are ignored
+    and the caps the workspace and agent set now are read instead.
     """
 
     workspace_id: str
@@ -797,6 +911,7 @@ class MonthlySpendCapRequest(BaseModel):
     agent_id: str | None = None
     agent_cap_usd: Money | None = None
     llm_caps: list[dict[str, Any]] = Field(default_factory=list)
+    current_caps: bool = False
 
 
 class MonthlySpendCapResult(BaseModel):
@@ -836,12 +951,16 @@ class CompactMessagesRequest(BaseModel):
 class CompactMessagesResult(BaseModel):
     """The conversation window after compaction.
 
-    ``original_message_count`` is 0 when nothing could be compacted; the
-    pending entries are written either way, so ``conversation`` is current.
+    ``original_message_count`` is 0 when nothing could be compacted. A window
+    read from the log (no cursors) is not written by the activity: the run
+    appends the compaction row, ``summary`` plus the ``skills`` loaded so far.
+    A cursor window has its pending entries and summary written, and
+    ``conversation`` is current.
     """
 
-    conversation: ConversationWindow
+    conversation: ConversationWindow | None = None
     summary: str
+    skills: list[str] = Field(default_factory=list)
     original_message_count: int
     estimated_tokens_saved: int
     # Estimated prompt tokens of the new window, so the run does not compact
@@ -939,6 +1058,8 @@ class CreateDelegationTaskRequest(BaseModel):
     # provide it and the activity rejects its absence.
     parent_effective_policy: dict[str, Any] | None = None
     run_budget_usd: Money | None = Field(default=None, gt=ZERO)
+    # The child's workflow id, recorded on its task row so the run can be acted on.
+    execution_id: str | None = None
 
 
 class CreateDelegationTaskResult(BaseModel):
@@ -1000,6 +1121,41 @@ class MaterializeSkillFilesRequest(BaseModel):
     workspace_id: str | None = None
     task_id: str | None = None
     user_context_data: dict[str, Any] | None = None
+
+
+class ActivateSkillRequest(BaseModel):
+    """Activate a skill: read its SKILL.md, put its files in the sandbox, log its entry.
+
+    The entry is written at ``seq`` under ``event_id``, both assigned by the
+    workflow, so a retried call writes it once.
+    """
+
+    skill_id: UUID
+    skill_name: str
+    user_context_data: dict[str, Any]
+    workspace_id: str
+    task_id: str
+    workflow_id: str | None = None
+    execution_id: str | None = None
+    tool_call_id: str
+    seq: int
+    event_id: str
+    iteration: int | None = None
+    # The tokens of the model's window this skill's entry may take.
+    max_tokens: int = Field(gt=0)
+    # The package the run was configured with: activation reads that version.
+    package: str | None = None
+
+
+class ActivateSkillResult(BaseModel):
+    """What the run needs of the logged entry: its size, never its text."""
+
+    chars: int
+    est_tokens: int
+    # The SKILL.md was over max_tokens; the entry points at where it is instead.
+    summarized: bool = False
+    # Links the instructions carry, for the web fetch gate.
+    urls: list[str] = Field(default_factory=list)
 
 
 class MaterializeSkillFilesResult(BaseModel):

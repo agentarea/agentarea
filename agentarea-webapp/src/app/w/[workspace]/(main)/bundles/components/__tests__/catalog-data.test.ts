@@ -25,6 +25,32 @@ function item(over: Partial<RegistryItem>): RegistryItem {
 }
 
 describe("catalog data normalization", () => {
+  // ── source: the registry an item is published in ──
+
+  assertEqual(
+    normalize(
+      "skills",
+      item({
+        registry_name: "acme-internal",
+        registry_trust: "private",
+        registry_scope: "workspace",
+        registry_mode: "mirror",
+      })
+    ).source,
+    {
+      name: "acme-internal",
+      trust: "private",
+      scope: "workspace",
+      mode: "mirror",
+    },
+    "source: registry name, trust, scope and mode reach the card"
+  );
+  assertEqual(
+    normalize("skills", item({})).source,
+    null,
+    "source: an item that names no registry has no source badge"
+  );
+
   // ── agents: preferred_models drives the model meta ──
 
   assertEqual(

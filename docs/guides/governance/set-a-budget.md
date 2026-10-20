@@ -157,8 +157,8 @@ The streaming create route (`POST .../tasks/`) opens the stream and sends one
 `error` event instead, with `error_type: "monthly_spend_cap_exceeded"` and the
 same `current_mtd_usd`, `cap_usd` and `currency`.
 
-**Confirm the run budget bites.** The loop emits `BudgetWarning` at 80 percent
-and `BudgetExceeded` when it stops:
+**Confirm the run budget bites.** The loop emits `budget.warning` at 80 percent
+and `budget.exceeded` when it stops:
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" \
@@ -166,7 +166,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   | python3 -c '
 import json,sys
 for e in json.load(sys.stdin)["events"]:
-    if e["event_type"] in ("BudgetWarning", "BudgetExceeded", "ServiceBudgetWarning", "ServiceBudgetExceeded"):
+    if e["event_type"] in ("budget.warning", "budget.exceeded", "service.budget_warning", "service.budget_exceeded"):
         print(e["event_type"], e["message"])'
 ```
 

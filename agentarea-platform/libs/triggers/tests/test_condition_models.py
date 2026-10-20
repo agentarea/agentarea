@@ -19,7 +19,11 @@ class _Instances:
         return self._by_id.get(str(instance_id))
 
 
-CHAT, DECISION, IMAGE = str(uuid4()), str(uuid4()), str(uuid4())
+CHAT, DECISION, IMAGE = (
+    "e01ce66c-912b-43d8-9c91-3c4c1264eb9d",
+    "92a5363c-4965-4e61-b37e-50c991d6ab88",
+    "2f7dfdab-1bb7-4c6d-a9eb-2cebb72ef540",
+)
 INSTANCES = _Instances(**{CHAT: "chat", DECISION: "decision", IMAGE: "image"})
 
 

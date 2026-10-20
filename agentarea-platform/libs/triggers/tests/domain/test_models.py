@@ -7,15 +7,15 @@ import pytest
 from agentarea_triggers.domain.enums import (
     ExecutionStatus,
     TriggerType,
-    WebhookType,
 )
 from agentarea_triggers.domain.models import (
     CronTrigger,
+    StreamTrigger,
     Trigger,
     TriggerCreate,
     TriggerExecution,
+    TriggerSession,
     TriggerUpdate,
-    WebhookTrigger,
 )
 from pydantic import ValidationError
 
@@ -60,7 +60,7 @@ class TestTrigger:
             name="Custom Trigger",
             description="A custom trigger for testing",
             agent_id=agent_id,
-            trigger_type=TriggerType.WEBHOOK,
+            trigger_type=TriggerType.STREAM,
             is_active=False,
             task_parameters={"param1": "value1"},
             conditions={"condition1": "value1"},
@@ -195,19 +195,12 @@ class TestTrigger:
             consecutive_failures=3,
         )
 
-        # Record success
+        # A started task says nothing yet of how it ends
         original_updated_at = trigger.updated_at
-        trigger.record_execution_success()
+        trigger.record_execution_started()
 
-        assert trigger.consecutive_failures == 0
+        assert trigger.consecutive_failures == 3
         assert trigger.last_execution_at is not None
-        assert trigger.updated_at > original_updated_at
-
-        # Record failure
-        original_updated_at = trigger.updated_at
-        trigger.record_execution_failure()
-
-        assert trigger.consecutive_failures == 1
         assert trigger.updated_at > original_updated_at
 
 
@@ -228,9 +221,6 @@ class TestCronTrigger:
         assert trigger.trigger_type == TriggerType.CRON
         assert trigger.cron_expression == "0 9 * * *"
         assert trigger.timezone == "America/New_York"
-        assert trigger.data_extractor is None
-        assert trigger.data_extractor_config is None
-        assert trigger.data_extractor_state is None
 
     def test_cron_expression_validation(self):
         """Test cron expression validation."""
@@ -291,82 +281,28 @@ class TestCronTrigger:
         assert trigger.timezone == "UTC"
 
 
-class TestWebhookTrigger:
-    """Test WebhookTrigger model."""
+class TestStreamTrigger:
+    """Test StreamTrigger model."""
 
-    def test_webhook_trigger_creation(self):
-        """Test creating a webhook trigger."""
-        agent_id = uuid4()
-        trigger = WebhookTrigger(
-            name="Webhook Test",
-            agent_id=agent_id,
+    def test_stream_trigger_creation(self):
+        trigger = StreamTrigger(name="Stream Test", agent_id=uuid4(), created_by="test_user")
+
+        assert trigger.trigger_type == TriggerType.STREAM
+        assert trigger.session is None
+
+    def test_session_takes_the_continue_alias(self):
+        trigger = StreamTrigger(
+            name="Stream Test",
+            agent_id=uuid4(),
             created_by="test_user",
-            webhook_id="webhook_123",
-            allowed_methods=["POST", "PUT"],
-            webhook_type=WebhookType.TELEGRAM,
+            session={"continue": True, "idle_timeout": "30m"},
         )
 
-        assert trigger.trigger_type == TriggerType.WEBHOOK
-        assert trigger.webhook_id == "webhook_123"
-        assert trigger.allowed_methods == ["POST", "PUT"]
-        assert trigger.webhook_type == WebhookType.TELEGRAM
-        assert trigger.validation_rules == {}
+        assert trigger.session == TriggerSession(continue_=True, idle_timeout="30m")
 
-    def test_webhook_id_validation(self):
-        """Test webhook ID validation."""
-        agent_id = uuid4()
-
-        # Empty webhook_id should raise error
-        with pytest.raises(ValidationError) as exc_info:
-            WebhookTrigger(
-                name="Webhook Test", agent_id=agent_id, created_by="test_user", webhook_id=""
-            )
-        assert "String should have at least 1 character" in str(exc_info.value)
-
-        # Whitespace webhook_id should be trimmed
-        trigger = WebhookTrigger(
-            name="Webhook Test",
-            agent_id=agent_id,
-            created_by="test_user",
-            webhook_id="  webhook_123  ",
-        )
-        assert trigger.webhook_id == "webhook_123"
-
-    def test_allowed_methods_validation(self):
-        """Test allowed methods validation."""
-        agent_id = uuid4()
-
-        # Empty methods list should raise error
-        with pytest.raises(ValidationError) as exc_info:
-            WebhookTrigger(
-                name="Webhook Test",
-                agent_id=agent_id,
-                created_by="test_user",
-                webhook_id="webhook_123",
-                allowed_methods=[],
-            )
-        assert "At least one HTTP method must be allowed" in str(exc_info.value)
-
-        # Invalid method should raise error
-        with pytest.raises(ValidationError) as exc_info:
-            WebhookTrigger(
-                name="Webhook Test",
-                agent_id=agent_id,
-                created_by="test_user",
-                webhook_id="webhook_123",
-                allowed_methods=["INVALID"],
-            )
-        assert "Invalid HTTP method: INVALID" in str(exc_info.value)
-
-        # Methods should be converted to uppercase
-        trigger = WebhookTrigger(
-            name="Webhook Test",
-            agent_id=agent_id,
-            created_by="test_user",
-            webhook_id="webhook_123",
-            allowed_methods=["post", "get"],
-        )
-        assert trigger.allowed_methods == ["POST", "GET"]
+    def test_session_idle_timeout_must_be_a_duration(self):
+        with pytest.raises(ValidationError):
+            TriggerSession(idle_timeout="thirty minutes")
 
 
 class TestTriggerExecution:
@@ -462,22 +398,22 @@ class TestTriggerCreate:
         assert create_model.cron_expression == "0 9 * * *"
         assert create_model.timezone == "UTC"
 
-    def test_webhook_trigger_create(self):
-        """Test creating a webhook trigger creation model."""
-        agent_id = uuid4()
+    def test_stream_trigger_create(self):
+        """Test creating a stream trigger creation model."""
+        stream_id = uuid4()
         create_model = TriggerCreate(
-            name="Test Webhook",
-            agent_id=agent_id,
-            trigger_type=TriggerType.WEBHOOK,
+            name="Test Stream",
+            agent_id=uuid4(),
+            trigger_type=TriggerType.STREAM,
             created_by="test_user",
-            webhook_id="webhook_123",
-            webhook_type=WebhookType.SLACK,
+            stream_id=stream_id,
+            event_filter={"kinds": ["push"]},
         )
 
-        assert create_model.name == "Test Webhook"
-        assert create_model.trigger_type == TriggerType.WEBHOOK
-        assert create_model.webhook_id == "webhook_123"
-        assert create_model.webhook_type == WebhookType.SLACK
+        assert create_model.name == "Test Stream"
+        assert create_model.trigger_type == TriggerType.STREAM
+        assert create_model.stream_id == stream_id
+        assert create_model.event_filter == {"kinds": ["push"]}
 
     def test_trigger_create_validation(self):
         """Test trigger creation validation."""
@@ -493,15 +429,15 @@ class TestTriggerCreate:
             )
         assert "cron_expression is required for CRON triggers" in str(exc_info.value)
 
-        # Webhook trigger without webhook_id should raise error
+        # Stream trigger without stream_id should raise error
         with pytest.raises(ValidationError) as exc_info:
             TriggerCreate(
-                name="Test Webhook",
+                name="Test Stream",
                 agent_id=agent_id,
-                trigger_type=TriggerType.WEBHOOK,
+                trigger_type=TriggerType.STREAM,
                 created_by="test_user",
             )
-        assert "webhook_id is required for WEBHOOK triggers" in str(exc_info.value)
+        assert "stream_id is required for STREAM triggers" in str(exc_info.value)
 
 
 class TestTriggerUpdate:

@@ -43,7 +43,8 @@ from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.base.tenant_scope import unscoped
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_read_db_session
-from agentarea_common.utils.url_safety import OutboundPolicy, safe_async_client
+from agentarea_common.outbound import Destination, outbound_client
+from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_common.workspaces.lookup import workspace_slug_for
 from agentarea_governance.application import GovernancePolicyResolver
 from agentarea_mcp.application.auth_service import MCPAuthService
@@ -118,6 +119,21 @@ def _filter_outbound_headers(headers) -> dict[str, str]:
     return out
 
 
+# MCP Events (SEP-3415) requests carry the event name in Mcp-Name, as tools/call does.
+_EVENT_NAME_BEARING_METHODS = {
+    "events/poll": "name",
+    "events/stream": "name",
+    "events/subscribe": "name",
+    "events/unsubscribe": "name",
+}
+# Only an MCP Events source subscribes, through the event service: through the
+# proxy a member or an agent could point the instance's credentials at any
+# callback, with no source recording it (ADR-0040 §6).
+_REFUSED_EVENT_METHODS = frozenset({"events/subscribe", "events/unsubscribe"})
+# Read through the tool policy, named by the method.
+_GOVERNED_EVENT_METHODS = frozenset({"events/list", "events/poll"})
+
+
 class _MCPHeaderMismatchError(Exception):
     """A request envelope header disagrees with the JSON-RPC body."""
 
@@ -172,7 +188,11 @@ def _validate_mcp_header_consistency(payload: Any, headers) -> None:
 
     if name_header is None:
         return
-    name_key = NAME_BEARING_METHODS.get(body_method) if isinstance(body_method, str) else None
+    name_key = (
+        NAME_BEARING_METHODS.get(body_method) or _EVENT_NAME_BEARING_METHODS.get(body_method)
+        if isinstance(body_method, str)
+        else None
+    )
     if name_key is None:
         raise _MCPHeaderMismatchError(
             request_id,
@@ -188,6 +208,13 @@ def _validate_mcp_header_consistency(payload: Any, headers) -> None:
             f"Header mismatch: Mcp-Name header value {name_header!r} "
             f"does not match body value {body_name!r}",
         )
+
+
+def _jsonrpc_methods(payload: Any) -> list[str]:
+    messages = payload if isinstance(payload, list) else [payload]
+    return [
+        m["method"] for m in messages if isinstance(m, dict) and isinstance(m.get("method"), str)
+    ]
 
 
 def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
@@ -262,7 +289,16 @@ async def _authorize_mcp_tool_calls(
     except json.JSONDecodeError:
         return
     _validate_mcp_header_consistency(payload, headers)
-    tool_calls = _iter_jsonrpc_tool_calls(payload)
+    methods = _jsonrpc_methods(payload)
+    for method in methods:
+        if method in _REFUSED_EVENT_METHODS:
+            raise HTTPException(
+                status_code=403,
+                detail=f"{method} is refused through the proxy: only a stream's MCP Events "
+                "source subscribes to an MCP server's events",
+            )
+    governed = [(m, {}) for m in methods if m in _GOVERNED_EVENT_METHODS]
+    tool_calls = _iter_jsonrpc_tool_calls(payload) + governed
     if not tool_calls:
         return
 
@@ -328,8 +364,8 @@ def _upstream_client(instance_type: MCPTransport, *, policy: OutboundPolicy) -> 
     """
     timeout = httpx.Timeout(connect=10, read=None, write=30, pool=10)
     if instance_type == MCPTransport.URL:
-        return safe_async_client(policy=policy, timeout=timeout)
-    return httpx.AsyncClient(timeout=timeout)
+        return outbound_client(Destination.MEMBER, policy=policy, timeout=timeout)
+    return outbound_client(Destination.INTERNAL, timeout=timeout)
 
 
 @binds_workspace

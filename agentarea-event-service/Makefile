@@ -1,7 +1,7 @@
 .PHONY: check build run test lint tidy
 
 # CI installs the same version (.github/workflows/ci.yml); keep both in step.
-GOLANGCI_LINT_VERSION := v2.12.2
+GOLANGCI_LINT_VERSION := v2.15.0
 
 check:
 	go build ./...

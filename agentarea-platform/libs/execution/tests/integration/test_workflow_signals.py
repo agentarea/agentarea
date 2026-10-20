@@ -36,6 +36,7 @@ from agentarea_execution.models import (
     WorkflowEventsRequest,
     WorkflowEventsResult,
 )
+from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
@@ -173,7 +174,7 @@ def _mock_call_llm_request_input(request: LLMCallRequest) -> dict[str, Any]:
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
     tool_payload = None
-    for message in request.messages:
+    for message in _TASK_LOG.messages(request):
         if message.get("name") == "request_user_input":
             tool_payload = json.loads(message["content"])
             break
@@ -234,6 +235,14 @@ async def _mock_validate_artifacts(
     return ArtifactValidationResult(state="passed", generation=0)
 
 
+_TASK_LOG = TaskLogFake()
+_RECORD = make_record_activity(
+    publish=_mock_publish_events,
+    update_status=_mock_update_status,
+    log=_TASK_LOG,
+)
+
+
 _ALL_ACTIVITIES = [
     _mock_build_config,
     _mock_discover_tools,
@@ -241,6 +250,7 @@ _ALL_ACTIVITIES = [
     _mock_call_llm,
     _mock_execute_mcp,
     _mock_publish_events,
+    _RECORD,
     _mock_update_status,
     _mock_validate_artifacts,
 ]
@@ -341,6 +351,7 @@ async def test_request_user_input_waits_for_queued_reply_then_continues():
             _mock_call_llm_request_input,
             _mock_execute_mcp,
             _mock_publish_events,
+            _RECORD,
             _mock_update_status,
             _mock_validate_artifacts,
         ]
@@ -462,7 +473,7 @@ async def test_pause_resume_signals_flip_queryable_state():
 @pytest.mark.asyncio
 async def test_workflow_command_queue_message_publishes_event():
     """``workflow_command("queue_message", ...)`` causes the workflow to
-    publish a ``MessageQueued`` event and a ``WorkflowCommandReceived``
+    publish a ``message.queued`` event and a ``command.received``
     event.
 
     Signal-recorded events go through ``EventManager.add_event`` with
@@ -511,14 +522,14 @@ async def test_workflow_command_queue_message_publishes_event():
                 await handle.result()
 
                 published_types = {e.get("event_type") for e in _published}
-                assert "MessageQueued" in published_types, published_types
-                assert "WorkflowCommandReceived" in published_types, published_types
+                assert "message.queued" in published_types, published_types
+                assert "command.received" in published_types, published_types
 
 
 @pytest.mark.asyncio
 async def test_workflow_command_change_model_swaps_model_and_publishes_event():
     """``workflow_command("change_model", ...)`` swaps the workflow's cached
-    resolved model on the fly and publishes a ``ModelChanged`` event.
+    resolved model on the fly and publishes a ``model.changed`` event.
 
     This is the mechanism behind the per-task "switch model on the fly" UI:
     the API ``/command`` endpoint resolves a model_instance into this payload
@@ -568,16 +579,16 @@ async def test_workflow_command_change_model_swaps_model_and_publishes_event():
                 )
 
                 # Release the LLM so the workflow finishes and flushes its
-                # pending events (ModelChanged rides along the same batch).
+                # pending events (model.changed rides along the same batch).
                 _llm_release.set()
                 await handle.result()
 
                 published_types = {e.get("event_type") for e in _published}
-                assert "ModelChanged" in published_types, published_types
-                assert "WorkflowCommandReceived" in published_types, published_types
+                assert "model.changed" in published_types, published_types
+                assert "command.received" in published_types, published_types
 
-                # The ModelChanged event carries the new model identity.
-                changed = next(e for e in _published if e.get("event_type") == "ModelChanged")
+                # The model.changed event carries the new model identity.
+                changed = next(e for e in _published if e.get("event_type") == "model.changed")
                 serialized = json.dumps(changed)
                 assert new_model_name in serialized, changed
                 assert new_model_id in serialized, changed
@@ -623,7 +634,7 @@ async def test_unknown_workflow_command_is_ignored_no_event():
                 await handle.result()
 
                 published_types = {e.get("event_type") for e in _published}
-                assert "WorkflowCommandReceived" not in published_types, published_types
+                assert "command.received" not in published_types, published_types
 
 
 @pytest.mark.parametrize(
@@ -670,13 +681,11 @@ async def test_malformed_workflow_command_is_rejected_and_the_run_finishes(comma
                 result = await asyncio.wait_for(handle.result(), timeout=30)
 
                 assert result.success is True
-                rejected = [
-                    e for e in _published if e.get("event_type") == "WorkflowCommandRejected"
-                ]
+                rejected = [e for e in _published if e.get("event_type") == "command.rejected"]
                 assert [e["data"]["command"] for e in rejected] == [command]
                 assert rejected[0]["data"]["reason"]
                 published_types = {e.get("event_type") for e in _published}
-                assert "WorkflowCommandReceived" not in published_types, published_types
+                assert "command.received" not in published_types, published_types
                 await Replayer(
                     workflows=[AgentExecutionWorkflow],
                     data_converter=pydantic_data_converter,

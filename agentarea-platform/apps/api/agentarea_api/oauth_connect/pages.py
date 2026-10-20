@@ -8,6 +8,7 @@ from agentarea_common.config import get_settings
 logger = logging.getLogger(__name__)
 
 CALLBACK_PATH = "/v1/oauth/callback"
+FINISH_PAGE_PATH = "/oauth/finish"
 
 
 def callback_uri() -> str:
@@ -30,6 +31,12 @@ def frontend_base(return_to: str = "") -> str:
         return f"{parsed.scheme}://{parsed.netloc}"
     logger.warning("Rejected non-matching return_to origin: %s", return_to)
     return default_base
+
+
+def finish_page_url(return_to: str, token: str) -> str:
+    """The frontend page where the person who started a flow finishes it in their session."""
+    query = urllib.parse.urlencode({"token": token})
+    return f"{frontend_base(return_to)}{FINISH_PAGE_PATH}?{query}"
 
 
 def connect_page_url(workspace_slug: str, instance_id: str) -> str:

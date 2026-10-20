@@ -64,7 +64,7 @@ func (e *StartFailureError) FailureReason() string {
 // NewManager creates a new container manager
 func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	healthChecker := NewHealthChecker(cfg, logger)
-	eventPublisher := events.NewEventPublisher(cfg.Redis.URL, logger)
+	eventPublisher := events.NewEventPublisher(cfg.Redis.URL, cfg.Redis.EventNamespace, logger)
 
 	// Create context for health monitoring
 	healthCtx, healthCancel := context.WithCancel(context.Background())

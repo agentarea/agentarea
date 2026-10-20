@@ -33,8 +33,10 @@ _TEXT_CONTENT_TYPES: tuple[str, ...] = (
     "application/xml",
     "application/xhtml",
     "application/javascript",
-    "application/ld+json",
 )
+# RFC 6839 structured-syntax suffixes: RSS, Atom, JSON-LD, JSON Feed and the like
+# are XML or JSON documents under their own names.
+_TEXT_SUFFIXES: tuple[str, ...] = ("+xml", "+json")
 _DEFAULT_TIMEOUT_SECONDS: float = 15.0
 _INLINE_TEXT_CHAR_LIMIT: int = 50_000
 _MAX_FETCH_BYTES: int = 5 * 1024 * 1024  # raw page ceiling; the inline text is far smaller
@@ -107,6 +109,8 @@ def _is_text_content_type(content_type: str | None) -> bool:
     if not content_type:
         return False
     ct = content_type.lower().split(";", 1)[0].strip()
+    if ct.startswith("application/") and ct.endswith(_TEXT_SUFFIXES):
+        return True
     return any(ct.startswith(p) for p in _TEXT_CONTENT_TYPES)
 
 
@@ -161,13 +165,12 @@ class WebToolset(Toolset):
         if isinstance(max_results, bool) or not 1 <= max_results <= 20:
             return "Error: max_results must be between 1 and 20"
 
-        from agentarea_common.utils.outbound_tls import outbound_ssl_context
+        from agentarea_common.outbound import Destination, outbound_client
 
         try:
-            async with httpx.AsyncClient(
-                timeout=_DEFAULT_TIMEOUT_SECONDS,
-                follow_redirects=True,
-                verify=outbound_ssl_context(),
+            # The search service is the operator's, at an address the operator set.
+            async with outbound_client(
+                Destination.VENDOR, timeout=_DEFAULT_TIMEOUT_SECONDS, follow_redirects=True
             ) as client:
                 response = await client.get(
                     f"{self.search_base_url}/search",

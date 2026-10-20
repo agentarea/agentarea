@@ -1,8 +1,9 @@
 """A redelivered event whose follow-up was routed into a running workflow queues it once.
 
-The claim is the subscription's outcome row for the event, committed before the
-signal; a second attempt -- after a crash before the cursor moved, or by a
-second dispatcher -- finds it. Set STREAMS_TEST_DATABASE_URL.
+The claim is the subscription's reaction row (trigger_executions) for the event,
+committed before the signal; a second attempt -- a redelivery after a crash
+before the ack, or a second router consumer -- finds it. Set
+STREAMS_TEST_DATABASE_URL.
 """
 
 import os
@@ -14,7 +15,7 @@ from uuid import uuid4
 import pytest
 from agentarea_streams.domain import (
     EventFilter,
-    JournaledEvent,
+    StreamEvent,
     SubscriptionKind,
     SubscriptionView,
 )
@@ -30,24 +31,31 @@ pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="STREAMS_TEST_DATA
 async def delivery():
     engine = create_async_engine(TEST_DATABASE_URL)
     maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    ws, stream_id, subscription_id = str(uuid4()), uuid4(), uuid4()
+    ws, stream_id, subscription_id, trigger_id = str(uuid4()), uuid4(), uuid4(), uuid4()
     async with maker() as session:
         await session.execute(
             text(
                 "INSERT INTO streams (id, workspace_id, created_by, name, description, kind, "
-                "retention_days, created_at, updated_at) "
-                "VALUES (:id, :ws, 'u', :n, '', 'custom', 30, now(), now())"
+                "created_at, updated_at) VALUES (:id, :ws, 'u', :n, '', 'custom', now(), now())"
             ),
             {"id": stream_id, "ws": ws, "n": f"s-{stream_id}"},
         )
         await session.execute(
             text(
-                "INSERT INTO stream_subscriptions (id, workspace_id, created_by, stream_id, kind, "
-                "filter, output_stream_ids, cursor_sequence, status, attempts, created_at, "
-                "updated_at) VALUES (:id, :ws, 'u', :s, 'forward', '{}', '[]', 0, 'active', 0, "
-                "now(), now())"
+                "INSERT INTO triggers (id, workspace_id, created_by, name, description, agent_id, "
+                "trigger_type, is_active, task_parameters, conditions, failure_threshold, "
+                "consecutive_failures, created_at, updated_at) VALUES (:id, "
+                ":ws, 'u', 't', '', :a, 'stream', true, '{}', '{}', 5, 0, now(), now())"
             ),
-            {"id": subscription_id, "ws": ws, "s": stream_id},
+            {"id": trigger_id, "ws": ws, "a": uuid4()},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO stream_subscriptions (id, workspace_id, created_by, stream_id, kind, "
+                "trigger_id, filter, output_stream_ids, status, created_at, updated_at) VALUES "
+                "(:id, :ws, 'u', :s, 'trigger', :t, '{}', '[]', 'active', now(), now())"
+            ),
+            {"id": subscription_id, "ws": ws, "s": stream_id, "t": trigger_id},
         )
         await session.commit()
     view = SubscriptionView(
@@ -56,16 +64,18 @@ async def delivery():
         created_by="u",
         stream_id=stream_id,
         kind=SubscriptionKind.TRIGGER,
-        trigger_id=uuid4(),
+        trigger_id=trigger_id,
         filter=EventFilter(),
         output_stream_ids=[],
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
-    event = JournaledEvent(
+    event = StreamEvent(
         type="message",
         source="webhook:telegram",
         data={"text": "hello again"},
         stream_id=stream_id,
-        sequence=7,
+        workspace_id=ws,
+        created_by="u",
         event_key="telegram:1",
         received_at=datetime.now(UTC),
     )
@@ -80,7 +90,7 @@ async def delivery():
 async def _outcomes(maker, subscription_id) -> list:
     async with maker() as session:
         rows = await session.execute(
-            text("SELECT verdict, task_id FROM subscription_outcomes WHERE subscription_id = :s"),
+            text("SELECT verdict, task_id FROM trigger_executions WHERE subscription_id = :s"),
             {"s": subscription_id},
         )
         return list(rows.fetchall())
@@ -113,7 +123,7 @@ async def test_redelivering_a_routed_event_queues_exactly_one_message(delivery):
         id=uuid4(),
         agent_id=uuid4(),
         description="Chat",
-        parameters={"channel_origin": {"chat_id": "c-1"}},
+        parameters={"trigger_id": "trg-1", "session": {"key": "c-1", "continue": True}},
         status="running",
         execution_id="task-running",
         user_id="u",
@@ -128,7 +138,7 @@ async def test_redelivering_a_routed_event_queues_exactly_one_message(delivery):
         return True
 
     tasks = MagicMock()
-    tasks.find_active_by_agent_and_chat = AsyncMock(return_value=[running])
+    tasks.find_active_in_session = AsyncMock(return_value=[running])
     factory = MagicMock()
     factory.create_repository = MagicMock(
         side_effect=lambda cls: tasks if cls is TaskRepository else MagicMock()
@@ -154,7 +164,10 @@ async def test_redelivering_a_routed_event_queues_exactly_one_message(delivery):
                     user_id="u",
                     workspace_id="w",
                     agent_id=running.agent_id,
-                    task_parameters={"channel_origin": {"chat_id": "c-1"}},
+                    task_parameters={
+                        "trigger_id": "trg-1",
+                        "session": {"key": "c-1", "continue": True},
+                    },
                 ),
                 follow_up_claim=attempt(session),
             )

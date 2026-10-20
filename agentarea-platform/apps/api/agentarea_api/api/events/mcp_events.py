@@ -14,7 +14,7 @@ from agentarea_common.events.ports import IntegrationEvent
 logger = logging.getLogger(__name__)
 
 # CloudEvents `type` for the MCP status-change event. The Go MCP manager XADDs
-# to the stream derived from this (``events:<type>``); both sides must agree.
+# to the stream derived from this (``domain.events.<type>``); both sides must agree.
 MCP_STATUS_CHANGED_TYPE = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
 
 

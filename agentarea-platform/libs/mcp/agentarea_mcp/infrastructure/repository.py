@@ -93,18 +93,12 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         is_public: bool | None = None,
         tag: str | None = None,
         search: str | None = None,
-        creator_scoped: bool = False,
         include_system: bool = True,
         ids: set[str] | None = None,
         spec_ids: Collection[str] | None = None,
     ):
         """Build the base filtered query (without pagination) for list_servers."""
-        query = select(self.model_class)
-
-        if creator_scoped:
-            query = query.where(self._get_creator_workspace_filter())
-        else:
-            query = query.where(self._get_workspace_filter())
+        query = select(self.model_class).where(self._get_workspace_filter())
 
         if ids is not None:
             # What the authorization graph says this caller may read, applied in
@@ -152,7 +146,6 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         search: str | None = None,
         limit: int = 100,
         offset: int = 0,
-        creator_scoped: bool = False,
         include_system: bool = True,
         ids: set[str] | None = None,
         spec_ids: Collection[str] | None = None,
@@ -177,7 +170,6 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
             is_public=is_public,
             tag=tag,
             search=search,
-            creator_scoped=creator_scoped,
             include_system=include_system,
             ids=ids,
             spec_ids=spec_ids,
@@ -322,6 +314,23 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         item = await self._get_catalog_repository().get_item(str(server_id))
         return _project_catalog_mcp_server(item) if item else None
 
+    async def catalog_json_spec(self, server_id: UUID | str) -> dict[str, Any] | None:
+        """The server JSON the catalog holds for a spec: the one that declares what it costs.
+
+        The platform's own row or projection is the catalog's. A workspace's copy
+        reads the registry item it was made from, since its members may edit the
+        copy. A spec a member wrote has none.
+        """
+        server = await self.get_server_by_id(str(server_id))
+        if server is None:
+            return None
+        if server.is_catalog or server.workspace_id == PLATFORM_WORKSPACE_ID:
+            return server.json_spec
+        if server.registry_item_id is None:
+            return None
+        item = await self._get_catalog_repository().get_item(str(server.registry_item_id))
+        return _project_catalog_mcp_server(item).json_spec if item is not None else None
+
 
 class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
@@ -430,23 +439,8 @@ class MCPServerInstanceRepository(WorkspaceScopedRepository[MCPServerInstance]):
     async def list_by_server_spec(
         self,
         server_spec_id: str,
-        creator_scoped: bool = False,
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[MCPServerInstance]:
         """List instances by server spec ID within the current workspace."""
-        return await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, server_spec_id=server_spec_id
-        )
-
-    async def list_by_status(
-        self,
-        status: str,
-        creator_scoped: bool = False,
-        limit: int | None = None,
-        offset: int | None = None,
-    ) -> list[MCPServerInstance]:
-        """List instances by status within the current workspace."""
-        return await self.list_all(
-            creator_scoped=creator_scoped, limit=limit, offset=offset, status=status
-        )
+        return await self.list_all(limit=limit, offset=offset, server_spec_id=server_spec_id)

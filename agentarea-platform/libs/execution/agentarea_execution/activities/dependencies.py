@@ -25,6 +25,8 @@ from agentarea_llm.infrastructure.video_generation_job_repository import (
 from agentarea_mcp.application.service import MCPServerInstanceService
 from agentarea_openapi.application.service import OpenAPIConnectionService
 from agentarea_tasks.application.task_event_service import TaskEventService
+from agentarea_tasks.infrastructure.log_body_store import S3LogBodyStore
+from agentarea_tasks.infrastructure.task_log import TaskLog
 from agentarea_wallet.application.wallet_service import WalletService
 from agentarea_wallet.infrastructure.repository import PaymentRecordRepository, WalletRepository
 
@@ -42,6 +44,13 @@ class ActivityServiceContainer:
     def __init__(self, dependencies: ActivityDependencies):
         self.dependencies = dependencies
         self._database = get_database()
+        self._log_bodies: S3LogBodyStore | None = None
+
+    def log_body_store(self) -> S3LogBodyStore:
+        """Where task log bodies too large for a row are kept."""
+        if self._log_bodies is None:
+            self._log_bodies = S3LogBodyStore.from_settings()
+        return self._log_bodies
 
     async def get_agent_service(self, user_context: UserContext) -> tuple[AgentService, Any]:
         """Get AgentService with proper session and context."""
@@ -276,6 +285,12 @@ class ActivityContext:
 
         if commit_error is not None:
             raise commit_error
+
+    def task_log(self) -> TaskLog:
+        """The task log on a session of this context, committed with it on exit."""
+        session = self.container._database.async_session_factory()
+        self._sessions.append(session)
+        return TaskLog(session, self.user_context, self.container.log_body_store())
 
     async def get_agent_service(self) -> AgentService:
         """Get AgentService for this context."""

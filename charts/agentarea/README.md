@@ -97,6 +97,8 @@ The following table lists configurable parameters of the chart and their default
 | global.redis.ssl | bool | `false` |  |
 | global.redis.maxConnections | int | `50` |  |
 | global.redis.connectionTimeout | string | `"5s"` |  |
+| global.events.namespace | string | `"agentarea"` |  |
+| global.events.partitions | int | `16` |  |
 | global.storage.type | string | `"rustfs"` |  |
 | global.storage.endpoint | string | `""` |  |
 | global.storage.publicEndpoint | string | `""` |  |
@@ -142,9 +144,7 @@ The following table lists configurable parameters of the chart and their default
 | global.jobs.kube.timeouts.discover | string | `"900s"` |  |
 | global.jobs.kube.mainContainerImagePullPolicy | string | `"IfNotPresent"` |  |
 | global.jobs.kube.sidecarContainerImagePullPolicy | string | `"IfNotPresent"` |  |
-| global.jobs.kube.images.socat | string | `"alpine/socat:latest"` |  |
-| global.jobs.kube.images.busybox | string | `"busybox:latest"` |  |
-| global.jobs.kube.images.curl | string | `"curlimages/curl:latest"` |  |
+| global.jobs.kube.images.busybox | string | `"busybox:1.38.0"` |  |
 | global.workloads.resources.mainContainer.cpu.request | string | `"50m"` |  |
 | global.workloads.resources.mainContainer.cpu.limit | string | `"1000m"` |  |
 | global.workloads.resources.mainContainer.memory.request | string | `"128Mi"` |  |
@@ -197,7 +197,7 @@ The following table lists configurable parameters of the chart and their default
 | backend.shutdownTimeout | int | `20` | Seconds uvicorn then waits for open connections to finish. Must be finite: the API serves SSE, and those connections never close on their own. |
 | backend.terminationGracePeriodSeconds | int | `30` | Total budget the kubelet allows for the two above before SIGKILL. Keep it above preStopDelay + shutdownTimeout, or draining is cut short. |
 | backend.image.repository | string | `"agentarea/agentarea-api"` |  |
-| backend.image.tag | string | `"latest"` |  |
+| backend.image.tag | string | `""` |  |
 | backend.image.pullPolicy | string | `""` |  |
 | backend.service.type | string | `"ClusterIP"` |  |
 | backend.service.port | int | `8000` |  |
@@ -228,7 +228,7 @@ The following table lists configurable parameters of the chart and their default
 | frontend.enabled | bool | `true` |  |
 | frontend.replicaCount | int | `1` |  |
 | frontend.image.repository | string | `"agentarea/agentarea-frontend"` |  |
-| frontend.image.tag | string | `"latest"` |  |
+| frontend.image.tag | string | `""` |  |
 | frontend.image.pullPolicy | string | `""` |  |
 | frontend.service.type | string | `"ClusterIP"` |  |
 | frontend.service.port | int | `3000` |  |
@@ -257,9 +257,13 @@ The following table lists configurable parameters of the chart and their default
 | worker.enabled | bool | `true` |  |
 | worker.replicaCount | int | `1` |  |
 | worker.image.repository | string | `"agentarea/agentarea-worker"` |  |
-| worker.image.tag | string | `"latest"` |  |
+| worker.image.tag | string | `""` |  |
 | worker.image.pullPolicy | string | `""` |  |
 | worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
+| worker.outageWait.retryWindow | string | `"5m"` | How long a call retries before the run starts waiting. |
+| worker.outageWait.backoff | string | `"1m,5m,10m"` | Pauses between retries while the run waits, comma-separated. |
+| worker.outageWait.deadline | string | `"24h"` | How long a run waits before it fails. |
+| worker.skillsWindowShare | string | `"0.3"` | Share of the model's context window all of a run's activated skills may take together (their instructions are never compacted); between 0 and 1. |
 | worker.minReadySeconds | int | `10` | Seconds a new pod must stay ready before it counts as available, so a pod that passes readiness and then crashes cannot retire an old replica. |
 | worker.shutdownTimeout | int | `120` | Seconds a stopping worker lets in-flight activities (model calls, tools, event writes) finish before it cancels them. A cancelled model call is paid for twice when it reruns on another replica. |
 | worker.terminationGracePeriodSeconds | int | `150` | Total budget the kubelet allows the worker before SIGKILL. Keep it above shutdownTimeout, or the drain is cut short. |
@@ -281,13 +285,11 @@ The following table lists configurable parameters of the chart and their default
 | eventService.enabled | bool | `true` |  |
 | eventService.replicaCount | int | `1` |  |
 | eventService.image.repository | string | `"agentarea/agentarea-events"` |  |
-| eventService.image.tag | string | `"latest"` |  |
+| eventService.image.tag | string | `""` |  |
 | eventService.image.pullPolicy | string | `""` |  |
 | eventService.port | int | `8002` |  |
 | eventService.pollInterval | string | `"30s"` |  |
 | eventService.maxPollers | int | `10` |  |
-| eventService.inboundStream | string | `"agentarea.channel.inbound"` |  |
-| eventService.telegramPolling.enabled | bool | `false` |  |
 | eventService.resources | object | `{}` |  |
 | eventService.podAnnotations | object | `{}` |  |
 | eventService.podLabels | object | `{}` |  |
@@ -305,10 +307,13 @@ The following table lists configurable parameters of the chart and their default
 | eventService.readinessProbe.timeoutSeconds | int | `3` |  |
 | eventService.readinessProbe.failureThreshold | int | `3` |  |
 | eventService.extraEnv | list | `[]` |  |
+| platformNetworkPolicy.enabled | bool | `false` |  |
+| platformNetworkPolicy.blockedEgressCIDRs[0] | string | `"169.254.0.0/16"` |  |
+| platformNetworkPolicy.extraEgress | list | `[]` |  |
 | mcpManager.enabled | bool | `true` |  |
 | mcpManager.replicaCount | int | `1` |  |
 | mcpManager.image.repository | string | `"agentarea/agentarea-mcp-manager"` |  |
-| mcpManager.image.tag | string | `"latest"` |  |
+| mcpManager.image.tag | string | `""` |  |
 | mcpManager.service.type | string | `"ClusterIP"` |  |
 | mcpManager.service.port | int | `80` |  |
 | mcpManager.serviceAccount.create | bool | `true` |  |
@@ -321,7 +326,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.serverless.requestLeaseTTL | string | `"90s"` |  |
 | mcpManager.serverless.startupTimeout | string | `"5m"` |  |
 | mcpManager.mcpBase.image.repository | string | `"agentarea/agentarea-mcp-base"` |  |
-| mcpManager.mcpBase.image.tag | string | `"latest"` |  |
+| mcpManager.mcpBase.image.tag | string | `""` |  |
 | mcpManager.packageImages.repository | string | `""` | Registry repository where immutable images built from npm/PyPI packages are stored. Leave empty to use the local Docker daemon with the Docker backend; Kubernetes and data-plane backends require a repository. |
 | mcpManager.packageImages.registrySecret | string | `""` | Existing dockerconfigjson Secret used to authenticate package-image registry lookups and pushes. The Secret is mounted read-only in the manager. |
 | mcpManager.packageImages.importTimeout | string | `"15m"` | Maximum time allowed for one package-image import. |
@@ -339,6 +344,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.instanceNetworkPolicy.probeIngressCIDRs[1] | string | `"172.16.0.0/12"` |  |
 | mcpManager.instanceNetworkPolicy.probeIngressCIDRs[2] | string | `"192.168.0.0/16"` |  |
 | mcpManager.instanceNetworkPolicy.extraEgress | list | `[]` |  |
+| mcpManager.instanceNetworkPolicy.egressProxy | object | `{}` |  |
 | mcpManager.instancePod.labels | object | `{}` |  |
 | mcpManager.instancePod.annotations | object | `{}` |  |
 | mcpManager.instancePod.nodeSelector | object | `{}` |  |
@@ -364,7 +370,7 @@ The following table lists configurable parameters of the chart and their default
 | mcpManager.features.variants | object | `{}` |  |
 | mcpManager.warmPool.enabled | bool | `true` |  |
 | mcpManager.warmPool.image.repository | string | `"agentarea/agentarea-mcp-runner"` |  |
-| mcpManager.warmPool.image.tag | string | `"latest"` |  |
+| mcpManager.warmPool.image.tag | string | `""` |  |
 | mcpManager.warmPool.image.pullPolicy | string | `"IfNotPresent"` |  |
 | mcpManager.warmPool.idleTimeout | string | `"0s"` |  |
 | mcpManager.warmPool.size | int | `1` |  |
@@ -449,17 +455,19 @@ The following table lists configurable parameters of the chart and their default
 | mcpSandboxRunner.extraEnv | list | `[]` |  |
 | temporal.enabled | bool | `true` |  |
 | temporal.replicaCount | int | `1` |  |
-| temporal.image.repository | string | `"temporalio/auto-setup"` |  |
-| temporal.image.tag | string | `"1.29.1"` |  |
+| temporal.image.repository | string | `"temporalio/server"` |  |
+| temporal.image.tag | string | `"1.32.1"` |  |
+| temporal.adminTools.image.repository | string | `"temporalio/admin-tools"` |  |
+| temporal.adminTools.image.tag | string | `"1.32.1"` |  |
+| temporal.namespaceRetention | string | `"24h"` |  |
 | temporal.database.name | string | `"temporal"` |  |
-| temporal.database.createJob.enabled | bool | `true` |  |
 | temporal.service.type | string | `"ClusterIP"` |  |
 | temporal.service.port | int | `7233` |  |
 | temporal.resources | object | `{}` |  |
 | temporal.extraEnv | list | `[]` |  |
 | postgresql.enabled | bool | `true` |  |
 | postgresql.image.repository | string | `"postgres"` |  |
-| postgresql.image.tag | string | `"16-alpine"` |  |
+| postgresql.image.tag | string | `"16.15-alpine"` |  |
 | postgresql.resources.limits.cpu | string | `"500m"` |  |
 | postgresql.resources.limits.memory | string | `"512Mi"` |  |
 | postgresql.resources.requests.cpu | string | `"250m"` |  |
@@ -473,15 +481,18 @@ The following table lists configurable parameters of the chart and their default
 | valkey.auth.aclUsers.default.permissions | string | `"~* &* +@all"` |  |
 | valkey.auth.aclUsers.default.passwordKey | string | `"redis-password"` |  |
 | valkey.replica.enabled | bool | `false` |  |
-| valkey.dataStorage.enabled | bool | `false` |  |
-| valkey.dataStorage.requestedSize | string | `"1Gi"` |  |
-| valkey.resources.limits.cpu | string | `"250m"` |  |
-| valkey.resources.limits.memory | string | `"256Mi"` |  |
+| valkey.deploymentStrategy | string | `"Recreate"` |  |
+| valkey.dataStorage.enabled | bool | `true` |  |
+| valkey.dataStorage.requestedSize | string | `"4Gi"` |  |
+| valkey.dataStorage.className | string | `""` |  |
+| valkey.valkeyConfig | string | `"appendonly yes\nappendfsync everysec\nmaxmemory 768mb\nmaxmemory-policy noeviction\n"` |  |
+| valkey.resources.limits.cpu | string | `"500m"` |  |
+| valkey.resources.limits.memory | string | `"1Gi"` |  |
 | valkey.resources.requests.cpu | string | `"100m"` |  |
-| valkey.resources.requests.memory | string | `"128Mi"` |  |
+| valkey.resources.requests.memory | string | `"1Gi"` |  |
 | rustfs.enabled | bool | `true` |  |
 | rustfs.image.repository | string | `"rustfs/rustfs"` |  |
-| rustfs.image.tag | string | `"latest"` |  |
+| rustfs.image.tag | string | `"1.0.3"` |  |
 | rustfs.auth.existingSecret | string | `"agentarea-rustfs-secret"` |  |
 | rustfs.defaultBuckets | string | `""` |  |
 | rustfs.resources.limits.cpu | string | `"500m"` |  |
@@ -502,11 +513,29 @@ The following table lists configurable parameters of the chart and their default
 | rustfs.livenessProbe.failureThreshold | int | `6` |  |
 | jobs.dbMigration.enabled | bool | `true` |  |
 | registryReconcile.enabled | bool | `true` |  |
-| registryReconcile.registries | list | `[{"name":"system-llm-providers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"},{"name":"system-llm-models","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"},{"name":"system-mcp-servers","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"},{"name":"system-skills-curated","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"},{"name":"system-agents","recommendation_priority":10,"source_url":"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"}]` | a custom catalog, or the ~123k community mirror, which stays opt-in and must not drive first-run picks -- lands after them instead of interleaving its first entries with the curated front page. |
+| registryReconcile.workspaceRegistries | bool | `false` | Also sync every active registry a workspace admin added (`--workspace-registries`). A tenant's failing source is recorded on its registry and does not fail the Job. |
+| registryReconcile.registries[0].name | string | `"system-llm-providers"` |  |
+| registryReconcile.registries[0].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-providers.json"` |  |
+| registryReconcile.registries[0].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[1].name | string | `"system-llm-models"` |  |
+| registryReconcile.registries[1].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json"` |  |
+| registryReconcile.registries[1].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[2].name | string | `"system-mcp-servers"` |  |
+| registryReconcile.registries[2].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"` |  |
+| registryReconcile.registries[2].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[3].name | string | `"system-skills-curated"` |  |
+| registryReconcile.registries[3].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json"` |  |
+| registryReconcile.registries[3].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[4].name | string | `"system-agents"` |  |
+| registryReconcile.registries[4].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"` |  |
+| registryReconcile.registries[4].recommendation_priority | int | `10` |  |
+| registryReconcile.registries[5].name | string | `"system-source-types"` |  |
+| registryReconcile.registries[5].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/source-types.json"` |  |
+| registryReconcile.registries[5].recommendation_priority | int | `10` |  |
 | openfga.enabled | bool | `true` |  |
 | openfga.replicaCount | int | `1` |  |
 | openfga.image.repository | string | `"openfga/openfga"` |  |
-| openfga.image.tag | string | `"v1.18.0"` |  |
+| openfga.image.tag | string | `"v1.22.0"` |  |
 | openfga.database.name | string | `"openfga"` |  |
 | openfga.database.createJob.enabled | bool | `true` |  |
 | openfga.log.level | string | `"info"` |  |
@@ -524,7 +553,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.enabled | bool | `true` |  |
 | kratos.replicaCount | int | `1` |  |
 | kratos.image.repository | string | `"oryd/kratos"` |  |
-| kratos.image.tag | string | `"v1.3.1"` |  |
+| kratos.image.tag | string | `"v26.2.0"` |  |
 | kratos.urls.public | string | `""` |  |
 | kratos.urls.publicBrowser | string | `""` |  |
 | kratos.urls.admin | string | `""` |  |
@@ -546,7 +575,7 @@ The following table lists configurable parameters of the chart and their default
 | kratos.jwt.issuer | string | `"https://agentarea.dev"` |  |
 | kratos.jwt.audience | string | `"agentarea-api"` |  |
 | kratos.identitySchema | string | `"{\n  \"$id\": \"https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json\",\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Person\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"traits\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"email\": {\n          \"type\": \"string\",\n          \"format\": \"email\",\n          \"title\": \"Email\",\n          \"ory.sh/kratos\": {\n            \"credentials\": {\n              \"password\": {\n                \"identifier\": true\n              }\n            },\n            \"recovery\": {\n              \"via\": \"email\"\n            }\n          }\n        },\n        \"name\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"first\": {\n              \"title\": \"First Name\",\n              \"type\": \"string\"\n            },\n            \"last\": {\n              \"title\": \"Last Name\",\n              \"type\": \"string\"\n            }\n          }\n        },\n        \"username\": {\n          \"type\": \"string\",\n          \"title\": \"Username\"\n        }\n      },\n      \"required\": [\n        \"email\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n}\n"` |  |
-| kratos.config.version | string | `"v1.3.1"` |  |
+| kratos.config.version | string | `"v26.2.0"` |  |
 | kratos.config.serve.public.cors.enabled | bool | `true` |  |
 | kratos.config.serve.public.cors.allowed_origins[0] | string | `"https://staging-0.agentarea.ai"` |  |
 | kratos.config.serve.public.cors.allowed_origins[1] | string | `"https://*.staging-0.agentarea.ai"` |  |

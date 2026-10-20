@@ -36,9 +36,9 @@ from ..constants import (
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy, make_retry_policy, model_call_retry_policy
+from ..retry import make_retry_policy, model_call_retry_policy
 from .budget import BudgetMixin
-from .patches import ANSWER_CHECK_REWRITE_PATCH
+from .patches import ANSWER_CHECK_REWRITE_PATCH, COMPLETED_STATUS_WITH_TURN_EVENTS_PATCH
 
 
 class CompletionMixin(BudgetMixin):
@@ -161,12 +161,7 @@ class CompletionMixin(BudgetMixin):
         # reject the next follow-up because its history contains an unresolved
         # function call. Implicit text completion synthesizes a ToolCall only
         # for local control flow, so it must not gain an orphan tool message.
-        call_is_in_history = any(
-            call.get("id") == completion_call.id
-            for message in self.state.messages
-            for call in (message.tool_calls or [])
-            if isinstance(call, dict)
-        )
+        call_is_in_history = self._call_in_history(completion_call.id)
         if call_is_in_history:
             self.state.messages.append(
                 Message(
@@ -210,41 +205,36 @@ class CompletionMixin(BudgetMixin):
         workflow.logger.info(f"Task completed: {result_text}")
         workflow.logger.info("Entering awaiting_input state for follow-up messages")
 
-        # Update task status to completed immediately so UI reflects it
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status="completed",
-                    result=json.dumps(
-                        {
-                            "response": result_text,
-                            "artifacts": [evidence.path for evidence in validation.evidence],
-                            "validation_state": self.state.validation_state,
-                        }
-                    ),
-                    workspace_id=self.state.workspace_id,
-                    total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
-                    own_cost=self._own_cost,
-                    tokens_used=self.state.tokens_used,
-                )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+        completed = UpdateTaskStatusRequest(
+            user_context_data=self.state.user_context_data,
+            task_id=self.state.task_id,
+            status="completed",
+            result=json.dumps(
+                {
+                    "response": result_text,
+                    "artifacts": [evidence.path for evidence in validation.evidence],
+                    "validation_state": self.state.validation_state,
+                }
+            ),
+            workspace_id=self.state.workspace_id,
+            total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
+            own_cost=self._own_cost,
+            tokens_used=self.state.tokens_used,
         )
-        if (
-            self._interaction_contract_enabled
-            and self.state.interaction_capabilities.channel == "none"
-        ):
+        if self._task_log_on() and workflow.patched(COMPLETED_STATUS_WITH_TURN_EVENTS_PATCH):
+            # Stored when the turn ends, in one record with its closing events.
+            self._completed_status = completed
+        else:
+            await self._persist_task_status(completed)
+        window = self._follow_up_window()
+        if window is None:
             self._awaiting_input = False
             return
         self._events.add_event(
             EventTypes.WORKFLOW_AWAITING_FOLLOW_UP,
             {
                 "state": "awaiting_follow_up",
-                "timeout_seconds": 1800,
+                "timeout_seconds": int(window.total_seconds()),
                 **({"final_response": result_text} if self._interaction_contract_enabled else {}),
             },
         )
@@ -262,7 +252,7 @@ class CompletionMixin(BudgetMixin):
         Off unless ``_answer_check`` is on. The rewrite is a silent call to the
         agent's own model (no chunks, no conversation write). Its
         ``llm.call.completed`` (``purpose: answer_check``) meters it and carries
-        the answer the person sees; ``AnswerChecked`` records what was found and
+        the answer the person sees; ``answer.checked`` records what was found and
         the model's account of what it changed. A failed or unusable rewrite
         keeps the original, minus CJK characters when those were the leak.
         """
@@ -358,12 +348,7 @@ class CompletionMixin(BudgetMixin):
         self.state.success = False
         self.state.final_response = None
         self._awaiting_input = False
-        call_is_in_history = any(
-            call.get("id") == completion_call.id
-            for message in self.state.messages
-            for call in (message.tool_calls or [])
-            if isinstance(call, dict)
-        )
+        call_is_in_history = self._call_in_history(completion_call.id)
         if not call_is_in_history:
             self.state.messages.append(
                 Message(
@@ -473,12 +458,7 @@ class CompletionMixin(BudgetMixin):
         result: ArtifactValidationResult,
     ) -> None:
         """Return structured, tool-paired repair evidence to the next model turn."""
-        call_is_in_history = any(
-            call.get("id") == completion_call.id
-            for message in self.state.messages
-            for call in (message.tool_calls or [])
-            if isinstance(call, dict)
-        )
+        call_is_in_history = self._call_in_history(completion_call.id)
         if not call_is_in_history:
             self.state.messages.append(
                 Message(

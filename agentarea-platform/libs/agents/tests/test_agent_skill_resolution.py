@@ -24,6 +24,7 @@ def _service(workspace_skills: set, catalog: dict) -> AgentService:
     service = object.__new__(AgentService)
     service.repository_factory = factory
     service._user_context = factory.user_context
+    service._install_guard = None
     installer = MagicMock()
     installer.install_catalog_skill = AsyncMock(side_effect=lambda sid: catalog.get(sid))
     return service, installer

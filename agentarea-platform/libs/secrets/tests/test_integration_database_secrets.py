@@ -12,13 +12,13 @@ import os
 from typing import AsyncGenerator
 
 import pytest
+import pytest_asyncio
 from agentarea_common.auth import UserContext
 from agentarea_secrets.database_secret_manager import DatabaseSecretManager, EncryptedSecret
 from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from agentarea_common.base.models import BaseModel
 
 
 # Test database URL - can be overridden via environment
@@ -28,7 +28,7 @@ TEST_DATABASE_URL = os.getenv(
 )
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def db_engine():
     """Create test database engine."""
     engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_pre_ping=True)
@@ -36,21 +36,20 @@ async def db_engine():
     await engine.dispose()
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def setup_database(db_engine):
     """Create database tables before tests."""
     async with db_engine.begin() as conn:
-        # Create tables
-        await conn.run_sync(BaseModel.metadata.create_all)
+        await conn.run_sync(EncryptedSecret.__table__.create)
 
     yield
 
     # Cleanup after tests
     async with db_engine.begin() as conn:
-        await conn.run_sync(BaseModel.metadata.drop_all)
+        await conn.run_sync(EncryptedSecret.__table__.drop)
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="module")
 async def db_session(db_engine, setup_database) -> AsyncGenerator[AsyncSession, None]:
     """Create a new database session for each test."""
     async_session = sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
@@ -86,7 +85,7 @@ def shared_encryption_key():
 
 
 @pytest.mark.integration
-@pytest.mark.asyncio
+@pytest.mark.asyncio(loop_scope="module")
 class TestDatabaseSecretManagerIntegration:
     """Integration tests for DatabaseSecretManager with real database."""
 

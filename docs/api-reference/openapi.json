@@ -487,7 +487,7 @@
             "type": "array"
           },
           "triggers": {
-            "description": "Triggers that start the agent: schedules, webhooks, messaging channels (types from GET /v1/triggers/catalog). Created with the agent; if any cannot be created, neither the agent nor any trigger is kept.",
+            "description": "Triggers that start the agent: cron schedules, or stream triggers on a stream whose sources are webhooks and polled providers. Created with the agent; if any cannot be created, neither the agent nor any trigger is kept.",
             "items": {
               "$ref": "#/components/schemas/TriggerSpec"
             },
@@ -1150,7 +1150,7 @@
         "type": "object"
       },
       "ApprovalDecision": {
-        "description": "One answered approval request, as the workflow recorded the answer.",
+        "description": "One answered approval request, as the audit trail recorded the answer.",
         "properties": {
           "agent_id": {
             "anyOf": [
@@ -2862,11 +2862,19 @@
         "type": "object"
       },
       "CatalogToolPrice": {
-        "description": "What the workspace is charged per unit of a tool's calls; ``tool`` null is the default.",
+        "description": "What one unit of a tool's calls costs; ``tool`` null is the connector's default.\n\n``basis`` \"price\": billing's price on the platform's key, markup included.\n\"vendor_cost\": the vendor's own cost, with no markup. ``unavailable``: billing could\nnot be asked for its price, so the vendor cost stands in.",
         "properties": {
           "amount": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Amount",
+            "type": "string"
+          },
+          "basis": {
+            "enum": [
+              "price",
+              "vendor_cost"
+            ],
+            "title": "Basis",
             "type": "string"
           },
           "currency": {
@@ -2884,6 +2892,11 @@
             ],
             "title": "Tool"
           },
+          "unavailable": {
+            "default": false,
+            "title": "Unavailable",
+            "type": "boolean"
+          },
           "unit": {
             "title": "Unit",
             "type": "string"
@@ -2893,7 +2906,8 @@
           "tool",
           "amount",
           "currency",
-          "unit"
+          "unit",
+          "basis"
         ],
         "title": "CatalogToolPrice",
         "type": "object"
@@ -3861,6 +3875,17 @@
       },
       "DiscoverPreviewModelResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -4044,6 +4069,17 @@
       },
       "DiscoveredModelResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -4351,6 +4387,74 @@
         "title": "EscalationResolution",
         "type": "object"
       },
+      "EventAttachmentResponse": {
+        "properties": {
+          "mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ref": {
+            "description": "A workspace file path, or the provider's reference (JSON).",
+            "title": "Ref",
+            "type": "string"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Download link for a stored file; null for a provider's reference.",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "name",
+          "mime",
+          "size",
+          "sha256",
+          "ref",
+          "url"
+        ],
+        "title": "EventAttachmentResponse",
+        "type": "object"
+      },
       "EventFilter": {
         "additionalProperties": false,
         "description": "Empty kinds and fields match every event.",
@@ -4369,6 +4473,65 @@
           }
         },
         "title": "EventFilter",
+        "type": "object"
+      },
+      "EventOverrides": {
+        "additionalProperties": false,
+        "description": "What one source may set in place of its entry's templates (a generic webhook's own key).",
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          }
+        },
+        "title": "EventOverrides",
         "type": "object"
       },
       "ExecutionCorrelationResponse": {
@@ -4696,6 +4859,182 @@
         "title": "FailedTaskBlocker",
         "type": "object"
       },
+      "FeedEventResponse": {
+        "description": "An event's envelope without its body, and what the platform did with it.",
+        "properties": {
+          "attachments": {
+            "description": "How many files the event carries.",
+            "title": "Attachments",
+            "type": "integer"
+          },
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "processing": {
+            "$ref": "#/components/schemas/Processing"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "v": {
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "stream_id",
+          "source_id",
+          "source_type",
+          "kind",
+          "key",
+          "session_key",
+          "sender",
+          "received_at",
+          "occurred_at",
+          "depth",
+          "correlation_id",
+          "causation_id",
+          "attachments",
+          "processing"
+        ],
+        "title": "FeedEventResponse",
+        "type": "object"
+      },
+      "FeedFacetsResponse": {
+        "properties": {
+          "capped": {
+            "default": false,
+            "description": "Under a filter other than stream and source type the counts stop after the first 1000 matching events; true when more match, so each count is a lower bound.",
+            "title": "Capped",
+            "type": "boolean"
+          },
+          "source_types": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Events per source type under the other filters.",
+            "title": "Source Types",
+            "type": "object"
+          },
+          "streams": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Events per stream under the other filters.",
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Streams",
+            "type": "object"
+          }
+        },
+        "required": [
+          "streams",
+          "source_types"
+        ],
+        "title": "FeedFacetsResponse",
+        "type": "object"
+      },
       "ForwardCreate": {
         "additionalProperties": false,
         "properties": {
@@ -4938,6 +5277,85 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HandlerResponse": {
+        "description": "One subscription's reaction to an event, named for the person reading it.",
+        "properties": {
+          "derived_event_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Derived Event Ids",
+            "type": "array"
+          },
+          "kind": {
+            "description": "trigger, forward, or deleted",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "description": "The trigger's name, or the streams a forward writes to.",
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "subscription_id": {
+            "format": "uuid",
+            "title": "Subscription Id",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "task_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Status"
+          },
+          "verdict": {
+            "description": "reacted, skipped, error, or batched while it waits in an open batch",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "subscription_id",
+          "kind",
+          "name",
+          "verdict",
+          "reason",
+          "task_id",
+          "task_status",
+          "derived_event_ids"
+        ],
+        "title": "HandlerResponse",
         "type": "object"
       },
       "HeaderInput": {
@@ -6054,6 +6472,18 @@
             ],
             "title": "Auth Config Id"
           },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -6069,6 +6499,18 @@
               }
             ],
             "title": "Description"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
           },
           "id": {
             "format": "uuid",
@@ -6171,6 +6613,19 @@
             ],
             "description": "URL instances only. Shared secret (at least 32 characters) AgentArea signs each tool call's context token with, so the server can trust which task, workspace and end user the call is for. Write-only: stored in the secret manager; the instance's json_spec shows context_signing: true instead. Send null to remove it.",
             "title": "Context Secret"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 \u00a72.3). It wins over the connector's declaration. Send null to go back to the connector's.",
+            "title": "Cost"
           },
           "description": {
             "anyOf": [
@@ -7202,6 +7657,27 @@
       },
       "ModelSpecCreate": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -7346,6 +7822,27 @@
       },
       "ModelSpecUpdate": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                    "type": "string"
+                  }
+                ],
+                "ge": "0",
+                "lt": "100000000"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -7889,6 +8386,35 @@
         "title": "OAuthAuthorizeResponse",
         "type": "object"
       },
+      "OAuthFinishRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "OAuthFinishRequest",
+        "type": "object"
+      },
+      "OAuthFinishResponse": {
+        "properties": {
+          "location": {
+            "title": "Location",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "OAuthFinishResponse",
+        "type": "object"
+      },
       "OAuthLinkCreateRequest": {
         "properties": {
           "access_control": {
@@ -8263,6 +8789,18 @@
             "title": "Base Url",
             "type": "string"
           },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -8323,6 +8861,17 @@
               }
             ],
             "title": "Last Dispatch"
+          },
+          "managed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Managed By"
           },
           "name": {
             "title": "Name",
@@ -8415,6 +8964,19 @@
               }
             ],
             "title": "Base Url"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a call of this connection costs, set by a member on a connection the workspace pays for: a rate (per call or per unit), a field of the response, or free (wiki ADR-0038 \u00a72.3). It wins over the connector's declaration. Send null to go back to the connector's.",
+            "title": "Cost"
           },
           "custom_headers": {
             "anyOf": [
@@ -8630,16 +9192,19 @@
             "title": "Created At",
             "type": "string"
           },
-          "derived_sequences": {
+          "derived_event_ids": {
+            "description": "Events a forward wrote into its output streams, in output-stream order.",
             "items": {
-              "type": "integer"
+              "format": "uuid",
+              "type": "string"
             },
-            "title": "Derived Sequences",
+            "title": "Derived Event Ids",
             "type": "array"
           },
-          "event_sequence": {
-            "title": "Event Sequence",
-            "type": "integer"
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
           },
           "reason": {
             "anyOf": [
@@ -8697,7 +9262,7 @@
             "title": "Trigger Id"
           },
           "verdict": {
-            "description": "reacted, skipped or error",
+            "description": "reacted, skipped, error, or batched while it waits in an open batch",
             "title": "Verdict",
             "type": "string"
           }
@@ -8706,12 +9271,12 @@
           "subscription_id",
           "subscription_kind",
           "trigger_id",
-          "event_sequence",
+          "event_id",
           "verdict",
           "reason",
           "score",
           "task_id",
-          "derived_sequences",
+          "derived_event_ids",
           "created_at"
         ],
         "title": "OutcomeResponse",
@@ -9648,6 +10213,164 @@
         "title": "PrincipalType",
         "type": "string"
       },
+      "Processing": {
+        "properties": {
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "reacted": {
+            "description": "Subscriptions whose reaction is recorded.",
+            "title": "Reacted",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProcessingStatus"
+          },
+          "subscribers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Subscriptions the router matched; null until it routed the event.",
+            "title": "Subscribers"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessingTask"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "subscribers",
+          "reacted",
+          "skipped",
+          "errors"
+        ],
+        "title": "Processing",
+        "type": "object"
+      },
+      "ProcessingStatus": {
+        "enum": [
+          "queued",
+          "processing",
+          "handled",
+          "error",
+          "no_handlers",
+          "skipped"
+        ],
+        "title": "ProcessingStatus",
+        "type": "string"
+      },
+      "ProcessingTask": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "ProcessingTask",
+        "type": "object"
+      },
+      "ProcessorCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.",
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "event_filter": {
+            "$ref": "#/components/schemas/EventFilter",
+            "description": "Which events the code runs on; empty runs it on every event."
+          },
+          "output_stream_ids": {
+            "description": "Streams the code may write to; never the input.",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Output Stream Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "output_stream_ids",
+          "code"
+        ],
+        "title": "ProcessorCreate",
+        "type": "object"
+      },
+      "ProcessorUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Python defining def process(event: dict) -> list[dict] | None. Each returned dict is {stream, kind, data, key?}: stream is an output stream's id or name, kind the new event's kind, data its body. Return None or [] to write nothing. No secrets: the code gets none and every reader of the stream sees it.",
+            "title": "Code"
+          },
+          "event_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventFilter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New filter; null keeps it."
+          },
+          "output_stream_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New output streams; null keeps them.",
+            "title": "Output Stream Ids"
+          }
+        },
+        "title": "ProcessorUpdate",
+        "type": "object"
+      },
       "ProjectAgentRef": {
         "properties": {
           "id": {
@@ -10502,6 +11225,16 @@
             ],
             "title": "Description"
           },
+          "mode": {
+            "default": "mirror",
+            "description": "'mirror' copies content at sync; 'upstream' keeps only the index",
+            "enum": [
+              "mirror",
+              "upstream"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "description": "Human-readable registry name",
             "title": "Name",
@@ -10521,9 +11254,34 @@
             "title": "Recommendation Priority"
           },
           "registry_type": {
-            "description": "Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles')",
+            "description": "Catalog entity type: one of ('mcp_servers', 'skills', 'llm_providers', 'llm_models', 'agents', 'bundles', 'source_types')",
             "title": "Registry Type",
             "type": "string"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub sources: the folder whose skill folders are indexed",
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub sources: branch, tag or commit to read",
+            "title": "Source Ref"
           },
           "source_type": {
             "description": "Source mode: 'url', 'github', 'api', or platform-managed 'managed'",
@@ -10542,10 +11300,16 @@
             "description": "Registry source URL; omitted when source_type is 'managed'",
             "title": "Source Url"
           },
-          "sync_mode": {
-            "default": "manual",
-            "description": "'auto' or 'manual'",
-            "title": "Sync Mode",
+          "trust": {
+            "default": "official",
+            "description": "Trust label on every catalog card",
+            "enum": [
+              "official",
+              "verified",
+              "community",
+              "private"
+            ],
+            "title": "Trust",
             "type": "string"
           }
         },
@@ -10653,6 +11417,57 @@
             "title": "Registry Id",
             "type": "string"
           },
+          "registry_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mirror",
+                  "upstream"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Mode"
+          },
+          "registry_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Name"
+          },
+          "registry_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "workspace"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Scope"
+          },
+          "registry_trust": {
+            "enum": [
+              "official",
+              "verified",
+              "community",
+              "private"
+            ],
+            "title": "Registry Trust",
+            "type": "string"
+          },
           "spec": {
             "additionalProperties": true,
             "title": "Spec",
@@ -10712,6 +11527,7 @@
           "installed_entity_id",
           "update_available",
           "installed_version",
+          "registry_trust",
           "created_at",
           "updated_at"
         ],
@@ -10724,6 +11540,18 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "credentials_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentials Secret Id"
           },
           "description": {
             "anyOf": [
@@ -10772,6 +11600,14 @@
             ],
             "title": "Last Synced At"
           },
+          "mode": {
+            "enum": [
+              "mirror",
+              "upstream"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -10784,6 +11620,36 @@
             "title": "Registry Type",
             "type": "string"
           },
+          "scope": {
+            "enum": [
+              "platform",
+              "workspace"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
           "source_type": {
             "title": "Source Type",
             "type": "string"
@@ -10792,14 +11658,31 @@
             "title": "Source Url",
             "type": "string"
           },
-          "sync_mode": {
-            "title": "Sync Mode",
+          "trust": {
+            "enum": [
+              "official",
+              "verified",
+              "community",
+              "private"
+            ],
+            "title": "Trust",
             "type": "string"
           },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
           }
         },
         "required": [
@@ -10809,8 +11692,10 @@
           "registry_type",
           "source_type",
           "source_url",
-          "sync_mode",
           "is_active",
+          "scope",
+          "mode",
+          "trust",
           "last_synced_at",
           "last_sync_error",
           "item_count",
@@ -10844,6 +11729,21 @@
               }
             ],
             "title": "Is Active"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mirror",
+                  "upstream"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
           },
           "name": {
             "anyOf": [
@@ -10879,16 +11779,22 @@
             ],
             "title": "Source Url"
           },
-          "sync_mode": {
+          "trust": {
             "anyOf": [
               {
+                "enum": [
+                  "official",
+                  "verified",
+                  "community",
+                  "private"
+                ],
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Sync Mode"
+            "title": "Trust"
           }
         },
         "title": "RegistryUpdate",
@@ -11476,6 +12382,7 @@
         "type": "object"
       },
       "ScheduledRun": {
+        "description": "One upcoming run: a cron trigger firing or a task booked for later.\n\nExactly one of `trigger_id` and `task_id` is set.",
         "properties": {
           "agent_id": {
             "format": "uuid",
@@ -11498,19 +12405,37 @@
             "title": "Fires At",
             "type": "string"
           },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
           "title": {
             "title": "Title",
             "type": "string"
           },
           "trigger_id": {
-            "format": "uuid",
-            "title": "Trigger Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Id"
           }
         },
         "required": [
           "fires_at",
-          "trigger_id",
           "agent_id",
           "title"
         ],
@@ -12274,6 +13199,11 @@
             "title": "Created At",
             "type": "string"
           },
+          "customized": {
+            "default": false,
+            "title": "Customized",
+            "type": "boolean"
+          },
           "description": {
             "anyOf": [
               {
@@ -12312,6 +13242,54 @@
               }
             ],
             "title": "Registry Item Id"
+          },
+          "registry_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Name"
+          },
+          "registry_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "workspace"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Scope"
+          },
+          "registry_trust": {
+            "anyOf": [
+              {
+                "enum": [
+                  "official",
+                  "verified",
+                  "community",
+                  "private"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registry Trust"
+          },
+          "removed_upstream": {
+            "default": false,
+            "title": "Removed Upstream",
+            "type": "boolean"
           },
           "slug": {
             "title": "Slug",
@@ -12361,6 +13339,23 @@
         "title": "SkillResponse",
         "type": "object"
       },
+      "SkillUpdateAllResponse": {
+        "description": "One result per installed skill that had an update.",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SkillUpdateResultResponse"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "title": "SkillUpdateAllResponse",
+        "type": "object"
+      },
       "SkillUpdateRequest": {
         "description": "Request to update a skill.",
         "properties": {
@@ -12407,6 +13402,124 @@
         "title": "SkillUpdateRequest",
         "type": "object"
       },
+      "SkillUpdateResultResponse": {
+        "description": "What updating one installed skill did.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skill_id": {
+            "title": "Skill Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "updated",
+              "up_to_date",
+              "customized",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_id",
+          "name",
+          "status"
+        ],
+        "title": "SkillUpdateResultResponse",
+        "type": "object"
+      },
+      "SkillVersionResponse": {
+        "description": "One package a skill pointed at; the last is what it runs now.",
+        "properties": {
+          "catalog_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Version"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Digest"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "create",
+              "edit",
+              "install",
+              "update",
+              "rollback",
+              "migrate",
+              "refresh",
+              "repin"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "digest",
+          "reason",
+          "created_by",
+          "created_at",
+          "current"
+        ],
+        "title": "SkillVersionResponse",
+        "type": "object"
+      },
       "SkippedItem": {
         "properties": {
           "external_id": {
@@ -12446,8 +13559,195 @@
         "title": "SkippedModelResponse",
         "type": "object"
       },
-      "SourceField": {
+      "SourceCreate": {
+        "additionalProperties": false,
+        "description": "A webhook or poll source of a catalog entry on an existing stream.",
         "properties": {
+          "config": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The type's plain settings, e.g. shop_id.",
+            "title": "Config",
+            "type": "object"
+          },
+          "credentials": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/SecretRef"
+                }
+              ]
+            },
+            "description": "The type's credential fields, each a value or {secret_id} of a workspace secret. Write-only: never returned.",
+            "title": "Credentials",
+            "type": "object"
+          },
+          "event_templates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This source's own kind, key and session_key templates ({body:a.b}, {header:x}, {first_key:a|b}), in place of the type's. Without a key nothing is deduplicated."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SourceKind",
+            "default": "webhook",
+            "description": "webhook: the provider posts to the source's URL; poll: the platform fetches."
+          },
+          "source_type": {
+            "description": "A slug of GET /streams/source-types.",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Source Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type"
+        ],
+        "title": "SourceCreate",
+        "type": "object"
+      },
+      "SourceCreated": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_templates": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This source's own kind / key / session_key templates.",
+            "title": "Event Templates"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issued": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Credentials generated because they were left out; shown this once only.",
+            "title": "Issued",
+            "type": "object"
+          },
+          "kind": {
+            "description": "webhook or poll",
+            "title": "Kind",
+            "type": "string"
+          },
+          "poll_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll Error"
+          },
+          "polled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polled At"
+          },
+          "registered": {
+            "default": false,
+            "description": "The provider was pointed at webhook_url (entries with a registration).",
+            "title": "Registered",
+            "type": "boolean"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The catalog slug of GET /streams/source-types.",
+            "title": "Source Type"
+          },
+          "webhook_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Id"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public URL the provider posts to; null for a poll source.",
+            "title": "Webhook Url"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "source_type",
+          "webhook_id",
+          "webhook_url",
+          "created_at"
+        ],
+        "title": "SourceCreated",
+        "type": "object"
+      },
+      "SourceField": {
+        "additionalProperties": false,
+        "description": "A credential or setting a member fills in for a source of this type.",
+        "properties": {
+          "format": {
+            "default": "token",
+            "enum": [
+              "token",
+              "whsec"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "issued": {
+            "default": false,
+            "title": "Issued",
+            "type": "boolean"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -12472,6 +13772,222 @@
           "label"
         ],
         "title": "SourceField",
+        "type": "object"
+      },
+      "SourceKind": {
+        "enum": [
+          "webhook",
+          "poll",
+          "platform"
+        ],
+        "title": "SourceKind",
+        "type": "string"
+      },
+      "SourceTypeResponse": {
+        "properties": {
+          "config": {
+            "items": {
+              "$ref": "#/components/schemas/SourceField"
+            },
+            "title": "Config",
+            "type": "array"
+          },
+          "continues_sessions": {
+            "description": "Default of a trigger's session.continue for this type.",
+            "title": "Continues Sessions",
+            "type": "boolean"
+          },
+          "credentials": {
+            "description": "Secret fields: write-only, held by reference, never returned.",
+            "items": {
+              "$ref": "#/components/schemas/SourceField"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "delivery": {
+            "description": "webhook, poll or both; platform for the platform stream, which no member adds",
+            "title": "Delivery",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "event": {
+            "$ref": "#/components/schemas/SourceTypeTemplates"
+          },
+          "events": {
+            "description": "What the provider can send, to enable at the provider; not a filter.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "icon": {
+            "title": "Icon",
+            "type": "string"
+          },
+          "icon_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icon Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "replies": {
+            "description": "A task started by its event can answer where it came from.",
+            "title": "Replies",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "verification_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Header"
+          },
+          "verification_scheme": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Scheme"
+          }
+        },
+        "required": [
+          "slug",
+          "name",
+          "description",
+          "icon",
+          "icon_url",
+          "delivery",
+          "credentials",
+          "config",
+          "events",
+          "event",
+          "verification_scheme",
+          "verification_header",
+          "continues_sessions",
+          "replies"
+        ],
+        "title": "SourceTypeResponse",
+        "type": "object"
+      },
+      "SourceTypeTemplates": {
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Kind"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          }
+        },
+        "required": [
+          "kind",
+          "key",
+          "session_key",
+          "sender",
+          "occurred_at"
+        ],
+        "title": "SourceTypeTemplates",
         "type": "object"
       },
       "SpecPreviewRequest": {
@@ -12577,6 +14093,11 @@
             ],
             "title": "Cap Usd"
           },
+          "mtd_estimate_usd": {
+            "default": "0",
+            "title": "Mtd Estimate Usd",
+            "type": "string"
+          },
           "mtd_usd": {
             "title": "Mtd Usd",
             "type": "string"
@@ -12645,26 +14166,199 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
-          },
-          "retention_days": {
-            "anyOf": [
-              {
-                "maximum": 365.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Days events are kept; omitted means the deployment's AGENTAREA_EVENT_RETENTION.",
-            "title": "Retention Days"
           }
         },
         "required": [
           "name"
         ],
         "title": "StreamCreate",
+        "type": "object"
+      },
+      "StreamEventDetailResponse": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/EventAttachmentResponse"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "body_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Download link for data.body_ref; null without one.",
+            "title": "Body Url"
+          },
+          "causation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Causation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "data": {
+            "additionalProperties": true,
+            "description": "{headers, body, body_ref}: the request as sent.",
+            "title": "Data",
+            "type": "object"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "handlers": {
+            "description": "One per subscription that reacted so far; the rest are still to come.",
+            "items": {
+              "$ref": "#/components/schemas/HandlerResponse"
+            },
+            "title": "Handlers",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "outcomes": {
+            "description": "One per subscription that took the event; empty means nobody listened.",
+            "items": {
+              "$ref": "#/components/schemas/OutcomeResponse"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Processing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the platform did with it; on the workspace feed."
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "sender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "v": {
+            "default": 1,
+            "title": "V",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "stream_id",
+          "source_id",
+          "source_type",
+          "kind",
+          "key",
+          "session_key",
+          "sender",
+          "received_at",
+          "occurred_at",
+          "depth",
+          "correlation_id",
+          "causation_id",
+          "data",
+          "body_url",
+          "attachments",
+          "outcomes",
+          "handlers"
+        ],
+        "title": "StreamEventDetailResponse",
         "type": "object"
       },
       "StreamEventPage": {
@@ -12708,7 +14402,27 @@
         "type": "object"
       },
       "StreamEventResponse": {
+        "description": "The event envelope (ADR-0040 \u00a72) and how each subscription reacted.",
         "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/EventAttachmentResponse"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "body_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Download link for data.body_ref; null without one.",
+            "title": "Body Url"
+          },
           "causation_id": {
             "anyOf": [
               {
@@ -12733,6 +14447,7 @@
           },
           "data": {
             "additionalProperties": true,
+            "description": "{headers, body, body_ref}: the request as sent.",
             "title": "Data",
             "type": "object"
           },
@@ -12745,8 +14460,8 @@
             "title": "Event Id",
             "type": "string"
           },
-          "event_key": {
-            "title": "Event Key",
+          "key": {
+            "title": "Key",
             "type": "string"
           },
           "kind": {
@@ -12766,20 +14481,23 @@
             "title": "Outcomes",
             "type": "array"
           },
+          "processing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Processing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the platform did with it; on the workspace feed."
+          },
           "received_at": {
             "format": "date-time",
             "title": "Received At",
             "type": "string"
           },
-          "sequence": {
-            "title": "Sequence",
-            "type": "integer"
-          },
-          "source": {
-            "title": "Source",
-            "type": "string"
-          },
-          "subject": {
+          "sender": {
             "anyOf": [
               {
                 "type": "string"
@@ -12788,22 +14506,75 @@
                 "type": "null"
               }
             ],
-            "title": "Subject"
+            "title": "Sender"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "session_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Key"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "stream_id": {
+            "format": "uuid",
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "v": {
+            "default": 1,
+            "title": "V",
+            "type": "integer"
           }
         },
         "required": [
           "sequence",
           "event_id",
-          "event_key",
+          "stream_id",
+          "source_id",
+          "source_type",
           "kind",
-          "source",
-          "subject",
-          "occurred_at",
+          "key",
+          "session_key",
+          "sender",
           "received_at",
+          "occurred_at",
+          "depth",
           "correlation_id",
           "causation_id",
-          "depth",
           "data",
+          "body_url",
+          "attachments",
           "outcomes"
         ],
         "title": "StreamEventResponse",
@@ -12836,10 +14607,6 @@
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "retention_days": {
-            "title": "Retention Days",
-            "type": "integer"
           }
         },
         "required": [
@@ -12847,7 +14614,6 @@
           "name",
           "description",
           "kind",
-          "retention_days",
           "created_by",
           "created_at"
         ],
@@ -12856,24 +14622,23 @@
       },
       "StreamSourceResponse": {
         "properties": {
-          "allowed_methods": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_templates": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
+                "additionalProperties": true,
+                "type": "object"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Allowed Methods"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
+            "description": "This source's own kind / key / session_key templates.",
+            "title": "Event Templates"
           },
           "id": {
             "format": "uuid",
@@ -12881,32 +14646,50 @@
             "type": "string"
           },
           "kind": {
+            "description": "webhook or poll",
             "title": "Kind",
             "type": "string"
           },
-          "signature_scheme": {
+          "poll_error": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/WebhookSignatureScheme"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "How a sender signs for a type verified by configurable HMAC; null otherwise."
-          },
-          "trigger_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The webhook trigger that owns this source; null for a source added directly.",
-            "title": "Trigger Id"
+            "title": "Poll Error"
+          },
+          "polled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polled At"
+          },
+          "registered": {
+            "default": false,
+            "description": "The provider was pointed at webhook_url (entries with a registration).",
+            "title": "Registered",
+            "type": "boolean"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The catalog slug of GET /streams/source-types.",
+            "title": "Source Type"
           },
           "webhook_id": {
             "anyOf": [
@@ -12919,17 +14702,6 @@
             ],
             "title": "Webhook Id"
           },
-          "webhook_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Type"
-          },
           "webhook_url": {
             "anyOf": [
               {
@@ -12939,96 +14711,19 @@
                 "type": "null"
               }
             ],
-            "description": "Public URL senders post to; null for non-webhook sources.",
+            "description": "Public URL the provider posts to; null for a poll source.",
             "title": "Webhook Url"
           }
         },
         "required": [
           "id",
           "kind",
+          "source_type",
           "webhook_id",
-          "webhook_type",
           "webhook_url",
-          "allowed_methods",
           "created_at"
         ],
         "title": "StreamSourceResponse",
-        "type": "object"
-      },
-      "StreamSourceTypeResponse": {
-        "properties": {
-          "config": {
-            "description": "Plain settings.",
-            "items": {
-              "$ref": "#/components/schemas/SourceField"
-            },
-            "title": "Config",
-            "type": "array"
-          },
-          "credentials": {
-            "description": "Secret fields: write-only, held by reference, never returned.",
-            "items": {
-              "$ref": "#/components/schemas/SourceField"
-            },
-            "title": "Credentials",
-            "type": "array"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "events": {
-            "description": "Event kinds it can deliver.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Events",
-            "type": "array"
-          },
-          "icon": {
-            "title": "Icon",
-            "type": "string"
-          },
-          "icon_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Icon Url"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "verification": {
-            "description": "signature: the body is signed with the secret; secret_token: the sender repeats a token; api_lookup: the notified object is read back from the API.",
-            "enum": [
-              "signature",
-              "secret_token",
-              "api_lookup"
-            ],
-            "title": "Verification",
-            "type": "string"
-          },
-          "webhook_type": {
-            "title": "Webhook Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "webhook_type",
-          "name",
-          "description",
-          "icon",
-          "verification",
-          "credentials",
-          "icon_url"
-        ],
-        "title": "StreamSourceTypeResponse",
         "type": "object"
       },
       "SubjectSetBody": {
@@ -13056,18 +14751,22 @@
       },
       "SubscriptionResponse": {
         "properties": {
-          "attempts": {
-            "title": "Attempts",
-            "type": "integer"
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A processor's Python (def process(event)); null otherwise.",
+            "title": "Code"
           },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
-          },
-          "cursor_sequence": {
-            "title": "Cursor Sequence",
-            "type": "integer"
           },
           "filter": {
             "additionalProperties": true,
@@ -13082,29 +14781,6 @@
           "kind": {
             "title": "Kind",
             "type": "string"
-          },
-          "last_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Error"
-          },
-          "next_attempt_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Attempt At"
           },
           "output_stream_ids": {
             "items": {
@@ -13137,11 +14813,7 @@
           "trigger_id",
           "filter",
           "output_stream_ids",
-          "cursor_sequence",
           "status",
-          "attempts",
-          "last_error",
-          "next_attempt_at",
           "created_at"
         ],
         "title": "SubscriptionResponse",
@@ -13452,6 +15124,17 @@
             "title": "Metadata",
             "type": "object"
           },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
           "task_id": {
             "title": "Task Id",
             "type": "string"
@@ -13569,6 +15252,11 @@
               }
             ],
             "title": "Correlation Id"
+          },
+          "depth": {
+            "default": 0,
+            "title": "Depth",
+            "type": "integer"
           },
           "origin_id": {
             "anyOf": [
@@ -13776,32 +15464,21 @@
         "type": "object"
       },
       "TaskSummary": {
-        "description": "Headline rollup for a single task, derived from the event log.\n\nBacked by the ``task_summary`` Postgres view. Stable contract \u2014 when\nthe view's implementation moves to a materialized view or projection\ntable, this shape stays the same. Per-tool breakdowns and per-artifact\nlists are deliberately not here; they live in their own endpoints so\nthis stays small and additive.",
+        "description": "Headline rollup for a single task: its run times, answer, error and spend.\n\nRead from the task row and the spend ledger. ``cost`` sums the task's current\nledger lines in ``currency``, the billing currency. ``duration_ms`` runs from the\ntask's first start to its last end, idle waits between turns included.",
         "properties": {
           "agent_id": {
             "format": "uuid",
             "title": "Agent Id",
             "type": "string"
           },
-          "cost_usd": {
+          "cost": {
             "default": 0.0,
-            "title": "Cost Usd",
+            "title": "Cost",
             "type": "number"
           },
-          "delegations_completed": {
-            "default": 0,
-            "title": "Delegations Completed",
-            "type": "integer"
-          },
-          "delegations_failed": {
-            "default": 0,
-            "title": "Delegations Failed",
-            "type": "integer"
-          },
-          "delegations_started": {
-            "default": 0,
-            "title": "Delegations Started",
-            "type": "integer"
+          "currency": {
+            "title": "Currency",
+            "type": "string"
           },
           "duration_ms": {
             "anyOf": [
@@ -13837,11 +15514,6 @@
             ],
             "title": "Final Response"
           },
-          "iterations": {
-            "default": 0,
-            "title": "Iterations",
-            "type": "integer"
-          },
           "last_error": {
             "anyOf": [
               {
@@ -13852,16 +15524,6 @@
               }
             ],
             "title": "Last Error"
-          },
-          "llm_calls": {
-            "default": 0,
-            "title": "Llm Calls",
-            "type": "integer"
-          },
-          "llm_calls_failed": {
-            "default": 0,
-            "title": "Llm Calls Failed",
-            "type": "integer"
           },
           "started_at": {
             "anyOf": [
@@ -13884,16 +15546,6 @@
             "title": "Task Id",
             "type": "string"
           },
-          "tools_called": {
-            "default": 0,
-            "title": "Tools Called",
-            "type": "integer"
-          },
-          "tools_failed": {
-            "default": 0,
-            "title": "Tools Failed",
-            "type": "integer"
-          },
           "workspace_id": {
             "title": "Workspace Id",
             "type": "string"
@@ -13903,7 +15555,8 @@
           "task_id",
           "agent_id",
           "workspace_id",
-          "status"
+          "status",
+          "currency"
         ],
         "title": "TaskSummary",
         "type": "object"
@@ -14614,6 +16267,40 @@
         "title": "ToolsPolicy",
         "type": "object"
       },
+      "TriggerBatchWindow": {
+        "additionalProperties": false,
+        "description": "A stream trigger that fires once for the events of a batch (ADR-0040 \u00a74).\n\nThe batch opens with its first event and fires when ``window`` has passed or\n``max_events`` have joined, whichever comes first. Either may be left out;\na batch never holds more than the deployment's cap.",
+        "properties": {
+          "max_events": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fire as soon as this many events have joined.",
+            "title": "Max Events"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "pattern": "^[1-9][0-9]*[smhd]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long a batch stays open after its first event, e.g. '1h'.",
+            "title": "Window"
+          }
+        },
+        "title": "TriggerBatchWindow",
+        "type": "object"
+      },
       "TriggerCreate": {
         "additionalProperties": false,
         "description": "Payload for creating a trigger on an existing agent.",
@@ -14624,26 +16311,16 @@
             "title": "Agent Id",
             "type": "string"
           },
-          "allowed_methods": {
-            "description": "HTTP methods accepted on the webhook endpoint.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed Methods",
-            "type": "array"
-          },
-          "channel_credentials": {
+          "batch": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/TriggerBatchWindow"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.",
-            "title": "Channel Credentials"
+            "description": "Fire once for a batch of events instead of once per event: {\"window\": \"1h\", \"max_events\": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event."
           },
           "conditions": {
             "additionalProperties": true,
@@ -14662,31 +16339,6 @@
             ],
             "description": "5- or 6-field cron expression (required when trigger_type='cron').",
             "title": "Cron Expression"
-          },
-          "data_extractor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Polling extractor identifier (e.g. 'imap', 'rss').",
-            "title": "Data Extractor"
-          },
-          "data_extractor_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Connection/auth details for the polling extractor.",
-            "title": "Data Extractor Config"
           },
           "description": {
             "default": "",
@@ -14714,14 +16366,6 @@
             "description": "Which events of the stream fire it: {\"kinds\": [\"push\"], \"fields\": {\"raw_data.action\": \"opened\"}}. Empty means every event.",
             "title": "Event Filter"
           },
-          "event_types": {
-            "description": "Event types to filter on (empty list = accept all events).",
-            "items": {
-              "type": "string"
-            },
-            "title": "Event Types",
-            "type": "array"
-          },
           "failure_threshold": {
             "default": 5,
             "description": "Auto-disable after this many consecutive failed executions.",
@@ -14736,6 +16380,17 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerSession"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the next event of the same session does: {\"continue\": true, \"idle_timeout\": \"30m\"} joins the running task. Null takes the source type's default."
           },
           "stream_id": {
             "anyOf": [
@@ -14763,53 +16418,12 @@
             "type": "string"
           },
           "trigger_type": {
-            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.",
+            "description": "'cron' for scheduled, 'stream' to run on the events of a stream (a webhook or a polled provider is a source of a stream).",
             "enum": [
               "cron",
-              "webhook",
-              "polling",
               "stream"
             ],
             "title": "Trigger Type",
-            "type": "string"
-          },
-          "validation_rules": {
-            "additionalProperties": true,
-            "description": "Per-channel validation rules (signature secrets, allowed senders, etc).",
-            "title": "Validation Rules",
-            "type": "object"
-          },
-          "webhook_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Channel-specific configuration (bot tokens, signing keys, etc).",
-            "title": "Webhook Config"
-          },
-          "webhook_id": {
-            "anyOf": [
-              {
-                "minLength": 16,
-                "pattern": "^[A-Za-z0-9_-]+$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.",
-            "title": "Webhook Id"
-          },
-          "webhook_type": {
-            "default": "generic",
-            "description": "Channel type: 'generic', 'telegram', 'slack', 'discord', etc.",
-            "title": "Webhook Type",
             "type": "string"
           }
         },
@@ -14824,11 +16438,6 @@
       "TriggerExecuteRequest": {
         "description": "Request model for executing a trigger via the event service.",
         "properties": {
-          "channel_origin": {
-            "additionalProperties": true,
-            "title": "Channel Origin",
-            "type": "object"
-          },
           "events": {
             "items": {
               "additionalProperties": true,
@@ -14961,19 +16570,16 @@
             "title": "Agent Id",
             "type": "string"
           },
-          "allowed_methods": {
+          "batch": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
+                "$ref": "#/components/schemas/TriggerBatchWindow"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Allowed Methods"
+            "description": "The batch window it fires per; null fires on every event."
           },
           "conditions": {
             "additionalProperties": true,
@@ -15004,17 +16610,6 @@
             ],
             "title": "Cron Expression"
           },
-          "data_extractor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Data Extractor"
-          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -15032,21 +16627,9 @@
             "description": "Which events fire it.",
             "title": "Event Filter"
           },
-          "event_types": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Event Types",
-            "type": "array"
-          },
           "failure_threshold": {
             "title": "Failure Threshold",
             "type": "integer"
-          },
-          "has_channel_credentials": {
-            "default": false,
-            "title": "Has Channel Credentials",
-            "type": "boolean"
           },
           "id": {
             "format": "uuid",
@@ -15110,28 +16693,16 @@
             ],
             "title": "Next Run Time"
           },
-          "signature_scheme": {
+          "session": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/WebhookSignatureScheme"
+                "$ref": "#/components/schemas/TriggerSession"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Signing scheme of a generic webhook; null for other types."
-          },
-          "signing_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Generated signing secret of a generic webhook. Returned only by the create and rotate calls that generated it; never readable afterwards.",
-            "title": "Signing Secret"
+            "description": "What the next event of the same session does; null takes the defaults."
           },
           "status": {
             "description": "'needs_owner' when the person who configured it can no longer run its agent; the trigger stays stopped until it is enabled again, and the next event re-checks that person's access.",
@@ -15180,81 +16751,6 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
-          },
-          "validation_rules": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Validation Rules"
-          },
-          "webhook_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Config"
-          },
-          "webhook_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Id"
-          },
-          "webhook_signing": {
-            "anyOf": [
-              {
-                "enum": [
-                  "signed",
-                  "unsigned",
-                  "unsupported"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "What protects the public webhook URL. 'signed': requests without a valid signature or token are refused. 'unsigned': this trigger has no secret, so any request starts the agent. 'unsupported': the platform does not verify this provider's requests. Null for non-webhook triggers, or when the stored secret could not be read.",
-            "title": "Webhook Signing"
-          },
-          "webhook_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Type"
-          },
-          "webhook_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Public URL a sender posts to; set for webhook triggers.",
-            "title": "Webhook Url"
           }
         },
         "required": [
@@ -15332,30 +16828,53 @@
         "title": "TriggerRunResponse",
         "type": "object"
       },
-      "TriggerSpec": {
+      "TriggerSession": {
         "additionalProperties": false,
-        "description": "Everything about a trigger except the agent it fires.\n\nA trigger fires an agent \u2014 either on a cron schedule (``trigger_type='cron'``)\nor in response to an inbound webhook (``trigger_type='webhook'``). For poll-based\nchannels (e.g. email inbox), use ``trigger_type='polling'`` plus a\n``data_extractor`` configuration. Creating an agent takes a list of these,\nbecause the agent does not exist yet when they are written.",
+        "description": "What happens to the next event of the same session (ADR-0040 \u00a74).",
         "properties": {
-          "allowed_methods": {
-            "description": "HTTP methods accepted on the webhook endpoint.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Allowed Methods",
-            "type": "array"
-          },
-          "channel_credentials": {
+          "continue": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "type": "boolean"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Channel credentials (bot_token, SMTP password, etc). Stored encrypted in the secret store. Never returned in responses.",
-            "title": "Channel Credentials"
+            "description": "The next event with the same session_key joins the same task; null takes the source type's default (continue when it has sessions).",
+            "title": "Continue"
+          },
+          "idle_timeout": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9]+[smhd]$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long the task waits for the next event, e.g. '30m'.",
+            "title": "Idle Timeout"
+          }
+        },
+        "title": "TriggerSession",
+        "type": "object"
+      },
+      "TriggerSpec": {
+        "additionalProperties": false,
+        "description": "Everything about a trigger except the agent it fires.\n\nA trigger fires an agent \u2014 on a cron schedule (``trigger_type='cron'``) or on\nthe events of a stream (``trigger_type='stream'``). A webhook or a polled\nprovider is a source of a stream (``streams_create_source``) with a stream\ntrigger on it. Creating an agent takes a list of these, because the agent\ndoes not exist yet when they are written.",
+        "properties": {
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerBatchWindow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fire once for a batch of events instead of once per event: {\"window\": \"1h\", \"max_events\": 50} fires when the hour has passed or 50 events joined, whichever comes first. Null fires on every event."
           },
           "conditions": {
             "additionalProperties": true,
@@ -15374,31 +16893,6 @@
             ],
             "description": "5- or 6-field cron expression (required when trigger_type='cron').",
             "title": "Cron Expression"
-          },
-          "data_extractor": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Polling extractor identifier (e.g. 'imap', 'rss').",
-            "title": "Data Extractor"
-          },
-          "data_extractor_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Connection/auth details for the polling extractor.",
-            "title": "Data Extractor Config"
           },
           "description": {
             "default": "",
@@ -15426,14 +16920,6 @@
             "description": "Which events of the stream fire it: {\"kinds\": [\"push\"], \"fields\": {\"raw_data.action\": \"opened\"}}. Empty means every event.",
             "title": "Event Filter"
           },
-          "event_types": {
-            "description": "Event types to filter on (empty list = accept all events).",
-            "items": {
-              "type": "string"
-            },
-            "title": "Event Types",
-            "type": "array"
-          },
           "failure_threshold": {
             "default": 5,
             "description": "Auto-disable after this many consecutive failed executions.",
@@ -15448,6 +16934,17 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerSession"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the next event of the same session does: {\"continue\": true, \"idle_timeout\": \"30m\"} joins the running task. Null takes the source type's default."
           },
           "stream_id": {
             "anyOf": [
@@ -15475,53 +16972,12 @@
             "type": "string"
           },
           "trigger_type": {
-            "description": "'cron' for scheduled, 'webhook' for inbound HTTP, 'polling' for extractor-driven, 'stream' to run on events from an existing stream.",
+            "description": "'cron' for scheduled, 'stream' to run on the events of a stream (a webhook or a polled provider is a source of a stream).",
             "enum": [
               "cron",
-              "webhook",
-              "polling",
               "stream"
             ],
             "title": "Trigger Type",
-            "type": "string"
-          },
-          "validation_rules": {
-            "additionalProperties": true,
-            "description": "Per-channel validation rules (signature secrets, allowed senders, etc).",
-            "title": "Validation Rules",
-            "type": "object"
-          },
-          "webhook_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Channel-specific configuration (bot tokens, signing keys, etc).",
-            "title": "Webhook Config"
-          },
-          "webhook_id": {
-            "anyOf": [
-              {
-                "minLength": 16,
-                "pattern": "^[A-Za-z0-9_-]+$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Public webhook path segment. Custom values must be at least 16 URL-safe characters; auto-generated if omitted for webhook triggers.",
-            "title": "Webhook Id"
-          },
-          "webhook_type": {
-            "default": "generic",
-            "description": "Channel type: 'generic', 'telegram', 'slack', 'discord', etc.",
-            "title": "Webhook Type",
             "type": "string"
           }
         },
@@ -15586,6 +17042,15 @@
         "title": "TriggerStatusResponse",
         "type": "object"
       },
+      "TriggerType": {
+        "description": "Types of triggers supported by the system.",
+        "enum": [
+          "cron",
+          "stream"
+        ],
+        "title": "TriggerType",
+        "type": "string"
+      },
       "TriggerUpdate": {
         "additionalProperties": false,
         "description": "Patch payload for a trigger. All fields optional \u2014 unset = unchanged.",
@@ -15602,32 +17067,16 @@
             ],
             "title": "Agent Id"
           },
-          "allowed_methods": {
+          "batch": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
+                "$ref": "#/components/schemas/TriggerBatchWindow"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Allowed Methods"
-          },
-          "channel_credentials": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Channel credentials to update. Pass to rotate credentials.",
-            "title": "Channel Credentials"
+            "description": "Sent as null, the trigger fires on every event again."
           },
           "conditions": {
             "anyOf": [
@@ -15688,20 +17137,6 @@
             ],
             "title": "Event Filter"
           },
-          "event_types": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Event Types"
-          },
           "failure_threshold": {
             "anyOf": [
               {
@@ -15728,6 +17163,16 @@
             ],
             "title": "Name"
           },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerSession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "task_parameters": {
             "anyOf": [
               {
@@ -15750,41 +17195,6 @@
               }
             ],
             "title": "Timezone"
-          },
-          "validation_rules": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Validation Rules"
-          },
-          "webhook_config": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Config"
-          },
-          "webhook_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Type"
           }
         },
         "title": "TriggerUpdate",
@@ -16328,187 +17738,6 @@
         "title": "WalletType",
         "type": "string"
       },
-      "WebhookSignatureScheme": {
-        "description": "How a sender signs requests to a generic webhook.",
-        "properties": {
-          "algorithm": {
-            "description": "HMAC digest, e.g. 'sha256'.",
-            "title": "Algorithm",
-            "type": "string"
-          },
-          "header": {
-            "description": "Request header carrying the signature.",
-            "title": "Header",
-            "type": "string"
-          },
-          "prefix": {
-            "description": "Text before the hex digest in the header; often empty.",
-            "title": "Prefix",
-            "type": "string"
-          }
-        },
-        "required": [
-          "header",
-          "algorithm",
-          "prefix"
-        ],
-        "title": "WebhookSignatureScheme",
-        "type": "object"
-      },
-      "WebhookSourceCreate": {
-        "additionalProperties": false,
-        "description": "A webhook source on an existing stream, with no trigger.",
-        "properties": {
-          "config": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "The type's plain settings, e.g. shop_id.",
-            "title": "Config",
-            "type": "object"
-          },
-          "credentials": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "$ref": "#/components/schemas/SecretRef"
-                }
-              ]
-            },
-            "description": "The type's credential fields, each a value or {secret_id} of a workspace secret. Write-only: never returned.",
-            "title": "Credentials",
-            "type": "object"
-          },
-          "webhook_type": {
-            "description": "One of GET /streams/source-types.",
-            "maxLength": 50,
-            "minLength": 1,
-            "title": "Webhook Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "webhook_type"
-        ],
-        "title": "WebhookSourceCreate",
-        "type": "object"
-      },
-      "WebhookSourceCreated": {
-        "properties": {
-          "allowed_methods": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allowed Methods"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "kind": {
-            "title": "Kind",
-            "type": "string"
-          },
-          "signature_scheme": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WebhookSignatureScheme"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "How a sender signs for a type verified by configurable HMAC; null otherwise."
-          },
-          "signing_secret": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Issued when the type's signing secret is optional and none was given; shown this once only.",
-            "title": "Signing Secret"
-          },
-          "trigger_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The webhook trigger that owns this source; null for a source added directly.",
-            "title": "Trigger Id"
-          },
-          "webhook_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Id"
-          },
-          "webhook_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Webhook Type"
-          },
-          "webhook_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Public URL senders post to; null for non-webhook sources.",
-            "title": "Webhook Url"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "webhook_id",
-          "webhook_type",
-          "webhook_url",
-          "allowed_methods",
-          "created_at"
-        ],
-        "title": "WebhookSourceCreated",
-        "type": "object"
-      },
       "WorkspaceDirectoryResponse": {
         "properties": {
           "path": {
@@ -16520,6 +17749,45 @@
           "path"
         ],
         "title": "WorkspaceDirectoryResponse",
+        "type": "object"
+      },
+      "WorkspaceEventPage": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/FeedEventResponse"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "facets": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeedFacetsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On the first page only (no ?before=)."
+          },
+          "next_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?before= for older events; null at the start.",
+            "title": "Next Before"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "WorkspaceEventPage",
         "type": "object"
       },
       "WorkspaceFileDownloadResponse": {
@@ -16607,6 +17875,257 @@
           "files"
         ],
         "title": "WorkspaceFileListResponse",
+        "type": "object"
+      },
+      "WorkspaceRegistryCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A workspace secret holding the token a private source is read with",
+            "title": "Credentials Secret Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "mode": {
+            "default": "mirror",
+            "description": "'mirror' stores every skill's content when the registry syncs, so an install needs no network; 'upstream' fetches it on first install. A source read with credentials is mirrored.",
+            "enum": [
+              "mirror",
+              "upstream"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "registry_type": {
+            "default": "skills",
+            "enum": [
+              "skills",
+              "agents"
+            ],
+            "title": "Registry Type",
+            "type": "string"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub: the folder whose skill folders are indexed; the root if unset",
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GitHub: branch, tag or commit; the default branch if unset",
+            "title": "Source Ref"
+          },
+          "source_type": {
+            "description": "'url': an index in the platform format; 'github': a repository",
+            "enum": [
+              "url",
+              "github"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_url": {
+            "description": "The index URL, or the repository as owner/repo",
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "trust": {
+            "default": "private",
+            "enum": [
+              "private",
+              "community"
+            ],
+            "title": "Trust",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_type",
+          "source_url"
+        ],
+        "title": "WorkspaceRegistryCreate",
+        "type": "object"
+      },
+      "WorkspaceRegistryRemoved": {
+        "properties": {
+          "kept_items": {
+            "title": "Kept Items",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "deleted",
+              "retired"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "kept_items"
+        ],
+        "title": "WorkspaceRegistryRemoved",
+        "type": "object"
+      },
+      "WorkspaceRegistryUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "credentials_secret_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentials Secret Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mirror",
+                  "upstream"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ref"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "enum": [
+                  "private",
+                  "community"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust"
+          }
+        },
+        "title": "WorkspaceRegistryUpdate",
         "type": "object"
       },
       "WorkspaceResponse": {
@@ -16748,6 +18267,17 @@
       },
       "agentarea_api__api__v1__model_specs__ModelSpecResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -16935,6 +18465,17 @@
       },
       "agentarea_api__api__v1__provider_specs__ModelSpecResponse": {
         "properties": {
+          "cache_creation_input_cost_per_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Creation Input Cost Per Token"
+          },
           "cached_input_cost_per_token": {
             "anyOf": [
               {
@@ -17174,7 +18715,7 @@
     },
     "/.well-known/oauth-authorization-server": {
       "get": {
-        "description": "RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.\n\nHydra v2 only serves /.well-known/openid-configuration; we bridge the gap\nso MCP clients (Cursor) that look for /.well-known/oauth-authorization-server\nstill get the Hydra endpoints, rewritten to point to our proxy paths.",
+        "description": "RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.\n\nMCP clients (Cursor) look for /.well-known/oauth-authorization-server on the\nresource's AS URL, which is this API, so we serve Hydra's document here with\nthe endpoints we proxy rewritten to point at us.",
         "operationId": "oauth_authorization_server_metadata__well_known_oauth_authorization_server_get",
         "responses": {
           "200": {
@@ -18173,7 +19714,7 @@
     },
     "/v1/oauth/callback": {
       "get": {
-        "description": "The provider's redirect back: exchange the code and attach the credential.\n\nRequires no session \u2014 the user is mid-redirect from the provider. The state\ntoken proves the flow was started by authorize and names its connection.",
+        "description": "The provider's redirect back: park the code and send the browser to finish.\n\nRequires no session \u2014 the user is mid-redirect from the provider. Whoever\nfollows a provider URL lands here, not only the person authorize returned\nit to, so nothing is attached until that person finishes.",
         "operationId": "oauth_callback_v1_oauth_callback_get",
         "parameters": [
           {
@@ -18270,6 +19811,55 @@
         "tags": [
           "v1",
           "public",
+          "oauth-connect"
+        ]
+      }
+    },
+    "/v1/oauth/finish": {
+      "post": {
+        "description": "Exchange a returned code and attach the credential, for the flow's own starter.",
+        "operationId": "oauth_finish_v1_oauth_finish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthFinishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthFinishResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Oauth Finish",
+        "tags": [
+          "v1",
+          "protected",
           "oauth-connect"
         ]
       }
@@ -19392,7 +20982,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}/install": {
       "post": {
-        "description": "Add a built-in catalog agent to the workspace (copy-on-write fork).\n\nResolves a catalog agent by UUID or slug and materializes a tenant copy.\nIdempotent: returns the existing workspace copy if already installed.",
+        "description": "Add a built-in catalog agent to the workspace (copy-on-write fork).\n\nResolves a catalog agent by UUID or slug and materializes a tenant copy.\nIdempotent: returns the existing workspace copy if already installed. A\npolicy rule refusing the item's registry answers 403.",
         "operationId": "install_agent_v1_agents__agent_id__install_post",
         "parameters": [
           {
@@ -20420,7 +22010,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/events": {
       "get": {
-        "description": "Get paginated task execution events for the specified task from database.",
+        "description": "One page of the task's feed from its log: event rows and the messages a person sent.",
         "operationId": "get_task_events_v1_agents__agent_id__tasks__task_id__events_get",
         "parameters": [
           {
@@ -21241,7 +22831,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}/tasks/{task_id}/summary": {
       "get": {
-        "description": "Per-task rollup derived from the event log via the ``task_summary`` view.\n\nWorkspace-scoped: the row must belong to the caller's workspace and\nthe agent must match, or we return 404 (same shape as other task\nendpoints \u2014 no information leak).",
+        "description": "Per-task rollup from the task row and the spend ledger.\n\nWorkspace-scoped: the task must belong to the caller's workspace and\nthe agent must match, or we return 404 (same shape as other task\nendpoints \u2014 no information leak).",
         "operationId": "get_task_summary_v1_agents__agent_id__tasks__task_id__summary_get",
         "parameters": [
           {
@@ -24233,7 +25823,7 @@
     },
     "/v1/workspaces/{workspace}/inbox/": {
       "get": {
-        "description": "List tasks requiring user attention.\n\nReturns tasks with actionable statuses (waiting_for_approval, completed, failed),\nordered by most recently updated first. Includes total count for badge/pagination.",
+        "description": "List tasks requiring user attention.\n\nReturns tasks with actionable statuses (waiting_for_approval, completed, failed),\nnewest call for attention first: when an ended run ended, when a waiting task\nbegan to wait. Includes total count for badge/pagination.",
         "operationId": "get_inbox_items_v1_inbox__get",
         "parameters": [
           {
@@ -24310,7 +25900,7 @@
             "required": false,
             "schema": {
               "default": 100,
-              "maximum": 1000,
+              "maximum": 200,
               "minimum": 1,
               "title": "Page Size",
               "type": "integer"
@@ -24354,7 +25944,7 @@
     },
     "/v1/workspaces/{workspace}/inbox/decisions": {
       "get": {
-        "description": "Answered approval requests, newest first: who decided what, and when.",
+        "description": "Answered approval requests, newest first: who decided what, and when.\n\nRead from the audit trail, where the tool audit records every decision.",
         "operationId": "list_approval_decisions_v1_inbox_decisions_get",
         "parameters": [
           {
@@ -31374,6 +32964,26 @@
               ],
               "title": "Registry Type"
             }
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "platform",
+                    "workspace"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scope"
+            }
           }
         ],
         "responses": {
@@ -33779,6 +35389,60 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/skills/update-all": {
+      "post": {
+        "description": "Update every installed catalog skill that has an update and was not edited here.",
+        "operationId": "update_all_skills_v1_skills_update_all_post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillUpdateAllResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update All Skills",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/skills/upload": {
       "post": {
         "description": "Upload a skill package as a ZIP file.",
@@ -34362,7 +36026,7 @@
     },
     "/v1/workspaces/{workspace}/skills/{skill_id}/install": {
       "post": {
-        "description": "Add a built-in catalog skill to the workspace.",
+        "description": "Add a built-in catalog skill to the workspace: fetch its package and pin it.\n\nA policy rule refusing the item's registry answers 403.",
         "operationId": "install_skill_v1_skills__skill_id__install_post",
         "parameters": [
           {
@@ -34636,6 +36300,224 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/skills/{skill_id}/update": {
+      "post": {
+        "description": "Move an installed catalog skill to its catalog item's current version.",
+        "operationId": "update_installed_skill_v1_skills__skill_id__update_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Update a skill edited in this workspace, discarding the edit",
+            "in": "query",
+            "name": "discard_changes",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Update a skill edited in this workspace, discarding the edit",
+              "title": "Discard Changes",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Installed Skill",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/skills/{skill_id}/versions": {
+      "get": {
+        "description": "Every package the skill pointed at, oldest first; the last is the current one.",
+        "operationId": "list_skill_versions_v1_skills__skill_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SkillVersionResponse"
+                  },
+                  "title": "Response List Skill Versions V1 Skills  Skill Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Skill Versions",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/skills/{skill_id}/versions/{version_id}/rollback": {
+      "post": {
+        "description": "Point the skill at the package one of its versions had; recorded as a new version.",
+        "operationId": "rollback_skill_v1_skills__skill_id__versions__version_id__rollback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "skill_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Skill Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rollback Skill",
+        "tags": [
+          "v1",
+          "protected",
+          "skills"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/streams/": {
       "get": {
         "operationId": "list_streams_v1_streams__get",
@@ -34778,9 +36660,522 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/streams/events": {
+      "get": {
+        "description": "Every event of the workspace's streams the caller may read, newest first.\n\nEach carries what the platform did with it (``processing``); bodies are\nleft out, the event's own endpoint has them.",
+        "operationId": "list_workspace_events_v1_streams_events_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Newest first, before this sequence.",
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9223372036854775807,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Newest first, before this sequence.",
+              "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stream Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "description": "An event kind, or a prefix ending in .* (order.*).",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An event kind, or a prefix ending in .* (order.*).",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sender",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sender"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Key"
+            }
+          },
+          {
+            "description": "What the platform did with it.",
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProcessingStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "What the platform did with it.",
+              "title": "Result"
+            }
+          },
+          {
+            "description": "Received at or after.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received at or after.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Received before.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received before.",
+              "title": "Until"
+            }
+          },
+          {
+            "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+              "title": "Platform",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceEventPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Workspace Events",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/events/live": {
+      "get": {
+        "description": "SSE: ``event.recorded`` (a feed item) as an event arrives, ``event.processing``\n({event_id, processing}) as the platform acts on it. The filters are the feed's;\n``result`` is not applied here, since an event's result changes as it is handled.",
+        "operationId": "stream_workspace_events_v1_streams_events_live_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stream_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Stream Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Type"
+            }
+          },
+          {
+            "description": "An event kind, or a prefix ending in .* (order.*).",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An event kind, or a prefix ending in .* (order.*).",
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sender",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sender"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Key"
+            }
+          },
+          {
+            "description": "What the platform did with it.",
+            "in": "query",
+            "name": "result",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProcessingStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "What the platform did with it.",
+              "title": "Result"
+            }
+          },
+          {
+            "description": "Received at or after.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received at or after.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Received before.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Received before.",
+              "title": "Until"
+            }
+          },
+          {
+            "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "False leaves out the platform's own events (source type platform); the first page's counts still include them.",
+              "title": "Platform",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Workspace Events",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/events/{event_id}": {
+      "get": {
+        "description": "One event by its id, whichever stream holds it: what a forward or a cause points at.",
+        "operationId": "get_event_by_id_v1_streams_events__event_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Event Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamEventDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Event By Id",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/streams/source-types": {
       "get": {
-        "description": "Webhook types a source can be, with the credentials and settings each needs.",
+        "description": "Source types of the catalog, with the credentials and settings each needs.",
         "operationId": "list_source_types_v1_streams_source_types_get",
         "parameters": [
           {
@@ -34803,7 +37198,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/StreamSourceTypeResponse"
+                    "$ref": "#/components/schemas/SourceTypeResponse"
                   },
                   "title": "Response List Source Types V1 Streams Source Types Get",
                   "type": "array"
@@ -34838,7 +37233,7 @@
     },
     "/v1/workspaces/{workspace}/streams/{stream_id}": {
       "delete": {
-        "description": "Delete a stream with its events, sources and subscriptions.\n\nRefused with 409 while a live webhook trigger's source feeds the stream,\nwhile a trigger subscribes to it (delete the trigger first), or while a\nforward of any stream writes into it (remove that forward first).",
+        "description": "Delete a stream with its events, sources and subscriptions.\n\nRefused with 409 while a trigger subscribes to it (delete the trigger\nfirst), or while a forward of any stream writes into it (remove that\nforward first).",
         "operationId": "delete_stream_v1_streams__stream_id__delete",
         "parameters": [
           {
@@ -35113,7 +37508,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StreamEventResponse"
+                  "$ref": "#/components/schemas/StreamEventDetailResponse"
                 }
               }
             },
@@ -35216,6 +37611,229 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/processors": {
+      "post": {
+        "description": "Run code over every matching event of the stream; it writes into the output streams.\n\nThe caller must be able to edit every output stream. The code runs in the\nsandbox, one call per event, and gets no secrets.",
+        "operationId": "create_processor_v1_streams__stream_id__processors_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessorCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Processor",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/streams/{stream_id}/processors/{subscription_id}": {
+      "delete": {
+        "description": "Remove a processor; the events it wrote stay. The caller must be able to edit its outputs.",
+        "operationId": "delete_processor_v1_streams__stream_id__processors__subscription_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Processor",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      },
+      "patch": {
+        "description": "Change a processor's code, outputs or filter; the next event runs the change.\n\nThe caller must be able to edit every output stream it has and is given.",
+        "operationId": "update_processor_v1_streams__stream_id__processors__subscription_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "stream_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Stream Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "subscription_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Subscription Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcessorUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Processor",
+        "tags": [
+          "v1",
+          "protected",
+          "streams"
+        ]
+      }
+    },
     "/v1/workspaces/{workspace}/streams/{stream_id}/sources": {
       "get": {
         "operationId": "list_sources_v1_streams__stream_id__sources_get",
@@ -35283,8 +37901,8 @@
         ]
       },
       "post": {
-        "description": "Add a webhook source to the stream, with no trigger.\n\nCredentials are write-only and held by reference; the response carries the\npublic URL to give the sender.",
-        "operationId": "create_source_v1_streams__stream_id__sources_post",
+        "description": "Add a webhook or poll source of a catalog entry to the stream.\n\nCredentials are write-only and held by reference; a webhook source's\nresponse carries the public URL to give the provider.",
+        "operationId": "add_source_v1_streams__stream_id__sources_post",
         "parameters": [
           {
             "in": "path",
@@ -35314,7 +37932,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebhookSourceCreate"
+                "$ref": "#/components/schemas/SourceCreate"
               }
             }
           },
@@ -35325,7 +37943,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WebhookSourceCreated"
+                  "$ref": "#/components/schemas/SourceCreated"
                 }
               }
             },
@@ -35347,7 +37965,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Source",
+        "summary": "Add Source",
         "tags": [
           "v1",
           "protected",
@@ -35357,7 +37975,7 @@
     },
     "/v1/workspaces/{workspace}/streams/{stream_id}/sources/{source_id}": {
       "delete": {
-        "description": "Remove a webhook source; one a live trigger owns is refused with 409.",
+        "description": "Remove a source and its credentials; its events stay.",
         "operationId": "delete_source_v1_streams__stream_id__sources__source_id__delete",
         "parameters": [
           {
@@ -35682,6 +38300,7 @@
                       "waiting_for_input",
                       "waiting_for_approval",
                       "waiting_for_continuation",
+                      "waiting_for_infrastructure",
                       "blocked",
                       "completed",
                       "failed",
@@ -36171,7 +38790,7 @@
     },
     "/v1/workspaces/{workspace}/triggers/": {
       "get": {
-        "description": "List triggers with optional filtering.\n\nReturns a list of triggers that match the specified criteria. Supports\nfiltering by agent ID, trigger type, and active status.\n\nAccess Control:\n    Returns all triggers within the current user's workspace (workspace isolation).\n    All users in the same workspace can see all workspace triggers.\n\nArgs:\n    secret_manager: Injected secret manager (to resolve credential presence)\n    agent_id: Optional agent ID filter\n    trigger_type: Optional trigger type filter\n    active_only: Whether to only return active triggers\n    limit: Maximum number of triggers to return\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    List of triggers matching the criteria",
+        "description": "List the workspace's triggers, by agent, type and active state.",
         "operationId": "list_triggers_v1_triggers__get",
         "parameters": [
           {
@@ -36207,20 +38826,20 @@
             }
           },
           {
-            "description": "Filter by trigger type (cron, webhook, stream)",
+            "description": "Filter by trigger type (cron, stream)",
             "in": "query",
             "name": "trigger_type",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/TriggerType"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Filter by trigger type (cron, webhook, stream)",
+              "description": "Filter by trigger type (cron, stream)",
               "title": "Trigger Type"
             }
           },
@@ -36290,7 +38909,7 @@
         ]
       },
       "post": {
-        "description": "Create a new trigger.\n\nCreates a new trigger with the specified configuration. The trigger will be\nvalidated and, if it's a cron trigger, automatically scheduled.\n\nIf channel_credentials are provided, they are stored encrypted in the secret\nstore under key ``channel_cred:{webhook_type}:{trigger_id}``.\n\nA generic webhook created without a signing secret gets a generated one,\nreturned once in ``signing_secret``; requests must then be signed as\n``signature_scheme`` describes.\n\nArgs:\n    payload: Trigger creation DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The created trigger.\n\nRaises:\n    HTTPException: If validation fails or creation errors occur.",
+        "description": "Create a cron trigger (scheduled at once) or a stream trigger (subscribed to its stream).\n\nA webhook or a polled provider is a source of a stream; its events fire a\nstream trigger on that stream.",
         "operationId": "create_trigger_v1_triggers__post",
         "parameters": [
           {
@@ -36352,129 +38971,9 @@
         ]
       }
     },
-    "/v1/workspaces/{workspace}/triggers/catalog": {
-      "get": {
-        "description": "Get the trigger catalog \u2014 available trigger types with metadata and events.\n\n``icon`` is stored as data (an asset id or a full URL); it is resolved here\ninto ``icon_url`` so the frontend renders whatever it is handed and never\ncarries a table of which channels exist.",
-        "operationId": "get_catalog_v1_triggers_catalog_get",
-        "parameters": [
-          {
-            "description": "Slug of the workspace the request acts in",
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "description": "Slug of the workspace the request acts in",
-              "maxLength": 120,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "title": "Response Get Catalog V1 Triggers Catalog Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Catalog",
-        "tags": [
-          "v1",
-          "protected",
-          "triggers"
-        ]
-      }
-    },
-    "/v1/workspaces/{workspace}/triggers/channels/events": {
-      "get": {
-        "description": "Get supported event types for all channels.\nReturns a mapping of channel type to list of event types.",
-        "operationId": "get_channel_events_v1_triggers_channels_events_get",
-        "parameters": [
-          {
-            "description": "Slug of the workspace the request acts in",
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "description": "Slug of the workspace the request acts in",
-              "maxLength": 120,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  "title": "Response Get Channel Events V1 Triggers Channels Events Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Channel Events",
-        "tags": [
-          "v1",
-          "protected",
-          "triggers"
-        ]
-      }
-    },
     "/v1/workspaces/{workspace}/triggers/health": {
       "get": {
-        "description": "Comprehensive health check endpoint for trigger system.\n\nChecks all trigger system components including:\n- Database connectivity\n- Temporal schedule manager\n- Webhook manager\n- Execution metrics\n\nReturns:\n    Dictionary with detailed health status information",
+        "description": "Comprehensive health check endpoint for trigger system.\n\nChecks all trigger system components including:\n- Database connectivity\n- Temporal schedule manager\n- Webhook intake\n- Execution metrics\n\nReturns:\n    Dictionary with detailed health status information",
         "operationId": "triggers_health_check_v1_triggers_health_get",
         "parameters": [
           {
@@ -36530,7 +39029,7 @@
     },
     "/v1/workspaces/{workspace}/triggers/{trigger_id}": {
       "delete": {
-        "description": "Delete a trigger.\n\nPermanently deletes the specified trigger and all its execution history.\nIf it's a cron trigger, the schedule will also be removed.\n\nArgs:\n    secret_manager: Injected secret manager, used to read channel credentials.\n    trigger_id: The unique identifier of the trigger\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n    webhook_service: Injected service that clears the channel webhook.\n\nRaises:\n    HTTPException: If trigger not found",
+        "description": "Delete a trigger with its execution history; a cron trigger's schedule goes with it.\n\nA stream trigger's stream and its sources stay.",
         "operationId": "delete_trigger_v1_triggers__trigger_id__delete",
         "parameters": [
           {
@@ -36585,7 +39084,7 @@
         ]
       },
       "get": {
-        "description": "Get a specific trigger by ID.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    secret_manager: Injected secret manager (to resolve credential presence)\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    The trigger data\n\nRaises:\n    HTTPException: If trigger not found",
+        "description": "Get a specific trigger by ID.",
         "operationId": "get_trigger_v1_triggers__trigger_id__get",
         "parameters": [
           {
@@ -36647,7 +39146,7 @@
         ]
       },
       "put": {
-        "description": "Update an existing trigger.\n\nUpdates the specified trigger with the provided data. Only non-null fields\nin the request will be updated. Secret selections preserve unselected\ncredential fields; legacy raw credentials replace the stored bundle, except\nthe Telegram secret token, which is kept. A channel webhook is registered\nwith its provider before anything is saved; if the provider refuses, the\ncall fails with 502 and nothing changes.\n\nArgs:\n    trigger_id: The unique identifier of the trigger.\n    payload: Trigger update DTO (single source of truth shared with MCP toolset).\n    user_context: Authentication context.\n    trigger_service: Injected trigger service.\n    secret_manager: Injected secret manager for credential storage.\n    secret_catalog: Workspace-scoped catalog for selected credential references.\n    webhook_service: Injected service that registers the channel webhook.\n\nReturns:\n    The updated trigger.\n\nRaises:\n    HTTPException: If trigger not found or validation fails; 409 if the\n        update changes the filter of a trigger that has no stream\n        subscription left.",
+        "description": "Update an existing trigger; only the fields sent change.\n\nRaises:\n    HTTPException: 404 if the trigger does not exist; 400 if validation\n        fails; 409 if the update changes the filter of a trigger that has no\n        stream subscription left.",
         "operationId": "update_trigger_v1_triggers__trigger_id__put",
         "parameters": [
           {
@@ -36945,7 +39444,7 @@
     },
     "/v1/workspaces/{workspace}/triggers/{trigger_id}/execute": {
       "post": {
-        "description": "Execute a trigger with the provided event data.\n\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nAuthorization is the caller's session plus the workspace-scoped trigger\nlookup: a trigger in another workspace is simply not found. This used to sit\non the public router behind an ``X-Internal-Token`` check that skipped\nitself whenever the secret was unset \u2014 which was every deployment, since\nnothing ever sent that header.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: Events and channel origin data\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
+        "description": "Execute a trigger with the provided event data.\n\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nAuthorization is the caller's session plus the workspace-scoped trigger\nlookup: a trigger in another workspace is simply not found. This used to sit\non the public router behind an ``X-Internal-Token`` check that skipped\nitself whenever the secret was unset \u2014 which was every deployment, since\nnothing ever sent that header.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: The events to run the trigger on\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
         "operationId": "execute_trigger_v1_triggers__trigger_id__execute_post",
         "parameters": [
           {
@@ -37315,70 +39814,6 @@
         ]
       }
     },
-    "/v1/workspaces/{workspace}/triggers/{trigger_id}/signing-secret": {
-      "post": {
-        "description": "Generate a new signing secret for a generic webhook and return it once.\n\nSigns an unsigned webhook, or replaces the secret of a signed one: from\nthis call on, requests signed with any previous secret, or not signed, are\nrefused. The secret is in ``signing_secret`` of this response only.\n\nRaises:\n    HTTPException: 404 if the trigger does not exist; 400 if it is not a\n        generic webhook (other channels are signed with their provider's\n        secret); 409 if its secret is set inline in ``validation_rules`` or\n        ``webhook_config``, which this call cannot replace.",
-        "operationId": "rotate_signing_secret_v1_triggers__trigger_id__signing_secret_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "trigger_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Trigger Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Slug of the workspace the request acts in",
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "description": "Slug of the workspace the request acts in",
-              "maxLength": 120,
-              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TriggerResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Rotate Signing Secret",
-        "tags": [
-          "v1",
-          "protected",
-          "triggers"
-        ]
-      }
-    },
     "/v1/workspaces/{workspace}/triggers/{trigger_id}/status": {
       "get": {
         "description": "Get trigger status and schedule information.\n\nReturns detailed status information about the trigger, including execution\nstatus, rate limiting, and schedule information for cron triggers.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    user_context: Authentication context\n    trigger_service: Injected trigger service\n\nReturns:\n    Trigger status information\n\nRaises:\n    HTTPException: If trigger not found",
@@ -37535,6 +39970,393 @@
         ]
       }
     },
+    "/v1/workspaces/{workspace}/workspace-registries": {
+      "get": {
+        "operationId": "list_workspace_registries_v1_workspace_registries_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RegistryResponse"
+                  },
+                  "title": "Response List Workspace Registries V1 Workspace Registries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Workspace Registries",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "post": {
+        "operationId": "create_workspace_registry_v1_workspace_registries_post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceRegistryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/workspace-registries/{registry_id}": {
+      "delete": {
+        "description": "Remove the registry, or retire it while something still uses its items.",
+        "operationId": "delete_workspace_registry_v1_workspace_registries__registry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRegistryRemoved"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "get": {
+        "operationId": "get_workspace_registry_v1_workspace_registries__registry_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      },
+      "patch": {
+        "operationId": "update_workspace_registry_v1_workspace_registries__registry_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceRegistryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/workspace-registries/{registry_id}/sync": {
+      "post": {
+        "operationId": "sync_workspace_registry_v1_workspace_registries__registry_id__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Registry Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/agentarea_api__api__v1__registries__SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Workspace Registry",
+        "tags": [
+          "v1",
+          "protected",
+          "registries"
+        ]
+      }
+    },
     "/webhooks/health": {
       "get": {
         "description": "Health check endpoint for webhook system.",
@@ -37566,279 +40388,9 @@
       }
     },
     "/webhooks/{webhook_id}": {
-      "delete": {
-        "description": "Record an incoming webhook in its stream",
-        "operationId": "handle_webhook_webhooks__webhook_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "webhook_id",
-            "required": true,
-            "schema": {
-              "title": "Webhook Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Handle webhook requests",
-        "tags": [
-          "webhooks",
-          "webhooks"
-        ]
-      },
-      "get": {
-        "description": "Record an incoming webhook in its stream",
-        "operationId": "handle_webhook_webhooks__webhook_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "webhook_id",
-            "required": true,
-            "schema": {
-              "title": "Webhook Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Handle webhook requests",
-        "tags": [
-          "webhooks",
-          "webhooks"
-        ]
-      },
-      "head": {
-        "description": "Record an incoming webhook in its stream",
-        "operationId": "handle_webhook_webhooks__webhook_id__head",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "webhook_id",
-            "required": true,
-            "schema": {
-              "title": "Webhook Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Handle webhook requests",
-        "tags": [
-          "webhooks",
-          "webhooks"
-        ]
-      },
-      "options": {
-        "description": "Record an incoming webhook in its stream",
-        "operationId": "handle_webhook_webhooks__webhook_id__options",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "webhook_id",
-            "required": true,
-            "schema": {
-              "title": "Webhook Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Handle webhook requests",
-        "tags": [
-          "webhooks",
-          "webhooks"
-        ]
-      },
-      "patch": {
-        "description": "Record an incoming webhook in its stream",
-        "operationId": "handle_webhook_webhooks__webhook_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "webhook_id",
-            "required": true,
-            "schema": {
-              "title": "Webhook Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Handle webhook requests",
-        "tags": [
-          "webhooks",
-          "webhooks"
-        ]
-      },
       "post": {
         "description": "Record an incoming webhook in its stream",
         "operationId": "handle_webhook_webhooks__webhook_id__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "webhook_id",
-            "required": true,
-            "schema": {
-              "title": "Webhook Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Handle webhook requests",
-        "tags": [
-          "webhooks",
-          "webhooks"
-        ]
-      },
-      "put": {
-        "description": "Record an incoming webhook in its stream",
-        "operationId": "handle_webhook_webhooks__webhook_id__put",
         "parameters": [
           {
             "in": "path",

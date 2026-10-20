@@ -66,6 +66,7 @@ from . import (
     wallet,
     workspace_config,
     workspace_invitations,
+    workspace_registries,
     workspace_secrets,
     workspaces,
 )
@@ -102,6 +103,8 @@ principal_v1_router.include_router(external_identities.router)
 # Billing currency of every money amount. Deployment-wide, so it belongs to no
 # workspace: every workspace on a deployment is billed in the same currency.
 principal_v1_router.include_router(pricing.router)
+# Finishing an OAuth sign-in: the flow names its workspace, the caller must have started it.
+principal_v1_router.include_router(oauth_connect.principal_router)
 
 
 # ============================================================================
@@ -207,6 +210,8 @@ workspace_v1_router.include_router(workspace_secrets.router)
 # repositories installs land in, and writing the global catalog means acting
 # in the platform workspace (require_platform_catalog_write).
 workspace_v1_router.include_router(registries.router)
+# The workspace's own registries, written by its admins (ADR-0044).
+workspace_v1_router.include_router(workspace_registries.router)
 
 # OpenAPI connections
 workspace_v1_router.include_router(openapi_connections.router)

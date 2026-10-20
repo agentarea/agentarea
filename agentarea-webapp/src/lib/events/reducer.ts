@@ -18,14 +18,18 @@ import {
   EventInput,
   Part,
   TASK_AWAITING_CONTINUATION,
+  TASK_AWAITING_INFRASTRUCTURE,
   TASK_COMPLETED,
   TASK_CONTINUED,
   TASK_FAILED,
+  TASK_INFRASTRUCTURE_RECOVERED,
   TERMINAL_TYPES,
 } from "./contract";
 
 const RUN_BOUNDARY_TYPES = new Set(["task.started", TASK_CONTINUED]);
 const FOLLOW_UP_WAIT = "task.awaiting_follow_up";
+const EXECUTION_PAUSED = "execution.paused";
+const EXECUTION_RESUMED = "execution.resumed";
 
 export interface TimelineItem {
   eventType: string;
@@ -42,10 +46,12 @@ export interface CompletedRun {
 
 export type TaskStatus =
   | "running"
+  | "paused"
   | "waiting_for_input"
   | "waiting_for_approval"
   | "blocked"
   | "waiting_for_continuation"
+  | "waiting_for_infrastructure"
   | "completed"
   | "failed"
   | "cancelled";
@@ -122,7 +128,7 @@ export function findPendingForm(state: EventState): Part | null {
     state.parts.find(
       (part) =>
         (part.eventType === "input.request" ||
-          part.eventType === "approval.request") &&
+          part.eventType === "approval.requested") &&
         part.data.interactionClosed !== true &&
         !state.completedRuns.some((run) => run.partIds.includes(part.partId))
     ) ?? null
@@ -233,7 +239,7 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
         return {
           ...next,
           status:
-            pending.eventType === "approval.request"
+            pending.eventType === "approval.requested"
               ? "waiting_for_approval"
               : "waiting_for_input",
           executionStatus: "waiting",
@@ -325,6 +331,33 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
   }
   if (canonical === "execution.finished") {
     return { ...state, timeline, executionStatus: "finished" };
+  }
+  // A pause holds a working run; a run waiting on someone is not working.
+  if (canonical === EXECUTION_PAUSED && state.status === "running") {
+    return { ...state, timeline, status: "paused" };
+  }
+  if (canonical === EXECUTION_RESUMED && state.status === "paused") {
+    return { ...state, timeline, status: "running" };
+  }
+  // A service the run needs is down: the run waits and retries on its own.
+  if (canonical === TASK_AWAITING_INFRASTRUCTURE) {
+    return {
+      ...state,
+      timeline,
+      status: "waiting_for_infrastructure",
+      executionStatus: "waiting",
+    };
+  }
+  if (
+    canonical === TASK_INFRASTRUCTURE_RECOVERED &&
+    state.status === "waiting_for_infrastructure"
+  ) {
+    return {
+      ...state,
+      timeline,
+      status: "running",
+      executionStatus: "running",
+    };
   }
   if (canonical === TASK_AWAITING_CONTINUATION) {
     return {

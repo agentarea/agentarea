@@ -64,7 +64,10 @@ async def _stored(factory) -> tuple[int, datetime | None]:
 
 
 async def _use_key() -> None:
-    assert await _validate_api_key(KEY, MagicMock()) is not None
+    principal = await _validate_api_key(KEY, MagicMock())
+    assert principal is not None
+    # The key authenticates as a key: every scope it lacks hangs on this.
+    assert principal.credential is not None and principal.credential.kind == "api_key"
 
 
 async def test_uses_within_the_interval_are_not_written(session_factory):

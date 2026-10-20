@@ -1,8 +1,9 @@
 """Persistence of the spend ledger."""
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from ..domain.costs import CostCategory, CostEntry
-from .orm import CostEntryORM
+from .orm import CostEntryORM, TaskORM
 
 
 @dataclass(frozen=True)
@@ -24,7 +25,8 @@ class SpendScope:
     """Which lines a sum counts: the workspace's, narrowed by any field that is set.
 
     ``tool`` narrows a ``connection_id`` scope to the lines of one of its tools;
-    ``category`` to model or tool lines; ``task_id`` to one run's.
+    ``category`` to model or tool lines; ``task_id`` to one run's; ``estimate`` to
+    the lines whose amount is or is not final yet.
     """
 
     agent_id: UUID | None = None
@@ -33,6 +35,59 @@ class SpendScope:
     tool: str | None = None
     task_id: UUID | None = None
     category: CostCategory | None = None
+    estimate: bool | None = None
+
+
+class CrossWorkspaceCostLines:
+    """The one ledger read that spans every workspace: lines waiting to be settled.
+
+    Run inside an ``unscoped`` block; each claimed line is then settled in its own
+    workspace's scope. Never commits.
+    """
+
+    def __init__(self, session: AsyncSession):
+        self._session = session
+
+    async def claim_unsettled(
+        self,
+        *,
+        now: datetime,
+        since: datetime,
+        tick: timedelta,
+        max_interval: timedelta,
+        limit: int,
+    ) -> list[CostEntryORM]:
+        """Lines marked for settlement, superseded by none, due now; locked SKIP LOCKED.
+
+        A line is retried every tick while young, then about every tenth of its age
+        (a power-of-two number of ticks), up to ``max_interval``: due when such an
+        interval boundary passed in the last tick.
+        Lines older than ``since`` are left as they are.
+        """
+        newer = aliased(CostEntryORM)
+        seconds = tick.total_seconds()
+        age = func.extract("epoch", now - CostEntryORM.occurred_at)
+        # A tenth of the age, rounded down to a power-of-two number of ticks: an
+        # interval that stays put between claims, so its boundaries fall once each.
+        ticks = func.power(
+            2, func.floor(func.ln(func.greatest(age / (10 * seconds), 1)) / math.log(2))
+        )
+        interval = func.least(ticks * seconds, max_interval.total_seconds())
+        epoch = now.timestamp()
+        due = func.floor(epoch / interval) != func.floor((epoch - tick.total_seconds()) / interval)
+        rows = await self._session.execute(
+            select(CostEntryORM)
+            .where(
+                CostEntryORM.evidence.has_key("settle"),
+                CostEntryORM.occurred_at >= since,
+                ~exists().where(newer.supersedes_id == CostEntryORM.id),
+                due,
+            )
+            .order_by(CostEntryORM.occurred_at)
+            .limit(limit)
+            .with_for_update(skip_locked=True, of=CostEntryORM)
+        )
+        return list(rows.scalars().all())
 
 
 class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
@@ -54,6 +109,7 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                     f"Cost entry of event {entry.event_id} belongs to workspace "
                     f"{entry.workspace_id}, not {self.user_context.workspace_id}"
                 )
+        chains = await self._task_chains({e.task_id for e in entries if e.task_id is not None})
         result = await self.session.execute(
             pg_insert(CostEntryORM)
             .values(
@@ -83,6 +139,11 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
                         "evidence": entry.evidence,
                         "supersedes_id": entry.supersedes_id,
                         "occurred_at": entry.occurred_at,
+                        "estimate": entry.estimate,
+                        "correlation_id": entry.correlation_id
+                        or chains.get(entry.task_id, (None, None))[0],
+                        "causation_id": entry.causation_id
+                        or chains.get(entry.task_id, (None, None))[1],
                     }
                     for entry in entries
                 ]
@@ -91,6 +152,19 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             .returning(CostEntryORM.id)
         )
         return len(result.all())
+
+    async def _task_chains(
+        self, task_ids: set[UUID]
+    ) -> dict[UUID | None, tuple[str | None, str | None]]:
+        """Each task's ``(correlation_id, causation_id)``, for the lines that name it."""
+        if not task_ids:
+            return {}
+        rows = await self.session.execute(
+            select(TaskORM.id, TaskORM.correlation_id, TaskORM.causation_id).where(
+                TaskORM.id.in_(task_ids), TaskORM.workspace_id == self.user_context.workspace_id
+            )
+        )
+        return {row.id: (row.correlation_id, row.causation_id) for row in rows}
 
     def _current_lines_since(
         self, since: datetime, currency: str | None, scope: SpendScope
@@ -118,6 +192,8 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             conditions.append(CostEntryORM.task_id == scope.task_id)
         if scope.category is not None:
             conditions.append(CostEntryORM.category == scope.category.value)
+        if scope.estimate is not None:
+            conditions.append(CostEntryORM.estimate.is_(scope.estimate))
         return conditions
 
     async def sum_by_currency_since(
@@ -168,3 +244,16 @@ class CostEntryRepository(WorkspaceScopedRepository[CostEntryORM]):
             *self._current_lines_since(since, currency, scope or SpendScope(agent_id=agent_id))
         )
         return Decimal(await self.session.scalar(stmt) or ZERO)
+
+
+async def record_cost_lines(user_context: UserContext, entries: Sequence[CostEntry]) -> int:
+    """Store lines for spend outside a run (a trigger's model call) in a committed session."""
+    from agentarea_common.config import get_database
+
+    session = get_database().async_session_factory()
+    try:
+        recorded = await CostEntryRepository(session, user_context).record(entries)
+        await session.commit()
+        return recorded
+    finally:
+        await session.close()

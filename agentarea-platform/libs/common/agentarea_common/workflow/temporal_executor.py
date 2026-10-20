@@ -194,6 +194,12 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             )
 
             workflow_class = AgentExecutionWorkflow.run
+        elif workflow_name == "TriggerBatchWorkflow":
+            from agentarea_execution.workflows.trigger_batch_workflow import (
+                TriggerBatchWorkflow,
+            )
+
+            workflow_class = TriggerBatchWorkflow.run
         else:
             raise ValueError(f"Unknown workflow: {workflow_name}")
 
@@ -235,8 +241,11 @@ class TemporalWorkflowExecutor(WorkflowExecutor):
             else:
                 workflow_args = [args]
 
-            # Add workflow ID reuse policy to handle duplicates gracefully
-            temporal_params["id_reuse_policy"] = WorkflowIDReusePolicy.ALLOW_DUPLICATE
+            temporal_params["id_reuse_policy"] = (
+                WorkflowIDReusePolicy.REJECT_DUPLICATE
+                if config is not None and config.start_once
+                else WorkflowIDReusePolicy.ALLOW_DUPLICATE
+            )
 
             handle = await client.start_workflow(
                 workflow_class,

@@ -2,7 +2,8 @@
 
 ``trigger_event`` and ``trigger_event_file`` make a run write a file into its
 inputs, ``follow_up_message`` replaces what a routed follow-up says, and
-``channel_origin`` borrows a trigger's bot. Every caller-facing surface that
+``delivery_address`` and ``session`` would answer through a source's bot or
+join someone else's conversation. Every caller-facing surface that
 takes task parameters -- a task, a run, a trigger's stored task parameters --
 refuses them; an edit drops keys a trigger stored before the check.
 """
@@ -23,7 +24,8 @@ RESERVED = [
     {"trigger_event_file": "trigger-event-1.json", "trigger_event": {"a": 1}},
     {"trigger_event": {"a": 1}},
     {"follow_up_message": "hello"},
-    {"channel_origin": {"chat_id": "1"}},
+    {"delivery_address": {"type": "chat", "sender": "http"}},
+    {"session": {"key": "s:1", "continue": True}},
 ]
 
 

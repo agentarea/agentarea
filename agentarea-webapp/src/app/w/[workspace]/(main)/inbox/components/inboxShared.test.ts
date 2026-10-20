@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   countInbox,
+  decidedStatus,
   inboxBucket,
   isPending,
+  pruneDecided,
   RESOLVED_ESCALATION_STATUS,
 } from "./inboxShared";
 
@@ -79,5 +81,38 @@ describe("countInbox", () => {
       decided: 0,
     });
     expect(unknown).toEqual(["something_new"]);
+  });
+});
+
+// An approved item came back as "Waiting for approval": the reload landed
+// before the workflow wrote the task's new status, and wiped the decision.
+describe("decided escalations", () => {
+  const waiting = {
+    id: "t1",
+    status: "waiting_for_approval",
+    escalation_id: "esc-1",
+  };
+
+  it("shows a decision as made while the server still lists the task as waiting", () => {
+    expect(decidedStatus(waiting, { t1: "esc-1" })).toBe(
+      RESOLVED_ESCALATION_STATUS
+    );
+    expect(
+      decidedStatus({ ...waiting, escalation_id: null }, { t1: "esc-1" })
+    ).toBe(RESOLVED_ESCALATION_STATUS);
+  });
+
+  it("shows a new escalation on the same task as pending", () => {
+    expect(
+      decidedStatus({ ...waiting, escalation_id: "esc-2" }, { t1: "esc-1" })
+    ).toBe("waiting_for_approval");
+  });
+
+  it("keeps a decision across a reload that has not caught up, and drops it once it has", () => {
+    expect(pruneDecided({ t1: "esc-1" }, [waiting])).toEqual({ t1: "esc-1" });
+    expect(
+      pruneDecided({ t1: "esc-1" }, [{ ...waiting, status: "completed" }])
+    ).toEqual({});
+    expect(pruneDecided({ t1: "esc-1" }, [])).toEqual({});
   });
 });

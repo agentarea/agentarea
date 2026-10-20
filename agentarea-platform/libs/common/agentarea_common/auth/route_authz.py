@@ -21,7 +21,9 @@ from fastapi import Depends, Request, params
 from fastapi.exceptions import RequestValidationError
 
 from .authorization import assert_workspace_admin
-from .dependencies import UserContextDep, ensure_user_session
+from .context import ensure_scope
+from .credential import Scope
+from .dependencies import PrincipalDep, UserContextDep
 from .permission import require_permission
 
 AUTHZ_ATTR = "__route_authz__"
@@ -79,17 +81,26 @@ def requires_workspace_admin() -> params.Depends:
     return Depends(_check)
 
 
-def requires_user_session(action: str) -> params.Depends:
-    """Refuse an API key; the action needs a signed-in user.
+def requires_scope(scope: Scope, action: str) -> params.Depends:
+    """Demand that the request's credential grants ``scope``, on a workspace route.
 
-    Not an authorization decision of its own: it narrows the route's marker
-    (``requires_workspace_admin()``, ``enforced_in_handler`` ...) to callers
-    that are not keys, for actions that hand out or take away access. See
-    :func:`~agentarea_common.auth.dependencies.ensure_user_session`.
+    Not an authorization decision of its own: the principal's roles still
+    decide through the route's marker. This narrows it by what the caller
+    authenticated with, e.g. an API key cannot mint another credential.
+    ``action`` completes "This credential cannot ...".
     """
 
     async def _check(user_context: UserContextDep) -> None:
-        ensure_user_session(user_context, action)
+        ensure_scope(user_context, scope, action)
+
+    return Depends(_check)
+
+
+def requires_principal_scope(scope: Scope, action: str) -> params.Depends:
+    """:func:`requires_scope` for a route that selects no workspace."""
+
+    async def _check(principal: PrincipalDep) -> None:
+        ensure_scope(principal, scope, action)
 
     return Depends(_check)
 

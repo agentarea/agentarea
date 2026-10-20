@@ -275,17 +275,13 @@ async def test_the_update_check_looks_forks_up_by_primary_key(seeded):
     )
 
 
-async def test_search_uses_the_trigram_indexes(seeded):
-    # A btree cannot answer ILIKE '%term%'; with plain index scans switched off
-    # only a bitmap over a trigram index is left, or else a seq scan.
+async def test_search_reads_only_the_live_rows_of_the_catalog(seeded):
+    # Search has no index of its own: ILIKE '%term%' filters the live skills the
+    # partial browse indexes already narrow to, not the whole table.
     for nodes in await _plans(
         seeded,
         lambda r: r.list_page(limit=48, offset=0, exclude_item_ids=[], search="merge"),
         "enable_seqscan",
-        "enable_indexscan",
-        "enable_indexonlyscan",
     ):
         assert all(n["Node Type"] != "Seq Scan" for n in _item_scans(nodes))
-        assert any(
-            n["Node Type"] == "Bitmap Index Scan" and "trgm" in n["Index Name"] for n in nodes
-        )
+        assert any(n.get("Index Name", "").startswith("ix_registry_items_browse") for n in nodes)

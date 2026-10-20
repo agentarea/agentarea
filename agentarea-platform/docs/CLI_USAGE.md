@@ -10,7 +10,7 @@ The AgentArea CLI provides comprehensive command-line interface for managing LLM
 ## Installation & Setup
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.14+
 - All dependencies installed: `pip install -r requirements.txt`
 - Database properly configured and migrated
 

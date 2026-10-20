@@ -31,7 +31,7 @@ function asFields(value: unknown): HumanInputField[] {
 
 /**
  * Input/approval form. Resolution is not a flag: a later input.response /
- * approval.response supersedes the request at the same partId, so the part's
+ * approval.decided supersedes the request at the same partId, so the part's
  * eventType alone tells us whether it is still awaiting a human.
  */
 export const FormPart: React.FC<FormPartProps> = ({
@@ -41,10 +41,10 @@ export const FormPart: React.FC<FormPartProps> = ({
 }) => {
   const resolved =
     part.eventType === "input.response" ||
-    part.eventType === "approval.response";
+    part.eventType === "approval.decided";
   const isApproval =
-    part.eventType === "approval.request" ||
-    part.eventType === "approval.response";
+    part.eventType === "approval.requested" ||
+    part.eventType === "approval.decided";
 
   // A request the run ended without answering can no longer be submitted, and
   // saying so adds nothing to the transcript -- drop it rather than render a

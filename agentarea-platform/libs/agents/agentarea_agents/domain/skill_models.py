@@ -68,6 +68,33 @@ class Skill(BaseModel, WorkspaceScopedMixin):
         object.__setattr__(self, "_is_catalog", value)
 
     @property
+    def catalog_spec(self) -> dict[str, Any] | None:
+        """The catalog item's spec a projection was made from; packages are built from it."""
+        return getattr(self, "_catalog_spec", None)
+
+    @catalog_spec.setter
+    def catalog_spec(self, value: dict[str, Any] | None) -> None:
+        object.__setattr__(self, "_catalog_spec", value)
+
+    @property
+    def catalog_workspace_id(self) -> str | None:
+        """The owner of the workspace registry a projection's item is from, if any."""
+        return getattr(self, "_catalog_workspace_id", None)
+
+    @catalog_workspace_id.setter
+    def catalog_workspace_id(self, value: str | None) -> None:
+        object.__setattr__(self, "_catalog_workspace_id", value)
+
+    @property
+    def catalog_provenance(self) -> Any:
+        """The registry an installed skill's item comes from (a ``CatalogProvenance``)."""
+        return getattr(self, "_catalog_provenance", None)
+
+    @catalog_provenance.setter
+    def catalog_provenance(self, value: Any) -> None:
+        object.__setattr__(self, "_catalog_provenance", value)
+
+    @property
     def update_available(self) -> bool:
         return bool(getattr(self, "_update_available", False))
 
@@ -85,7 +112,9 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     source_url: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # GitHub URL or original source
-    content: Mapped[str | None] = mapped_column(Text, nullable=True)  # Main skill markdown content
+    # Pre-package bodies only (ADR-0044): nothing writes it any more, and a row
+    # that still has one is moved into its package on first read.
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     s3_path: Mapped[str | None] = mapped_column(
         String(1024), nullable=True
     )  # S3 path for multi-file packages
@@ -110,6 +139,30 @@ class Skill(BaseModel, WorkspaceScopedMixin):
     def __repr__(self) -> str:
         """Return a compact string representation."""
         return f"<Skill {self.name} ({self.id})>"
+
+
+class SkillVersion(BaseModel, WorkspaceScopedMixin):
+    """One package a skill pointed at, in the order it did (ADR-0044).
+
+    Every pointer move of a skill writes one: created, edited, installed or
+    updated from its catalog item, rolled back, or moved off a pre-package
+    copy. The package itself is immutable, so rolling back is pointing the
+    skill at an earlier row's ``s3_path`` again.
+    """
+
+    __tablename__ = "skill_versions"
+    __table_args__ = (Index("ix_skill_versions_skill_created", "skill_id", "created_at"),)
+
+    skill_id: Mapped[Any] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
+    )
+    s3_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # create, edit, install, update, rollback, migrate or refresh.
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    # The catalog item version a catalog package was pinned at, or the source
+    # commit a refresh read; null for the workspace's other packages.
+    catalog_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
 
 # Association table for Agent-Skill many-to-many relationship

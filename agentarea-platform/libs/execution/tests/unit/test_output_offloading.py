@@ -17,7 +17,9 @@ _constants_path = os.path.join(
     os.path.dirname(__file__),
     "../../agentarea_execution/workflows/constants.py",
 )
-_constants_spec, constants_mod = _load_module_directly("constants", os.path.abspath(_constants_path))
+_constants_spec, constants_mod = _load_module_directly(
+    "constants", os.path.abspath(_constants_path)
+)
 _constants_spec.loader.exec_module(constants_mod)
 
 

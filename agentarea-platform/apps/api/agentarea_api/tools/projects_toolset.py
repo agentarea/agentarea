@@ -8,6 +8,7 @@ between toolset kwargs and DTO fields.
 """
 
 import json
+from typing import Annotated
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -17,12 +18,50 @@ from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_projects.application.service import ProjectService
 from agentarea_projects.infrastructure.repository import ProjectRepository
 from agentarea_projects.schemas.dto import ProjectCreate, ProjectUpdate
+from pydantic import BaseModel, Field
 
 from .base import platform_context, platform_read_context
 
 PROJECTS_ARE_MEMBER_LEVEL = (
     "every /v1/projects route is member-level; the workspace-scoped repository is the boundary"
 )
+
+
+ProjectId = Annotated[
+    str, Field(description="Project id (UUID), from `projects_list` or `projects_create`.")
+]
+
+
+class ProjectSummary(BaseModel):
+    id: str = Field(description="Project id (UUID).")
+    name: str = Field(description="Project name.")
+    description: str | None = Field(default=None, description="Short summary of the project.")
+
+
+class ProjectDetail(ProjectSummary):
+    instructions: str | None = Field(
+        default=None, description="Instructions shared across the project's agents."
+    )
+    parent_project_id: str | None = Field(
+        default=None, description="Id of the parent project; null for a top-level project."
+    )
+
+
+class ProjectRef(BaseModel):
+    id: str = Field(description="Project id (UUID).")
+    name: str = Field(description="Project name.")
+
+
+class ProjectDeleted(BaseModel):
+    deleted: bool = Field(description="True when a project was deleted; false when none matched.")
+
+
+class ProjectLinkAdded(BaseModel):
+    added: bool = Field(description="Always true: the resource is attached to the project.")
+
+
+class ProjectLinkRemoved(BaseModel):
+    removed: bool = Field(description="Always true: the resource is no longer attached.")
 
 
 def _build_service(repo_factory) -> ProjectService:
@@ -39,9 +78,15 @@ def _build_service(repo_factory) -> ProjectService:
 class ProjectsToolset(Toolset):
     """Manage projects: list, get, create, update, delete, and attach skills/agents/MCP instances."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(display_name="List projects", effect="read", output=list[ProjectSummary])
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def list(self, limit: int = 50, offset: int = 0) -> str:
+    async def list(
+        self,
+        limit: Annotated[int, Field(description="Maximum number of projects to return.")] = 50,
+        offset: Annotated[int, Field(description="Number of projects to skip, for paging.")] = 0,
+    ) -> str:
         """List projects in the workspace."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
@@ -51,9 +96,9 @@ class ProjectsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="read")
+    @tool_method(display_name="Get project", effect="read", output=ProjectDetail)
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def get(self, project_id: str) -> str:
+    async def get(self, project_id: ProjectId) -> str:
         """Get a project by ID."""
         async with platform_read_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
@@ -73,14 +118,31 @@ class ProjectsToolset(Toolset):
                 default=str,
             )
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Create project", effect="write", output=ProjectRef)
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def create(
         self,
-        name: str,
-        description: str | None = None,
-        instructions: str | None = None,
-        parent_project_id: str | None = None,
+        name: Annotated[
+            str, Field(description="Project name, 1-255 characters, unique in the workspace.")
+        ],
+        description: Annotated[
+            str | None,
+            Field(description="Short summary of the project's purpose, at most 1000 characters."),
+        ] = None,
+        instructions: Annotated[
+            str | None,
+            Field(
+                description="Instructions shared across the project's agents, at most "
+                "20000 characters."
+            ),
+        ] = None,
+        parent_project_id: Annotated[
+            str | None,
+            Field(
+                description="Parent project id (UUID), from `projects_list`, to create a "
+                "sub-project; omit for a top-level project."
+            ),
+        ] = None,
     ) -> str:
         """Create a new project."""
         try:
@@ -100,15 +162,29 @@ class ProjectsToolset(Toolset):
             project = await service.create_project(payload)
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
-    @tool_method(effect="write")
+    @tool_method(display_name="Update project", effect="write", idempotent=True, output=ProjectRef)
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
     async def update(
         self,
-        project_id: str,
-        name: str | None = None,
-        description: str | None = None,
-        instructions: str | None = None,
-        parent_project_id: str | None = None,
+        project_id: ProjectId,
+        name: Annotated[
+            str | None, Field(description="New project name, 1-255 characters; omit to keep.")
+        ] = None,
+        description: Annotated[
+            str | None,
+            Field(description="New project description, at most 1000 characters; omit to keep."),
+        ] = None,
+        instructions: Annotated[
+            str | None,
+            Field(description="New shared instructions, at most 20000 characters; omit to keep."),
+        ] = None,
+        parent_project_id: Annotated[
+            str | None,
+            Field(
+                description="Id (UUID) of the project to nest this one under, from "
+                "`projects_list`; not itself or one of its sub-projects. Omit to keep."
+            ),
+        ] = None,
     ) -> str:
         """Update a project's fields. Only fields explicitly set are written."""
         patch: dict[str, object] = {}
@@ -134,63 +210,124 @@ class ProjectsToolset(Toolset):
                 raise ToolError("Project not found")
             return json.dumps({"id": str(project.id), "name": project.name}, default=str)
 
-    @tool_method(effect="destructive")
+    @tool_method(
+        display_name="Delete project", effect="destructive", idempotent=True, output=ProjectDeleted
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def delete(self, project_id: str) -> str:
+    async def delete(self, project_id: ProjectId) -> str:
         """Delete a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             deleted = await service.delete(UUID(project_id))
             return json.dumps({"deleted": deleted})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Attach skill to project",
+        effect="write",
+        idempotent=True,
+        output=ProjectLinkAdded,
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def add_skill(self, project_id: str, skill_id: str) -> str:
+    async def add_skill(
+        self,
+        project_id: ProjectId,
+        skill_id: Annotated[str, Field(description="Skill id (UUID), from `skills_list`.")],
+    ) -> str:
         """Attach a skill to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.add_skill(UUID(project_id), UUID(skill_id))
             return json.dumps({"added": True})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Detach skill from project",
+        effect="write",
+        idempotent=True,
+        output=ProjectLinkRemoved,
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def remove_skill(self, project_id: str, skill_id: str) -> str:
+    async def remove_skill(
+        self,
+        project_id: ProjectId,
+        skill_id: Annotated[str, Field(description="Skill id (UUID), from `skills_list`.")],
+    ) -> str:
         """Detach a skill from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.remove_skill(UUID(project_id), UUID(skill_id))
             return json.dumps({"removed": True})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Attach agent to project",
+        effect="write",
+        idempotent=True,
+        output=ProjectLinkAdded,
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def add_agent(self, project_id: str, agent_id: str) -> str:
+    async def add_agent(
+        self,
+        project_id: ProjectId,
+        agent_id: Annotated[str, Field(description="Agent id (UUID), from `agents_list`.")],
+    ) -> str:
         """Attach an agent to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.add_agent(UUID(project_id), UUID(agent_id))
             return json.dumps({"added": True})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Detach agent from project",
+        effect="write",
+        idempotent=True,
+        output=ProjectLinkRemoved,
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def remove_agent(self, project_id: str, agent_id: str) -> str:
+    async def remove_agent(
+        self,
+        project_id: ProjectId,
+        agent_id: Annotated[str, Field(description="Agent id (UUID), from `agents_list`.")],
+    ) -> str:
         """Detach an agent from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.remove_agent(UUID(project_id), UUID(agent_id))
             return json.dumps({"removed": True})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Attach MCP instance to project",
+        effect="write",
+        idempotent=True,
+        output=ProjectLinkAdded,
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def add_mcp_instance(self, project_id: str, mcp_instance_id: str) -> str:
+    async def add_mcp_instance(
+        self,
+        project_id: ProjectId,
+        mcp_instance_id: Annotated[
+            str, Field(description="MCP server instance id (UUID), from `mcp_servers_list`.")
+        ],
+    ) -> str:
         """Attach an MCP server instance to a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)
             await service.add_mcp_instance(UUID(project_id), UUID(mcp_instance_id))
             return json.dumps({"added": True})
 
-    @tool_method(effect="write")
+    @tool_method(
+        display_name="Detach MCP instance from project",
+        effect="write",
+        idempotent=True,
+        output=ProjectLinkRemoved,
+    )
     @unrestricted(PROJECTS_ARE_MEMBER_LEVEL)
-    async def remove_mcp_instance(self, project_id: str, mcp_instance_id: str) -> str:
+    async def remove_mcp_instance(
+        self,
+        project_id: ProjectId,
+        mcp_instance_id: Annotated[
+            str,
+            Field(description="MCP server instance id (UUID), from `mcp_servers_list`."),
+        ],
+    ) -> str:
         """Detach an MCP server instance from a project."""
         async with platform_context() as (_session, _user_ctx, repo_factory, _broker, _secret):
             service = _build_service(repo_factory)

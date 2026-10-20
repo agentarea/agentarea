@@ -10,6 +10,10 @@ AGENTAREA_DEBUG: "false"
 AGENTAREA_ENV: "production"
 AGENTAREA_MCP_MANAGER_URL: "http://{{ include "agentarea.fullname" . }}-mcp-manager:{{ .Values.mcpManager.service.port }}"
 AGENTAREA_WORKER_HEALTH_PORT: "{{ .Values.worker.healthPort }}"
+AGENTAREA_TASK_OUTAGE_RETRY_WINDOW: "{{ .Values.worker.outageWait.retryWindow }}"
+AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF: "{{ .Values.worker.outageWait.backoff }}"
+AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE: "{{ .Values.worker.outageWait.deadline }}"
+AGENTAREA_TASK_SKILLS_WINDOW_SHARE: "{{ .Values.worker.skillsWindowShare }}"
 AGENTAREA_APP_URL: "{{ include "agentarea.frontendUrl" . }}"
 {{- end }}
 
@@ -44,6 +48,26 @@ AGENTAREA_APP_URL: "{{ include "agentarea.frontendUrl" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-worker
       key: AGENTAREA_WORKER_HEALTH_PORT
+- name: AGENTAREA_TASK_OUTAGE_RETRY_WINDOW
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_TASK_OUTAGE_RETRY_WINDOW
+- name: AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF
+- name: AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE
+- name: AGENTAREA_TASK_SKILLS_WINDOW_SHARE
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-worker
+      key: AGENTAREA_TASK_SKILLS_WINDOW_SHARE
 - name: AGENTAREA_APP_URL
   valueFrom:
     configMapKeyRef:

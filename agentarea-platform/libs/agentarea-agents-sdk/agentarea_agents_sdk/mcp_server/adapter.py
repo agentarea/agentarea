@@ -12,11 +12,12 @@ from collections.abc import Callable
 from typing import Annotated, Any
 
 from mcp.server.mcpserver.exceptions import ToolError as MCPToolError
-from mcp.types import InputRequiredResult
+from mcp.types import InputRequiredResult, ToolAnnotations
 from pydantic import Field
 
 from ..tools.base_tool import BaseTool, ToolError
-from ..tools.decorator_tool import Toolset
+from ..tools.decorator_tool import ToolMethodMetadata, Toolset
+from ..tools.tool_definition import ToolEffect
 from .auth import bind_workspace
 from .toolsets import RegisteredToolset, ToolsetMCPServer
 
@@ -28,6 +29,32 @@ _WorkspaceArgument = Annotated[
     str,
     Field(description="Slug or id of the workspace to act in."),
 ]
+
+# A privileged call changes someone's rights, limits or reach: a client asks
+# before making it, as it does before a destructive one.
+# effect -> (read_only_hint, destructive_hint)
+_EFFECT_HINTS: dict[ToolEffect, tuple[bool, bool | None]] = {
+    "read": (True, None),
+    "write": (False, False),
+    "destructive": (False, True),
+    "privileged": (False, True),
+}
+
+
+def _annotations(toolset: Toolset, meta: ToolMethodMetadata | None) -> ToolAnnotations | None:
+    """The behavior hints a toolset method declares, as MCP tool annotations."""
+    if meta is None:
+        return None
+    read_only, destructive = _EFFECT_HINTS[meta.effect] if meta.effect else (None, None)
+    open_world = meta.open_world if meta.open_world is not None else toolset.open_world
+    if read_only is None and meta.idempotent is None and open_world is None:
+        return None
+    return ToolAnnotations(
+        read_only_hint=read_only,
+        destructive_hint=destructive,
+        idempotent_hint=meta.idempotent,
+        open_world_hint=open_world,
+    )
 
 
 class MCPToolAdapter:
@@ -52,20 +79,29 @@ class MCPToolAdapter:
         tools: dict[str, str] = {}
         for method_name, method in toolset._tool_methods.items():
             tool_name = f"{toolset.name}_{method_name}"
-            description = getattr(method, "_tool_description", f"{method_name}")
-            handler = self._make_method_handler(toolset, method)
+            meta: ToolMethodMetadata | None = getattr(method, "_tool_meta", None)
+            handler = self._make_method_handler(toolset, method, meta.output if meta else None)
             if self._workspace_argument and toolset.workspace_scoped:
                 handler = _bind_workspace_argument(handler)
 
-            self._server.add_tool(handler, name=tool_name, description=description)
+            self._server.add_tool(
+                handler,
+                name=tool_name,
+                title=(meta.title or None) if meta else None,
+                description=meta.documentation if meta else method_name,
+                annotations=_annotations(toolset, meta),
+                structured_output=True if meta and meta.output is not None else None,
+            )
             tools[method_name] = tool_name
             logger.debug(f"Registered MCP tool: {tool_name}")
 
-        meta = toolset.metadata
+        toolset_meta = toolset.metadata
         self._server.register_toolset(
             RegisteredToolset(
                 name=toolset.name,
-                namespace=meta.namespace if meta and meta.namespace else toolset.name,
+                namespace=toolset_meta.namespace
+                if toolset_meta and toolset_meta.namespace
+                else toolset.name,
                 tools=tools,
             )
         )
@@ -78,41 +114,48 @@ class MCPToolAdapter:
         logger.debug(f"Registered MCP tool: {tool.name}")
 
     @staticmethod
-    def _make_method_handler(toolset: Toolset, method: Callable) -> Callable:
+    def _make_method_handler(toolset: Toolset, method: Callable, output: Any = None) -> Callable:
         """Create an async handler function for a Toolset method.
 
         The handler preserves the original method's signature (minus ``self``)
-        so the MCP SDK can introspect parameters and build JSON Schema.
+        so the MCP SDK can introspect parameters and build JSON Schema. With an
+        *output* type it returns the method's result as that value — parsed
+        when the method serialized it — for the SDK to validate and publish as
+        structured content.
         """
         is_async = inspect.iscoroutinefunction(method)
 
-        async def handler(**kwargs: Any) -> str | InputRequiredResult:
+        async def handler(**kwargs: Any) -> Any:
             try:
                 result = await method(**kwargs) if is_async else method(**kwargs)
             except ToolError as exc:
                 raise MCPToolError(str(exc)) from exc
-            if isinstance(result, str | InputRequiredResult):
+            if isinstance(result, InputRequiredResult):
                 return result
             if isinstance(result, dict) and result.get("success") is False:
                 raise MCPToolError(
                     str(result.get("result") or result.get("error") or "Tool failed")
                 )
+            if output is not None:
+                return json.loads(result) if isinstance(result, str) else result
+            if isinstance(result, str):
+                return result
             return json.dumps(result, default=str)
 
         # Copy signature from original method, removing 'self'. The return is the
-        # handler's own, a string: left as the method's, the SDK would derive an output
-        # schema from it and reject the serialized result the handler actually returns.
+        # declared output, else a string: left as the method's, the SDK would derive an
+        # output schema from it and reject the serialized result the handler returns.
         sig = inspect.signature(method)
         params = [p for name, p in sig.parameters.items() if name != "self"]
-        handler.__signature__ = sig.replace(parameters=params, return_annotation=str)
+        returns = output if output is not None else str
+        handler.__signature__ = sig.replace(parameters=params, return_annotation=returns)
 
         # Copy type hints (excluding 'self' and 'return')
         hints = {}
         for key, val in getattr(method, "__annotations__", {}).items():
             if key != "self":
                 hints[key] = val
-        # Force return type to str for MCP
-        hints["return"] = str
+        hints["return"] = returns
         handler.__annotations__ = hints
 
         handler.__name__ = method.__name__

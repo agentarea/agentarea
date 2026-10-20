@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   existingConnectionsHref,
   fromCatalogItem,
+  isCatalogApi,
   parseCatalogSource,
 } from "./catalog-connections";
 
@@ -64,5 +65,17 @@ describe("fromCatalogItem", () => {
 
     expect(result.instances.map((i) => i.id)).toEqual(["from-copy"]);
     expect(result.openApiConnections.map((c) => c.id)).toEqual(["api"]);
+  });
+});
+
+describe("isCatalogApi", () => {
+  it("is an HTTP API only for an openapi connection", () => {
+    expect(isCatalogApi({ connection_type: "openapi" })).toBe(true);
+  });
+
+  it("is not for a remote MCP server or a spec without a type", () => {
+    expect(isCatalogApi({ connection_type: "url" })).toBe(false);
+    expect(isCatalogApi({})).toBe(false);
+    expect(isCatalogApi(null)).toBe(false);
   });
 });

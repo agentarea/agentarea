@@ -10,12 +10,15 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import to_money
+from agentarea_tasks.infrastructure.task_log import ERROR_CLEARING_STATUSES, TaskOutcome
 from temporalio import activity
 
 from ...interfaces import ActivityDependencies
 from ...models import (
     CreateDelegationTaskRequest,
     CreateDelegationTaskResult,
+    DelegatedSpendRequest,
+    DelegatedSpendResult,
     MonthlySpendCapRequest,
     MonthlySpendCapResult,
     UpdateTaskGovernanceSnapshotRequest,
@@ -30,8 +33,45 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def task_outcome(request: UpdateTaskStatusRequest) -> TaskOutcome:
+    """What a status update sets on the task row.
+
+    The result arrives as JSON (or plain text, kept as the response) and gets the
+    run's cost and token totals; the error goes to the row's ``error``; a resume
+    snapshot goes into the metadata.
+    """
+    result: dict[str, Any] | None = None
+    if request.result:
+        try:
+            result = json.loads(request.result)
+        except json.JSONDecodeError, TypeError:
+            result = {"response": request.result}
+    elif request.total_cost is not None or request.own_cost is not None:
+        result = {}
+    if result is not None:
+        if request.total_cost is not None:
+            result["total_cost"] = str(request.total_cost)
+        if request.own_cost is not None:
+            result["own_cost"] = str(request.own_cost)
+        if request.tokens_used is not None:
+            result["tokens_used"] = request.tokens_used
+    metadata_patch: dict[str, Any] = {}
+    if request.conversation_resume is not None:
+        metadata_patch["conversation_resume"] = request.conversation_resume.model_dump()
+    if request.failure_reason:
+        metadata_patch["failure_reason"] = request.failure_reason
+    elif request.status in ERROR_CLEARING_STATUSES:
+        metadata_patch["failure_reason"] = None
+    return TaskOutcome(
+        status=request.status,
+        result=result,
+        error=request.error_message or None,
+        metadata_patch=metadata_patch or None,
+    )
+
+
 def make_task_state_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 
@@ -60,42 +100,18 @@ def make_task_state_activities(
                     pending_entries(request.conversation.next_seq, request.conversation_pending),
                 )
             try:
-                additional_fields = {}
-                if (
-                    request.result
-                ):  # Task model expects result as dict, but request carries it as JSON string
-                    result_dict: dict[str, Any]
-                    try:
-                        result_dict = json.loads(request.result)
-                    except (json.JSONDecodeError, TypeError):
-                        result_dict = {"response": request.result}
-                    if request.total_cost is not None:
-                        # Serialize Money (Decimal) to string for JSON compatibility
-                        result_dict["total_cost"] = str(request.total_cost)
-                    if request.own_cost is not None:
-                        result_dict["own_cost"] = str(request.own_cost)
-                    if request.tokens_used is not None:
-                        result_dict["tokens_used"] = request.tokens_used
-                    additional_fields["result"] = result_dict
-                elif request.total_cost is not None or request.own_cost is not None:
-                    # Serialize Money (Decimal) to string for JSON compatibility
-                    additional_fields["result"] = {}
-                    if request.total_cost is not None:
-                        additional_fields["result"]["total_cost"] = str(request.total_cost)
-                    if request.own_cost is not None:
-                        additional_fields["result"]["own_cost"] = str(request.own_cost)
-                    if request.tokens_used is not None:
-                        additional_fields["result"]["tokens_used"] = request.tokens_used
-                if request.error_message:
-                    # Tasks table stores this as `error`, not `error_message`.
-                    additional_fields["error"] = request.error_message
-                if request.conversation_resume is not None:
+                outcome = task_outcome(request)
+                additional_fields: dict[str, Any] = {}
+                if outcome.result is not None:
+                    additional_fields["result"] = outcome.result
+                additional_fields.update(outcome.error_fields())
+                if outcome.metadata_patch is not None:
                     task = await task_repo.get_task(_UUID(request.task_id))
                     if task is None:
                         return UpdateTaskStatusResult(success=False, error="Task not found")
                     additional_fields["metadata"] = {
                         **(task.metadata or {}),
-                        "conversation_resume": request.conversation_resume.model_dump(),
+                        **outcome.metadata_patch,
                     }
 
                 updated = await task_repo.update_status(
@@ -150,22 +166,43 @@ def make_task_state_activities(
         """Read month-to-date spend of the workspace and of the agent against their caps."""
         from agentarea_governance.domain.policies import BudgetPolicy
         from agentarea_tasks.infrastructure.repository import TaskRepository
+        from agentarea_tasks.model_spend_caps import current_budget
 
         user_context = create_user_context(request.user_context_data)
         agent_spent = None
         llm_cap_message = None
+        cap_usd = request.cap_usd
+        agent_cap_usd = request.agent_cap_usd
+        llm_caps = BudgetPolicy.model_validate({"spend_caps": request.llm_caps or None})
         async with ActivityContext(container, user_context) as ctx:
             session = container._database.async_session_factory()
             ctx._sessions.append(session)
+            if request.current_caps:
+                budget = await current_budget(
+                    session,
+                    user_context,
+                    UUID(request.agent_id) if request.agent_id else None,
+                    None,
+                )
+                cap_usd = budget.monthly_spend_cap_usd if budget else None
+                agent_cap_usd = budget.agent_monthly_spend_cap_usd if budget else None
+                llm_caps = BudgetPolicy(
+                    spend_caps=[
+                        cap
+                        for cap in (budget.spend_caps or [] if budget else [])
+                        if cap.category == "llm" and cap.period != "run"
+                    ]
+                    or None
+                )
             tasks = TaskRepository(session, user_context)
             spent = to_money(await tasks.sum_spend_mtd())
-            if request.agent_cap_usd is not None:
+            if agent_cap_usd is not None:
                 if not request.agent_id:
                     raise ValueError("an agent spend cap check needs the run's agent_id")
                 agent_spent = to_money(await tasks.sum_spend_mtd(agent_id=UUID(request.agent_id)))
-            if request.llm_caps:
+            if llm_caps.spend_caps:
                 reached = await tasks.monthly_llm_cap_reached(
-                    BudgetPolicy.model_validate({"spend_caps": request.llm_caps}),
+                    llm_caps,
                     UUID(request.agent_id) if request.agent_id else None,
                 )
                 if reached is not None:
@@ -175,19 +212,33 @@ def make_task_state_activities(
                         f"({reached.spent} {reached.currency}/{reached.cap} {reached.currency})"
                     )
         return MonthlySpendCapResult(
-            exceeded=request.cap_usd is not None and spent >= request.cap_usd,
+            exceeded=cap_usd is not None and spent >= cap_usd,
             month_to_date_usd=spent,
-            cap_usd=request.cap_usd,
+            cap_usd=cap_usd,
             currency=get_customer_pricing().currency(),
             agent_exceeded=(
                 agent_spent is not None
-                and request.agent_cap_usd is not None
-                and agent_spent >= request.agent_cap_usd
+                and agent_cap_usd is not None
+                and agent_spent >= agent_cap_usd
             ),
             agent_month_to_date_usd=agent_spent,
-            agent_cap_usd=request.agent_cap_usd,
+            agent_cap_usd=agent_cap_usd,
             llm_cap_message=llm_cap_message,
         )
+
+    @activity.defn
+    async def delegated_task_spend_activity(
+        request: DelegatedSpendRequest,
+    ) -> DelegatedSpendResult:
+        """What a delegated agent's task has spent, every line of it."""
+        from agentarea_tasks.infrastructure.repository import TaskRepository
+
+        user_context = create_user_context(request.user_context_data)
+        async with ActivityContext(container, user_context) as ctx:
+            session = container._database.async_session_factory()
+            ctx._sessions.append(session)
+            spent = await TaskRepository(session, user_context).sum_task_spend(request.task_id)
+        return DelegatedSpendResult(spent=to_money(spent))
 
     @activity.defn
     async def create_delegation_task_activity(
@@ -260,6 +311,7 @@ def make_task_state_activities(
                     ),
                     upper_bound_policy=parent_effective_policy,
                     require_model=True,
+                    execution_id=request.execution_id,
                     provenance=TaskProvenance(
                         origin_type="agent",
                         origin_id=request.parent_task_id,
@@ -287,4 +339,5 @@ def make_task_state_activities(
         update_task_governance_snapshot_activity,
         check_monthly_spend_cap_activity,
         create_delegation_task_activity,
+        delegated_task_spend_activity,
     ]

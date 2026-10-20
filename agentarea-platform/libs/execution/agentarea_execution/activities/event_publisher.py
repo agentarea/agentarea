@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from agentarea_common.broker import BrokerClient
 from agentarea_common.events.contract import LLM_CHUNK
-from agentarea_common.events.task_stream import publish_task_event
+from agentarea_common.events.task_stream import broadcast_live, task_event
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ def create_event_publisher(
     goes out per ``min_interval_seconds``; the final one and the first after a
     switch between text and thinking always go out.
 
-    Snapshots are XADDed to the per-task live stream (ADR-0018) only; the DB
-    keeps durable events, and the completed call supersedes the last snapshot.
+    Snapshots are broadcast on the task's live channel only and never kept; the
+    completed call supersedes the last one.
 
     With ``stream_text`` False the reply text is withheld: its snapshots carry
     an empty ``chunk``, and only the first and the final one go out, so a
@@ -86,22 +86,25 @@ def create_event_publisher(
         published_at, published_type = now, chunk_type
 
         try:
-            await publish_task_event(
+            await broadcast_live(
                 broker_client,
-                task_id=task_id,
-                event_type=LLM_CHUNK,
-                data={
-                    "task_id": task_id,
-                    "execution_id": execution_id,
-                    "iteration": iteration,
-                    "chunk": text if stream_text else "",
-                    "thinking": thinking,
-                    "chunk_index": chunk_index,
-                    "is_final": is_final,
-                    "chunk_type": chunk_type,
-                },
-                event_id=str(uuid4()),
-                timestamp=datetime.now(UTC).isoformat(),
+                task_event(
+                    task_id=task_id,
+                    workspace_id=None,
+                    event_type=LLM_CHUNK,
+                    event_id=str(uuid4()),
+                    timestamp=datetime.now(UTC),
+                    data={
+                        "task_id": task_id,
+                        "execution_id": execution_id,
+                        "iteration": iteration,
+                        "chunk": text if stream_text else "",
+                        "thinking": thinking,
+                        "chunk_index": chunk_index,
+                        "is_final": is_final,
+                        "chunk_type": chunk_type,
+                    },
+                ),
             )
         except Exception:
             # A snapshot is superseded by the next one and by the completed

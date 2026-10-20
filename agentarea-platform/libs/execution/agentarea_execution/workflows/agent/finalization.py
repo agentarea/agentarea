@@ -13,12 +13,9 @@ with workflow.unsafe.imports_passed_through():
 
 from ...models import AgentExecutionResult, ConversationResumeSnapshot, UpdateTaskStatusRequest
 from ..constants import (
-    ACTIVITY_TIMEOUT,
-    Activities,
     EventTypes,
     ExecutionStatus,
 )
-from ..retry import bookkeeping_retry_policy
 from .budget import BudgetMixin
 from .errors import ErrorReportingMixin
 from .patches import CONVERSATION_RESUME_SNAPSHOT_PATCH, RESUME_AFTER_STOP_OR_FAILURE_PATCH
@@ -99,6 +96,7 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             final_status = "cancelled"
         else:
             final_status = "failed"
+        self._keep_queued_messages()
         conversation_pending = self._conversation_payload()
         # A completed, stopped or failed conversation can be continued by a later
         # message, or a retry, after the workflow closes; the snapshot tells that
@@ -114,36 +112,33 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
             )
             and not self._is_delegation_child()
             and workflow.patched(CONVERSATION_RESUME_SNAPSHOT_PATCH)
+            and self._conversation_resumable_from_here()
             else None
         )
-        await workflow.execute_activity(
-            Activities.UPDATE_TASK_STATUS,
-            args=[
-                UpdateTaskStatusRequest(
-                    user_context_data=self.state.user_context_data,
-                    task_id=self.state.task_id,
-                    status=final_status,
-                    result=json.dumps(
-                        {
-                            "response": self.state.final_response,
-                            "validation_state": self.state.validation_state,
-                        }
-                    )
-                    if self.state.final_response
-                    else None,
-                    error_message=self.state.error_message
-                    or (self.state.blocked_reason if final_status == "blocked" else None),
-                    workspace_id=self.state.workspace_id,
-                    total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
-                    own_cost=self._own_cost,
-                    tokens_used=self.state.tokens_used,
-                    conversation=self._conversation_window(),
-                    conversation_pending=conversation_pending,
-                    conversation_resume=conversation_resume,
+        await self._persist_task_status(
+            UpdateTaskStatusRequest(
+                user_context_data=self.state.user_context_data,
+                task_id=self.state.task_id,
+                status=final_status,
+                result=json.dumps(
+                    {
+                        "response": self.state.final_response,
+                        "validation_state": self.state.validation_state,
+                    }
                 )
-            ],
-            start_to_close_timeout=ACTIVITY_TIMEOUT,
-            retry_policy=bookkeeping_retry_policy(),
+                if self.state.final_response
+                else None,
+                error_message=self.state.error_message
+                or (self.state.blocked_reason if final_status == "blocked" else None),
+                failure_reason=None if self.state.success else self.state.failure_reason,
+                workspace_id=self.state.workspace_id,
+                total_cost=self.budget_tracker.cost if self.budget_tracker else ZERO,
+                own_cost=self._own_cost,
+                tokens_used=self.state.tokens_used,
+                conversation=self._conversation_window(),
+                conversation_pending=conversation_pending,
+                conversation_resume=conversation_resume,
+            )
         )
         self._mark_conversation_written()
         if self._interaction_contract_enabled and not settling:
@@ -215,25 +210,27 @@ class FinalizationMixin(BudgetMixin, ErrorReportingMixin):
                 self._answer_unanswered_tool_calls(
                     "Not executed: the run failed before this call ran."
                 )
-                conversation_resume = self._conversation_resume_snapshot(len(self.state.messages))
-            await workflow.execute_activity(
-                Activities.UPDATE_TASK_STATUS,
-                args=[
-                    UpdateTaskStatusRequest(
-                        user_context_data=self.state.user_context_data,
-                        task_id=self.state.task_id,
-                        status=status,
-                        error_message=self.state.blocked_reason or error_details,
-                        workspace_id=self.state.workspace_id,
-                        total_cost=self.budget_tracker.cost if self.budget_tracker else None,
-                        own_cost=self._own_cost if self.budget_tracker else None,
-                        tokens_used=self.state.tokens_used,
-                        conversation=self._conversation_window(),
-                        conversation_pending=self._conversation_payload(),
-                        conversation_resume=conversation_resume,
+                self._keep_queued_messages()
+                if self._conversation_resumable_from_here():
+                    conversation_resume = self._conversation_resume_snapshot(
+                        len(self.state.messages)
                     )
-                ],
-                start_to_close_timeout=ACTIVITY_TIMEOUT,
-                retry_policy=bookkeeping_retry_policy(),
+            else:
+                self._keep_queued_messages()
+            await self._persist_task_status(
+                UpdateTaskStatusRequest(
+                    user_context_data=self.state.user_context_data,
+                    task_id=self.state.task_id,
+                    status=status,
+                    error_message=self.state.blocked_reason or error_details,
+                    failure_reason=self._failure_cause(error) or self.state.failure_reason,
+                    workspace_id=self.state.workspace_id,
+                    total_cost=self.budget_tracker.cost if self.budget_tracker else None,
+                    own_cost=self._own_cost if self.budget_tracker else None,
+                    tokens_used=self.state.tokens_used,
+                    conversation=self._conversation_window(),
+                    conversation_pending=self._conversation_payload(),
+                    conversation_resume=conversation_resume,
+                )
             )
             self._mark_conversation_written()

@@ -10,6 +10,7 @@ from typing import Any, BinaryIO, ClassVar
 
 import frontmatter
 import yaml
+from agentarea_common.utils.untrusted_yaml import UntrustedYamlError, load_untrusted_yaml
 from frontmatter.default_handlers import YAMLHandler
 
 from .skill_package_limits import check_zip_budget
@@ -19,8 +20,25 @@ _BLOCK_SCALAR_RE = re.compile(r"^[|>][+-]?[0-9]?[+-]?\s*(#.*)?$")
 _STRUCTURED_VALUE_START = ("'", '"', "[", "{")
 
 
+# A frontmatter is a handful of keys, and the SKILL.md is often someone
+# else's (a GitHub folder, an upload): read within these bounds, synchronously.
+FRONTMATTER_MAX_NODES = 2000
+FRONTMATTER_MAX_BYTES = 64 * 1024
+
+
 class SkillFrontmatterError(ValueError):
     """A SKILL.md frontmatter block that cannot be read; the message names the line."""
+
+
+def _load_frontmatter_yaml(text: str) -> Any:
+    return load_untrusted_yaml(
+        text, max_nodes=FRONTMATTER_MAX_NODES, max_bytes=FRONTMATTER_MAX_BYTES
+    )
+
+
+class _BoundedYAMLHandler(YAMLHandler):
+    def load(self, fm: str, **_kwargs: object) -> Any:
+        return _load_frontmatter_yaml(fm)
 
 
 def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
@@ -44,8 +62,13 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
     YAML cannot parse, or a nested block (``metadata:``, ``allowed-tools:``)
     that is not valid YAML itself.
     """
+    handler = frontmatter.detect_format(content.strip(), frontmatter.handlers)
+    if isinstance(handler, YAMLHandler):
+        handler = _BoundedYAMLHandler()
     try:
-        post = frontmatter.loads(content)
+        post = frontmatter.loads(content, handler=handler)
+    except UntrustedYamlError as exc:
+        raise SkillFrontmatterError(f"SKILL.md frontmatter is refused: {exc}") from exc
     except yaml.YAMLError:
         text = content.strip()
         block, body = YAMLHandler().split(text)
@@ -87,7 +110,11 @@ def _parse_frontmatter_entries(block: str, first_line: int) -> dict[str, Any]:
 
 def _parse_entry(key: str, value: str, entry_lines: list[str], line_number: int) -> Any:
     try:
-        parsed = yaml.safe_load("\n".join(entry_lines))
+        parsed = _load_frontmatter_yaml("\n".join(entry_lines))
+    except UntrustedYamlError as exc:
+        raise SkillFrontmatterError(
+            f"SKILL.md frontmatter line {line_number} ('{key}') is refused: {exc}"
+        ) from exc
     except yaml.YAMLError as exc:
         continuation = entry_lines[1:]
         is_plain_scalar = (

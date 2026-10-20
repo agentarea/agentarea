@@ -174,6 +174,8 @@ async def test_fork_catalog_agent_strips_and_syncs(session_factory):
             spec={"instruction": "do x", "tools": [_code_tool("agentarea/shell", True)]},
             installed_entity_id=None,
             installed_version=None,
+            registry_id=str(uuid4()),
+            registry_trust="official",
         )
 
         agent = await service._fork_catalog_agent(item)

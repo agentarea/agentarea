@@ -9,7 +9,8 @@ related:
   - /concepts/sandbox/sessions
   - /concepts/execution/artifacts
   - /concepts/governance/tool-authorization
-last_updated: 2026-07-29
+  - /concepts/integration/registry-and-catalog
+last_updated: 2026-10-20
 ---
 
 A skill is a folder of files with a `SKILL.md` manifest at its root, attached to
@@ -69,15 +70,37 @@ withheld. See [tool authorization](/concepts/governance/tool-authorization).
 
 ### Tier 2 — activation
 
-`activate_skill` runs inside the workflow rather than as a Temporal activity —
-the content is already in workflow state, so there is nothing to fetch. It is
-still gated: `_gate_tool_call` runs first, and a denied call never reaches the
-skill.
+The run's configuration carries each skill's name, description and package
+path, never its `SKILL.md`. The body is read when the model activates the
+skill, by `activate_skill_activity`, from the package recorded in the
+configuration: a catalog update between the start of the run and the
+activation does not change what the run reads. It is still gated: `_gate_tool_call` runs
+first, and a denied call never reaches the skill.
 
-The tool returns the skill's `SKILL.md` text wrapped in a
-`<skill_content name="...">` element, followed by a list of the skill's other
-files. Activation is idempotent per run: calling it twice returns "already
-active in this session" instead of a second copy of the text.
+The activity asks the install policy, reads `SKILL.md` from the skill's package
+(a catalog package from the worker's cache, keyed by its digest), copies the
+package into the sandbox, and writes the tool result straight into the task
+log at the position the workflow reserved for it. It returns only the entry's
+size, so the body never enters Temporal history, whatever it weighs. The entry
+is the `SKILL.md` text wrapped in a `<skill_content name="...">` element,
+followed by where the skill's files are in the sandbox. Activation is
+idempotent per run: calling it twice returns "already active in this session"
+instead of a second copy of the text.
+
+An entry takes at most a tenth of the model's context window
+(`SKILL_CONTEXT_SHARE`), the listing of the skill's files included, and all of
+a run's activated skills together take at most
+`AGENTAREA_TASK_SKILLS_WINDOW_SHARE` of it (30%). Sizes are counted with the
+tokenizer model calls are metered with. A larger `SKILL.md` is summarized: its
+size, its opening, and the path of its copy in the sandbox (or a
+`read_tool_output` id when there is no sandbox); a skill activated once the
+skills' share is used up is not loaded, and the model is told why. Activated
+entries are never compacted, so the caps hold for the rest of the run.
+
+A refusal by the install policy, a skill that no longer exists, and a GitHub
+source that is gone come back to the model as a tool error naming the skill.
+Unreachable storage is waited out (see
+[tasks](/concepts/execution/tasks#waiting-for-a-service)).
 
 Activated skill content is then protected from context compaction. `SkillContextGuard`
 identifies these messages two ways — by tool name `activate_skill`, and by the
@@ -88,7 +111,7 @@ for output.
 
 ### Tier 3 — materialization
 
-Immediately after activation the workflow copies the skill's whole folder into
+Activation also copies the skill's whole folder into
 the task's sandbox workspace, under `skills/<slug>-<hash8>/`. From that point
 the agent reaches the skill's scripts with an ordinary shell command. There is
 no separate "run skill script" tool, and that absence is the design: one
@@ -102,10 +125,10 @@ and "Deploy API" both reduce to `deploy-api` — and two skills sharing a
 directory means the agent reads one skill's manifest and runs the other's
 scripts.
 
-A skill that is only prose is still a folder. `assemble_skill_bundle` writes the
-stored text as `SKILL.md` when no manifest is present among the files, so there
-is one kind of skill rather than a "content-only" second kind needing its own
-handling.
+A skill that is only prose is still a folder: its package holds one file,
+`SKILL.md`. There is one kind of skill rather than a "content-only" second kind
+needing its own handling, and `assemble_skill_bundle` adds an empty `SKILL.md`
+to a package that has none.
 
 An unsafe path rejects the entire bundle. A path that is absolute, or contains
 `..`, raises rather than being skipped, because silently dropping one file can
@@ -117,11 +140,18 @@ their own, so the agent continues with a degraded skill rather than a dead task.
 
 ### Where a skill lives at rest
 
-A skill row is workspace-scoped with a workspace-unique `slug`, and stores its
-content one of two ways. Single-file skills keep their markdown in the `content`
-column ("content mode"). Multi-file skills keep an `s3_path` to the stored
-package ("package mode") and are read back file by file at materialization time.
-`source_type` records where it came from: `content`, `zip`, `github`, or `path`.
+A skill row is workspace-scoped with a workspace-unique `slug`, and holds
+metadata only: name, description, `source_type` (`content`, `zip`, `github` or
+`path`), `source_url`, and `s3_path`, the location of its package in object
+storage. Nothing writes the body to the database. A skill created from inline content
+is stored as a one-file package holding `SKILL.md`; activation reads `SKILL.md`
+from the package, and materialization copies the whole package.
+
+A skill installed from the catalog points at the catalog item's package, which
+is immutable and stored under the digest of its files, and is pinned to the
+item's version until a workspace admin updates it. Editing it copies the
+package into the workspace's own prefix first. See
+[registry and catalog](/concepts/integration/registry-and-catalog).
 
 Skills are managed through the `agentarea/skills` toolset as well as REST, and
 the two are kept in parity by a contract test. That toolset lives in the agents
@@ -158,10 +188,18 @@ relevance score to inspect afterwards — only the presence or absence of an
 
 ## Limits
 
-- **The catalog does not name a skill's files.** For a package-mode skill, the
-  file list built into the config is the literal placeholder
-  `["(additional files available)"]`, not the real filenames. The model learns
-  the actual names only after activation materializes the folder.
+- **The catalog does not name a skill's files.** The model learns their names
+  only after activation puts the folder in the sandbox.
+- **The install policy is asked again at run time.** A skill installed from a
+  registry, or imported from a GitHub URL (the `github` registry, trust
+  `community`), is not offered to a run once a workspace rule denies its
+  registry or trust level; the run's feed shows a `skill.withheld` event naming
+  the skill and the rule, and activating it fails with the rule. This holds for
+  skills installed before the rule was written. A run is held to the
+  workspace's rules only: a member's own rules apply when they install, not to
+  the runs of an agent, whoever starts them. Skills a workspace wrote itself
+  have no registry and are not asked about, and an install whose registry or
+  catalog item was deleted keeps working from its own package.
 - **An early activation can block compaction entirely.** The boundary search
   rejects any split that would drop protected skill content, and returns 0 — no
   compaction — when no safe boundary exists. A skill activated in the first
@@ -169,9 +207,10 @@ relevance score to inspect afterwards — only the presence or absence of an
 - **The activation registry is keyed by skill name.** `build_registry` maps name
   to entry, so two attached skills with the same name collapse to one. The
   workspace uniqueness constraint is on `slug`, not on `name`.
-- **Content-mode skills cannot be promoted to packages in place.** `edit_content`
-  rejects a multi-file payload for a content-mode skill and directs you to
-  delete and recreate; no silent promotion happens.
+- **Skills stored before packages existed are moved on first read.** A row
+  that still holds its body in the `content` column gets a package the first
+  time anything reads it. Until then the toolset's `edit_content` accepts only a
+  single `SKILL.md` for it.
 - **Authoring limits are enforced at the toolset, not the model.** Inline
   creation caps at 200 files, 5 MB total, and path depth 10. GitHub import caps
   at a 25 MB repository archive, 200 files and 10 MB per package, 50 `SKILL.md`

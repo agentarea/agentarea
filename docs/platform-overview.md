@@ -72,7 +72,7 @@ graph TB
 | Layer | Technology | Purpose |
 |-------|------------|---------|
 | **Frontend** | Next.js 16, React 19, Tailwind | Web dashboard |
-| **Backend API** | FastAPI, Python 3.12+ | REST API |
+| **Backend API** | FastAPI, Python 3.14+ | REST API |
 | **Workflow Engine** | Temporal.io | Durable execution |
 | **MCP Orchestration** | Go, Kubernetes | Container management |
 | **Database** | PostgreSQL 15 | Primary data store |

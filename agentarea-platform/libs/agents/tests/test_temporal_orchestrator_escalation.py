@@ -16,17 +16,29 @@ from agentarea_agents.application.execution_service import (
 )
 from agentarea_agents.application.temporal_workflow_service import TemporalWorkflowService
 from agentarea_agents.infrastructure.temporal_orchestrator import TemporalWorkflowOrchestrator
+from temporalio.client import WorkflowExecutionStatus
 from temporalio.service import RPCError, RPCStatusCode
 
 
 class _Handle:
-    def __init__(self, pending=None, query_error: Exception | None = None):
+    def __init__(
+        self,
+        pending=None,
+        query_error: Exception | None = None,
+        status: WorkflowExecutionStatus = WorkflowExecutionStatus.RUNNING,
+    ):
         self._pending = pending or []
         self._query_error = query_error
+        self._status = status
+        self.queried = False
         self.signals: list = []
+
+    async def describe(self):
+        return SimpleNamespace(status=self._status)
 
     async def query(self, name):
         assert name == "get_pending_escalations"
+        self.queried = True
         if self._query_error is not None:
             raise self._query_error
         return self._pending
@@ -148,3 +160,14 @@ async def test_workflow_service_does_not_flatten_not_an_approver_into_failure():
 
     with pytest.raises(NotAnApproverError):
         await service.resolve_escalation("task-1", "esc-1", True, "", "user-1")
+
+
+@pytest.mark.asyncio
+async def test_an_escalation_of_a_closed_run_is_no_longer_pending_and_the_run_is_not_queried():
+    handle = _Handle([_pending("esc-1")], status=WorkflowExecutionStatus.CANCELED)
+
+    with pytest.raises(EscalationNotPendingError):
+        await _orchestrator(handle).resolve_escalation_workflow("task-1", "esc-1", True)
+
+    assert handle.queried is False
+    assert handle.signals == []

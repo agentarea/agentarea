@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { ViewerCapabilitiesProvider } from "@/components/ViewerCapabilities";
+import { CurrencyProvider } from "@/hooks/useCurrency";
+import { getPricingCurrency } from "@/lib/api-dashboard";
 import { getViewerCapabilities, getWorkspaces } from "@/lib/workspace-context";
 
 /**
@@ -20,10 +22,17 @@ export default async function WorkspaceLayout({
   if (!workspaces.some((candidate) => candidate.slug === workspace)) {
     notFound();
   }
-  const capabilities = await getViewerCapabilities();
+  const [capabilities, pricingCurrency] = await Promise.all([
+    getViewerCapabilities(),
+    getPricingCurrency(),
+  ]);
   return (
     <ViewerCapabilitiesProvider capabilities={capabilities}>
-      {children}
+      <CurrencyProvider
+        currency={pricingCurrency.ok ? pricingCurrency.currency : null}
+      >
+        {children}
+      </CurrencyProvider>
     </ViewerCapabilitiesProvider>
   );
 }

@@ -39,8 +39,8 @@ describe("what an empty workplace offers", () => {
     const suggestions = build(bare);
     expect(suggestions.every((s) => s.href)).toBe(true);
     expect(suggestions.map((s) => s.href)).toEqual([
-      "/triggers/create",
-      "/triggers/create",
+      "/events",
+      "/events",
       "/connections",
       "/skills",
     ]);
@@ -130,7 +130,7 @@ describe("what an empty workplace offers", () => {
       mcpCount: 1,
       skillCount: 1,
     });
-    expect(suggestions[0]?.href).toBe("/triggers/create");
+    expect(suggestions[0]?.href).toBe("/events");
     expect(suggestions.at(-1)?.href).toBeUndefined();
   });
 });

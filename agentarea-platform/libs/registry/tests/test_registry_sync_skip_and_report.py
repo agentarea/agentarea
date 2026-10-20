@@ -22,6 +22,7 @@ def _service(registry_type: str = "llm_models"):
         registry_type=registry_type,
         source_type="url",
         source_url="https://example.com/catalog.json",
+        scope="platform",
     )
     registry_repo = SimpleNamespace(
         get_by_id=AsyncMock(return_value=registry),
@@ -46,8 +47,9 @@ def _service(registry_type: str = "llm_models"):
         return item
 
     item_repo = SimpleNamespace(
-        get_by_external_id=AsyncMock(return_value=None),
+        list_by_registry=AsyncMock(return_value=[]),
         mark_in_source=AsyncMock(return_value=0),
+        delete_unreferenced_out_of_source=AsyncMock(return_value=0),
         create=AsyncMock(side_effect=fake_create),
         update=AsyncMock(),
         delete=AsyncMock(return_value=True),

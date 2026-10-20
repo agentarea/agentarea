@@ -10,8 +10,8 @@ All cases use numeric-IP hosts so no real DNS resolution happens in unit tests.
 
 import httpx
 import pytest
-from agentarea_api.api.v1 import mcp_proxy
 from agentarea_api.api.v1.mcp_proxy import _guard_upstream, _upstream_client
+from agentarea_common import outbound
 from agentarea_common.utils.url_safety import (
     OutboundPolicy,
     SafeOutboundTransport,
@@ -74,7 +74,7 @@ def _record_upstream(monkeypatch, *, resolves_to: str) -> list[tuple[str | None,
         return [resolves_to]
 
     monkeypatch.setattr(
-        mcp_proxy,
+        outbound,
         "safe_async_client",
         lambda *, policy, **kwargs: httpx.AsyncClient(
             transport=SafeOutboundTransport(policy, resolve=resolve, inner=through), **kwargs
@@ -121,7 +121,7 @@ async def test_an_unproxied_url_upstream_is_pinned_and_keeps_its_host_header(mon
 async def test_a_container_upstream_reaches_the_gateway_unvetted(monkeypatch):
     # The demand gateway is an in-cluster address the platform builds itself.
     monkeypatch.setattr(
-        mcp_proxy,
+        outbound,
         "safe_async_client",
         lambda **_kw: pytest.fail("a gateway request must not go through the member client"),
     )

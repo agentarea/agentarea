@@ -31,8 +31,11 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from agentarea_common.auth.credential import Scope
 
 from .base_tool import ToolError
 
@@ -105,25 +108,24 @@ def requires_workspace_admin() -> Callable[[Any], Any]:
     return _enforcing({"action": "administer", "resource_type": "workspace"}, check)
 
 
-def requires_user_session(action: str) -> Callable[[Any], Any]:
-    """Refuse an API key: the tool hands out or takes away access.
+def requires_scope(scope: Scope, action: str) -> Callable[[Any], Any]:
+    """Demand that the call's credential grants ``scope``.
 
-    The tool counterpart of ``route_authz.requires_user_session``. It narrows
-    the tool's own marker to callers that are not keys and declares none of
-    its own. ``action`` completes "An API key cannot ...".
+    The tool counterpart of ``route_authz.requires_scope``. It narrows the
+    tool's own marker by what the caller authenticated with and declares none
+    of its own. ``action`` completes "This credential cannot ...".
     """
 
     def decorate(func: Any) -> Any:
         @functools.wraps(func)
         async def guarded(*args: Any, **kwargs: Any) -> Any:
-            from agentarea_common.auth.context import UserSessionRequiredError
-            from agentarea_common.auth.dependencies import ensure_user_session
+            from agentarea_common.auth.context import ScopeRequiredError, ensure_scope
 
             from ..mcp_server.auth import get_mcp_user_context
 
             try:
-                ensure_user_session(get_mcp_user_context(), action)
-            except UserSessionRequiredError as exc:
+                ensure_scope(get_mcp_user_context(), scope, action)
+            except ScopeRequiredError as exc:
                 raise ToolError(str(exc)) from exc
             return await func(*args, **kwargs)
 

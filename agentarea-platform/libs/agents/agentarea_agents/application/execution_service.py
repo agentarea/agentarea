@@ -46,11 +46,11 @@ class WorkflowNotFoundError(Exception):
 class ExecutionService(ExecutionServiceInterface):
     """Clean execution service that delegates to workflow orchestrators."""
 
-    def __init__(self, workflow_orchestrator: "WorkflowOrchestratorInterface"):
+    def __init__(self, workflow_orchestrator: WorkflowOrchestratorInterface):
         self._workflow_orchestrator = workflow_orchestrator
 
     @property
-    def orchestrator(self) -> "WorkflowOrchestratorInterface":
+    def orchestrator(self) -> WorkflowOrchestratorInterface:
         return self._workflow_orchestrator
 
     async def execute_async(self, request: ExecutionRequest) -> ExecutionResult:
@@ -151,7 +151,7 @@ class ExecutionService(ExecutionServiceInterface):
             return await self._workflow_orchestrator.resolve_escalation_workflow(
                 execution_id, escalation_id, approved, comment, resolved_by
             )
-        except (EscalationNotPendingError, NotAnApproverError):
+        except EscalationNotPendingError, NotAnApproverError:
             raise
         except Exception:
             logger.error("Failed to resolve escalation", exc_info=True)

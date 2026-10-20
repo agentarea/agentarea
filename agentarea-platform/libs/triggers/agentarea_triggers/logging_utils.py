@@ -148,6 +148,12 @@ class TriggerTimeoutError(TriggerError):
     pass
 
 
+class FiringNotRecordedError(TriggerError):
+    """A fired task ended before the firing that started it was recorded; retry later."""
+
+    pass
+
+
 def log_trigger_operation(operation: str, trigger_id: UUID | None = None, **context):
     """Decorator to log trigger operations with error handling."""
 

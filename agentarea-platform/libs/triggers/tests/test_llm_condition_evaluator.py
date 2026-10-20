@@ -1,12 +1,14 @@
 """Tests for LLM condition evaluator."""
 
 import json
+from dataclasses import asdict
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 from litellm import ModelResponse
-from agentarea_llm.infrastructure.model_clients import ModelEndpoint
+from agentarea_common.auth.context import UserContext
+from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_triggers.llm_condition_evaluator import (
     LLMConditionEvaluationError,
     LLMConditionEvaluator,
@@ -40,12 +42,11 @@ def _response(content: str) -> ModelResponse:
     return ModelResponse(choices=[{"message": {"role": "assistant", "content": content}}])
 
 
-def _endpoint(endpoint_url: str | None = None, managed_by: str | None = None) -> ModelEndpoint:
-    return ModelEndpoint(
+def _target(endpoint_url: str | None = None, managed_by: str | None = None) -> ModelTarget:
+    return ModelTarget(
         instance_id=str(uuid4()),
         provider_type="openai",
         model_name="gpt-4",
-        api_key="test-api-key",
         endpoint_url=endpoint_url,
         managed_by=managed_by,
         input_cost_per_token=None,
@@ -53,10 +54,15 @@ def _endpoint(endpoint_url: str | None = None, managed_by: str | None = None) ->
     )
 
 
+async def _connect(target: ModelTarget, funding) -> ModelEndpoint:
+    return ModelEndpoint(**asdict(target), api_key="test-api-key")
+
+
 @pytest.fixture
 def model_service():
     service = AsyncMock()
-    service.resolve.return_value = _endpoint()
+    service.describe.return_value = _target()
+    service.connect.side_effect = _connect
     return service
 
 
@@ -67,6 +73,9 @@ def llm_evaluator(mock_model_instance_service, mock_secret_manager, model_servic
         model_instance_service=mock_model_instance_service,
         secret_manager=mock_secret_manager,
         model_service=model_service,
+        user_context=UserContext(user_id="user-1", workspace_id="ws-1"),
+        record_costs=AsyncMock(),
+        refuse_at_spend_cap=AsyncMock(),
     )
 
 
@@ -438,10 +447,10 @@ async def test_a_member_endpoint_on_a_private_address_is_refused(
     mock_completion, llm_evaluator, model_service
 ):
     # GHSA-pprc-x767-m6jg: a member-set endpoint must not reach what the platform can.
-    model_service.resolve.return_value = _endpoint("http://10.0.0.5:8080/v1")
+    model_service.describe.return_value = _target("http://10.0.0.5:8080/v1")
 
     with pytest.raises(LLMConditionEvaluationError):
-        await llm_evaluator._call_llm("p", uuid4())
+        await llm_evaluator._call_llm("p", uuid4(), purpose="test", trigger_context=None)
     mock_completion.assert_not_called()
 
 
@@ -450,8 +459,8 @@ async def test_a_member_endpoint_on_a_private_address_is_refused(
 async def test_a_platform_endpoint_is_called_as_configured(
     mock_completion, llm_evaluator, model_service
 ):
-    model_service.resolve.return_value = _endpoint("http://10.0.0.5:8080/v1", "platform")
+    model_service.describe.return_value = _target("http://10.0.0.5:8080/v1", "platform")
     mock_completion.return_value = _response("ok")
 
-    assert await llm_evaluator._call_llm("p", uuid4()) == "ok"
+    assert await llm_evaluator._call_llm("p", uuid4(), purpose="test", trigger_context=None) == "ok"
     assert mock_completion.call_args.kwargs["base_url"] == "http://10.0.0.5:8080/v1"

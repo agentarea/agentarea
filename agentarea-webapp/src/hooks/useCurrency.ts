@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  createContext,
+  createElement,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import {
   getCurrencyCacheState,
   loadCurrency,
@@ -12,6 +19,26 @@ import { getPricingCurrencyAction } from "@/lib/server-actions";
 
 export { resetCurrencyCache };
 export type { CurrencyState };
+
+const ServerCurrencyContext = createContext<string | null>(null);
+
+/**
+ * The billing currency the workspace layout resolved on the server, so money
+ * renders in it from the first paint instead of after a client lookup.
+ */
+export function CurrencyProvider({
+  currency,
+  children,
+}: {
+  currency: string | null;
+  children: ReactNode;
+}) {
+  return createElement(
+    ServerCurrencyContext.Provider,
+    { value: currency },
+    children
+  );
+}
 
 async function fetchCurrency(): Promise<string | null> {
   const { data } = await getPricingCurrencyAction();
@@ -31,11 +58,13 @@ async function fetchCurrency(): Promise<string | null> {
  * just subscribes a component to it.
  */
 export function useCurrency(): CurrencyState {
+  const serverCurrency = useContext(ServerCurrencyContext);
   const [state, setState] = useState<CurrencyState>(() =>
     getCurrencyCacheState()
   );
 
   useEffect(() => {
+    if (serverCurrency) return;
     let cancelled = false;
 
     const load = () => {
@@ -55,7 +84,9 @@ export function useCurrency(): CurrencyState {
       cancelled = true;
       unsubscribe();
     };
-  }, []);
+  }, [serverCurrency]);
 
-  return state;
+  return serverCurrency
+    ? { currency: serverCurrency, status: "ready" }
+    : state;
 }

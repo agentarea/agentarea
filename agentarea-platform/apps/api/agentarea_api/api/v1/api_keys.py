@@ -16,10 +16,11 @@ from uuid import UUID
 from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_api.api.deps.services import AuditServiceDep, DatabaseSessionDep
 from agentarea_common.auth.authorization import assert_workspace_admin, is_workspace_admin
+from agentarea_common.auth.credential import Scope
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import (
     enforced_in_handler,
-    requires_user_session,
+    requires_scope,
     unrestricted,
 )
 from agentarea_common.base.repository_factory import RepositoryFactory
@@ -113,7 +114,7 @@ class APIKeyCreateResponse(APIKeyResponse):
     response_model=APIKeyCreateResponse,
     status_code=201,
     dependencies=[
-        requires_user_session("create API keys"),
+        requires_scope(Scope.CREDENTIALS, "create API keys"),
         unrestricted(
             "mints a token that authenticates as its creator; grants no authority "
             "the caller does not already have"
@@ -211,7 +212,7 @@ async def get_api_key(
     "/{token_id}",
     status_code=204,
     dependencies=[
-        requires_user_session("revoke API keys"),
+        requires_scope(Scope.CREDENTIALS, "revoke API keys"),
         enforced_in_handler(
             "the key's creator, or a workspace admin; needs the record loaded first"
         ),

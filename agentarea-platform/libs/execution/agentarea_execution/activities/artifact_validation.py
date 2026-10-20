@@ -12,6 +12,7 @@ from typing import Any
 
 import httpx
 from agentarea_common.artifacts import WorkspaceValidationError, normalize_workspace_path
+from agentarea_common.outbound import Destination, outbound_client
 
 from ..models import (
     ArtifactValidationEvidence,
@@ -95,7 +96,7 @@ async def validate_published_artifacts(
     client = http_client
     owned = client is None
     if client is None:
-        client = httpx.AsyncClient(timeout=60)
+        client = outbound_client(Destination.INTERNAL, timeout=60)
     issues: list[ArtifactValidationIssue] = []
     evidence: list[ArtifactValidationEvidence] = []
     try:
@@ -159,7 +160,7 @@ def _artifact_publication_outcome(
         item = response.json()
         sha256 = str(item["sha256"])
         size = item["size"]
-    except (TypeError, ValueError, KeyError):
+    except TypeError, ValueError, KeyError:
         return _artifact_store_unavailable("artifact store returned an invalid response")
     if not _SHA256_RE.fullmatch(sha256) or not isinstance(size, int) or size < 0:
         return _artifact_store_unavailable(f"published artifact {path} has no valid identity")

@@ -1,18 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import type {
-  TriggerCreate,
-  TriggerUpdate,
-  WebhookSignatureScheme,
-} from "@/api/client/types.gen";
-import {
-  zGetCatalogV1TriggersCatalogGetResponse,
-  zTriggerCreate,
-  zTriggerUpdate,
-} from "@/api/client/zod.gen";
-import { createTrigger, listTriggerCatalog, updateTrigger } from "@/lib/api";
+import type { TriggerCreate, TriggerUpdate } from "@/api/client/types.gen";
+import { zTriggerCreate, zTriggerUpdate } from "@/api/client/zod.gen";
+import { createTrigger, updateTrigger } from "@/lib/api";
 import { formatApiError } from "@/lib/api-errors";
 import { requestWorkspacePath } from "@/lib/workspace-request";
 
@@ -22,68 +13,7 @@ export type TriggerFormState = {
   success?: boolean;
   /** Set by create: the new trigger, so the form can open it. */
   triggerId?: string;
-  /**
-   * A generic webhook's generated signing secret. Returned by the create call
-   * only, so this state is the one chance to show it.
-   */
-  signing?: { secret: string; scheme: WebhookSignatureScheme };
 };
-
-const zTriggerCatalogEntry = z.object({
-  id: z.string(),
-  name: z.string(),
-  /** Asset id kept for reference; the UI draws `icon_url`, not this. */
-  icon: z.string(),
-  /** Resolved by the API. Declared here or zod strips it off the entry. */
-  icon_url: z.string().nullish(),
-  description: z.string(),
-  kind: z.enum(["messaging", "event", "schedule"]),
-  backend_type: z.enum(["cron", "webhook", "polling", "stream"]),
-  webhook_type: z.string().optional(),
-  default_methods: z.array(z.string()).optional(),
-  default_cron: z.string().optional(),
-  data_extractor: z.string().optional(),
-  credential_fields: z
-    .array(
-      z.object({
-        key: z.string(),
-        label: z.string(),
-        placeholder: z.string(),
-      })
-    )
-    .optional(),
-  events: z.array(z.string()).optional(),
-});
-
-export type TriggerCatalogEntry = z.infer<typeof zTriggerCatalogEntry>;
-
-export async function listTriggerCatalogAction(): Promise<
-  TriggerCatalogEntry[]
-> {
-  const { data, error } = await listTriggerCatalog();
-  if (error || !data) {
-    throw new Error("Failed to load trigger catalog");
-  }
-  const records = zGetCatalogV1TriggersCatalogGetResponse.parse(data);
-  // Per entry, not over the array: the catalog grows server-side, and parsing it
-  // whole meant one channel this build does not know about emptied the picker.
-  const entries: TriggerCatalogEntry[] = [];
-  for (const record of records) {
-    const parsed = zTriggerCatalogEntry.safeParse(record);
-    if (parsed.success) {
-      entries.push(parsed.data);
-    } else {
-      console.warn(
-        `Skipping trigger catalog entry the UI cannot render: ${JSON.stringify(record)}`,
-        parsed.error.flatten().fieldErrors
-      );
-    }
-  }
-  if (entries.length === 0 && records.length > 0) {
-    throw new Error("No trigger catalog entry could be read");
-  }
-  return entries;
-}
 
 function parseTaskParameters(raw: string | null): {
   data?: Record<string, unknown>;
@@ -148,76 +78,35 @@ function parseJsonObject(
   }
 }
 
-function parseStringArray(raw: string | null): string[] | undefined {
-  if (!raw || !raw.trim()) {
+/**
+ * A stream trigger's session setting, as `SessionSetting` posts it; absent when
+ * the form carries none, which leaves the source's default.
+ */
+function parseSession(formData: FormData): TriggerCreate["session"] {
+  const keep = formData.get("session_continue");
+  const idleTimeout = formData.get("session_idle_timeout");
+  if (typeof keep !== "string" || typeof idleTimeout !== "string") {
     return undefined;
   }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  return { continue: keep === "true", idle_timeout: idleTimeout };
 }
 
-function parseChannelCredentials(formData: FormData): {
-  data: NonNullable<TriggerCreate["channel_credentials"]>;
-  /** Credential fields the form posted empty, named by their form key. */
-  missing: string[];
-  error?: TriggerFormState;
-} {
-  const data: NonNullable<TriggerCreate["channel_credentials"]> = {};
-  const missing: string[] = [];
-  for (const [key, value] of formData.entries()) {
-    if (typeof value !== "string") continue;
-    if (!value) {
-      if (key.startsWith("credential_secret_")) missing.push(key);
-      continue;
-    }
-    if (key.startsWith("credential_secret_")) {
-      const secretId = z.string().uuid().safeParse(value);
-      if (!secretId.success) {
-        return {
-          data: {},
-          missing: [],
-          error: {
-            message: "Invalid secret selection",
-            errors: { [key]: ["Select a workspace secret"] },
-          },
-        };
-      }
-      data[key.slice("credential_secret_".length)] = {
-        secret_id: secretId.data,
-      };
-    } else if (key.startsWith("credential_")) {
-      data[key.slice("credential_".length)] = value;
-    }
+/**
+ * A stream trigger's batch window, as `BatchSetting` posts it: null when it is
+ * off, absent when the form carries none.
+ */
+function parseBatch(formData: FormData): TriggerCreate["batch"] {
+  const raw = formData.get("batch");
+  if (typeof raw !== "string") {
+    return undefined;
   }
-  return { data, missing };
+  return raw ? (JSON.parse(raw) as TriggerCreate["batch"]) : null;
 }
 
 function buildTriggerCreate(formData: FormData): TriggerCreate {
   const trigger_type = formData.get("trigger_type") as string;
-  const data_extractor = formData.get("data_extractor") as string | null;
   const task_parameters_raw = formData.get("task_parameters") as string | null;
   const failure_threshold_raw = formData.get("failure_threshold") as string;
-
-  const credentials = parseChannelCredentials(formData);
-  if (credentials.error) throw credentials.error;
-  // A channel that extracts its payload cannot run without its credential, and
-  // the picker is a combobox, so the browser no longer blocks the submit.
-  if (data_extractor && credentials.missing.length > 0) {
-    const missingCredentials: TriggerFormState = {
-      message: "Validation failed. Please check the fields.",
-      errors: Object.fromEntries(
-        credentials.missing.map((key) => [key, ["Select a workspace secret"]])
-      ),
-    };
-    throw missingCredentials;
-  }
 
   const parsedTaskParameters = parseJsonObject(
     task_parameters_raw,
@@ -247,28 +136,10 @@ function buildTriggerCreate(formData: FormData): TriggerCreate {
   if (trigger_type === "cron") {
     body.cron_expression = formData.get("cron_expression") as string;
     body.timezone = (formData.get("timezone") as string) || "UTC";
-    if (data_extractor) {
-      body.data_extractor = data_extractor;
-    }
-  } else if (trigger_type === "webhook") {
-    const webhook_type = formData.get("webhook_type") as string;
-    const methods: string[] = [];
-    ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].forEach(
-      (method) => {
-        if (formData.get(`method_${method}`) === "on") {
-          methods.push(method);
-        }
-      }
-    );
-    body.webhook_type = webhook_type || "generic";
-    body.allowed_methods = methods.length > 0 ? methods : ["POST"];
-    body.event_types = parseStringArray(formData.get("event_types") as string);
   } else if (trigger_type === "stream") {
     body.stream_id = formData.get("stream_id") as string;
-  }
-
-  if (Object.keys(credentials.data).length > 0) {
-    body.channel_credentials = credentials.data;
+    body.session = parseSession(formData);
+    body.batch = parseBatch(formData);
   }
 
   return body;
@@ -319,10 +190,6 @@ export async function createTriggerAction(
         message: "Trigger created successfully!",
         success: true,
         triggerId: data.id,
-        signing:
-          data.signing_secret && data.signature_scheme
-            ? { secret: data.signing_secret, scheme: data.signature_scheme }
-            : undefined,
       };
     }
   } catch (err) {
@@ -383,25 +250,9 @@ export async function updateTriggerAction(
     if (timezone !== null) updateBody.timezone = timezone;
   }
 
-  if (trigger_type === "webhook") {
-    updateBody.allowed_methods = [
-      "GET",
-      "POST",
-      "PUT",
-      "PATCH",
-      "DELETE",
-      "HEAD",
-      "OPTIONS",
-    ].filter((method) => formData.get(`method_${method}`) === "on");
-    updateBody.event_types = parseStringArray(
-      formData.get("event_types") as string
-    );
-  }
-
-  const credentials = parseChannelCredentials(formData);
-  if (credentials.error) return credentials.error;
-  if (Object.keys(credentials.data).length > 0) {
-    updateBody.channel_credentials = credentials.data;
+  if (trigger_type === "stream") {
+    updateBody.session = parseSession(formData);
+    updateBody.batch = parseBatch(formData);
   }
 
   const validated = zTriggerUpdate.safeParse(updateBody);

@@ -5,8 +5,15 @@ import json
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import requires_workspace_admin
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from pydantic import BaseModel, Field
 
 from .base import platform_read_context
+
+
+class WorkspaceConfigExport(BaseModel):
+    yaml: str = Field(
+        description="The workspace bundle as YAML: agents, MCP instances, skills and triggers."
+    )
 
 
 @toolset(
@@ -19,7 +26,11 @@ from .base import platform_read_context
 class WorkspaceConfigToolset(Toolset):
     """Export a canonical bundle of agents, MCPs, skills, and supported triggers as YAML."""
 
-    @tool_method(effect="read")
+    open_world = False
+
+    @tool_method(
+        display_name="Export workspace config", effect="read", output=WorkspaceConfigExport
+    )
     @requires_workspace_admin()
     async def export(self) -> str:
         """Export a canonical importable workspace bundle as YAML."""

@@ -156,7 +156,10 @@ def recall_history_tool_schema() -> dict[str, Any]:
                     "event_types": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Filter by event types (e.g. ToolCallCompleted, LLMCallCompleted)",
+                        "description": (
+                            "Filter by event types, dotted: e.g. tool.result, "
+                            "llm.call.completed, message.received"
+                        ),
                     },
                     "limit": {
                         "type": "integer",

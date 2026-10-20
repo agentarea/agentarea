@@ -38,6 +38,11 @@ A task that takes follow-ups ends every turn with `task.completed`
 `tokens_used` are the **running totals of the task**. Charge the difference
 from the last value you processed for that task.
 
+`execution_status` says what the run does after the event: `waiting` (it takes
+a follow-up), `completed` (it ended), or `settling` on `task.cancelled` (it is
+still recording the call the cancel interrupted; a later delivery does not
+follow, and `total_cost` can still grow by that call's cost on the task read).
+
 ## Steps
 
 <Steps titleSize="h3">

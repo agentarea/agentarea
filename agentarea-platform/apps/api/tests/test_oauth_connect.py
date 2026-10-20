@@ -11,10 +11,10 @@ from uuid import uuid4
 import httpx
 import pytest
 from agentarea_api.api.v1 import oauth_connect as routes
-from agentarea_api.api.v1.oauth_connect import OAuthAuthorizeRequest
+from agentarea_api.api.v1.oauth_connect import OAuthAuthorizeRequest, OAuthFinishRequest
 from agentarea_api.oauth_connect import pages, service, targets
 from agentarea_api.oauth_connect import state as oauth_state
-from agentarea_api.oauth_connect.state import OAuthState
+from agentarea_api.oauth_connect.state import OAuthState, ReturnedFlow
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -889,9 +889,7 @@ def _patch_connection_creation(monkeypatch):
     monkeypatch.setattr(
         targets, "build_auth_config_access_checker", lambda *_args, **_kwargs: AsyncMock()
     )
-    monkeypatch.setattr(
-        targets, "build_owned_auth_releaser", lambda *_args, **_kwargs: AsyncMock()
-    )
+    monkeypatch.setattr(targets, "build_owned_auth_releaser", lambda *_args, **_kwargs: AsyncMock())
     monkeypatch.setattr(targets, "get_real_secret_manager", lambda **_kwargs: SimpleNamespace())
     return connection_create
 
@@ -1118,10 +1116,11 @@ def _flow(**overrides) -> OAuthState:
 
 
 class _Callback:
-    """The callback's collaborators, faked; records what it attached."""
+    """The callback's and the finish's collaborators, faked; records what they parked and attached."""
 
     def __init__(self, monkeypatch, flow: OAuthState | None, *, exchange=None):
         self.flow = flow
+        self.parked: list[tuple[str, ReturnedFlow]] = []
         self.exchange = exchange or AsyncMock()
         self.auth_config = SimpleNamespace(id=uuid4())
         self.instance_update = AsyncMock()
@@ -1149,10 +1148,22 @@ class _Callback:
             update = test.connection_update
 
         monkeypatch.setattr(oauth_state, "pop", AsyncMock(return_value=flow))
+
+        async def _store_returned(token: str, returned: ReturnedFlow) -> None:
+            self.parked.append((token, returned))
+
+        monkeypatch.setattr(oauth_state, "store_returned", _store_returned)
+
+        async def _pop_returned(token: str) -> ReturnedFlow | None:
+            for i, (parked_token, returned) in enumerate(self.parked):
+                if parked_token == token:
+                    del self.parked[i]
+                    return returned
+            return None
+
+        monkeypatch.setattr(oauth_state, "pop_returned", _pop_returned)
         monkeypatch.setattr(service, "workspace_slug_for", AsyncMock(return_value="acme"))
-        monkeypatch.setattr(
-            service, "get_real_secret_manager", lambda **_kwargs: SimpleNamespace()
-        )
+        monkeypatch.setattr(service, "get_real_secret_manager", lambda **_kwargs: SimpleNamespace())
         monkeypatch.setattr(service, "MCPAuthService", _AuthService)
         monkeypatch.setattr(targets, "MCPServerInstanceRepository", _InstanceRepository)
         monkeypatch.setattr(targets, "OpenAPIConnectionRepository", _ConnectionRepository)
@@ -1162,7 +1173,6 @@ class _Callback:
 
     async def run(self, *, code="code", state="state", error=None, error_description=None):
         response = await routes.oauth_callback(
-            db_session=AsyncMock(),
             code=code,
             state=state,
             error=error,
@@ -1171,35 +1181,106 @@ class _Callback:
         assert response.status_code == 302
         return response.headers["location"]
 
+    async def finish(self, *, user_id="user-1", token=None, reachable=("ws-1",)):
+        """Finish the flow the provider sent back; the callback runs first unless a token is given."""
+        if token is None:
+            location = await self.run()
+            token = urllib.parse.parse_qs(urllib.parse.urlparse(location).query)["token"][0]
+        response = await routes.oauth_finish(
+            body=OAuthFinishRequest(token=token),
+            principal=SimpleNamespace(user_id=user_id, accessible_workspaces=list(reachable)),
+            db_session=AsyncMock(),
+        )
+        return response.location
+
 
 @pytest.mark.asyncio
 @pytest.mark.flow(MainFlow.MCP_OAUTH)
-async def test_the_callback_attaches_the_credential_to_the_mcp_instance(monkeypatch):
+async def test_finishing_attaches_the_credential_to_the_mcp_instance(monkeypatch):
     flow = _flow()
     callback = _Callback(monkeypatch, flow)
 
-    location = await callback.run()
+    location = await callback.finish()
 
     assert location == f"{_APP}/w/acme/connections/{_INSTANCE_ID}?oauth=success"
     callback.exchange.assert_awaited_once_with(
         callback.auth_config, code="code", redirect_uri=_CALLBACK, code_verifier="verifier"
     )
     callback.instance_update.assert_awaited_once()
-    assert callback.instance_update.await_args.kwargs == {
-        "auth_config_id": callback.auth_config.id
-    }
+    assert callback.instance_update.await_args.kwargs == {"auth_config_id": callback.auth_config.id}
     callback.connection_update.assert_not_awaited()
     assert callback.after_connect == [flow]
 
 
 @pytest.mark.asyncio
-async def test_the_callback_activates_the_api_connection(monkeypatch):
+async def test_the_callback_parks_the_code_and_sends_the_browser_to_finish(monkeypatch):
+    flow = _flow(return_to=_CONNECT_PAGE)
+    callback = _Callback(monkeypatch, flow)
+
+    location = urllib.parse.urlparse(await callback.run())
+
+    assert (location.scheme, location.netloc, location.path) == (
+        "https",
+        "app.agentarea.ai",
+        "/oauth/finish",
+    )
+    token = urllib.parse.parse_qs(location.query)["token"][0]
+    assert callback.parked == [(token, ReturnedFlow(flow=flow, code="code"))]
+    callback.exchange.assert_not_awaited()
+    callback.instance_update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.flow(MainFlow.MCP_OAUTH)
+async def test_a_sign_in_url_followed_by_someone_else_attaches_nothing(monkeypatch):
+    """RFC 6749 §10.12: an authorize URL sent to another person must not put
+    their account into the sender's connection."""
+    callback = _Callback(monkeypatch, _flow(user_id="sender"))
+    token = urllib.parse.parse_qs(urllib.parse.urlparse(await callback.run()).query)["token"][0]
+
+    with pytest.raises(HTTPException) as refused:
+        await callback.finish(user_id="recipient", token=token)
+    # The refusal is final: the sender cannot redeem the recipient's code after it.
+    with pytest.raises(HTTPException) as retried:
+        await callback.finish(user_id="sender", token=token)
+
+    assert (refused.value.status_code, retried.value.status_code) == (403, 400)
+    callback.exchange.assert_not_awaited()
+    callback.instance_update.assert_not_awaited()
+    callback.connection_update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_starter_who_no_longer_reaches_the_workspace_cannot_finish(monkeypatch):
+    """Removed from it while at the provider, or holding a key issued for another one."""
+    callback = _Callback(monkeypatch, _flow())
+
+    with pytest.raises(HTTPException) as excinfo:
+        await callback.finish(reachable=["ws-other"])
+
+    assert excinfo.value.status_code == 403
+    callback.exchange.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_finish_token_is_refused(monkeypatch):
+    callback = _Callback(monkeypatch, None)
+
+    with pytest.raises(HTTPException) as excinfo:
+        await callback.finish(token="replayed")
+
+    assert excinfo.value.status_code == 400
+    callback.exchange.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finishing_activates_the_api_connection(monkeypatch):
     connection_id = str(uuid4())
     callback = _Callback(
         monkeypatch, _flow(target_kind="openapi_connection", connection_id=connection_id)
     )
 
-    location = await callback.run()
+    location = await callback.finish()
 
     assert location == f"{_APP}/w/acme/connections/openapi/{connection_id}?oauth=success"
     assert callback.connection_update.await_args.kwargs == {
@@ -1218,7 +1299,7 @@ async def test_a_failed_exchange_lands_with_the_reason_and_attaches_nothing(monk
         exchange=AsyncMock(side_effect=OAuthCodeExchangeError(reason)),
     )
 
-    location = await callback.run()
+    location = await callback.finish()
 
     assert location == f"{_CONNECT_PAGE}?oauth=error&reason={reason}"
     callback.instance_update.assert_not_awaited()
@@ -1228,7 +1309,7 @@ async def test_a_failed_exchange_lands_with_the_reason_and_attaches_nothing(monk
 async def test_connect_link_returns_to_the_connect_page_it_started_from(monkeypatch):
     callback = _Callback(monkeypatch, _flow(return_to=_CONNECT_PAGE))
 
-    assert await callback.run() == f"{_CONNECT_PAGE}?oauth=success"
+    assert await callback.finish() == f"{_CONNECT_PAGE}?oauth=success"
 
 
 @pytest.mark.asyncio
@@ -1237,7 +1318,7 @@ async def test_connect_page_query_and_fragment_are_not_carried_back(monkeypatch)
         monkeypatch, _flow(return_to=f"{_CONNECT_PAGE}?oauth=error&next=https://evil.example#x")
     )
 
-    assert await callback.run() == f"{_CONNECT_PAGE}?oauth=success"
+    assert await callback.finish() == f"{_CONNECT_PAGE}?oauth=success"
 
 
 @pytest.mark.asyncio
@@ -1245,7 +1326,7 @@ async def test_connect_page_query_and_fragment_are_not_carried_back(monkeypatch)
     "return_to",
     [
         f"{_APP}/w/other/connect/{_INSTANCE_ID}",
-        f"{_APP}/w/acme/connect/{uuid4()}",
+        f"{_APP}/w/acme/connect/f37e9858-f588-4911-b5bf-ae2f09f8cdbb",
         f"https://evil.example/w/acme/connect/{_INSTANCE_ID}",
         f"{_APP}/w/acme/connect/{_INSTANCE_ID}/../../settings",
         f"{_APP}/w/acme/connect/{_INSTANCE_ID}/extra",
@@ -1255,7 +1336,7 @@ async def test_connect_page_query_and_fragment_are_not_carried_back(monkeypatch)
 async def test_any_other_return_to_lands_on_the_connection_page(monkeypatch, return_to):
     callback = _Callback(monkeypatch, _flow(return_to=return_to))
 
-    assert await callback.run() == f"{_APP}/w/acme/connections/{_INSTANCE_ID}?oauth=success"
+    assert await callback.finish() == f"{_APP}/w/acme/connections/{_INSTANCE_ID}?oauth=success"
 
 
 @pytest.mark.asyncio
@@ -1298,7 +1379,12 @@ async def test_a_denied_api_sign_in_lands_on_the_connection(monkeypatch):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "description",
-    ["access_denied", "https://evil.example/phish", "//evil.example", "a&next=https://evil.example"],
+    [
+        "access_denied",
+        "https://evil.example/phish",
+        "//evil.example",
+        "a&next=https://evil.example",
+    ],
 )
 async def test_a_denied_sign_in_without_state_lands_on_the_frontend_root(monkeypatch, description):
     _Callback(monkeypatch, None)
@@ -1319,7 +1405,7 @@ async def test_an_unknown_state_without_an_error_is_refused(monkeypatch):
 
     with pytest.raises(HTTPException) as excinfo:
         await routes.oauth_callback(
-            db_session=AsyncMock(), code="code", state="replayed", error=None, error_description=None
+            code="code", state="replayed", error=None, error_description=None
         )
 
     assert excinfo.value.status_code == 400
@@ -1327,7 +1413,7 @@ async def test_an_unknown_state_without_an_error_is_refused(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("target_kind", ["mcp_instance", "openapi_connection"])
-async def test_a_flow_whose_workspace_was_deleted_lands_on_the_frontend_root(
+async def test_a_flow_whose_workspace_was_deleted_finishes_on_the_frontend_root(
     monkeypatch, target_kind
 ):
     callback = _Callback(monkeypatch, _flow(target_kind=target_kind))
@@ -1337,7 +1423,7 @@ async def test_a_flow_whose_workspace_was_deleted_lands_on_the_frontend_root(
 
     monkeypatch.setattr(service, "workspace_slug_for", AsyncMock(side_effect=_gone))
 
-    location = urllib.parse.urlparse(await callback.run())
+    location = urllib.parse.urlparse(await callback.finish())
 
     assert (location.scheme, location.netloc, location.path) == ("https", "app.agentarea.ai", "/")
     assert urllib.parse.parse_qs(location.query) == {
@@ -1348,6 +1434,22 @@ async def test_a_flow_whose_workspace_was_deleted_lands_on_the_frontend_root(
 
 
 @pytest.mark.asyncio
+async def test_a_denied_sign_in_whose_workspace_was_deleted_lands_on_the_frontend_root(
+    monkeypatch,
+):
+    callback = _Callback(monkeypatch, _flow())
+    monkeypatch.setattr(service, "workspace_slug_for", AsyncMock(side_effect=LookupError("gone")))
+
+    location = urllib.parse.urlparse(await callback.run(code=None, error="access_denied"))
+
+    assert (location.scheme, location.netloc, location.path) == ("https", "app.agentarea.ai", "/")
+    assert urllib.parse.parse_qs(location.query) == {
+        "oauth": ["error"],
+        "reason": ["workspace_gone"],
+    }
+
+
+@pytest.mark.asyncio
 async def test_oauth_state_is_consumed_atomically(monkeypatch):
     flow = _flow()
     redis = SimpleNamespace(getdel=AsyncMock(return_value=json.dumps(vars(flow))))
@@ -1355,6 +1457,27 @@ async def test_oauth_state_is_consumed_atomically(monkeypatch):
 
     assert await oauth_state.pop("one-time-state") == flow
     redis.getdel.assert_awaited_once_with("oauth_state:one-time-state")
+
+
+@pytest.mark.asyncio
+async def test_a_returned_flow_is_consumed_atomically_by_its_first_finish(monkeypatch):
+    stored: dict[str, str] = {}
+
+    async def _set(key, value, ex):
+        stored[key] = value
+
+    async def _getdel(key):
+        return stored.pop(key, None)
+
+    redis = SimpleNamespace(set=_set, getdel=_getdel)
+    monkeypatch.setattr(oauth_state, "_redis", AsyncMock(return_value=redis))
+    returned = ReturnedFlow(flow=_flow(), code="code")
+
+    await oauth_state.store_returned("one-time-finish", returned)
+
+    assert list(stored) == ["oauth_returned:one-time-finish"]
+    assert await oauth_state.pop_returned("one-time-finish") == returned
+    assert await oauth_state.pop_returned("one-time-finish") is None
 
 
 # ---------------------------------------------------------------------------

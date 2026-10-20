@@ -423,3 +423,47 @@ name: github-skill
 
         assert parsed.metadata.name == "github-skill"
         assert manifest.main_skill_path == "SKILL.md"
+
+
+def _bomb(kind: str, levels: int) -> str:
+    if kind == "merge":
+        lines = ["a0: &a0 {x: 1}"] + [
+            f"a{i}: &a{i} {{<<: [*a{i - 1}, *a{i - 1}]}}" for i in range(1, levels)
+        ]
+    else:
+        lines = ['a0: &a0 ["x", "x"]'] + [
+            f"a{i}: &a{i} [*a{i - 1}, *a{i - 1}]" for i in range(1, levels)
+        ]
+    return "\n".join(lines)
+
+
+@pytest.mark.parametrize(("kind", "levels"), [("merge", 28), ("alias", 40)])
+def test_a_frontmatter_bomb_is_refused_at_once(kind, levels):
+    # Every install of a GitHub skill, a mirror sync and an upload parse a
+    # SKILL.md someone else wrote.
+    import time
+
+    from agentarea_agents.application.skill_parser import SkillFrontmatterError, parse_frontmatter
+
+    started = time.monotonic()
+
+    with pytest.raises(SkillFrontmatterError, match="not accepted"):
+        parse_frontmatter(f"---\nname: bomb\n{_bomb(kind, levels)}\n---\n# Bomb\n")
+
+    assert time.monotonic() - started < 0.5
+
+
+def test_a_bomb_in_one_entry_of_a_lenient_block_is_refused_too():
+    # Strict YAML fails on the unquoted colon, so each entry is read alone;
+    # the bomb sits inside one entry.
+    import time
+
+    from agentarea_agents.application.skill_parser import SkillFrontmatterError, parse_frontmatter
+
+    entry = "data:\n" + "\n".join(f"  {line}" for line in _bomb("merge", 28).split("\n"))
+    started = time.monotonic()
+
+    with pytest.raises(SkillFrontmatterError, match="not accepted"):
+        parse_frontmatter(f"---\nname: x\ndescription: a: b\n{entry}\n---\n# X\n")
+
+    assert time.monotonic() - started < 0.5

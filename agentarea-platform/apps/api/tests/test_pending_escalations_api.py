@@ -3,7 +3,7 @@
 The event log redacts a tool call's arguments (a command can carry an inline
 secret), so the approval request alone shows the approver a pattern label. The
 arguments come from the workflow instead, to the same principals who may resolve
-the escalation: whoever may act on the run, narrowed to the designated approvers.
+the escalation: its named approvers, else whoever may act on the run.
 """
 
 from __future__ import annotations
@@ -95,11 +95,55 @@ async def test_the_person_who_may_resolve_it_reads_the_real_command():
 
 
 @pytest.mark.asyncio
-async def test_a_member_who_cannot_act_on_the_run_is_refused_before_the_workflow_is_asked():
-    response, workflow = await _get("user-invited-yesterday", [_escalation([])])
+async def test_a_member_who_cannot_act_on_the_run_and_is_named_nowhere_is_refused():
+    response, _ = await _get("user-invited-yesterday", [_escalation([])])
 
     assert response.status_code == 403
-    workflow.get_pending_escalations.assert_not_awaited()
+    assert COMMAND not in response.text
+
+
+@pytest.mark.asyncio
+async def test_a_named_approver_who_did_not_start_the_run_reads_their_escalation():
+    response, _ = await _get(
+        "security-lead",
+        [
+            _escalation(["user:security-lead"]),
+            {**_escalation([]), "escalation_id": "esc-2"},
+        ],
+    )
+
+    assert response.status_code == 200, response.text
+    assert [e["escalation_id"] for e in response.json()] == ["esc-1"]
+
+
+async def _resolve(caller: str, pending: list[dict]):
+    workflow_service = AsyncMock()
+    workflow_service.get_pending_escalations.return_value = pending
+    workflow_service.resolve_escalation.return_value = True
+    app = _app(caller, workflow_service)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as client:
+        response = await client.post(
+            f"/v1/workspaces/acme/agents/{AGENT_ID}/tasks/{TASK_ID}/resolve-escalation",
+            json={"escalation_id": "esc-1", "approved": True},
+        )
+    return response, workflow_service
+
+
+@pytest.mark.asyncio
+async def test_a_named_approver_who_did_not_start_the_run_resolves_it():
+    response, workflow = await _resolve("security-lead", [_escalation(["user:security-lead"])])
+
+    assert response.status_code == 200, response.text
+    workflow.resolve_escalation.assert_awaited_once()
+    assert workflow.resolve_escalation.await_args.kwargs["resolved_by"] == "security-lead"
+
+
+@pytest.mark.asyncio
+async def test_a_member_cannot_resolve_an_escalation_that_names_no_approvers_on_a_run_not_theirs():
+    response, workflow = await _resolve("user-invited-yesterday", [_escalation([])])
+
+    assert response.status_code == 403, response.text
+    workflow.resolve_escalation.assert_not_awaited()
 
 
 @pytest.mark.asyncio

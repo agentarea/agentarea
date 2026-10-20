@@ -6,22 +6,15 @@ import LinkedCard from "@/components/LinkedCard/LinkedCard";
 import { Badge } from "@/components/ui/badge";
 import { StatusIndicator } from "@/components/ui/status-indicator";
 import { getTriggerStatusPresentation } from "@/lib/status";
-import {
-  findTriggerCatalogEntry,
-  renderTriggerIcon,
-  type EnrichedTrigger,
-  type TriggerCatalogEntry,
-} from "./triggerDisplay";
+import { renderTriggerIcon, type EnrichedTrigger } from "./triggerDisplay";
 
 interface TriggerCardProps {
   trigger: EnrichedTrigger;
-  catalog: TriggerCatalogEntry[];
 }
 
-export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
+export default function TriggerCard({ trigger }: TriggerCardProps) {
   const t = useTranslations("TriggersPage");
 
-  const entry = findTriggerCatalogEntry(trigger, catalog);
   const state =
     trigger.status === "needs_owner"
       ? "needs_owner"
@@ -35,7 +28,6 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
       href={`/triggers/${trigger.id}`}
       title={trigger.name}
       type="view"
-      icon={entry?.icon_url ?? undefined}
       subtitle={
         <div className="flex items-center gap-1.5">
           <Badge
@@ -43,8 +35,8 @@ export default function TriggerCard({ trigger, catalog }: TriggerCardProps) {
             variant="outline"
             className="gap-1 font-normal text-muted-foreground border-transparent bg-secondary/50 hover:bg-secondary/70 px-1.5 h-5"
           >
-            {renderTriggerIcon(entry, trigger, "h-3 w-3")}
-            {entry?.name ?? trigger.trigger_type}
+            {renderTriggerIcon(trigger, "h-3 w-3")}
+            {t(`type.${trigger.trigger_type}`)}
           </Badge>
           <StatusIndicator
             size="sm"

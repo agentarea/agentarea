@@ -1,12 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import type { AgentResponse } from "@/api/client/types.gen";
-import { listAgents, listTriggerCatalog } from "@/lib/api";
+import { listAgents } from "@/lib/api";
 import { getTriggersCached } from "./triggersData";
-import {
-  findTriggerCatalogEntry,
-  getTriggerLane,
-  type TriggerCatalogEntry,
-} from "./triggerDisplay";
+import { getTriggerLane } from "./triggerDisplay";
 import TriggersList from "./TriggersList";
 
 interface TriggersContentProps {
@@ -24,10 +20,9 @@ export default async function TriggersContent({
 }: TriggersContentProps) {
   const t = await getTranslations("TriggersPage");
 
-  const [triggersResult, agentsResponse, catalogResponse] = await Promise.all([
+  const [triggersResult, agentsResponse] = await Promise.all([
     getTriggersCached(),
     listAgents(),
-    listTriggerCatalog(),
   ]);
 
   if (triggersResult.error) {
@@ -40,7 +35,6 @@ export default async function TriggersContent({
 
   const triggers = triggersResult.triggers;
   const agents: AgentResponse[] = agentsResponse.data ?? [];
-  const catalog = (catalogResponse.data ?? []) as TriggerCatalogEntry[];
 
   // Build agent name lookup
   const agentMap = new Map(agents.map((a) => [a.id, a.name]));
@@ -54,9 +48,7 @@ export default async function TriggersContent({
   // Filter by what starts the automation (All / Channels / Events / Schedules)
   if (typeFilter !== "all") {
     enrichedTriggers = enrichedTriggers.filter(
-      (trigger) =>
-        getTriggerLane(trigger, findTriggerCatalogEntry(trigger, catalog)) ===
-        typeFilter
+      (trigger) => getTriggerLane(trigger) === typeFilter
     );
   }
 
@@ -74,7 +66,6 @@ export default async function TriggersContent({
     <TriggersList
       triggers={filteredTriggers}
       totalCount={triggers.length}
-      catalog={catalog}
       viewMode={viewMode}
       searchQuery={searchQuery}
       groupBy={groupBy}
