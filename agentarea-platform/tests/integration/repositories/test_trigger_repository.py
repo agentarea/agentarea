@@ -212,23 +212,30 @@ class TestTriggerRepository:
         assert updated_trigger.is_active is False
 
     async def test_update_execution_tracking(self, trigger_repository, sample_cron_trigger):
-        """Test updating trigger execution tracking fields."""
+        """The stamp moves; the failure count moves only by count_failure and reset_failures."""
         # Arrange
         await trigger_repository.create_trigger(sample_cron_trigger)
         execution_time = datetime.utcnow()
 
         # Act
         updated = await trigger_repository.update_execution_tracking(
-            sample_cron_trigger.id, execution_time, consecutive_failures=2
+            sample_cron_trigger.id, execution_time
         )
+        count = await trigger_repository.count_failure(sample_cron_trigger.id)
+        await trigger_repository.count_failure(sample_cron_trigger.id)
 
         # Assert
         assert updated is True
+        assert count is not None and count.failures == 1
 
         # Verify update
         retrieved_trigger = await trigger_repository.get_trigger(sample_cron_trigger.id)
         assert retrieved_trigger.last_execution_at == execution_time
         assert retrieved_trigger.consecutive_failures == 2
+
+        await trigger_repository.reset_failures(sample_cron_trigger.id)
+        retrieved_trigger = await trigger_repository.get_trigger(sample_cron_trigger.id)
+        assert retrieved_trigger.consecutive_failures == 0
 
     async def test_disable_enable_trigger(self, trigger_repository, sample_cron_trigger):
         """Test disabling and enabling a trigger."""
