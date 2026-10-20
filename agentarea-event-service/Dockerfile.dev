@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine
+FROM golang:1.27.3-alpine3.24
 
 RUN apk add --no-cache git ca-certificates dumb-init && rm -rf /var/cache/apk/*
 RUN go install github.com/air-verse/air@v1.67.4

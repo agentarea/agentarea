@@ -114,9 +114,10 @@ func (p *EventPublisher) publish(ctx context.Context, eventType, subject string,
 		return err
 	}
 	return p.redisClient.XAdd(ctx, &redis.XAddArgs{
-		Stream:       streamFor(p.namespace, eventType),
-		MaxLenApprox: streamMaxLen,
-		Values:       fields,
+		Stream: streamFor(p.namespace, eventType),
+		MaxLen: streamMaxLen,
+		Approx: true,
+		Values: fields,
 	}).Err()
 }
 
