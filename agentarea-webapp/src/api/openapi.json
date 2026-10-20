@@ -18714,7 +18714,7 @@
     },
     "/.well-known/oauth-authorization-server": {
       "get": {
-        "description": "RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.\n\nHydra v2 only serves /.well-known/openid-configuration; we bridge the gap\nso MCP clients (Cursor) that look for /.well-known/oauth-authorization-server\nstill get the Hydra endpoints, rewritten to point to our proxy paths.",
+        "description": "RFC 8414: serve Hydra's OIDC config at the standard AS discovery path.\n\nMCP clients (Cursor) look for /.well-known/oauth-authorization-server on the\nresource's AS URL, which is this API, so we serve Hydra's document here with\nthe endpoints we proxy rewritten to point at us.",
         "operationId": "oauth_authorization_server_metadata__well_known_oauth_authorization_server_get",
         "responses": {
           "200": {
