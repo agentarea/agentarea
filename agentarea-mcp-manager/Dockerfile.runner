@@ -4,7 +4,7 @@
 #   - dev:  the compose sandbox-executor container
 # Debian base (not Alpine): agent workloads need manylinux wheels
 # (pandas, lxml, pillow) that do not install on musl.
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27.3-alpine3.24 AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -20,7 +20,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
  && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build \
     -a -installsuffix cgo -o bin/agentarea-exec-supervisor ./cmd/exec-supervisor
 
-FROM python:3.12-slim-bookworm
+FROM node:24.22.0-trixie-slim AS node
+
+FROM python:3.14.8-slim-trixie
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -37,9 +39,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tar \
     unzip \
     zip \
-    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && ln -s ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack
 
 # Venv-first: /opt/runtime/venv owns `python` and `pip` on PATH, so agent
 # `pip install` works without --break-system-packages (no PEP 668 marker).
@@ -77,16 +83,15 @@ RUN mkdir -p /etc/agentarea \
     && case "${MANAGED_ENVIRONMENT}" in \
          mutable) chown -R 10001:10001 /opt/runtime/venv ;; \
          immutable) \
-           rm -f /opt/runtime/venv/bin/pip /opt/runtime/venv/bin/pip3 /opt/runtime/venv/bin/pip3.12 \
-             /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
-             /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
-             /usr/bin/npm /usr/bin/npx /usr/bin/corepack /usr/bin/yarn /usr/bin/pnpm; \
-           find /opt/runtime/venv/lib/python3.12/site-packages -maxdepth 1 \
+           rm -f /opt/runtime/venv/bin/pip /opt/runtime/venv/bin/pip3 /opt/runtime/venv/bin/pip3.14 \
+             /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.14 \
+             /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack; \
+           find /opt/runtime/venv/lib/python3.14/site-packages -maxdepth 1 \
              \( -name 'pip' -o -name 'pip-*.dist-info' \) -exec rm -rf '{}' +; \
-           find /usr/local/lib/python3.12/site-packages -maxdepth 1 \
+           find /usr/local/lib/python3.14/site-packages -maxdepth 1 \
              \( -name 'pip' -o -name 'pip-*.dist-info' \) -exec rm -rf '{}' +; \
-           rm -rf /usr/local/lib/python3.12/ensurepip /usr/local/lib/python3.12/venv \
-             /usr/lib/node_modules/npm /usr/lib/node_modules/corepack; \
+           rm -rf /usr/local/lib/python3.14/ensurepip /usr/local/lib/python3.14/venv \
+             /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack; \
            chown -R root:root /opt/runtime/venv; \
            chmod -R a-w /opt/runtime/venv \
            ;; \
