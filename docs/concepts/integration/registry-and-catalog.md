@@ -155,7 +155,10 @@ Every move is a row of the skill's history, with its reason (`create`, `edit`,
 `GET /v1/workspaces/{workspace}/skills/{skill_id}/versions` lists it, oldest
 first, the current one marked. `POST .../versions/{version_id}/rollback` points
 the skill at that version's package again; the rollback is itself a new row, so
-it can be undone the same way. Rolling an edited install back to the version it
+it can be undone the same way. A move locks the skill's row and writes the
+pointer and its history row together, so concurrent edits are ordered and the
+history ends where the pointer is; a run already started keeps reading the
+package it was configured with. Rolling an edited install back to the version it
 was installed at re-pins it to that catalog version, after the same policy check
 an install makes, and it reads as not customized again.
 
@@ -255,7 +258,10 @@ link instead: an installed skill, agent or MCP server records `registry_item_id`
   package the first time it is read, which starts its history. `agentarea-api
   skills move-bodies-to-packages` and `move-own-copies-to-packages` do it for
   every row at once. The old copies stay until `agentarea-api skills
-  delete-moved-own-copies` (add `--dry-run` to count first).
+  delete-moved-own-copies`, which deletes only copies moved at least
+  `--min-age-hours` ago (default 168; `--dry-run` counts first). Run it once
+  every pod runs this release and no task started before the move is still
+  running: such a run reads the copy it was configured with.
 - **Nothing in the chart schedules a sync.** See
   [configure the platform registries](/self-host/catalog-registries).
 
