@@ -83,6 +83,10 @@ class AgentWorkflowBase:
         # The model-call failure _call_llm already reported as llm.call.failed.
         self._reported_llm_failure: BaseException | None = None
         self._waiting_for_continuation = False
+        # A service the run needs is down; the run waits for it (see OutageWaitMixin).
+        self._waiting_for_outage = False
+        self._outage_reason: str | None = None
+        self._retry_outage_now = False
         # A continuation grant is persisting its policy revision; a second grant is refused.
         self._continuation_in_flight = False
         self._continuation_failure_reason: str | None = None

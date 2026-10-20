@@ -1396,6 +1396,7 @@
       "error": "Ошибка",
       "cancelled": "Отменено",
       "paused": "Пауза",
+      "waitingForInfrastructure": "Ждёт сервис",
       "pending": "Ожидание",
       "scheduled": "Запланировано"
     },
@@ -1705,6 +1706,8 @@
       "taskAwaitingFollowUp": "Ждёт продолжения от человека",
       "taskAwaitingContinuation": "Ждёт продолжения",
       "taskContinued": "Задача продолжена",
+      "taskAwaitingInfrastructure": "Ждёт недоступный сервис",
+      "taskInfrastructureRecovered": "Сервис снова доступен",
       "taskRetried": "Задача перезапущена",
       "executionFinished": "Запуск завершён",
       "executionContinuedAsNew": "Запуск продолжен с новой историей",

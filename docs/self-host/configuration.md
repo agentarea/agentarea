@@ -394,6 +394,18 @@ on both through `backend.extraEnv` and `worker.extraEnv`.
 |---|---|---|---|
 | `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS` | integer | `100` | The most events one batch of a windowed stream trigger holds. A batch that reaches it fires at once, also before its window has passed; a trigger's own `max_events` may not exceed it. |
 
+### Outage wait (not in `config.yaml`)
+
+Read by the worker when it configures a run (see
+[waiting for a service](/concepts/execution/tasks#waiting-for-a-service)); a
+run keeps the values it started with. Set them through `worker.extraEnv`.
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | duration | `5m` | How long an activity retries an unreachable service before the run starts waiting for it. |
+| `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | durations, comma-separated | `1m,5m,10m` | The pauses between retries while the run waits; the last one repeats. |
+| `AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` | duration | `24h` | How long the run waits before it fails with `dependency_unavailable`. |
+
 ### Event service (group `eventService` values, chart keys only)
 
 | Setting | Helm value | Default |

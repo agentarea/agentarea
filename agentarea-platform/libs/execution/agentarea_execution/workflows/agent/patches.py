@@ -140,3 +140,6 @@ UNSTARTED_TASK_MARKED_RUNNING_PATCH = "unstarted-task-marked-running-v1"
 # answers the delegation as stopped and the parent carries on; before, its
 # cancellation read as the parent's own and stopped the parent too.
 CHILD_STOP_IS_NOT_PARENT_STOP_PATCH = "child-stop-is-not-parent-stop-v1"
+# Activating a skill reads its SKILL.md in an activity; before, the body rode in
+# the config activity's result and activation used that copy.
+SKILL_BODY_ON_ACTIVATION_PATCH = "skill-body-on-activation-v1"

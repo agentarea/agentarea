@@ -61,6 +61,8 @@ const TYPE_KEYS: Readonly<Record<TaskEventType, string>> = {
   "task.awaiting_follow_up": "taskAwaitingFollowUp",
   "task.awaiting_continuation": "taskAwaitingContinuation",
   "task.continued": "taskContinued",
+  "task.awaiting_infrastructure": "taskAwaitingInfrastructure",
+  "task.infrastructure_recovered": "taskInfrastructureRecovered",
   "task.retried": "taskRetried",
   "execution.finished": "executionFinished",
   "execution.continued_as_new": "executionContinuedAsNew",

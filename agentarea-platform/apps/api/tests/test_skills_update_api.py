@@ -185,6 +185,7 @@ def test_a_skill_response_says_whether_the_workspace_edited_it():
         s3_path=f"skills/ws-acme/{SKILL_ID}/",
         update_available=True,
         catalog_provenance=CatalogProvenance(
+            registry_id="2b0c6a7e-1d4f-4e8a-9b3c-5d6e7f8a9b0c",
             registry_name="acme-skills",
             registry_scope="workspace",
             registry_trust="private",

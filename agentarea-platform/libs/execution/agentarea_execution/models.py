@@ -3,6 +3,7 @@
 Integrates with existing AgentArea domain models and uses proper UUID types.
 """
 
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import Any, Literal
@@ -297,14 +298,33 @@ class AgentConfigRequest(BaseModel):
     task_parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class OutageWait(BaseModel):
+    """How a run rides out a dependency it cannot reach, read from the worker's settings.
+
+    An activity retries for ``retry_window``; then the run waits, retrying after
+    each ``backoff`` step (the last one repeats), and fails after ``deadline``.
+    """
+
+    retry_window: timedelta = timedelta(minutes=5)
+    backoff: list[timedelta] = Field(
+        default_factory=lambda: [timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=10)],
+        min_length=1,
+    )
+    deadline: timedelta = timedelta(hours=24)
+
+
 class SkillInfo(BaseModel):
-    """Skill information for execution context."""
+    """What a run's prompt lists of a skill; its body is read when it is activated."""
 
     id: str
     name: str
-    description: str = ""  # For catalog display (progressive disclosure)
-    content: str  # Markdown body
-    files: list[str] = Field(default_factory=list)  # Available file paths
+    description: str = ""
+    # The skill's package when the run was configured: a catalog package's path
+    # is its digest, a workspace's own copy is keyed by the skill.
+    package: str | None = None
+    # Histories recorded before bodies were read at activation carry them here.
+    content: str = ""
+    files: list[str] = Field(default_factory=list)
 
 
 class RuntimePython(BaseModel):
@@ -433,6 +453,8 @@ class AgentConfigResult(BaseModel):
     runtime_event_data: dict[str, Any] = Field(default_factory=dict)
     # Hash of the agent's declared config as resolved for this run.
     config_hash: str | None = None
+    # How long the run waits out a dependency outage; None in histories recorded before.
+    outage_wait: OutageWait | None = None
     # OpenAPI attachment config name -> the operation tools it gives the model.
     # Resolved here so policy can govern a connection's every operation by its
     # name without workflow code looking the connection up.
@@ -1085,6 +1107,39 @@ class MaterializeSkillFilesRequest(BaseModel):
     workspace_id: str | None = None
     task_id: str | None = None
     user_context_data: dict[str, Any] | None = None
+
+
+class ActivateSkillRequest(BaseModel):
+    """Activate a skill: read its SKILL.md, put its files in the sandbox, log its entry.
+
+    The entry is written at ``seq`` under ``event_id``, both assigned by the
+    workflow, so a retried call writes it once.
+    """
+
+    skill_id: UUID
+    skill_name: str
+    user_context_data: dict[str, Any]
+    workspace_id: str
+    task_id: str
+    workflow_id: str | None = None
+    execution_id: str | None = None
+    tool_call_id: str
+    seq: int
+    event_id: str
+    iteration: int | None = None
+    # The share of the model's window a skill's instructions may take.
+    max_tokens: int = Field(gt=0)
+
+
+class ActivateSkillResult(BaseModel):
+    """What the run needs of the logged entry: its size, never its text."""
+
+    chars: int
+    est_tokens: int
+    # The SKILL.md was over max_tokens; the entry points at where it is instead.
+    summarized: bool = False
+    # Links the instructions carry, for the web fetch gate.
+    urls: list[str] = Field(default_factory=list)
 
 
 class MaterializeSkillFilesResult(BaseModel):

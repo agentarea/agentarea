@@ -43,11 +43,17 @@ import { latestContinuationReason } from "@/lib/continuation";
 import type { Part } from "@/lib/events/contract";
 import { PartRenderer } from "@/lib/events/parts/PartRenderer";
 import { TaskFileUrlContext } from "@/lib/events/parts/TaskFileUrl";
-import { taskSandboxFileUrl } from "@/lib/task-files";
 import { useTaskEvents } from "@/lib/events/useTaskEvents";
 import { getTaskStatusPresentation } from "@/lib/status";
+import { taskSandboxFileUrl } from "@/lib/task-files";
 
-const QUEUEABLE_STATUSES = ["running", "paused", "blocked", "completed"];
+const QUEUEABLE_STATUSES = [
+  "running",
+  "paused",
+  "waiting_for_infrastructure",
+  "blocked",
+  "completed",
+];
 
 export type TaskConversationTask = Pick<TaskWithAgent, "id" | "agent_id"> &
   Partial<
@@ -151,7 +157,9 @@ export function TaskConversation({
   );
   const historyReady = !eventsLoading && !eventsError;
   const streamKnown = historyReady && (parts.length > 0 || timeline.length > 0);
-  const status = streamKnown ? streamStatus : currentStatus || task.status || "";
+  const status = streamKnown
+    ? streamStatus
+    : currentStatus || task.status || "";
   const isActive =
     QUEUEABLE_STATUSES.includes(status) || status === "waiting_for_input";
   const agentName = task.agent_name || tc("agentFallback");
@@ -333,26 +341,26 @@ export function TaskConversation({
             </div>
           )}
           <TaskFileUrlContext.Provider value={taskFileUrl}>
-          {activitySegments.map((segment) =>
-            segment.kind === "work" ? (
-              <ActivityGroup
-                key={segment.run.id}
-                run={segment.run}
-                onFormSubmit={handleFormSubmit}
-                isInteractionClosed={isInteractionClosed}
-                onA2UIAction={dispatchA2UIAction}
-                paused={streamStatus === "paused"}
-              />
-            ) : (
-              <PartRenderer
-                key={segment.part.partId}
-                part={segment.part}
-                interactionClosed={isInteractionClosed(segment.part)}
-                onFormSubmit={handleFormSubmit}
-                onA2UIAction={dispatchA2UIAction}
-              />
-            )
-          )}
+            {activitySegments.map((segment) =>
+              segment.kind === "work" ? (
+                <ActivityGroup
+                  key={segment.run.id}
+                  run={segment.run}
+                  onFormSubmit={handleFormSubmit}
+                  isInteractionClosed={isInteractionClosed}
+                  onA2UIAction={dispatchA2UIAction}
+                  paused={streamStatus === "paused"}
+                />
+              ) : (
+                <PartRenderer
+                  key={segment.part.partId}
+                  part={segment.part}
+                  interactionClosed={isInteractionClosed(segment.part)}
+                  onFormSubmit={handleFormSubmit}
+                  onA2UIAction={dispatchA2UIAction}
+                />
+              )
+            )}
           </TaskFileUrlContext.Provider>
           {showTerminalMessage && (
             <StatusIndicator kind={terminalKind}>
@@ -441,7 +449,9 @@ export function TaskConversation({
                   role="status"
                   className="px-1 pt-1.5 text-[11px] leading-4 text-muted-foreground"
                 >
-                  {eventsError ? tc("historyUnavailable") : tc("historyLoading")}
+                  {eventsError
+                    ? tc("historyUnavailable")
+                    : tc("historyLoading")}
                 </p>
               )}
             </div>

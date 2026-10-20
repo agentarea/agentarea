@@ -21,7 +21,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-VOCABULARY_VERSION = 4
+VOCABULARY_VERSION = 5
 
 LLM_STARTED = "llm.call.started"
 LLM_COMPLETED = "llm.call.completed"
@@ -49,6 +49,8 @@ TASK_CANCELLED = "task.cancelled"
 TASK_AWAITING_FOLLOW_UP = "task.awaiting_follow_up"
 TASK_AWAITING_CONTINUATION = "task.awaiting_continuation"
 TASK_CONTINUED = "task.continued"
+TASK_AWAITING_INFRASTRUCTURE = "task.awaiting_infrastructure"
+TASK_INFRASTRUCTURE_RECOVERED = "task.infrastructure_recovered"
 TASK_RETRIED = "task.retried"
 EXECUTION_FINISHED = "execution.finished"
 EXECUTION_CONTINUED_AS_NEW = "execution.continued_as_new"
@@ -91,6 +93,10 @@ EVENT_DESCRIPTIONS: dict[str, str] = {
     TASK_AWAITING_FOLLOW_UP: "A conversational run replied and waits for the next message.",
     TASK_AWAITING_CONTINUATION: "The run hit a limit and waits for a decision to continue.",
     TASK_CONTINUED: "A run waiting for continuation was allowed to go on.",
+    TASK_AWAITING_INFRASTRUCTURE: (
+        "A service the run needs is unreachable; the run waits and retries on its own."
+    ),
+    TASK_INFRASTRUCTURE_RECOVERED: "The service the run waited for answered; the run went on.",
     TASK_RETRIED: "A failed run was started again from its last state.",
     EXECUTION_FINISHED: "The workflow execution ended, whatever the outcome.",
     EXECUTION_CONTINUED_AS_NEW: "The workflow rolled its history over into a fresh execution.",

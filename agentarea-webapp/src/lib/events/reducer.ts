@@ -18,9 +18,11 @@ import {
   EventInput,
   Part,
   TASK_AWAITING_CONTINUATION,
+  TASK_AWAITING_INFRASTRUCTURE,
   TASK_COMPLETED,
   TASK_CONTINUED,
   TASK_FAILED,
+  TASK_INFRASTRUCTURE_RECOVERED,
   TERMINAL_TYPES,
 } from "./contract";
 
@@ -49,6 +51,7 @@ export type TaskStatus =
   | "waiting_for_approval"
   | "blocked"
   | "waiting_for_continuation"
+  | "waiting_for_infrastructure"
   | "completed"
   | "failed"
   | "cancelled";
@@ -335,6 +338,26 @@ export function applyEvent(state: EventState, event: EventInput): EventState {
   }
   if (canonical === EXECUTION_RESUMED && state.status === "paused") {
     return { ...state, timeline, status: "running" };
+  }
+  // A service the run needs is down: the run waits and retries on its own.
+  if (canonical === TASK_AWAITING_INFRASTRUCTURE) {
+    return {
+      ...state,
+      timeline,
+      status: "waiting_for_infrastructure",
+      executionStatus: "waiting",
+    };
+  }
+  if (
+    canonical === TASK_INFRASTRUCTURE_RECOVERED &&
+    state.status === "waiting_for_infrastructure"
+  ) {
+    return {
+      ...state,
+      timeline,
+      status: "running",
+      executionStatus: "running",
+    };
   }
   if (canonical === TASK_AWAITING_CONTINUATION) {
     return {

@@ -17465,7 +17465,7 @@ export type GetAllTasksV1TasksGetData = {
          *
          * Filter to tasks in any of these statuses
          */
-        status?: Array<'submitted' | 'pending' | 'preparing' | 'scheduled' | 'running' | 'working' | 'waiting_for_input' | 'waiting_for_approval' | 'waiting_for_continuation' | 'blocked' | 'completed' | 'failed' | 'cancelled'> | null;
+        status?: Array<'submitted' | 'pending' | 'preparing' | 'scheduled' | 'running' | 'working' | 'waiting_for_input' | 'waiting_for_approval' | 'waiting_for_continuation' | 'waiting_for_infrastructure' | 'blocked' | 'completed' | 'failed' | 'cancelled'> | null;
         /**
          * Created By
          *

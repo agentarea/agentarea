@@ -170,7 +170,18 @@ class FakeCatalogRepo:
 
     async def provenance_for(self, item_ids):
         wanted = {str(i) for i in item_ids}
-        return {k: v for k, v in self.provenance.items() if k in wanted}
+        found = {
+            i.id: CatalogProvenance(
+                registry_id=str(i.registry_id),
+                registry_name="registry",
+                registry_scope="platform",
+                registry_trust=i.registry_trust,
+                removed_upstream=False,
+            )
+            for i in self._items
+            if i.id in wanted and i.registry_id
+        }
+        return {**found, **{k: v for k, v in self.provenance.items() if k in wanted}}
 
     async def get_item(self, item_id):
         return next((i for i in self._items if i.id == item_id), None)
@@ -500,6 +511,7 @@ async def test_list_paginated_flags_update_available_on_returned_page():
         registry_item_id=forked_item.id,
     )
     provenance = CatalogProvenance(
+        registry_id=str(uuid4()),
         registry_name="community",
         registry_scope="platform",
         registry_trust="community",

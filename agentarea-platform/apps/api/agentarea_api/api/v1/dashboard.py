@@ -70,6 +70,8 @@ _STATUS_PLACE: dict[TaskStatus, _DashboardPlace] = {
     "waiting_for_input": "hitl",
     "waiting_for_approval": "hitl",
     "waiting_for_continuation": "continuation",
+    # Still the run's own: it retries by itself until the service answers.
+    "waiting_for_infrastructure": "active",
     "blocked": "blocked",
     "completed": "finished",
     "failed": "finished",

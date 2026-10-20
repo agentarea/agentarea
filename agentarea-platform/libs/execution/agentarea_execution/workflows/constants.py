@@ -57,6 +57,9 @@ TOKENS_PER_MESSAGE_OVERHEAD: Final[int] = 4  # ~4 tokens overhead per message
 
 # Dynamic context discovery — output offloading
 TOOL_OUTPUT_OFFLOAD_CHARS: Final[int] = 8000  # ~2000 tokens
+# The share of the model's window one activated skill's instructions may take;
+# they are never compacted, so a larger SKILL.md is pointed at instead.
+SKILL_CONTEXT_SHARE: Final[float] = 0.1
 OUTPUT_SUMMARY_HEAD_CHARS: Final[int] = 500
 OUTPUT_SUMMARY_TAIL_CHARS: Final[int] = 200
 READ_OUTPUT_MAX_RETURN_CHARS: Final[int] = 16000  # Safety limit for read_tool_output
@@ -75,6 +78,8 @@ class EventTypes:
     WORKFLOW_AWAITING_FOLLOW_UP: Final[str] = contract.TASK_AWAITING_FOLLOW_UP
     WORKFLOW_AWAITING_CONTINUATION: Final[str] = contract.TASK_AWAITING_CONTINUATION
     WORKFLOW_CONTINUED: Final[str] = contract.TASK_CONTINUED
+    WORKFLOW_AWAITING_INFRASTRUCTURE: Final[str] = contract.TASK_AWAITING_INFRASTRUCTURE
+    WORKFLOW_INFRASTRUCTURE_RECOVERED: Final[str] = contract.TASK_INFRASTRUCTURE_RECOVERED
     WORKFLOW_RETRIED: Final[str] = contract.TASK_RETRIED
     CONTINUED_AS_NEW: Final[str] = contract.EXECUTION_CONTINUED_AS_NEW
     EXECUTION_PAUSED: Final[str] = contract.EXECUTION_PAUSED
@@ -160,6 +165,7 @@ class Activities:
     UPDATE_TASK_GOVERNANCE_SNAPSHOT: Final[str] = "update_task_governance_snapshot_activity"
     CHECK_MONTHLY_SPEND_CAP: Final[str] = "check_monthly_spend_cap_activity"
     MATERIALIZE_SKILL_FILES: Final[str] = "materialize_skill_files_activity"
+    ACTIVATE_SKILL: Final[str] = "activate_skill_activity"
     # Dynamic context discovery
     DISCOVER_TOOL_PROVIDERS: Final[str] = "discover_tool_providers_activity"
     STORE_CONTEXT_OUTPUT: Final[str] = "store_context_output"
@@ -183,6 +189,7 @@ class ExecutionStatus:
     WAITING_FOR_APPROVAL: Final[str] = "waiting_for_approval"
     WAITING_FOR_INPUT: Final[str] = "waiting_for_input"
     WAITING_FOR_CONTINUATION: Final[str] = "waiting_for_continuation"
+    WAITING_FOR_INFRASTRUCTURE: Final[str] = "waiting_for_infrastructure"
     BLOCKED: Final[str] = "blocked"
     TOOL_EXECUTION: Final[str] = "tool_execution"
     EVALUATING: Final[str] = "evaluating"

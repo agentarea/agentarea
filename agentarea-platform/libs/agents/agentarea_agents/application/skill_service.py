@@ -718,16 +718,41 @@ class SkillService:
                 skill.update_available = True
             skill.catalog_provenance = provenance.get(str(item_id))
 
+    async def require_runnable(self, skill: Skill) -> None:
+        """Ask the install policy again when a run uses a skill a registry supplied.
+
+        An install was decided once; a rule written since (denying a trust
+        level or a registry) holds for the skills already installed from it.
+        A skill imported from a GitHub URL is from the public source; one the
+        workspace wrote has no registry and is not asked about.
+        """
+        item_id = getattr(skill, "registry_item_id", None)
+        if item_id is not None:
+            provenance = (await self._get_catalog_repository().provenance_for([str(item_id)])).get(
+                str(item_id)
+            )
+            if provenance is None:
+                raise CatalogInstallRefusedError(
+                    f"Skill '{skill.name}' came from a registry item that no longer exists"
+                )
+            await self.install_guard.require_allowed(
+                registry_id=provenance.registry_id, trust=provenance.registry_trust
+            )
+        elif skill.source_type == SkillSourceType.GITHUB.value:
+            await self.require_github_import_allowed()
+
     async def get_with_catalog(self, skill_id: UUID | str, *, to_run: bool = False) -> Skill | None:
         """Get a tenant skill by id, falling back to a catalog projection.
 
         Returns the tenant ``skills`` row if present; otherwise projects the
         matching catalog ``registry_item`` (read-only). No DB row is created.
         A run reads the catalog item's content without installing it, so with
-        ``to_run`` the install policy decides first.
+        ``to_run`` the install policy decides first, for an installed skill too.
         """
         skill = await self.get(skill_id)
         if skill is not None:
+            if to_run:
+                await self.require_runnable(skill)
             return skill
         item = await self._get_catalog_repository().get_item(str(skill_id))
         if item is None:

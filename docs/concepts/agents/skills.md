@@ -70,15 +70,31 @@ withheld. See [tool authorization](/concepts/governance/tool-authorization).
 
 ### Tier 2 — activation
 
-`activate_skill` runs inside the workflow rather than as a Temporal activity —
-the content is already in workflow state, so there is nothing to fetch. It is
-still gated: `_gate_tool_call` runs first, and a denied call never reaches the
-skill.
+The run's configuration carries each skill's name, description and package
+path, never its `SKILL.md`. The body is read when the model activates the
+skill, by `activate_skill_activity`. It is still gated: `_gate_tool_call` runs
+first, and a denied call never reaches the skill.
 
-The tool returns the skill's `SKILL.md` text wrapped in a
-`<skill_content name="...">` element, followed by a list of the skill's other
-files. Activation is idempotent per run: calling it twice returns "already
-active in this session" instead of a second copy of the text.
+The activity asks the install policy, reads `SKILL.md` from the skill's package
+(a catalog package from the worker's cache, keyed by its digest), copies the
+package into the sandbox, and writes the tool result straight into the task
+log at the position the workflow reserved for it. It returns only the entry's
+size, so the body never enters Temporal history, whatever it weighs. The entry
+is the `SKILL.md` text wrapped in a `<skill_content name="...">` element,
+followed by where the skill's files are in the sandbox. Activation is
+idempotent per run: calling it twice returns "already active in this session"
+instead of a second copy of the text.
+
+An entry takes at most a tenth of the model's context window
+(`SKILL_CONTEXT_SHARE`). A larger `SKILL.md` is summarized: its size, its
+opening, and the path of its copy in the sandbox (or a `read_tool_output` id
+when there is no sandbox). Activated entries are never compacted, so the cap
+holds for the rest of the run.
+
+A refusal by the install policy, a skill that no longer exists, and a GitHub
+source that is gone come back to the model as a tool error naming the skill.
+Unreachable storage is waited out (see
+[tasks](/concepts/execution/tasks#waiting-for-a-service)).
 
 Activated skill content is then protected from context compaction. `SkillContextGuard`
 identifies these messages two ways — by tool name `activate_skill`, and by the
@@ -89,7 +105,7 @@ for output.
 
 ### Tier 3 — materialization
 
-Immediately after activation the workflow copies the skill's whole folder into
+Activation also copies the skill's whole folder into
 the task's sandbox workspace, under `skills/<slug>-<hash8>/`. From that point
 the agent reaches the skill's scripts with an ordinary shell command. There is
 no separate "run skill script" tool, and that absence is the design: one
@@ -166,13 +182,14 @@ relevance score to inspect afterwards — only the presence or absence of an
 
 ## Limits
 
-- **The catalog does not name a skill's files.** For a package with more than
-  `SKILL.md`, the file list built into the config is the literal placeholder
-  `["(additional files available)"]`, not the real filenames. The model learns
-  the actual names only after activation materializes the folder.
-- **`SKILL.md` size is capped per run.** Every attached skill's `SKILL.md` is
-  read into the run's configuration: at most 256 KB per skill and 1 MB for all
-  of them together, or the task fails before the first model call.
+- **The catalog does not name a skill's files.** The model learns their names
+  only after activation puts the folder in the sandbox.
+- **The install policy is asked again at run time.** A skill installed from a
+  registry, or imported from a GitHub URL (the `github` registry, trust
+  `community`), is not offered to a run once a rule denies its registry or
+  trust level, and activating it fails with the rule. This holds for skills
+  installed before the rule was written. Skills a workspace wrote itself have
+  no registry and are not asked about.
 - **An early activation can block compaction entirely.** The boundary search
   rejects any split that would drop protected skill content, and returns 0 — no
   compaction — when no safe boundary exists. A skill activated in the first

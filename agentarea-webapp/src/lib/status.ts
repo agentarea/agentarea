@@ -190,6 +190,13 @@ export function getTaskStatusPresentation(status: string): StatusPresentation {
       return { label: "Cancelled", labelKey: "cancelled", kind: "cancelled" };
     case "paused":
       return { label: "Paused", labelKey: "paused", kind: "paused" };
+    // Held by the platform, not a person: the run retries until the service answers.
+    case "waiting_for_infrastructure":
+      return {
+        label: "Waiting for a service",
+        labelKey: "waitingForInfrastructure",
+        kind: "paused",
+      };
     // Accepted but not picked up by a worker yet. `submitted` is the status a
     // task is created with and `preparing` precedes its dispatch; A2A folds
     // both into SUBMITTED alongside `pending`, and so do we.

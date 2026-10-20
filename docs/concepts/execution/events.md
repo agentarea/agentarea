@@ -49,6 +49,7 @@ a2ui.create           a2ui.update.components
 a2ui.update.data      a2ui.delete
 task.started          task.completed      task.failed          task.cancelled
 task.awaiting_continuation                task.continued
+task.awaiting_infrastructure              task.infrastructure_recovered
 ```
 
 Timeline and diagnostic events are dotted too and derive no part: `turn.started`,

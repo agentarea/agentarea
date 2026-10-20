@@ -32,11 +32,13 @@ export const TASK_FAILED = "task.failed";
 export const TASK_CANCELLED = "task.cancelled";
 export const TASK_AWAITING_CONTINUATION = "task.awaiting_continuation";
 export const TASK_CONTINUED = "task.continued";
+export const TASK_AWAITING_INFRASTRUCTURE = "task.awaiting_infrastructure";
+export const TASK_INFRASTRUCTURE_RECOVERED = "task.infrastructure_recovered";
 export const MESSAGE_RECEIVED = "message.received";
 export const CONTEXT_COMPACTED = "context.compacted";
 
 /** Mirrors VOCABULARY_VERSION in contract.py; bumps with every change to EVENT_TYPES. */
-export const VOCABULARY_VERSION = 4;
+export const VOCABULARY_VERSION = 5;
 
 /**
  * The closed task-event vocabulary, the same list as EVENT_TYPES in
@@ -50,6 +52,8 @@ export const EVENT_TYPES = [
   "task.awaiting_follow_up",
   "task.awaiting_continuation",
   "task.continued",
+  "task.awaiting_infrastructure",
+  "task.infrastructure_recovered",
   "task.retried",
   "execution.finished",
   "execution.continued_as_new",
