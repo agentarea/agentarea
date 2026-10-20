@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import redis.asyncio as redis
 from redis.exceptions import ResponseError
+from redis.typing import KeyT, StreamIdT
 
 from .interface import BrokerMessage, GroupInfo, LiveChannels, PendingSummary
 
@@ -33,6 +34,11 @@ if redis.call('XDEL', KEYS[1], ARGV[1]) == 0 then
 end
 return redis.call('XADD', KEYS[2], '*', unpack(ARGV, 2))
 """
+
+#: Where a group the broker lost is recreated. It went with its stream, so
+#: everything the stream holds now was appended after the loss and never
+#: delivered to the group; "$" would drop what producers wrote in between.
+LOST_GROUP_START = "0"
 
 #: A consumer idle this long with nothing pending belongs to a stopped process.
 #: A live one reads at least every block timeout, so it is never this idle.
@@ -63,13 +69,19 @@ return removed
 """
 
 
+def _is_lost_group(exc: ResponseError) -> bool:
+    return str(exc).startswith("NOGROUP")
+
+
 class RedisStreamsBroker:
     """Broker backed by Redis Streams + consumer groups.
 
     Stream entries are produced with `XADD`, consumed via `XREADGROUP` on a
     named consumer group, ACKed with `XACK`, and reclaimed from dead consumers
     via `XAUTOCLAIM`. `ensure_group` runs `XGROUP CREATE … MKSTREAM` so the
-    first producer creates the stream lazily.
+    first producer creates the stream lazily. A read or reclaim that finds its
+    group gone (``NOGROUP``: Redis restarted without its data) recreates it from
+    `LOST_GROUP_START` and goes on.
 
     Callers name streams logically; every Redis key is ``<namespace>.<stream>``
     and messages come back with the logical name.
@@ -148,13 +160,7 @@ class RedisStreamsBroker:
         block_ms: int = 5000,
     ) -> list[BrokerMessage]:
         client = await self._get_client()
-        response: Any = await client.xreadgroup(
-            groupname=group,
-            consumername=consumer,
-            streams={self._key(stream): ">"},
-            count=count,
-            block=block_ms,
-        )
+        response = await self._read_group(client, [stream], group, consumer, count, block_ms)
         msgs = self._flatten_xread(response)
         return await self._enrich_with_delivery_count(client, stream, group, msgs)
 
@@ -169,13 +175,7 @@ class RedisStreamsBroker:
         if not streams:
             return []
         client = await self._get_client()
-        response: Any = await client.xreadgroup(
-            groupname=group,
-            consumername=consumer,
-            streams=dict.fromkeys((self._key(s) for s in streams), ">"),
-            count=count,
-            block=block_ms,
-        )
+        response = await self._read_group(client, streams, group, consumer, count, block_ms)
         by_stream: dict[str, list[BrokerMessage]] = {}
         for msg in self._flatten_xread(response):
             by_stream.setdefault(msg.stream, []).append(msg)
@@ -199,14 +199,20 @@ class RedisStreamsBroker:
     ) -> list[BrokerMessage]:
         client = await self._get_client()
         # redis-py returns (next_start_id, [(id, {fields})], deleted_ids)
-        response: Any = await client.xautoclaim(
-            name=self._key(stream),
-            groupname=group,
-            consumername=consumer,
-            min_idle_time=min_idle_ms,
-            start_id=start,
-            count=count,
-        )
+        try:
+            response: Any = await client.xautoclaim(
+                name=self._key(stream),
+                groupname=group,
+                consumername=consumer,
+                min_idle_time=min_idle_ms,
+                start_id=start,
+                count=count,
+            )
+        except ResponseError as exc:
+            if not _is_lost_group(exc):
+                raise
+            await self._recreate_lost_group([stream], group, exc)
+            return []
         await self._prune_stopped(client, stream, group)
         if not response:
             return []
@@ -284,6 +290,41 @@ class RedisStreamsBroker:
         client = await self._get_client()
         newest: Any = await client.xrevrange(self._key(stream), max="+", min="-", count=1)
         return newest[0][0] if newest else "0-0"
+
+    async def _read_group(
+        self,
+        client: redis.Redis,
+        streams: list[str],
+        group: str,
+        consumer: str,
+        count: int,
+        block_ms: int,
+    ) -> Any:
+        keys: dict[KeyT, StreamIdT] = {self._key(s): ">" for s in streams}
+        try:
+            return await client.xreadgroup(
+                groupname=group, consumername=consumer, streams=keys, count=count, block=block_ms
+            )
+        except ResponseError as exc:
+            if not _is_lost_group(exc):
+                raise
+            await self._recreate_lost_group(streams, group, exc)
+        return await client.xreadgroup(
+            groupname=group, consumername=consumer, streams=keys, count=count, block=block_ms
+        )
+
+    async def _recreate_lost_group(
+        self, streams: list[str], group: str, lost: ResponseError
+    ) -> None:
+        logger.warning(
+            "Consumer group %s is gone from %s; the broker lost its data. Recreating it from %s",
+            group,
+            ", ".join(streams),
+            LOST_GROUP_START,
+            exc_info=lost,
+        )
+        for stream in streams:
+            await self.ensure_group(stream, group, start=LOST_GROUP_START)
 
     async def _prune_stopped(self, client: redis.Redis, stream: str, group: str) -> None:
         pruned = client.eval(_PRUNE_SCRIPT, 1, self._key(stream), group, self._stopped_after_ms)
