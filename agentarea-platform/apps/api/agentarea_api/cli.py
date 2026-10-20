@@ -378,25 +378,39 @@ async def _move_own_copies_to_packages() -> None:
 
 @skills.command("delete-moved-own-copies")
 @click.option("--dry-run", is_flag=True, help="Count what would be deleted; delete nothing.")
-def delete_moved_own_copies(dry_run: bool):
+@click.option(
+    "--min-age-hours",
+    default=168,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="Keep every copy moved into a package more recently than this.",
+)
+def delete_moved_own_copies(dry_run: bool, min_age_hours: int):
     """Delete the pre-package copies no skill points at any more (ADR-0044).
 
-    Only the mutable skills/<workspace>/<id>/ copies of skills that now point
-    at a package are deleted. Packages are never deleted: other skills, and
-    each skill's history, may point at them.
+    Only the mutable skills/<workspace>/<id>/ copies of skills moved into a
+    package at least --min-age-hours ago are deleted. Run it once every pod
+    runs this release and no task started before the move is still running:
+    such a run reads the copy it was configured with. Packages are never
+    deleted: other skills, and each skill's history, may point at them.
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    asyncio.run(_delete_moved_own_copies(dry_run=dry_run))
+    asyncio.run(_delete_moved_own_copies(dry_run=dry_run, min_age_hours=min_age_hours))
 
 
-async def _delete_moved_own_copies(*, dry_run: bool) -> None:
+async def _delete_moved_own_copies(*, dry_run: bool, min_age_hours: int = 168) -> None:
+    from datetime import timedelta
+
     from agentarea_agents.application import skill_packages
     from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
 
     _require_object_storage()
     db = Database(get_db_settings())
     prefixes, files = await skill_packages.delete_moved_own_copies(
-        db.async_session_factory, SkillStorageService(), dry_run=dry_run
+        db.async_session_factory,
+        SkillStorageService(),
+        dry_run=dry_run,
+        min_age=timedelta(hours=min_age_hours),
     )
     verb = "Would delete" if dry_run else "Deleted"
     click.echo(f"{verb} {prefixes} moved skill copies ({files} files)")

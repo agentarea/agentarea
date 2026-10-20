@@ -31,6 +31,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
@@ -45,6 +46,7 @@ from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubSkillImporter,
 )
 from agentarea_agents.infrastructure.skill_repository import (
+    SkillPackageMovedError,
     SkillRepository,
     list_own_copy_skills,
     list_pre_package_skills,
@@ -170,7 +172,9 @@ class SkillPackages:
         self._parser = SkillParser()
 
     async def read_files(self, skill: Skill, *, at: str | None = None) -> dict[str, bytes]:
-        s3_path = await self._package_of(skill, at)
+        return await self._files_at(await self._package_of(skill, at))
+
+    async def _files_at(self, s3_path: str) -> dict[str, bytes]:
         if not is_immutable_package(s3_path):
             return await self._storage.read_package(s3_path)
         files = _cache_get(s3_path)
@@ -197,7 +201,7 @@ class SkillPackages:
         if cached is not None:
             return self._main_file(skill, cached)
         if is_immutable_package(s3_path):
-            return self._main_file(skill, await self.read_files(skill, at=s3_path))
+            return self._main_file(skill, await self._files_at(s3_path))
         paths = [info.path for info in await self._storage.list_files(s3_path)]
         main = self._parser.find_main_skill_file(paths)
         if main is None:
@@ -259,7 +263,12 @@ class SkillPackages:
                 return skill.s3_path
             files = {**files, main: body}
         s3_path = await self._storage.store_workspace_package(files, str(skill.workspace_id))
-        updated = await self._repository.set_package(str(skill.id), s3_path, reason="migrate")
+        try:
+            updated = await self._repository.set_package(
+                str(skill.id), s3_path, reason="migrate", expect=skill.s3_path
+            )
+        except SkillPackageMovedError as e:
+            return self._moved_meanwhile(skill, e)
         if updated is None:
             raise RuntimeError(f"Skill {skill.id} vanished while its body was moved")
         skill.s3_path, skill.content = s3_path, None
@@ -284,7 +293,13 @@ class SkillPackages:
         if not files:
             raise ValueError(f"Skill {skill.id} points at {own}, which holds no files")
         s3_path = await self._storage.store_workspace_package(files, str(skill.workspace_id))
-        if await self._repository.set_package(str(skill.id), s3_path, reason="migrate") is None:
+        try:
+            moved = await self._repository.set_package(
+                str(skill.id), s3_path, reason="migrate", expect=own
+            )
+        except SkillPackageMovedError as e:
+            return self._moved_meanwhile(skill, e)
+        if moved is None:
             raise RuntimeError(f"Skill {skill.id} vanished while its copy was moved")
         skill.s3_path = s3_path
         logger.info(
@@ -295,6 +310,15 @@ class SkillPackages:
             s3_path,
         )
         return s3_path
+
+    @staticmethod
+    def _moved_meanwhile(skill: Skill, error: SkillPackageMovedError) -> str:
+        """Another request moved the skill first (an edit, or the same move): use its package."""
+        logger.info("Skill %s was moved to %s meanwhile; reading that", skill.id, error.current)
+        if error.current is None:
+            raise RuntimeError(f"Skill {skill.id} lost its package while it was moved")
+        skill.s3_path, skill.content = error.current, None
+        return error.current
 
     async def store_catalog_item(
         self, spec: dict[str, Any] | None, *, workspace_id: str | None = None
@@ -530,17 +554,19 @@ async def delete_moved_own_copies(
     storage: SkillStorageService,
     *,
     dry_run: bool = False,
+    min_age: timedelta = timedelta(days=7),
 ) -> tuple[int, int]:
     """Delete the pre-package copies no skill points at any more; ``(prefixes, objects)``.
 
     A copy belongs to one skill only, so once that skill points elsewhere
-    nothing reads it. Packages are never deleted here: other skills, and the
-    history of this one, may point at them.
+    only a run configured before the move reads it; ``min_age`` keeps every
+    copy moved more recently than that. Packages are never deleted here:
+    other skills, and the history of this one, may point at them.
     """
     from agentarea_agents.infrastructure.skill_repository import list_moved_own_copies
 
     async with session_factory() as session:
-        prefixes = await list_moved_own_copies(session)
+        prefixes = await list_moved_own_copies(session, moved_before=datetime.now() - min_age)
     deleted_prefixes = deleted_objects = 0
     for prefix in prefixes:
         files = await storage.list_files(prefix)

@@ -33,14 +33,19 @@ def test_moving_reports_what_moved_and_fails_on_a_copy_that_did_not(packages):
     assert failed.exit_code == 1
 
 
-@pytest.mark.parametrize(("args", "dry_run"), [([], False), (["--dry-run"], True)])
-def test_deleting_moved_copies_says_how_many(packages, args, dry_run):
+@pytest.mark.parametrize(
+    ("args", "dry_run", "hours"),
+    [([], False, 168), (["--dry-run", "--min-age-hours", "0"], True, 0)],
+)
+def test_deleting_moved_copies_says_how_many(packages, args, dry_run, hours):
+    from datetime import timedelta
+
     _, delete = packages
     delete.return_value = (2, 5)
 
     result = CliRunner().invoke(cli.cli, ["skills", "delete-moved-own-copies", *args])
 
     assert result.exit_code == 0, result.output
-    assert delete.await_args.kwargs == {"dry_run": dry_run}
+    assert delete.await_args.kwargs == {"dry_run": dry_run, "min_age": timedelta(hours=hours)}
     verb = "Would delete" if dry_run else "Deleted"
     assert f"{verb} 2 moved skill copies (5 files)" in result.output

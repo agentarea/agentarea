@@ -14,6 +14,7 @@ from agentarea_agents.application.skill_service import (
     SkillService,
     _project_catalog_skill,
 )
+from agentarea_agents.infrastructure.skill_repository import ANY_PACKAGE, SkillPackageMovedError
 from agentarea_agents.domain.skill_models import Skill
 from agentarea_agents.infrastructure.catalog_skill_repository import (
     CatalogProvenance,
@@ -115,7 +116,12 @@ class FakeSkillRepo:
             setattr(skill, k, v)
         return skill
 
-    async def set_package(self, skill_id, s3_path, *, reason, catalog_version=None, **fields):
+    async def set_package(
+        self, skill_id, s3_path, *, reason, catalog_version=None, expect=ANY_PACKAGE, **fields
+    ):
+        current = await self.get_by_id(skill_id)
+        if current is not None and expect is not ANY_PACKAGE and current.s3_path != expect:
+            raise SkillPackageMovedError(str(skill_id), current.s3_path)
         skill = await self.update(skill_id, s3_path=s3_path, content=None, **fields)
         if skill is not None:
             await self.add_version(skill, reason=reason, catalog_version=catalog_version)

@@ -1,5 +1,6 @@
 """Skill repository for database operations."""
 
+from datetime import datetime
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -8,7 +9,7 @@ from agentarea_common.base.workspace_scoped_repository import (
     WorkspaceScopedRepository,
     as_record_ids,
 )
-from agentarea_common.constants import PLATFORM_WORKSPACE_ID
+from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -54,12 +55,22 @@ async def list_own_copy_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
         return [(row.id, row.workspace_id) for row in result.all()]
 
 
-async def list_moved_own_copies(session: AsyncSession) -> list[str]:
-    """The pre-package prefix of every skill that no longer points at it."""
+async def list_moved_own_copies(session: AsyncSession, *, moved_before: datetime) -> list[str]:
+    """The pre-package prefix of every skill moved off it into a package before ``moved_before``.
+
+    Only rows whose history has a ``migrate`` version that old: a run started
+    before the move may still read the copy it was configured with, and a pod
+    of the previous release may still point a row back at it.
+    """
+    moved = (
+        select(SkillVersion.skill_id)
+        .where(SkillVersion.reason == "migrate", SkillVersion.created_at < moved_before)
+        .scalar_subquery()
+    )
     with unscoped("deleting moved pre-package copies spans every workspace"):
         result = await session.execute(
             select(_own_copy_prefix())
-            .where(Skill.s3_path.is_distinct_from(_own_copy_prefix()))
+            .where(Skill.id.in_(moved), Skill.s3_path.is_distinct_from(_own_copy_prefix()))
             .order_by(Skill.workspace_id, Skill.id)
         )
         return list(result.scalars().all())
@@ -80,6 +91,18 @@ async def list_catalog_installs(session: AsyncSession) -> list[tuple[UUID, str]]
         return [(row.id, row.workspace_id) for row in result.all()]
 
 
+# ``set_package`` without a compare-and-set.
+ANY_PACKAGE = object()
+
+
+class SkillPackageMovedError(RuntimeError):
+    """A compare-and-set pointer move lost: the skill points elsewhere now."""
+
+    def __init__(self, skill_id: str, current: str | None):
+        super().__init__(f"Skill {skill_id} already points at {current}")
+        self.current = current
+
+
 class SkillRepository(WorkspaceScopedRepository[Skill]):
     """Repository for Skill CRUD operations."""
 
@@ -93,17 +116,58 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         *,
         reason: str,
         catalog_version: str | None = None,
+        expect: str | None | object = ANY_PACKAGE,
         **fields,
     ) -> Skill | None:
-        """Point a skill at a package and record the move in its history.
+        """Point a skill at a package and record the move in its history, atomically.
 
+        The row is locked (``FOR UPDATE``) for the move, and the pointer and its
+        history row are written in one commit, so concurrent moves are ordered
+        and the history ends where the pointer is. With ``expect`` the move is
+        a compare-and-set: it happens only while the skill still points at
+        ``expect``, else ``SkillPackageMovedError`` names where it points now.
         ``fields`` are other columns to change with it (``source_url``). The
         body column is cleared: a skill's body is its package.
         """
-        skill = await self.update(str(skill_id), s3_path=s3_path, content=None, **fields)
-        if skill is not None:
-            await self.add_version(skill, reason=reason, catalog_version=catalog_version)
+        result = await self.session.execute(
+            select(Skill)
+            .where(Skill.id == UUID(str(skill_id)), self._get_workspace_filter())
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        skill = result.scalar_one_or_none()
+        if skill is None:
+            await self.session.commit()
+            return None
+        if expect is not ANY_PACKAGE and skill.s3_path != expect:
+            current = skill.s3_path
+            await self.session.commit()
+            raise SkillPackageMovedError(str(skill_id), current)
+        try:
+            skill.s3_path = s3_path
+            skill.content = None
+            for field, value in fields.items():
+                setattr(skill, field, value)
+            latest = await self.latest_version(skill.id)
+            if latest is None or latest.s3_path != s3_path:
+                self.session.add(self._version(skill, reason, catalog_version))
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
         return skill
+
+    def _version(self, skill: Skill, reason: str, catalog_version: str | None) -> SkillVersion:
+        return SkillVersion(
+            skill_id=skill.id,
+            s3_path=skill.s3_path,
+            digest=package_digest_of(skill.s3_path),
+            reason=reason,
+            catalog_version=catalog_version,
+            workspace_id=self.user_context.workspace_id,
+            # Moving a pre-package row is the platform's doing, whoever read it.
+            created_by=PLATFORM_PRINCIPAL_ID if reason == "migrate" else self.user_context.user_id,
+        )
 
     async def add_version(
         self, skill: Skill, *, reason: str, catalog_version: str | None = None
@@ -114,15 +178,7 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         latest = await self.latest_version(skill.id)
         if latest is not None and latest.s3_path == skill.s3_path:
             return latest
-        version = SkillVersion(
-            skill_id=skill.id,
-            s3_path=skill.s3_path,
-            digest=package_digest_of(skill.s3_path),
-            reason=reason,
-            catalog_version=catalog_version,
-            workspace_id=self.user_context.workspace_id,
-            created_by=self.user_context.user_id,
-        )
+        version = self._version(skill, reason, catalog_version)
         self.session.add(version)
         await self.session.commit()
         return version

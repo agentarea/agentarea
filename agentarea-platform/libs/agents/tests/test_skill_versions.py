@@ -117,3 +117,19 @@ async def test_deleting_a_skill_keeps_its_packages():
     assert await svc.delete(skill.id)
 
     assert s3.under(_own({"SKILL.md": b"# kept"})) == {"SKILL.md": b"# kept"}
+
+
+async def test_a_run_pinned_to_an_own_package_keeps_reading_it_after_an_edit_and_a_rollback():
+    svc, _, _, _ = _service()
+    skill = await svc.create_from_content(SkillCreateFromContent(content="# v1"))
+    skill.workspace_id = "w1"
+    pinned = skill.s3_path
+
+    await svc.set_content(skill.id, "# v2")
+    assert await svc.read_skill_md(skill, at=pinned) == "# v1"
+    await svc.set_content(skill.id, "# v3")
+    second = (await svc.list_versions(skill.id))[1]
+    await svc.rollback(skill.id, second.id)
+
+    assert await svc.read_skill_md(skill, at=pinned) == "# v1"
+    assert await svc.read_skill_md(skill) == "# v2"

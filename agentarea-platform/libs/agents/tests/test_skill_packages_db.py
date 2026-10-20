@@ -308,6 +308,9 @@ async def test_copies_move_into_packages_and_only_the_moved_ones_are_deleted(ses
         move_all_own_copies_to_packages,
     )
 
+    from datetime import timedelta
+
+    now = timedelta(seconds=-60)  # "moved before a minute from now": everything moved so far
     storage, s3 = fake_storage()
     copied = await _skill_row(session, workspace)
     await session.execute(
@@ -320,7 +323,7 @@ async def test_copies_move_into_packages_and_only_the_moved_ones_are_deleted(ses
     async def same_session():
         yield session
 
-    assert await delete_moved_own_copies(same_session, storage, dry_run=True) == (0, 0)
+    assert await delete_moved_own_copies(same_session, storage, dry_run=True, min_age=now) == (0, 0)
     moved, failed = await move_all_own_copies_to_packages(same_session, storage)
 
     assert (moved, failed) == (1, 0)
@@ -332,12 +335,14 @@ async def test_copies_move_into_packages_and_only_the_moved_ones_are_deleted(ses
     ]
     # The copy stays until the explicit command, and a dry run deletes nothing.
     assert s3.under(f"skills/{workspace}/{copied}/") == {"SKILL.md": b"# Copied"}
-    assert await delete_moved_own_copies(same_session, storage, dry_run=True) == (1, 1)
+    # Moved just now: kept by the default age, deleted only once old enough.
+    assert await delete_moved_own_copies(same_session, storage) == (0, 0)
+    assert await delete_moved_own_copies(same_session, storage, dry_run=True, min_age=now) == (1, 1)
     assert s3.under(f"skills/{workspace}/{copied}/") == {"SKILL.md": b"# Copied"}
     s3.delete_objects = lambda *, Bucket, Delete: [  # noqa: N803
         s3.objects.pop(o["Key"]) for o in Delete["Objects"]
     ]
-    assert await delete_moved_own_copies(same_session, storage) == (1, 1)
+    assert await delete_moved_own_copies(same_session, storage, min_age=now) == (1, 1)
     assert s3.under(f"skills/{workspace}/{copied}/") == {}
     assert s3.under(package) == {"SKILL.md": b"# Copied"}
 
@@ -386,3 +391,86 @@ async def test_the_migration_starts_each_packaged_skills_history(session, worksp
     ).scalar_one()
     assert catalog_version == OLD_TREE
     assert await _versions(session, copy) == []
+
+
+@pytest.fixture
+async def committed():
+    """Sessions on their own connections that really commit, as two requests would."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+
+    engine = create_async_engine(TEST_DATABASE_URL)
+    maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    workspace = f"ws-{uuid4()}"
+    yield maker, workspace
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("DELETE FROM skills WHERE workspace_id = :w"), {"w": workspace}
+        )
+    await engine.dispose()
+
+
+async def _legacy_copy(maker, workspace: str, s3) -> str:
+    async with maker() as setup:
+        skill_id = await _skill_row(setup, workspace)
+        await setup.execute(
+            text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+            {"p": f"skills/{workspace}/{skill_id}/", "id": skill_id},
+        )
+        await setup.commit()
+    s3.objects[f"skills/{workspace}/{skill_id}/SKILL.md"] = b"# Legacy"
+    return skill_id
+
+
+async def _history(maker, skill_id: str) -> tuple[str, list[tuple[str, str]]]:
+    async with maker() as check:
+        pointer = (
+            await check.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": skill_id})
+        ).scalar_one()
+        rows = await check.execute(
+            text("SELECT reason, s3_path FROM skill_versions WHERE skill_id = :id ORDER BY created_at, id"),
+            {"id": skill_id},
+        )
+        return pointer, [tuple(r) for r in rows.all()]
+
+
+async def test_a_stale_read_of_a_legacy_skill_does_not_move_it_back_over_an_edit(committed):
+    maker, workspace = committed
+    storage, _s3 = fake_storage()
+    skill_id = await _legacy_copy(maker, workspace, _s3)
+    with workspace_scope(workspace):
+        async with maker() as reader_session, maker() as editor_session:
+            # A run's config loaded the skill while it was still at its copy...
+            reader = _service(reader_session, workspace, storage)
+            stale = await reader._get_repository().get_by_id(skill_id)
+            # ...then the user edited it in another request...
+            editor = _service(editor_session, workspace, storage)
+            await editor.set_content(skill_id, "# Edited")
+            # ...and only then did the run read its body.
+            body = await reader.read_skill_md(stale)
+
+    edited = _own(workspace, {"SKILL.md": b"# Edited"})
+    pointer, history = await _history(maker, skill_id)
+    assert body == "# Edited"
+    assert pointer == edited
+    assert history == [("migrate", _own(workspace, {"SKILL.md": b"# Legacy"})), ("edit", edited)]
+
+
+async def test_concurrent_edits_leave_the_pointer_where_the_history_ends(committed):
+    import asyncio
+
+    maker, workspace = committed
+    storage, s3 = fake_storage()
+    skill_id = await _legacy_copy(maker, workspace, s3)
+
+    async def edit(body: str) -> None:
+        with workspace_scope(workspace):
+            async with maker() as session:
+                await _service(session, workspace, storage).set_content(skill_id, body)
+
+    await asyncio.gather(*(edit(f"# Edit {n}") for n in range(4)))
+
+    pointer, history = await _history(maker, skill_id)
+    assert history[0][0] == "migrate"
+    assert [reason for reason, _ in history[1:]] == ["edit"] * 4
+    assert pointer == history[-1][1]
+    assert len({path for _, path in history}) == len(history)

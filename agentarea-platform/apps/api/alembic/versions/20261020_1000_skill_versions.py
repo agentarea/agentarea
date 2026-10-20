@@ -25,15 +25,16 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Waits at most this long for a lock rather than queueing every write to
+    # ``skills`` behind it.
+    op.execute("SET LOCAL lock_timeout = '5s'")
+    # The foreign key comes after the backfill, NOT VALID then validated: added
+    # with the table it would hold a write-blocking lock on ``skills`` for the
+    # whole backfill.
     op.create_table(
         "skill_versions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "skill_id",
-            postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("skills.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
+        sa.Column("skill_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("s3_path", sa.String(1024), nullable=False),
         sa.Column("digest", sa.String(64), nullable=True),
         sa.Column("reason", sa.String(32), nullable=False),
@@ -47,15 +48,21 @@ def upgrade() -> None:
     op.create_index("ix_skill_versions_workspace_id", "skill_versions", ["workspace_id"])
     op.create_index("ix_skill_versions_created_by", "skill_versions", ["created_by"])
     op.execute(BACKFILL)
+    op.execute(
+        "ALTER TABLE skill_versions ADD CONSTRAINT skill_versions_skill_id_fkey "
+        "FOREIGN KEY (skill_id) REFERENCES skills (id) ON DELETE CASCADE NOT VALID"
+    )
+    op.execute("ALTER TABLE skill_versions VALIDATE CONSTRAINT skill_versions_skill_id_fkey")
 
 
 # A skill already on an immutable package starts its history there; the digest
-# is the package's last path segment. Run by the test of this migration too.
+# is the package's last path segment (no split_part(..., -1): that needs
+# PostgreSQL 14). Run by the test of this migration too.
 BACKFILL = """
         INSERT INTO skill_versions (id, skill_id, s3_path, digest, reason, catalog_version,
                                     workspace_id, created_by, created_at, updated_at)
         SELECT gen_random_uuid(), s.id, s.s3_path,
-               split_part(rtrim(s.s3_path, '/'), '/', -1),
+               regexp_replace(rtrim(s.s3_path, '/'), '^.*/', ''),
                CASE WHEN s.registry_item_id IS NULL THEN 'create' ELSE 'install' END,
                CASE WHEN split_part(s.s3_path, '/', 2) = 'catalog'
                       OR split_part(s.s3_path, '/', 3) = 'catalog'
