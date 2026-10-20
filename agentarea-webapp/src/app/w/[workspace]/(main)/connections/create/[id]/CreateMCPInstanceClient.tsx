@@ -151,9 +151,10 @@ function getAuthMethods(server: MCPServer): string[] {
 // --- small identity building blocks -----------------------------------------
 
 function VerificationStatus({ verified }: { verified: boolean }) {
+  const t = useTranslations("MCPServersPage.createInstance.connect");
   return (
     <StatusIndicator kind={verified ? "active" : "attention"} size="sm">
-      {verified ? "Verified" : "Needs verification"}
+      {verified ? t("verified") : t("needsVerification")}
     </StatusIndicator>
   );
 }
@@ -187,6 +188,8 @@ function SpecHeader({
   server: MCPServer;
   verified: boolean;
 }) {
+  const tMeta = useTranslations("MCPServersPage.instanceDetail.meta");
+  const tTools = useTranslations("MCPServersPage.instanceDetail.consumers");
   const iconSrc = getIcon(server);
   const title = getTitle(server);
   const version = getVersion(server);
@@ -236,12 +239,12 @@ function SpecHeader({
               href={repoUrl}
               icon={repoSource === "github" ? Github : Globe}
             >
-              {repoSource === "github" ? "GitHub" : "Repository"}
+              {repoSource === "github" ? "GitHub" : tMeta("repository")}
             </LinkPill>
           )}
           {websiteUrl && (
             <LinkPill href={websiteUrl} icon={ExternalLink}>
-              Website
+              {tMeta("website")}
             </LinkPill>
           )}
         </div>
@@ -253,7 +256,9 @@ function SpecHeader({
                 {c}
               </Badge>
             ))}
-            {toolCount > 0 && <Badge variant="gray">{toolCount} tools</Badge>}
+            {toolCount > 0 && (
+              <Badge variant="gray">{tTools("toolCount", { count: toolCount })}</Badge>
+            )}
           </div>
         )}
       </div>
@@ -271,20 +276,21 @@ interface UrlFormValues {
   fields: string[];
 }
 
-const DEFAULT_CREDENTIAL_FIELD: CredentialFieldSpec = {
-  name: "Authorization",
-  isSecret: true,
-  placeholder: "Bearer your-token",
-};
 
 // Env vars a spec may declare for manual auth; shown as the credential inputs.
 const CREDENTIAL_ENV_NAMES = new Set(["AUTHORIZATION", "API_KEY", "TOKEN"]);
 
-function credentialFieldsFromSpec(server: MCPServer): CredentialFieldSpec[] {
+/** Without a declared one, a single Authorization header to fill in. */
+function credentialFieldsFromSpec(
+  server: MCPServer,
+  defaultPlaceholder: string
+): CredentialFieldSpec[] {
   const named = parseFieldSpecs(server.env_schema)
     .filter((field) => CREDENTIAL_ENV_NAMES.has(field.name.toUpperCase()))
     .map((field) => ({ ...field, isSecret: true }));
-  return named.length > 0 ? named : [DEFAULT_CREDENTIAL_FIELD];
+  return named.length > 0
+    ? named
+    : [{ name: "Authorization", isSecret: true, placeholder: defaultPlaceholder }];
 }
 
 /** Server actions return the raw API body on failure; surface its `detail`. */
@@ -322,7 +328,7 @@ function UrlConnectForm({ server }: { server: MCPServer }) {
     }
     return "loading";
   });
-  const credentialFields = credentialFieldsFromSpec(server);
+  const credentialFields = credentialFieldsFromSpec(server, t("tokenPlaceholder"));
   const [authTab, setAuthTab] = useState<"oauth" | "manual">("oauth");
   const [probeError, setProbeError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -751,13 +757,13 @@ function DockerCommandForm({ server }: { server: MCPServer }) {
             ? errorDetail
             : Array.isArray(errorDetail) && errorDetail[0]?.msg
               ? errorDetail[0].msg
-              : "Failed to create MCP instance";
+              : t("errors.createFailed");
         throw new Error(errorMessage);
       }
 
       const created = instanceResult.data;
       if (!created) {
-        throw new Error("Failed to create MCP instance");
+        throw new Error(t("errors.createFailed"));
       }
       const vStatus = created?.verification?.status;
       if (vStatus === "in_progress" || vStatus === "never_attempted") {

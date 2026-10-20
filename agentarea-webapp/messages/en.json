@@ -832,7 +832,10 @@
         "toolsFound": "{count} tools found",
         "encryptionNote": "Credentials are encrypted at rest and scoped to this workspace.",
         "connectionFailed": "Connection failed",
-        "createFailed": "Failed to create connection"
+        "createFailed": "Failed to create connection",
+        "tokenPlaceholder": "Bearer your-token",
+        "verified": "Verified",
+        "needsVerification": "Needs verification"
       }
     },
     "instanceForm": {

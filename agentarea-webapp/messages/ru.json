@@ -832,7 +832,10 @@
         "toolsFound": "Найдено инструментов: {count}",
         "encryptionNote": "Учётные данные шифруются при хранении и доступны только в этом рабочем пространстве.",
         "connectionFailed": "Не удалось подключиться",
-        "createFailed": "Не удалось создать подключение"
+        "createFailed": "Не удалось создать подключение",
+        "tokenPlaceholder": "Bearer ваш-токен",
+        "verified": "Проверено",
+        "needsVerification": "Нужна проверка"
       }
     },
     "instanceForm": {
