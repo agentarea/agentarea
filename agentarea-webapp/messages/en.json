@@ -3891,10 +3891,7 @@
   },
   "ConnectionCost": {
     "title": "Cost per call",
-    "edit": "Edit",
-    "save": "Save",
-    "saving": "Saving…",
-    "cancel": "Cancel",
+    "saveCost": "Save the cost",
     "saveFailed": "Could not save the cost",
     "hint": "What a call of this connection costs on your own key. Spend caps count it; the vendor bills you.",
     "mode": "Cost",
