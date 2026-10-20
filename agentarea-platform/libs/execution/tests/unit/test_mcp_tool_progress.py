@@ -74,7 +74,7 @@ async def test_activity_passes_context_and_relays_progress(harness):
         tool_args={},
         workspace_id="ws-1",
         user_id="user-1",
-        user_context_data={"user_id": "user-1", "workspace_id": "ws-1"},
+        user_context_data={"user_id": "user-1", "workspace_id": "ws-1", "agent_id": "agent-1"},
         task_id=task_id,
         tool_call_id="call-1",
         agent_id=uuid4(),

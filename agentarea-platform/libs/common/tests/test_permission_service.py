@@ -9,6 +9,7 @@ fails instead.
 from unittest.mock import AsyncMock
 
 import pytest
+from agentarea_common.auth.context import Subject
 from agentarea_common.auth.permission import PermissionService, require_permission
 from agentarea_common.di.container import get_container
 from fastapi import HTTPException
@@ -21,6 +22,9 @@ def clean_container():
     container.clear()
 
 
+_CALLER = Subject(kind="user", id="user-1")
+
+
 def _pdp(answer: bool) -> AsyncMock:
     svc = AsyncMock(spec=PermissionService)
     svc.check.return_value = answer
@@ -31,7 +35,7 @@ def _pdp(answer: bool) -> AsyncMock:
 async def test_passes_when_the_pdp_allows():
     get_container().register_singleton(PermissionService, _pdp(True))
 
-    await require_permission("edit", "agent", "agent-123", "user-1")
+    await require_permission("edit", "agent", "agent-123", _CALLER)
 
 
 @pytest.mark.asyncio
@@ -39,7 +43,7 @@ async def test_raises_403_when_the_pdp_denies():
     get_container().register_singleton(PermissionService, _pdp(False))
 
     with pytest.raises(HTTPException) as error:
-        await require_permission("edit", "agent", "agent-123", "user-1")
+        await require_permission("edit", "agent", "agent-123", _CALLER)
 
     assert error.value.status_code == 403
 
@@ -50,9 +54,9 @@ async def test_the_question_reaches_the_pdp_unchanged():
     pdp = _pdp(True)
     get_container().register_singleton(PermissionService, pdp)
 
-    await require_permission("delete", "mcp_server", "mcp-7", "user-1")
+    await require_permission("delete", "mcp_server", "mcp-7", _CALLER)
 
-    pdp.check.assert_awaited_once_with("user-1", "delete", "mcp_server", "mcp-7")
+    pdp.check.assert_awaited_once_with("User:user-1", "delete", "mcp_server", "mcp-7")
 
 
 def test_permission_service_is_abstract():

@@ -340,7 +340,7 @@ async def create_skill(
         await grant_resource_owner(
             resource_id=skill.id,
             workspace_id=skill_service.user_context.workspace_id,
-            user_id=skill_service.user_context.user_id,
+            owner=skill_service.user_context.graph_subject,
         )
         return SkillResponse.from_skill(skill)
 
@@ -383,7 +383,7 @@ async def upload_skill(
         await grant_resource_owner(
             resource_id=skill.id,
             workspace_id=skill_service.user_context.workspace_id,
-            user_id=skill_service.user_context.user_id,
+            owner=skill_service.user_context.graph_subject,
         )
         return SkillResponse.from_skill(skill)
 
@@ -420,7 +420,7 @@ async def list_skills(
         network_scope=network_scope,
         from_registry=from_registry,
         include_catalog=include_catalog,
-        ids=await readable_resource_ids(user_context.user_id),
+        ids=await readable_resource_ids(user_context),
     )
     return PaginatedResponse(
         items=[SkillResponse.from_skill(skill) for skill in skills],
@@ -452,7 +452,7 @@ async def get_skill(
     if not getattr(skill, "is_catalog", False):
         # A tenant row; the catalog projection beside it is platform data and
         # carries no ownership tuples to check.
-        await require_permission("read", "skill", str(skill_id), user_context.user_id)
+        await require_permission("read", "skill", str(skill_id), user_context)
         await skill_service.annotate_installs([skill])
     return SkillResponse.from_skill(skill)
 
@@ -554,7 +554,7 @@ async def install_skill(
         await grant_resource_owner(
             resource_id=skill.id,
             workspace_id=skill_service.user_context.workspace_id,
-            user_id=skill_service.user_context.user_id,
+            owner=skill_service.user_context.graph_subject,
         )
     return SkillResponse.from_skill(skill)
 
@@ -650,7 +650,7 @@ async def update_skill(
     user_context: UserContextDep,
 ):
     """Update a skill."""
-    await require_permission("edit", "skill", str(skill_id), user_context.user_id)
+    await require_permission("edit", "skill", str(skill_id), user_context)
 
     # Build metadata patch with PATCH semantics (only fields the client sent).
     metadata_patch_fields = request.model_dump(
@@ -683,7 +683,7 @@ async def delete_skill(
     user_context: UserContextDep,
 ):
     """Delete a skill."""
-    await require_permission("delete", "skill", str(skill_id), user_context.user_id)
+    await require_permission("delete", "skill", str(skill_id), user_context)
     deleted = await skill_service.delete(skill_id)
 
     if not deleted:

@@ -21,6 +21,7 @@ def _service() -> TriggerService:
     service.trigger_repository = AsyncMock()
     service.trigger_execution_repository = AsyncMock()
     service.agent_repository = AsyncMock()
+    service.agent_repository.get.return_value = SimpleNamespace(status="active")
     service.model_instance_repository = AsyncMock()
     service.stream_service = AsyncMock()
     return service

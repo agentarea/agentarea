@@ -49,7 +49,7 @@ async def test_grant_resource_owner_fails_when_graph_client_missing(graph):
         await grants.grant_resource_owner(
             resource_id="agent-1",
             workspace_id="ws-1",
-            user_id="user-1",
+            owner="User:user-1",
         )
 
     assert exc.value.status_code == 503
@@ -66,7 +66,7 @@ async def test_grant_resource_owner_fails_when_graph_write_fails(graph):
         await grants.grant_resource_owner(
             resource_id="agent-1",
             workspace_id="ws-1",
-            user_id="user-1",
+            owner="User:user-1",
         )
 
     assert exc.value.status_code == 503
@@ -89,7 +89,7 @@ async def test_grant_resource_owner_treats_existing_tuple_as_success(graph):
     await grants.grant_resource_owner(
         resource_id="agent-1",
         workspace_id="ws-1",
-        user_id="user-1",
+        owner="User:user-1",
     )
 
     assert client.write_tuple.await_count == 1 + len(ownership.OWNER_RELATIONS)

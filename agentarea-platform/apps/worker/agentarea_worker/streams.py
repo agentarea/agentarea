@@ -67,7 +67,7 @@ from agentarea_triggers.channels.sender_admission import build_telegram_sender_a
 from agentarea_triggers.infrastructure.causation_repository import load_platform_task
 from agentarea_triggers.infrastructure.reactions import TriggerExecutionReactionLog
 from agentarea_triggers.run_outcomes import TriggerRunOutcomes
-from agentarea_triggers.stream_subscriber import ConfigurerAuthority, TriggerSubscriptionHandler
+from agentarea_triggers.stream_subscriber import InvokerAuthority, TriggerSubscriptionHandler
 from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
 from agentarea_triggers.trigger_service import TriggerService
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -168,7 +168,7 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
     bus = setup_streams_di(settings)
     notices = BrokerEventNotices(bus.broker)
     session_factory = get_database().async_session_factory
-    authority = ConfigurerAuthority(
+    authority = InvokerAuthority(
         graph=get_workspace_membership_graph(),
         permissions=resolve(PermissionService),
     )
@@ -183,7 +183,6 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
         event_broker=dependencies.event_broker,
         secret_manager_factory=dependencies.secret_manager_factory,
         workflow_executor=dependencies.workflow_executor,
-        authority=authority,
         max_depth=settings.streams.FORWARD_DEPTH,
         sender_admission=sender_admission,
         batches=TemporalTriggerBatches(

@@ -1,6 +1,7 @@
 """A spend cap or budget turning a firing away is not the trigger failing."""
 
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -17,6 +18,8 @@ def _service(trigger: StreamTrigger) -> TriggerService:
     service = TriggerService(
         repository_factory=MagicMock(), event_broker=AsyncMock(), task_service=AsyncMock()
     )
+    service.agent_repository = AsyncMock()
+    service.agent_repository.get.return_value = SimpleNamespace(status="active")
     service.trigger_repository = AsyncMock()
     service.trigger_repository.get_trigger.return_value = trigger
     service.trigger_repository.disable_trigger.return_value = True

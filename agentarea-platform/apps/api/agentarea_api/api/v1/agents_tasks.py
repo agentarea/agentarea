@@ -31,7 +31,7 @@ from agentarea_api.api.deps.services import (
 from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
 from agentarea_common.config import get_settings
@@ -138,6 +138,11 @@ class TaskWebhook(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+
+
+def started_by(user_context: UserContext) -> TaskProvenance:
+    """The provenance of a run the caller started from the app, the API or MCP."""
+    return TaskProvenance.started_by_caller(user_context)
 
 
 def _is_api_caller(user_context: UserContext) -> bool:
@@ -911,9 +916,7 @@ async def _with_sse_heartbeats(
 
 @router.post(
     "/",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("execute", "agent", id_param="agent_id")],
 )
 async def create_task_for_agent_with_stream(
     agent_id: UUID,
@@ -969,6 +972,7 @@ async def create_task_for_agent_with_stream(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 task_id=reserved_task_id,
                 trusted_metadata={
                     **caller_metadata,
@@ -1015,6 +1019,7 @@ async def create_task_for_agent_with_stream(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 trusted_metadata=caller_metadata or None,
             )
         except PolicyValidationError:
@@ -1136,9 +1141,7 @@ async def create_task_for_agent_with_stream(
 @router.post(
     "/sync",
     response_model=TaskResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("execute", "agent", id_param="agent_id")],
 )
 async def create_task_for_agent_sync(
     agent_id: UUID,
@@ -1173,6 +1176,7 @@ async def create_task_for_agent_sync(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 task_id=reserved_task_id,
                 trusted_metadata={
                     **caller_metadata,
@@ -1197,6 +1201,7 @@ async def create_task_for_agent_sync(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 trusted_metadata=caller_metadata or None,
             )
 
@@ -1233,9 +1238,7 @@ class ScheduleTaskCreate(TaskCreate):
     "/schedule",
     response_model=TaskResponse,
     status_code=201,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("execute", "agent", id_param="agent_id")],
 )
 async def schedule_task_for_agent(
     agent_id: UUID,
@@ -1274,6 +1277,7 @@ async def schedule_task_for_agent(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 task_id=reserved_task_id,
                 trusted_metadata={
                     **caller_metadata,
@@ -1299,6 +1303,7 @@ async def schedule_task_for_agent(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 trusted_metadata=caller_metadata or None,
             )
 

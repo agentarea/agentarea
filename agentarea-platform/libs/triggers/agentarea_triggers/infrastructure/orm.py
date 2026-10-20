@@ -35,6 +35,11 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     agent_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    # The saved task definition this trigger runs; ``None`` when the trigger
+    # carries its own ask, or the event itself is the ask.
+    task_definition_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True, index=True
+    )
     trigger_type: Mapped[str] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     task_parameters: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

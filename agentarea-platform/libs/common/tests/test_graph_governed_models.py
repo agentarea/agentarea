@@ -23,6 +23,7 @@ from agentarea_mcp.domain.mpc_server_instance_model import (
 )
 from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_streams.infrastructure.orm import StreamORM
+from agentarea_tasks.infrastructure.orm import TaskDefinitionORM
 from agentarea_triggers.infrastructure.orm import TriggerORM
 
 
@@ -45,6 +46,7 @@ def test_the_governed_models_are_the_ones_the_pdp_knows_about() -> None:
         Skill,
         SkillCollection,
         StreamORM,
+        TaskDefinitionORM,
         TriggerORM,
     }
 

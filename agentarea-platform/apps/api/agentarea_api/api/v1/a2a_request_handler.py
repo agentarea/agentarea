@@ -70,6 +70,7 @@ from agentarea_api.api.v1.a2a_mapping import (
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.context_manager import ContextManager
 from agentarea_common.auth.credential import Credential
+from agentarea_common.auth.permission import require_permission
 from agentarea_common.base.tenant_scope import bind_workspace_scope
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
@@ -86,7 +87,7 @@ from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
 )
-from agentarea_tasks.domain.models import AgentTask, TaskUpdate
+from agentarea_tasks.domain.models import AgentTask, TaskProvenance, TaskUpdate
 from agentarea_tasks.task_service import TaskService
 from google.protobuf.json_format import MessageToDict
 from starlette.exceptions import HTTPException
@@ -246,6 +247,16 @@ def _scope(context: ServerCallContext) -> A2ACallScope:
     return context.state[A2A_SCOPE_KEY]
 
 
+def _a2a_provenance(user: UserContext) -> TaskProvenance:
+    """Who an A2A message came from: an agent's key names the key, anyone else the user."""
+    credential = user.credential
+    if credential is not None and credential.kind == "api_key" and credential.key_id:
+        source = f"a2a:{credential.key_id}"
+    else:
+        source = f"user:{user.user_id}"
+    return TaskProvenance(origin_type="a2a", origin_id=source, source_identity=source)
+
+
 def _user_context(scope: A2ACallScope) -> UserContext:
     """The caller as a workspace member; A2A serves only authenticated users."""
     auth = scope.auth
@@ -361,6 +372,10 @@ class AgentAreaRequestHandler(RequestHandler):
         scope = op.scope
         user = _user_context(scope)
         await self._require_available_agent(scope.agent_id)
+        # An agent's own key was confined to this agent at the edge; anyone else
+        # is starting the agent and must be allowed to (``can_invoke``).
+        if user.credential is None or user.credential.kind != "api_key":
+            await require_permission("execute", "agent", str(scope.agent_id), user)
 
         text = message_text(params.message)
         if not text.strip():
@@ -376,6 +391,7 @@ class AgentAreaRequestHandler(RequestHandler):
             method=context.state["method"],
             request_id=context.state.get("request_id"),
         )
+        task.provenance = _a2a_provenance(user)
         try:
             created = await self._tasks.submit_task(task)
         except AgentModelNotConfiguredError as e:

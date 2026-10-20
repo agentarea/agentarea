@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type {
   AgentResponse,
+  TaskDefinitionResponse,
   TriggerBatchWindow,
   TriggerResponse,
 } from "@/api/client/types.gen";
@@ -34,13 +35,16 @@ import Link from "@/components/WorkspaceLink";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { resolveSession } from "@/lib/sourceTypes";
+import { BatchSetting } from "../components/BatchSetting";
+import {
+  SessionSetting,
+  type TriggerSession,
+} from "../components/SessionSetting";
 import {
   composeTaskParameters,
   normalizeTaskParameters,
   type TaskParameterRef,
 } from "../components/taskParameters";
-import { BatchSetting } from "../components/BatchSetting";
-import { SessionSetting, type TriggerSession } from "../components/SessionSetting";
 import { renderTriggerIcon } from "../components/triggerDisplay";
 import {
   createTriggerAction,
@@ -56,8 +60,11 @@ import { requiresTaskText } from "./triggerShape";
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
   streams: StreamOptions;
+  savedTasks: TaskDefinitionResponse[];
   initialData?: TriggerResponse;
 }
+
+const NO_SAVED_TASK = "none";
 
 const INLINE_ERROR_FIELDS = new Set([
   "name",
@@ -77,6 +84,7 @@ type SelectableResource = TaskParameterRef;
 export function CreateTriggerForm({
   agents,
   streams,
+  savedTasks,
   initialData,
 }: CreateTriggerFormProps) {
   const router = useWorkspaceRouter();
@@ -97,6 +105,18 @@ export function CreateTriggerForm({
     initialData?.agent_id ?? ""
   );
   const [streamId, setStreamId] = useState(initialData?.stream_id ?? "");
+  const [savedTaskId, setSavedTaskId] = useState(
+    initialData?.task_definition_id ?? ""
+  );
+  const agentSavedTasks = savedTasks.filter(
+    (savedTask) => savedTask.agent_id === selectedAgentId
+  );
+  // A saved task runs its own agent: one of another agent is dropped with it.
+  const chosenSavedTaskId = agentSavedTasks.some(
+    (savedTask) => savedTask.id === savedTaskId
+  )
+    ? savedTaskId
+    : "";
   // Null until someone changes it: then it follows the chosen stream's default.
   const [session, setSession] = useState<TriggerSession | null>(
     initialData?.session ?? null
@@ -107,10 +127,7 @@ export function CreateTriggerForm({
   const [runSettingsOpen, setRunSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (
-      state.errors?.failure_threshold ||
-      state.errors?.description
-    )
+    if (state.errors?.failure_threshold || state.errors?.description)
       setRunSettingsOpen(true);
   }, [state.errors]);
   // Field errors the form has no inline slot for (e.g. `config.*` from the
@@ -161,7 +178,7 @@ export function CreateTriggerForm({
     </Button>
   );
 
-  const taskTextRequired = requiresTaskText(triggerType);
+  const taskTextRequired = requiresTaskText(triggerType) && !chosenSavedTaskId;
   const stream = streams.items.find((item) => item.id === streamId);
   const effectiveSession = resolveSession(
     session,
@@ -300,6 +317,11 @@ export function CreateTriggerForm({
         <input type="hidden" name="trigger_type" value={triggerType} />
         <input
           type="hidden"
+          name="task_definition_id"
+          value={chosenSavedTaskId}
+        />
+        <input
+          type="hidden"
           name="task_parameters"
           value={taskParametersValue}
         />
@@ -376,6 +398,44 @@ export function CreateTriggerForm({
               </div>
             </div>
             <section aria-label={t("taskInstructions")} className="space-y-3">
+              {agentSavedTasks.length > 0 && (
+                <div className="grid content-start gap-2">
+                  <FormLabel htmlFor="task_definition_select" optional>
+                    {t("savedTask")}
+                  </FormLabel>
+                  <p className="text-xs text-muted-foreground">
+                    {t("savedTaskHint")}
+                  </p>
+                  <Select
+                    value={chosenSavedTaskId || NO_SAVED_TASK}
+                    onValueChange={(value) =>
+                      setSavedTaskId(value === NO_SAVED_TASK ? "" : value)
+                    }
+                  >
+                    <SelectTrigger
+                      id="task_definition_select"
+                      className="h-9 sm:max-w-sm"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_SAVED_TASK}>
+                        {t("savedTaskNone")}
+                      </SelectItem>
+                      {agentSavedTasks.map((savedTask) => (
+                        <SelectItem key={savedTask.id} value={savedTask.id}>
+                          {savedTask.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {state.errors?.task_definition_id && (
+                    <p className="text-sm text-destructive">
+                      {state.errors.task_definition_id[0]}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid content-start gap-2">
                 {/* Until a type is picked neither answer is true yet, so the
                   label stays bare rather than claiming the text is optional. */}

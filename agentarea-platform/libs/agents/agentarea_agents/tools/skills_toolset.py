@@ -333,7 +333,7 @@ class SkillsToolset(Toolset):
 
             service = SkillService(repository_factory=repo_factory, user_context=user_ctx)
             skills = await service.list()
-            readable = await readable_resource_ids(user_ctx.user_id)
+            readable = await readable_resource_ids(user_ctx)
             return json.dumps(
                 [_skill_summary(s) for s in skills if str(s.id) in readable], default=str
             )

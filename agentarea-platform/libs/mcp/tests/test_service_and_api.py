@@ -5,13 +5,14 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_mcp.application.auth_service import AuthConfigAccessDeniedError
-from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.application.service import (
     MCPServerInstanceService,
     derive_bundle_verification,
 )
+from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.mpc_server_instance_model import MCPServerInstance
 from agentarea_mcp.domain.verification_types import DEFAULT_VERIFICATION
 from agentarea_mcp.package_import import MCPRuntimeRetirementError
@@ -72,9 +73,7 @@ def _make_service(
     instances = instances or {}
 
     repo = MagicMock()
-    repo.user_context = MagicMock()
-    repo.user_context.user_id = str(uuid.uuid4())
-    repo.user_context.workspace_id = str(uuid.uuid4())
+    repo.user_context = UserContext(user_id=str(uuid.uuid4()), workspace_id=str(uuid.uuid4()))
     repo.session = MagicMock()
     repo.session.add = MagicMock()
     repo.session.commit = AsyncMock()

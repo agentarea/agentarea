@@ -19,6 +19,8 @@ from agentarea_agents.infrastructure.repository import AgentRepository
 from agentarea_api.api.deps.services import get_agent_service, get_task_service
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.di.container import get_container
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
     EffectivePolicy,
@@ -28,6 +30,29 @@ from agentarea_governance.domain.policies import (
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 from httpx import ASGITransport, AsyncClient
+
+
+class _AllowAll(PermissionService):
+    """The PDP a run's start asks for ``execute`` on its agent; it allows, and remembers."""
+
+    def __init__(self):
+        self.checks: list[tuple[str, str, str, str]] = []
+
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        self.checks.append((subject, permission, resource_type, resource_id))
+        return True
+
+
+@pytest.fixture(autouse=True)
+def permissions():
+    container = get_container()
+    saved = dict(container._singletons)
+    allow = _AllowAll()
+    container.register_singleton(PermissionService, allow)
+    yield allow
+    container._singletons.clear()
+    container._singletons.update(saved)
+
 
 _CAP = Decimal("0.000001")
 _SPENT = Decimal("0.000058")

@@ -14,14 +14,15 @@ turns into an exposure, and answering "nothing" would look like data loss.
 from __future__ import annotations
 
 from ..rebac.ownership import ResourceOwnershipError, resolve_graph_client
+from .permission import GraphCaller
 
 
 class ResourceVisibilityError(RuntimeError):
     """The graph could not say what this user may read."""
 
 
-async def readable_resource_ids(user_id: str) -> set[str]:
-    """Ids of ``resource:`` objects the user may read.
+async def readable_resource_ids(caller: GraphCaller) -> set[str]:
+    """Ids of ``resource:`` objects the caller's subject may read.
 
     Includes everything reachable through the workspace root project, which is
     how a plain member sees their workspace (see
@@ -36,6 +37,6 @@ async def readable_resource_ids(user_id: str) -> set[str]:
         await client.list_objects(
             namespace="resource",
             relation="can_read",
-            subject_id=f"User:{user_id}",
+            subject_id=caller.graph_subject,
         )
     )

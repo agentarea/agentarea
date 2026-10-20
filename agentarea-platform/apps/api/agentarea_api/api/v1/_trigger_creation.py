@@ -9,14 +9,14 @@ from agentarea_triggers.schemas.dto import TriggerSpec
 from agentarea_triggers.trigger_service import TriggerService
 
 
-async def require_stream_readable(stream_id: UUID | None, user_id: str) -> None:
+async def require_stream_readable(stream_id: UUID | None, caller: UserContext) -> None:
     """Refuse a stream trigger on a stream its creator may not read (403).
 
     The trigger hands every event of the stream to the agent as task input, so
     subscribing is reading.
     """
     if stream_id is not None:
-        await require_permission("read", "stream", str(stream_id), user_id)
+        await require_permission("read", "stream", str(stream_id), caller)
 
 
 async def create_trigger_from_spec(
@@ -32,7 +32,7 @@ async def create_trigger_from_spec(
     so it never fires before its owner switches it on.
     """
     if spec.trigger_type == "stream":
-        await require_stream_readable(spec.stream_id, user_context.user_id)
+        await require_stream_readable(spec.stream_id, user_context)
     return await trigger_service.create_trigger(
         spec.to_domain_for(
             agent_id, created_by=user_context.user_id, workspace_id=user_context.workspace_id

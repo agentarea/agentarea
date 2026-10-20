@@ -92,9 +92,8 @@ def harness(monkeypatch):
 
     app = FastAPI()
     app.include_router(agents.router, prefix="/v1")
-    app.dependency_overrides[get_user_context] = lambda: UserContext(
-        user_id="user-a", workspace_id="workspace-a"
-    )
+    caller = UserContext(user_id="user-a", workspace_id="workspace-a")
+    app.dependency_overrides[get_user_context] = lambda: caller
     app.dependency_overrides[get_agent_service] = lambda: agent_service
     app.dependency_overrides[get_trigger_service] = lambda: trigger_service
     app.dependency_overrides[get_db_session] = lambda: None
@@ -108,6 +107,7 @@ def harness(monkeypatch):
         agent_service=agent_service,
         trigger_service=trigger_service,
         created=created,
+        caller=caller,
     )
 
 
@@ -127,8 +127,10 @@ async def test_agent_and_its_triggers_are_created_together(harness):
     assert not hasattr(payload, "triggers")
     assert [t.agent_id for t in harness.created] == [harness.agent.id, harness.agent.id]
     assert str(harness.created[1].stream_id) == _ON_MESSAGES["stream_id"]
+    # Binding the agent is the trigger service's check; the route asks that the
+    # creator may read the stream the trigger subscribes to.
     _trigger_creation.require_permission.assert_awaited_once_with(
-        "read", "stream", _ON_MESSAGES["stream_id"], "user-a"
+        "read", "stream", _ON_MESSAGES["stream_id"], harness.caller
     )
 
 

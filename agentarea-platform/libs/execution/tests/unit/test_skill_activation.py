@@ -74,7 +74,11 @@ def _request(skill, **overrides):
     fields = {
         "skill_id": skill.id,
         "skill_name": skill.name,
-        "user_context_data": {"user_id": "user", "workspace_id": "workspace"},
+        "user_context_data": {
+            "user_id": "user",
+            "workspace_id": "workspace",
+            "agent_id": "agent-1",
+        },
         "workspace_id": "workspace",
         "task_id": str(uuid4()),
         "tool_call_id": "call-1",

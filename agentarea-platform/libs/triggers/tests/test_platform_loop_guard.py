@@ -153,13 +153,10 @@ class _Claim:
 
 
 def _handler(service, chain: _Chain) -> TriggerSubscriptionHandler:
-    authority = MagicMock()
-    authority.may_run = AsyncMock(return_value=True)
     return TriggerSubscriptionHandler(
         event_broker=AsyncMock(),
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
-        authority=authority,
         max_depth=MAX_DEPTH,
         trigger_service_factory=lambda _s, _c: service,
         follow_up_claim_factory=lambda _s, _sub, _e: cast(SubscriptionFollowUpClaim, _Claim()),
@@ -172,6 +169,7 @@ def _handler(service, chain: _Chain) -> TriggerSubscriptionHandler:
 def _service(trigger: StreamTrigger) -> MagicMock:
     service = MagicMock()
     service.get_trigger = AsyncMock(return_value=trigger)
+    service.agent_stands = AsyncMock(return_value=True)
     service.stream_service.get_stream = AsyncMock(return_value=SimpleNamespace(name="platform"))
     service.fire = AsyncMock(return_value=TriggerFiring(outcome="reacted", task_id=uuid4()))
     return service

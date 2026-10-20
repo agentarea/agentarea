@@ -12,7 +12,7 @@ from uuid import UUID
 from agentarea_api.api.deps.services import BaseSecretManagerDep, SecretCatalogServiceDep
 from agentarea_common.artifacts import ArtifactService
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.permission import require_permission
+from agentarea_common.auth.permission import GraphCaller, require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import RepositoryFactoryDep
@@ -455,7 +455,7 @@ async def workspace_events(
     limit: int,
 ) -> StreamEventPage:
     """The workspace feed with each event's body and outcomes, for an agent."""
-    streams = await _readable_streams(service, user_context.user_id)
+    streams = await _readable_streams(service, user_context)
     session = service.repository_factory.session
     rows = await StreamEventRepository(session, user_context).read_feed(
         filters, streams, before=before, limit=limit
@@ -475,10 +475,8 @@ async def workspace_events(
     )
 
 
-async def _readable_streams(service: StreamService, user_id: str) -> list[UUID]:
-    rows = await service.list_streams(
-        limit=1000, offset=0, ids=await readable_resource_ids(user_id)
-    )
+async def _readable_streams(service: StreamService, caller: GraphCaller) -> list[UUID]:
+    rows = await service.list_streams(limit=1000, offset=0, ids=await readable_resource_ids(caller))
     return [row.id for row in rows]
 
 
@@ -543,7 +541,7 @@ async def list_streams(
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
 ):
     return await service.list_streams(
-        limit=limit, offset=offset, ids=await readable_resource_ids(user_context.user_id)
+        limit=limit, offset=offset, ids=await readable_resource_ids(user_context)
     )
 
 
@@ -593,7 +591,7 @@ async def list_workspace_events(
     Each carries what the platform did with it (``processing``); bodies are
     left out, the event's own endpoint has them.
     """
-    streams = await _readable_streams(service, user_context.user_id)
+    streams = await _readable_streams(service, user_context)
     session = service.repository_factory.session
     events = StreamEventRepository(session, user_context)
     rows = await events.read_feed(filters, streams, before=before, limit=limit)
@@ -631,7 +629,7 @@ async def stream_workspace_events(
     from agentarea_api.api.deps.database import get_db_session
     from agentarea_api.api.v1.agents_tasks import _with_sse_heartbeats
 
-    streams = await _readable_streams(service, user_context.user_id)
+    streams = await _readable_streams(service, user_context)
     live_filter = filters.model_copy(update={"result": None})
 
     async def load(event_id: UUID) -> FeedEventResponse | None:
@@ -669,7 +667,7 @@ async def get_event_by_id(
         event = await service.get_event(event_id)
     except StreamEventNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
-    await require_permission("read", "stream", str(event.stream_id), user_context.user_id)
+    await require_permission("read", "stream", str(event.stream_id), user_context)
     return await _event_detail(service, reactions, user_context, event)
 
 
@@ -800,7 +798,7 @@ async def create_forward(
     stream_id: UUID, data: ForwardCreate, user_context: UserContextDep, service: StreamServiceDep
 ):
     for output in data.output_stream_ids:
-        await require_permission("edit", "stream", str(output), user_context.user_id)
+        await require_permission("edit", "stream", str(output), user_context)
     try:
         row = await service.create_forward(
             stream_id=stream_id,
@@ -834,7 +832,7 @@ async def delete_forward(
     try:
         forward = await service.get_forward(stream_id, subscription_id)
         for output in await service.existing_outputs(forward):
-            await require_permission("edit", "stream", str(output), user_context.user_id)
+            await require_permission("edit", "stream", str(output), user_context)
         await service.delete_forward(stream_id, subscription_id)
     except SubscriptionNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
@@ -875,7 +873,7 @@ async def create_processor(
     sandbox, one call per event, and gets no secrets.
     """
     for output in data.output_stream_ids:
-        await require_permission("edit", "stream", str(output), user_context.user_id)
+        await require_permission("edit", "stream", str(output), user_context)
     try:
         row = await service.create_processor(
             stream_id=stream_id,
@@ -908,7 +906,7 @@ async def update_processor(
         processor = await service.get_processor(stream_id, subscription_id)
         outputs = {*await service.existing_outputs(processor), *(data.output_stream_ids or [])}
         for output in sorted(outputs, key=str):
-            await require_permission("edit", "stream", str(output), user_context.user_id)
+            await require_permission("edit", "stream", str(output), user_context)
         row = await service.update_processor(
             stream_id,
             subscription_id,
@@ -936,7 +934,7 @@ async def delete_processor(
     try:
         processor = await service.get_processor(stream_id, subscription_id)
         for output in await service.existing_outputs(processor):
-            await require_permission("edit", "stream", str(output), user_context.user_id)
+            await require_permission("edit", "stream", str(output), user_context)
         await service.delete_processor(stream_id, subscription_id)
     except _PROCESSOR_ERRORS as error:
         raise processor_refusal(error) from error

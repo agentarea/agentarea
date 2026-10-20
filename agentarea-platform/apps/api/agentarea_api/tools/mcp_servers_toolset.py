@@ -530,7 +530,7 @@ class MCPServersToolset(Toolset):
                 search=search or None,
                 limit=limit,
                 offset=offset,
-                ids=await readable_resource_ids(user_ctx.user_id),
+                ids=await readable_resource_ids(user_ctx),
             )
             return json.dumps(
                 {
@@ -564,7 +564,7 @@ class MCPServersToolset(Toolset):
                 raise ToolError("MCP server spec not found")
             if not getattr(server, "is_catalog", False):
                 try:
-                    await require_permission("read", "mcp_server", spec_id, user_ctx.user_id)
+                    await require_permission("read", "mcp_server", spec_id, user_ctx)
                 except HTTPException as exc:
                     raise ToolError(exc.detail) from exc
             payload = _serialize_server(server)

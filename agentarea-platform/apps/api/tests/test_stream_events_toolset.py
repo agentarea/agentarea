@@ -43,15 +43,16 @@ def env(monkeypatch):
     service = AsyncMock()
     service.find_stream.return_value = stream
     permission = AsyncMock()
+    caller = SimpleNamespace(user_id="u", workspace_id="w")
 
     @asynccontextmanager
     async def ctx():
-        yield (None, SimpleNamespace(user_id="u", workspace_id="w"), object(), None, None)
+        yield (None, caller, object(), None, None)
 
     monkeypatch.setattr(f"{MODULE}.platform_read_context", ctx)
     monkeypatch.setattr(f"{MODULE}._service", lambda _f: service)
     monkeypatch.setattr(f"{MODULE}.require_permission", permission)
-    return SimpleNamespace(stream=stream, service=service, permission=permission)
+    return SimpleNamespace(stream=stream, service=service, permission=permission, caller=caller)
 
 
 async def _read(**kwargs) -> dict:
@@ -70,7 +71,7 @@ async def test_events_after_the_cursor_come_with_the_next_cursor(env):
     env.service.list_events.return_value = [_event(41), _event(42), _event(43)]
     page = await _read(stream="payments", after_sequence=40, limit=2)
     env.service.find_stream.assert_awaited_once_with("payments")
-    env.permission.assert_awaited_once_with("read", "stream", str(env.stream.id), "u")
+    env.permission.assert_awaited_once_with("read", "stream", str(env.stream.id), env.caller)
     assert env.service.list_events.await_args.kwargs == {"after": 40, "before": None, "limit": 3}
     assert page["stream"] == {"id": str(env.stream.id), "name": "payments"}
     assert [e["sequence"] for e in page["events"]] == [41, 42]

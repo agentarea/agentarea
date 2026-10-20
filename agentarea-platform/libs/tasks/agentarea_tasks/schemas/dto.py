@@ -108,3 +108,57 @@ class RunCreate(BaseModel):
 
     _validate_scheduled_at = field_validator("scheduled_at")(require_future_instant)
     _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
+
+
+def _require_text(value: str | None) -> str | None:
+    if value is not None and not value.strip():
+        raise ValueError("must not be blank")
+    return value.strip() if value is not None else None
+
+
+class TaskDefinitionCreate(BaseModel):
+    """A saved task: the agent, what to ask it, and the parameters to ask with."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255, description="What the saved task is called.")
+    description: str = Field(
+        min_length=1,
+        max_length=20000,
+        description="What the agent is asked to do each time the task runs.",
+    )
+    agent_id: UUID = Field(description="UUID of the agent that runs the task.")
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Task parameters every run of it starts with, as on a run.",
+    )
+
+    _require_text = field_validator("name", "description")(_require_text)
+    _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
+
+
+class TaskDefinitionUpdate(BaseModel):
+    """Changes to a saved task; a field left out stays as it is."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, min_length=1, max_length=20000)
+    agent_id: UUID | None = None
+    parameters: dict[str, Any] | None = None
+
+    _require_text = field_validator("name", "description")(_require_text)
+    _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)
+
+
+class TaskDefinitionRun(BaseModel):
+    """One run of a saved task."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    parameters: dict[str, Any] | None = Field(
+        default=None,
+        description="Merged over the saved task's own parameters for this run only.",
+    )
+
+    _reject_reserved_parameters = field_validator("parameters")(reject_reserved_parameters)

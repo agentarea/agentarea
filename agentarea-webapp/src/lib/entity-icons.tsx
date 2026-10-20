@@ -1,6 +1,7 @@
 import {
   Activity,
   AppWindow,
+  BookmarkCheck,
   Bot,
   Boxes,
   FolderTree,
@@ -33,6 +34,7 @@ export const ENTITY_ICONS = {
   platformStream: Activity,
   sandbox: Boxes,
   app: AppWindow,
+  savedTask: BookmarkCheck,
 } satisfies Record<string, LucideIcon>;
 
 export type EntityKind = keyof typeof ENTITY_ICONS;

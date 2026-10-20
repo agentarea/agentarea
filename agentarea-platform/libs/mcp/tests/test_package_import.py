@@ -9,13 +9,13 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from agentarea_mcp.transport_spec import server_transport_spec as _server_transport_spec
 from agentarea_mcp.application.validation_service import MCPConfigurationValidator
 from agentarea_mcp.container_monitor import MCPContainerMonitor
 from agentarea_mcp.domain.transport import MCPTransport
 from agentarea_mcp.package_import import import_package_image
 from agentarea_mcp.schemas.dto import MCPServerInstanceCreate
 from agentarea_mcp.transport_spec import merge_transport_spec
+from agentarea_mcp.transport_spec import server_transport_spec as _server_transport_spec
 
 
 class _Begin:

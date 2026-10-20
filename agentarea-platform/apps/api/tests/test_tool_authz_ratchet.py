@@ -108,8 +108,8 @@ class _BodyReachedError(Exception):
 
 
 class _OwnerOnlyPermissions(PermissionService):
-    async def check(self, user_id, permission, resource_type, resource_id) -> bool:
-        return user_id == OWNER.user_id
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        return subject == OWNER.graph_subject
 
 
 @pytest.fixture(autouse=True)

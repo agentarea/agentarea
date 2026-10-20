@@ -6,7 +6,6 @@ from uuid import uuid4
 
 import pytest
 from agentarea_common.exceptions.errors import NotFoundError
-
 from agentarea_mcp.application.oauth_link_service import MCPOAuthLinkService
 from agentarea_mcp.domain.auth_models import (
     ACCESS_CONTROL_PUBLIC,
@@ -14,7 +13,6 @@ from agentarea_mcp.domain.auth_models import (
     MCPOAuthLink,
     MCPOAuthSession,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures / builders

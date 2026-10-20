@@ -139,6 +139,7 @@
             "group": "Triggers",
             "pages": [
               "guides/triggers/schedule-an-agent",
+              "guides/triggers/save-a-task",
               "guides/triggers/trigger-from-a-webhook",
               "guides/triggers/collect-events-into-a-stream",
               "guides/triggers/subscribe-to-a-stream-over-mcp-events",

@@ -13,7 +13,7 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
 )
 
-from .conftest import make_trigger_repository_factory
+from .conftest import active_agent_repository, make_trigger_repository_factory
 
 pytestmark = pytest.mark.asyncio
 
@@ -32,7 +32,7 @@ class TestTriggerExecutionEngine:
     def mock_dependencies(self):
         """Create mock dependencies."""
         event_broker = AsyncMock()
-        agent_repository = AsyncMock()
+        agent_repository = active_agent_repository()
         task_service = AsyncMock()
         llm_service = AsyncMock()
         temporal_schedule_manager = AsyncMock()

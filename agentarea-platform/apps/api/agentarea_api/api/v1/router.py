@@ -61,6 +61,7 @@ from . import (
     skill_collections,
     skills,
     streams,
+    task_definitions,
     tool_call_approvals,
     triggers,
     wallet,
@@ -162,6 +163,9 @@ workspace_v1_router.include_router(model_instances.router)
 
 # Triggers management
 workspace_v1_router.include_router(triggers.router)
+
+# Saved tasks, run on demand or by a trigger
+workspace_v1_router.include_router(task_definitions.router)
 
 # Streams: event journals and their subscriptions
 workspace_v1_router.include_router(streams.router)

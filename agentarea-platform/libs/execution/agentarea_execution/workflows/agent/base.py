@@ -419,6 +419,7 @@ class AgentWorkflowBase:
                     task_id=self.state.task_id,
                     workspace_id=self.state.workspace_id,
                     user_id=self.state.user_id,
+                    agent_id=self.state.agent_id,
                     execution_id=self.state.execution_id,
                     rows=rows,
                     events_json=[json.dumps(event) for event in sent_events],
@@ -453,6 +454,7 @@ class AgentWorkflowBase:
                     task_id=self.state.task_id,
                     workspace_id=self.state.workspace_id,
                     user_id=self.state.user_id,
+                    agent_id=self.state.agent_id,
                     execution_id=self.state.execution_id,
                     rows=[
                         LogRow(

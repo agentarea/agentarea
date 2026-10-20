@@ -220,7 +220,7 @@ async def create_client(
     await grant_resource_owner(
         resource_id=client.id,
         workspace_id=user_context.workspace_id,
-        user_id=user_context.user_id,
+        owner=user_context.graph_subject,
     )
     return await _to_response(service, client)
 
@@ -249,7 +249,7 @@ async def list_clients(
     clients = await service.list(
         limit=limit,
         offset=offset,
-        ids=await readable_resource_ids(user_context.user_id),
+        ids=await readable_resource_ids(user_context),
     )
     return await client_responses(service, clients)
 

@@ -44,6 +44,7 @@ def mock_agent_repository():
     # Mock agent exists
     mock_agent = MagicMock()
     mock_agent.id = uuid4()
+    mock_agent.status = "active"
     repo.get.return_value = mock_agent
     return repo
 

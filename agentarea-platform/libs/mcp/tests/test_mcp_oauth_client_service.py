@@ -16,7 +16,6 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 from agentarea_common.utils.url_safety import OutboundPolicy, SafeOutboundTransport, UnsafeUrlError
-
 from agentarea_mcp.application.oauth_client_service import (
     AuthServerMetadata,
     MCPOAuthClientService,
@@ -28,7 +27,6 @@ from agentarea_mcp.application.oauth_client_service import (
     oauth_authorize_params,
 )
 from agentarea_mcp.application.oauth_profile import OAuthProfile
-
 
 # ---------------------------------------------------------------------------
 # Helper: redirect httpx clients inside the service to a MockTransport.

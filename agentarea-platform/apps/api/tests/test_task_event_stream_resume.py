@@ -18,7 +18,9 @@ from agentarea_api.api.deps.services import get_read_task_service
 from agentarea_api.api.v1 import agents_tasks, task_event_feed
 from agentarea_api.main import app
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config.database import get_read_db_session
+from agentarea_common.di.container import get_container
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.task_service import TaskService
@@ -35,6 +37,22 @@ async def async_client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+class _AllowAll(PermissionService):
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        return True
+
+
+@pytest.fixture
+def may_start_runs():
+    """Starting a run asks for ``execute`` on the agent; this PDP allows it."""
+    container = get_container()
+    saved = dict(container._singletons)
+    container.register_singleton(PermissionService, _AllowAll())
+    yield
+    container._singletons.clear()
+    container._singletons.update(saved)
 
 
 @pytest.fixture
@@ -260,7 +278,7 @@ async def test_event_stream_closes_read_session_before_first_frame(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_task_creation_runs_before_first_sse_frame(monkeypatch):
+async def test_task_creation_runs_before_first_sse_frame(monkeypatch, may_start_runs):
     agent = MagicMock(name="agent")
     agent.name = "Test agent"
     agent_service = MagicMock()
@@ -312,7 +330,9 @@ async def test_task_creation_runs_before_first_sse_frame(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_streamed_task_create_rejects_an_invalid_run_with_422(monkeypatch, async_client):
+async def test_streamed_task_create_rejects_an_invalid_run_with_422(
+    monkeypatch, async_client, may_start_runs
+):
     """An invalid run is a request error, not an "agent not found" SSE frame."""
     agent = MagicMock(name="agent")
     agent.name = "Test agent"

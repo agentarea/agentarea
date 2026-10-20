@@ -48,7 +48,7 @@ class OpenFGAPermissionService(PermissionService):
 
     async def check(
         self,
-        user_id: str,
+        subject: str,
         permission: str,
         resource_type: str,
         resource_id: str,
@@ -68,6 +68,6 @@ class OpenFGAPermissionService(PermissionService):
             namespace="resource",
             object=resource_id,
             relation=relation,
-            subject_id=f"User:{user_id}",
+            subject_id=subject,
         )
         return result.allowed
