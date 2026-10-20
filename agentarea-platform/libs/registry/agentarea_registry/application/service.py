@@ -63,7 +63,10 @@ from agentarea_registry.domain.models import (
     Registry,
     RegistryItem,
 )
-from agentarea_registry.infrastructure.github_client import GitHubApiError, HttpGitHubSource
+from agentarea_registry.infrastructure.github_client import (
+    GitHubApiError,
+    github_source,
+)
 from agentarea_registry.infrastructure.repository import (
     DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
@@ -475,7 +478,7 @@ class RegistryService:
         model_spec_repo: Any | None = None,
         agent_repo: Any | None = None,
         credentials_resolver: CredentialsResolver | None = None,
-        github_source_factory: Callable[[str | None], GitHubSource] = HttpGitHubSource,
+        github_source_factory: Callable[[str | None], GitHubSource] = github_source,
         content_mirror: ContentMirror | None = None,
         untrusted_client: Callable[..., httpx.AsyncClient] = _member_client,
     ):
@@ -880,12 +883,12 @@ class RegistryService:
             else None
         )
         github: GitHubSource | None = None
-        head = root_tree = ""
+        head = ""
         if registry.source_type == "github":
             # A repository's version is its head commit, kept where an
             # index URL keeps its ETag.
             github = self.github_source_factory(token)
-            head, root_tree = await github.head(registry.source_url, registry.source_ref)
+            head = await github.head(registry.source_url, registry.source_ref)
             source_etag = head
         elif registry.scope == "workspace":
             source_etag = await self._untrusted_etag(registry.source_url)
@@ -913,7 +916,6 @@ class RegistryService:
                 github,
                 repo=registry.source_url,
                 commit=head,
-                root_tree=root_tree,
                 path=registry.source_path,
                 max_skills=MAX_WORKSPACE_GITHUB_SKILLS if registry.scope == "workspace" else None,
             )

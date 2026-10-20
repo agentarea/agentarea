@@ -40,12 +40,12 @@ class StubGitHub:
         self.truncated = truncated
         self.calls: list[tuple] = []
 
-    async def head(self, repo: str, ref: str | None) -> tuple[str, str]:
+    async def head(self, repo: str, ref: str | None) -> str:
         self.calls.append(("head", repo, ref))
-        return self.commit, ROOT_TREE
+        return self.commit
 
-    async def tree(self, repo: str, tree_sha: str) -> tuple[list[dict], bool]:
-        self.calls.append(("tree", repo, tree_sha))
+    async def tree(self, repo: str, commit: str) -> tuple[list[dict], str, bool]:
+        self.calls.append(("tree", repo, commit))
         entries: list[dict] = []
         dirs: set[str] = set()
         for path in self.files:
@@ -54,7 +54,7 @@ class StubGitHub:
             for i in range(1, len(parts) + 1):
                 dirs.add("/".join(parts[:i]))
         entries.extend({"path": d, "type": "tree", "sha": f"tree:{d}"} for d in sorted(dirs))
-        return entries, self.truncated
+        return entries, ROOT_TREE, self.truncated
 
     async def raw(self, repo: str, commit: str, path: str) -> bytes:
         self.calls.append(("raw", repo, commit, path))
@@ -74,7 +74,7 @@ async def test_every_folder_with_a_skill_md_is_one_item():
     github = StubGitHub(REPO_FILES)
 
     items = await build_github_skill_index(
-        github, repo="acme/skills", commit=COMMIT, root_tree=ROOT_TREE, path=None
+        github, repo="acme/skills", commit=COMMIT, path=None
     )
 
     by_id = {i["external_id"]: i for i in items}
@@ -95,7 +95,7 @@ async def test_every_folder_with_a_skill_md_is_one_item():
 
 async def test_path_limits_the_index_to_one_folder():
     items = await build_github_skill_index(
-        StubGitHub(REPO_FILES), repo="acme/skills", commit=COMMIT, root_tree=ROOT_TREE, path="/skills/"
+        StubGitHub(REPO_FILES), repo="acme/skills", commit=COMMIT, path="/skills/"
     )
 
     assert sorted(i["external_id"] for i in items) == ["skills/pdf", "skills/xlsx"]
@@ -106,7 +106,6 @@ async def test_a_skill_at_the_repository_root_points_at_the_root_tree():
         StubGitHub({"SKILL.md": _skill_md("solo", "One skill")}),
         repo="acme/solo",
         commit=COMMIT,
-        root_tree=ROOT_TREE,
         path=None,
     )
 
@@ -121,7 +120,6 @@ async def test_a_skill_md_without_a_name_takes_its_folder_name():
         StubGitHub({"tools/lint/SKILL.md": b"# no frontmatter\n"}),
         repo="acme/skills",
         commit=COMMIT,
-        root_tree=ROOT_TREE,
         path=None,
     )
 
@@ -134,7 +132,6 @@ async def test_a_truncated_tree_fails_instead_of_dropping_skills():
             StubGitHub(REPO_FILES, truncated=True),
             repo="acme/skills",
             commit=COMMIT,
-            root_tree=ROOT_TREE,
             path=None,
         )
 
@@ -242,7 +239,7 @@ async def test_skill_bodies_are_read_raw_not_through_the_rate_limited_api():
     github = StubGitHub(REPO_FILES)
 
     await build_github_skill_index(
-        github, repo="acme/skills", commit=COMMIT, root_tree=ROOT_TREE, path=None
+        github, repo="acme/skills", commit=COMMIT, path=None
     )
 
     assert [c[0] for c in github.calls] == ["tree", "raw", "raw", "raw"]
@@ -255,7 +252,6 @@ async def test_a_repository_with_more_skills_than_the_cap_is_refused():
             StubGitHub(REPO_FILES),
             repo="acme/skills",
             commit=COMMIT,
-            root_tree=ROOT_TREE,
             path=None,
             max_skills=2,
         )
@@ -285,7 +281,6 @@ async def test_a_frontmatter_bomb_is_refused_at_once(kind):
         StubGitHub({"tools/bomb/SKILL.md": _bomb_frontmatter(kind)}),
         repo="acme/skills",
         commit=COMMIT,
-        root_tree=ROOT_TREE,
         path=None,
     )
 
@@ -315,7 +310,7 @@ async def test_frontmatters_are_parsed_off_the_event_loop():
     loop = asyncio.get_running_loop()
     started = loop.time()
     items = await build_github_skill_index(
-        StubGitHub(files), repo="acme/skills", commit=COMMIT, root_tree=ROOT_TREE, path=None
+        StubGitHub(files), repo="acme/skills", commit=COMMIT, path=None
     )
     elapsed = loop.time() - started
     stop.set()

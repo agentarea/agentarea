@@ -521,11 +521,25 @@ class TestImportStaysOnPublicAddresses:
         monkeypatch.setattr(
             "agentarea_agents.infrastructure.github_skill_importer.safe_async_client", client
         )
-        importer = GitHubSkillImporter()
+        importer = GitHubSkillImporter(github_token="t0k")  # noqa: S106
 
         with pytest.raises(GitHubSkillImporterError):
             await importer.download_repo("https://github.com/owner/repo/tree/main")
         assert hosts == ["api.github.com"]
+
+    @pytest.mark.asyncio
+    async def test_an_archive_redirect_is_not_followed(self):
+        hosts: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            hosts.append(request.url.host)
+            return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/"})
+
+        importer = GitHubSkillImporter(transport=httpx.MockTransport(handler))
+
+        with pytest.raises(GitHubSkillImporterError):
+            await importer.download_repo("https://github.com/owner/repo/tree/main")
+        assert hosts == ["codeload.github.com"]
 
     @pytest.mark.asyncio
     async def test_a_skill_file_fetch_refuses_a_non_public_address(self):

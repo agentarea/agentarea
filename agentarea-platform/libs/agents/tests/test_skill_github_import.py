@@ -1,4 +1,6 @@
-"""GitHub import over REST: a tree URL into a monorepo imports only that package.
+"""GitHub import: a tree URL into a monorepo imports only that package.
+
+Without a token the repository comes from its archive endpoint, not the REST API.
 
 A direct import is an install from the unvetted public source (ADR-0044): the
 install policy decides it as the ``registry:github`` pseudo-registry of trust
@@ -30,7 +32,7 @@ CALLER = UserContext(user_id="u1", workspace_id="w1")
 URL = "https://github.com/coreyhaines31/marketingskills/tree/main/skills/seo-audit"
 
 SKILL_MD = "---\nname: seo-audit\ndescription: Audit a site for SEO\n---\n# SEO audit\n"
-ZIPBALL_URL = "https://api.github.com/repos/coreyhaines31/marketingskills/zipball/main"
+ZIPBALL_URL = "https://codeload.github.com/coreyhaines31/marketingskills/zip/main"
 
 
 def _repo_zipball() -> bytes:
@@ -56,11 +58,12 @@ def github_serves_zipball(monkeypatch):
         requested.append(str(request.url))
         return httpx.Response(200, content=_repo_zipball())
 
-    def client(**kwargs):
+    def client(_destination, **kwargs):
+        kwargs.pop("transport", None)
         return httpx.AsyncClient(transport=httpx.MockTransport(handler), **kwargs)
 
     monkeypatch.setattr(
-        "agentarea_agents.infrastructure.github_skill_importer.safe_async_client", client
+        "agentarea_agents.infrastructure.github_skill_importer.outbound_client", client
     )
     return requested
 
