@@ -64,6 +64,7 @@ export const TriggerControl = ({
   children,
 }: TriggerControlProps) => {
   const t = useTranslations("AgentsPage");
+  const tMethods = useTranslations("MethodsList");
   // Reactively watch allowed_tools so checkboxes update on change
   const watchedAllowedTools = useWatch({
     control,
@@ -242,7 +243,6 @@ export const TriggerControl = ({
             toolName={trigger.name || trigger.id || `trigger-${index}`}
             showSelectAll={hasMethodToggle}
             onSelectAll={hasMethodToggle ? handleSelectAllMethods : undefined}
-            label="Available Methods:"
           />
         )}
 
@@ -276,7 +276,10 @@ export const TriggerControl = ({
             onApprovalToggle={
               hasToolControl ? handleToolApprovalToggle : undefined
             }
-            label={`Available Tools (${enabledToolCount}/${availableTools.length}):`}
+            label={tMethods("availableTools", {
+              enabled: enabledToolCount,
+              total: availableTools.length,
+            })}
           />
         )}
       </div>

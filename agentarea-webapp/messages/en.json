@@ -1,6 +1,7 @@
 {
   "MethodsList": {
     "availableMethods": "Available methods",
+    "availableTools": "Available tools ({enabled}/{total})",
     "selectAll": "Select all",
     "approvalRequired": "Approval required",
     "autoApproved": "Auto",

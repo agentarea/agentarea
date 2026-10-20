@@ -1,6 +1,7 @@
 {
   "MethodsList": {
     "availableMethods": "Доступные методы",
+    "availableTools": "Доступные инструменты ({enabled}/{total})",
     "selectAll": "Выбрать все",
     "approvalRequired": "Нужно одобрение",
     "autoApproved": "Авто",

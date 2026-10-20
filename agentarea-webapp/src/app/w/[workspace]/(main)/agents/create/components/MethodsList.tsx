@@ -52,12 +52,12 @@ export const MethodsList: React.FC<MethodsListProps> = ({
   const someSelected = selectedCount > 0 && selectedCount < totalCount;
 
   return (
-    <div className={cn(`space-y-1`, className)}>
+    <div className={className}>
       <p className="text-xs font-medium text-foreground">
         {label ?? t("availableMethods")}
       </p>
       {showSelectAll && onSelectAll && (
-        <div className="flex items-center gap-2 pl-1">
+        <div className="mt-1.5 flex items-center gap-2 px-1.5">
           <Checkbox
             id={`${toolName}-select-all`}
             checked={allSelected}
@@ -72,8 +72,8 @@ export const MethodsList: React.FC<MethodsListProps> = ({
           </label>
         </div>
       )}
-      <Divider />
-      <div className="max-h-60 space-y-1 overflow-y-auto pr-2">
+      <Divider className="my-2" />
+      <div className="max-h-60 space-y-0.5 overflow-y-auto">
         {methods.map((method) => {
           const methodId = `${toolName}-${method.name}`;
           const isChecked = selectedMethods[method.name] === true;
@@ -82,10 +82,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
           return (
             <div
               key={method.name}
-              className={cn(
-                "flex items-center gap-2 rounded p-1",
-                isChecked ? "bg-muted/30" : "bg-muted/10 opacity-60"
-              )}
+              className="flex items-start gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-muted/50"
             >
               <Checkbox
                 id={methodId}
@@ -93,14 +90,16 @@ export const MethodsList: React.FC<MethodsListProps> = ({
                 onCheckedChange={(checked) =>
                   onMethodToggle(method.name, checked === true)
                 }
+                className="mt-px"
               />
+              {/* Name over its description, so a long name never runs into it. */}
               <label
                 htmlFor={methodId}
-                className="flex flex-1 cursor-pointer items-center gap-2"
+                className="min-w-0 flex-1 cursor-pointer"
               >
                 <span
                   className={cn(
-                    "text-xs",
+                    "block text-xs font-medium leading-4",
                     isChecked
                       ? "text-foreground"
                       : "text-muted-foreground line-through"
@@ -108,8 +107,8 @@ export const MethodsList: React.FC<MethodsListProps> = ({
                 >
                   {method.display_name || method.name}
                 </span>
-                {!onApprovalToggle && (
-                  <span className="ml-auto text-xs text-muted-foreground line-clamp-1">
+                {method.description && (
+                  <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground">
                     {method.description}
                   </span>
                 )}
@@ -118,7 +117,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
                 <button
                   type="button"
                   className={cn(
-                    "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-colors",
+                    "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] transition-colors",
                     needsApproval
                       ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                       : "bg-muted/40 text-muted-foreground hover:bg-primary/10 hover:text-primary"
