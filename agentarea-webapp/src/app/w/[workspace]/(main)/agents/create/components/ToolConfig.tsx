@@ -16,6 +16,7 @@ import {
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
@@ -809,17 +810,16 @@ const ToolConfig = ({
                                   className="flex items-center gap-2 rounded bg-muted/30 p-1"
                                 >
                                   {isSelected && (
-                                    <input
-                                      type="checkbox"
+                                    <Checkbox
+                                      id={`${connection.id}-${tool.name}`}
                                       checked={isEnabled}
-                                      onChange={(e) =>
+                                      onCheckedChange={(checked) =>
                                         handleOpenapiToolToggle(
                                           connection.id,
                                           tool.name,
-                                          e.target.checked
+                                          checked === true
                                         )
                                       }
-                                      className="h-3 w-3 shrink-0"
                                     />
                                   )}
                                   <span className="text-xs text-foreground">

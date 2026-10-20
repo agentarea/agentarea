@@ -1,4 +1,12 @@
 {
+  "MethodsList": {
+    "availableMethods": "Available methods",
+    "selectAll": "Select all",
+    "approvalRequired": "Approval required",
+    "autoApproved": "Auto",
+    "approvalRequiredHint": "Requires human approval — click to auto-approve",
+    "autoApprovedHint": "Auto-approved — click to require approval"
+  },
   "404": {
     "title": "Page not found",
     "description": "The page you are looking for does not exist.",
@@ -644,6 +652,8 @@
       "descriptionPlaceholder": "Describe the agent's purpose, personality, and main goal...",
       "instruction": "Instruction",
       "instructionPlaceholder": "Provide specific instructions for this agent...",
+      "a2ui": "Interactive UI (A2UI)",
+      "a2uiDescription": "Let the agent show forms, buttons and cards in the web chat instead of plain text.",
       "answerCheck": "Check the final answer",
       "answerCheckDescription": "Before the answer is shown, look for tool names, codes, JSON, error texts and other scripts, and have the model rewrite it once. The reply then appears only after the check.",
       "answerCheckLanguage": "Answer language",
