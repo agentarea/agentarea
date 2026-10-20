@@ -75,9 +75,10 @@ In the web app, everything below is on **Settings → Registries**
         }
         ```
 
-        `tree_sha` is the version: without it the entry is never flagged as
-        updated. An entry may carry an inline `content` body instead of
-        `source`.
+        `tree_sha` is the version. Without it the version is `latest`: an
+        install pins the tree it fetched, and each sync of an `upstream`
+        registry checks installed entries for a new tree. An entry may carry
+        an inline `content` body instead of `source`.
       </Tab>
     </Tabs>
   </Step>
