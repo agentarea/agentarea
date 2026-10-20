@@ -2102,6 +2102,10 @@
       "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
       "noStreams": "No streams yet",
       "streamsLoadFailed": "Could not load streams",
+      "typeKinds": "Kinds",
+      "typeItems": "Types",
+      "typeSearch": "Search trigger types",
+      "typeNotFound": "No types found",
       "session": {
         "continue": "Continue the conversation",
         "continueHint": "The next event of the same session (a chat, a thread) joins the task that is waiting for it.",

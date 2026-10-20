@@ -25,6 +25,7 @@ import { FilePickerPanel } from "@/components/ResourcePicker/FilePickerPanel";
 import SectionLoadError from "@/components/SectionLoadError";
 import { Button } from "@/components/ui/button";
 import Divider from "@/components/ui/divider";
+import type { GroupedSelectGroup } from "@/components/ui/grouped-select";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -50,6 +51,7 @@ import {
   type TaskParameterRef,
 } from "../components/taskParameters";
 import { renderTriggerIcon } from "../components/triggerDisplay";
+import { LANE_ICON } from "../components/TriggersTypeFilter";
 import {
   createTriggerAction,
   updateTriggerAction,
@@ -60,6 +62,7 @@ import type { StreamOptions } from "./streamOptions";
 import { TIMEZONES } from "./timezones";
 import { TriggerExecutionContext } from "./TriggerExecutionContext";
 import { requiresTaskText } from "./triggerShape";
+import { TriggerTypeSelect } from "./TriggerTypeSelect";
 
 interface CreateTriggerFormProps {
   agents: AgentResponse[];
@@ -78,8 +81,14 @@ const INLINE_ERROR_FIELDS = new Set([
   "failure_threshold",
   "batch",
 ]);
-/** What a trigger can be: a schedule, or a subscription to a stream. */
-const TRIGGER_TYPES = ["cron", "stream"] as const;
+/**
+ * What a trigger can be, grouped as the trigger list's lanes are: a schedule,
+ * or a subscription to a stream.
+ */
+const TYPE_KINDS = [
+  { lane: "schedule", label: "schedules", types: ["cron"] },
+  { lane: "event", label: "events", types: ["stream"] },
+] as const;
 
 type SelectableResource = TaskParameterRef;
 
@@ -91,6 +100,7 @@ export function CreateTriggerForm({
   const router = useWorkspaceRouter();
   const t = useTranslations("TriggersPage.create");
   const tType = useTranslations("TriggersPage.type");
+  const tFilter = useTranslations("TriggersPage.filter");
   const tError = useTranslations("TriggersPage.error");
 
   const isEditing = !!initialData;
@@ -212,6 +222,25 @@ export function CreateTriggerForm({
 
   // The type's own fields wait for a type; an edit always has one.
   const hasType = isEditing || !!triggerType;
+
+  const typeGroups: GroupedSelectGroup[] = TYPE_KINDS.map(
+    ({ lane, label, types }) => {
+      const Icon = LANE_ICON[lane] ?? ENTITY_ICONS.trigger;
+      return {
+        id: lane,
+        label: tFilter(label),
+        icon: <Icon className="h-4 w-4 text-muted-foreground" />,
+        items: types.map((type) => ({
+          id: type,
+          label: tType(type),
+          icon: renderTriggerIcon(
+            { trigger_type: type },
+            "h-4 w-4 text-muted-foreground"
+          ),
+        })),
+      };
+    }
+  );
 
   // A new trigger cannot be saved without a type or an agent; both are
   // checked here, before the post, rather than left to the server's 422.
@@ -378,7 +407,9 @@ export function CreateTriggerForm({
                   {state.errors?.trigger_type?.[0] ?? t("selectType")}
                 </p>
               )}
-              <Select
+              <TriggerTypeSelect
+                id="trigger_type_select"
+                groups={typeGroups}
                 value={triggerType}
                 onValueChange={(type) => {
                   setTriggerType(type);
@@ -386,29 +417,11 @@ export function CreateTriggerForm({
                     setName(t("suggestedName", { type: tType(type) }));
                   setTypeMissing(false);
                 }}
+                placeholder={t("selectType")}
                 // An edit cannot change the type: shown, not offered.
                 disabled={isEditing}
-              >
-                <SelectTrigger
-                  id="trigger_type_select"
-                  className="md:max-w-sm"
-                  aria-invalid={typeMissing || !!state.errors?.trigger_type}
-                >
-                  <SelectValue placeholder={t("selectType")} />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRIGGER_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      <span className="flex items-center gap-2">
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground">
-                          {renderTriggerIcon({ trigger_type: type }, "h-4 w-4")}
-                        </span>
-                        {tType(type)}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                invalid={typeMissing || !!state.errors?.trigger_type}
+              />
             </div>
 
             {hasType && triggerType === "stream" && (
