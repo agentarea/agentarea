@@ -72,7 +72,9 @@ withheld. See [tool authorization](/concepts/governance/tool-authorization).
 
 The run's configuration carries each skill's name, description and package
 path, never its `SKILL.md`. The body is read when the model activates the
-skill, by `activate_skill_activity`. It is still gated: `_gate_tool_call` runs
+skill, by `activate_skill_activity`, from the package recorded in the
+configuration: a catalog update between the start of the run and the
+activation does not change what the run reads. It is still gated: `_gate_tool_call` runs
 first, and a denied call never reaches the skill.
 
 The activity asks the install policy, reads `SKILL.md` from the skill's package
@@ -86,10 +88,14 @@ idempotent per run: calling it twice returns "already active in this session"
 instead of a second copy of the text.
 
 An entry takes at most a tenth of the model's context window
-(`SKILL_CONTEXT_SHARE`). A larger `SKILL.md` is summarized: its size, its
-opening, and the path of its copy in the sandbox (or a `read_tool_output` id
-when there is no sandbox). Activated entries are never compacted, so the cap
-holds for the rest of the run.
+(`SKILL_CONTEXT_SHARE`), the listing of the skill's files included, and all of
+a run's activated skills together take at most
+`AGENTAREA_TASK_SKILLS_WINDOW_SHARE` of it (30%). Sizes are counted with the
+tokenizer model calls are metered with. A larger `SKILL.md` is summarized: its
+size, its opening, and the path of its copy in the sandbox (or a
+`read_tool_output` id when there is no sandbox); a skill activated once the
+skills' share is used up is not loaded, and the model is told why. Activated
+entries are never compacted, so the caps hold for the rest of the run.
 
 A refusal by the install policy, a skill that no longer exists, and a GitHub
 source that is gone come back to the model as a tool error naming the skill.
@@ -186,10 +192,14 @@ relevance score to inspect afterwards — only the presence or absence of an
   only after activation puts the folder in the sandbox.
 - **The install policy is asked again at run time.** A skill installed from a
   registry, or imported from a GitHub URL (the `github` registry, trust
-  `community`), is not offered to a run once a rule denies its registry or
-  trust level, and activating it fails with the rule. This holds for skills
-  installed before the rule was written. Skills a workspace wrote itself have
-  no registry and are not asked about.
+  `community`), is not offered to a run once a workspace rule denies its
+  registry or trust level; the run's feed shows a `skill.withheld` event naming
+  the skill and the rule, and activating it fails with the rule. This holds for
+  skills installed before the rule was written. A run is held to the
+  workspace's rules only: a member's own rules apply when they install, not to
+  the runs of an agent, whoever starts them. Skills a workspace wrote itself
+  have no registry and are not asked about, and an install whose registry or
+  catalog item was deleted keeps working from its own package.
 - **An early activation can block compaction entirely.** The boundary search
   rejects any split that would drop protected skill content, and returns 0 — no
   compaction — when no safe boundary exists. A skill activated in the first

@@ -54,6 +54,7 @@ export const EVENT_TYPES = [
   "task.continued",
   "task.awaiting_infrastructure",
   "task.infrastructure_recovered",
+  "skill.withheld",
   "task.retried",
   "execution.finished",
   "execution.continued_as_new",

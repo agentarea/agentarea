@@ -12,6 +12,7 @@ Uses ``WorkflowEnvironment.start_time_skipping()``: awaiting the result, or
 
 from __future__ import annotations
 
+import asyncio
 import concurrent.futures
 import json
 import uuid
@@ -55,6 +56,13 @@ class Scenario:
         self.outage: timedelta | None = None
         self.outage_started: datetime | None = None
         self.refusal: str | None = None
+        # What the service answers once the outage is over, instead of the body.
+        self.after_outage: str | None = None
+        # Holds the model's second call until the test releases it.
+        self.hold_second_call: asyncio.Event | None = None
+        self.skills = ["pdf"]
+        self.skills_window_share: float | None = None
+        self.withheld: list[dict[str, str]] = []
         # Configs built before activation read the package carried the body.
         self.carry_body = False
         self.attempts = 0
@@ -79,12 +87,15 @@ async def _build_config(request: AgentConfigRequest) -> dict[str, Any]:
         "planning": False,
         "skills": [
             {
-                "id": SKILL_ID,
-                "name": "pdf",
-                "description": "PDFs",
+                "id": SKILL_ID if name == "pdf" else str(uuid.uuid5(uuid.NAMESPACE_DNS, name)),
+                "name": name,
+                "description": name.upper(),
                 **({"content": S.body} if S.carry_body else {}),
             }
+            for name in S.skills
         ],
+        **({"skills_window_share": S.skills_window_share} if S.skills_window_share else {}),
+        "withheld_skills": S.withheld,
     }
 
 
@@ -124,8 +135,11 @@ def _call(name: str, arguments: dict[str, Any], call_id: str) -> dict[str, Any]:
 @activity.defn(name="call_llm_activity")
 async def _call_llm(request: LLMCallRequest) -> dict[str, Any]:
     S.model_saw.append(S.log.messages(request))
-    if len(S.model_saw) == 1:
-        return _call("activate_skill", {"skill_name": "pdf"}, "call_skill")
+    if len(S.model_saw) == 2 and S.hold_second_call is not None:
+        await S.hold_second_call.wait()
+    if len(S.model_saw) <= len(S.skills):
+        name = S.skills[len(S.model_saw) - 1]
+        return _call("activate_skill", {"skill_name": name}, f"call_skill_{name}")
     return _call("completion", {"result": "done", "artifacts": []}, f"call_done_{len(S.model_saw)}")
 
 
@@ -140,10 +154,13 @@ async def _activate_skill(request: ActivateSkillRequest) -> ActivateSkillResult:
             S.outage_started = now
         if now - S.outage_started < S.outage:
             raise ApplicationError(
-                f"Skill '{request.skill_name}' could not be read: Could not connect to the "
-                "endpoint URL: http://s3:9000",
-                type="SkillStorageUnavailable",
+                "Object storage is unreachable: Could not connect to the endpoint URL: "
+                "http://s3:9000",
+                {"service": "Object storage"},
+                type="ServiceUnreachable",
             )
+        if S.after_outage is not None:
+            raise ApplicationError(S.after_outage, type="SkillNotFound", non_retryable=True)
     content = f'<skill_content name="{request.skill_name}">\n{S.body}</skill_content>'
     S.log.rows.setdefault(request.task_id, {})[request.seq] = LogRow(
         seq=request.seq,
@@ -232,7 +249,7 @@ def _status_values() -> list[str]:
     return [request.status for request in S.statuses]
 
 
-async def _run(body_size: int | None = None, *, during=None):
+async def _run(body_size: int | None = None, *, during=None, execution_timeout=timedelta(days=3)):
     if body_size is not None:
         S.body = "# PDF skill\n" + ("Use pdfplumber. " * (body_size // 16 + 1))[:body_size]
     env = await WorkflowEnvironment.start_time_skipping(data_converter=pydantic_data_converter)
@@ -252,7 +269,7 @@ async def _run(body_size: int | None = None, *, during=None):
                     _request(),
                     id=f"test-skill-activation-{uuid.uuid4()}",
                     task_queue=queue,
-                    execution_timeout=timedelta(days=3),
+                    execution_timeout=execution_timeout,
                 )
                 if during is not None:
                     await during(env, handle)
@@ -309,7 +326,8 @@ async def test_a_long_outage_waits_for_the_service_and_goes_on_by_itself():
         "task.infrastructure_recovered"
     )
     waiting = next(e for e in S.published if e["event_type"] == "task.awaiting_infrastructure")
-    assert "Storage for skill 'pdf'" in waiting["data"]["message"]
+    assert waiting["data"]["service"] == "Object storage"
+    assert "while activating skill 'pdf'" in waiting["data"]["message"]
     statuses = _status_values()
     assert statuses.index("waiting_for_infrastructure") < statuses.index("running", 1)
     assert _skill_messages(1)[0].startswith('<skill_content name="pdf">')
@@ -324,7 +342,7 @@ async def test_an_outage_past_the_deadline_fails_the_run_with_the_service_named(
     failed = [request for request in S.statuses if request.status == "failed"]
     assert failed, _status_values()
     message = failed[-1].error_message or ""
-    assert "Storage for skill 'pdf' stayed unavailable" in message
+    assert "Object storage stayed unreachable for 24 h while activating skill 'pdf'" in message
     assert "AI model" not in message
     assert failed[-1].failure_reason == "dependency_unavailable"
 
@@ -381,3 +399,106 @@ async def test_a_skill_the_install_policy_refuses_is_a_tool_error_the_model_read
     ]
     assert S.attempts == 1
     assert "task.awaiting_infrastructure" not in _event_types()
+
+
+async def test_a_final_answer_after_an_outage_ends_the_wait_and_pause_still_works():
+    # Storage comes back, but the skill was deleted meanwhile.
+    S.outage = timedelta(minutes=8)
+    S.after_outage = "Skill 'pdf' no longer exists"
+    S.hold_second_call = asyncio.Event()
+
+    async def after_the_wait(env, handle):
+        for _ in range(400):
+            if len(S.model_saw) >= 2:
+                break
+            await env.sleep(timedelta(seconds=5))
+        state = await handle.query(AgentExecutionWorkflow.get_current_state)
+        assert state["waiting_for_infrastructure"] is False
+        assert state["status"] == "executing"
+        await handle.signal(AgentExecutionWorkflow.pause_execution, "hold on")
+        await handle.signal(AgentExecutionWorkflow.resume_execution, "go on")
+        state = await handle.query(AgentExecutionWorkflow.get_current_state)
+        assert state["paused"] is False
+        S.hold_second_call.set()
+
+    result, _ = await _run(during=after_the_wait)
+
+    assert result.success is True
+    statuses = _status_values()
+    assert statuses.index("waiting_for_infrastructure") < statuses.index("running", 1)
+    ended = next(e for e in S.published if e["event_type"] == "task.infrastructure_recovered")
+    assert ended["data"]["error"] == "Skill 'pdf' no longer exists"
+    assert _skill_messages(1) == ["Tool failed: Skill 'pdf' no longer exists"]
+
+
+async def test_a_paused_run_does_not_retry_and_a_resume_lifts_the_pause_and_retries():
+    S.outage = timedelta(minutes=8)
+
+    async def pause_then_resume(env, handle):
+        await env.sleep(timedelta(minutes=6))
+        state = await handle.query(AgentExecutionWorkflow.get_current_state)
+        assert state["waiting_for_infrastructure"] is True
+        await handle.signal(AgentExecutionWorkflow.pause_execution, "hold on")
+        attempts = S.attempts
+        await env.sleep(timedelta(minutes=30))
+        assert S.attempts == attempts
+        await handle.signal(AgentExecutionWorkflow.resume_execution, "go on")
+        for _ in range(100):
+            if S.attempts > attempts:
+                break
+            await asyncio.sleep(0.05)
+        state = await handle.query(AgentExecutionWorkflow.get_current_state)
+        assert state["paused"] is False
+
+    result, _ = await _run(during=pause_then_resume)
+
+    assert result.success is True
+    types = _event_types()
+    assert "execution.paused" in types
+    assert "execution.resumed" in types
+    assert _skill_messages(1)[0].startswith('<skill_content name="pdf">')
+
+
+async def test_a_run_with_less_time_left_than_the_deadline_fails_itself_in_time():
+    # A delegated agent runs under a 6 h execution timeout, under the 24 h deadline.
+    S.outage = timedelta(hours=25)
+
+    result, _ = await _run(execution_timeout=timedelta(hours=3))
+
+    assert isinstance(result, WorkflowFailureError)
+    assert getattr(result.cause, "type", None) == "DependencyUnavailable"
+    failed = [request for request in S.statuses if request.status == "failed"]
+    assert failed and failed[-1].failure_reason == "dependency_unavailable"
+    message = failed[-1].error_message or ""
+    assert "Object storage stayed unreachable for" in message
+    assert "while activating skill 'pdf'" in message
+
+
+async def test_a_skill_past_the_skills_share_of_the_window_is_not_loaded():
+    S.skills = ["pdf", "docx"]
+    S.skills_window_share = 0.001  # 1,000 tokens of the 1,000,000 window
+    S.body = "x" * 3200  # about 800 tokens
+
+    result, _ = await _run()
+
+    assert result.success is True
+    assert S.attempts == 1
+    [*_, refused] = _skill_messages(2)
+    assert refused.startswith("Skill 'docx' was not loaded")
+
+
+async def test_a_skill_the_policy_withholds_is_named_in_the_runs_feed():
+    S.withheld = [
+        {
+            "id": str(uuid.uuid4()),
+            "name": "community-pdf",
+            "reason": "denied by registry_trust:community",
+        }
+    ]
+
+    result, _ = await _run()
+
+    assert result.success is True
+    [withheld] = [e for e in S.published if e["event_type"] == "skill.withheld"]
+    assert withheld["data"]["skill_name"] == "community-pdf"
+    assert withheld["data"]["reason"] == "denied by registry_trust:community"

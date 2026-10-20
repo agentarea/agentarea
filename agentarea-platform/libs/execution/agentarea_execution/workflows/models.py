@@ -130,6 +130,8 @@ class ContinueAsNewState(BaseModel):
     continued_from_run_id: str | None = None
     agent_tool_registry: dict[str, dict[str, Any]] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)
+    # The tokens the activated skills' entries take in the window, all together.
+    skill_tokens_used: int = 0
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0
@@ -229,6 +231,8 @@ class AgentExecutionState(BaseModel):
     context_window: int | None = None  # Loaded from ModelSpec before the first LLM call
     user_context_data: dict[str, Any] = Field(default_factory=dict)
     activated_skills: list[str] = Field(default_factory=list)
+    # The tokens the activated skills' entries take in the window, all together.
+    skill_tokens_used: int = 0
     # Dynamic context discovery
     context_strategy: str = "hybrid"
     history_chunk_counter: int = 0

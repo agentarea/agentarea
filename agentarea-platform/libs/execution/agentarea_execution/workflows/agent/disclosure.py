@@ -23,7 +23,15 @@ from ...models import (
     MaterializeSkillFilesRequest,
     MaterializeSkillFilesResult,
 )
-from ..constants import ACTIVITY_TIMEOUT, SKILL_CONTEXT_SHARE, Activities, EventTypes
+from ..constants import (
+    ACTIVITY_TIMEOUT,
+    HEARTBEAT_TIMEOUT,
+    LEGACY_SKILLS_WINDOW_SHARE,
+    SKILL_CONTEXT_SHARE,
+    SKILL_MIN_TOKENS,
+    Activities,
+    EventTypes,
+)
 from ..helpers import SEEN_URLS_LIMIT
 from ..retry import make_retry_policy
 from .approval import ToolApprovalMixin
@@ -202,22 +210,7 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
             if refusal is None:
                 await self._activate_skill_from_package(tool_call, skill_name)
                 return
-            self.state.messages.append(
-                Message(
-                    role="tool", content=refusal, tool_call_id=tool_call.id, name="activate_skill"
-                )
-            )
-            self._events.add_event(
-                EventTypes.TOOL_CALL_COMPLETED,
-                {
-                    "tool_name": "activate_skill",
-                    "tool_call_id": tool_call.id,
-                    "skill_name": skill_name,
-                    "success": True,
-                    "result": refusal,
-                    "iteration": self.state.current_iteration,
-                },
-            )
+            self._answer_skill_activation(tool_call, skill_name, refusal, success=True)
             return
 
         if not self._skill_tool:
@@ -264,18 +257,32 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
 
         The rows pending so far are recorded first, so the activity writes the
         skill's entry at the next position of the log; the run then only moves
-        its cursor past it. A storage outage is waited out; a refusal or a skill
-        gone is the model's tool error, naming the skill.
+        its cursor past it. The entry fits the share of the window one skill
+        may take and what the run's skills together have left. A storage
+        outage is waited out; a refusal or a skill gone is the model's tool
+        error, naming the skill, written at the same position.
         """
         skill_config = next(
             s for s in self.state.agent_config.get("skills", []) if s.get("name") == skill_name
         )
-        await self._record()
-        seq = self.state.conversation_next_seq
-        self.state.conversation_next_seq += 1
         context_window = self.state.context_window or int(
             self.state.agent_config.get("context_window") or 0
         )
+        share = self.state.agent_config.get("skills_window_share") or LEGACY_SKILLS_WINDOW_SHARE
+        left = int(context_window * share) - self.state.skill_tokens_used
+        max_tokens = min(int(context_window * SKILL_CONTEXT_SHARE), left)
+        if max_tokens < SKILL_MIN_TOKENS:
+            refusal = (
+                f"Skill '{skill_name}' was not loaded: the skills already active take the "
+                f"{share:.0%} of the context window this run's skills may use."
+            )
+            self._answer_skill_activation(tool_call, skill_name, refusal, success=False)
+            return
+
+        await self._record()
+        seq = self.state.conversation_next_seq
+        self.state.conversation_next_seq += 1
+        event_id = str(workflow.uuid4())
         request = ActivateSkillRequest(
             skill_id=UUID(skill_config["id"]),
             skill_name=skill_name,
@@ -286,29 +293,33 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
             execution_id=self.state.execution_id,
             tool_call_id=tool_call.id,
             seq=seq,
-            event_id=str(workflow.uuid4()),
+            event_id=event_id,
             iteration=self.state.current_iteration,
-            max_tokens=max(1, int(context_window * SKILL_CONTEXT_SHARE)),
+            max_tokens=max_tokens,
+            package=skill_config.get("package"),
         )
         try:
             result = await self._execute_through_outage(
                 Activities.ACTIVATE_SKILL,
                 request,
                 ActivateSkillResult,
-                service=f"Storage for skill '{skill_name}'",
+                what=f"activating skill '{skill_name}'",
+                heartbeat_timeout=HEARTBEAT_TIMEOUT,
             )
         except ActivityError as e:
             if self._is_cancellation(e):
                 raise
             error = failure_text(e)
             workflow.logger.warning(f"Could not activate skill '{skill_name}': {error}")
-            self.state.messages.append(
+            await self._record_at(
+                seq,
+                event_id,
                 Message(
                     role="tool",
                     content=f"Tool failed: {error}",
                     tool_call_id=tool_call.id,
                     name="activate_skill",
-                )
+                ),
             )
             self._events.add_event(
                 EventTypes.TOOL_CALL_FAILED,
@@ -328,6 +339,7 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
         if skill_name not in self.state.activated_skills:
             self.state.activated_skills.append(skill_name)
         self._recorded_turn_answered.add(tool_call.id)
+        self.state.skill_tokens_used += result.est_tokens
         # The entry is in the log, not pending: the next call's prompt holds it on
         # top of the last one, which is what the pre-call estimate starts from.
         self.state.last_prompt_tokens += result.est_tokens
@@ -343,6 +355,24 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
                 "success": True,
                 "result": f"Loaded skill '{skill_name}' ({result.chars} characters)",
                 "summarized": result.summarized,
+                "iteration": self.state.current_iteration,
+            },
+        )
+
+    def _answer_skill_activation(
+        self, tool_call: ToolCall, skill_name: str, text: str, *, success: bool
+    ) -> None:
+        self.state.messages.append(
+            Message(role="tool", content=text, tool_call_id=tool_call.id, name="activate_skill")
+        )
+        self._events.add_event(
+            EventTypes.TOOL_CALL_COMPLETED if success else EventTypes.TOOL_CALL_FAILED,
+            {
+                "tool_name": "activate_skill",
+                "tool_call_id": tool_call.id,
+                "skill_name": skill_name,
+                "success": success,
+                ("result" if success else "error"): text,
                 "iteration": self.state.current_iteration,
             },
         )

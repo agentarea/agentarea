@@ -207,6 +207,19 @@ it, the worker to refresh tokens.
 | `AGENTAREA_ENV` | fixed | `production` |
 | `AGENTAREA_MCP_MANAGER_URL` | derived | — |
 | `AGENTAREA_MCP_OAUTH_APPS` | same Secret as the backend | unset |
+| `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | `worker.outageWait.retryWindow` | `5m` |
+| `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | `worker.outageWait.backoff` | `1m,5m,10m` |
+| `AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` | `worker.outageWait.deadline` | `24h` |
+| `AGENTAREA_TASK_SKILLS_WINDOW_SHARE` | `worker.skillsWindowShare` | `0.3` |
+
+The three `OUTAGE` durations decide how a run rides out a service it cannot
+reach (see [waiting for a service](/concepts/execution/tasks#waiting-for-a-service)):
+how long a call retries before the run starts waiting, the pauses between
+retries while it waits (comma-separated, the last repeats), and how long it
+waits before it fails with `dependency_unavailable`. Each must be positive. A
+run keeps the values it was configured with. `AGENTAREA_TASK_SKILLS_WINDOW_SHARE`
+is the share of the model's context window all of a run's activated skills may
+take together, above 0 and at most 1; one skill takes at most a tenth.
 
 `global.temporal.worker.maxConcurrentActivityExecutions`,
 `maxConcurrentWorkflowTaskExecutions`, and `maxConcurrentSessionExecutions` in
@@ -393,18 +406,6 @@ on both through `backend.extraEnv` and `worker.extraEnv`.
 | Variable | Type | Default | Description |
 |---|---|---|---|
 | `AGENTAREA_TRIGGER_BATCH_MAX_EVENTS` | integer | `100` | The most events one batch of a windowed stream trigger holds. A batch that reaches it fires at once, also before its window has passed; a trigger's own `max_events` may not exceed it. |
-
-### Outage wait (not in `config.yaml`)
-
-Read by the worker when it configures a run (see
-[waiting for a service](/concepts/execution/tasks#waiting-for-a-service)); a
-run keeps the values it started with. Set them through `worker.extraEnv`.
-
-| Variable | Type | Default | Description |
-|---|---|---|---|
-| `AGENTAREA_TASK_OUTAGE_RETRY_WINDOW` | duration | `5m` | How long an activity retries an unreachable service before the run starts waiting for it. |
-| `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` | durations, comma-separated | `1m,5m,10m` | The pauses between retries while the run waits; the last one repeats. |
-| `AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` | duration | `24h` | How long the run waits before it fails with `dependency_unavailable`. |
 
 ### Event service (group `eventService` values, chart keys only)
 

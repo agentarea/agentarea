@@ -45,6 +45,9 @@ class AllowInstalls:
     async def require_allowed(self, *, registry_id, trust):
         pass
 
+    async def run_time_rules(self):
+        return []
+
 
 class FakeSkillRepo:
     def __init__(self, skills=None):

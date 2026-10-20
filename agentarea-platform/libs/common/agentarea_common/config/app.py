@@ -6,13 +6,22 @@ from pathlib import Path
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BeforeValidator, Field, model_validator
+from pydantic import AfterValidator, BeforeValidator, Field, model_validator
 from pydantic_settings import NoDecode, SettingsConfigDict
 
 from .base import BaseAppSettings
 from .duration import Duration, parse_duration
 
 A2A_AGENT_ID_PLACEHOLDER = "{agent_id}"
+
+
+def _positive(value: timedelta) -> timedelta:
+    if value <= timedelta(0):
+        raise ValueError("must be a positive duration")
+    return value
+
+
+PositiveDuration = Annotated[Duration, AfterValidator(_positive)]
 
 
 def _parse_durations(value: object) -> object:
@@ -49,14 +58,17 @@ class AppSettings(BaseAppSettings):
     # call for TASK_OUTAGE_RETRY_WINDOW, then waits, retrying after each
     # TASK_OUTAGE_WAIT_BACKOFF step (the last repeats), and fails once
     # TASK_OUTAGE_WAIT_DEADLINE has passed since it started waiting.
-    TASK_OUTAGE_RETRY_WINDOW: Duration = timedelta(minutes=5)
+    TASK_OUTAGE_RETRY_WINDOW: PositiveDuration = timedelta(minutes=5)
     TASK_OUTAGE_WAIT_BACKOFF: Annotated[
-        list[timedelta], NoDecode, BeforeValidator(_parse_durations)
+        list[PositiveDuration], NoDecode, BeforeValidator(_parse_durations)
     ] = Field(
         default_factory=lambda: [timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=10)],
         min_length=1,
     )
-    TASK_OUTAGE_WAIT_DEADLINE: Duration = timedelta(hours=24)
+    TASK_OUTAGE_WAIT_DEADLINE: PositiveDuration = timedelta(hours=24)
+    # The share of the model's context window all of a run's activated skills
+    # may take together; their instructions are never compacted.
+    TASK_SKILLS_WINDOW_SHARE: float = Field(default=0.3, gt=0, le=1)
 
     # Public base URL for this API (used in OAuth AS metadata and redirect URLs)
     API_URL: str = "http://localhost:8000"

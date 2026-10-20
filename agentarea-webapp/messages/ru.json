@@ -1708,6 +1708,7 @@
       "taskContinued": "Задача продолжена",
       "taskAwaitingInfrastructure": "Ждёт недоступный сервис",
       "taskInfrastructureRecovered": "Сервис снова доступен",
+      "skillWithheld": "Навык не предложен по политике",
       "taskRetried": "Задача перезапущена",
       "executionFinished": "Запуск завершён",
       "executionContinuedAsNew": "Запуск продолжен с новой историей",

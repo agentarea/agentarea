@@ -541,6 +541,21 @@ worker:
   # polling; /livez answers 200 while the event loop responds.
   healthPort: 8081
 
+  # How a run rides out a service it cannot reach (skill storage): the call
+  # retries for retryWindow, then the run waits (status
+  # waiting_for_infrastructure), retrying after each backoff step (the last
+  # repeats), and fails with dependency_unavailable once deadline has passed.
+  outageWait:
+    # -- How long a call retries before the run starts waiting.
+    retryWindow: 5m
+    # -- Pauses between retries while the run waits, comma-separated.
+    backoff: "1m,5m,10m"
+    # -- How long a run waits before it fails.
+    deadline: 24h
+  # -- Share of the model's context window all of a run's activated skills may
+  # take together (their instructions are never compacted); between 0 and 1.
+  skillsWindowShare: "0.3"
+
   # -- Seconds a new pod must stay ready before it counts as available, so a
   # pod that passes readiness and then crashes cannot retire an old replica.
   minReadySeconds: 10

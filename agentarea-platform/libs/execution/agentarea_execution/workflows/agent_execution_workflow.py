@@ -70,11 +70,12 @@ class AgentExecutionWorkflow(CommandsMixin, InitializationMixin, LifecycleMixin,
 
     @workflow.signal
     async def resume_execution(self, reason: str = "Resumed by user") -> None:
-        """Signal to resume execution; a run waiting out an outage retries at once."""
+        """Signal to resume execution; a run waiting out an outage also retries at once."""
         if self._waiting_for_outage:
             self._retry_outage_now = True
-            workflow.logger.info(f"Retrying the unavailable service now: {reason}")
-            return
+            workflow.logger.info(f"Retrying the unreachable service now: {reason}")
+            if not self._paused:
+                return
         if not self._paused and workflow.patched(RESUME_ONLY_WHEN_PAUSED_PATCH):
             workflow.logger.info("Resume ignored: the run is not paused")
             return

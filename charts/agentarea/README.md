@@ -262,6 +262,10 @@ The following table lists configurable parameters of the chart and their default
 | worker.image.tag | string | `"latest"` |  |
 | worker.image.pullPolicy | string | `""` |  |
 | worker.healthPort | int | `8081` | Port of the worker's health endpoint, passed to the container as AGENTAREA_WORKER_HEALTH_PORT. /readyz answers 200 once the database, the authorization backend and Redis are reachable and every Temporal worker is polling; /livez answers 200 while the event loop responds. |
+| worker.outageWait.retryWindow | string | `"5m"` | How long a call retries before the run starts waiting. |
+| worker.outageWait.backoff | string | `"1m,5m,10m"` | Pauses between retries while the run waits, comma-separated. |
+| worker.outageWait.deadline | string | `"24h"` | How long a run waits before it fails. |
+| worker.skillsWindowShare | string | `"0.3"` | Share of the model's context window all of a run's activated skills may take together (their instructions are never compacted); between 0 and 1. |
 | worker.minReadySeconds | int | `10` | Seconds a new pod must stay ready before it counts as available, so a pod that passes readiness and then crashes cannot retire an old replica. |
 | worker.shutdownTimeout | int | `120` | Seconds a stopping worker lets in-flight activities (model calls, tools, event writes) finish before it cancels them. A cancelled model call is paid for twice when it reruns on another replica. |
 | worker.terminationGracePeriodSeconds | int | `150` | Total budget the kubelet allows the worker before SIGKILL. Keep it above shutdownTimeout, or the drain is cut short. |

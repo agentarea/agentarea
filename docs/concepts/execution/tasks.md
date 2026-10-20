@@ -150,11 +150,17 @@ workflow writes `waiting_for_infrastructure`, emits
 `task.awaiting_infrastructure` with the service and the error, and retries
 after each step of `AGENTAREA_TASK_OUTAGE_WAIT_BACKOFF` (1, 5, then every 10
 minutes). When the service answers it emits `task.infrastructure_recovered`,
-writes `running` and goes on by itself. Resuming the task retries at once, and
-cancelling it stops the wait. Once `AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` (24
-hours) has passed, the task ends `failed` with failure reason
-`dependency_unavailable` and a message naming the service; a retry continues
-it from there. Skill activation is the one call that waits this way today.
+writes `running` and goes on by itself; the service answering with a final
+error (the skill was deleted meanwhile) ends the wait the same way, and the
+error goes to the model. Resuming the task retries at once and lifts a pause; a
+paused task does not retry; cancelling stops the wait. Once
+`AGENTAREA_TASK_OUTAGE_WAIT_DEADLINE` (24 hours) has passed, or ten minutes
+before the run's own execution timeout (a delegated agent's is six hours),
+the task ends `failed` with failure reason `dependency_unavailable` and a
+message naming the service; a retry continues it from there. Only an
+unreachable service is waited out (object storage, the database, GitHub); any
+other error is final at once. A 24-hour wait adds about 1,700 events to the
+run's history. Skill activation is the one call that waits this way today.
 
 ## Why not derive status from Temporal
 

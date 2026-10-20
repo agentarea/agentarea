@@ -14,13 +14,15 @@ from agentarea_agents.infrastructure.github_skill_importer import (
 )
 from agentarea_execution.activities import agent_execution_activities as activities
 from agentarea_execution.activities.agent import files as files_module
+from agentarea_execution.activities.agent.files import count_tokens
 from agentarea_execution.models import ActivateSkillRequest, AgentConfigResult, SkillInfo
 from agentarea_execution.workflows import agent_execution_workflow as workflow_module
 from agentarea_execution.workflows.constants import Activities
-from agentarea_execution.workflows.context_manager import estimate_tokens
 from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
-from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ClientError, EndpointConnectionError
+from sqlalchemy.exc import OperationalError
 from temporalio.exceptions import ApplicationError
+from temporalio.testing import ActivityEnvironment
 
 CATALOG_PACKAGE = "skills/catalog/" + "a" * 64 + "/"
 SKILL_DIR = "inputs/skills/pdf-1a2b3c4d"
@@ -42,9 +44,6 @@ def _skill(name="pdf", s3_path=CATALOG_PACKAGE):
 class FakeLog:
     entries: list = []
 
-    def __init__(self, session, user_context, bodies):
-        pass
-
     async def append(self, task_id, rows, *, execution_id=None):
         FakeLog.entries.extend(rows)
 
@@ -55,18 +54,20 @@ def activation(monkeypatch):
 
     ctx = AsyncMock()
     ctx.__aenter__.return_value = ctx
-    ctx._sessions = []
+    ctx.task_log = MagicMock(return_value=FakeLog())
     skills = ctx.get_skill_service.return_value
     FakeLog.entries = []
-    monkeypatch.setattr(files_module, "TaskLog", FakeLog)
     put_files = AsyncMock(return_value=(SKILL_DIR, [f"{SKILL_DIR}/SKILL.md"]))
     monkeypatch.setattr(files_module, "_put_skill_files", put_files)
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     functions = {fn.__name__: fn for fn in activities.make_agent_activities(MagicMock())}
-    return SimpleNamespace(
-        skills=skills, activate=functions["activate_skill_activity"], put_files=put_files
-    )
+    activate_fn = functions["activate_skill_activity"]
+
+    async def activate(request):
+        return await ActivityEnvironment().run(activate_fn, request)
+
+    return SimpleNamespace(skills=skills, activate=activate, put_files=put_files)
 
 
 def _request(skill, **overrides):
@@ -111,7 +112,7 @@ async def test_the_entry_goes_to_the_log_and_the_result_carries_only_its_size(ac
     assert f"{SKILL_DIR}/" in entry.content
     assert "# PDF" not in result.model_dump_json()
     assert result.chars == len(entry.content)
-    assert result.est_tokens >= estimate_tokens(entry.content)
+    assert result.est_tokens >= count_tokens(entry.content)
     assert result.urls == ["pdf.example/docs"]
     assert not result.summarized
     assert activation.skills.get_with_catalog.await_args.kwargs == {"to_run": True}
@@ -151,7 +152,7 @@ async def test_a_body_over_the_cap_is_pointed_at_and_its_entry_fits_the_cap(acti
 
     [entry] = FakeLog.entries
     assert result.summarized
-    assert estimate_tokens(entry.content) <= 4000
+    assert count_tokens(entry.content) <= 4000
     assert entry.content.startswith('<skill_content name="pdf">')
     assert f"{SKILL_DIR}/SKILL.md" in entry.content
     assert "# Big" in entry.content
@@ -184,17 +185,89 @@ async def test_a_body_over_the_cap_without_a_sandbox_is_stored_for_read_tool_out
     assert 'read_tool_output("call-1")' in FakeLog.entries[0].content
 
 
-async def test_storage_down_is_a_retryable_error_naming_the_skill(activation):
+@pytest.mark.parametrize(
+    ("failure", "service"),
+    [
+        (EndpointConnectionError(endpoint_url="http://s3.test"), "Object storage"),
+        (
+            ClientError(
+                {"Error": {"Code": "SlowDown"}, "ResponseMetadata": {"HTTPStatusCode": 503}},
+                "GetObject",
+            ),
+            "Object storage",
+        ),
+        (OperationalError("SELECT 1", {}, ConnectionRefusedError("refused")), "The database"),
+        (ConnectionError("reset by peer"), "A service"),
+    ],
+)
+async def test_an_unreachable_service_is_retried_and_named(activation, failure, service):
     skill = _skill()
     activation.skills.get_with_catalog.return_value = skill
-    activation.skills.read_skill_md = AsyncMock(
-        side_effect=EndpointConnectionError(endpoint_url="http://s3.test")
-    )
+    activation.skills.read_skill_md = AsyncMock(side_effect=failure)
 
-    with pytest.raises(ApplicationError, match="Skill 'pdf' could not be read") as error:
+    with pytest.raises(ApplicationError, match=f"{service} is unreachable") as error:
         await activation.activate(_request(skill))
     assert not error.value.non_retryable
+    assert error.value.details == ({"service": service},)
     assert FakeLog.entries == []
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        KeyError("spec"),
+        ClientError(
+            {"Error": {"Code": "AccessDenied"}, "ResponseMetadata": {"HTTPStatusCode": 403}},
+            "GetObject",
+        ),
+        RuntimeError("bug"),
+    ],
+)
+async def test_any_other_error_is_final_and_names_the_skill(activation, failure):
+    skill = _skill()
+    activation.skills.get_with_catalog.return_value = skill
+    activation.skills.read_skill_md = AsyncMock(side_effect=failure)
+
+    with pytest.raises(ApplicationError, match="Skill 'pdf' could not be activated") as error:
+        await activation.activate(_request(skill))
+    assert error.value.non_retryable
+
+
+async def test_activation_reads_the_package_the_run_was_configured_with(activation):
+    skill = _skill(s3_path="skills/catalog/" + "b" * 64 + "/")
+    activation.skills.get_with_catalog.return_value = skill
+    activation.skills.read_skill_md = AsyncMock(return_value="# v1")
+
+    await activation.activate(_request(skill, package=CATALOG_PACKAGE))
+
+    assert activation.skills.read_skill_md.await_args.kwargs == {"at": CATALOG_PACKAGE}
+
+
+async def test_the_file_listing_counts_toward_the_cap(activation):
+    skill = _skill()
+    paths = [f"{SKILL_DIR}/scripts/tool_{i}.py" for i in range(400)]
+    activation.put_files.return_value = (SKILL_DIR, paths)
+    activation.skills.get_with_catalog.return_value = skill
+    activation.skills.read_skill_md = AsyncMock(return_value="# PDF\nSteps")
+
+    await activation.activate(_request(skill, max_tokens=600))
+
+    [entry] = FakeLog.entries
+    assert count_tokens(entry.content) <= 600
+    assert entry.content.startswith('<skill_content name="pdf">\n# PDF\nSteps')
+
+
+async def test_sizes_are_counted_with_the_tokenizer_not_by_characters(activation):
+    skill = _skill()
+    body = "Извлеки таблицы из PDF и сохрани их в CSV. " * 200
+    activation.skills.get_with_catalog.return_value = skill
+    activation.skills.read_skill_md = AsyncMock(return_value=body)
+    cap = len(body) // 4 + 200
+
+    result = await activation.activate(_request(skill, max_tokens=cap))
+
+    assert result.summarized
+    assert count_tokens(FakeLog.entries[0].content) <= cap
 
 
 @pytest.mark.parametrize(

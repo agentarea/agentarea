@@ -180,6 +180,7 @@ def activity_context(monkeypatch):
     skills = ctx.get_skill_service.return_value
     skills.read_skill_md = AsyncMock(side_effect=lambda skill: skill.content)
     skills.packages.list_paths = AsyncMock(return_value=["SKILL.md"])
+    skills.run_refusals = AsyncMock(return_value={})
     monkeypatch.setattr(dependencies, "ActivityServiceContainer", MagicMock())
     monkeypatch.setattr(dependencies, "ActivityContext", MagicMock(return_value=ctx))
     monkeypatch.setattr(
@@ -726,16 +727,11 @@ async def test_the_config_result_carries_no_skill_body_and_reads_no_package(acti
 
 @pytest.mark.asyncio
 async def test_an_attached_skill_the_install_policy_now_denies_is_not_offered(activity_context):
-    from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
-
     ctx, functions = activity_context
     allowed, denied = skill("Allowed"), skill("Community")
 
-    async def require_runnable(candidate):
-        if candidate is denied:
-            raise CatalogInstallRefusedError("denied by registry_trust:community")
-
-    ctx.get_skill_service.return_value.require_runnable = AsyncMock(side_effect=require_runnable)
+    refusals = AsyncMock(return_value={str(denied.id): "denied by registry_trust:community"})
+    ctx.get_skill_service.return_value.run_refusals = refusals
     ctx.get_agent_service.return_value.get_with_skills.return_value = agent(
         skills=[allowed, denied]
     )
@@ -751,3 +747,8 @@ async def test_an_attached_skill_the_install_policy_now_denies_is_not_offered(ac
     result = await functions["build_agent_config_activity"](request)
 
     assert [s.name for s in result.skills] == ["Allowed"]
+    assert [(s.name, s.reason) for s in result.withheld_skills] == [
+        ("Community", "denied by registry_trust:community")
+    ]
+    # One decision for every skill of the run.
+    refusals.assert_awaited_once()

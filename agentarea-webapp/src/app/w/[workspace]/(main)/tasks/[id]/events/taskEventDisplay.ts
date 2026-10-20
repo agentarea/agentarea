@@ -43,6 +43,7 @@ const CATEGORY_BY_SCOPE: Readonly<Record<string, EventCategory>> = {
   service: "budget",
   context: "context",
   runtime: "runtime",
+  skill: "runtime",
 };
 
 export function eventCategory(type: string): EventCategory {
@@ -63,6 +64,7 @@ const TYPE_KEYS: Readonly<Record<TaskEventType, string>> = {
   "task.continued": "taskContinued",
   "task.awaiting_infrastructure": "taskAwaitingInfrastructure",
   "task.infrastructure_recovered": "taskInfrastructureRecovered",
+  "skill.withheld": "skillWithheld",
   "task.retried": "taskRetried",
   "execution.finished": "executionFinished",
   "execution.continued_as_new": "executionContinuedAsNew",

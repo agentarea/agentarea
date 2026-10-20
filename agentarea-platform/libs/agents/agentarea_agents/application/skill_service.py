@@ -20,6 +20,7 @@ from agentarea_governance.application.catalog_install import (
     CatalogInstallGuard,
     CatalogInstallRefusedError,
 )
+from agentarea_governance.domain.rules import decide_catalog_install
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_packages import (
@@ -252,11 +253,11 @@ class SkillService:
         """The accessor every reader of a skill body goes through."""
         return SkillPackages(self.storage_service, self.github_importer, self._get_repository())
 
-    async def read_skill_md(self, skill: Skill) -> str:
-        return await self.packages.read_skill_md(skill)
+    async def read_skill_md(self, skill: Skill, *, at: str | None = None) -> str:
+        return await self.packages.read_skill_md(skill, at=at)
 
-    async def read_files(self, skill: Skill) -> dict[str, bytes]:
-        return await self.packages.read_files(skill)
+    async def read_files(self, skill: Skill, *, at: str | None = None) -> dict[str, bytes]:
+        return await self.packages.read_files(skill, at=at)
 
     def _get_catalog_repository(self) -> CatalogSkillRepository:
         """Get the read-only catalog (registry_items) repository for skills."""
@@ -718,28 +719,50 @@ class SkillService:
                 skill.update_available = True
             skill.catalog_provenance = provenance.get(str(item_id))
 
-    async def require_runnable(self, skill: Skill) -> None:
-        """Ask the install policy again when a run uses a skill a registry supplied.
+    async def run_refusals(self, skills: list[Skill]) -> dict[str, str]:
+        """Why the install policy keeps a run from each of ``skills``, by skill id.
 
         An install was decided once; a rule written since (denying a trust
         level or a registry) holds for the skills already installed from it.
-        A skill imported from a GitHub URL is from the public source; one the
-        workspace wrote has no registry and is not asked about.
+        A run is held to the workspace's rules alone, so an agent's skills do
+        not depend on who started the run. A skill imported from a GitHub URL
+        is from the public source; one the workspace wrote has no registry
+        and is not asked about, and neither is an install whose registry item
+        is gone, since it holds its own package. One read of the provenance
+        and one of the rules, whatever the number of skills.
         """
-        item_id = getattr(skill, "registry_item_id", None)
-        if item_id is not None:
-            provenance = (await self._get_catalog_repository().provenance_for([str(item_id)])).get(
-                str(item_id)
-            )
-            if provenance is None:
-                raise CatalogInstallRefusedError(
-                    f"Skill '{skill.name}' came from a registry item that no longer exists"
-                )
-            await self.install_guard.require_allowed(
-                registry_id=provenance.registry_id, trust=provenance.registry_trust
-            )
-        elif skill.source_type == SkillSourceType.GITHUB.value:
-            await self.require_github_import_allowed()
+        item_ids = [
+            str(skill.registry_item_id)
+            for skill in skills
+            if getattr(skill, "registry_item_id", None) is not None
+        ]
+        provenance = (
+            await self._get_catalog_repository().provenance_for(item_ids) if item_ids else {}
+        )
+        sources: dict[str, tuple[str, str]] = {}
+        for skill in skills:
+            item_id = getattr(skill, "registry_item_id", None)
+            if item_id is not None:
+                found = provenance.get(str(item_id))
+                if found is not None:
+                    sources[str(skill.id)] = (found.registry_id, found.registry_trust)
+            elif skill.source_type == SkillSourceType.GITHUB.value:
+                sources[str(skill.id)] = (GITHUB_IMPORT_REGISTRY_ID, GITHUB_IMPORT_TRUST)
+        if not sources:
+            return {}
+        rules = await self.install_guard.run_time_rules()
+        refusals: dict[str, str] = {}
+        for skill_id, (registry_id, trust) in sources.items():
+            decision = decide_catalog_install(rules, registry_id=registry_id, trust=trust)
+            if not decision.allowed:
+                refusals[skill_id] = decision.reason
+        return refusals
+
+    async def require_runnable(self, skill: Skill) -> None:
+        """Raise ``CatalogInstallRefusedError`` when a run may not use ``skill``."""
+        reason = (await self.run_refusals([skill])).get(str(skill.id))
+        if reason is not None:
+            raise CatalogInstallRefusedError(f"Refused by policy: {reason}")
 
     async def get_with_catalog(self, skill_id: UUID | str, *, to_run: bool = False) -> Skill | None:
         """Get a tenant skill by id, falling back to a catalog projection.
@@ -747,7 +770,8 @@ class SkillService:
         Returns the tenant ``skills`` row if present; otherwise projects the
         matching catalog ``registry_item`` (read-only). No DB row is created.
         A run reads the catalog item's content without installing it, so with
-        ``to_run`` the install policy decides first, for an installed skill too.
+        ``to_run`` the install policy decides first, for an installed skill too
+        (see :meth:`run_refusals`).
         """
         skill = await self.get(skill_id)
         if skill is not None:
@@ -757,11 +781,10 @@ class SkillService:
         item = await self._get_catalog_repository().get_item(str(skill_id))
         if item is None:
             return None
+        projection = _project_catalog_skill(item)
         if to_run:
-            await self.install_guard.require_allowed(
-                registry_id=item.registry_id, trust=item.registry_trust
-            )
-        return _project_catalog_skill(item)
+            await self.require_runnable(projection)
+        return projection
 
     async def _fork_catalog_skill(self, item: CatalogSkillItem) -> Skill:
         """Copy-on-write: materialize a tenant ``skills`` row from a catalog item.

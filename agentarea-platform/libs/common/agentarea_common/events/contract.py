@@ -51,6 +51,7 @@ TASK_AWAITING_CONTINUATION = "task.awaiting_continuation"
 TASK_CONTINUED = "task.continued"
 TASK_AWAITING_INFRASTRUCTURE = "task.awaiting_infrastructure"
 TASK_INFRASTRUCTURE_RECOVERED = "task.infrastructure_recovered"
+SKILL_WITHHELD = "skill.withheld"
 TASK_RETRIED = "task.retried"
 EXECUTION_FINISHED = "execution.finished"
 EXECUTION_CONTINUED_AS_NEW = "execution.continued_as_new"
@@ -97,6 +98,7 @@ EVENT_DESCRIPTIONS: dict[str, str] = {
         "A service the run needs is unreachable; the run waits and retries on its own."
     ),
     TASK_INFRASTRUCTURE_RECOVERED: "The service the run waited for answered; the run went on.",
+    SKILL_WITHHELD: "An attached skill was not offered to the run; data names the policy rule.",
     TASK_RETRIED: "A failed run was started again from its last state.",
     EXECUTION_FINISHED: "The workflow execution ended, whatever the outcome.",
     EXECUTION_CONTINUED_AS_NEW: "The workflow rolled its history over into a fresh execution.",

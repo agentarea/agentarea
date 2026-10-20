@@ -113,6 +113,11 @@ def legacy_catalog_s3_path(spec: dict[str, Any] | None, workspace_id: str | None
     return path if path.startswith(areas) else None
 
 
+def _has_pending_body(skill: Skill) -> bool:
+    """A row written before packages that still holds its body in ``content``."""
+    return "content" not in sa_inspect(skill).unloaded and skill.content is not None
+
+
 def clear_package_cache() -> None:
     """Forget every cached catalog package (a fresh process, as tests need it)."""
     global _catalog_bytes
@@ -150,8 +155,8 @@ class SkillPackages:
         self._repository = repository
         self._parser = SkillParser()
 
-    async def read_files(self, skill: Skill) -> dict[str, bytes]:
-        s3_path = await self.resolve_s3_path(skill)
+    async def read_files(self, skill: Skill, *, at: str | None = None) -> dict[str, bytes]:
+        s3_path = await self._package_of(skill, at)
         if not is_catalog_package(s3_path):
             return await self._storage.read_package(s3_path)
         files = _cache_get(s3_path)
@@ -167,24 +172,44 @@ class SkillPackages:
             return list(cached)
         return [info.path for info in await self._storage.list_files(s3_path)]
 
-    async def read_skill_md(self, skill: Skill) -> str:
-        """The skill's SKILL.md: what activating it hands the model."""
-        s3_path = await self.resolve_s3_path(skill)
+    async def read_skill_md(self, skill: Skill, *, at: str | None = None) -> str:
+        """The skill's SKILL.md: what activating it hands the model.
+
+        ``at`` reads the package a run was configured with rather than the
+        skill's current one, so a run keeps the version it started on.
+        """
+        s3_path = await self._package_of(skill, at)
         cached = _cache_get(s3_path) if is_catalog_package(s3_path) else None
         if cached is not None:
             return self._main_file(skill, cached)
         if is_catalog_package(s3_path):
-            return self._main_file(skill, await self.read_files(skill))
+            return self._main_file(skill, await self.read_files(skill, at=s3_path))
         paths = [info.path for info in await self._storage.list_files(s3_path)]
         main = self._parser.find_main_skill_file(paths)
         if main is None:
             raise ValueError(f"Skill {skill.id} package {s3_path} has no SKILL.md at its root")
         return (await self._storage.get_file_content(s3_path, main)).decode("utf-8")
 
+    async def _package_of(self, skill: Skill, at: str | None) -> str:
+        """``at`` when it is a package this skill may be read from, else the skill's own.
+
+        A pinned path must lie in the shared catalog area or the skill's
+        workspace; a row whose body is still in the database is read from it.
+        """
+        if at is None or _has_pending_body(skill):
+            return await self.resolve_s3_path(skill)
+        workspace_id = getattr(skill, "workspace_id", None) or skill.catalog_workspace_id
+        areas = [f"{catalog_area(None)}/", f"{SKILLS_PREFIX}/{PLATFORM_WORKSPACE_ID}/"]
+        if workspace_id is not None:
+            areas.append(f"{SKILLS_PREFIX}/{workspace_id}/")
+        if ".." in at.split("/") or "\\" in at or not at.startswith(tuple(areas)):
+            raise ValueError(f"Skill {skill.id} cannot be read from package {at!r}")
+        return at
+
     async def resolve_s3_path(self, skill: Skill) -> str:
         """The package of ``skill``, storing it first when it has none yet."""
         if skill.s3_path:
-            if "content" not in sa_inspect(skill).unloaded and skill.content is not None:
+            if _has_pending_body(skill):
                 return await self.move_body_to_package(skill)
             return skill.s3_path
         if skill.is_catalog:

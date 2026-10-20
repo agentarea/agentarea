@@ -6,7 +6,9 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import httpx
 from agentarea_agents.infrastructure.github_skill_importer import (
+    GitHubRateLimitError,
     GitHubSourceGoneError,
     GitHubTreeMismatchError,
 )
@@ -14,8 +16,10 @@ from agentarea_agents_sdk.skills.skill_toolset import wrap_skill_content
 from agentarea_common.auth.context import UserContext
 from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_tasks.domain.models import ConversationEntry
-from agentarea_tasks.infrastructure.task_log import TaskLog
-from sqlalchemy.exc import DataError, IntegrityError
+from botocore.exceptions import BotoCoreError, ClientError, HTTPClientError
+from botocore.exceptions import ConnectionError as BotoConnectionError
+from sqlalchemy.exc import DataError, IntegrityError, InterfaceError, OperationalError
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
@@ -28,9 +32,10 @@ from ...models import (
     MaterializeSkillFilesRequest,
     MaterializeSkillFilesResult,
 )
-from ...workflows.context_manager import estimate_tokens, estimate_tokens_for_messages
+from ...workflows.constants import TOKENS_PER_MESSAGE_OVERHEAD
 from ...workflows.helpers import SEEN_URLS_LIMIT, external_urls
 from ..artifact_validation import validate_published_artifacts
+from ..heartbeat import auto_heartbeater
 from .sandbox import agent_artifact_actor, sandbox_file_auth_secret
 
 if TYPE_CHECKING:
@@ -64,7 +69,9 @@ async def _put_skill_files(
 
     if not request.workspace_id or not request.task_id:
         raise ValueError("workspace_id and task_id are required for skill materialization")
-    bundled = list((await skill_service.read_files(skill)).items())
+    bundled = list(
+        (await skill_service.read_files(skill, at=getattr(request, "package", None))).items()
+    )
     files = assemble_skill_bundle(None, bundled)
     workspace_files = build_skill_workspace_files(request.skill_name, str(request.skill_id), files)
     if not workspace_files:
@@ -87,8 +94,55 @@ async def _put_skill_files(
     return skill_workspace_dir(request.skill_name, str(request.skill_id)), list(workspace_files)
 
 
+SKILL_FILES_LISTED = 50
+_STORAGE_CODES = frozenset(
+    {"SlowDown", "ServiceUnavailable", "InternalError", "RequestTimeout", "Throttling"}
+)
+
+
+def count_tokens(text: str) -> int:
+    """The tokens of ``text`` by the tokenizer the model calls are metered with."""
+    import litellm
+
+    return int(litellm.token_counter(text=text)) if text else 0
+
+
+def unreachable_service(error: BaseException) -> str | None:
+    """The service an error says is unreachable, or None when it is not an outage.
+
+    Only transport, storage and database connectivity are waited out; any other
+    error is the skill's or the code's and is final.
+    """
+    seen: BaseException | None = error
+    for _ in range(6):
+        if seen is None:
+            return None
+        if isinstance(seen, ClientError):
+            response = seen.response or {}
+            status = (response.get("ResponseMetadata") or {}).get("HTTPStatusCode") or 0
+            code = (response.get("Error") or {}).get("Code")
+            if status >= 500 or code in _STORAGE_CODES:
+                return "Object storage"
+            return None
+        if isinstance(seen, BotoConnectionError | HTTPClientError):
+            return "Object storage"
+        if isinstance(seen, OperationalError | InterfaceError | PoolTimeoutError):
+            return "The database"
+        if isinstance(seen, GitHubRateLimitError | httpx.TransportError):
+            return "GitHub"
+        if isinstance(seen, BotoCoreError):
+            return None
+        if isinstance(seen, ConnectionError | TimeoutError):
+            return "A service"
+        seen = seen.__cause__ or seen.__context__
+    return None
+
+
 def _files_note(directory: str, paths: list[str]) -> str:
-    listing = "\n".join(f"- {path}" for path in paths)
+    shown = paths[:SKILL_FILES_LISTED]
+    listing = "\n".join(f"- {path}" for path in shown)
+    if len(paths) > len(shown):
+        listing += f"\n- ... and {len(paths) - len(shown)} more"
     return (
         f"This skill's files are in {directory}/ in your sandbox:\n{listing}\n"
         f'Run them with the shell tool, e.g. bash("python {directory}/<script>").'
@@ -96,27 +150,44 @@ def _files_note(directory: str, paths: list[str]) -> str:
 
 
 def skill_entry(
-    name: str, body: str, *, max_tokens: int, note: str, pointer: str | None
+    name: str,
+    body: str,
+    *,
+    max_tokens: int,
+    directory: str,
+    paths: list[str],
+    pointer: str,
+    count=count_tokens,
 ) -> tuple[str, bool]:
     """The activated skill's log entry, and whether it points at its SKILL.md instead.
 
     The entry is kept verbatim through every compaction, so it never takes
-    more than ``max_tokens`` of the model's window. A larger SKILL.md is
-    summarized: its size, where the agent reads it in full, and its opening.
+    more than ``max_tokens`` of the model's window, the file listing included.
+    A larger SKILL.md is summarized: its size, where the agent reads it in
+    full, and as much of its opening as fits.
     """
-    suffix = f"\n\n{note}" if note else ""
-    content = wrap_skill_content(name, body) + suffix
-    if estimate_tokens(content) <= max_tokens:
-        return content, False
+    notes = [
+        _files_note(directory, paths),
+        f"This skill's files are in {directory}/ in your sandbox.",
+    ]
+    notes = [*notes, ""] if directory else [""]
+    for note in notes:
+        content = wrap_skill_content(name, body) + (f"\n\n{note}" if note else "")
+        if count(content) <= max_tokens:
+            return content, False
     lead = (
-        f"This skill's SKILL.md is {len(body):,} characters (about "
-        f"{estimate_tokens(body):,} tokens), more than the {max_tokens:,} tokens a skill's "
-        f"instructions may take in this run, so it is not shown here in full. {pointer}"
+        f"This skill's SKILL.md is {len(body):,} characters (about {count(body):,} tokens), "
+        f"more than the {max_tokens:,} tokens its instructions may take in this run, so it "
+        f"is not shown here in full. {pointer}"
     )
-    room = max_tokens * 4 - len(wrap_skill_content(name, lead + suffix)) - 64
-    preview = body[: max(0, min(SKILL_PREVIEW_CHARS, room))]
-    opening = f"\n\nIt opens with:\n{preview}\n[...]" if preview else ""
-    return wrap_skill_content(name, lead + opening) + suffix, True
+    for note in notes:
+        suffix = f"\n\n{note}" if note else ""
+        for preview_chars in (2000, 1000, 400, 0):
+            opening = f"\n\nIt opens with:\n{body[:preview_chars]}\n[...]" if preview_chars else ""
+            content = wrap_skill_content(name, lead + opening) + suffix
+            if count(content) <= max_tokens:
+                return content, True
+    return wrap_skill_content(name, lead[: max(0, max_tokens * 2)]), True
 
 
 def make_files_activities(
@@ -138,16 +209,39 @@ def make_files_activities(
         )
 
     @activity.defn(name="activate_skill_activity")
+    @auto_heartbeater
     async def activate_skill_activity(request: ActivateSkillRequest) -> ActivateSkillResult:
         """Activate a skill for a run: its SKILL.md goes into the task log, never into history.
 
         The install policy decides first, for an installed skill too. The body
-        is read from its package (a catalog package from the in-process cache),
-        the package is put in the sandbox, and the entry the model reads is
-        written at the position the workflow reserved. A refusal, a skill gone
-        or a source gone are final; anything else (storage unreachable) is
-        retried.
+        is read from the package the run was configured with (a catalog
+        package from the in-process cache), the package is put in the sandbox,
+        and the entry the model reads is written at the position the workflow
+        reserved, under the id it chose, so a retry writes it once. Only an
+        unreachable service (object storage, the database, GitHub) is retried;
+        anything else is final and the model hears it as a tool error.
         """
+        try:
+            return await _activate_skill(request)
+        except ApplicationError:
+            raise
+        except Exception as exc:
+            service = unreachable_service(exc)
+            if service is None:
+                logger.error("Activating skill %s failed", request.skill_name, exc_info=True)
+                raise ApplicationError(
+                    f"Skill '{request.skill_name}' could not be activated: {exc}",
+                    type="SkillActivationFailed",
+                    non_retryable=True,
+                ) from exc
+            logger.warning(
+                "%s is unreachable for skill %s", service, request.skill_name, exc_info=True
+            )
+            raise ApplicationError(
+                f"{service} is unreachable: {exc}", {"service": service}, type="ServiceUnreachable"
+            ) from exc
+
+    async def _activate_skill(request: ActivateSkillRequest) -> ActivateSkillResult:
         name = request.skill_name
         user_context = create_user_context(request.user_context_data)
         async with ActivityContext(container, user_context) as ctx:
@@ -165,26 +259,19 @@ def make_files_activities(
                     f"Skill '{name}' no longer exists", type="SkillNotFound", non_retryable=True
                 )
             try:
-                body = await skill_service.read_skill_md(skill)
+                body = await skill_service.read_skill_md(skill, at=request.package)
             except (GitHubSourceGoneError, GitHubTreeMismatchError, ValueError) as exc:
                 raise ApplicationError(
                     f"Skill '{name}' cannot be read: {exc}",
                     type="SkillUnreadable",
                     non_retryable=True,
                 ) from exc
-            except Exception as exc:
-                logger.warning("Could not read the SKILL.md of skill %s", name, exc_info=True)
-                raise ApplicationError(
-                    f"Skill '{name}' could not be read: {exc}", type="SkillStorageUnavailable"
-                ) from exc
 
-            directory = ""
-            note = ""
+            directory, paths = "", []
             try:
                 directory, paths = await _put_skill_files(
                     skill_service, skill, request, user_context
                 )
-                note = _files_note(directory, paths)
             except Exception:
                 # The instructions stand on their own; the agent works without the files.
                 logger.warning(
@@ -202,7 +289,12 @@ def make_files_activities(
                     f'with read_tool_output("{request.tool_call_id}", grep="pattern").'
                 )
             content, summarized = skill_entry(
-                name, body, max_tokens=request.max_tokens, note=note, pointer=pointer
+                name,
+                body,
+                max_tokens=request.max_tokens,
+                directory=directory,
+                paths=paths,
+                pointer=pointer,
             )
             if summarized and not directory:
                 from ...workflows.context_store import ContextStore
@@ -211,8 +303,6 @@ def make_files_activities(
                     request.tool_call_id, body
                 )
 
-            session = container._database.async_session_factory()
-            ctx._sessions.append(session)
             entry = ConversationEntry(
                 seq=request.seq,
                 event_id=UUID(request.event_id),
@@ -225,7 +315,7 @@ def make_files_activities(
                 execution_id=request.execution_id,
             )
             try:
-                await TaskLog(session, user_context, container.log_body_store()).append(
+                await ctx.task_log().append(
                     UUID(request.task_id), [entry], execution_id=request.execution_id
                 )
             except LookupError as gone:
@@ -239,7 +329,7 @@ def make_files_activities(
 
         return ActivateSkillResult(
             chars=len(content),
-            est_tokens=estimate_tokens_for_messages([{"role": "tool", "content": content}]),
+            est_tokens=count_tokens(content) + TOKENS_PER_MESSAGE_OVERHEAD,
             summarized=summarized,
             urls=external_urls([SimpleNamespace(role="tool", content=body)])[:SEEN_URLS_LIMIT],
         )

@@ -305,12 +305,23 @@ class OutageWait(BaseModel):
     each ``backoff`` step (the last one repeats), and fails after ``deadline``.
     """
 
-    retry_window: timedelta = timedelta(minutes=5)
-    backoff: list[timedelta] = Field(
-        default_factory=lambda: [timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=10)],
-        min_length=1,
-    )
-    deadline: timedelta = timedelta(hours=24)
+    retry_window: timedelta
+    backoff: list[timedelta] = Field(min_length=1)
+    deadline: timedelta
+
+    @model_validator(mode="after")
+    def _positive(self) -> "OutageWait":
+        if min(self.retry_window, self.deadline, *self.backoff) <= timedelta(0):
+            raise ValueError("outage wait durations must be positive")
+        return self
+
+
+class WithheldSkill(BaseModel):
+    """An attached skill the install policy keeps from this run, and the rule that does."""
+
+    id: str
+    name: str
+    reason: str
 
 
 class SkillInfo(BaseModel):
@@ -455,6 +466,9 @@ class AgentConfigResult(BaseModel):
     config_hash: str | None = None
     # How long the run waits out a dependency outage; None in histories recorded before.
     outage_wait: OutageWait | None = None
+    # The share of the window all activated skills may take; None before it existed.
+    skills_window_share: float | None = Field(default=None, gt=0, le=1)
+    withheld_skills: list[WithheldSkill] = Field(default_factory=list)
     # OpenAPI attachment config name -> the operation tools it gives the model.
     # Resolved here so policy can govern a connection's every operation by its
     # name without workflow code looking the connection up.
@@ -1127,8 +1141,10 @@ class ActivateSkillRequest(BaseModel):
     seq: int
     event_id: str
     iteration: int | None = None
-    # The share of the model's window a skill's instructions may take.
+    # The tokens of the model's window this skill's entry may take.
     max_tokens: int = Field(gt=0)
+    # The package the run was configured with: activation reads that version.
+    package: str | None = None
 
 
 class ActivateSkillResult(BaseModel):

@@ -36,6 +36,7 @@ from ...models import (
     ToolDiscoveryRequest,
     ToolDiscoveryResult,
     ToolProviderData,
+    WithheldSkill,
 )
 from ..runtime_discovery import fetch_runtime_manifest, render_runtime_prompt, runtime_event_data
 
@@ -85,22 +86,21 @@ def _task_resource_ids(parameters: dict[str, Any], kind: str) -> list[UUID]:
     return ids
 
 
-async def _runnable_skills(skills: list[Any], ctx: Any) -> list[Any]:
-    """The agent's skills the install policy still lets a run use; the rest are not offered."""
+async def _runnable_skills(skills: list[Any], ctx: Any) -> tuple[list[Any], list[WithheldSkill]]:
+    """The run's skills the install policy still lets it use, and those it withholds."""
     if not skills:
-        return []
-    skill_service = await ctx.get_skill_service()
-    runnable = []
-    for skill in skills:
-        try:
-            await skill_service.require_runnable(skill)
-        except CatalogInstallRefusedError as exc:
-            logger.warning(
-                "Skill %s (%s) is not offered to this run: %s", skill.name, skill.id, exc
-            )
-            continue
-        runnable.append(skill)
-    return runnable
+        return [], []
+    refusals = await (await ctx.get_skill_service()).run_refusals(skills)
+    withheld = [
+        WithheldSkill(id=str(skill.id), name=skill.name, reason=refusals[str(skill.id)])
+        for skill in skills
+        if str(skill.id) in refusals
+    ]
+    for skill in withheld:
+        logger.warning(
+            "Skill %s (%s) is not offered to this run: %s", skill.name, skill.id, skill.reason
+        )
+    return [skill for skill in skills if str(skill.id) not in refusals], withheld
 
 
 async def _resolve_task_resources(
@@ -108,7 +108,7 @@ async def _resolve_task_resources(
 ) -> tuple[list[dict[str, Any]], list[Any]]:
     """Resolve additive run resources with the task's workspace-scoped services."""
     tools = deepcopy(_as_tool_config_list(agent.tools))
-    skills = await _runnable_skills(list(getattr(agent, "skills", None) or []), ctx)
+    skills = list(getattr(agent, "skills", None) or [])
     mcp_ids = _task_resource_ids(parameters, "mcps")
     if mcp_ids:
         mcp_service = await ctx.get_mcp_server_instance_service()
@@ -401,6 +401,7 @@ def make_config_activities(
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
 
             tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
+            skills, withheld_skills = await _runnable_skills(skills, ctx)
             runtime = await discover_runtime_manifest_activity()
 
             skills_info = [
@@ -511,6 +512,8 @@ def make_config_activities(
                     backoff=dependencies.settings.app.TASK_OUTAGE_WAIT_BACKOFF,
                     deadline=dependencies.settings.app.TASK_OUTAGE_WAIT_DEADLINE,
                 ),
+                skills_window_share=dependencies.settings.app.TASK_SKILLS_WINDOW_SHARE,
+                withheld_skills=withheld_skills,
                 runtime=runtime,
                 runtime_event_data=runtime_event_data(runtime),
                 openapi_operation_tools=openapi_operation_tools,

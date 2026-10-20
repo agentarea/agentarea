@@ -322,3 +322,27 @@ async def test_a_legacy_package_outside_the_items_area_is_refused(s3_path, works
     assert _project_catalog_skill(item).s3_path is None
     with pytest.raises(ValueError, match="outside"):
         await packages.store_catalog_item({"s3_path": s3_path}, workspace_id=workspace_id)
+
+
+async def test_a_run_reads_the_package_it_was_configured_with():
+    # The skill moved to v2 since the run started; the run keeps reading v1.
+    packages, storage, _ = _packages()
+    v1 = await storage.store_catalog_package({"SKILL.md": b"# v1"})
+    v2 = await storage.store_catalog_package({"SKILL.md": b"# v2"})
+    skill = _tenant(s3_path=v2)
+
+    assert await packages.read_skill_md(skill, at=v1) == "# v1"
+    assert await packages.read_files(skill, at=v1) == {"SKILL.md": b"# v1"}
+    assert await packages.read_skill_md(skill) == "# v2"
+
+
+@pytest.mark.parametrize(
+    "foreign",
+    ["skills/other-workspace/abc/", "skills/catalog/../w2/x/", "elsewhere/abc/"],
+)
+async def test_a_pinned_package_outside_the_skills_reach_is_refused(foreign):
+    packages, storage, _ = _packages()
+    skill = _tenant(s3_path=await storage.store_catalog_package({"SKILL.md": b"# v1"}))
+
+    with pytest.raises(ValueError, match="cannot be read from package"):
+        await packages.read_skill_md(skill, at=foreign)

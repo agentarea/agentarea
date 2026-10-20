@@ -60,6 +60,11 @@ TOOL_OUTPUT_OFFLOAD_CHARS: Final[int] = 8000  # ~2000 tokens
 # The share of the model's window one activated skill's instructions may take;
 # they are never compacted, so a larger SKILL.md is pointed at instead.
 SKILL_CONTEXT_SHARE: Final[float] = 0.1
+# The share all of a run's skills may take when its config recorded none. Never
+# change it: those runs replay with it.
+LEGACY_SKILLS_WINDOW_SHARE: Final[float] = 0.3
+# Less room than this is no room for a skill's instructions.
+SKILL_MIN_TOKENS: Final[int] = 256
 OUTPUT_SUMMARY_HEAD_CHARS: Final[int] = 500
 OUTPUT_SUMMARY_TAIL_CHARS: Final[int] = 200
 READ_OUTPUT_MAX_RETURN_CHARS: Final[int] = 16000  # Safety limit for read_tool_output
@@ -80,6 +85,7 @@ class EventTypes:
     WORKFLOW_CONTINUED: Final[str] = contract.TASK_CONTINUED
     WORKFLOW_AWAITING_INFRASTRUCTURE: Final[str] = contract.TASK_AWAITING_INFRASTRUCTURE
     WORKFLOW_INFRASTRUCTURE_RECOVERED: Final[str] = contract.TASK_INFRASTRUCTURE_RECOVERED
+    SKILL_WITHHELD: Final[str] = contract.SKILL_WITHHELD
     WORKFLOW_RETRIED: Final[str] = contract.TASK_RETRIED
     CONTINUED_AS_NEW: Final[str] = contract.EXECUTION_CONTINUED_AS_NEW
     EXECUTION_PAUSED: Final[str] = contract.EXECUTION_PAUSED

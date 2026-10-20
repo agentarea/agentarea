@@ -1708,6 +1708,7 @@
       "taskContinued": "Task continued",
       "taskAwaitingInfrastructure": "Waiting for a service",
       "taskInfrastructureRecovered": "Service is back",
+      "skillWithheld": "Skill withheld by policy",
       "taskRetried": "Task retried",
       "executionFinished": "Run finished",
       "executionContinuedAsNew": "Run restarted with fresh history",

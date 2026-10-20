@@ -124,8 +124,9 @@ next model turn.
     **Policies**, or installs from a registry the rules allow.
   </Accordion>
   <Accordion title="An installed skill is no longer offered to tasks">
-    An install rule written after the install denies the skill's registry or
-    trust level; the worker logs which rule. Activating it in a running task
+    A workspace install rule written after the install denies the skill's
+    registry or trust level; the task's feed shows a `skill.withheld` event
+    naming the rule. Activating it in a running task
     returns a tool error naming the rule. Lift or narrow the rule under
     **Policies** and the next task offers the skill again.
   </Accordion>
