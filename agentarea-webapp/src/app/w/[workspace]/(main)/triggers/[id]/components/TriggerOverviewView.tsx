@@ -253,9 +253,12 @@ export async function TriggerOverviewView({
       <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
         {/* ===== stat strip ===== */}
         <StatStrip>
+          {/* The overview counts the whole history; the Metrics tab picks a
+              window. The tag says which, so the two never read as a clash. */}
           <Stat
             icon={<Gauge />}
             label={t("successRate")}
+            period={t("periodOption.all")}
             value={attempted > 0 ? successPct.toFixed(0) : "—"}
             unit={attempted > 0 ? "%" : undefined}
             bar={attempted > 0 ? { pct: successPct } : null}
@@ -281,6 +284,7 @@ export async function TriggerOverviewView({
             label={t("spend")}
             value={fmtCost(metrics?.totalCost ?? 0)}
             bar={null}
+            period={t("periodOption.all")}
             sub={
               total > 0
                 ? t("spendPerRun", { cost: fmtCost(metrics?.avgCost ?? 0) })

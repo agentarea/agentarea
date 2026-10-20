@@ -196,7 +196,7 @@ const TriggersConfig = ({
 
               {spec.trigger_type === "cron" && (
                 <>
-                  <div className="grid gap-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
                     <FormLabel required>{tTrigger("schedule")}</FormLabel>
                     <CronScheduler
                       name={`trigger-cron-${key}`}

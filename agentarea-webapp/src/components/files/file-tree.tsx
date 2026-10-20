@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Trash2,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -99,6 +100,23 @@ export function sortedChildren(node: TreeNode): TreeNode[] {
   });
 }
 
+/** Opt-in modes a picker passes down the tree; the file browser sets neither. */
+type PickProps = {
+  /** Picked paths: files get a checkbox and a click toggles them. */
+  checkedPaths?: string[];
+  /** Open every folder, e.g. while a search narrows the files. */
+  expandAll?: boolean;
+  /** With `checkedPaths`: folders get a checkbox that picks every file under them. */
+  onCheckFolder?: (paths: string[], checked: boolean) => void;
+};
+
+/** Every file path under a folder, however deep. */
+function filesUnder(node: TreeNode): string[] {
+  return Array.from(node.children.values()).flatMap((child) =>
+    child.isFile ? [child.path] : filesUnder(child)
+  );
+}
+
 function FileRow({
   node,
   depth,
@@ -106,6 +124,7 @@ function FileRow({
   selectedPath,
   onDelete,
   nodeProps,
+  checkedPaths,
 }: {
   node: TreeNode;
   depth: number;
@@ -113,10 +132,11 @@ function FileRow({
   selectedPath: string | null;
   onDelete?: (file: BrowsedFile) => void;
   nodeProps?: NodeProps;
-}) {
+} & PickProps) {
   const file = node.file;
   if (!file) return null;
   const isSelected = selectedPath === file.path;
+  const checked = checkedPaths?.includes(file.path);
   const { className: extraClassName, ...extra } = nodeProps?.(node) ?? {};
   return (
     <div
@@ -130,12 +150,24 @@ function FileRow({
       <button
         type="button"
         onClick={() => onSelect(file)}
+        aria-pressed={checked}
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm"
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
         <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate">{node.name}</span>
+        <span className="min-w-0 flex-1 truncate">{node.name}</span>
       </button>
+      {checked !== undefined && (
+        // Beside the row's button, not in it: a checkbox is a button too. The
+        // row stays the control for the keyboard; the box mirrors it.
+        <Checkbox
+          checked={checked}
+          onCheckedChange={() => onSelect(file)}
+          tabIndex={-1}
+          aria-hidden
+          className="mr-2 shrink-0"
+        />
+      )}
       {onDelete && (
         <button
           type="button"
@@ -159,6 +191,9 @@ function FolderRow({
   onSelectFolder,
   selectedFolder,
   nodeProps,
+  checkedPaths,
+  expandAll,
+  onCheckFolder,
 }: {
   node: TreeNode;
   depth: number;
@@ -168,12 +203,23 @@ function FolderRow({
   onSelectFolder?: (path: string) => void;
   selectedFolder?: string;
   nodeProps?: NodeProps;
-}) {
-  const [open, setOpen] = useState(depth < 1);
+} & PickProps) {
+  // A folder holding a picked file starts open, so the pick is in view.
+  const [open, setOpen] = useState(
+    () =>
+      depth < 1 ||
+      Boolean(checkedPaths?.some((path) => path.startsWith(`${node.path}/`)))
+  );
   const containsSelection = Boolean(
     selectedFolder?.startsWith(`${node.path}/`)
   );
-  const expanded = open || containsSelection;
+  const expanded = open || containsSelection || Boolean(expandAll);
+  const folderPaths = checkedPaths && onCheckFolder ? filesUnder(node) : null;
+  const folderCheck = folderPaths && {
+    paths: folderPaths,
+    all: folderPaths.every((path) => checkedPaths?.includes(path)),
+    some: folderPaths.some((path) => checkedPaths?.includes(path)),
+  };
   const { className: extraClassName, ...extra } = nodeProps?.(node) ?? {};
   return (
     <Collapsible open={expanded} onOpenChange={setOpen}>
@@ -221,33 +267,53 @@ function FolderRow({
           </button>
         </div>
       ) : (
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            {...extra}
-            className={cn(
-              "flex min-h-11 w-full items-center gap-1.5 rounded px-2 py-1 text-left text-sm hover:bg-muted md:min-h-6",
-              extraClassName
-            )}
-            style={{ paddingLeft: `${depth * 16 + 4}px` }}
-          >
-            <ChevronRight
+        <div
+          className={cn(
+            "flex w-full items-center rounded",
+            folderCheck && "hover:bg-muted"
+          )}
+        >
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              {...extra}
               className={cn(
-                "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
-                open && "rotate-90"
+                "flex min-h-11 min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1 text-left text-sm md:min-h-6",
+                !folderCheck && "hover:bg-muted",
+                extraClassName
               )}
+              style={{ paddingLeft: `${depth * 16 + 4}px` }}
+            >
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                  expanded && "rotate-90"
+                )}
+              />
+              {expanded ? (
+                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="truncate font-medium">{node.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {node.children.size}
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          {folderCheck && (
+            // Beside the fold button, not in it: a checkbox is a button too.
+            <Checkbox
+              checked={folderCheck.all}
+              indeterminate={!folderCheck.all && folderCheck.some}
+              onCheckedChange={() =>
+                onCheckFolder?.(folderCheck.paths, !folderCheck.all)
+              }
+              aria-label={node.name}
+              className="mr-2 shrink-0"
             />
-            {open ? (
-              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            ) : (
-              <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            )}
-            <span className="truncate font-medium">{node.name}</span>
-            <span className="text-xs text-muted-foreground">
-              {node.children.size}
-            </span>
-          </button>
-        </CollapsibleTrigger>
+          )}
+        </div>
       )}
       {/* The sidebar's own fold: the folder's contents slide to their
           measured height instead of jumping in. */}
@@ -262,6 +328,7 @@ function FolderRow({
               selectedPath={selectedPath}
               onDelete={onDelete}
               nodeProps={nodeProps}
+              checkedPaths={checkedPaths}
             />
           ) : (
             <FolderRow
@@ -274,6 +341,9 @@ function FolderRow({
               selectedPath={selectedPath}
               onDelete={onDelete}
               nodeProps={nodeProps}
+              checkedPaths={checkedPaths}
+              expandAll={expandAll}
+              onCheckFolder={onCheckFolder}
             />
           )
         )}
@@ -292,6 +362,9 @@ export function FileTree({
   selectedFolder,
   className,
   nodeProps,
+  checkedPaths,
+  expandAll,
+  onCheckFolder,
 }: {
   files: BrowsedFile[];
   directories?: string[];
@@ -302,7 +375,7 @@ export function FileTree({
   selectedFolder?: string;
   className?: string;
   nodeProps?: NodeProps;
-}) {
+} & PickProps) {
   const root = buildTree(files, directories);
   const top = sortedChildren(root);
   return (
@@ -317,6 +390,7 @@ export function FileTree({
             selectedPath={selectedPath}
             onDelete={onDelete}
             nodeProps={nodeProps}
+            checkedPaths={checkedPaths}
           />
         ) : (
           <FolderRow
@@ -329,6 +403,9 @@ export function FileTree({
             selectedPath={selectedPath}
             onDelete={onDelete}
             nodeProps={nodeProps}
+            checkedPaths={checkedPaths}
+            expandAll={expandAll}
+            onCheckFolder={onCheckFolder}
           />
         )
       )}

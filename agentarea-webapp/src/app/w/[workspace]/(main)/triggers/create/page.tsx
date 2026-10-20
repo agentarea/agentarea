@@ -30,6 +30,7 @@ export default async function CreateTriggerPage() {
           <CreateTriggerHeaderControls label={tCreate("createButton")} />
         ),
       }}
+      className="p-0"
     >
       <CreateTriggerForm
         agents={agents ?? []}

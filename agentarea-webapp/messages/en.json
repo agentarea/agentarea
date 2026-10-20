@@ -1694,7 +1694,6 @@
       },
       "uploadHint": "Drag and drop or browse to select a ZIP file",
       "loadingDuplicate": "Loading the original skill and pre-filling this form...",
-      "cancel": "Cancel",
       "writeContent": "Write content",
       "uploadFiles": "Upload files",
       "descriptionLabel": "Description",
@@ -2140,6 +2139,7 @@
       "selectType": "Select trigger type",
       "agent": "Agent",
       "selectAgent": "Select an agent",
+      "agentRequired": "Pick the agent that will run this automation",
       "cronExpression": "Cron Expression",
       "cronPlaceholder": "e.g., 0 9 * * 1-5",
       "timezone": "Timezone",
@@ -2152,6 +2152,7 @@
       "schedule": "Schedule",
       "automationName": "Automation name",
       "automationNamePlaceholder": "Untitled automation",
+      "suggestedName": "{type} automation",
       "taskInstructions": "Task",
       "whenToRun": "When to run",
       "runSettings": "Run settings",
@@ -2181,13 +2182,15 @@
         "selectedTools": "{count, plural, one {# selected tool} other {# selected tools}}",
         "noTools": "No tools enabled",
         "approval": "Approval required",
-        "toolListUnavailable": "Tool list unavailable",
         "skillsOnDemand": "Available for activation",
         "configureAgent": "Configure agent",
         "carriedOver": "These came from an older version of this trigger. Move them onto the agent — triggers no longer carry their own.",
         "viewInNetwork": "See this in the network",
         "disabledMethods": "Disabled methods",
-        "builtin": "Built-in"
+        "builtin": "Built-in",
+        "clearFiles": "Clear",
+        "showAllFiles": "Show all ({count})",
+        "showLessFiles": "Show less"
       },
       "taskText": "Task text",
       "taskTextPlaceholder": "Text to pass into each task created by this trigger",
@@ -2197,19 +2200,19 @@
       "taskMcps": "Additional MCP",
       "taskTextFromStream": "The event's data is attached to the task automatically. The text here is the instruction the agent follows.",
       "taskFilesHint": "Select workspace files to include in every task.",
-      "searchFiles": "Search files",
-      "noFiles": "No more files to select.",
-      "manageFiles": "Manage workspace files",
       "taskMcpsHint": "Select MCP servers to make available to every task.",
       "taskSkillsHint": "Select skills to make available to every task.",
       "loadingResources": "Loading…",
       "resourcesLoadFailed": "Could not load resources. Try refreshing the list.",
-      "refreshResources": "Refresh list",
       "removeResource": "Remove {name}",
       "stream": "Stream",
       "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
       "noStreams": "No streams yet",
       "streamsLoadFailed": "Could not load streams",
+      "typeKinds": "Kinds",
+      "typeItems": "Types",
+      "typeSearch": "Search trigger types",
+      "typeNotFound": "No types found",
       "session": {
         "continue": "Continue the conversation",
         "continueHint": "The next event of the same session (a chat, a thread) joins the task that is waiting for it.",
@@ -2227,7 +2230,34 @@
       },
       "savedTask": "Saved task",
       "savedTaskNone": "None — use the task below",
-      "savedTaskHint": "Each run asks the saved task’s text, with its parameters."
+      "savedTaskHint": "Each run asks the saved task’s text, with its parameters.",
+      "cron": {
+        "frequency": {
+          "every_minute": "Minutes",
+          "hourly": "Hourly",
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "custom": "Custom"
+        },
+        "interval": "Interval",
+        "atMinute": "At minute",
+        "time": "Time",
+        "hour": "Hour",
+        "minute": "Minute",
+        "day": "Day",
+        "dayOfMonth": "Day of month",
+        "expression": "Cron expression",
+        "expressionFields": "minute hour day month weekday",
+        "everyMinutes": "{count, plural, =1 {Every minute} other {Every # minutes}}",
+        "everyHours": "{count, plural, =1 {Every hour} other {Every # hours}}",
+        "runsEveryMinutes": "{count, plural, =1 {Runs every minute} other {Runs every # minutes}}",
+        "runsEveryHours": "{count, plural, =1 {Runs every hour at minute {minute}} other {Runs every # hours at minute {minute}}}",
+        "runsDaily": "Runs daily at {time}",
+        "runsWeekly": "Runs every {day} at {time}",
+        "runsMonthly": "Runs on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} of every month at {time}",
+        "runsCustom": "Custom cron expression"
+      }
     },
     "detail": {
       "overview": "Overview",
@@ -2294,7 +2324,6 @@
       },
       "metricsLoadFailed": "Failed to load metrics",
       "executionsLoadFailed": "Failed to load executions",
-      "periodHours": "Over the last {hours}h",
       "durationRange": "{min}s — {max}s range",
       "failures": "Failures",
       "timeouts": "{count} timed out",
@@ -2302,8 +2331,6 @@
       "spendPerRun": "{cost} per run",
       "noCostedRuns": "No costed runs yet",
       "cost": "Cost",
-      "firstPage": "First page",
-      "noExecutionsOnPage": "No runs on this page",
       "lastEvent": "Last event",
       "noEventsYet": "No events yet",
       "needsOwnerTitle": "This trigger stopped",
@@ -2316,7 +2343,27 @@
       "batchOff": "Fires on every event",
       "batchWindowOrCount": "One task for the events of {window}, or sooner at {count} events",
       "batchWindow": "One task for the events of each {window}",
-      "batchCount": "One task for every {count} events"
+      "batchCount": "One task for every {count} events",
+      "columnStatus": "Status",
+      "columnStarted": "Started",
+      "columnDuration": "Duration",
+      "openTask": "Open task",
+      "copyExecutionId": "Copy ID",
+      "idCopied": "Copied",
+      "metricsPeriod": "Period",
+      "periodOption": {
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
+        "all": "All time"
+      },
+      "noFailures": "No failures",
+      "periodLabel": {
+        "24h": "Over the last 24 hours",
+        "7d": "Over the last 7 days",
+        "30d": "Over the last 30 days",
+        "all": "All time"
+      }
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -2926,7 +2973,12 @@
     "emptySkillsHint": "Package a procedure once, then attach it to any task or agent.",
     "emptyMcpsTitle": "No MCP servers yet",
     "emptyMcpsHint": "Connect one to give this task — and any agent — its tools.",
-    "nothingFoundTitle": "Nothing found"
+    "nothingFoundTitle": "Nothing found",
+    "filesHeading": "Files",
+    "emptyFilesTitle": "No files yet",
+    "emptyFilesHint": "Upload files to the workspace, then pick the ones every task should get.",
+    "uploadFiles": "Upload files",
+    "manageFilesLink": "Manage files"
   },
   "QuickTask": {
     "title": "New task",
@@ -4084,5 +4136,14 @@
     "customized": "Edited in this workspace",
     "notFromCatalog": "Not installed from the catalog",
     "sourceUnreachable": "The source could not be reached"
+  },
+  "ModelSelector": {
+    "placeholder": "Select a model",
+    "configurations": "Configurations",
+    "models": "Models",
+    "search": "Search configurations and models",
+    "noModels": "No models found",
+    "defaultConfiguration": "Default configuration",
+    "unknownProvider": "Unknown provider"
   }
 }

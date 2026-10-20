@@ -1694,7 +1694,6 @@
       },
       "uploadHint": "Перетащите ZIP-файл или выберите его для загрузки",
       "loadingDuplicate": "Загружаю исходный навык и предзаполняю форму...",
-      "cancel": "Отмена",
       "writeContent": "Написать контент",
       "uploadFiles": "Загрузить файлы",
       "descriptionLabel": "Описание",
@@ -2140,6 +2139,7 @@
       "selectType": "Выберите тип триггера",
       "agent": "Агент",
       "selectAgent": "Выберите агента",
+      "agentRequired": "Выберите агента, который будет выполнять автоматизацию",
       "cronExpression": "Выражение Cron",
       "cronPlaceholder": "напр., 0 9 * * 1-5",
       "timezone": "Часовой пояс",
@@ -2152,6 +2152,7 @@
       "schedule": "Расписание",
       "automationName": "Название автоматизации",
       "automationNamePlaceholder": "Новая автоматизация",
+      "suggestedName": "Автоматизация {type}",
       "taskInstructions": "Задача",
       "whenToRun": "Когда запускать",
       "runSettings": "Настройки запуска",
@@ -2181,13 +2182,15 @@
         "selectedTools": "{count, plural, one {# выбранный инструмент} few {# выбранных инструмента} other {# выбранных инструментов}}",
         "noTools": "Нет включённых инструментов",
         "approval": "Нужно подтверждение",
-        "toolListUnavailable": "Список инструментов недоступен",
         "skillsOnDemand": "Доступны для активации",
         "configureAgent": "Настроить агента",
         "carriedOver": "Достались от прежней версии этого триггера. Перенесите их на агента — триггеры больше не носят свои ресурсы.",
         "viewInNetwork": "Посмотреть в сети",
         "disabledMethods": "Отключённые методы",
-        "builtin": "Встроенный"
+        "builtin": "Встроенный",
+        "clearFiles": "Очистить",
+        "showAllFiles": "Показать все ({count})",
+        "showLessFiles": "Свернуть"
       },
       "taskText": "Текст задачи",
       "taskTextPlaceholder": "Текст, передаваемый в каждую задачу этого триггера",
@@ -2197,19 +2200,19 @@
       "taskMcps": "Дополнительные MCP",
       "taskTextFromStream": "Данные события прикладываются к задаче автоматически. Текст здесь — это инструкция, которой следует агент.",
       "taskFilesHint": "Выберите файлы рабочего пространства для каждой задачи.",
-      "searchFiles": "Поиск файлов",
-      "noFiles": "Нет других файлов для выбора.",
-      "manageFiles": "Управление файлами",
       "taskMcpsHint": "Выберите MCP-серверы, доступные каждой задаче.",
       "taskSkillsHint": "Выберите навыки, доступные каждой задаче.",
       "loadingResources": "Загрузка…",
       "resourcesLoadFailed": "Не удалось загрузить ресурсы. Обновите список.",
-      "refreshResources": "Обновить список",
       "removeResource": "Убрать {name}",
       "stream": "Поток",
       "streamHint": "Срабатывает на события, пришедшие в этот поток после создания триггера.",
       "noStreams": "Потоков пока нет",
       "streamsLoadFailed": "Не удалось загрузить потоки",
+      "typeKinds": "Виды",
+      "typeItems": "Типы",
+      "typeSearch": "Поиск по типам триггеров",
+      "typeNotFound": "Типы не найдены",
       "session": {
         "continue": "Продолжать разговор",
         "continueHint": "Следующее событие той же сессии (чат, тред) попадает в задачу, которая его ждёт.",
@@ -2227,7 +2230,34 @@
       },
       "savedTask": "Сохранённая задача",
       "savedTaskNone": "Нет — использовать задачу ниже",
-      "savedTaskHint": "Каждый запуск использует текст и параметры сохранённой задачи."
+      "savedTaskHint": "Каждый запуск использует текст и параметры сохранённой задачи.",
+      "cron": {
+        "frequency": {
+          "every_minute": "Минуты",
+          "hourly": "Ежечасно",
+          "daily": "Ежедневно",
+          "weekly": "Еженедельно",
+          "monthly": "Ежемесячно",
+          "custom": "Своё"
+        },
+        "interval": "Интервал",
+        "atMinute": "Минута",
+        "time": "Время",
+        "hour": "Час",
+        "minute": "Минута",
+        "day": "День",
+        "dayOfMonth": "День месяца",
+        "expression": "Cron-выражение",
+        "expressionFields": "минута час день месяц день_недели",
+        "everyMinutes": "{count, plural, =1 {Каждую минуту} one {Каждую # минуту} few {Каждые # минуты} other {Каждые # минут}}",
+        "everyHours": "{count, plural, =1 {Каждый час} one {Каждый # час} few {Каждые # часа} other {Каждые # часов}}",
+        "runsEveryMinutes": "{count, plural, =1 {Запуск каждую минуту} one {Запуск каждую # минуту} few {Запуск каждые # минуты} other {Запуск каждые # минут}}",
+        "runsEveryHours": "{count, plural, =1 {Запуск каждый час в :{minute}} one {Запуск каждый # час в :{minute}} few {Запуск каждые # часа в :{minute}} other {Запуск каждые # часов в :{minute}}}",
+        "runsDaily": "Запуск ежедневно в {time}",
+        "runsWeekly": "Запуск еженедельно: {day}, {time}",
+        "runsMonthly": "Запуск {day}-го числа каждого месяца в {time}",
+        "runsCustom": "Своё cron-выражение"
+      }
     },
     "detail": {
       "overview": "Обзор",
@@ -2294,7 +2324,6 @@
       },
       "metricsLoadFailed": "Не удалось загрузить метрики",
       "executionsLoadFailed": "Не удалось загрузить список выполнений",
-      "periodHours": "За последние {hours} ч",
       "durationRange": "разброс {min}s — {max}s",
       "failures": "Сбои",
       "timeouts": "таймаутов: {count}",
@@ -2302,8 +2331,6 @@
       "spendPerRun": "{cost} за запуск",
       "noCostedRuns": "Оплаченных запусков ещё не было",
       "cost": "Стоимость",
-      "firstPage": "Первая страница",
-      "noExecutionsOnPage": "На этой странице запусков нет",
       "lastEvent": "Последнее событие",
       "noEventsYet": "Событий пока нет",
       "needsOwnerTitle": "Триггер остановлен",
@@ -2316,7 +2343,27 @@
       "batchOff": "Срабатывает на каждое событие",
       "batchWindowOrCount": "Одна задача на события за {window}, или раньше, если набралось {count}",
       "batchWindow": "Одна задача на события за каждые {window}",
-      "batchCount": "Одна задача на каждые {count} событий"
+      "batchCount": "Одна задача на каждые {count} событий",
+      "columnStatus": "Статус",
+      "columnStarted": "Запуск",
+      "columnDuration": "Длительность",
+      "openTask": "Открыть задачу",
+      "copyExecutionId": "Скопировать ID",
+      "idCopied": "Скопировано",
+      "metricsPeriod": "Период",
+      "periodOption": {
+        "24h": "24 часа",
+        "7d": "7 дней",
+        "30d": "30 дней",
+        "all": "Всё время"
+      },
+      "noFailures": "Без сбоев",
+      "periodLabel": {
+        "24h": "За последние 24 часа",
+        "7d": "За последние 7 дней",
+        "30d": "За последние 30 дней",
+        "all": "За всё время"
+      }
     },
     "error": {
       "createFailed": "Не удалось создать триггер",
@@ -2926,7 +2973,12 @@
     "emptySkillsHint": "Опишите процедуру один раз — и подключайте её к любой задаче или агенту.",
     "emptyMcpsTitle": "MCP-серверов пока нет",
     "emptyMcpsHint": "Подключите сервер, чтобы его инструменты были у этой задачи и у любого агента.",
-    "nothingFoundTitle": "Ничего не найдено"
+    "nothingFoundTitle": "Ничего не найдено",
+    "filesHeading": "Файлы",
+    "emptyFilesTitle": "Файлов пока нет",
+    "emptyFilesHint": "Загрузите файлы в рабочее пространство, потом выберите те, что нужны каждой задаче.",
+    "uploadFiles": "Загрузить файлы",
+    "manageFilesLink": "Управлять файлами"
   },
   "QuickTask": {
     "title": "Новая задача",
@@ -4084,5 +4136,14 @@
     "customized": "Изменён в этом рабочем пространстве",
     "notFromCatalog": "Установлен не из каталога",
     "sourceUnreachable": "Источник недоступен"
+  },
+  "ModelSelector": {
+    "placeholder": "Выберите модель",
+    "configurations": "Конфигурации",
+    "models": "Модели",
+    "search": "Поиск по конфигурациям и моделям",
+    "noModels": "Модели не найдены",
+    "defaultConfiguration": "Конфигурация по умолчанию",
+    "unknownProvider": "Неизвестный провайдер"
   }
 }

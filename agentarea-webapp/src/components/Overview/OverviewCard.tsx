@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { BoardCrossMark } from "@/components/board";
+import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { Button } from "@/components/ui/button";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import Link from "@/components/WorkspaceLink";
@@ -283,6 +284,7 @@ export function Stat({
   bar,
   sub,
   subTone = "muted",
+  period,
 }: {
   icon: ReactNode;
   label: string;
@@ -292,6 +294,8 @@ export function Stat({
   bar?: { pct: number } | null;
   sub: ReactNode;
   subTone?: "muted" | "up" | "down";
+  /** The window the figure covers, tagged beside the label (e.g. "7 days"). */
+  period?: ReactNode;
 }) {
   return (
     <div
@@ -305,7 +309,10 @@ export function Stat({
     >
       <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground [&>svg]:h-[13px] [&>svg]:w-[13px] [&>svg]:text-muted-foreground/70">
         {icon}
-        {label}
+        <span className="min-w-0 truncate">{label}</span>
+        {period != null && (
+          <BlueprintBadge className="ml-auto">{period}</BlueprintBadge>
+        )}
       </div>
       <div className="mt-[7px] flex items-baseline gap-1.5 leading-none">
         <span className="font-mono text-[24px] font-medium tracking-[-0.03em] tabular-nums">

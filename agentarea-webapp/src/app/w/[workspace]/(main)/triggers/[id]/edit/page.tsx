@@ -40,15 +40,11 @@ export default async function EditTriggerPage({ params }: Props) {
   const agents: AgentResponse[] = agentsResponse.data ?? [];
 
   return (
-    <div className="px-4 py-5">
-      <div className="mx-auto w-full max-w-5xl">
-        <CreateTriggerForm
-          agents={agents}
-          streams={streams}
-          savedTasks={savedTasks.data ?? []}
-          initialData={trigger}
-        />
-      </div>
-    </div>
+    <CreateTriggerForm
+      agents={agents}
+      streams={streams}
+      savedTasks={savedTasks.data ?? []}
+      initialData={trigger}
+    />
   );
 }

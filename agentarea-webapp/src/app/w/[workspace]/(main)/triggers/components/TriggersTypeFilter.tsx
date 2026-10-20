@@ -19,7 +19,7 @@ interface TriggersTypeFilterProps {
   counts: TriggerTypeCounts;
 }
 
-const LANE_ICON: Record<string, LucideIcon | undefined> = {
+export const LANE_ICON: Record<string, LucideIcon | undefined> = {
   channel: MessagesSquare,
   event: Webhook,
   schedule: Clock,
