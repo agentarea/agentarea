@@ -1,10 +1,10 @@
 module github.com/agentarea/mcp-manager
 
-go 1.26.0
+go 1.27.3
 
 require (
 	connectrpc.com/connect v1.18.1
-	github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.0.5
+	github.com/alibaba/OpenSandbox/sdks/sandbox/go v1.1.1
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/aws/aws-sdk-go-v2 v1.43.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.18

@@ -51,10 +51,11 @@ spec:
         command:
         - /workspace/server
         args:
+        {{- $healthPort := .Values.controller.livenessProbe.httpGet.port }}
         {{- if .Values.controller.leaderElection.enabled }}
         - --leader-elect
         {{- end }}
-        - --health-probe-bind-address=:8081
+        - --health-probe-bind-address=:{{ $healthPort }}
         - --zap-log-level={{ .Values.controller.logLevel }}
         {{- if $metrics.enabled }}
         - --metrics-bind-address=:{{ $metrics.port | default 8080 }}
@@ -81,6 +82,9 @@ spec:
         {{- if .Values.controller.snapshot.registry }}
         - --snapshot-registry={{ .Values.controller.snapshot.registry }}
         {{- end }}
+        {{- if .Values.controller.snapshot.imageURITemplate }}
+        - {{ printf "--snapshot-image-uri-template=%s" .Values.controller.snapshot.imageURITemplate | quote }}
+        {{- end }}
         {{- if .Values.controller.snapshot.registryInsecure }}
         - --snapshot-registry-insecure={{ .Values.controller.snapshot.registryInsecure }}
         {{- end }}
@@ -95,7 +99,7 @@ spec:
         {{- end }}
         ports:
         - name: health
-          containerPort: 8081
+          containerPort: {{ .Values.controller.livenessProbe.httpGet.port }}
           protocol: TCP
         {{- if $metrics.enabled }}
         - name: metrics
@@ -130,8 +134,12 @@ spec:
         {{- end }}
         resources:
           {{- toYaml .Values.controller.resources | nindent 10 }}
-        {{- if .Values.extraEnv }}
         env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- if .Values.extraEnv }}
         {{- toYaml .Values.extraEnv | nindent 8 }}
         {{- end }}
         {{- if or .Values.controller.snapshot.imageCommitterPodTemplate .Values.extraVolumeMounts }}
