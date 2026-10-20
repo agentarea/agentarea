@@ -1918,7 +1918,7 @@ export declare const createTaskDefinitionV1TaskDefinitionsPost: <ThrowOnError ex
 /**
  * Delete Task Definition
  *
- * Delete a saved task. Runs started from it stay; a trigger on it fails until changed.
+ * Delete a saved task no trigger runs. Runs started from it stay.
  */
 export declare const deleteTaskDefinitionV1TaskDefinitionsDefinitionIdDelete: <ThrowOnError extends boolean = false>(options: Options<DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteData, ThrowOnError>) => RequestResult<DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses, DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors, ThrowOnError>;
 /**
@@ -1936,7 +1936,7 @@ export declare const updateTaskDefinitionV1TaskDefinitionsDefinitionIdPut: <Thro
 /**
  * Run Task Definition
  *
- * Run a saved task now, as the caller, with its agent, text and parameters.
+ * Run a saved task now with its agent, text and parameters; the run acts as the agent.
  *
  * ``parameters`` in the body are merged over the saved ones for this run only.
  */
@@ -2115,6 +2115,7 @@ export declare const enableTriggerV1TriggersTriggerIdEnablePost: <ThrowOnError e
  * Args:
  * trigger_id: The unique identifier of the trigger
  * request: The events to run the trigger on
+ * user_context: The person replaying the events; the run is theirs
  * trigger_service: Injected trigger service
  *
  * Returns:

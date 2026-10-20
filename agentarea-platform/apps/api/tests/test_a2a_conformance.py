@@ -50,7 +50,9 @@ from agentarea_api.api.v1 import a2a_auth, a2a_request_handler, agents_a2a, agen
 from agentarea_common.auth.context import UserPrincipal
 from agentarea_common.auth.credential import Credential
 from agentarea_common.auth.dependencies import get_optional_principal
+from agentarea_common.auth.permission import PermissionService
 from agentarea_common.config import get_settings
+from agentarea_common.di.container import get_container
 from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_STARTED
 from agentarea_common.events.task_stream import TaskEventEnvelope
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
@@ -133,6 +135,18 @@ class FakeSecretManager:
         return self.secrets.pop(name, None) is not None
 
 
+class RecordingPermissions(PermissionService):
+    """Whether a member may start the agent; allows unless turned off, and remembers."""
+
+    def __init__(self) -> None:
+        self.allowed = True
+        self.checks: list[tuple[str, str, str, str]] = []
+
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        self.checks.append((subject, permission, resource_type, resource_id))
+        return self.allowed
+
+
 class FakeAgentService:
     async def get(self, agent_id: UUID) -> Any:
         return AGENTS.get(agent_id)
@@ -163,7 +177,18 @@ def _subject(request: Request) -> UserPrincipal | None:
 
 
 @pytest.fixture
-def services(monkeypatch):
+def permissions():
+    container = get_container()
+    saved = dict(container._singletons)
+    recorder = RecordingPermissions()
+    container.register_singleton(PermissionService, recorder)
+    yield recorder
+    container._singletons.clear()
+    container._singletons.update(saved)
+
+
+@pytest.fixture
+def services(monkeypatch, permissions):
     tasks = FakeTaskService()
     secrets = FakeSecretManager()
     feed_script: list[TaskEventEnvelope] = []
@@ -184,7 +209,13 @@ def services(monkeypatch):
     monkeypatch.setattr(settings, "A2A_AGENT_URL", f"http://{AGENT_HOST_PATTERN}")
     monkeypatch.setattr(a2a_request_handler, "validate_outbound_url", lambda url: None)
     monkeypatch.setattr(a2a_auth, "workspace_slug_for", AsyncMock(return_value="acme"))
-    return SimpleNamespace(tasks=tasks, secrets=secrets, feed=feed_script, feed_calls=feed_calls)
+    return SimpleNamespace(
+        tasks=tasks,
+        secrets=secrets,
+        feed=feed_script,
+        feed_calls=feed_calls,
+        permissions=permissions,
+    )
 
 
 @pytest.fixture
@@ -290,6 +321,8 @@ async def test_a_client_given_only_the_agent_host_creates_a_task(app, services):
 
 @pytest.mark.asyncio
 async def test_an_agents_key_creates_a_task_as_the_member_who_issued_it(app, services):
+    # The key was confined to this agent at the edge; it asks the graph nothing more.
+    services.permissions.allowed = False
     http = _http(app, AGENT_KEY_BEARER)
     card = await A2ACardResolver(http, AGENT_HOST).get_agent_card()
     async with ClientFactory(ClientConfig(httpx_client=http, streaming=False)).create(
@@ -299,6 +332,7 @@ async def test_an_agents_key_creates_a_task_as_the_member_who_issued_it(app, ser
 
     stored = services.tasks.tasks[UUID(task.id)]
     assert (stored.agent_id, stored.user_id, stored.workspace_id) == (AGENT_ID, MEMBER, WORKSPACE)
+    assert services.permissions.checks == []
 
 
 async def _agent_key_client(app):
@@ -391,6 +425,27 @@ async def test_send_message_creates_a_task_for_this_agent(client, services):
     assert (stored.user_id, stored.workspace_id) == (MEMBER, WORKSPACE)
     assert stored.metadata["source"] == "a2a"
     assert stored.metadata["a2a_method"] == "SendMessage"
+    assert services.permissions.checks == [(f"User:{MEMBER}", "execute", "agent", str(AGENT_ID))]
+
+
+@pytest.mark.asyncio
+async def test_a_member_who_may_not_run_the_agent_cannot_start_it(app, services):
+    services.permissions.allowed = False
+    body = {
+        "jsonrpc": "2.0",
+        "id": "1",
+        "method": "SendMessage",
+        "params": {
+            "message": {"messageId": uuid4().hex, "role": "ROLE_USER", "parts": [{"text": "go"}]}
+        },
+    }
+
+    response = await _http(app, MEMBER_BEARER).post(
+        f"{AGENT_BASE}/a2a/rpc", json=body, headers={"A2A-Version": "1.0"}
+    )
+
+    assert response.status_code == 403
+    assert services.tasks.tasks == {}
 
 
 @pytest.mark.asyncio

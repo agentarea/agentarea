@@ -83,12 +83,14 @@ class TaskDefinitionService:
         "task_definition.update", resource_type="task_definition", resource_id_param="definition_id"
     )
     async def update(self, definition_id: UUID, payload: TaskDefinitionUpdate) -> TaskDefinition:
-        await self.get(definition_id)
+        current = await self.get(definition_id)
         changes: dict[str, Any] = {
             field: value
             for field, value in payload.model_dump(exclude_unset=True).items()
             if value is not None
         }
+        if changes.get("agent_id") == current.agent_id:
+            del changes["agent_id"]
         if "agent_id" in changes:
             await self._require_agent(changes["agent_id"])
             # A trigger was bound to one agent; it must not start asking another.

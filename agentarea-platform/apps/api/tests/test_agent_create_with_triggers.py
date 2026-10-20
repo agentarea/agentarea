@@ -127,14 +127,11 @@ async def test_agent_and_its_triggers_are_created_together(harness):
     assert not hasattr(payload, "triggers")
     assert [t.agent_id for t in harness.created] == [harness.agent.id, harness.agent.id]
     assert str(harness.created[1].stream_id) == _ON_MESSAGES["stream_id"]
-    # Each trigger binds the new agent, which needs the right to run it; the
-    # stream trigger also needs to read its stream.
-    agent_id = str(harness.agent.id)
-    assert [call.args for call in _trigger_creation.require_permission.await_args_list] == [
-        ("execute", "agent", agent_id, harness.caller),
-        ("execute", "agent", agent_id, harness.caller),
-        ("read", "stream", _ON_MESSAGES["stream_id"], harness.caller),
-    ]
+    # Binding the agent is the trigger service's check; the route asks that the
+    # creator may read the stream the trigger subscribes to.
+    _trigger_creation.require_permission.assert_awaited_once_with(
+        "read", "stream", _ON_MESSAGES["stream_id"], harness.caller
+    )
 
 
 async def test_tools_must_be_given_explicitly(harness):

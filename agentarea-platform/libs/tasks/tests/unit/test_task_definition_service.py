@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,6 +14,7 @@ from agentarea_tasks.application.task_definition_service import TaskDefinitionSe
 from agentarea_tasks.domain.models import AgentTask
 from agentarea_tasks.domain.task_definitions import (
     TaskDefinition,
+    TaskDefinitionInUseError,
     TaskDefinitionNotFoundError,
     TaskDefinitionValidationError,
 )
@@ -108,11 +109,21 @@ def _started(payload, **kwargs) -> AgentTask:
     )
 
 
-def _service() -> tuple[TaskDefinitionService, _Definitions, AsyncMock]:
+class _Session:
+    """Answers the one count the service asks: how many triggers run a definition."""
+
+    def __init__(self, triggers_running: int) -> None:
+        self.triggers_running = triggers_running
+
+    async def execute(self, _statement):
+        return SimpleNamespace(scalar_one=lambda: self.triggers_running)
+
+
+def _service(triggers_running: int = 0) -> tuple[TaskDefinitionService, _Definitions, AsyncMock]:
     definitions = _Definitions()
     repositories = {TaskDefinitionRepository: definitions, AgentRepository: _Agents()}
     factory = SimpleNamespace(
-        session=MagicMock(),
+        session=_Session(triggers_running),
         user_context=CALLER,
         create_repository=lambda cls: repositories[cls],
     )
@@ -168,6 +179,39 @@ async def test_moving_a_saved_task_to_another_agent_checks_that_agent():
     moved = await service.update(definition.id, TaskDefinitionUpdate(agent_id=OTHER_AGENT))
     assert moved.agent_id == OTHER_AGENT
     assert moved.name == definition.name
+
+
+async def test_a_saved_task_a_trigger_runs_keeps_its_agent_and_cannot_be_deleted():
+    service, definitions, _ = _service(triggers_running=2)
+    definition = await service.create(_create())
+
+    with pytest.raises(TaskDefinitionInUseError, match="2 trigger"):
+        await service.update(definition.id, TaskDefinitionUpdate(agent_id=OTHER_AGENT))
+    with pytest.raises(TaskDefinitionInUseError):
+        await service.delete(definition.id)
+
+    assert definitions.rows[definition.id].agent_id == AGENT
+
+
+async def test_a_saved_task_a_trigger_runs_may_still_be_reworded():
+    service, _, _ = _service(triggers_running=1)
+    definition = await service.create(_create())
+
+    renamed = await service.update(definition.id, TaskDefinitionUpdate(name="Evening digest"))
+
+    assert renamed.name == "Evening digest"
+
+
+async def test_resending_the_same_agent_is_not_moving_the_saved_task():
+    """The edit form sends every field; keeping the agent is not changing it."""
+    service, _, _ = _service(triggers_running=1)
+    definition = await service.create(_create())
+
+    updated = await service.update(
+        definition.id, TaskDefinitionUpdate(agent_id=AGENT, name="Evening digest")
+    )
+
+    assert (updated.agent_id, updated.name) == (AGENT, "Evening digest")
 
 
 async def test_an_unknown_saved_task_is_not_found():

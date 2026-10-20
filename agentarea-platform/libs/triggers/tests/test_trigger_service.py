@@ -20,8 +20,9 @@ from agentarea_triggers.trigger_service import (
     TriggerService,
     TriggerValidationError,
 )
+from fastapi import HTTPException
 
-from .conftest import active_agent_repository, make_trigger_repository_factory
+from .conftest import CALLER, active_agent_repository, make_trigger_repository_factory
 
 
 class TestTriggerService:
@@ -1232,15 +1233,134 @@ class TestTriggerService:
         mock_task_service,
         sample_cron_trigger,
     ):
-        """The run acts as the agent, so the agent is what must still stand."""
+        """The run acts as the agent, so the agent is what must still stand.
+
+        The trigger stops for attention and the failed firing is recorded.
+        """
         mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
         mock_agent_repository.get.return_value = agent
 
         firing = await trigger_service.fire(sample_cron_trigger.id, {"source": "test"})
 
         assert firing.outcome == "error"
-        assert "gone or inactive" in (firing.reason or "")
+        assert (firing.reason or "").startswith("agent_unavailable:")
+        mock_trigger_repository.mark_needs_new_owner.assert_awaited_once_with(
+            sample_cron_trigger.id
+        )
+        mock_trigger_execution_repository.create.assert_awaited_once()
+        assert (
+            mock_trigger_execution_repository.create.await_args.kwargs["status"]
+            == ExecutionStatus.FAILED
+        )
         mock_task_service.route_or_submit_task.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_manual_run_needs_the_right_to_run_the_agent(
+        self,
+        permissions,
+        trigger_service,
+        mock_trigger_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """Pressing "run now" starts the agent, so the presser must be allowed to."""
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        permissions.allowed = False
+
+        with pytest.raises(HTTPException) as refused:
+            await trigger_service.fire(sample_cron_trigger.id, {"source": "test"}, fired_by="u")
+
+        assert refused.value.status_code == 403
+        assert permissions.checks == [
+            (CALLER.graph_subject, "execute", "agent", str(sample_cron_trigger.agent_id))
+        ]
+        mock_task_service.route_or_submit_task.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_scheduled_firing_asks_nobody(
+        self,
+        permissions,
+        trigger_service,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """A schedule coming due is not a person starting the agent."""
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_task_service.route_or_submit_task.return_value = MagicMock(
+            id=uuid4(), status="submitted"
+        )
+        mock_trigger_execution_repository.create.return_value = MagicMock(
+            id=uuid4(), trigger_id=sample_cron_trigger.id, status=ExecutionStatus.SUCCESS
+        )
+        permissions.allowed = False
+
+        await trigger_service.fire(sample_cron_trigger.id, {"source": "schedule"})
+
+        assert permissions.checks == []
+        mock_task_service.route_or_submit_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_creating_a_trigger_needs_the_right_to_run_its_agent(
+        self, permissions, trigger_service, mock_trigger_repository, sample_cron_trigger_data
+    ):
+        """Nobody sets an agent going on a schedule they could not start by hand."""
+        permissions.allowed = False
+
+        with pytest.raises(HTTPException) as refused:
+            await trigger_service.create_trigger(sample_cron_trigger_data)
+
+        assert refused.value.status_code == 403
+        mock_trigger_repository.create_from_model.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_repointing_a_trigger_needs_the_right_to_run_the_new_agent(
+        self, permissions, trigger_service, mock_trigger_repository, sample_cron_trigger
+    ):
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        new_agent_id = uuid4()
+        permissions.allowed = False
+
+        with pytest.raises(HTTPException) as refused:
+            await trigger_service.update_trigger(
+                sample_cron_trigger.id, TriggerUpdate(agent_id=new_agent_id)
+            )
+
+        assert refused.value.status_code == 403
+        assert permissions.checks == [(CALLER.graph_subject, "execute", "agent", str(new_agent_id))]
+        mock_trigger_repository.update_by_id.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_switching_a_trigger_on_needs_the_right_to_run_its_agent(
+        self, permissions, trigger_service, mock_trigger_repository, sample_cron_trigger
+    ):
+        sample_cron_trigger.is_active = False
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        permissions.allowed = False
+
+        with pytest.raises(HTTPException):
+            await trigger_service.update_trigger(
+                sample_cron_trigger.id, TriggerUpdate(is_active=True)
+            )
+        with pytest.raises(HTTPException) as refused:
+            await trigger_service.enable_trigger(sample_cron_trigger.id)
+
+        assert refused.value.status_code == 403
+        mock_trigger_repository.update_by_id.assert_not_awaited()
+        mock_trigger_repository.enable_trigger.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_edit_that_neither_repoints_nor_enables_asks_nobody(
+        self, permissions, trigger_service, mock_trigger_repository, sample_cron_trigger
+    ):
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_trigger_repository.update_by_id.return_value = sample_cron_trigger
+        permissions.allowed = False
+
+        await trigger_service.update_trigger(sample_cron_trigger.id, TriggerUpdate(name="Renamed"))
+
+        assert permissions.checks == []
 
     @pytest.mark.asyncio
     async def test_execute_trigger_task_creation_error(

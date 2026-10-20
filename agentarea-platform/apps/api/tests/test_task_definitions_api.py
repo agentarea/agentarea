@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,6 +22,7 @@ from httpx import ASGITransport, AsyncClient
 
 CALLER = UserContext(user_id="user-1", workspace_id="ws-1")
 AGENT = uuid4()
+OTHER_AGENT = uuid4()
 BASE = "/v1/workspaces/acme/task-definitions"
 
 
@@ -54,7 +55,17 @@ class _Definitions:
 
 class _Agents:
     async def get(self, agent_id):
-        return SimpleNamespace(id=agent_id) if agent_id == AGENT else None
+        return SimpleNamespace(id=agent_id) if agent_id in (AGENT, OTHER_AGENT) else None
+
+
+class _Session:
+    """Answers how many triggers run a saved task."""
+
+    def __init__(self) -> None:
+        self.triggers_running = 0
+
+    async def execute(self, _statement):
+        return SimpleNamespace(scalar_one=lambda: self.triggers_running)
 
 
 class _Permissions(PermissionService):
@@ -91,8 +102,9 @@ def wired():
     container = get_container()
     saved = dict(container._singletons)
     repositories = {TaskDefinitionRepository: _Definitions(), AgentRepository: _Agents()}
+    session = _Session()
     factory = SimpleNamespace(
-        session=MagicMock(), user_context=CALLER, create_repository=lambda cls: repositories[cls]
+        session=session, user_context=CALLER, create_repository=lambda cls: repositories[cls]
     )
     task_service = AsyncMock()
     task_service.start_run.side_effect = _started
@@ -104,6 +116,7 @@ def wired():
         container.register_singleton(PermissionService, _Permissions(allowed))
         return task_service
 
+    allow_execute.session = session  # type: ignore[attr-defined]
     yield allow_execute
     app.dependency_overrides.pop(get_user_context, None)
     app.dependency_overrides.pop(get_task_definition_service, None)
@@ -170,3 +183,15 @@ async def test_an_unknown_saved_task_is_not_found(client, wired):
     assert (await client.get(f"{BASE}/{uuid4()}")).status_code == 404
     assert (await client.post(f"{BASE}/{uuid4()}/run")).status_code == 404
     task_service.start_run.assert_not_awaited()
+
+
+async def test_a_saved_task_a_trigger_runs_cannot_change_agent_or_be_deleted(client, wired):
+    wired(True)
+    saved = await _save(client)
+    wired.session.triggers_running = 1
+
+    moved = await client.put(f"{BASE}/{saved['id']}", json={"agent_id": str(OTHER_AGENT)})
+    deleted = await client.delete(f"{BASE}/{saved['id']}")
+
+    assert (moved.status_code, deleted.status_code) == (409, 409)
+    assert (await client.get(f"{BASE}/{saved['id']}")).json()["agent_id"] == str(AGENT)

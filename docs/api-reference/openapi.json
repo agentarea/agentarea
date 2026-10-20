@@ -38665,7 +38665,7 @@
     },
     "/v1/workspaces/{workspace}/task-definitions/{definition_id}": {
       "delete": {
-        "description": "Delete a saved task. Runs started from it stay; a trigger on it fails until changed.",
+        "description": "Delete a saved task no trigger runs. Runs started from it stay.",
         "operationId": "delete_task_definition_v1_task_definitions__definition_id__delete",
         "parameters": [
           {
@@ -38856,7 +38856,7 @@
     },
     "/v1/workspaces/{workspace}/task-definitions/{definition_id}/run": {
       "post": {
-        "description": "Run a saved task now, as the caller, with its agent, text and parameters.\n\n``parameters`` in the body are merged over the saved ones for this run only.",
+        "description": "Run a saved task now with its agent, text and parameters; the run acts as the agent.\n\n``parameters`` in the body are merged over the saved ones for this run only.",
         "operationId": "run_task_definition_v1_task_definitions__definition_id__run_post",
         "parameters": [
           {
@@ -40116,7 +40116,7 @@
     },
     "/v1/workspaces/{workspace}/triggers/{trigger_id}/execute": {
       "post": {
-        "description": "Execute a trigger with the provided event data.\n\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nAuthorization is the caller's session plus the workspace-scoped trigger\nlookup: a trigger in another workspace is simply not found. This used to sit\non the public router behind an ``X-Internal-Token`` check that skipped\nitself whenever the secret was unset \u2014 which was every deployment, since\nnothing ever sent that header.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: The events to run the trigger on\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
+        "description": "Execute a trigger with the provided event data.\n\nBuilds trigger data from the events and channel origin, then creates and\nsubmits a task for agent execution.\n\nAuthorization is the caller's session plus the workspace-scoped trigger\nlookup: a trigger in another workspace is simply not found. This used to sit\non the public router behind an ``X-Internal-Token`` check that skipped\nitself whenever the secret was unset \u2014 which was every deployment, since\nnothing ever sent that header.\n\nArgs:\n    trigger_id: The unique identifier of the trigger\n    request: The events to run the trigger on\n    user_context: The person replaying the events; the run is theirs\n    trigger_service: Injected trigger service\n\nReturns:\n    Execution result with task ID\n\nRaises:\n    HTTPException: If trigger not found or execution fails",
         "operationId": "execute_trigger_v1_triggers__trigger_id__execute_post",
         "parameters": [
           {

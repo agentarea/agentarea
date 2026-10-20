@@ -871,6 +871,16 @@ class TestExecuteTrigger:
         assert body["status"] == "success"
         assert body["task_id"] == str(task_id)
 
+    def test_replaying_events_is_a_run_the_caller_started(self, client, mock_trigger_service):
+        """So the trigger service asks that the caller may run the agent."""
+        mock_trigger_service.execute_trigger.return_value = MagicMock(
+            id=uuid4(), task_id=uuid4(), status=ExecutionStatus.SUCCESS, error_message=None
+        )
+
+        client.post(f"/v1/workspaces/acme/triggers/{uuid4()}/execute", json={})
+
+        assert mock_trigger_service.execute_trigger.call_args.kwargs["fired_by"] == "test_user"
+
 
 class TestRunTriggerNow:
     """POST /v1/workspaces/acme/triggers/{id}/run -- firing a trigger once by hand."""
@@ -991,5 +1001,3 @@ async def test_a_stream_trigger_checks_its_creator_may_read_the_stream(
 
     assert response.status_code == 201, response.text
     assert ("User:test_user", "read", "stream", stream_id) in pdp.checks
-    # Binding a trigger to an agent needs the right to run that agent.
-    assert ("User:test_user", "execute", "agent", body["agent_id"]) in pdp.checks

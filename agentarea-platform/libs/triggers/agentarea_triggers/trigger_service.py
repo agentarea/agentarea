@@ -310,6 +310,9 @@ class TriggerService:
         """
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
+        # Refused before anything else, and not wrapped as a failure to create:
+        # a caller who may not run the agent is told so (403).
+        await self._require_may_invoke(trigger_data.agent_id)
 
         try:
             logger.info(
@@ -320,7 +323,6 @@ class TriggerService:
 
             # Validate agent exists first (fail fast)
             await self._validate_agent_exists(trigger_data.agent_id)
-            await self._require_may_invoke(trigger_data.agent_id)
 
             # Validate trigger configuration
             await self._validate_trigger_configuration(trigger_data)
