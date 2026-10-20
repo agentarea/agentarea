@@ -22,8 +22,18 @@ type ServerSpecLike = {
   json_spec?: Record<string, unknown> | null;
 };
 
-// The API rejects these in an instance update and restores them itself.
-const TRANSPORT_FIELDS = new Set(["type", "endpoint_url", "image", "command", "args"]);
+// The API rejects these in an instance update and restores them itself
+// (INSTANCE_TRANSPORT_FIELDS in agentarea_mcp/schemas/dto.py).
+const TRANSPORT_FIELDS = new Set([
+  "type",
+  "endpoint_url",
+  "image",
+  "command",
+  "args",
+  "port",
+  "package",
+  "source",
+]);
 
 export function parseFieldSpecs(value: unknown): CredentialFieldSpec[] {
   if (!Array.isArray(value)) return [];

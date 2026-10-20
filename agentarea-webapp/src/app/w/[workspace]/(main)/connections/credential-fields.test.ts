@@ -80,6 +80,13 @@ describe("credentialUpdateSpec", () => {
     });
   });
 
+  it("drops a container's runtime fields too", () => {
+    const spec = { image: "ghcr.io/acme/mcp", port: 8080, source: "registry", environment: {} };
+    expect(credentialUpdateSpec(spec, "docker", { TOKEN: "t" })).toEqual({
+      environment: { TOKEN: "t" },
+    });
+  });
+
   it("writes a container's values into its environment", () => {
     expect(credentialUpdateSpec({}, "docker", { TOKEN: "t" })).toEqual({
       environment: { TOKEN: "t" },

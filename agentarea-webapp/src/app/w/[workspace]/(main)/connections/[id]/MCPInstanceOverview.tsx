@@ -43,7 +43,7 @@ import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { mcpIdentity } from "@/lib/entity-identity";
 import { useClientApiUrl } from "@/lib/use-client-api-url";
 import { CredentialFields } from "../components/CredentialFields";
-import { remoteHeaderFields } from "../credential-fields";
+import { credentialUpdateSpec, remoteHeaderFields } from "../credential-fields";
 import { OAuthConnectPanel } from "../OAuthConnectPanel";
 import { summarizeAuthorization, type OAuthConnectState } from "../oauth-connect-state";
 import { getMcpConnectionState } from "../state";
@@ -166,11 +166,10 @@ export default function MCPInstanceOverview({
       const { updateMCPServerInstanceAction } = await import(
         "@/lib/server-actions"
       );
+      // Not the spec as it came: the API refuses transport fields back, and a
+      // blank value keeps the stored secret.
       const result = await updateMCPServerInstanceAction(instance.id, {
-        json_spec: {
-          ...instance.json_spec,
-          headers: editHeaders,
-        },
+        json_spec: credentialUpdateSpec(instance.json_spec ?? {}, "url", editHeaders),
       });
       if (result.error) {
         setSaveConfigError(apiErrorMessage(result, t("errors.saveConfigFailed")));
@@ -276,7 +275,11 @@ export default function MCPInstanceOverview({
       variant="ghost"
       size="xs"
       className="text-muted-foreground"
-      onClick={() => setIsEditingConfig(true)}
+      onClick={() => {
+        // From what the page shows now, not from what it showed on mount.
+        setEditHeaders(customHeaders);
+        setIsEditingConfig(true);
+      }}
     >
       <Pencil />
       {tCommon("edit")}
