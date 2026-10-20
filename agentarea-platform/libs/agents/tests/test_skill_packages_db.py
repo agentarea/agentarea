@@ -173,6 +173,10 @@ async def _skill_row(session, workspace: str, **columns) -> str:
     return skill_id
 
 
+def _own(workspace: str, files: dict[str, bytes]) -> str:
+    return f"skills/{workspace}/packages/{package_digest(files)}/"
+
+
 def _service(session, workspace: str, storage) -> SkillService:
     context = UserContext(user_id="u1", workspace_id=workspace)
     return SkillService(
@@ -253,12 +257,132 @@ async def test_bodies_left_in_rows_move_into_packages_in_every_workspace(session
             )
         ).all()
     }
-    assert rows[legacy].s3_path == f"skills/{workspace}/{legacy}/"
+    assert rows[legacy].s3_path == _own(workspace, {"SKILL.md": b"# Legacy"})
     assert rows[legacy].content is None
     assert s3.under(rows[legacy].s3_path) == {"SKILL.md": b"# Legacy"}
-    assert rows[legacy_elsewhere].s3_path == f"skills/{other}/{legacy_elsewhere}/"
-    assert (rows[edited].s3_path, rows[edited].content) == (f"skills/{workspace}/{edited}/", None)
-    assert s3.under(rows[edited].s3_path) == {"SKILL.md": b"# Edited", "fill.py": b"print(1)"}
+    assert rows[legacy_elsewhere].s3_path == _own(other, {"SKILL.md": b"# Elsewhere"})
+    edited_files = {"SKILL.md": b"# Edited", "fill.py": b"print(1)"}
+    assert (rows[edited].s3_path, rows[edited].content) == (_own(workspace, edited_files), None)
+    assert s3.under(rows[edited].s3_path) == edited_files
     assert s3.under(shared) == {"SKILL.md": b"# Imported", "fill.py": b"print(1)"}
     assert (rows[unedited].s3_path, rows[unedited].content) == (shared, None)
     assert (rows[stub].s3_path, rows[stub].content) == (None, "# Stub")
+
+
+async def _versions(session, skill_id: str) -> list[tuple[str, str, str | None]]:
+    rows = await session.execute(
+        text(
+            "SELECT reason, s3_path, digest FROM skill_versions WHERE skill_id = :id "
+            "ORDER BY created_at, id"
+        ),
+        {"id": skill_id},
+    )
+    return [tuple(r) for r in rows.all()]
+
+
+async def test_edits_are_versions_and_a_rollback_moves_the_pointer_back(session, workspace):
+    storage, s3 = fake_storage()
+    v1_path = await storage.store_workspace_package({"SKILL.md": b"# v1"}, workspace)
+    skill_id = await _skill_row(session, workspace, s3_path=v1_path)
+    with workspace_scope(workspace):
+        svc = _service(session, workspace, storage)
+        repo = svc._get_repository()
+        await repo.add_version(await repo.get_by_id(skill_id), reason="create")
+        skill = await svc.set_content(skill_id, "# v2")
+        [first, _] = await svc.list_versions(skill.id)
+        rolled = await svc.rollback(skill.id, first.id)
+
+    v1, v2 = {"SKILL.md": b"# v1"}, {"SKILL.md": b"# v2"}
+    assert rolled.s3_path == _own(workspace, v1)
+    assert await _versions(session, str(skill.id)) == [
+        ("create", _own(workspace, v1), package_digest(v1)),
+        ("edit", _own(workspace, v2), package_digest(v2)),
+        ("rollback", _own(workspace, v1), package_digest(v1)),
+    ]
+    assert s3.under(_own(workspace, v2)) == v2
+
+
+async def test_copies_move_into_packages_and_only_the_moved_ones_are_deleted(session, workspace):
+    from agentarea_agents.application.skill_packages import (
+        delete_moved_own_copies,
+        move_all_own_copies_to_packages,
+    )
+
+    storage, s3 = fake_storage()
+    copied = await _skill_row(session, workspace)
+    await session.execute(
+        text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+        {"p": f"skills/{workspace}/{copied}/", "id": copied},
+    )
+    s3.objects[f"skills/{workspace}/{copied}/SKILL.md"] = b"# Copied"
+
+    @asynccontextmanager
+    async def same_session():
+        yield session
+
+    assert await delete_moved_own_copies(same_session, storage, dry_run=True) == (0, 0)
+    moved, failed = await move_all_own_copies_to_packages(same_session, storage)
+
+    assert (moved, failed) == (1, 0)
+    package = _own(workspace, {"SKILL.md": b"# Copied"})
+    row = (await session.execute(text("SELECT s3_path FROM skills WHERE id = :id"), {"id": copied})).one()
+    assert row.s3_path == package
+    assert await _versions(session, copied) == [
+        ("migrate", package, package_digest({"SKILL.md": b"# Copied"}))
+    ]
+    # The copy stays until the explicit command, and a dry run deletes nothing.
+    assert s3.under(f"skills/{workspace}/{copied}/") == {"SKILL.md": b"# Copied"}
+    assert await delete_moved_own_copies(same_session, storage, dry_run=True) == (1, 1)
+    assert s3.under(f"skills/{workspace}/{copied}/") == {"SKILL.md": b"# Copied"}
+    s3.delete_objects = lambda *, Bucket, Delete: [  # noqa: N803
+        s3.objects.pop(o["Key"]) for o in Delete["Objects"]
+    ]
+    assert await delete_moved_own_copies(same_session, storage) == (1, 1)
+    assert s3.under(f"skills/{workspace}/{copied}/") == {}
+    assert s3.under(package) == {"SKILL.md": b"# Copied"}
+
+
+async def test_the_migration_starts_each_packaged_skills_history(session, workspace):
+    import importlib.util
+    from pathlib import Path
+
+    migration_file = next(
+        (Path(__file__).resolve().parents[3] / "apps" / "api" / "alembic" / "versions").glob(
+            "*_skill_versions.py"
+        )
+    )
+    spec = importlib.util.spec_from_file_location("skill_versions_migration", migration_file)
+    assert spec and spec.loader
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    item_id = await _item(session, OLD_TREE)
+    own = await _skill_row(session, workspace, s3_path=f"skills/{workspace}/packages/{'d' * 64}/")
+    installed = await _skill_row(
+        session, workspace, s3_path=f"skills/catalog/{'e' * 64}/", registry_item_id=item_id
+    )
+    await CatalogSkillRepository(
+        session, UserContext(user_id="u1", workspace_id=workspace)
+    ).mark_installed(item_id, installed, OLD_TREE)
+    copy = await _skill_row(session, workspace)
+    await session.execute(
+        text("UPDATE skills SET s3_path = :p WHERE id = :id"),
+        {"p": f"skills/{workspace}/{copy}/", "id": copy},
+    )
+
+    await session.execute(text(migration.BACKFILL))
+    await session.execute(text(migration.BACKFILL))
+
+    assert await _versions(session, own) == [
+        ("create", f"skills/{workspace}/packages/{'d' * 64}/", "d" * 64)
+    ]
+    assert await _versions(session, installed) == [
+        ("install", f"skills/catalog/{'e' * 64}/", "e" * 64)
+    ]
+    catalog_version = (
+        await session.execute(
+            text("SELECT catalog_version FROM skill_versions WHERE skill_id = :id"),
+            {"id": installed},
+        )
+    ).scalar_one()
+    assert catalog_version == OLD_TREE
+    assert await _versions(session, copy) == []

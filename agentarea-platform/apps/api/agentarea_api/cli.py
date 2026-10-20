@@ -348,6 +348,60 @@ async def _move_bodies_to_packages() -> None:
         sys.exit(1)
 
 
+@skills.command("move-own-copies-to-packages")
+def move_own_copies_to_packages():
+    """Move every workspace skill still at its mutable copy into a package (ADR-0044).
+
+    Before packages, a skill authored or edited in a workspace was rewritten in
+    place under skills/<workspace>/<id>/. Each such copy is stored as an
+    immutable package and the skill pointed at it, which starts its version
+    history; reading a skill does the same. The copies stay until
+    ``delete-moved-own-copies``. Safe to run again.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_move_own_copies_to_packages())
+
+
+async def _move_own_copies_to_packages() -> None:
+    from agentarea_agents.application import skill_packages
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    _require_object_storage()
+    db = Database(get_db_settings())
+    moved, failed = await skill_packages.move_all_own_copies_to_packages(
+        db.async_session_factory, SkillStorageService()
+    )
+    click.echo(f"Moved {moved} skill copies into packages; {failed} failed")
+    if failed:
+        sys.exit(1)
+
+
+@skills.command("delete-moved-own-copies")
+@click.option("--dry-run", is_flag=True, help="Count what would be deleted; delete nothing.")
+def delete_moved_own_copies(dry_run: bool):
+    """Delete the pre-package copies no skill points at any more (ADR-0044).
+
+    Only the mutable skills/<workspace>/<id>/ copies of skills that now point
+    at a package are deleted. Packages are never deleted: other skills, and
+    each skill's history, may point at them.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    asyncio.run(_delete_moved_own_copies(dry_run=dry_run))
+
+
+async def _delete_moved_own_copies(*, dry_run: bool) -> None:
+    from agentarea_agents.application import skill_packages
+    from agentarea_agents.infrastructure.skill_storage_service import SkillStorageService
+
+    _require_object_storage()
+    db = Database(get_db_settings())
+    prefixes, files = await skill_packages.delete_moved_own_copies(
+        db.async_session_factory, SkillStorageService(), dry_run=dry_run
+    )
+    verb = "Would delete" if dry_run else "Deleted"
+    click.echo(f"{verb} {prefixes} moved skill copies ({files} files)")
+
+
 @skills.command("repin-catalog-installs")
 @click.option("--dry-run", is_flag=True, help="Report what would be repinned; change nothing.")
 def repin_catalog_installs(dry_run: bool):

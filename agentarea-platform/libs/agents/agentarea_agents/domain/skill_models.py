@@ -141,6 +141,30 @@ class Skill(BaseModel, WorkspaceScopedMixin):
         return f"<Skill {self.name} ({self.id})>"
 
 
+class SkillVersion(BaseModel, WorkspaceScopedMixin):
+    """One package a skill pointed at, in the order it did (ADR-0044).
+
+    Every pointer move of a skill writes one: created, edited, installed or
+    updated from its catalog item, rolled back, or moved off a pre-package
+    copy. The package itself is immutable, so rolling back is pointing the
+    skill at an earlier row's ``s3_path`` again.
+    """
+
+    __tablename__ = "skill_versions"
+    __table_args__ = (Index("ix_skill_versions_skill_created", "skill_id", "created_at"),)
+
+    skill_id: Mapped[Any] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), nullable=False
+    )
+    s3_path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # create, edit, install, update, rollback or migrate.
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    # The catalog item version a catalog package was pinned at; null for the
+    # workspace's own packages.
+    catalog_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
 # Association table for Agent-Skill many-to-many relationship
 # Using Table construct to match the database schema exactly
 agent_skills_table = Table(

@@ -7,7 +7,6 @@ re-installed from the item's current package, keeping its id. A row whose
 body differs is left alone; one whose item is gone is reported.
 """
 
-
 import pytest
 from agentarea_agents.application.skill_packages import clear_package_cache
 from agentarea_agents.domain.skill_models import Skill
@@ -57,19 +56,20 @@ async def test_a_row_still_holding_its_stub_is_repinned_in_place():
     assert catalog.installed == [(item.id, str(skill.id), "3")]
 
 
-async def test_a_stub_moved_into_a_workspace_package_is_repinned_and_the_copy_removed():
+async def test_a_stub_moved_into_a_workspace_package_is_repinned_and_kept_in_its_history():
     item = _stub_item()
     svc, repo, catalog, s3 = _service(catalog=FakeCatalogRepo([item]))
     skill = await _legacy_row(repo, item)
     await svc.packages.move_body_to_package(skill)
-    own = f"skills/w1/{skill.id}/"
-    assert skill.s3_path == own
+    own = skill.s3_path
+    assert own.startswith("skills/w1/packages/")
 
     result = await svc.repin_from_catalog(skill.id)
 
     assert result.status == "repinned"
     assert skill.s3_path.startswith("skills/catalog/")
-    assert s3.under(own) == {}
+    assert s3.under(own) == {"SKILL.md": STUB.encode()}
+    assert [v.reason for v in await repo.list_versions(skill.id)] == ["migrate", "update"]
 
 
 async def test_the_item_moved_to_a_folder_is_repinned_to_that_folder():
@@ -108,7 +108,9 @@ async def test_a_row_whose_body_was_edited_is_left_alone(columns, files):
     svc, repo, catalog, s3 = _service(catalog=FakeCatalogRepo([item]))
     skill = await _legacy_row(repo, item, **columns)
     if files:
-        skill.s3_path = await svc.storage_service.store_package_files(str(skill.id), "w1", files)
+        skill.s3_path = f"skills/w1/{skill.id}/"
+        for path, data in files.items():
+            s3.objects[f"{skill.s3_path}{path}"] = data
     before = (skill.s3_path, skill.content)
 
     result = await svc.repin_from_catalog(skill.id)

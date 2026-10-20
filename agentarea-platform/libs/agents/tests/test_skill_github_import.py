@@ -125,8 +125,9 @@ async def _workspace_rule(session: AsyncSession, target: str, effect: PolicyEffe
     await session.commit()
 
 
-def _stored_paths(s3_client: MagicMock, skill_id: str) -> set[str]:
-    prefix = SkillStorageService()._get_s3_prefix("w1", skill_id)
+def _stored_paths(s3_client: MagicMock, s3_path: str) -> set[str]:
+    prefix = s3_path
+    assert prefix.startswith("skills/w1/packages/")
     keys = {call.kwargs["Key"] for call in s3_client.put_object.call_args_list}
     assert all(key.startswith(prefix) for key in keys)
     return {key[len(prefix) :] for key in keys}
@@ -146,7 +147,7 @@ async def test_a_github_url_into_a_monorepo_imports_only_that_skill_package(
     skill = await _service().create_from_github(SkillImportFromGithub(github_url=github_url))
 
     assert github_serves_zipball == [ZIPBALL_URL]
-    assert _stored_paths(s3_client, str(skill.id)) == {"SKILL.md", "references/x.md"}
+    assert _stored_paths(s3_client, skill.s3_path) == {"SKILL.md", "references/x.md"}
     assert skill.name == "seo-audit"
     assert skill.content is None  # the body is the stored SKILL.md
     assert skill.source_type == SkillSourceType.GITHUB.value
@@ -200,9 +201,7 @@ async def test_an_install_policy_that_admits_github_lets_the_import_through(
 ):
     await _workspace_rule(policy_session, target, effect)
 
-    skill = await _service(policy_session).create_from_github(
-        SkillImportFromGithub(github_url=URL)
-    )
+    skill = await _service(policy_session).create_from_github(SkillImportFromGithub(github_url=URL))
 
     assert skill.name == "seo-audit"
     assert github_serves_zipball == [ZIPBALL_URL]

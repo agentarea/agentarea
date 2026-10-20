@@ -9,16 +9,18 @@ from agentarea_common.base.workspace_scoped_repository import (
     as_record_ids,
 )
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
 
 from agentarea_agents.domain.skill_models import (
     Skill,
     SkillMember,
+    SkillVersion,
     agent_skills_table,
     skill_members_table,
 )
+from agentarea_agents.infrastructure.skill_storage_service import package_digest_of
 
 
 async def list_pre_package_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
@@ -34,6 +36,33 @@ async def list_pre_package_skills(session: AsyncSession) -> list[tuple[UUID, str
             .order_by(Skill.workspace_id, Skill.id)
         )
         return [(row.id, row.workspace_id) for row in result.all()]
+
+
+def _own_copy_prefix():
+    """The pre-package prefix of each row: ``skills/<workspace>/<id>/``."""
+    return func.concat("skills/", Skill.workspace_id, "/", cast(Skill.id, String), "/")
+
+
+async def list_own_copy_skills(session: AsyncSession) -> list[tuple[UUID, str]]:
+    """``(id, workspace_id)`` of every skill still pointing at its mutable pre-package copy."""
+    with unscoped("moving pre-package copies into packages spans every workspace"):
+        result = await session.execute(
+            select(Skill.id, Skill.workspace_id)
+            .where(Skill.s3_path == _own_copy_prefix())
+            .order_by(Skill.workspace_id, Skill.id)
+        )
+        return [(row.id, row.workspace_id) for row in result.all()]
+
+
+async def list_moved_own_copies(session: AsyncSession) -> list[str]:
+    """The pre-package prefix of every skill that no longer points at it."""
+    with unscoped("deleting moved pre-package copies spans every workspace"):
+        result = await session.execute(
+            select(_own_copy_prefix())
+            .where(Skill.s3_path.is_distinct_from(_own_copy_prefix()))
+            .order_by(Skill.workspace_id, Skill.id)
+        )
+        return list(result.scalars().all())
 
 
 async def list_catalog_installs(session: AsyncSession) -> list[tuple[UUID, str]]:
@@ -56,6 +85,79 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
 
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Skill, user_context)
+
+    async def set_package(
+        self,
+        skill_id: UUID | str,
+        s3_path: str,
+        *,
+        reason: str,
+        catalog_version: str | None = None,
+        **fields,
+    ) -> Skill | None:
+        """Point a skill at a package and record the move in its history.
+
+        ``fields`` are other columns to change with it (``source_url``). The
+        body column is cleared: a skill's body is its package.
+        """
+        skill = await self.update(str(skill_id), s3_path=s3_path, content=None, **fields)
+        if skill is not None:
+            await self.add_version(skill, reason=reason, catalog_version=catalog_version)
+        return skill
+
+    async def add_version(
+        self, skill: Skill, *, reason: str, catalog_version: str | None = None
+    ) -> SkillVersion | None:
+        """Record that ``skill`` now points at its ``s3_path``; nothing if it already did."""
+        if not skill.s3_path:
+            return None
+        latest = await self.latest_version(skill.id)
+        if latest is not None and latest.s3_path == skill.s3_path:
+            return latest
+        version = SkillVersion(
+            skill_id=skill.id,
+            s3_path=skill.s3_path,
+            digest=package_digest_of(skill.s3_path),
+            reason=reason,
+            catalog_version=catalog_version,
+            workspace_id=self.user_context.workspace_id,
+            created_by=self.user_context.user_id,
+        )
+        self.session.add(version)
+        await self.session.commit()
+        return version
+
+    async def list_versions(self, skill_id: UUID | str) -> list[SkillVersion]:
+        """The packages ``skill_id`` pointed at, oldest first."""
+        result = await self.session.execute(
+            select(SkillVersion)
+            .where(SkillVersion.skill_id == UUID(str(skill_id)))
+            .where(SkillVersion.workspace_id == self.user_context.workspace_id)
+            .order_by(SkillVersion.created_at, SkillVersion.id)
+        )
+        return list(result.scalars().all())
+
+    async def latest_version(self, skill_id: UUID | str) -> SkillVersion | None:
+        result = await self.session.execute(
+            select(SkillVersion)
+            .where(SkillVersion.skill_id == UUID(str(skill_id)))
+            .where(SkillVersion.workspace_id == self.user_context.workspace_id)
+            .order_by(SkillVersion.created_at.desc(), SkillVersion.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_version(
+        self, skill_id: UUID | str, version_id: UUID | str
+    ) -> SkillVersion | None:
+        result = await self.session.execute(
+            select(SkillVersion).where(
+                SkillVersion.id == UUID(str(version_id)),
+                SkillVersion.skill_id == UUID(str(skill_id)),
+                SkillVersion.workspace_id == self.user_context.workspace_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def get_by_name(self, name: str) -> Skill | None:
         """Get a skill by name within accessible workspaces.

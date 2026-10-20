@@ -115,6 +115,43 @@ class FakeSkillRepo:
             setattr(skill, k, v)
         return skill
 
+    async def set_package(self, skill_id, s3_path, *, reason, catalog_version=None, **fields):
+        skill = await self.update(skill_id, s3_path=s3_path, content=None, **fields)
+        if skill is not None:
+            await self.add_version(skill, reason=reason, catalog_version=catalog_version)
+        return skill
+
+    async def add_version(self, skill, *, reason, catalog_version=None):
+        from agentarea_agents.domain.skill_models import SkillVersion
+        from agentarea_agents.infrastructure.skill_storage_service import package_digest_of
+
+        versions = getattr(self, "versions", None)
+        if versions is None:
+            versions = self.versions = []
+        latest = next((v for v in reversed(versions) if v.skill_id == skill.id), None)
+        if not skill.s3_path or (latest is not None and latest.s3_path == skill.s3_path):
+            return latest
+        version = SkillVersion(
+            id=uuid4(),
+            skill_id=skill.id,
+            s3_path=skill.s3_path,
+            digest=package_digest_of(skill.s3_path),
+            reason=reason,
+            catalog_version=catalog_version,
+            workspace_id="w1",
+            created_by="u1",
+        )
+        versions.append(version)
+        return version
+
+    async def list_versions(self, skill_id):
+        return [v for v in getattr(self, "versions", []) if str(v.skill_id) == str(skill_id)]
+
+    async def get_version(self, skill_id, version_id):
+        return next(
+            (v for v in await self.list_versions(skill_id) if str(v.id) == str(version_id)), None
+        )
+
 
 class FakeCatalogRepo:
     def __init__(self, items=None, provenance=None):
