@@ -127,8 +127,6 @@ function buildTriggerCreate(formData: FormData): TriggerCreate {
     trigger_type: trigger_type as TriggerCreate["trigger_type"],
     agent_id: formData.get("agent_id") as string,
     task_parameters: parsedTaskParameters.data,
-    task_definition_id:
-      (formData.get("task_definition_id") as string | null) || undefined,
     failure_threshold:
       failure_threshold && !isNaN(failure_threshold)
         ? failure_threshold
@@ -244,12 +242,6 @@ export async function updateTriggerAction(
     task_parameters,
     failure_threshold,
   };
-
-  // Posted empty, the trigger stops running a saved task; not posted, it stays.
-  const taskDefinitionId = formData.get("task_definition_id");
-  if (typeof taskDefinitionId === "string") {
-    updateBody.task_definition_id = taskDefinitionId || null;
-  }
 
   if (trigger_type === "cron") {
     const cronExpr = formData.get("cron_expression") as string;

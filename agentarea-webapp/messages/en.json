@@ -223,8 +223,7 @@
     "logout": "Logout",
     "workspaceSettings": "Workspace settings",
     "inboxPending": "{count, plural, one {Inbox, # approval waiting} other {Inbox, # approvals waiting}}",
-    "audit": "Audit",
-    "savedTasks": "Saved tasks"
+    "audit": "Audit"
   },
   "MembersPage": {
     "title": "Members",
@@ -2228,9 +2227,6 @@
         "maxEvents": "Fire at",
         "maxEventsPlaceholder": "events"
       },
-      "savedTask": "Saved task",
-      "savedTaskNone": "None — use the task below",
-      "savedTaskHint": "Each run asks the saved task’s text, with its parameters.",
       "cron": {
         "frequency": {
           "every_minute": "Minutes",
@@ -2373,39 +2369,6 @@
       "enableFailed": "Failed to enable trigger",
       "disableFailed": "Failed to disable trigger",
       "runFailed": "Couldn't run the trigger"
-    }
-  },
-  "SavedTasksPage": {
-    "title": "Saved tasks",
-    "searchPlaceholder": "Search saved tasks...",
-    "create": "New saved task",
-    "columns": {
-      "name": "Name",
-      "agent": "Agent",
-      "updated": "Updated"
-    },
-    "emptyTitle": "No saved tasks yet",
-    "emptyDescription": "Save what you ask an agent, then run it in one click or from an automation.",
-    "noMatchTitle": "No saved tasks match",
-    "noMatchDescription": "Nothing matches “{query}”.",
-    "loadFailed": "Couldn’t load saved tasks",
-    "run": "Run",
-    "runFailed": "Couldn’t run the saved task",
-    "delete": "Delete saved task",
-    "deleteFailed": "Couldn’t delete the saved task",
-    "saveFailed": "Couldn’t save the task",
-    "form": {
-      "name": "Name",
-      "namePlaceholder": "Untitled saved task",
-      "agent": "Agent",
-      "selectAgent": "Select an agent",
-      "description": "What to ask",
-      "descriptionPlaceholder": "Describe what the agent should do each time it runs",
-      "parameters": "Parameters (JSON)",
-      "parametersHint": "Passed to every run, as on a task.",
-      "invalidParameters": "Parameters must be a JSON object",
-      "save": "Save",
-      "createTitle": "New saved task"
     }
   },
   "EventsPage": {
