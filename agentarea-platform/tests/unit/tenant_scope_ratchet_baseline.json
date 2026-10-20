@@ -47,7 +47,8 @@
     "libs/tasks/agentarea_tasks/undispatched_tasks.py": 1,
     "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1,
     "libs/triggers/agentarea_triggers/channels/task_delivery.py": 1,
-    "libs/triggers/agentarea_triggers/infrastructure/reactions.py": 8
+    "libs/triggers/agentarea_triggers/infrastructure/reactions.py": 8,
+    "libs/triggers/agentarea_triggers/schedule_sync.py": 1
   },
   "unscoped": {
     "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
@@ -66,6 +67,7 @@
     "libs/streams/agentarea_streams/infrastructure/repository.py": 2,
     "libs/tasks/agentarea_tasks/cost_settlement.py": 1,
     "libs/tasks/agentarea_tasks/undispatched_tasks.py": 1,
-    "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1
+    "libs/triggers/agentarea_triggers/channels/lazy_secret_manager.py": 1,
+    "libs/triggers/agentarea_triggers/schedule_sync.py": 1
   }
 }
