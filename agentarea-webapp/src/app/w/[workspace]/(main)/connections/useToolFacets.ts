@@ -4,7 +4,6 @@ import {
   countToolFacets,
   filterTools,
   groupToolsByName,
-  groupToolsByPath,
   toToolRows,
   type Tool,
   type ToolFacet,
@@ -23,9 +22,6 @@ export function useToolFacets(
     [consumers]
   );
 
-  // OpenAPI tools carry method/path and group naturally by path prefix.
-  // MCP tools have neither, so they get search, facets and name-prefix groups.
-  const isOpenAPI = tools.some((tool) => !!tool.path);
   const hasDestructive = tools.some(
     (tool) => tool.annotations?.destructiveHint
   );
@@ -44,20 +40,13 @@ export function useToolFacets(
     [tools, principalsFor]
   );
 
-  const mcpRows = useMemo(
-    () => (isOpenAPI ? [] : toToolRows(filtered)),
-    [filtered, isOpenAPI]
-  );
+  // MCP and OpenAPI tools alike: name-ordered rows, name-prefix groups once
+  // a server is wide enough to need them.
+  const rows = useMemo(() => toToolRows(filtered), [filtered]);
 
-  const mcpGroups = useMemo(
-    () =>
-      isOpenAPI ? [] : groupToolsByName(mcpRows, { principalsFor, searching }),
-    [isOpenAPI, searching, mcpRows, principalsFor]
-  );
-
-  const pathGroups = useMemo(
-    () => (isOpenAPI ? groupToolsByPath(filtered) : []),
-    [filtered, isOpenAPI]
+  const groups = useMemo(
+    () => groupToolsByName(rows, { principalsFor, searching }),
+    [searching, rows, principalsFor]
   );
 
   return {
@@ -66,14 +55,12 @@ export function useToolFacets(
     facet,
     setFacet,
     principalsFor,
-    isOpenAPI,
     hasDestructive,
     hasReadOnly,
     searching,
     filtered,
     facetCounts,
-    mcpRows,
-    mcpGroups,
-    pathGroups,
+    rows,
+    groups,
   };
 }

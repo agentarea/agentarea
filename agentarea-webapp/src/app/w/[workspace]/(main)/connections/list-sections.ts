@@ -15,6 +15,20 @@ import { getMCPInstanceToolCount } from "./utils";
  */
 export type SectionKey = "attention" | "active" | "idle";
 
+export type ConnectionType = "mcp" | "openapi";
+
+/** How the list is split: by verdict (default), by protocol, or not at all. */
+export type ConnectionGroupBy = "state" | "type" | "none";
+
+export const CONNECTION_GROUPINGS: ConnectionGroupBy[] = [
+  "state",
+  "type",
+  "none",
+];
+
+/** A group heading: a verdict section, a protocol, or the whole list. */
+export type ConnectionGroupKey = SectionKey | ConnectionType | "all";
+
 export type ListFilter = "all" | "attention" | "unused" | "unrestricted";
 
 export const LIST_FILTERS: ListFilter[] = [
@@ -25,6 +39,8 @@ export const LIST_FILTERS: ListFilter[] = [
 ];
 
 const SECTION_ORDER: SectionKey[] = ["attention", "active", "idle"];
+
+const TYPE_ORDER: ConnectionType[] = ["mcp", "openapi"];
 
 const SECTION_OF: Record<ConnectionStateKey, SectionKey> = {
   failing: "attention",
@@ -47,6 +63,7 @@ const STATE_SEVERITY: Record<ConnectionStateKey, number> = {
 
 export interface ConnectionListRow {
   name: string;
+  _type: ConnectionType;
   _state: ConnectionState;
   _usage: ConnectionUsage | undefined;
 }
@@ -58,6 +75,7 @@ export function mcpConnectionListRow(
 ): ConnectionListRow {
   return {
     name: instance.name,
+    _type: "mcp",
     _state: getMcpConnectionState({
       verification: instance.verification,
       last_dispatch: instance.last_dispatch,
@@ -74,6 +92,7 @@ export function openApiConnectionListRow(
   const toolCount = connection.available_tools.length;
   return {
     name: connection.name,
+    _type: "openapi",
     _state: getOpenApiConnectionState(
       getOpenApiConnectionDisplayStatus(connection.status, toolCount),
       toolCount,
@@ -90,8 +109,15 @@ export function parseListFilter(value: unknown): ListFilter {
     : "all";
 }
 
+/** Reads the `group` URL param; anything unknown falls back to "state". */
+export function parseGroupBy(value: unknown): ConnectionGroupBy {
+  return CONNECTION_GROUPINGS.includes(value as ConnectionGroupBy)
+    ? (value as ConnectionGroupBy)
+    : "state";
+}
+
 export interface ConnectionSection<T extends ConnectionListRow> {
-  key: SectionKey;
+  key: ConnectionGroupKey;
   rows: T[];
 }
 
@@ -116,6 +142,31 @@ function matchesFilter(row: ConnectionListRow, filter: ListFilter): boolean {
   }
 }
 
+// Verdict order first, so a broken connection tops every grouping.
+function byUrgency(a: ConnectionListRow, b: ConnectionListRow): number {
+  return (
+    SECTION_ORDER.indexOf(SECTION_OF[a._state.key]) -
+      SECTION_ORDER.indexOf(SECTION_OF[b._state.key]) ||
+    STATE_SEVERITY[a._state.key] - STATE_SEVERITY[b._state.key] ||
+    a.name.localeCompare(b.name)
+  );
+}
+
+function groupKeyOf(
+  row: ConnectionListRow,
+  groupBy: ConnectionGroupBy
+): ConnectionGroupKey {
+  if (groupBy === "state") return SECTION_OF[row._state.key];
+  if (groupBy === "type") return row._type;
+  return "all";
+}
+
+const GROUP_ORDER: Record<ConnectionGroupBy, ConnectionGroupKey[]> = {
+  state: SECTION_ORDER,
+  type: TYPE_ORDER,
+  none: ["all"],
+};
+
 /**
  * Filter the connection list and split what remains into ordered sections.
  * Counts always describe the whole list, so a chip keeps its number while
@@ -123,7 +174,8 @@ function matchesFilter(row: ConnectionListRow, filter: ListFilter): boolean {
  */
 export function buildConnectionList<T extends ConnectionListRow>(
   rows: T[],
-  filter: ListFilter
+  filter: ListFilter,
+  groupBy: ConnectionGroupBy = "state"
 ): ConnectionList<T> {
   const counts = Object.fromEntries(
     LIST_FILTERS.map((key) => [
@@ -134,16 +186,14 @@ export function buildConnectionList<T extends ConnectionListRow>(
 
   const visibleRows = rows.filter((row) => matchesFilter(row, filter));
 
-  const sections = SECTION_ORDER.map((key) => ({
-    key,
-    rows: visibleRows
-      .filter((row) => SECTION_OF[row._state.key] === key)
-      .sort(
-        (a, b) =>
-          STATE_SEVERITY[a._state.key] - STATE_SEVERITY[b._state.key] ||
-          a.name.localeCompare(b.name)
-      ),
-  })).filter((section) => section.rows.length > 0);
+  const sections = GROUP_ORDER[groupBy]
+    .map((key) => ({
+      key,
+      rows: visibleRows
+        .filter((row) => groupKeyOf(row, groupBy) === key)
+        .sort(byUrgency),
+    }))
+    .filter((section) => section.rows.length > 0);
 
   return {
     counts,

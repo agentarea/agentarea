@@ -1,69 +1,62 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import type { CustomHeader } from "./CustomHeadersList";
-import { QueryParamRows, type QueryParamRow } from "./QueryParamRows";
+import { SecretRows, type SecretRow } from "./SecretRows";
 
+/**
+ * Rows to edit for stored query parameters. A secret comes back without its
+ * value, so it starts blank (blank keeps the stored one). An empty list starts
+ * with one row to fill in, so "Add" does not need a second click.
+ */
+export function toQueryParamRows(stored: CustomHeader[]): SecretRow[] {
+  return stored.length > 0
+    ? stored.map((p) => ({
+        name: p.name,
+        value: p.secret ? "" : (p.value ?? ""),
+        secret: p.secret,
+      }))
+    : [{ name: "", value: "", secret: true }];
+}
+
+/** The rows worth saving: named ones, names trimmed. */
+export function cleanQueryParamRows(rows: SecretRow[]): SecretRow[] {
+  return rows.filter((r) => r.name.trim()).map((r) => ({ ...r, name: r.name.trim() }));
+}
+
+/**
+ * The parameter rows of an open editor. Save and Cancel live in the section
+ * card's head, which owns the draft; this draws the rows and the Add button.
+ */
 export function CustomQueryParamsEditor({
-  initial,
-  saving,
-  onSave,
-  onCancel,
+  rows,
+  onChange,
+  stored,
 }: {
-  initial: CustomHeader[];
-  saving?: boolean;
-  onSave: (rows: QueryParamRow[]) => Promise<void> | void;
-  onCancel: () => void;
+  rows: SecretRow[];
+  onChange: (rows: SecretRow[]) => void;
+  /** What is saved now: its secrets keep their value when left blank. */
+  stored: CustomHeader[];
 }) {
   const t = useTranslations("OpenAPIConnection");
-  // Secret values come back masked: a blank value keeps the stored one.
-  const [rows, setRows] = useState<QueryParamRow[]>(() =>
-    initial.map((p) => ({
-      name: p.name,
-      value: p.secret ? "" : (p.value ?? ""),
-      secret: p.secret,
-    }))
-  );
-  const storedSecrets = new Set(initial.filter((p) => p.secret).map((p) => p.name));
-
-  const handleSave = () =>
-    onSave(
-      rows
-        .filter((r) => r.name.trim())
-        .map((r) => ({ ...r, name: r.name.trim() }))
-    );
+  const storedSecrets = new Set(stored.filter((p) => p.secret).map((p) => p.name));
 
   return (
-    <div className="space-y-3 rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <Label>{t("editQueryParams")}</Label>
+    <div className="space-y-3">
+      {stored.length === 0 && <p className="note">{t("queryParamsEditorHint")}</p>}
+      <SecretRows rows={rows} onChange={onChange} keepSecretNames={storedSecrets} />
+      <div className="flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="xs"
-          onClick={() => setRows([...rows, { name: "", value: "", secret: true }])}
+          className="text-muted-foreground"
+          onClick={() => onChange([...rows, { name: "", value: "", secret: true }])}
         >
-          <Plus className="mr-1" />
+          <Plus />
           {t("addHeader")}
-        </Button>
-      </div>
-
-      {rows.length === 0 && (
-        <p className="text-xs text-muted-foreground">{t("queryParamsEditorHint")}</p>
-      )}
-
-      <QueryParamRows rows={rows} onChange={setRows} keepSecretNames={storedSecrets} />
-
-      <div className="flex gap-2 pt-1">
-        <Button type="button" size="xs" onClick={handleSave} disabled={saving}>
-          {saving ? t("saving") : t("saveQueryParams")}
-        </Button>
-        <Button type="button" size="xs" variant="outline" onClick={onCancel} disabled={saving}>
-          {t("cancel")}
         </Button>
       </div>
     </div>

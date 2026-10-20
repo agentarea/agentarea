@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
-import { ChevronDown } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { CollapsibleGroup } from "@/components/ui/group-header";
 import { CARD_GRID_DENSE } from "@/lib/collectionGrids";
-import { cn } from "@/lib/utils";
 import TriggerCard from "./TriggerCard";
 import {
   getTriggerDisplayName,
@@ -44,7 +43,6 @@ export default function TriggersList({
   const t = useTranslations("TriggersPage");
   const tCommon = useTranslations("Common");
   const searchParams = useSearchParams();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // Groups that actually have triggers come first (largest first); empty
   // catalog entries are not rendered at all.
@@ -120,41 +118,20 @@ export default function TriggersList({
     return <TriggersTable triggers={triggers} />;
   }
 
+  // The 36px group header carries its own air above the label, so the list
+  // is pulled up into the content block's top padding.
   return (
-    <div className="flex flex-col gap-1">
+    <div className="-mt-2 flex flex-col gap-1">
       {groups.map((group) => (
-        <div key={group.key}>
-          <button
-            type="button"
-            onClick={() =>
-              setCollapsed((prev) => ({
-                ...prev,
-                [group.key]: !prev[group.key],
-              }))
-            }
-            className="flex h-9 w-full items-center gap-2 px-1 text-left"
-          >
-            <ChevronDown
-              className={cn(
-                "h-3.5 w-3.5 text-muted-foreground transition-transform",
-                collapsed[group.key] && "-rotate-90"
-              )}
-            />
-            <span className="text-muted-foreground">
-              {renderTriggerIcon(group.sample, "h-3.5 w-3.5")}
-            </span>
-            <span className="text-[12.5px] font-semibold">{group.label}</span>
-            <span className="rounded-full bg-muted px-[7px] text-[11.5px] leading-[17px] text-muted-foreground">
-              {group.items.length}
-            </span>
-          </button>
-          {!collapsed[group.key] && (
-            <TriggersTable
-              triggers={group.items}
-              hideChannelColumn
-            />
-          )}
-        </div>
+        <CollapsibleGroup
+          key={group.key}
+          variant="plain"
+          label={group.label}
+          count={group.items.length}
+          icon={renderTriggerIcon(group.sample, "h-3.5 w-3.5")}
+        >
+          <TriggersTable triggers={group.items} hideChannelColumn />
+        </CollapsibleGroup>
       ))}
     </div>
   );
