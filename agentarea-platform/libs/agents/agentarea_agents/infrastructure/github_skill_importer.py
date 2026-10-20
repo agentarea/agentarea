@@ -16,11 +16,14 @@ from agentarea_common import github_git
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.url_safety import safe_async_client
 
+from agentarea_agents.application.skill_package_limits import (
+    MAX_PACKAGE_FILES,
+    MAX_PACKAGE_TOTAL_BYTES,
+)
+
 logger = logging.getLogger(__name__)
 
 MAX_GITHUB_REPO_ZIP_BYTES = 25 * 1024 * 1024
-MAX_GITHUB_PACKAGE_FILES = 200
-MAX_GITHUB_PACKAGE_BYTES = 10 * 1024 * 1024
 FOLDER_DOWNLOAD_CONCURRENCY = 8
 
 _REPO_PART = re.compile(r"[A-Za-z0-9_.-]+")
@@ -119,12 +122,12 @@ def extract_skill_package(repo_zip_data: bytes, *, package_path: str | None) -> 
                 continue
             selected.append((info, relative))
             total_size += info.file_size
-            if len(selected) > MAX_GITHUB_PACKAGE_FILES:
+            if len(selected) > MAX_PACKAGE_FILES:
                 raise ValueError(
-                    f"GitHub skill package contains more than {MAX_GITHUB_PACKAGE_FILES} files"
+                    f"GitHub skill package contains more than {MAX_PACKAGE_FILES} files"
                 )
-            if total_size > MAX_GITHUB_PACKAGE_BYTES:
-                mb = MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)
+            if total_size > MAX_PACKAGE_TOTAL_BYTES:
+                mb = MAX_PACKAGE_TOTAL_BYTES // (1024 * 1024)
                 raise ValueError(f"GitHub skill package exceeds {mb} MB uncompressed limit")
 
         if not selected:
@@ -303,8 +306,8 @@ class GitHubSkillImporter:
                 commit,
                 prefix=folder,
                 keep=packaged,
-                max_kept_files=MAX_GITHUB_PACKAGE_FILES,
-                max_kept_bytes=MAX_GITHUB_PACKAGE_BYTES,
+                max_kept_files=MAX_PACKAGE_FILES,
+                max_kept_bytes=MAX_PACKAGE_TOTAL_BYTES,
                 transport=self._transport,
             )
         except github_git.GitHubGitRateLimitError as e:
@@ -315,8 +318,8 @@ class GitHubSkillImporter:
             ) from e
         except github_git.GitHubArchiveTooLargeError as e:
             raise ValueError(
-                f"GitHub skill package exceeds its limits ({MAX_GITHUB_PACKAGE_FILES} files, "
-                f"{MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)} MB): {e}"
+                f"GitHub skill package exceeds its limits ({MAX_PACKAGE_FILES} files, "
+                f"{MAX_PACKAGE_TOTAL_BYTES // (1024 * 1024)} MB): {e}"
             ) from e
         except github_git.GitHubGitError as e:
             raise GitHubSkillImporterError(str(e)) from e
@@ -365,12 +368,12 @@ class GitHubSkillImporter:
                 continue
             blobs.append((rel, str(entry.get("sha"))))
             total += int(entry.get("size") or 0)
-            if len(blobs) > MAX_GITHUB_PACKAGE_FILES:
+            if len(blobs) > MAX_PACKAGE_FILES:
                 raise ValueError(
-                    f"GitHub skill package contains more than {MAX_GITHUB_PACKAGE_FILES} files"
+                    f"GitHub skill package contains more than {MAX_PACKAGE_FILES} files"
                 )
-            if total > MAX_GITHUB_PACKAGE_BYTES:
-                mb = MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)
+            if total > MAX_PACKAGE_TOTAL_BYTES:
+                mb = MAX_PACKAGE_TOTAL_BYTES // (1024 * 1024)
                 raise ValueError(f"GitHub skill package exceeds {mb} MB uncompressed limit")
         if not blobs:
             raise ValueError(f"No files found in {where}")

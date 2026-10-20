@@ -12,6 +12,7 @@ import tarfile
 
 import httpx
 import pytest
+from agentarea_agents.application.skill_package_limits import MAX_PACKAGE_FILES
 from agentarea_agents.infrastructure.github_skill_importer import (
     GitHubRateLimitError,
     GitHubSkillImporter,
@@ -142,10 +143,20 @@ async def test_throttling_is_reported_as_a_rate_limit():
         await throttled.download_folder("owner/repo", "skills/pdf", ref=None, tree_sha=None)
 
 
-async def test_a_folder_over_the_package_caps_is_refused():
-    many = {f"skills/pdf/f{i}.md": ("100644", b"x") for i in range(201)}
+async def test_a_folder_within_the_package_caps_is_read_whole():
+    many = {f"skills/pdf/references/f{i}.md": ("100644", b"x") for i in range(310)}
 
-    with pytest.raises(ValueError, match="200"):
+    folder = await importer(FakeGitHub({**FILES, **many})).download_folder(
+        "owner/repo", "skills/pdf", ref=COMMIT, tree_sha=None
+    )
+
+    assert len(folder.files) == 312
+
+
+async def test_a_folder_over_the_package_caps_is_refused():
+    many = {f"skills/pdf/f{i}.md": ("100644", b"x") for i in range(MAX_PACKAGE_FILES + 1)}
+
+    with pytest.raises(ValueError, match=str(MAX_PACKAGE_FILES)):
         await importer(FakeGitHub({**FILES, **many})).download_folder(
             "owner/repo", "skills/pdf", ref=COMMIT, tree_sha=None
         )
