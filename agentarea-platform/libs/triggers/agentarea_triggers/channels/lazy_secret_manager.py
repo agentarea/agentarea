@@ -55,7 +55,7 @@ class LazySecretReader:
                                 user_id=str(task_orm.created_by),
                                 workspace_id=str(task_orm.workspace_id),
                             )
-                    except (ValueError, Exception):
+                    except ValueError, Exception:
                         logger.exception("Failed to resolve the task a task secret belongs to")
                 elif name.startswith("channel_cred:") and len(parts) == 3:
                     try:
@@ -69,7 +69,7 @@ class LazySecretReader:
                             user_context = UserContext(
                                 user_id=str(row.created_by), workspace_id=str(row.workspace_id)
                             )
-                    except (ValueError, Exception):
+                    except ValueError, Exception:
                         logger.exception(
                             "Failed to resolve the source a source credential belongs to"
                         )

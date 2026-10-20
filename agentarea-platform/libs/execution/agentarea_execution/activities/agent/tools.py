@@ -216,7 +216,7 @@ def _settled_payments(payment: dict[str, Any] | None) -> tuple[dict[str, Any], .
 
 
 def make_tools_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

@@ -151,7 +151,7 @@ class WebhookSourceIntake:
                         config=source.webhook_config or {},
                         lookup=self._lookup,
                     )
-                except (SecretStoreUnreachableError, ProviderUnreachableError):
+                except SecretStoreUnreachableError, ProviderUnreachableError:
                     logger.error("Webhook %s could not be verified now", webhook_id, exc_info=True)
                     return _error(503, "The webhook could not be verified now; retry the delivery")
                 except (CredentialsUnavailableError, ValidationError, VerificationError) as error:

@@ -181,7 +181,7 @@ agentarea-agents-sdk/
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.14+
 - LiteLLM for LLM provider integration
 - Pydantic for data validation
 - httpx for HTTP requests

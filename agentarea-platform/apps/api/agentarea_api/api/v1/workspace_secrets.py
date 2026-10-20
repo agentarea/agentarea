@@ -82,7 +82,7 @@ class SecretResponse(BaseModel):
         secret: EncryptedSecret,
         used_by: list[SecretConsumer],
         owner_name: str | None = None,
-    ) -> "SecretResponse":
+    ) -> SecretResponse:
         owner = None
         if secret.owner_type is not None and secret.owner_id is not None:
             owner = SecretOwner(

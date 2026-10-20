@@ -61,7 +61,7 @@ def row_event(row: LogRow) -> dict[str, Any] | None:
 
 
 def make_record_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

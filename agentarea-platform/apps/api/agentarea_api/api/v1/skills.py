@@ -131,7 +131,7 @@ class SkillResponse(BaseModel):
     removed_upstream: bool = False
 
     @classmethod
-    def from_skill(cls, skill: Skill) -> "SkillResponse":
+    def from_skill(cls, skill: Skill) -> SkillResponse:
         """Create response from Skill entity."""
         network_scope = getattr(skill, "network_scope", "private")
         if not isinstance(network_scope, str):
@@ -173,7 +173,7 @@ class SkillUpdateResultResponse(BaseModel):
     skill: SkillResponse | None = None
 
     @classmethod
-    def from_result(cls, result: SkillUpdateResult) -> "SkillUpdateResultResponse":
+    def from_result(cls, result: SkillUpdateResult) -> SkillUpdateResultResponse:
         return cls(
             skill_id=result.skill_id,
             name=result.name,

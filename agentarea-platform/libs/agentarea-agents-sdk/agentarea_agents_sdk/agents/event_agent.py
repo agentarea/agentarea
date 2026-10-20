@@ -190,7 +190,7 @@ class EventAgent:
         *,
         goal: str | None = None,
         success_criteria: list[str] | None = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """Run the agent and stream tokens while emitting events for orchestration."""
         goal = goal or task
         system_prompt = self._build_system_prompt(goal, success_criteria)

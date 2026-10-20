@@ -91,7 +91,7 @@ class ProviderConfigResponse(BaseModel):
     model_instance_ids: list[str] = []
 
     @classmethod
-    def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigResponse":
+    def from_domain(cls, provider_config: ProviderConfig) -> ProviderConfigResponse:
         # Extract model instance IDs from the relationship if loaded
         # Always return a list (empty if no model instances)
         model_instance_ids: list[str] = []
@@ -146,7 +146,7 @@ class ModelInstanceResponse(BaseModel):
     config_name: str | None = None
 
     @classmethod
-    def from_domain(cls, model_instance) -> "ModelInstanceResponse":
+    def from_domain(cls, model_instance) -> ModelInstanceResponse:
         provider_spec = (
             model_instance.provider_config.provider_spec if model_instance.provider_config else None
         )
@@ -192,7 +192,7 @@ class ProviderConfigWithInstancesResponse(BaseModel):
     model_instances: list[ModelInstanceResponse] = []
 
     @classmethod
-    def from_domain(cls, provider_config: ProviderConfig) -> "ProviderConfigWithInstancesResponse":
+    def from_domain(cls, provider_config: ProviderConfig) -> ProviderConfigWithInstancesResponse:
         provider_config_any = cast(Any, provider_config)
         return cls(
             id=str(provider_config.id),
@@ -309,7 +309,7 @@ class DiscoverPreviewResponse(BaseModel):
     discovered: int
     new_models: int
     models: list[DiscoverPreviewModelResponse]
-    skipped: list["SkippedModelResponse"] = []
+    skipped: list[SkippedModelResponse] = []
 
 
 class SkippedModelResponse(BaseModel):

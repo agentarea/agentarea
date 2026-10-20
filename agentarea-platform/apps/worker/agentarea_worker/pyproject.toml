@@ -3,7 +3,7 @@ name = "agentarea-worker"
 version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115.12",
     "faststream[redis]>=0.5.42",

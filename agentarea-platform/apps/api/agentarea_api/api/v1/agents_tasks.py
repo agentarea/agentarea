@@ -499,7 +499,7 @@ class TaskResponse(BaseModel):
         description: str,
         parameters: dict[str, Any],
         execution_id: str | None = None,
-    ) -> "TaskResponse":
+    ) -> TaskResponse:
         """Create a new task response for a newly created task."""
         return cls(
             id=task_id,
@@ -513,7 +513,7 @@ class TaskResponse(BaseModel):
         )
 
     @classmethod
-    def from_agent_task(cls, task: Any, user_context: UserContext | None = None) -> "TaskResponse":
+    def from_agent_task(cls, task: Any, user_context: UserContext | None = None) -> TaskResponse:
         """Build a response from a service-layer AgentTask, surfacing its failure cause."""
         return cls(
             id=task.id,
@@ -596,7 +596,7 @@ class TaskWithAgent(BaseModel):
         cls,
         task: TaskResponse,
         agent_name: str | None,
-    ) -> "TaskWithAgent":
+    ) -> TaskWithAgent:
         """Create TaskWithAgent from TaskResponse and agent name."""
         return cls(
             id=task.id,
@@ -802,7 +802,7 @@ async def _tail_task_events_sse(
     include_chunks: bool = True,
     last_event_id: str | None = None,
     follow_execution: bool = True,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[str]:
     """Stream a task's feed as SSE: its log, then the ``tasks.events`` tail (ADR-0043 §8).
 
     Each stored entry carries its log ``seq`` as the SSE ``id``, so a
@@ -854,10 +854,10 @@ async def _tail_task_events_sse(
 
 
 async def _with_sse_heartbeats(
-    source: AsyncGenerator[str, None],
+    source: AsyncGenerator[str],
     *,
     interval_seconds: float = 15.0,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[str]:
     """Emit ``: ping`` comments while ``source`` has no frame ready.
 
     One producer task iterates ``source`` for its whole life, so a deadline the
@@ -1045,7 +1045,7 @@ async def create_task_for_agent_with_stream(
     if created_task is not None:
         await data.store_webhook_secret(secret_manager, created_task.id)
 
-    async def task_creation_stream() -> AsyncGenerator[str, None]:
+    async def task_creation_stream() -> AsyncGenerator[str]:
         """Generate Server-Sent Events for task creation and execution."""
         task = created_task
         try:
@@ -1204,7 +1204,7 @@ async def create_task_for_agent_sync(
         # Convert to API response format
         return TaskResponse.from_agent_task(task, user_context)
 
-    except (HTTPException, BudgetCapExceededError):
+    except HTTPException, BudgetCapExceededError:
         raise
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
@@ -1305,7 +1305,7 @@ async def schedule_task_for_agent(
         await data.store_webhook_secret(secret_manager, task.id)
         return TaskResponse.from_agent_task(task, user_context)
 
-    except (HTTPException, BudgetCapExceededError):
+    except HTTPException, BudgetCapExceededError:
         raise
     except SchedulingNotSupportedError as exc:
         raise HTTPException(
@@ -1588,7 +1588,7 @@ async def _stream_manager_download(
             await response.aclose()
             await client.aclose()
 
-    async def stream_content() -> AsyncGenerator[bytes, None]:
+    async def stream_content() -> AsyncGenerator[bytes]:
         try:
             async for chunk in response.aiter_bytes():
                 yield chunk
@@ -2421,7 +2421,7 @@ async def send_task_command(
 
         return {"status": "accepted", "command": payload.command}
 
-    except (HTTPException, BudgetCapExceededError):
+    except HTTPException, BudgetCapExceededError:
         raise
     except RunStillClosingError as exc:
         raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
@@ -2680,7 +2680,7 @@ async def stream_task_events(
 
         # Create SSE stream by tailing the task_events table (single source of
         # truth, no pub/sub race) via the shared helper.
-        async def event_stream() -> AsyncGenerator[str, None]:
+        async def event_stream() -> AsyncGenerator[str]:
             try:
                 async for chunk in _tail_task_events_sse(
                     task_id,

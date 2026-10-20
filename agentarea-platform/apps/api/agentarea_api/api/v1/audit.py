@@ -34,7 +34,7 @@ class AuditEventResponse(BaseModel):
     event_metadata: dict
 
     @classmethod
-    def from_orm(cls, event: AuditEventORM) -> "AuditEventResponse":
+    def from_orm(cls, event: AuditEventORM) -> AuditEventResponse:
         return cls(
             id=event.id,
             created_at=event.created_at,

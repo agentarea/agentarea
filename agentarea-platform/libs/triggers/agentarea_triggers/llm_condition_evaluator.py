@@ -246,7 +246,7 @@ def build_condition_evaluator(
     secret_manager: BaseSecretManager,
     secret_manager_factory: SecretManagerFactory,
     event_broker: Any,
-) -> "LLMConditionEvaluator | None":
+) -> LLMConditionEvaluator | None:
     """The evaluator a TriggerService gets outside a request, when enabled.
 
     For the worker's trigger activities and the inbound channel consumer, which

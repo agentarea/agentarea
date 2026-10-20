@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from agentarea_triggers.batch_firing import TriggerBatchFirer
 
 
-def make_trigger_batch_activities(firer: "TriggerBatchFirer"):
+def make_trigger_batch_activities(firer: TriggerBatchFirer):
     @activity.defn(name=FIRE_TRIGGER_BATCH)
     async def fire_trigger_batch_activity(batch: OpenBatch) -> int:
         return await firer.fire(batch)

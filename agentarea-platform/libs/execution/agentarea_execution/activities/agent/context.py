@@ -33,7 +33,7 @@ RECALLABLE_TYPES = EVENT_TYPES - LIVE_ONLY_TYPES
 
 
 def make_context_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

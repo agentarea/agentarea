@@ -310,7 +310,7 @@ class OutageWait(BaseModel):
     deadline: timedelta
 
     @model_validator(mode="after")
-    def _positive(self) -> "OutageWait":
+    def _positive(self) -> OutageWait:
         if min(self.retry_window, self.deadline, *self.backoff) <= timedelta(0):
             raise ValueError("outage wait durations must be positive")
         return self
@@ -363,7 +363,7 @@ class RuntimeExecutionSupervisor(BaseModel):
     command_gid: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def validate_path(self) -> "RuntimeExecutionSupervisor":
+    def validate_path(self) -> RuntimeExecutionSupervisor:
         parsed = PurePosixPath(self.path)
         if not parsed.is_absolute() or str(parsed) != self.path or self.path == "/":
             raise ValueError("execution supervisor path must be an absolute clean file path")
@@ -382,7 +382,7 @@ class RuntimeManifest(BaseModel):
     execution_supervisor: RuntimeExecutionSupervisor
 
     @model_validator(mode="after")
-    def validate_profile_features(self) -> "RuntimeManifest":
+    def validate_profile_features(self) -> RuntimeManifest:
         expected_mutation = self.managed_environment == "mutable"
         if self.features.managed_environment_mutation != expected_mutation:
             raise ValueError("managed environment feature disagrees with profile")
@@ -526,7 +526,7 @@ class McpToolRoute(BaseModel):
     attachment_ref: str
 
     @classmethod
-    def from_identity(cls, identity: McpToolIdentity) -> "McpToolRoute":
+    def from_identity(cls, identity: McpToolIdentity) -> McpToolRoute:
         return cls(
             instance_id=identity.instance_id,
             raw_name=identity.raw_name,
@@ -729,7 +729,7 @@ class MCPToolResult(BaseModel):
     _metered_meta: dict[str, Any] | None = PrivateAttr(default=None)
 
     @classmethod
-    def metered(cls, body: Any, meta: dict[str, Any] | None, **fields: Any) -> "MCPToolResult":
+    def metered(cls, body: Any, meta: dict[str, Any] | None, **fields: Any) -> MCPToolResult:
         result = cls(**fields)
         result._metered_body = body
         result._metered_meta = meta if isinstance(meta, dict) else None

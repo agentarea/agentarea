@@ -44,7 +44,7 @@ def task_outcome(request: UpdateTaskStatusRequest) -> TaskOutcome:
     if request.result:
         try:
             result = json.loads(request.result)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             result = {"response": request.result}
     elif request.total_cost is not None or request.own_cost is not None:
         result = {}
@@ -71,7 +71,7 @@ def task_outcome(request: UpdateTaskStatusRequest) -> TaskOutcome:
 
 
 def make_task_state_activities(
-    dependencies: ActivityDependencies, container: "ActivityServiceContainer"
+    dependencies: ActivityDependencies, container: ActivityServiceContainer
 ) -> list[Callable[..., Any]]:
     from ..dependencies import ActivityContext, create_user_context
 

@@ -302,7 +302,7 @@ class MCPServersToolset(Toolset):
         ] = None,
         version: Annotated[str, Field(description="Semantic version of the spec.")] = "1.0.0",
         tags: Annotated[
-            list[str] | None, Field(description="Tags used for search and categorization.")
+            builtins.list[str] | None, Field(description="Tags used for search and categorization.")
         ] = None,
         is_public: Annotated[
             bool, Field(description="True makes the spec visible across workspaces.")
@@ -407,7 +407,7 @@ class MCPServersToolset(Toolset):
             str | None, Field(description="New semantic version; omit to keep.")
         ] = None,
         tags: Annotated[
-            list[str] | None, Field(description="Replacement tag list; omit to keep.")
+            builtins.list[str] | None, Field(description="Replacement tag list; omit to keep.")
         ] = None,
         is_public: Annotated[
             bool | None, Field(description="True shares the spec across workspaces; omit to keep.")

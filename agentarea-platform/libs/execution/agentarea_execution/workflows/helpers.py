@@ -765,7 +765,7 @@ class ToolCallExtractor:
                             function={"name": parsed_content["name"], "arguments": arguments},
                         )
                     )
-            except (json.JSONDecodeError, KeyError, TypeError):
+            except json.JSONDecodeError, KeyError, TypeError:
                 # Method 3: Extract using regex patterns for embedded JSON
                 try:
                     # Look for JSON-like patterns in content

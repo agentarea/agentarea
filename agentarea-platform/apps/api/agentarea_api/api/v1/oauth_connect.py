@@ -65,7 +65,7 @@ class OAuthAuthorizeRequest(CustomOAuthAppFields):
     return_to: str = Field(default="", max_length=2048)
 
     @model_validator(mode="after")
-    def validate_target_and_credentials(self) -> "OAuthAuthorizeRequest":
+    def validate_target_and_credentials(self) -> OAuthAuthorizeRequest:
         if (self.instance_id is None) == (self.catalog_item_id is None):
             raise ValueError("Pass exactly one of instance_id or catalog_item_id.")
         if self.credential_mode == "auto":

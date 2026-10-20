@@ -54,7 +54,7 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
         """
         try:
             args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             args = {}
 
         requested = args.get("tool_names")
@@ -130,7 +130,7 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
         """Activate a tool source (DYNAMIC mode) — load full definitions into context."""
         try:
             args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             args = {}
 
         source_name = args.get("source_name", "")
@@ -196,7 +196,7 @@ class ToolDisclosureMixin(ToolApprovalMixin, OutageWaitMixin):
             return
         try:
             args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             args = {}
 
         skill_name = args.get("skill_name", "")

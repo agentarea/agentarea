@@ -293,9 +293,9 @@ async def get_workspace_export_service(
     repository_factory: RepositoryFactoryDep,
     event_broker: EventBrokerDep,
     mcp_instance_service: Annotated[
-        "MCPServerInstanceService", Depends(get_mcp_server_instance_service)
+        MCPServerInstanceService, Depends(get_mcp_server_instance_service)
     ],
-    skill_service: Annotated["SkillService", Depends(get_skill_service)],
+    skill_service: Annotated[SkillService, Depends(get_skill_service)],
 ) -> WorkspaceExportService:
     """Get a WorkspaceExportService instance for the current request."""
     from agentarea_common.auth.authorization import AuthorizationService

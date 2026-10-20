@@ -460,7 +460,7 @@ class OpenAPIToolFactory:
                 try:
                     uuid_val = UUID(str(connection_name_or_id))
                     connection = await openapi_connection_service.get_connection(uuid_val)
-                except (ValueError, AttributeError):
+                except ValueError, AttributeError:
                     pass
 
                 if not connection:

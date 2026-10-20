@@ -58,7 +58,7 @@ class TriggerORM(BaseModel, WorkspaceScopedMixin, AuditMixin):
     batch: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Relationship to executions
-    executions: Mapped[list["TriggerExecutionORM"]] = relationship(
+    executions: Mapped[list[TriggerExecutionORM]] = relationship(
         "TriggerExecutionORM",
         back_populates="trigger",
         cascade="all, delete-orphan",
@@ -122,7 +122,7 @@ class TriggerExecutionORM(BaseModel, WorkspaceScopedMixin):
     causation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationship to trigger
-    trigger: Mapped["TriggerORM"] = relationship("TriggerORM", back_populates="executions")
+    trigger: Mapped[TriggerORM] = relationship("TriggerORM", back_populates="executions")
 
     def __repr__(self) -> str:
         """Return string representation."""

@@ -187,7 +187,7 @@ def _capped_structured_content(value: Any) -> tuple[Any, bool]:
         return None, False
     try:
         size = len(json.dumps(value, default=str))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None, True
     if size > STRUCTURED_CONTENT_MAX_CHARS:
         return None, True
@@ -1117,7 +1117,7 @@ class MCPServerInstanceService:
                 self._endpoint_url_from_spec(instance, transport_spec),
                 force_refresh=force_refresh,
             )
-        except (OAuthReauthRequiredError, ManagedCredentialDestinationError):
+        except OAuthReauthRequiredError, ManagedCredentialDestinationError:
             raise
         except Exception:
             logger.warning(

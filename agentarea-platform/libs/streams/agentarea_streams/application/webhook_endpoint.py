@@ -167,7 +167,7 @@ class WebhookEndpoint:
             )
         try:
             echoed = json.loads(outcome.body).get("challenge")
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             echoed = None
         if not isinstance(echoed, str) or not hmac.compare_digest(echoed, nonce):
             raise EventsError(

@@ -16,7 +16,7 @@ class S3EventArchive:
         self._bucket = bucket
 
     @classmethod
-    def from_settings(cls) -> "S3EventArchive":
+    def from_settings(cls) -> S3EventArchive:
         from agentarea_common.config.aws import get_aws_settings, get_s3_client
 
         return cls(get_s3_client(), get_aws_settings().BUCKET)

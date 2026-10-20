@@ -160,7 +160,7 @@ def _artifact_publication_outcome(
         item = response.json()
         sha256 = str(item["sha256"])
         size = item["size"]
-    except (TypeError, ValueError, KeyError):
+    except TypeError, ValueError, KeyError:
         return _artifact_store_unavailable("artifact store returned an invalid response")
     if not _SHA256_RE.fullmatch(sha256) or not isinstance(size, int) or size < 0:
         return _artifact_store_unavailable(f"published artifact {path} has no valid identity")

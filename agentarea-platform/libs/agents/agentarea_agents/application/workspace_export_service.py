@@ -140,7 +140,7 @@ class WorkspaceExportService:
         agent_service: AgentService,
         repository_factory: RepositoryFactory,
         mcp_instance_service: Any | None = None,
-        skill_service: "SkillService | None" = None,
+        skill_service: SkillService | None = None,
         trigger_repository: Any | None = None,
     ):
         self.agent_service = agent_service

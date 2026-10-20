@@ -79,7 +79,7 @@ class AgentResponse(BaseModel):
     a2a_url: str | None = None
 
     @classmethod
-    def from_domain(cls, agent: Agent, include_skills: bool = False) -> "AgentResponse":
+    def from_domain(cls, agent: Agent, include_skills: bool = False) -> AgentResponse:
         tools = None
         if agent.tools:
             agent_tools = cast(Any, agent.tools)

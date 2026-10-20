@@ -43,7 +43,7 @@ class TriggerEvent(BaseModel):
     @classmethod
     def from_stream_event(
         cls, event: StreamEvent, *, stream_name: str, body: Any = None
-    ) -> "TriggerEvent":
+    ) -> TriggerEvent:
         """``body``: a body the event carries by reference only, read back so the run gets it."""
         return cls(
             kind=event.type,
@@ -54,7 +54,7 @@ class TriggerEvent(BaseModel):
         )
 
     @classmethod
-    def from_trigger_data(cls, trigger_data: dict[str, Any]) -> "TriggerEvent | None":
+    def from_trigger_data(cls, trigger_data: dict[str, Any]) -> TriggerEvent | None:
         """The events a channel, a poller or a replay handed over; None when there are none.
 
         Only the events, scrubbed: the routing metadata beside them is not the event.

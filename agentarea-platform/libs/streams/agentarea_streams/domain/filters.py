@@ -62,7 +62,7 @@ class EventFilter(BaseModel):
         return self.matches(event.type, event.data)
 
     @classmethod
-    def from_trigger_event_types(cls, event_types: list[str] | None) -> "EventFilter":
+    def from_trigger_event_types(cls, event_types: list[str] | None) -> EventFilter:
         return cls(kinds=list(event_types or []))
 
 

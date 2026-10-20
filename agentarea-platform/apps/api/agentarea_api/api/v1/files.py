@@ -529,7 +529,7 @@ async def restore_workspace_file(
     )
     try:
         restored = await svc.restore(user_context.workspace_id, clean)
-    except (FileNotFoundError, InvalidArtifactPathError):
+    except FileNotFoundError, InvalidArtifactPathError:
         raise HTTPException(status_code=404, detail="File not found") from None
     except WorkspaceConflictError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
@@ -637,7 +637,7 @@ async def download_workspace_file(
             exists = not is_reserved_path(file_path) and await _get_artifact_service().exists(
                 user_context.workspace_id, file_path
             )
-    except (InvalidArtifactPathError, WorkspaceValidationError):
+    except InvalidArtifactPathError, WorkspaceValidationError:
         exists = False
     if not exists:
         raise HTTPException(status_code=404, detail="File not found")

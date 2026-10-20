@@ -41,7 +41,7 @@ class ContextToolsMixin(AgentWorkflowBase):
         """
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         grep = tool_args.get("grep")
@@ -143,7 +143,7 @@ class ContextToolsMixin(AgentWorkflowBase):
         """Execute read_tool_output tool to retrieve offloaded content from MinIO."""
         try:
             tool_args = json.loads(tool_call.function["arguments"])
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError, KeyError:
             tool_args = {}
 
         output_id = tool_args.get("output_id", "")

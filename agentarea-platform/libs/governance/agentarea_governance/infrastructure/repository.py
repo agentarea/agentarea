@@ -157,7 +157,7 @@ class PolicyRuleRepository:
     async def _get_row(self, rule_id: UUID | str) -> PolicyRuleORM | None:
         try:
             rule_uuid = rule_id if isinstance(rule_id, UUID) else UUID(str(rule_id))
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             return None
         stmt = select(PolicyRuleORM).where(
             PolicyRuleORM.workspace_id == self.user_context.workspace_id,

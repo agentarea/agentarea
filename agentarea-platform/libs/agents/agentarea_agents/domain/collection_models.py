@@ -44,7 +44,7 @@ class SkillCollection(BaseModel, WorkspaceScopedMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    skills: Mapped[list["Skill"]] = relationship(
+    skills: Mapped[list[Skill]] = relationship(
         "Skill",
         secondary="collection_skills",
     )

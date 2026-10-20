@@ -232,7 +232,7 @@ class ProviderService:
         """
         await assert_workspace_admin(self.provider_config_repo.user_context)
 
-    async def _require_usable_secret(self, secret_id: UUID) -> "EncryptedSecret":
+    async def _require_usable_secret(self, secret_id: UUID) -> EncryptedSecret:
         """Look up a secret the caller asked to reuse, within their workspace."""
         from agentarea_secrets.models import EncryptedSecret
 

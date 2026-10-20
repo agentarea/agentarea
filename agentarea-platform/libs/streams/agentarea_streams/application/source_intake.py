@@ -245,7 +245,7 @@ class SourceIntake:
                 continue
             try:
                 data = base64.b64decode(encoded, validate=True)
-            except (binascii.Error, ValueError):
+            except binascii.Error, ValueError:
                 logger.warning("Attachment %d of event %s is not base64; left out", index, event_id)
                 continue
             name = _str(item, "name", "filename", "file_name") or f"attachment-{index}"

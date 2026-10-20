@@ -210,7 +210,7 @@ class _Operation:
             extra_metadata=self.extra or None,
         )
 
-    def __enter__(self) -> "_Operation":
+    def __enter__(self) -> _Operation:
         self._started = time.monotonic()
         self._log("started")
         return self

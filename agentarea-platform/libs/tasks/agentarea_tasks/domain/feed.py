@@ -30,7 +30,7 @@ class FeedBodies:
     revealed: bool = False
 
     @classmethod
-    def of(cls, rows: Iterable[ConversationEntry], *, revealed: bool = False) -> "FeedBodies":
+    def of(cls, rows: Iterable[ConversationEntry], *, revealed: bool = False) -> FeedBodies:
         results: dict[str, str] = {}
         arguments: dict[str, Any] = {}
         for row in rows:

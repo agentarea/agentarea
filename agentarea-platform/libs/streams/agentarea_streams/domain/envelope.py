@@ -125,7 +125,7 @@ def provider_time(value: str | None) -> datetime | None:
     except ValueError:
         try:
             parsed = parsedate_to_datetime(text)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 

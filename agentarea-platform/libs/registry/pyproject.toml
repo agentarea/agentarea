@@ -7,7 +7,7 @@ name = "agentarea-registry"
 version = "0.1.1"
 description = "Registry catalog sync (mcp_servers, skills, llm_providers, llm_models, default_agents)"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "agentarea-common",
     "agentarea-mcp",

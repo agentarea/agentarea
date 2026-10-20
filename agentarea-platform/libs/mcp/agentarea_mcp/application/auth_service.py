@@ -1,5 +1,6 @@
 """Service layer for MCP authentication configuration management."""
 
+import builtins
 import json
 import logging
 import time
@@ -119,7 +120,7 @@ def _set_expiry(creds: dict[str, Any], expires_in: Any) -> None:
     """Absolute expiry from a token response; none when the token does not expire."""
     try:
         creds["expires_at"] = time.time() + int(expires_in)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         creds.pop("expires_at", None)
 
 
@@ -523,7 +524,7 @@ class MCPAuthService:
             )
         return config
 
-    async def list(self) -> list[MCPAuthConfig]:
+    async def list(self) -> builtins.list[MCPAuthConfig]:
         return await self._repo.list_all()
 
     async def update(

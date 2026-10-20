@@ -299,9 +299,7 @@ class LLMExecutionService:
         interrupted = False
         if self._stream:
             # The SDK yields from an async generator but annotates it as AsyncIterator.
-            responses = cast(
-                AsyncGenerator[LLMResponse, None], llm_model.ainvoke_stream(llm_request)
-            )
+            responses = cast(AsyncGenerator[LLMResponse], llm_model.ainvoke_stream(llm_request))
             try:
                 async with aclosing(responses):
                     async for response in responses:

@@ -52,12 +52,12 @@ class WorkspaceUnreachableError(PermissionError):
     """
 
 
-def granted_scopes(caller: "UserPrincipal | UserContext") -> frozenset[Scope]:
+def granted_scopes(caller: UserPrincipal | UserContext) -> frozenset[Scope]:
     """The scopes the caller's credential grants; none for a context minted outside a request."""
     return caller.credential.scopes if caller.credential is not None else frozenset()
 
 
-def ensure_scope(caller: "UserPrincipal | UserContext", scope: Scope, action: str) -> None:
+def ensure_scope(caller: UserPrincipal | UserContext, scope: Scope, action: str) -> None:
     """Refuse ``action`` unless the caller's credential grants ``scope``.
 
     ``action`` completes "This credential cannot ...".
@@ -94,7 +94,7 @@ class UserPrincipal:
         if not self.user_id:
             raise ValueError("user_id is required; refusing to build a principal without one")
 
-    def enter(self, workspace_id: str, workspace_slug: str) -> "UserContext":
+    def enter(self, workspace_id: str, workspace_slug: str) -> UserContext:
         """The context for acting in ``workspace_id``, which must be reachable."""
         if workspace_id not in (self.accessible_workspaces or []):
             raise WorkspaceUnreachableError(f"No accessible workspace '{workspace_slug}'")

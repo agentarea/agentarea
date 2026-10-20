@@ -185,7 +185,7 @@ async def _openapi_connect_action(
     if connection.auth_config_id is not None:
         try:
             await service.resolve_headers(connection)
-        except (OAuthReauthRequiredError, MissingCredentialsError):
+        except OAuthReauthRequiredError, MissingCredentialsError:
             logger.info(
                 "OpenAPI connection %s needs signing in again", connection.id, exc_info=True
             )
