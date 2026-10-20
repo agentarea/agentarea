@@ -128,6 +128,53 @@ async def test_each_claimed_message_carries_its_own_delivery_count(
     assert by_id[ids[0]] == by_id[ids[4]] == 27
 
 
+async def _lose_the_broker_s_data(broker: RedisStreamsBroker, *stream_names: str) -> None:
+    """What a Valkey restart without persistence leaves: the keys and their groups are gone."""
+    client = await broker._get_client()
+    await client.delete(*(f"test.{name}" for name in stream_names))
+
+
+async def test_a_read_recreates_a_group_the_broker_lost_and_delivers_what_came_after(
+    broker: RedisStreamsBroker, stream_name: str, caplog: pytest.LogCaptureFixture
+):
+    await broker.ensure_group(stream_name, GROUP, start="$")
+    await _lose_the_broker_s_data(broker, stream_name)
+    appended_after_the_loss = await broker.submit(stream_name, {"n": "1"}, retention=timedelta(hours=1))
+
+    with caplog.at_level("WARNING"):
+        msgs = await broker.consume(stream_name, GROUP, "c1", block_ms=100)
+
+    assert [m.id for m in msgs] == [appended_after_the_loss]
+    lost = [r for r in caplog.records if r.levelname == "WARNING" and GROUP in r.getMessage()]
+    assert lost and lost[0].exc_info is not None
+
+
+async def test_a_read_over_many_streams_recreates_the_groups_the_broker_lost(
+    broker: RedisStreamsBroker, stream_name: str
+):
+    streams = [stream_name, f"{stream_name}:other"]
+    for stream in streams:
+        await broker.ensure_group(stream, GROUP, start="$")
+    await _lose_the_broker_s_data(broker, *streams)
+    appended_after_the_loss = await broker.submit(streams[1], {"n": "1"}, retention=timedelta(hours=1))
+
+    msgs = await broker.consume_many(streams, GROUP, "c1", block_ms=100)
+
+    assert [m.id for m in msgs] == [appended_after_the_loss]
+    for stream in streams:
+        assert await broker.group_info(stream, GROUP) is not None
+
+
+async def test_a_reclaim_recreates_a_group_the_broker_lost(
+    broker: RedisStreamsBroker, stream_name: str
+):
+    await broker.ensure_group(stream_name, GROUP, start="$")
+    await _lose_the_broker_s_data(broker, stream_name)
+
+    assert await broker.autoclaim(stream_name, GROUP, "c1", min_idle_ms=10) == []
+    assert await broker.group_info(stream_name, GROUP) is not None
+
+
 async def _consumers(broker: RedisStreamsBroker, stream_name: str) -> set[str]:
     client = await broker._get_client()
     return {c["name"] for c in await client.xinfo_consumers(f"test.{stream_name}", GROUP)}

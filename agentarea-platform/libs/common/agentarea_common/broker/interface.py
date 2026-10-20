@@ -106,6 +106,8 @@ class BrokerClient(Protocol):
     ) -> list[BrokerMessage]:
         """Claim up to `count` un-ACKed messages for this consumer. Blocks
         up to `block_ms` if the stream is empty. Returns [] on timeout.
+
+        A group the broker lost with its data is recreated and read again.
         """
         raise NotImplementedError
 

@@ -127,6 +127,34 @@ async def test_one_group_reads_every_partition_including_events_from_before_it(b
         await subscription.stop()
 
 
+async def test_a_subscriber_keeps_consuming_after_the_broker_loses_its_group(broker):
+    prefix = f"p{uuid4().hex[:8]}"
+    topics = [f"{prefix}.0", f"{prefix}.1"]
+    bus = RedisStreamsEventBus(broker, block_ms=100, retention=timedelta(hours=1))
+    seen: list[str] = []
+
+    async def handler(event: IntegrationEvent) -> None:
+        seen.append(event.type)
+
+    async def dead(event: IntegrationEvent) -> None:
+        raise AssertionError("nothing should be dead-lettered")
+
+    subscription = await bus.subscribe_many(
+        topics=topics,
+        group="router",
+        handler=handler,
+        dead_letter_topic=f"{prefix}.router.dlq",
+        on_dead_letter=dead,
+    )
+    try:
+        client = await broker._get_client()
+        await client.delete(*(f"{NAMESPACE}.{topic}" for topic in topics))
+        await bus.publish(IntegrationEvent(type="after-the-loss", source="t"), topic=topics[1])
+        await _until(lambda: seen == ["after-the-loss"])
+    finally:
+        await subscription.stop()
+
+
 async def test_messages_name_the_logical_stream_they_came_from(broker):
     topics = [f"p{uuid4().hex[:8]}.0", f"p{uuid4().hex[:8]}.1"]
     for topic in topics:
