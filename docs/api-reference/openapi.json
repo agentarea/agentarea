@@ -8386,6 +8386,35 @@
         "title": "OAuthAuthorizeResponse",
         "type": "object"
       },
+      "OAuthFinishRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "OAuthFinishRequest",
+        "type": "object"
+      },
+      "OAuthFinishResponse": {
+        "properties": {
+          "location": {
+            "title": "Location",
+            "type": "string"
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "OAuthFinishResponse",
+        "type": "object"
+      },
       "OAuthLinkCreateRequest": {
         "properties": {
           "access_control": {
@@ -19640,7 +19669,7 @@
     },
     "/v1/oauth/callback": {
       "get": {
-        "description": "The provider's redirect back: exchange the code and attach the credential.\n\nRequires no session \u2014 the user is mid-redirect from the provider. The state\ntoken proves the flow was started by authorize and names its connection.",
+        "description": "The provider's redirect back: park the code and send the browser to finish.\n\nRequires no session \u2014 the user is mid-redirect from the provider. Whoever\nfollows a provider URL lands here, not only the person authorize returned\nit to, so nothing is attached until that person finishes.",
         "operationId": "oauth_callback_v1_oauth_callback_get",
         "parameters": [
           {
@@ -19737,6 +19766,55 @@
         "tags": [
           "v1",
           "public",
+          "oauth-connect"
+        ]
+      }
+    },
+    "/v1/oauth/finish": {
+      "post": {
+        "description": "Exchange a returned code and attach the credential, for the flow's own starter.",
+        "operationId": "oauth_finish_v1_oauth_finish_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthFinishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthFinishResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Oauth Finish",
+        "tags": [
+          "v1",
+          "protected",
           "oauth-connect"
         ]
       }

@@ -674,6 +674,9 @@ import type {
   OauthCallbackV1OauthCallbackGetData,
   OauthCallbackV1OauthCallbackGetErrors,
   OauthCallbackV1OauthCallbackGetResponses,
+  OauthFinishV1OauthFinishPostData,
+  OauthFinishV1OauthFinishPostErrors,
+  OauthFinishV1OauthFinishPostResponses,
   OauthPreflightV1OauthPreflightGetData,
   OauthPreflightV1OauthPreflightGetErrors,
   OauthPreflightV1OauthPreflightGetResponses,
@@ -1769,10 +1772,11 @@ export const unlinkExternalIdentityV1MeExternalIdentitiesIdentityIdDelete = <
 /**
  * Oauth Callback
  *
- * The provider's redirect back: exchange the code and attach the credential.
+ * The provider's redirect back: park the code and send the browser to finish.
  *
- * Requires no session — the user is mid-redirect from the provider. The state
- * token proves the flow was started by authorize and names its connection.
+ * Requires no session — the user is mid-redirect from the provider. Whoever
+ * follows a provider URL lands here, not only the person authorize returned
+ * it to, so nothing is attached until that person finishes.
  */
 export const oauthCallbackV1OauthCallbackGet = <
   ThrowOnError extends boolean = false,
@@ -1797,6 +1801,40 @@ export const oauthCallbackV1OauthCallbackGet = <
     ],
     url: "/v1/oauth/callback",
     ...options,
+  });
+
+/**
+ * Oauth Finish
+ *
+ * Exchange a returned code and attach the credential, for the flow's own starter.
+ */
+export const oauthFinishV1OauthFinishPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<OauthFinishV1OauthFinishPostData, ThrowOnError>
+): RequestResult<
+  OauthFinishV1OauthFinishPostResponses,
+  OauthFinishV1OauthFinishPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    OauthFinishV1OauthFinishPostResponses,
+    OauthFinishV1OauthFinishPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/oauth/finish",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

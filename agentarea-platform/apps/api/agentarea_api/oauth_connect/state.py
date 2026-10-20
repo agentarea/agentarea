@@ -1,8 +1,12 @@
-"""OAuth state between authorize and the callback.
+"""OAuth state between authorize, the callback and the finish.
 
 The state token is the only credential the public callback has. Its payload
 names the connection the flow is for, never a client secret: those sit on the
 auth config the authorize step already persisted.
+
+The callback does not redeem the code: anyone can open a provider URL someone
+else's authorize returned. It parks the code under a finish token, and the
+person who started the flow redeems it from their own session.
 """
 
 import json
@@ -16,6 +20,7 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 _PREFIX = "oauth_state"
+_RETURNED_PREFIX = "oauth_returned"
 _TTL_SECONDS = 600
 
 TargetKind = Literal["mcp_instance", "openapi_connection"]
@@ -55,3 +60,27 @@ async def pop(token: str) -> OAuthState | None:
     if raw is None:
         return None
     return OAuthState(**json.loads(raw))
+
+
+@dataclass(frozen=True)
+class ReturnedFlow:
+    """A flow the provider sent back with a code, waiting for its starter to finish it."""
+
+    flow: OAuthState
+    code: str
+
+
+async def store_returned(token: str, returned: ReturnedFlow) -> None:
+    redis = await _redis()
+    payload = {"flow": asdict(returned.flow), "code": returned.code}
+    await redis.set(f"{_RETURNED_PREFIX}:{token}", json.dumps(payload), ex=_TTL_SECONDS)
+
+
+async def pop_returned(token: str) -> ReturnedFlow | None:
+    """The returned flow for ``token``, consumed whoever asks: a refused finish is final."""
+    redis = await _redis()
+    raw = await redis.getdel(f"{_RETURNED_PREFIX}:{token}")
+    if raw is None:
+        return None
+    payload = json.loads(raw)
+    return ReturnedFlow(flow=OAuthState(**payload["flow"]), code=payload["code"])

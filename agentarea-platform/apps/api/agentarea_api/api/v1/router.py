@@ -103,6 +103,8 @@ principal_v1_router.include_router(external_identities.router)
 # Billing currency of every money amount. Deployment-wide, so it belongs to no
 # workspace: every workspace on a deployment is billed in the same currency.
 principal_v1_router.include_router(pricing.router)
+# Finishing an OAuth sign-in: the flow names its workspace, the caller must have started it.
+principal_v1_router.include_router(oauth_connect.principal_router)
 
 
 # ============================================================================

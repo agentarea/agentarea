@@ -3,8 +3,11 @@
     GET  /v1/workspaces/{workspace}/oauth/preflight  — can it be authorized, and with what
     POST /v1/workspaces/{workspace}/oauth/authorize  — pick the OAuth client, return the
                                                        provider's sign-in URL
-    GET  /v1/oauth/callback                          — the one redirect URI: exchange the
-                                                       code, attach the credential
+    GET  /v1/oauth/callback                          — the one redirect URI: park the code,
+                                                       send the browser to the finish page
+    POST /v1/oauth/finish                            — the person who started the flow
+                                                       exchanges the code, attaching the
+                                                       credential
 
 Preflight exists so the UI never offers a Connect button that cannot complete:
 a provider with neither a platform app (AGENTAREA_MCP_OAUTH_APPS) nor Dynamic
@@ -29,16 +32,18 @@ from agentarea_api.oauth_connect.targets import (
     MCPSpecTarget,
     PreflightTarget,
 )
-from agentarea_common.auth.dependencies import UserContextDep
+from agentarea_common.auth.dependencies import PrincipalDep, UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Preflight and authorize act in a workspace; the callback is a redirect from
-# the provider and carries no session.
+# the provider and carries no session; the finish names no workspace, the
+# flow it redeems does.
 router = APIRouter(prefix="/oauth", tags=["oauth-connect"])
 public_router = APIRouter(prefix="/oauth", tags=["oauth-connect"])
+principal_router = APIRouter(prefix="/oauth", tags=["oauth-connect"])
 
 
 class OAuthAuthorizeRequest(CustomOAuthAppFields):
@@ -77,6 +82,17 @@ class OAuthAuthorizeResponse(BaseModel):
     authorize_url: str
     # The MCP instance, or the API connection this request created.
     connection_id: UUID
+
+
+class OAuthFinishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=256)
+
+
+class OAuthFinishResponse(BaseModel):
+    # The frontend page to land on, with ``oauth=success`` or ``oauth=error``.
+    location: str
 
 
 class OAuthPreflightResponse(BaseModel):
@@ -199,18 +215,38 @@ async def oauth_authorize(
     ],
 )
 async def oauth_callback(
-    db_session: DatabaseSessionDep,
     code: str | None = Query(None),
     state: str | None = Query(None),
     error: str | None = Query(None),
     error_description: str | None = Query(None),
 ) -> RedirectResponse:
-    """The provider's redirect back: exchange the code and attach the credential.
+    """The provider's redirect back: park the code and send the browser to finish.
 
-    Requires no session — the user is mid-redirect from the provider. The state
-    token proves the flow was started by authorize and names its connection.
+    Requires no session — the user is mid-redirect from the provider. Whoever
+    follows a provider URL lands here, not only the person authorize returned
+    it to, so nothing is attached until that person finishes.
     """
-    location = await oauth_connect.complete(
-        db_session, state=state, code=code, error=error, error_description=error_description
+    location = await oauth_connect.receive(
+        state=state, code=code, error=error, error_description=error_description
     )
     return RedirectResponse(url=location, status_code=302)
+
+
+@principal_router.post(
+    "/finish",
+    response_model=OAuthFinishResponse,
+    dependencies=[enforced_in_handler("only the person who started the sign-in may finish it")],
+)
+async def oauth_finish(
+    body: OAuthFinishRequest,
+    principal: PrincipalDep,
+    db_session: DatabaseSessionDep,
+) -> OAuthFinishResponse:
+    """Exchange a returned code and attach the credential, for the flow's own starter."""
+    location = await oauth_connect.finish(
+        db_session,
+        token=body.token,
+        user_id=principal.user_id,
+        bound_workspace_id=principal.bound_workspace_id,
+    )
+    return OAuthFinishResponse(location=location)
