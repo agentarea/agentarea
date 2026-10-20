@@ -628,6 +628,9 @@ import type {
   ListSkillsV1SkillsGetData,
   ListSkillsV1SkillsGetErrors,
   ListSkillsV1SkillsGetResponses,
+  ListSkillVersionsV1SkillsSkillIdVersionsGetData,
+  ListSkillVersionsV1SkillsSkillIdVersionsGetErrors,
+  ListSkillVersionsV1SkillsSkillIdVersionsGetResponses,
   ListSourcesV1StreamsStreamIdSourcesGetData,
   ListSourcesV1StreamsStreamIdSourcesGetErrors,
   ListSourcesV1StreamsStreamIdSourcesGetResponses,
@@ -781,6 +784,9 @@ import type {
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteData,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteErrors,
   RevokeOauthLinkV1McpOauthLinksLinkIdDeleteResponses,
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostData,
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors,
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses,
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
@@ -9674,6 +9680,72 @@ export const updateInstalledSkillV1SkillsSkillIdUpdatePost = <
       },
     ],
     url: "/v1/workspaces/{workspace}/skills/{skill_id}/update",
+    ...options,
+  });
+
+/**
+ * List Skill Versions
+ *
+ * Every package the skill pointed at, oldest first; the last is the current one.
+ */
+export const listSkillVersionsV1SkillsSkillIdVersionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    ListSkillVersionsV1SkillsSkillIdVersionsGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  ListSkillVersionsV1SkillsSkillIdVersionsGetResponses,
+  ListSkillVersionsV1SkillsSkillIdVersionsGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListSkillVersionsV1SkillsSkillIdVersionsGetResponses,
+    ListSkillVersionsV1SkillsSkillIdVersionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/skills/{skill_id}/versions",
+    ...options,
+  });
+
+/**
+ * Rollback Skill
+ *
+ * Point the skill at the package one of its versions had; recorded as a new version.
+ */
+export const rollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses,
+  RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostResponses,
+    RollbackSkillV1SkillsSkillIdVersionsVersionIdRollbackPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/skills/{skill_id}/versions/{version_id}/rollback",
     ...options,
   });
 
