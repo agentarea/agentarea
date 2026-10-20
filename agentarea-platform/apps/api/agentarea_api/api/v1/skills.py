@@ -203,7 +203,7 @@ class SkillVersionResponse(BaseModel):
     current: bool
 
     @classmethod
-    def from_version(cls, version: SkillVersion, current: bool) -> "SkillVersionResponse":
+    def from_version(cls, version: SkillVersion, current: bool) -> SkillVersionResponse:
         return cls(
             id=str(version.id),
             digest=version.digest,
