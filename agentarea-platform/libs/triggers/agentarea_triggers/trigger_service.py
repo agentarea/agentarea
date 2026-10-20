@@ -34,6 +34,7 @@ from agentarea_streams.domain import (
     StreamNotFoundError,
     value_at,
 )
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
@@ -283,6 +284,7 @@ class TriggerService:
         self.task_definition_repository = repository_factory.create_repository(
             TaskDefinitionRepository
         )
+        self.task_repository = repository_factory.create_repository(TaskRepository)
 
         # Create agent repository using factory for validation
         try:
@@ -1475,6 +1477,20 @@ class TriggerService:
                     execution=await self._record_started_once(
                         trigger_id, task_id, trigger_data, fired_by
                     ),
+                )
+
+        # A schedule comes due again whether or not its last run has finished;
+        # the firing workflow ends once the task starts, so Temporal's overlap
+        # policy never sees the run. Each event of a stream trigger is its own
+        # work, and a person asking for a run gets it.
+        if trigger.trigger_type == TriggerType.CRON and fired_by is None:
+            running = await self.task_repository.oldest_unfinished_from("trigger", str(trigger.id))
+            if running is not None:
+                reason = f"The previous run is still going (task {running})"
+                logger.info(f"Trigger {trigger_id} skipped: {reason}")
+                execution = await self._record_execution_skipped(trigger_id, reason, trigger_data)
+                return TriggerFiring(
+                    outcome="skipped", reason=reason, execution=execution, blocked_by=running
                 )
 
         start_time = time.time()

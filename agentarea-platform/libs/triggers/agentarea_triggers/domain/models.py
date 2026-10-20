@@ -334,3 +334,5 @@ class TriggerFiring:
     verdict: ConditionVerdict | None = None
     task_id: UUID | None = None
     execution: TriggerExecution | None = None
+    # The trigger's own run still going that a scheduled firing gave way to.
+    blocked_by: UUID | None = None

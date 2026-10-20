@@ -60,6 +60,8 @@ class _Harness:
         self.execution_repo.create.side_effect = lambda **kwargs: TriggerExecution(**kwargs)
         self.agent_repo = AsyncMock()
         self.agent_repo.get.return_value = SimpleNamespace(status="active")
+        self.task_repo = AsyncMock()
+        self.task_repo.oldest_unfinished_from.return_value = None
         self.task_service = AsyncMock()
         self.task_service.get_task.return_value = None
         self.task_service.route_or_submit_task.side_effect = lambda task, **_: task
@@ -105,6 +107,12 @@ class _Harness:
                 patch(
                     "agentarea_agents.infrastructure.repository.AgentRepository",
                     return_value=self.agent_repo,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "agentarea_triggers.trigger_service.TaskRepository",
+                    return_value=self.task_repo,
                 )
             )
             stack.enter_context(
@@ -210,6 +218,17 @@ async def test_unmet_conditions_skip_the_firing():
 
     assert result.status is TriggerOutcome.SKIPPED
     assert result.reason is TriggerSkipReason.CONDITIONS_NOT_MET
+    harness.task_service.route_or_submit_task.assert_not_awaited()
+
+
+async def test_a_firing_gives_way_to_the_run_still_going():
+    harness = _Harness(_trigger())
+    harness.task_repo.oldest_unfinished_from.return_value = uuid4()
+
+    result = await harness.fire()
+
+    assert result.status is TriggerOutcome.SKIPPED
+    assert result.reason is TriggerSkipReason.PREVIOUS_RUN_ACTIVE
     harness.task_service.route_or_submit_task.assert_not_awaited()
 
 

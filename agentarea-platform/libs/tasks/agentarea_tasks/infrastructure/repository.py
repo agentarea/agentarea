@@ -353,6 +353,21 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return [self._orm_to_domain(t) for t in result.scalars().all()]
 
+    async def oldest_unfinished_from(self, origin_type: str, origin_id: str) -> UUID | None:
+        """The oldest task this origin started that has not ended, waiting on a person included."""
+        stmt = (
+            select(TaskORM.id)
+            .where(
+                self._get_workspace_filter(),
+                TaskORM.origin_type == origin_type,
+                TaskORM.origin_id == origin_id,
+                TaskORM.status.not_in(ENDED_TASK_STATUSES),
+            )
+            .order_by(TaskORM.created_at)
+            .limit(1)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def count_by_statuses(self, statuses: list[str], agent_id: UUID | None = None) -> int:
         """Count tasks matching any of the given statuses in the current workspace.
 

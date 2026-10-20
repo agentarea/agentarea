@@ -243,7 +243,9 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         trigger_id=trigger_id,
                         status=TriggerOutcome.SKIPPED,
                         reason=(
-                            TriggerSkipReason.CONDITIONS_NOT_MET
+                            TriggerSkipReason.PREVIOUS_RUN_ACTIVE
+                            if firing.blocked_by is not None
+                            else TriggerSkipReason.CONDITIONS_NOT_MET
                             if firing.verdict is not None
                             else TriggerSkipReason.TRIGGER_INACTIVE
                         ),
