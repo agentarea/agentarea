@@ -172,7 +172,21 @@ class SkillPackages:
         self._parser = SkillParser()
 
     async def read_files(self, skill: Skill, *, at: str | None = None) -> dict[str, bytes]:
+        if _has_pending_body(skill) and not self._writes():
+            return await self._unmoved_files(skill)
         return await self._files_at(await self._package_of(skill, at))
+
+    def _writes(self) -> bool:
+        """A pre-package row is moved only through a write session: a read session
+        (AUTOCOMMIT, possibly on a replica) reads it as it is.
+        """
+        return self._repository is not None and not getattr(self._repository, "read_only", False)
+
+    async def _unmoved_files(self, skill: Skill) -> dict[str, bytes]:
+        """A row whose body is still in the database, read without moving it."""
+        files = await self._storage.read_package(skill.s3_path) if skill.s3_path else {}
+        main = self._parser.find_main_skill_file(list(files)) or SKILL_MANIFEST
+        return {**files, main: (skill.content or "").encode("utf-8")}
 
     async def _files_at(self, s3_path: str) -> dict[str, bytes]:
         if not is_immutable_package(s3_path):
@@ -184,6 +198,8 @@ class SkillPackages:
         return files
 
     async def list_paths(self, skill: Skill) -> list[str]:
+        if _has_pending_body(skill) and not self._writes():
+            return list(await self._unmoved_files(skill))
         s3_path = await self.resolve_s3_path(skill)
         cached = _cache_get(s3_path) if is_immutable_package(s3_path) else None
         if cached is not None:
@@ -196,6 +212,8 @@ class SkillPackages:
         ``at`` reads the package a run was configured with rather than the
         skill's current one, so a run keeps the version it started on.
         """
+        if _has_pending_body(skill) and not self._writes():
+            return self._main_file(skill, await self._unmoved_files(skill))
         s3_path = await self._package_of(skill, at)
         cached = _cache_get(s3_path) if is_immutable_package(s3_path) else None
         if cached is not None:
@@ -228,8 +246,8 @@ class SkillPackages:
         """The package of ``skill``, storing it first when it has none yet."""
         if skill.s3_path:
             if _has_pending_body(skill):
-                return await self.move_body_to_package(skill)
-            if self._repository is not None and is_own_copy(skill):
+                return await self._move_body_or_refuse(skill)
+            if self._writes() and is_own_copy(skill):
                 return await self.move_own_copy_to_package(skill)
             return skill.s3_path
         if skill.is_catalog:
@@ -238,8 +256,16 @@ class SkillPackages:
                 await self.store_catalog_item(skill.catalog_spec, workspace_id=workspace_id)
             ).s3_path
         if skill.content is not None:
-            return await self.move_body_to_package(skill)
+            return await self._move_body_or_refuse(skill)
         raise ValueError(f"Skill {skill.id} has neither a package nor a body")
+
+    async def _move_body_or_refuse(self, skill: Skill) -> str:
+        if self._repository is not None and not self._writes():
+            raise ValueError(
+                f"Skill {skill.id} still holds its body in its row, and a read does not move "
+                "it; run `agentarea-api skills move-bodies-to-packages`"
+            )
+        return await self.move_body_to_package(skill)
 
     async def move_body_to_package(self, skill: Skill) -> str:
         """Write a pre-package row's body as its SKILL.md and stop storing it in the row.

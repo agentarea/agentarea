@@ -255,7 +255,9 @@ link instead: an installed skill, agent or MCP server records `registry_item_id`
 - **Skills stored before packages are moved lazily.** A row that still holds its
   body in `skills.content`, or that points at the mutable copy a workspace skill
   used to be rewritten in (`skills/<workspace>/<skill id>/`), is moved into a
-  package the first time it is read, which starts its history. `agentarea-api
+  package the first time a request that may write reads it, which starts its
+  history; a read on a read-only session (the MCP skill tools, or a replica)
+  reads the old copy or the row's body as it is and moves nothing. `agentarea-api
   skills move-bodies-to-packages` and `move-own-copies-to-packages` do it for
   every row at once. The old copies stay until `agentarea-api skills
   delete-moved-own-copies`, which deletes only copies moved at least

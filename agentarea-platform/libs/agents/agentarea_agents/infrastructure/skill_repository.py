@@ -10,8 +10,8 @@ from agentarea_common.base.workspace_scoped_repository import (
     as_record_ids,
 )
 from agentarea_common.constants import PLATFORM_PRINCIPAL_ID, PLATFORM_WORKSPACE_ID
-from sqlalchemy import String, and_, cast, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import String, and_, cast, func, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from sqlalchemy.orm import defer, selectinload
 
 from agentarea_agents.domain.skill_models import (
@@ -109,6 +109,14 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Skill, user_context)
 
+    @property
+    def read_only(self) -> bool:
+        """The session is a read session (AUTOCOMMIT, possibly a replica): it must not write."""
+        bind = self.session.bind
+        if not isinstance(bind, AsyncEngine):
+            return False
+        return bind.get_execution_options().get("isolation_level") == "AUTOCOMMIT"
+
     async def set_package(
         self,
         skill_id: UUID | str,
@@ -119,19 +127,26 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         expect: str | None | object = ANY_PACKAGE,
         **fields,
     ) -> Skill | None:
-        """Point a skill at a package and record the move in its history, atomically.
+        """Point a skill at a package and record the move in its history.
 
-        The row is locked (``FOR UPDATE``) for the move, and the pointer and its
-        history row are written in one commit, so concurrent moves are ordered
-        and the history ends where the pointer is. With ``expect`` the move is
-        a compare-and-set: it happens only while the skill still points at
-        ``expect``, else ``SkillPackageMovedError`` names where it points now.
-        ``fields`` are other columns to change with it (``source_url``). The
-        body column is cleared: a skill's body is its package.
+        With ``expect`` the move is a compare-and-set done in one statement
+        (``UPDATE ... WHERE s3_path IS NOT DISTINCT FROM :expect``), atomic in
+        any isolation: it happens only while the skill still points at
+        ``expect``, else ``SkillPackageMovedError`` names where it points now
+        and nothing is written. Without it the row is locked (``FOR UPDATE``)
+        and the pointer and its history row are written in one commit, so
+        concurrent edits are ordered and the history ends where the pointer
+        is. ``fields`` are other columns to change with it (``source_url``).
+        The body column is cleared: a skill's body is its package.
         """
+        sid = UUID(str(skill_id))
+        if expect is not ANY_PACKAGE:
+            return await self._compare_and_set(
+                sid, s3_path, expect, reason, catalog_version, fields
+            )
         result = await self.session.execute(
             select(Skill)
-            .where(Skill.id == UUID(str(skill_id)), self._get_workspace_filter())
+            .where(Skill.id == sid, self._get_workspace_filter())
             .with_for_update()
             .execution_options(populate_existing=True)
         )
@@ -139,10 +154,6 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
         if skill is None:
             await self.session.commit()
             return None
-        if expect is not ANY_PACKAGE and skill.s3_path != expect:
-            current = skill.s3_path
-            await self.session.commit()
-            raise SkillPackageMovedError(str(skill_id), current)
         try:
             skill.s3_path = s3_path
             skill.content = None
@@ -150,6 +161,59 @@ class SkillRepository(WorkspaceScopedRepository[Skill]):
                 setattr(skill, field, value)
             latest = await self.latest_version(skill.id)
             if latest is None or latest.s3_path != s3_path:
+                self.session.add(self._version(skill, reason, catalog_version))
+            await self.session.commit()
+        except Exception:
+            await self.session.rollback()
+            raise
+        return skill
+
+    async def _compare_and_set(
+        self,
+        sid: UUID,
+        s3_path: str,
+        expect: object,
+        reason: str,
+        catalog_version: str | None,
+        fields: dict,
+    ) -> Skill | None:
+        moved = (
+            await self.session.execute(
+                update(Skill)
+                .where(
+                    Skill.id == sid,
+                    Skill.workspace_id == self.user_context.workspace_id,
+                    Skill.s3_path.is_not_distinct_from(expect),
+                )
+                .values(s3_path=s3_path, content=None, updated_at=datetime.now(), **fields)
+                .returning(Skill.id)
+                .execution_options(synchronize_session=False)
+            )
+        ).scalar_one_or_none()
+        if moved is None:
+            current = (
+                await self.session.execute(
+                    select(Skill.id, Skill.s3_path).where(
+                        Skill.id == sid, self._get_workspace_filter()
+                    )
+                )
+            ).one_or_none()
+            await self.session.commit()
+            if current is None:
+                return None
+            raise SkillPackageMovedError(str(sid), current.s3_path)
+        try:
+            skill = (
+                await self.session.execute(
+                    select(Skill)
+                    .where(Skill.id == sid, self._get_workspace_filter())
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one()
+            latest = await self.latest_version(sid)
+            # In AUTOCOMMIT the move committed with its statement, and a later
+            # move may already have recorded itself; its row ends the history.
+            if skill.s3_path == s3_path and (latest is None or latest.s3_path != s3_path):
                 self.session.add(self._version(skill, reason, catalog_version))
             await self.session.commit()
         except Exception:
