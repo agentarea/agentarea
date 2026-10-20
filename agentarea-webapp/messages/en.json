@@ -991,7 +991,7 @@
       },
       "details": {
         "title": "Details",
-        "id": "Instance ID",
+        "id": "Connection ID",
         "created": "Created",
         "updated": "Updated"
       },
@@ -1202,31 +1202,31 @@
       "usage": "Couldn't load which agents use these connections"
     },
     "openapiDetail": {
-      "back": "Back to connections",
-      "notFound": "Connection not found",
-      "refreshing": "Refreshing...",
       "refreshFromSpec": "Refresh from spec URL",
-      "deleting": "Deleting...",
       "deleteTitle": "Delete connection?",
-      "type": "Type",
-      "status": "Status",
       "baseUrl": "Base URL",
       "specUrl": "Spec URL",
-      "customHeaders": "Custom headers ({count})",
-      "noCustomHeaders": "No custom headers. Click Add to set Authorization or any other request header your provider needs.",
-      "customQueryParams": "Query parameters ({count})",
-      "noCustomQueryParams": "No query parameters. Click Add to send a key the API expects in the URL, such as api_key.",
+      "noCustomHeaders": "No custom headers. Add Authorization or any other request header your provider needs.",
+      "noCustomQueryParams": "No query parameters. Add a key the API expects in the URL, such as api_key.",
       "noToolsWithSpec": "No tools discovered yet. Click “Refresh from spec URL” to parse the spec again.",
       "noTools": "No tools were parsed from this spec.",
-      "availableTools": "Available tools ({count})",
       "oauthError": "Couldn't connect the account: {reason}",
       "errors": {
-        "loadFailed": "Couldn't load the connection",
-        "reloadFailed": "Couldn't reload the connection",
         "discoverFailed": "Couldn't refresh tools from the spec",
         "saveHeadersFailed": "Couldn't save the headers",
         "saveQueryParamsFailed": "Couldn't save the query parameters",
         "deleteFailed": "Couldn't delete the connection"
+      },
+      "specLink": "Spec",
+      "specPasted": "Pasted as JSON, no URL to re-read",
+      "headersTitle": "Headers",
+      "queryParamsTitle": "Query parameters",
+      "stats": {
+        "fromSpecUrl": "from the spec URL",
+        "fromSpecJson": "from the pasted spec",
+        "headers": "Headers",
+        "queryParams": "Query parameters",
+        "secretCount": "{count, plural, =0 {none encrypted} one {# encrypted} other {# encrypted}}"
       }
     },
     "sourceFilter": "From the catalog: {name}",
@@ -2561,8 +2561,6 @@
     "availableTools": "Available Tools:"
   },
   "OpenAPIConnection": {
-    "method": "Method",
-    "operation": "Operation",
     "addHeader": "Add",
     "editHeaders": "Edit",
     "saveHeaders": "Save headers",
@@ -2571,7 +2569,7 @@
     "headerName": "Header name",
     "headerValue": "Header value",
     "secretValuePlaceholder": "Secret value (leave blank to keep)",
-    "headersEditorHint": "Add headers like Authorization: Bearer <token>. Non-safe headers are stored encrypted.",
+    "headersEditorHint": "Add headers like Authorization: Bearer YOUR_TOKEN. Non-safe headers are stored encrypted.",
     "editQueryParams": "Edit",
     "saveQueryParams": "Save query parameters",
     "queryParamName": "Parameter name",

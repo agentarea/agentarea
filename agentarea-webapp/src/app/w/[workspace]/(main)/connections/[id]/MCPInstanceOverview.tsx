@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { useFormatter, useLocale, useNow, useTranslations } from "next-intl";
+import { useEffect, useState } from "react";
+import { useLocale, useNow, useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import {
   Activity,
-  CalendarClock,
   ExternalLink,
   Github,
   GitBranch,
   Globe,
-  Info,
   KeyRound,
   Link2,
   Pencil,
@@ -56,6 +54,8 @@ import {
   getMCPInstanceToolCount,
   TRANSPORT_LABEL,
 } from "../utils";
+import { CardField, ConnectionDetailsCard } from "../components/ConnectionCards";
+import { relativeParts } from "../relative-parts";
 import { verifyInstance } from "./actions";
 
 interface Props {
@@ -86,55 +86,6 @@ function verificationKey(status: string): VerificationKey {
   return status in VERIFICATION_KINDS ? (status as VerificationKey) : "never_attempted";
 }
 
-/** A labelled value inside a section card: a URL, a command, an image. */
-function CardField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-1.5 border-b border-border/60 px-[15px] py-3 last:border-b-0">
-      <div className="text-[11px] text-muted-foreground">{label}</div>
-      {children}
-    </div>
-  );
-}
-
-const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-  ["year", 365 * 24 * 3600],
-  ["month", 30 * 24 * 3600],
-  ["week", 7 * 24 * 3600],
-  ["day", 24 * 3600],
-  ["hour", 3600],
-  ["minute", 60],
-];
-
-/**
- * "2 hours ago" split for a stat cell: the number as the big value, the rest
- * ("hours ago", "часа назад") as its unit, both in the page's locale.
- */
-function relativeParts(
-  iso: string | null | undefined,
-  now: Date,
-  locale: string
-): { value: string; unit: string } | null {
-  if (!iso) return null;
-  const seconds = (new Date(iso).getTime() - now.getTime()) / 1000;
-  const [unit, size] =
-    RELATIVE_UNITS.find(([, size]) => Math.abs(seconds) >= size) ??
-    RELATIVE_UNITS[RELATIVE_UNITS.length - 1];
-  const parts = new Intl.RelativeTimeFormat(locale, {
-    numeric: "always",
-  }).formatToParts(Math.round(seconds / size), unit);
-  return {
-    value: parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => part.value)
-      .join(""),
-    unit: parts
-      .filter((part) => part.type === "literal")
-      .map((part) => part.value)
-      .join("")
-      .trim(),
-  };
-}
-
 const externalLinkClass =
   "font-medium text-foreground/80 underline-offset-2 hover:underline";
 
@@ -148,7 +99,6 @@ export default function MCPInstanceOverview({
   const t = useTranslations("MCPServersPage.instanceDetail");
   const tState = useTranslations("MCPServersPage.state");
   const tCommon = useTranslations("Common");
-  const format = useFormatter();
   const locale = useLocale();
   const now = useNow({ updateInterval: 60_000 });
   const router = useWorkspaceRouter();
@@ -310,8 +260,6 @@ export default function MCPInstanceOverview({
   });
   const lastDispatch = readLastDispatch(instance.last_dispatch);
 
-  const dateTime = (iso: string) =>
-    format.dateTime(new Date(iso), { dateStyle: "medium", timeStyle: "short" });
 
   const unrestrictedCount =
     consumers?.filter((consumer) => consumer.enabled_tools == null).length ?? 0;
@@ -324,7 +272,12 @@ export default function MCPInstanceOverview({
       : t("consumers.toolCount", { count: consumer.enabled_tools.length });
 
   const editHeadersButton = isUrlType && !isEditingConfig && (
-    <Button variant="ghost" size="xs" onClick={() => setIsEditingConfig(true)}>
+    <Button
+      variant="ghost"
+      size="xs"
+      className="text-muted-foreground"
+      onClick={() => setIsEditingConfig(true)}
+    >
       <Pencil />
       {tCommon("edit")}
     </Button>
@@ -695,22 +648,11 @@ export default function MCPInstanceOverview({
               </SectionCard>
             )}
 
-            <SectionCard>
-              <SectionCardHead icon={<Info />} title={t("details.title")} />
-              <CardField label={t("details.id")}>
-                <CopyableText text={instance.id} />
-              </CardField>
-              <FactRow
-                tile={<SoftTile icon={<CalendarClock />} />}
-                title={dateTime(instance.created_at)}
-                sub={t("details.created")}
-              />
-              <FactRow
-                tile={<SoftTile icon={<CalendarClock />} />}
-                title={dateTime(instance.updated_at)}
-                sub={t("details.updated")}
-              />
-            </SectionCard>
+            <ConnectionDetailsCard
+              id={instance.id}
+              createdAt={instance.created_at}
+              updatedAt={instance.updated_at}
+            />
           </div>
         </div>
       </div>

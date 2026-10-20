@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import { FactRow } from "@/components/Overview/OverviewCard";
 
 export interface CustomHeader {
   name: string;
@@ -6,44 +7,29 @@ export interface CustomHeader {
   value?: string | null;
 }
 
-export function CustomHeadersList({
-  headers,
-  label,
-}: {
-  headers: CustomHeader[];
-  label?: string;
-}) {
-  if (headers.length === 0) return null;
-
+/**
+ * Stored headers or query parameters as rows of a section card: the name in
+ * mono, the value on the right, a secret shown only as locked dots.
+ */
+export function CustomHeadersList({ headers }: { headers: CustomHeader[] }) {
   return (
-    <div className="space-y-2">
-      {label && (
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </div>
-      )}
-      <div className="grid gap-2">
-        {headers.map((header) => (
-          <div
-            key={header.name}
-            className="flex items-center justify-between rounded-md border px-3 py-2"
-          >
-            <p className="font-mono text-sm">{header.name}</p>
-            <div className="flex items-center gap-1.5">
-              {header.secret ? (
-                <>
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-mono text-sm text-muted-foreground">
-                    ••••••••
-                  </span>
-                </>
-              ) : (
-                <span className="font-mono text-sm">{header.value ?? ""}</span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <>
+      {headers.map((header) => (
+        <FactRow
+          key={header.name}
+          title={<span className="font-mono">{header.name}</span>}
+          trailing={
+            header.secret ? (
+              <span className="inline-flex items-center gap-1.5 font-mono">
+                <Lock className="h-3 w-3" />
+                ••••••••
+              </span>
+            ) : (
+              <span className="font-mono text-foreground/80">{header.value ?? ""}</span>
+            )
+          }
+        />
+      ))}
+    </>
   );
 }

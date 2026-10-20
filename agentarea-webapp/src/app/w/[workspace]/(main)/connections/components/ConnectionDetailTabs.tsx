@@ -11,27 +11,33 @@ const TABS = [
   { key: "activity", icon: ScrollText, labelKey: "activity" },
 ] as const;
 
+type TabKey = (typeof TABS)[number]["key"];
+
 /**
  * Connection detail navigation: the same solid segmented control as the agent
  * and automation detail pages.
  */
 export default function ConnectionDetailTabs({
-  instanceId,
+  basePath,
   toolCount,
+  without = [],
 }: {
-  instanceId: string;
+  /** The overview's path, e.g. `/connections/<id>`; the tabs hang off it. */
+  basePath: string;
   /** Discovered tools, shown next to the Tools tab. */
   toolCount?: number;
+  /** Tabs this kind of connection has nothing for. */
+  without?: TabKey[];
 }) {
   const t = useTranslations("MCPServersPage.instanceDetail.tabs");
   const pathname = useWorkspacePathname();
   const router = useWorkspaceRouter();
 
-  const hrefFor = (key: string) =>
-    key ? `/connections/${instanceId}/${key}` : `/connections/${instanceId}`;
+  const hrefFor = (key: string) => (key ? `${basePath}/${key}` : basePath);
+  const tabs = TABS.filter((tab) => !without.includes(tab.key));
 
   const activeTab =
-    TABS.find((tab) => {
+    tabs.find((tab) => {
       const href = hrefFor(tab.key);
       return tab.key
         ? pathname === href || pathname.startsWith(`${href}/`)
@@ -41,7 +47,7 @@ export default function ConnectionDetailTabs({
   return (
     <nav aria-label={t("label")} className="min-w-0 flex-1">
       <CountSegmentedControl
-        items={TABS.map((tab) => {
+        items={tabs.map((tab) => {
           const Icon = tab.icon;
           return {
             value: tab.key,

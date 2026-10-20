@@ -74,29 +74,6 @@ function hasHints(annotations?: ToolAnnotations): boolean {
   return HINT_BADGES.some((b) => annotations?.[b.key] === true);
 }
 
-const METHOD_STYLES: Record<string, string> = {
-  GET: "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800",
-  POST: "bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800",
-  PUT: "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800",
-  PATCH:
-    "bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800",
-  DELETE:
-    "bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800",
-};
-
-function MethodBadge({ method }: { method?: string }) {
-  const m = (method || "").toUpperCase();
-  const style =
-    METHOD_STYLES[m] ?? "bg-muted text-muted-foreground border-border";
-  return (
-    <span
-      className={`inline-block w-[60px] shrink-0 rounded border px-1.5 py-0.5 text-center font-mono text-[10px] font-semibold uppercase tracking-wider ${style}`}
-    >
-      {m || "—"}
-    </span>
-  );
-}
-
 function prettyGroup(key: string): string {
   return key.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -249,8 +226,8 @@ function ToolName({ row }: { row: ToolRow }) {
   );
 }
 
-/** Columns for MCP tool rows: name, description, who holds it, expand chevron. */
-function useMcpColumns(
+/** Columns for tool rows: name, description, hints, who holds it, expand chevron. */
+function useToolColumns(
   principalsFor: PrincipalLookup | null,
   isOpen: (row: ToolRow) => boolean,
   showHints: boolean,
@@ -391,7 +368,7 @@ const canExpand = (
   descriptionInDetails(row, viewport.narrow) ||
   hintsInDetails(row, viewport);
 
-function McpToolsTable({
+function ToolRowsTable({
   rows,
   principalsFor,
   isOpen,
@@ -404,7 +381,7 @@ function McpToolsTable({
   toggle: (row: ToolRow) => void;
   viewport: Viewport;
 }) {
-  const columns = useMcpColumns(
+  const columns = useToolColumns(
     principalsFor,
     isOpen,
     rows.some((row) => hasHints(row.annotations)),
@@ -433,45 +410,6 @@ function McpToolsTable({
   );
 }
 
-function OpenApiToolsTable({ rows }: { rows: ToolRow[] }) {
-  const t = useTranslations("OpenAPIConnection");
-  return (
-    <Table
-      data={rows}
-      className="table-fixed"
-      columns={[
-        {
-          header: t("method"),
-          accessor: "method",
-          headerClassName: "w-[96px]",
-          render: (value) => <MethodBadge method={value as string} />,
-        },
-        {
-          header: t("operation"),
-          accessor: "description",
-          render: (value, row) => (
-            <div className="flex flex-col gap-0.5">
-              {value ? (
-                <DescriptionSummary markdown={value as string} />
-              ) : (
-                <span className="text-sm font-medium">{row?.name}</span>
-              )}
-              {row?.path && (
-                <span className="break-all font-mono text-[11px] text-muted-foreground">
-                  {row.path}
-                </span>
-              )}
-              <span className="break-all font-mono text-[10px] text-muted-foreground">
-                {row?.name}
-              </span>
-            </div>
-          ),
-        },
-      ]}
-    />
-  );
-}
-
 // Hard ceiling on rows rendered in one flat list — a 400-tool server otherwise
 // puts 400 expandable rows into the DOM on first paint.
 const FLAT_RENDER_CAP = 150;
@@ -496,7 +434,6 @@ export function ToolsToolbar({
     facet,
     setFacet,
     principalsFor,
-    isOpenAPI,
     hasDestructive,
     hasReadOnly,
     facetCounts,
@@ -521,7 +458,7 @@ export function ToolsToolbar({
   return (
     <SubheaderToolbar
       categories={
-        !isOpenAPI && facetItems.length > 1 ? (
+        facetItems.length > 1 ? (
           <div role="group" aria-label={t("facetsLabel")} className="min-w-0">
             <CountSegmentedControl
               items={facetItems}
@@ -574,14 +511,7 @@ export function ToolsTable({
   const viewport = useMemo(() => ({ narrow, mobile }), [narrow, mobile]);
   const ownFacets = useToolFacets(tools, consumers);
   const facets = givenFacets ?? ownFacets;
-  const {
-    principalsFor,
-    isOpenAPI,
-    searching,
-    mcpRows,
-    mcpGroups,
-    pathGroups,
-  } = facets;
+  const { principalsFor, rows, groups } = facets;
 
   const isOpen = (row: ToolRow) => open.has(row.id);
   const toggle = (row: ToolRow) =>
@@ -608,78 +538,48 @@ export function ToolsTable({
       }
     />
   );
-  let body: ReactNode;
-  if (!isOpenAPI) {
-    const truncated = !mcpGroups.length && mcpRows.length > FLAT_RENDER_CAP;
-    body =
-      mcpRows.length === 0 ? (
-        empty
-      ) : mcpGroups.length > 0 ? (
-        <div className={groupsClassName}>
-          {mcpGroups.map((group) => {
-            return (
-              <CollapsibleGroup
-                key={group.key}
-                variant="plain"
-                defaultOpen={group.open}
-                label={
-                  group.key === OTHER_GROUP_KEY
-                    ? t("otherGroup")
-                    : prettyGroup(group.label)
-                }
-                count={group.rows.length}
-              >
-                <McpToolsTable
-                  rows={group.rows}
-                  principalsFor={principalsFor}
-                  isOpen={isOpen}
-                  toggle={toggle}
-                  viewport={viewport}
-                />
-              </CollapsibleGroup>
-            );
-          })}
-        </div>
-      ) : (
-        <>
-          <McpToolsTable
-            rows={truncated ? mcpRows.slice(0, FLAT_RENDER_CAP) : mcpRows}
-            principalsFor={principalsFor}
-            isOpen={isOpen}
-            toggle={toggle}
-            viewport={viewport}
-          />
-          {truncated && (
-            <p className="note">
-              {t("truncated", { shown: FLAT_RENDER_CAP, total: mcpRows.length })}
-            </p>
-          )}
-        </>
-      );
-  } else {
-    // Auto-expand the first group when there are several so the page isn't an
-    // empty-looking accordion; collapse the rest so 70-tool specs stay scannable.
-    // A live search already narrowed the set, so every remaining group opens.
-    const defaultOpenAll = pathGroups.length <= 2 || searching;
-    body =
-      pathGroups.length === 0 ? (
-        empty
-      ) : (
-        <div className={groupsClassName}>
-          {pathGroups.map((group, i) => (
-            <CollapsibleGroup
-              key={group.key}
-              variant="plain"
-              defaultOpen={defaultOpenAll || i === 0}
-              label={prettyGroup(group.key)}
-              count={group.rows.length}
-            >
-              <OpenApiToolsTable rows={group.rows} />
-            </CollapsibleGroup>
-          ))}
-        </div>
-      );
-  }
+  const truncated = !groups.length && rows.length > FLAT_RENDER_CAP;
+  const body: ReactNode =
+    rows.length === 0 ? (
+      empty
+    ) : groups.length > 0 ? (
+      <div className={groupsClassName}>
+        {groups.map((group) => (
+          <CollapsibleGroup
+            key={group.key}
+            variant="plain"
+            defaultOpen={group.open}
+            label={
+              group.key === OTHER_GROUP_KEY ? t("otherGroup") : prettyGroup(group.label)
+            }
+            count={group.rows.length}
+          >
+            <ToolRowsTable
+              rows={group.rows}
+              principalsFor={principalsFor}
+              isOpen={isOpen}
+              toggle={toggle}
+              viewport={viewport}
+            />
+          </CollapsibleGroup>
+        ))}
+      </div>
+    ) : (
+      <>
+        <ToolRowsTable
+          rows={truncated ? rows.slice(0, FLAT_RENDER_CAP) : rows}
+          principalsFor={principalsFor}
+          isOpen={isOpen}
+          toggle={toggle}
+          viewport={viewport}
+        />
+        {truncated && (
+          <p className="note">
+            {t("truncated", { shown: FLAT_RENDER_CAP, total: rows.length })}
+          </p>
+        )}
+      </>
+    );
 
   return (
     <div className="space-y-3">

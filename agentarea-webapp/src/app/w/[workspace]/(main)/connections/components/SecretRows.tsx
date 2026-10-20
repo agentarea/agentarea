@@ -34,6 +34,7 @@ export function SecretRows({
   nameClassName?: string;
 }) {
   const t = useTranslations("OpenAPIConnection");
+  const tCommon = useTranslations("Common");
 
   const update = (i: number, patch: Partial<SecretRow>) =>
     onChange(rows.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
@@ -77,6 +78,10 @@ export function SecretRows({
             type="button"
             variant="ghost"
             size="xs"
+            // Quiet until hovered, then the colour of what it does.
+            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 dark:hover:text-destructive"
+            aria-label={tCommon("delete")}
+            title={tCommon("delete")}
             onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
           >
             <Trash2 />

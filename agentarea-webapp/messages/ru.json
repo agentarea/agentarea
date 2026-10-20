@@ -991,7 +991,7 @@
       },
       "details": {
         "title": "Детали",
-        "id": "ID инстанса",
+        "id": "ID подключения",
         "created": "Создан",
         "updated": "Обновлён"
       },
@@ -1202,31 +1202,31 @@
       "usage": "Не удалось загрузить, какие агенты используют эти подключения"
     },
     "openapiDetail": {
-      "back": "Назад к подключениям",
-      "notFound": "Подключение не найдено",
-      "refreshing": "Обновление...",
       "refreshFromSpec": "Обновить из спецификации",
-      "deleting": "Удаление...",
       "deleteTitle": "Удалить подключение?",
-      "type": "Тип",
-      "status": "Статус",
       "baseUrl": "Базовый URL",
       "specUrl": "URL спецификации",
-      "customHeaders": "Свои заголовки ({count})",
-      "noCustomHeaders": "Своих заголовков нет. Нажмите «Добавить», чтобы задать Authorization или другой заголовок, который нужен провайдеру.",
-      "customQueryParams": "Параметры запроса ({count})",
-      "noCustomQueryParams": "Параметров запроса нет. Нажмите «Добавить», чтобы передавать ключ, который API ждёт в URL, например api_key.",
+      "noCustomHeaders": "Своих заголовков нет. Добавьте Authorization или любой другой заголовок, который нужен провайдеру.",
+      "noCustomQueryParams": "Параметров нет. Добавьте ключ, который API ждёт в URL, например api_key.",
       "noToolsWithSpec": "Инструменты пока не найдены. Нажмите «Обновить из спецификации», чтобы разобрать её заново.",
       "noTools": "Из этой спецификации не удалось получить инструменты.",
-      "availableTools": "Доступные инструменты ({count})",
       "oauthError": "Не удалось подключить аккаунт: {reason}",
       "errors": {
-        "loadFailed": "Не удалось загрузить подключение",
-        "reloadFailed": "Не удалось заново загрузить подключение",
         "discoverFailed": "Не удалось обновить инструменты из спецификации",
         "saveHeadersFailed": "Не удалось сохранить заголовки",
         "saveQueryParamsFailed": "Не удалось сохранить параметры запроса",
         "deleteFailed": "Не удалось удалить подключение"
+      },
+      "specLink": "Спецификация",
+      "specPasted": "Вставлена как JSON, перечитать не откуда",
+      "headersTitle": "Заголовки",
+      "queryParamsTitle": "Параметры запроса",
+      "stats": {
+        "fromSpecUrl": "из спецификации по ссылке",
+        "fromSpecJson": "из вставленной спецификации",
+        "headers": "Заголовки",
+        "queryParams": "Параметры запроса",
+        "secretCount": "{count, plural, =0 {без шифрования} one {# зашифрован} few {# зашифрованы} many {# зашифрованы} other {# зашифрованы}}"
       }
     },
     "sourceFilter": "Из каталога: {name}",
@@ -2561,8 +2561,6 @@
     "availableTools": "Доступные инструменты:"
   },
   "OpenAPIConnection": {
-    "method": "Метод",
-    "operation": "Операция",
     "addHeader": "Добавить",
     "editHeaders": "Изменить",
     "saveHeaders": "Сохранить заголовки",
@@ -2571,7 +2569,7 @@
     "headerName": "Имя заголовка",
     "headerValue": "Значение заголовка",
     "secretValuePlaceholder": "Секретное значение (оставьте пустым, чтобы не менять)",
-    "headersEditorHint": "Добавьте заголовки, например Authorization: Bearer <token>. Небезопасные заголовки шифруются.",
+    "headersEditorHint": "Добавьте заголовки, например Authorization: Bearer ВАШ_ТОКЕН. Небезопасные заголовки шифруются.",
     "editQueryParams": "Изменить",
     "saveQueryParams": "Сохранить параметры",
     "queryParamName": "Имя параметра",

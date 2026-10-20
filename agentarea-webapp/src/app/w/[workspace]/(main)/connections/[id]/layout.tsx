@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import ContentBlock from "@/components/ContentBlock";
 import { getMCPInstanceToolCount } from "../utils";
-import ConnectionDetailTabs from "./ConnectionDetailTabs";
+import ConnectionDetailTabs from "../components/ConnectionDetailTabs";
 import MCPInstanceHeaderControls from "./HeaderControls";
 import { getInstanceCached } from "./instanceData";
 
@@ -39,7 +39,7 @@ export default async function ConnectionLayout({ params, children }: Props) {
       className="p-0"
       subheader={
         <ConnectionDetailTabs
-          instanceId={id}
+          basePath={`/connections/${id}`}
           toolCount={getMCPInstanceToolCount(instance)}
         />
       }

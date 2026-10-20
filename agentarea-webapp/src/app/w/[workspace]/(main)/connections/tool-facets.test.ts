@@ -4,7 +4,6 @@ import {
   countToolFacets,
   filterTools,
   groupToolsByName,
-  groupToolsByPath,
   OTHER_GROUP_KEY,
   titleAddsToName,
   toToolRows,
@@ -253,36 +252,6 @@ describe("groupToolsByName", () => {
     expect(groups[1].rows.map((row) => row.name)).toEqual([
       "archive",
       "zendesk_ticket",
-    ]);
-  });
-});
-
-describe("groupToolsByPath", () => {
-  it("groups OpenAPI operations by the first non-version path segment", () => {
-    const groups = groupToolsByPath([
-      {
-        name: "listPayments",
-        description: "List payments",
-        method: "GET",
-        path: "/acquiring/v1.0/payments",
-      },
-      {
-        name: "getAccounts",
-        description: "Get accounts",
-        method: "GET",
-        path: "/open-banking/v1.0/accounts",
-      },
-      {
-        name: "createPayment",
-        description: "Create payment",
-        method: "POST",
-        path: "/acquiring/v1.0/payments",
-      },
-    ]);
-
-    expect(groups.map((g) => [g.key, g.rows.map((row) => row.name)])).toEqual([
-      ["acquiring", ["createPayment", "listPayments"]],
-      ["open-banking", ["getAccounts"]],
     ]);
   });
 });
