@@ -30,6 +30,9 @@ from agentarea_common.observability import get_temporal_plugins, setup_otel
 from agentarea_common.utils.outbound_tls import install_outbound_trust
 from agentarea_common.workflow.sandbox import create_workflow_runner
 from agentarea_execution import create_activities_for_worker
+from agentarea_execution.activities.cron_schedule_sync_activities import (
+    make_cron_schedule_sync_activities,
+)
 from agentarea_execution.activities.heartbeat import CANCELLATION_DELIVERY_INTERVAL
 from agentarea_execution.activities.undispatched_task_activities import (
     make_undispatched_task_activities,
@@ -40,11 +43,16 @@ from agentarea_execution.interfaces import ActivityDependencies
 from agentarea_execution.workflows.agent_execution_workflow import (
     AgentExecutionWorkflow,
 )
+from agentarea_execution.workflows.cron_schedule_sync_workflow import (
+    CronScheduleSyncWorkflow,
+    ensure_cron_schedule_sync_schedule,
+)
 from agentarea_execution.workflows.undispatched_task_reconciler_workflow import (
     UndispatchedTaskReconcilerWorkflow,
     ensure_undispatched_task_schedule,
 )
 from agentarea_mcp.activities import make_mcp_activities
+from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
 from temporalio.client import Client
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -311,6 +319,7 @@ class AgentAreaWorker:
         )
 
         await ensure_undispatched_task_schedule(self.client, settings.temporal.QUEUE)
+        await ensure_cron_schedule_sync_schedule(self.client, settings.triggers.QUEUE)
 
         # The delivery group sending task events out.
         await self._setup_channel_subscribers(dependencies)
@@ -328,9 +337,12 @@ class AgentAreaWorker:
         self.trigger_worker = Worker(
             self.client,
             task_queue=settings.triggers.QUEUE,
-            workflows=[TriggerExecutionWorkflow, TriggerBatchWorkflow],
+            workflows=[TriggerExecutionWorkflow, TriggerBatchWorkflow, CronScheduleSyncWorkflow],
             activities=make_trigger_activities(dependencies)
-            + make_trigger_batch_activities(self.stream_runtime.batches),
+            + make_trigger_batch_activities(self.stream_runtime.batches)
+            + make_cron_schedule_sync_activities(
+                TemporalScheduleManager(self.client, task_queue=settings.triggers.QUEUE)
+            ),
             workflow_runner=create_workflow_runner(),
             max_concurrent_workflow_tasks=5,
             max_concurrent_activities=5,

@@ -174,7 +174,7 @@ class TestTriggerE2EScenarios:
         assert created_trigger.is_active is True
 
         # Verify schedule was created
-        mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
+        mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once()
 
         # Step 2: Simulate trigger execution
         execution_data = {
@@ -206,14 +206,18 @@ class TestTriggerE2EScenarios:
         assert disable_result is True
 
         # Verify schedule was paused
-        mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once()
+        assert (
+            mock_temporal_schedule_manager.apply_cron_schedule.await_args.kwargs["paused"] is True
+        )
 
         # Re-enable trigger
         enable_result = await trigger_service.enable_trigger(created_trigger.id)
         assert enable_result is True
 
         # Verify schedule was resumed
-        mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once()
+        assert (
+            mock_temporal_schedule_manager.apply_cron_schedule.await_args.kwargs["paused"] is False
+        )
 
         # Step 4: Delete trigger
         delete_result = await trigger_service.delete_trigger(created_trigger.id)

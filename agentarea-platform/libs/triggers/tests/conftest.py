@@ -104,9 +104,16 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
     trigger_repo = trigger_repo if trigger_repo is not None else AsyncMock()
     execution_repo = execution_repo if execution_repo is not None else AsyncMock()
 
+    from agentarea_tasks.infrastructure.repository import TaskRepository
+
+    # No run of the trigger is still going unless a test says so.
+    task_repo = AsyncMock()
+    task_repo.unfinished_runs_from.return_value = []
+
     mapping = {
         TriggerRepository: trigger_repo,
         TriggerExecutionRepository: execution_repo,
+        TaskRepository: task_repo,
     }
 
     try:

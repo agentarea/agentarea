@@ -157,11 +157,9 @@ class TestTriggerLifecycleManagement:
         assert created_trigger.updated_at is not None
 
         # Verify schedule was created
-        mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
-        schedule_call = mock_temporal_schedule_manager.create_cron_schedule.call_args
-        assert schedule_call.kwargs["trigger_id"] == created_trigger.id
-        assert schedule_call.kwargs["cron_expression"] == "0 9 * * 1-5"
-        assert schedule_call.kwargs["timezone"] == "UTC"
+        mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once_with(
+            created_trigger.id, "0 9 * * 1-5", "UTC", paused=False
+        )
 
         # Verify trigger can be retrieved
         retrieved_trigger = await trigger_service.get_trigger(created_trigger.id)
@@ -259,11 +257,8 @@ class TestTriggerLifecycleManagement:
         assert updated_trigger.updated_at > original_created_at  # Should be updated
 
         # Verify schedule was updated
-        mock_temporal_schedule_manager.update_cron_schedule.assert_called_once()
-        update_call = mock_temporal_schedule_manager.update_cron_schedule.call_args
-        assert update_call.kwargs["trigger_id"] == original_id
-        assert update_call.kwargs["cron_expression"] == "0 10 * * *"
-        assert update_call.kwargs["timezone"] == "America/New_York"
+        update_call = mock_temporal_schedule_manager.apply_cron_schedule.await_args
+        assert update_call.args == (original_id, "0 10 * * *", "America/New_York")
 
     async def test_partial_trigger_update(self, trigger_service, sample_agent_id, stream_id):
         """Test partial trigger update (only some fields)."""
@@ -325,9 +320,8 @@ class TestTriggerLifecycleManagement:
         assert disabled_trigger.is_active is False
 
         # Verify schedule was paused
-        mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once_with(
-            created_trigger.id
-        )
+        paused = mock_temporal_schedule_manager.apply_cron_schedule.await_args
+        assert (paused.args[0], paused.kwargs["paused"]) == (created_trigger.id, True)
 
         # Re-enable trigger
         enable_result = await trigger_service.enable_trigger(created_trigger.id)
@@ -338,9 +332,8 @@ class TestTriggerLifecycleManagement:
         assert enabled_trigger.is_active is True
 
         # Verify schedule was resumed
-        mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once_with(
-            created_trigger.id
-        )
+        resumed = mock_temporal_schedule_manager.apply_cron_schedule.await_args
+        assert (resumed.args[0], resumed.kwargs["paused"]) == (created_trigger.id, False)
 
     async def test_stream_trigger_disable_enable(self, trigger_service, sample_agent_id, stream_id):
         """Disabling a stream trigger keeps its subscription to the stream."""
@@ -626,7 +619,7 @@ class TestTriggerLifecycleManagement:
     ):
         """Test lifecycle operations when schedule manager fails."""
         # Make schedule manager fail
-        mock_temporal_schedule_manager.create_cron_schedule.side_effect = Exception(
+        mock_temporal_schedule_manager.apply_cron_schedule.side_effect = Exception(
             "Schedule manager error"
         )
 
@@ -641,15 +634,10 @@ class TestTriggerLifecycleManagement:
             workspace_id="lifecycle-test-workspace",
         )
 
-        # Creation might fail or succeed depending on implementation
-        try:
-            trigger = await trigger_service.create_trigger(trigger_data)
-            # If creation succeeded, verify trigger exists but schedule creation failed
-            assert trigger is not None
-            mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
-        except Exception as e:
-            # If creation failed, verify it's due to schedule manager
-            assert "Schedule manager error" in str(e)
+        # The trigger is stored; the schedule sync brings its schedule in line later.
+        trigger = await trigger_service.create_trigger(trigger_data)
+        assert trigger is not None
+        mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once()
 
     async def test_update_nonexistent_trigger(self, trigger_service):
         """Test updating non-existent trigger."""

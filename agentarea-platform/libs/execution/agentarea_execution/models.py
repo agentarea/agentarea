@@ -1001,6 +1001,7 @@ class TriggerSkipReason(StrEnum):
     TRIGGER_INACTIVE = "trigger_inactive"
     CONDITIONS_NOT_MET = "conditions_not_met"
     NO_NEW_DATA = "no_new_data"
+    PREVIOUS_RUN_ACTIVE = "previous_run_active"
 
 
 class ExecuteTriggerResult(BaseModel):

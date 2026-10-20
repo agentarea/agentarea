@@ -34,6 +34,7 @@ from agentarea_streams.domain import (
     StreamNotFoundError,
     value_at,
 )
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
@@ -283,6 +284,7 @@ class TriggerService:
         self.task_definition_repository = repository_factory.create_repository(
             TaskDefinitionRepository
         )
+        self.task_repository = repository_factory.create_repository(TaskRepository)
 
         # Create agent repository using factory for validation
         try:
@@ -341,24 +343,7 @@ class TriggerService:
                 trigger_type=trigger.trigger_type.value,
             )
 
-            # Schedule cron trigger if applicable
-            if trigger.trigger_type == TriggerType.CRON and isinstance(trigger, CronTrigger):
-                try:
-                    await self.schedule_cron_trigger(trigger)
-                    logger.info(
-                        "Successfully scheduled cron trigger",
-                        trigger_id=trigger.id,
-                        cron_expression=trigger.cron_expression,
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to schedule cron trigger: {e}",
-                        trigger_id=trigger.id,
-                        cron_expression=trigger.cron_expression,
-                        exc_info=True,
-                    )
-                    # Don't fail the trigger creation if scheduling fails
-                    # The trigger can be rescheduled later
+            await self._apply_schedule(trigger)
 
             return trigger
 
@@ -481,30 +466,12 @@ class TriggerService:
             if trigger_update.is_active is False and existing_trigger.is_active:
                 await self._close_open_batches(existing_trigger, "trigger disabled")
 
-            # Update schedule if it's a cron trigger
-            if updated_trigger.trigger_type == TriggerType.CRON and isinstance(
-                updated_trigger, CronTrigger
+            if (
+                trigger_update.cron_expression is not None
+                or trigger_update.timezone is not None
+                or trigger_update.is_active is not None
             ):
-                try:
-                    # Check if schedule settings or active status changed
-                    cron_changed = (
-                        trigger_update.cron_expression is not None
-                        or trigger_update.timezone is not None
-                        or trigger_update.is_active is not None
-                    )
-
-                    if cron_changed and self.temporal_schedule_manager:
-                        await self.temporal_schedule_manager.update_cron_schedule(
-                            trigger_id=updated_trigger.id,
-                            cron_expression=updated_trigger.cron_expression,
-                            timezone=updated_trigger.timezone,
-                        )
-                        logger.info(f"Updated schedule for cron trigger {trigger_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to update schedule for cron trigger {trigger_id}: {e}",
-                        exc_info=True,
-                    )
+                await self._apply_schedule(updated_trigger)
 
         return updated_trigger
 
@@ -592,23 +559,9 @@ class TriggerService:
         if success:
             logger.info(f"Enabled trigger {trigger_id}")
 
-            # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)
-
-            # Enable schedule if it's a cron trigger
-            if (
-                trigger
-                and trigger.trigger_type == TriggerType.CRON
-                and self.temporal_schedule_manager
-            ):
-                try:
-                    await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
-                    logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to unpause schedule for cron trigger {trigger_id}: {e}",
-                        exc_info=True,
-                    )
+            if trigger is not None:
+                await self._apply_schedule(trigger)
 
         return success
 
@@ -627,25 +580,10 @@ class TriggerService:
         if success:
             logger.info(f"Disabled trigger {trigger_id}")
 
-            # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)
             if trigger is not None:
                 await self._close_open_batches(trigger, "trigger disabled")
-
-            # Pause schedule if it's a cron trigger
-            if (
-                trigger
-                and trigger.trigger_type == TriggerType.CRON
-                and self.temporal_schedule_manager
-            ):
-                try:
-                    await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
-                    logger.info(f"Paused schedule for cron trigger {trigger_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to pause schedule for cron trigger {trigger_id}: {e}",
-                        exc_info=True,
-                    )
+                await self._apply_schedule(trigger)
 
         return success
 
@@ -919,157 +857,30 @@ class TriggerService:
 
     # Temporal Schedule Management
 
-    async def schedule_cron_trigger(self, trigger: CronTrigger) -> None:
-        """Schedule a cron trigger using Temporal Schedules.
+    async def _apply_schedule(self, trigger: Trigger) -> None:
+        """Bring a cron trigger's schedule to the trigger as stored.
 
-        Args:
-            trigger: The cron trigger to schedule
-
-        Raises:
-            DependencyUnavailableError: If temporal_schedule_manager is not available
-            TriggerExecutionError: If scheduling fails
+        The trigger is already written; a schedule Temporal refuses now is
+        brought in line by the schedule sync within minutes (see ``schedule_sync``).
         """
-        if not self.temporal_schedule_manager:
-            error_msg = "Temporal schedule manager not available - cannot schedule cron trigger"
-            logger.error(error_msg, trigger_id=trigger.id)
-            raise DependencyUnavailableError(
-                error_msg, dependency="temporal_schedule_manager", trigger_id=str(trigger.id)
+        if not isinstance(trigger, CronTrigger):
+            return
+        if self.temporal_schedule_manager is None:
+            logger.warning(
+                f"No schedule manager to apply trigger {trigger.id}'s schedule; "
+                "the schedule sync applies it"
             )
-
+            return
         try:
-            logger.info(
-                "Scheduling cron trigger",
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
+            await self.temporal_schedule_manager.apply_cron_schedule(
+                trigger.id, trigger.cron_expression, trigger.timezone, paused=not trigger.is_active
             )
-
-            await self.temporal_schedule_manager.create_cron_schedule(
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
-                paused=not trigger.is_active,
-            )
-
-            logger.info(
-                "Successfully scheduled cron trigger",
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-            )
-
-        except Exception as e:
-            error_msg = f"Failed to schedule cron trigger: {e}"
+        except Exception:
             logger.error(
-                error_msg,
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
+                f"Could not bring the schedule of trigger {trigger.id} in line; "
+                "the schedule sync retries it",
                 exc_info=True,
             )
-            raise TriggerExecutionError(
-                error_msg,
-                trigger_id=str(trigger.id),
-                cron_expression=trigger.cron_expression,
-                original_error=str(e),
-            ) from None
-
-    async def unschedule_cron_trigger(self, trigger_id: UUID) -> None:
-        """Unschedule a cron trigger by deleting its Temporal Schedule.
-
-        Args:
-            trigger_id: The ID of the trigger to unschedule
-
-        Raises:
-            Exception: If unscheduling fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot unschedule trigger {trigger_id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.delete_cron_schedule(trigger_id)
-            logger.info(f"Unscheduled cron trigger {trigger_id}")
-        except Exception as e:
-            logger.error(f"Failed to unschedule cron trigger {trigger_id}: {e}", exc_info=True)
-            raise
-
-    async def update_cron_schedule(self, trigger: CronTrigger) -> None:
-        """Update a cron trigger's Temporal Schedule.
-
-        Args:
-            trigger: The updated cron trigger
-
-        Raises:
-            Exception: If schedule update fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot update schedule for trigger {trigger.id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.update_cron_schedule(
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
-            )
-            logger.info(f"Updated schedule for cron trigger {trigger.id}")
-        except Exception as e:
-            logger.error(
-                f"Failed to update schedule for cron trigger {trigger.id}: {e}", exc_info=True
-            )
-            raise
-
-    async def pause_cron_schedule(self, trigger_id: UUID) -> None:
-        """Pause a cron trigger's Temporal Schedule.
-
-        Args:
-            trigger_id: The ID of the trigger to pause
-
-        Raises:
-            Exception: If pausing fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot pause trigger {trigger_id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
-            logger.info(f"Paused schedule for cron trigger {trigger_id}")
-        except Exception as e:
-            logger.error(
-                f"Failed to pause schedule for cron trigger {trigger_id}: {e}", exc_info=True
-            )
-            raise
-
-    async def unpause_cron_schedule(self, trigger_id: UUID) -> None:
-        """Unpause a cron trigger's Temporal Schedule.
-
-        Args:
-            trigger_id: The ID of the trigger to unpause
-
-        Raises:
-            Exception: If unpausing fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot unpause trigger {trigger_id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
-            logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
-        except Exception as e:
-            logger.error(
-                f"Failed to unpause schedule for cron trigger {trigger_id}: {e}", exc_info=True
-            )
-            raise
 
     async def get_cron_schedule_info(self, trigger_id: UUID) -> dict | None:
         """Get information about a cron trigger's Temporal Schedule.
@@ -1477,6 +1288,20 @@ class TriggerService:
                     ),
                 )
 
+        # A schedule comes due again whether or not its last run has finished;
+        # the firing workflow ends once the task starts, so Temporal's overlap
+        # policy never sees the run. Each event of a stream trigger is its own
+        # work, and a person asking for a run gets it.
+        if trigger.trigger_type == TriggerType.CRON and fired_by is None:
+            running = await self._run_still_going(trigger.id)
+            if running is not None:
+                reason = f"The previous run is still going (task {running})"
+                logger.info(f"Trigger {trigger_id} skipped: {reason}")
+                execution = await self._record_execution_skipped(trigger_id, reason, trigger_data)
+                return TriggerFiring(
+                    outcome="skipped", reason=reason, execution=execution, blocked_by=running
+                )
+
         start_time = time.time()
         verdict: ConditionVerdict | None = None
         try:
@@ -1611,6 +1436,24 @@ class TriggerService:
             return TriggerFiring(
                 outcome="error", reason=str(e), verdict=verdict, execution=execution
             )
+
+    async def _run_still_going(self, trigger_id: UUID) -> UUID | None:
+        """The trigger's task whose workflow is still open, if any.
+
+        A stored status can outlive its run -- a terminated workflow, a lost
+        history, a status write that failed -- so the workflow is asked; a task
+        whose workflow never started is running nothing.
+        """
+        for task_id, workflow_id in await self.task_repository.unfinished_runs_from(
+            "trigger", str(trigger_id)
+        ):
+            if workflow_id is None:
+                continue
+            if self.temporal_schedule_manager is None:
+                return task_id
+            if await self.temporal_schedule_manager.workflow_is_open(workflow_id):
+                return task_id
+        return None
 
     async def _record_execution_success(
         self,

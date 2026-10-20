@@ -353,6 +353,26 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return [self._orm_to_domain(t) for t in result.scalars().all()]
 
+    async def unfinished_runs_from(
+        self, origin_type: str, origin_id: str
+    ) -> list[tuple[UUID, str | None]]:
+        """Tasks this origin started whose stored status has not ended, oldest first.
+
+        Each comes with its workflow id, or None when its workflow never started.
+        The stored status can outlive the run, so whoever acts on it checks the run.
+        """
+        stmt = (
+            select(TaskORM.id, TaskORM.execution_id)
+            .where(
+                self._get_workspace_filter(),
+                TaskORM.origin_type == origin_type,
+                TaskORM.origin_id == origin_id,
+                TaskORM.status.not_in(ENDED_TASK_STATUSES),
+            )
+            .order_by(TaskORM.created_at)
+        )
+        return [(row.id, row.execution_id) for row in await self.session.execute(stmt)]
+
     async def count_by_statuses(self, statuses: list[str], agent_id: UUID | None = None) -> int:
         """Count tasks matching any of the given statuses in the current workspace.
 

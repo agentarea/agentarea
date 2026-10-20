@@ -23,6 +23,7 @@ from agentarea_execution.models import (
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import ConditionVerdict, CronTrigger, TriggerExecution
 from agentarea_triggers.infrastructure.repository import FailureCount
+from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
 from agentarea_triggers.trigger_service import TriggerService
 from temporalio.testing import ActivityEnvironment
 
@@ -52,7 +53,7 @@ class _Harness:
         self.trigger = trigger
         self.trigger_repo = AsyncMock()
         self.trigger_repo.get_trigger.return_value = trigger
-        self.trigger_repo.disable_trigger.return_value = True
+        self.trigger_repo.disable_trigger.side_effect = self._disable
         self.trigger_repo.count_failure.return_value = FailureCount(
             trigger.consecutive_failures + 1, trigger.failure_threshold, trigger.is_active
         )
@@ -60,6 +61,8 @@ class _Harness:
         self.execution_repo.create.side_effect = lambda **kwargs: TriggerExecution(**kwargs)
         self.agent_repo = AsyncMock()
         self.agent_repo.get.return_value = SimpleNamespace(status="active")
+        self.task_repo = AsyncMock()
+        self.task_repo.unfinished_runs_from.return_value = []
         self.task_service = AsyncMock()
         self.task_service.get_task.return_value = None
         self.task_service.route_or_submit_task.side_effect = lambda task, **_: task
@@ -80,6 +83,10 @@ class _Harness:
                 secret_manager_factory=MagicMock(),
             )
         )
+
+    def _disable(self, trigger_id):
+        self.trigger.is_active = False
+        return True
 
     async def run(self, activity_fn, request, *patches):
         with ExitStack() as stack:
@@ -105,6 +112,12 @@ class _Harness:
                 patch(
                     "agentarea_agents.infrastructure.repository.AgentRepository",
                     return_value=self.agent_repo,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "agentarea_triggers.trigger_service.TaskRepository",
+                    return_value=self.task_repo,
                 )
             )
             stack.enter_context(
@@ -161,18 +174,23 @@ async def test_a_cron_trigger_that_hits_its_failure_threshold_pauses_its_schedul
     harness = _Harness(_trigger(failure_threshold=1))
     harness.task_service.route_or_submit_task.side_effect = ValueError("no model")
 
-    result = await harness.fire()
+    apply = AsyncMock(return_value=True)
+
+    result = await harness.fire(
+        None, patch.object(TemporalScheduleManager, "apply_cron_schedule", apply)
+    )
 
     assert result.status is TriggerOutcome.FAILED
     assert result.task_id is None
     assert "no model" in (result.error or "")
-    harness.client.get_schedule_handle.assert_called_with(f"cron-trigger-{harness.trigger.id}")
-    harness.schedule_handle.pause.assert_awaited()
+    assert apply.await_args.args[0] == harness.trigger.id
+    assert apply.await_args.kwargs["paused"] is True
     harness.database.async_session_factory.return_value.commit.assert_awaited()
 
 
 async def test_a_recorded_workflow_failure_at_the_threshold_pauses_the_schedule():
     harness = _Harness(_trigger(failure_threshold=1))
+    apply = AsyncMock(return_value=True)
 
     await harness.run(
         harness.record,
@@ -180,9 +198,10 @@ async def test_a_recorded_workflow_failure_at_the_threshold_pauses_the_schedule(
             trigger_id=harness.trigger.id,
             execution_data={"status": "failed", "error_message": "boom"},
         ),
+        patch.object(TemporalScheduleManager, "apply_cron_schedule", apply),
     )
 
-    harness.schedule_handle.pause.assert_awaited()
+    assert apply.await_args.kwargs["paused"] is True
     harness.database.async_session_factory.return_value.commit.assert_awaited()
 
 
@@ -210,6 +229,20 @@ async def test_unmet_conditions_skip_the_firing():
 
     assert result.status is TriggerOutcome.SKIPPED
     assert result.reason is TriggerSkipReason.CONDITIONS_NOT_MET
+    harness.task_service.route_or_submit_task.assert_not_awaited()
+
+
+async def test_a_firing_gives_way_to_the_run_still_going():
+    harness = _Harness(_trigger())
+    harness.task_repo.unfinished_runs_from.return_value = [(uuid4(), "agent-task-1")]
+
+    result = await harness.fire(
+        None,
+        patch.object(TemporalScheduleManager, "workflow_is_open", AsyncMock(return_value=True)),
+    )
+
+    assert result.status is TriggerOutcome.SKIPPED
+    assert result.reason is TriggerSkipReason.PREVIOUS_RUN_ACTIVE
     harness.task_service.route_or_submit_task.assert_not_awaited()
 
 
@@ -268,7 +301,7 @@ async def test_record_trigger_execution_activity_records_what_the_workflow_repor
     assert recorded["task_id"] == task_id
     assert result.trigger_id == harness.trigger.id
     assert result.status == ExecutionStatus.SUCCESS
-    harness.schedule_handle.pause.assert_not_awaited()
+    harness.schedule_handle.update.assert_not_awaited()
 
 
 async def test_evaluate_trigger_conditions_activity():
