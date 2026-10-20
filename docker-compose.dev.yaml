@@ -190,8 +190,8 @@ services:
         "${CATALOG_MODELS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/llm-models.json}",
         "--source",
         "${CATALOG_MCP_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json}",
-        "--source",
-        "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json}",
+        "--registries-config",
+        '[{"name": "system-skills-curated", "source_url": "${CATALOG_SKILLS_SOURCE:-https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json}", "recommendation_priority": 10}, {"name": "skills.json", "active": false}]',
         "--source",
         "/app/data/catalog/source-types.json",
       ]

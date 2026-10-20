@@ -16,8 +16,7 @@ import {
 import { browseCatalog, listRegistries, listRegistryItems } from "@/lib/api";
 import type { EntityIdentity } from "@/lib/entity-identity";
 
-const CURATED_SKILLS_SOURCE =
-  "https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json";
+const CURATED_SKILLS_REGISTRY = "system-skills-curated";
 
 export type CatalogSuggestionItem = {
   id: string;
@@ -137,7 +136,7 @@ export async function listCatalogSuggestionsAction(
     const registries =
       zListRegistriesV1RegistriesGetResponse.parse(registriesData);
     const curated = registries.find(
-      (registry) => registry.source_url === CURATED_SKILLS_SOURCE
+      (registry) => registry.name === CURATED_SKILLS_REGISTRY
     );
     if (curated) {
       const { data, error } = await listRegistryItems(curated.id, {
