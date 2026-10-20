@@ -19,6 +19,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 
 export type NavSection = {
   id: string;
@@ -58,6 +59,12 @@ export const navData = {
           titleKey: "tasks",
           url: "/tasks",
           icon: ClipboardList,
+        },
+        {
+          title: "Saved tasks",
+          titleKey: "savedTasks",
+          url: "/saved-tasks",
+          icon: ENTITY_ICONS.savedTask,
         },
         {
           title: "Projects",

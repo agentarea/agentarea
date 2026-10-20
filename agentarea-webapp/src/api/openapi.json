@@ -15064,6 +15064,177 @@
         "title": "TaskCreate",
         "type": "object"
       },
+      "TaskDefinitionCreate": {
+        "additionalProperties": false,
+        "description": "A saved task: the agent, what to ask it, and the parameters to ask with.",
+        "properties": {
+          "agent_id": {
+            "description": "UUID of the agent that runs the task.",
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "description": {
+            "description": "What the agent is asked to do each time the task runs.",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "description": "What the saved task is called.",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "description": "Task parameters every run of it starts with, as on a run.",
+            "title": "Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "agent_id"
+        ],
+        "title": "TaskDefinitionCreate",
+        "type": "object"
+      },
+      "TaskDefinitionResponse": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "agent_id",
+          "parameters",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TaskDefinitionResponse",
+        "type": "object"
+      },
+      "TaskDefinitionRun": {
+        "additionalProperties": false,
+        "description": "One run of a saved task.",
+        "properties": {
+          "parameters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Merged over the saved task's own parameters for this run only.",
+            "title": "Parameters"
+          }
+        },
+        "title": "TaskDefinitionRun",
+        "type": "object"
+      },
+      "TaskDefinitionUpdate": {
+        "additionalProperties": false,
+        "description": "Changes to a saved task; a field left out stays as it is.",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters"
+          }
+        },
+        "title": "TaskDefinitionUpdate",
+        "type": "object"
+      },
       "TaskEvent": {
         "description": "Model for task execution events.",
         "properties": {
@@ -15276,7 +15447,8 @@
                   "user",
                   "trigger",
                   "agent",
-                  "api"
+                  "api",
+                  "a2a"
                 ],
                 "type": "string"
               },
@@ -15297,6 +15469,29 @@
               }
             ],
             "title": "Parent Task Id"
+          },
+          "source_identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Identity"
+          },
+          "task_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Definition Id"
           }
         },
         "title": "TaskProvenance",
@@ -16405,6 +16600,19 @@
             "description": "Stream whose events fire this trigger (required when trigger_type='stream').",
             "title": "Stream Id"
           },
+          "task_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Saved task the trigger runs, of the same agent: its text and parameters are what each firing asks, in place of task_parameters.",
+            "title": "Task Definition Id"
+          },
           "task_parameters": {
             "additionalProperties": true,
             "description": "Parameters merged into the task created when the trigger fires.",
@@ -16727,6 +16935,19 @@
             "description": "Stream whose events fire this trigger.",
             "title": "Stream Id"
           },
+          "task_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Saved task each firing asks, in place of task_parameters.",
+            "title": "Task Definition Id"
+          },
           "task_parameters": {
             "additionalProperties": true,
             "title": "Task Parameters",
@@ -16959,6 +17180,19 @@
             "description": "Stream whose events fire this trigger (required when trigger_type='stream').",
             "title": "Stream Id"
           },
+          "task_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Saved task the trigger runs, of the same agent: its text and parameters are what each firing asks, in place of task_parameters.",
+            "title": "Task Definition Id"
+          },
           "task_parameters": {
             "additionalProperties": true,
             "description": "Parameters merged into the task created when the trigger fires.",
@@ -17172,6 +17406,19 @@
                 "type": "null"
               }
             ]
+          },
+          "task_definition_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sent as null, the trigger asks its own task_parameters text again.",
+            "title": "Task Definition Id"
           },
           "task_parameters": {
             "anyOf": [
@@ -38260,6 +38507,431 @@
           "v1",
           "protected",
           "streams"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/task-definitions/": {
+      "get": {
+        "description": "List the workspace's saved tasks, newest first.",
+        "operationId": "list_task_definitions_v1_task_definitions__get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this agent's saved tasks",
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this agent's saved tasks",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "description": "Most saved tasks to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "description": "Most saved tasks to return",
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TaskDefinitionResponse"
+                  },
+                  "title": "Response List Task Definitions V1 Task Definitions  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Task Definitions",
+        "tags": [
+          "v1",
+          "protected",
+          "task-definitions"
+        ]
+      },
+      "post": {
+        "description": "Save a task: the agent, what to ask it, and the parameters.",
+        "operationId": "create_task_definition_v1_task_definitions__post",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskDefinitionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDefinitionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Task Definition",
+        "tags": [
+          "v1",
+          "protected",
+          "task-definitions"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/task-definitions/{definition_id}": {
+      "delete": {
+        "description": "Delete a saved task. Runs started from it stay; a trigger on it fails until changed.",
+        "operationId": "delete_task_definition_v1_task_definitions__definition_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Definition Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Task Definition",
+        "tags": [
+          "v1",
+          "protected",
+          "task-definitions"
+        ]
+      },
+      "get": {
+        "description": "Get a saved task.",
+        "operationId": "get_task_definition_v1_task_definitions__definition_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Definition Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDefinitionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Task Definition",
+        "tags": [
+          "v1",
+          "protected",
+          "task-definitions"
+        ]
+      },
+      "put": {
+        "description": "Change a saved task; only the fields sent change.",
+        "operationId": "update_task_definition_v1_task_definitions__definition_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Definition Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskDefinitionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskDefinitionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Task Definition",
+        "tags": [
+          "v1",
+          "protected",
+          "task-definitions"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/task-definitions/{definition_id}/run": {
+      "post": {
+        "description": "Run a saved task now, as the caller, with its agent, text and parameters.\n\n``parameters`` in the body are merged over the saved ones for this run only.",
+        "operationId": "run_task_definition_v1_task_definitions__definition_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Definition Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/TaskDefinitionRun"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Task Definition",
+        "tags": [
+          "v1",
+          "protected",
+          "task-definitions"
         ]
       }
     },

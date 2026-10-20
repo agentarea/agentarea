@@ -142,6 +142,9 @@ import type {
   CreateStreamV1StreamsPostData,
   CreateStreamV1StreamsPostErrors,
   CreateStreamV1StreamsPostResponses,
+  CreateTaskDefinitionV1TaskDefinitionsPostData,
+  CreateTaskDefinitionV1TaskDefinitionsPostErrors,
+  CreateTaskDefinitionV1TaskDefinitionsPostResponses,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostErrors,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses,
@@ -232,6 +235,9 @@ import type {
   DeleteStreamV1StreamsStreamIdDeleteData,
   DeleteStreamV1StreamsStreamIdDeleteErrors,
   DeleteStreamV1StreamsStreamIdDeleteResponses,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteData,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses,
   DeleteTriggerV1TriggersTriggerIdDeleteData,
   DeleteTriggerV1TriggersTriggerIdDeleteErrors,
   DeleteTriggerV1TriggersTriggerIdDeleteResponses,
@@ -438,6 +444,9 @@ import type {
   GetTaskByIdV1TasksTaskIdGetData,
   GetTaskByIdV1TasksTaskIdGetErrors,
   GetTaskByIdV1TasksTaskIdGetResponses,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetData,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses,
   GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetData,
   GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetErrors,
   GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetResponses,
@@ -646,6 +655,9 @@ import type {
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetData,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetErrors,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetResponses,
+  ListTaskDefinitionsV1TaskDefinitionsGetData,
+  ListTaskDefinitionsV1TaskDefinitionsGetErrors,
+  ListTaskDefinitionsV1TaskDefinitionsGetResponses,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses,
@@ -790,6 +802,9 @@ import type {
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -901,6 +916,9 @@ import type {
   UpdateSkillV1SkillsSkillIdPutData,
   UpdateSkillV1SkillsSkillIdPutErrors,
   UpdateSkillV1SkillsSkillIdPutResponses,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutData,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses,
   UpdateTriggerV1TriggersTriggerIdPutData,
   UpdateTriggerV1TriggersTriggerIdPutErrors,
   UpdateTriggerV1TriggersTriggerIdPutResponses,
@@ -10388,6 +10406,212 @@ export const listOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGet
       url: "/v1/workspaces/{workspace}/streams/{stream_id}/subscriptions/{subscription_id}/outcomes",
       ...options,
     });
+
+/**
+ * List Task Definitions
+ *
+ * List the workspace's saved tasks, newest first.
+ */
+export const listTaskDefinitionsV1TaskDefinitionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListTaskDefinitionsV1TaskDefinitionsGetData, ThrowOnError>
+): RequestResult<
+  ListTaskDefinitionsV1TaskDefinitionsGetResponses,
+  ListTaskDefinitionsV1TaskDefinitionsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListTaskDefinitionsV1TaskDefinitionsGetResponses,
+    ListTaskDefinitionsV1TaskDefinitionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/",
+    ...options,
+  });
+
+/**
+ * Create Task Definition
+ *
+ * Save a task: the agent, what to ask it, and the parameters.
+ */
+export const createTaskDefinitionV1TaskDefinitionsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateTaskDefinitionV1TaskDefinitionsPostData, ThrowOnError>
+): RequestResult<
+  CreateTaskDefinitionV1TaskDefinitionsPostResponses,
+  CreateTaskDefinitionV1TaskDefinitionsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateTaskDefinitionV1TaskDefinitionsPostResponses,
+    CreateTaskDefinitionV1TaskDefinitionsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Task Definition
+ *
+ * Delete a saved task. Runs started from it stay; a trigger on it fails until changed.
+ */
+export const deleteTaskDefinitionV1TaskDefinitionsDefinitionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses,
+    DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+    ...options,
+  });
+
+/**
+ * Get Task Definition
+ *
+ * Get a saved task.
+ */
+export const getTaskDefinitionV1TaskDefinitionsDefinitionIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses,
+    GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+    ...options,
+  });
+
+/**
+ * Update Task Definition
+ *
+ * Change a saved task; only the fields sent change.
+ */
+export const updateTaskDefinitionV1TaskDefinitionsDefinitionIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses,
+    UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Run Task Definition
+ *
+ * Run a saved task now, as the caller, with its agent, text and parameters.
+ *
+ * ``parameters`` in the body are merged over the saved ones for this run only.
+ */
+export const runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
+    RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}/run",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
 
 /**
  * Get All Tasks

@@ -44,6 +44,8 @@ EXPECTED = {
     "causation_id": EVENT_ID,
     "parent_task_id": str(PARENT_ID),
     "depth": 1,
+    "task_definition_id": None,
+    "source_identity": None,
 }
 
 

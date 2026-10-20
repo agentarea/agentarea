@@ -70,8 +70,10 @@ async def _validate_cron_configuration(trigger_data: TriggerCreate) -> None:
     if error is not None:
         raise TriggerValidationError(error)
 
-    # A schedule coming due carries nothing with it, so the task text is the
-    # only thing that can tell the agent what to do.
+    # A schedule coming due carries nothing with it, so the task text, or the
+    # saved task it runs, is the only thing that can tell the agent what to do.
+    if trigger_data.task_definition_id is not None:
+        return
     task_text = (trigger_data.task_parameters or {}).get("text")
     if not isinstance(task_text, str) or not task_text.strip():
         raise TriggerValidationError("Task text is required for CRON triggers")

@@ -62,6 +62,8 @@ import type {
   SkillUpdateRequest,
   SourceCreate,
   TaskCreate,
+  TaskDefinitionCreate,
+  TaskDefinitionUpdate,
   ToolCallApprovalDecision,
   TriggerCreate,
   TriggerType,
@@ -1260,6 +1262,62 @@ export const resolvePrincipals = async (ids: string[]) => {
     query: { ids },
   });
   return { data, error };
+};
+
+export const listTaskDefinitions = async (params?: { agent_id?: string }) => {
+  const result = await sdk.listTaskDefinitionsV1TaskDefinitionsGet({
+    client: serverClient,
+    query: params,
+  });
+  return withStatus(result);
+};
+
+export const getTaskDefinition = async (definitionId: string) => {
+  const result = await sdk.getTaskDefinitionV1TaskDefinitionsDefinitionIdGet({
+    client: serverClient,
+    path: { definition_id: definitionId },
+  });
+  return withStatus(result);
+};
+
+export const createTaskDefinition = async (body: TaskDefinitionCreate) => {
+  const result = await sdk.createTaskDefinitionV1TaskDefinitionsPost({
+    client: serverClient,
+    body,
+  });
+  return withStatus(result);
+};
+
+export const updateTaskDefinition = async (
+  definitionId: string,
+  body: TaskDefinitionUpdate
+) => {
+  const result = await sdk.updateTaskDefinitionV1TaskDefinitionsDefinitionIdPut(
+    {
+      client: serverClient,
+      path: { definition_id: definitionId },
+      body,
+    }
+  );
+  return withStatus(result);
+};
+
+export const deleteTaskDefinition = async (definitionId: string) => {
+  const result =
+    await sdk.deleteTaskDefinitionV1TaskDefinitionsDefinitionIdDelete({
+      client: serverClient,
+      path: { definition_id: definitionId },
+    });
+  return withStatus(result);
+};
+
+export const runTaskDefinition = async (definitionId: string) => {
+  const result =
+    await sdk.runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost({
+      client: serverClient,
+      path: { definition_id: definitionId },
+    });
+  return withStatus(result);
 };
 
 export const listTriggers = async (params?: {

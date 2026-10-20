@@ -73,6 +73,21 @@ class TaskORM(BaseModel, WorkspaceScopedMixin):  # SoftDeleteMixin commented out
     source_identity: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
+class TaskDefinitionORM(BaseModel, WorkspaceScopedMixin):
+    """A saved task: an agent, what to ask it, and the parameters to ask with."""
+
+    __tablename__ = "task_definitions"
+
+    #: Governed by the authorization graph: creating one writes
+    #: ``resource:<id>`` tuples so its creator can reach it afterwards.
+    __graph_resource__ = True
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    agent_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    parameters: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+
 class TaskEventORM(EventBaseModel, WorkspaceScopedMixin):
     """Task event ORM model for event sourcing."""
 

@@ -76,6 +76,7 @@ from .trigger_validation import validate_trigger_configuration
 if TYPE_CHECKING:
     from agentarea_tasks.domain.interfaces import FollowUpClaim
     from agentarea_tasks.domain.models import TaskProvenance
+    from agentarea_tasks.domain.task_definitions import TaskDefinition
 
 logger = TriggerLogger(__name__)
 
@@ -115,10 +116,15 @@ def event_text(trigger_data: dict[str, Any]) -> str | None:
     return "\n".join(texts) if texts else None
 
 
-def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
+def resolve_task_query(
+    trigger: Trigger,
+    trigger_data: dict[str, Any],
+    definition: "TaskDefinition | None" = None,
+) -> str | None:
     """What the agent is being asked to do, or None when nothing says.
 
-    The trigger's task text is what to do; the event is what to do it with, and
+    The trigger's task text is what to do -- or, for a trigger that runs a saved
+    task, that ``definition``'s text; the event is what to do it with, and
     reaches the agent whole in the block ``compose_task_input`` appends, its own
     text included. So a task text always wins. Only a trigger without one -- a
     chat channel whose every message is the request -- takes the event's text
@@ -129,6 +135,8 @@ def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | 
     an agent against "every weekday at 06:45 it scores the inbound queue"
     produces a task about the schedule instead of the work.
     """
+    if definition is not None:
+        return definition.description.strip()
     task_text = trigger.task_parameters.get("text")
     if isinstance(task_text, str) and task_text.strip():
         return task_text.strip()
@@ -158,7 +166,10 @@ class TriggerTaskInput:
 
 
 def compose_task_input(
-    trigger: Trigger, trigger_data: dict[str, Any], event: TriggerEvent | None = None
+    trigger: Trigger,
+    trigger_data: dict[str, Any],
+    event: TriggerEvent | None = None,
+    definition: "TaskDefinition | None" = None,
 ) -> TriggerTaskInput | None:
     """The task a firing starts: its ask, plus the event that fired it. None when nothing asks.
 
@@ -168,7 +179,7 @@ def compose_task_input(
     channel, poller or replay carried in ``trigger_data`` stand in, scrubbed,
     and a schedule tick carries none.
     """
-    ask = resolve_task_query(trigger, trigger_data)
+    ask = resolve_task_query(trigger, trigger_data, definition)
     if ask is None:
         return None
     if event is None:
@@ -189,7 +200,11 @@ def compose_task_input(
     )
 
 
-def _validate_batch(batch: TriggerBatchWindow | None, task_parameters: dict[str, Any]) -> None:
+def _validate_batch(
+    batch: TriggerBatchWindow | None,
+    task_parameters: dict[str, Any],
+    task_definition_id: UUID | None = None,
+) -> None:
     """A batch fits the deployment's cap, and says what to do with its events."""
     if batch is None:
         return
@@ -198,11 +213,20 @@ def _validate_batch(batch: TriggerBatchWindow | None, task_parameters: dict[str,
         raise TriggerValidationError(
             f"batch max_events is {batch.max_events}; a batch holds at most {cap} events"
         )
+    if task_definition_id is not None:
+        return
     text = (task_parameters or {}).get("text")
     if not isinstance(text, str) or not text.strip():
         raise TriggerValidationError(
             "a batched trigger needs task text: what to do with the events of each batch"
         )
+
+
+def _task_definition_after(existing: Trigger, update: TriggerUpdate) -> UUID | None:
+    """The saved task a trigger runs once ``update`` is applied; sent as null, none."""
+    if "task_definition_id" in update.model_fields_set:
+        return update.task_definition_id
+    return existing.task_definition_id
 
 
 class TriggerService:
@@ -239,6 +263,13 @@ class TriggerService:
 
         self.model_instance_repository = repository_factory.create_repository(
             ModelInstanceRepository
+        )
+        from agentarea_tasks.infrastructure.task_definition_repository import (
+            TaskDefinitionRepository,
+        )
+
+        self.task_definition_repository = repository_factory.create_repository(
+            TaskDefinitionRepository
         )
 
         # Create agent repository using factory for validation
@@ -280,6 +311,9 @@ class TriggerService:
 
             # Validate trigger configuration
             await self._validate_trigger_configuration(trigger_data)
+            await self._validate_task_definition(
+                trigger_data.task_definition_id, trigger_data.agent_id
+            )
 
             # Create the trigger
             trigger = await self.trigger_repository.create_from_model(trigger_data)
@@ -1092,7 +1126,9 @@ class TriggerService:
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration; see ``validate_trigger_configuration``."""
         await validate_trigger_configuration(trigger_data, self.model_instance_repository)
-        _validate_batch(trigger_data.batch, trigger_data.task_parameters)
+        _validate_batch(
+            trigger_data.batch, trigger_data.task_parameters, trigger_data.task_definition_id
+        )
         if trigger_data.trigger_type == TriggerType.STREAM and trigger_data.stream_id:
             try:
                 await self.stream_service.get_stream(trigger_data.stream_id)
@@ -1100,6 +1136,21 @@ class TriggerService:
                 raise TriggerValidationError(
                     f"Stream {trigger_data.stream_id} does not exist in this workspace"
                 ) from error
+
+    async def _validate_task_definition(self, definition_id: UUID | None, agent_id: UUID) -> None:
+        """A trigger runs a saved task of its own workspace, and of its own agent."""
+        if definition_id is None:
+            return
+        definition = await self.task_definition_repository.get_definition(definition_id)
+        if definition is None:
+            raise TriggerValidationError(
+                f"Task definition {definition_id} does not exist in this workspace"
+            )
+        if definition.agent_id != agent_id:
+            raise TriggerValidationError(
+                f"Task definition {definition_id} runs agent {definition.agent_id}, "
+                f"not the trigger's agent {agent_id}"
+            )
 
     async def _validate_trigger_update(
         self, existing_trigger: Trigger, trigger_update: TriggerUpdate
@@ -1119,6 +1170,13 @@ class TriggerService:
 
         if trigger_update.agent_id is not None:
             await self._validate_agent_exists(trigger_update.agent_id)
+
+        definition_set = "task_definition_id" in trigger_update.model_fields_set
+        if definition_set or trigger_update.agent_id is not None:
+            await self._validate_task_definition(
+                _task_definition_after(existing_trigger, trigger_update),
+                trigger_update.agent_id or existing_trigger.agent_id,
+            )
 
         if trigger_update.cron_expression is not None:
             error = cron_expression_error(trigger_update.cron_expression)
@@ -1154,6 +1212,7 @@ class TriggerService:
                 trigger_update.task_parameters
                 if trigger_update.task_parameters is not None
                 else existing_trigger.task_parameters,
+                _task_definition_after(existing_trigger, trigger_update),
             )
 
         if trigger_update.event_filter is not None:
@@ -1173,9 +1232,16 @@ class TriggerService:
 
             # Editing a schedule into the state create_trigger refuses is the
             # same mistake, made later. An update that leaves task_parameters
-            # alone leaves the existing text alone with it.
-            if trigger_update.task_parameters is not None:
-                task_text = trigger_update.task_parameters.get("text")
+            # and the saved task alone leaves the existing text alone with them.
+            if (
+                trigger_update.task_parameters is not None or definition_set
+            ) and _task_definition_after(existing_trigger, trigger_update) is None:
+                task_parameters = (
+                    trigger_update.task_parameters
+                    if trigger_update.task_parameters is not None
+                    else existing_trigger.task_parameters
+                )
+                task_text = task_parameters.get("text")
                 if not isinstance(task_text, str) or not task_text.strip():
                     raise TriggerValidationError("Task text is required for CRON triggers")
 
@@ -1294,6 +1360,18 @@ class TriggerService:
                 outcome="skipped", reason="trigger is inactive", execution=execution
             )
 
+        definition = None
+        if trigger.task_definition_id is not None:
+            definition = await self.task_definition_repository.get_definition(
+                trigger.task_definition_id
+            )
+            if definition is None:
+                reason = f"Task definition {trigger.task_definition_id} no longer exists"
+                execution = await self._record_execution_failure(
+                    trigger_id, reason, trigger_data, fired_by=fired_by
+                )
+                return TriggerFiring(outcome="error", reason=reason, execution=execution)
+
         if task_id is not None and self.task_service:
             existing = await self.task_service.get_task(task_id)
             if existing is not None:
@@ -1306,7 +1384,7 @@ class TriggerService:
                     # Starting it now is the retry. A failure raises and is retried.
                     # The stored row keeps only the ask, so the message is composed
                     # again from the same event.
-                    retried_input = compose_task_input(trigger, trigger_data, event)
+                    retried_input = compose_task_input(trigger, trigger_data, event, definition)
                     if retried_input is None:
                         # The trigger lost its instruction since the first attempt;
                         # the stored ask is no longer what it would run.
@@ -1359,7 +1437,7 @@ class TriggerService:
 
             created_task_id = None
             if self.task_service:
-                task_input = compose_task_input(trigger, trigger_data, event)
+                task_input = compose_task_input(trigger, trigger_data, event, definition)
                 if task_input is None:
                     execution = await self._record_execution_failure(
                         trigger_id,
@@ -1373,7 +1451,9 @@ class TriggerService:
                     )
 
                 task_params = task_input.stamp(
-                    await self._build_task_parameters(trigger, trigger_data, fired_by, delivery)
+                    await self._build_task_parameters(
+                        trigger, trigger_data, fired_by, delivery, definition
+                    )
                 )
 
                 from agentarea_tasks.domain.models import AgentTask, TaskProvenance
@@ -1391,8 +1471,10 @@ class TriggerService:
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
                     status="submitted",
-                    provenance=provenance
-                    or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id)),
+                    provenance=(
+                        provenance
+                        or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id))
+                    ).model_copy(update={"task_definition_id": trigger.task_definition_id}),
                 )
                 task = await self.task_service.route_or_submit_task(
                     task, follow_up_claim=follow_up_claim
@@ -1565,6 +1647,7 @@ class TriggerService:
         trigger_data: dict[str, Any],
         fired_by: str | None = None,
         delivery: FiringDelivery | None = None,
+        definition: "TaskDefinition | None" = None,
     ) -> dict[str, Any]:
         """Build task parameters from trigger and execution data using LLM extraction.
 
@@ -1573,15 +1656,17 @@ class TriggerService:
             trigger_data: Trigger execution data
             fired_by: Principal who asked for this run, when a person did
             delivery: Where a stream firing's task replies and the session it joins
+            definition: The saved task the trigger runs, whose parameters replace its own
 
         Returns:
             Task parameters
         """
-        # Start with trigger's task parameters. Reserved keys stored there
+        # Start with the asked task parameters. Reserved keys stored there
         # predate the create/update check; only the firing's delivery below may
         # name where replies go and the session, and only compose_task_input the
         # event file and the follow-up message.
-        params = dict(drop_reserved_parameters(trigger.task_parameters) or {})
+        asked = definition.parameters if definition is not None else trigger.task_parameters
+        params = dict(drop_reserved_parameters(asked) or {})
 
         # Add trigger metadata
         params.update(
@@ -1606,7 +1691,7 @@ class TriggerService:
             delivery.stamp(params)
 
         # Use LLM to extract additional parameters if instruction is provided
-        llm_instruction = trigger.task_parameters.get("llm_parameter_extraction")
+        llm_instruction = asked.get("llm_parameter_extraction")
         if llm_instruction and self.llm_condition_evaluator:
             try:
                 trigger_context = {

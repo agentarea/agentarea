@@ -55,6 +55,15 @@ Conditions = Annotated[
         )
     ),
 ]
+TaskDefinitionId = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Saved task (UUID, from `task_definitions_list`) of the same agent: each firing "
+            "asks its text with its parameters, in place of task_parameters."
+        )
+    ),
+]
 Enabled = Annotated[
     bool, Field(description="Whether the trigger is active as soon as it is created.")
 ]
@@ -69,6 +78,9 @@ class TriggerSummaryOutput(BaseModel):
     name: str = Field(description="Trigger name.")
     description: str = Field(description="What the trigger is for.")
     agent_id: str = Field(description="Id (UUID) of the agent it runs.")
+    task_definition_id: str | None = Field(
+        default=None, description="Id (UUID) of the saved task each firing asks, if any."
+    )
     trigger_type: TriggerTypeLiteral = Field(description="cron or stream.")
     is_active: bool = Field(description="Whether it fires now.")
     cron_expression: str | None = Field(default=None, description="Schedule of a cron trigger.")
@@ -152,6 +164,9 @@ def _trigger_summary(trigger: Any, binding: TriggerBinding | None) -> dict[str, 
         "name": trigger.name,
         "description": trigger.description,
         "agent_id": str(trigger.agent_id),
+        "task_definition_id": str(trigger.task_definition_id)
+        if trigger.task_definition_id
+        else None,
         "trigger_type": getattr(trigger.trigger_type, "value", str(trigger.trigger_type)),
         "is_active": trigger.is_active,
         "cron_expression": getattr(trigger, "cron_expression", None),
@@ -244,6 +259,7 @@ class TriggersToolset(Toolset):
             str, Field(description="IANA timezone the expression is read in, e.g. 'Europe/Moscow'.")
         ] = "UTC",
         task_parameters: TaskParameters = None,
+        task_definition_id: TaskDefinitionId = None,
         conditions: Conditions = None,
         enabled: Enabled = True,
         failure_threshold: FailureThreshold = 5,
@@ -256,7 +272,8 @@ class TriggersToolset(Toolset):
         given moment use ``runs_start`` with ``scheduled_at`` instead.
 
         ``task_parameters`` are merged into every task created when the trigger
-        fires, and must carry ``text`` -- what the agent is asked to do each time.
+        fires, and must carry ``text`` -- what the agent is asked to do each time --
+        unless ``task_definition_id`` names a saved task, whose text is asked instead.
         A schedule arrives carrying nothing, so there is no other source for it.
         ``conditions`` is an optional rule/LLM condition map evaluated against
         event data before firing.
@@ -271,6 +288,7 @@ class TriggersToolset(Toolset):
                 cron_expression=cron_expression,
                 timezone=timezone,
                 task_parameters=task_parameters or {},
+                task_definition_id=UUID(task_definition_id) if task_definition_id else None,
                 conditions=conditions or {},
                 enabled=enabled,
                 failure_threshold=failure_threshold,
@@ -303,6 +321,7 @@ class TriggersToolset(Toolset):
             ),
         ] = None,
         task_parameters: TaskParameters = None,
+        task_definition_id: TaskDefinitionId = None,
         conditions: Conditions = None,
         enabled: Enabled = True,
         failure_threshold: FailureThreshold = 5,
@@ -351,6 +370,7 @@ class TriggersToolset(Toolset):
                 session=TriggerSession.model_validate(session) if session else None,
                 batch=TriggerBatchWindow.model_validate(batch) if batch else None,
                 task_parameters=task_parameters or {},
+                task_definition_id=UUID(task_definition_id) if task_definition_id else None,
                 conditions=conditions or {},
                 enabled=enabled,
                 failure_threshold=failure_threshold,

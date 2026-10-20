@@ -8558,6 +8558,122 @@ export type TaskCreate = {
 };
 
 /**
+ * TaskDefinitionCreate
+ *
+ * A saved task: the agent, what to ask it, and the parameters to ask with.
+ */
+export type TaskDefinitionCreate = {
+  /**
+   * Agent Id
+   *
+   * UUID of the agent that runs the task.
+   */
+  agent_id: string;
+  /**
+   * Description
+   *
+   * What the agent is asked to do each time the task runs.
+   */
+  description: string;
+  /**
+   * Name
+   *
+   * What the saved task is called.
+   */
+  name: string;
+  /**
+   * Parameters
+   *
+   * Task parameters every run of it starts with, as on a run.
+   */
+  parameters?: {
+    [key: string]: unknown;
+  };
+};
+
+/**
+ * TaskDefinitionResponse
+ */
+export type TaskDefinitionResponse = {
+  /**
+   * Agent Id
+   */
+  agent_id: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Created By
+   */
+  created_by: string;
+  /**
+   * Description
+   */
+  description: string;
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Parameters
+   */
+  parameters: {
+    [key: string]: unknown;
+  };
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * TaskDefinitionRun
+ *
+ * One run of a saved task.
+ */
+export type TaskDefinitionRun = {
+  /**
+   * Parameters
+   *
+   * Merged over the saved task's own parameters for this run only.
+   */
+  parameters?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+/**
+ * TaskDefinitionUpdate
+ *
+ * Changes to a saved task; a field left out stays as it is.
+ */
+export type TaskDefinitionUpdate = {
+  /**
+   * Agent Id
+   */
+  agent_id?: string | null;
+  /**
+   * Description
+   */
+  description?: string | null;
+  /**
+   * Name
+   */
+  name?: string | null;
+  /**
+   * Parameters
+   */
+  parameters?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+/**
  * TaskEvent
  *
  * Model for task execution events.
@@ -8690,11 +8806,19 @@ export type TaskProvenance = {
   /**
    * Origin Type
    */
-  origin_type?: "user" | "trigger" | "agent" | "api" | null;
+  origin_type?: "user" | "trigger" | "agent" | "api" | "a2a" | null;
   /**
    * Parent Task Id
    */
   parent_task_id?: string | null;
+  /**
+   * Source Identity
+   */
+  source_identity?: string | null;
+  /**
+   * Task Definition Id
+   */
+  task_definition_id?: string | null;
 };
 
 /**
@@ -9327,6 +9451,12 @@ export type TriggerCreate = {
    */
   stream_id?: string | null;
   /**
+   * Task Definition Id
+   *
+   * Saved task the trigger runs, of the same agent: its text and parameters are what each firing asks, in place of task_parameters.
+   */
+  task_definition_id?: string | null;
+  /**
    * Task Parameters
    *
    * Parameters merged into the task created when the trigger fires.
@@ -9523,6 +9653,12 @@ export type TriggerResponse = {
    */
   stream_id?: string | null;
   /**
+   * Task Definition Id
+   *
+   * Saved task each firing asks, in place of task_parameters.
+   */
+  task_definition_id?: string | null;
+  /**
    * Task Parameters
    */
   task_parameters: {
@@ -9669,6 +9805,12 @@ export type TriggerSpec = {
    */
   stream_id?: string | null;
   /**
+   * Task Definition Id
+   *
+   * Saved task the trigger runs, of the same agent: its text and parameters are what each firing asks, in place of task_parameters.
+   */
+  task_definition_id?: string | null;
+  /**
    * Task Parameters
    *
    * Parameters merged into the task created when the trigger fires.
@@ -9780,6 +9922,12 @@ export type TriggerUpdate = {
    */
   name?: string | null;
   session?: TriggerSession | null;
+  /**
+   * Task Definition Id
+   *
+   * Sent as null, the trigger asks its own task_parameters text again.
+   */
+  task_definition_id?: string | null;
   /**
    * Task Parameters
    */
@@ -19954,6 +20102,206 @@ export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetR
 
 export type ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponse =
   ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses[keyof ListOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGetResponses];
+
+export type ListTaskDefinitionsV1TaskDefinitionsGetData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Agent Id
+     *
+     * Only this agent's saved tasks
+     */
+    agent_id?: string | null;
+    /**
+     * Limit
+     *
+     * Most saved tasks to return
+     */
+    limit?: number;
+  };
+  url: "/v1/workspaces/{workspace}/task-definitions/";
+};
+
+export type ListTaskDefinitionsV1TaskDefinitionsGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListTaskDefinitionsV1TaskDefinitionsGetError =
+  ListTaskDefinitionsV1TaskDefinitionsGetErrors[keyof ListTaskDefinitionsV1TaskDefinitionsGetErrors];
+
+export type ListTaskDefinitionsV1TaskDefinitionsGetResponses = {
+  /**
+   * Response List Task Definitions V1 Task Definitions  Get
+   *
+   * Successful Response
+   */
+  200: Array<TaskDefinitionResponse>;
+};
+
+export type ListTaskDefinitionsV1TaskDefinitionsGetResponse =
+  ListTaskDefinitionsV1TaskDefinitionsGetResponses[keyof ListTaskDefinitionsV1TaskDefinitionsGetResponses];
+
+export type CreateTaskDefinitionV1TaskDefinitionsPostData = {
+  body: TaskDefinitionCreate;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/task-definitions/";
+};
+
+export type CreateTaskDefinitionV1TaskDefinitionsPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateTaskDefinitionV1TaskDefinitionsPostError =
+  CreateTaskDefinitionV1TaskDefinitionsPostErrors[keyof CreateTaskDefinitionV1TaskDefinitionsPostErrors];
+
+export type CreateTaskDefinitionV1TaskDefinitionsPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: TaskDefinitionResponse;
+};
+
+export type CreateTaskDefinitionV1TaskDefinitionsPostResponse =
+  CreateTaskDefinitionV1TaskDefinitionsPostResponses[keyof CreateTaskDefinitionV1TaskDefinitionsPostResponses];
+
+export type DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteData = {
+  body?: never;
+  path: {
+    /**
+     * Definition Id
+     */
+    definition_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}";
+};
+
+export type DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteError =
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors[keyof DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors];
+
+export type DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponse =
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses[keyof DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses];
+
+export type GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetData = {
+  body?: never;
+  path: {
+    /**
+     * Definition Id
+     */
+    definition_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}";
+};
+
+export type GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetError =
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors[keyof GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors];
+
+export type GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses = {
+  /**
+   * Successful Response
+   */
+  200: TaskDefinitionResponse;
+};
+
+export type GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponse =
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses[keyof GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses];
+
+export type UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutData = {
+  body: TaskDefinitionUpdate;
+  path: {
+    /**
+     * Definition Id
+     */
+    definition_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}";
+};
+
+export type UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutError =
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors[keyof UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors];
+
+export type UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses = {
+  /**
+   * Successful Response
+   */
+  200: TaskDefinitionResponse;
+};
+
+export type UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponse =
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses[keyof UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses];
+
+export type RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData = {
+  /**
+   * Payload
+   */
+  body?: TaskDefinitionRun | null;
+  path: {
+    /**
+     * Definition Id
+     */
+    definition_id: string;
+  };
+  query?: never;
+  url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}/run";
+};
+
+export type RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostError =
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors[keyof RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors];
+
+export type RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses = {
+  /**
+   * Successful Response
+   */
+  201: TaskResponse;
+};
+
+export type RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponse =
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses[keyof RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses];
 
 export type GetAllTasksV1TasksGetData = {
   body?: never;

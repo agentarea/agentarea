@@ -38,6 +38,7 @@ from agentarea_registry.infrastructure.repository import (
 )
 from agentarea_secrets.catalog_service import SecretCatalogService
 from agentarea_secrets.secret_manager_factory import get_real_secret_manager
+from agentarea_tasks.application.task_definition_service import TaskDefinitionService
 from agentarea_tasks.domain.interfaces import BaseTaskManager
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
@@ -184,6 +185,13 @@ async def get_task_service(
         task_manager=task_manager,
         workflow_service=workflow_service,
     )
+
+
+async def get_task_definition_service(
+    repository_factory: RepositoryFactoryDep,
+    task_service: Annotated[TaskService, Depends(get_task_service)],
+) -> TaskDefinitionService:
+    return TaskDefinitionService(repository_factory, task_service)
 
 
 async def get_task_manager(

@@ -68,6 +68,13 @@ class TriggerSpec(BaseModel):
         default_factory=dict,
         description="Parameters merged into the task created when the trigger fires.",
     )
+    task_definition_id: UUID | None = Field(
+        default=None,
+        description=(
+            "Saved task the trigger runs, of the same agent: its text and parameters are "
+            "what each firing asks, in place of task_parameters."
+        ),
+    )
     conditions: dict[str, Any] = Field(
         default_factory=dict,
         description=(
@@ -164,6 +171,7 @@ class TriggerSpec(BaseModel):
             agent_id=agent_id,
             trigger_type=TriggerType(self.trigger_type),
             task_parameters=self.task_parameters,
+            task_definition_id=self.task_definition_id,
             conditions=self.conditions,
             created_by=created_by,
             is_active=self.enabled,
@@ -211,6 +219,10 @@ class TriggerUpdate(BaseModel):
         ),
     )
     task_parameters: dict[str, Any] | None = None
+    task_definition_id: UUID | None = Field(
+        default=None,
+        description="Sent as null, the trigger asks its own task_parameters text again.",
+    )
     conditions: dict[str, Any] | None = None
     failure_threshold: int | None = Field(default=None, ge=1, le=100)
     _drop_reserved_parameters = field_validator("task_parameters")(drop_reserved_parameters)
@@ -226,10 +238,10 @@ class TriggerUpdate(BaseModel):
 
     def to_domain(self) -> _DomainTriggerUpdate:
         """Build the internal domain ``TriggerUpdate`` value object."""
-        # Sent as null, session and batch go back to the defaults; left out, they stay.
+        # Sent as null, these go back to the defaults; left out, they stay.
         kept: dict[str, Any] = {
             field: getattr(self, field)
-            for field in ("session", "batch")
+            for field in ("session", "batch", "task_definition_id")
             if field in self.model_fields_set
         }
         return _DomainTriggerUpdate(

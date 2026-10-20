@@ -81,6 +81,9 @@ class TriggerResponse(BaseModel):
     name: str
     description: str
     agent_id: UUID
+    task_definition_id: UUID | None = Field(
+        default=None, description="Saved task each firing asks, in place of task_parameters."
+    )
     trigger_type: str
     is_active: bool
     task_parameters: dict[str, Any]
@@ -137,6 +140,7 @@ class TriggerResponse(BaseModel):
             "name": trigger.name,
             "description": trigger.description,
             "agent_id": trigger.agent_id,
+            "task_definition_id": getattr(trigger, "task_definition_id", None),
             "trigger_type": trigger.trigger_type.value
             if hasattr(trigger.trigger_type, "value")
             else str(trigger.trigger_type),
