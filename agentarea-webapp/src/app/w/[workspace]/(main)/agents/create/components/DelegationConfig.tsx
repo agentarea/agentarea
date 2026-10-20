@@ -1,22 +1,32 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import {
+  Globe,
+  KeyRound,
+  Link2,
+  Loader2,
+  MessageSquare,
+  Tag,
+  Trash2,
+} from "lucide-react";
 import type {
   AgentCardSummary,
   AgentToolConfig,
   SecretResponse,
 } from "@/api/client/types.gen";
-import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
-import { Globe, Loader2, Trash2 } from "lucide-react";
-import Link from "@/components/WorkspaceLink";
 import AccordionControl from "@/components/AccordionControl";
+import { AgentAvatar } from "@/components/AgentAvatar";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import ConfigSheet from "@/components/ConfigSheet";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { ResourcePicker } from "@/components/ResourcePicker/ResourcePicker";
+import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
+import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
 import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Note from "@/components/ui/note";
@@ -28,8 +38,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ENTITY_ICONS } from "@/lib/entity-icons";
+import Link from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { readAgentCardAction } from "../../shared/actions";
 import {
   agentAddress,
@@ -95,17 +106,14 @@ function SecretSelect({
   );
 }
 
-function RemoteAgentForm({
-  delegates,
-  secrets,
-  secretsFailed,
-  onAdd,
-}: {
-  delegates: AgentToolConfig[];
-  secrets: SecretResponse[];
-  secretsFailed: boolean;
-  onAdd: (delegate: AgentToolConfig) => void;
-}) {
+/**
+ * What the external-agent form holds, lifted out of it so the sheet's footer
+ * can add it or throw it away.
+ */
+function useRemoteAgentDraft(
+  delegates: AgentToolConfig[],
+  onAdd: (delegate: AgentToolConfig) => void
+) {
   const t = useTranslations("AgentsPage.delegationConfig");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -140,6 +148,16 @@ function RemoteAgentForm({
     }
   };
 
+  const reset = () => {
+    setName("");
+    setUrl("");
+    setSecret("");
+    setInstructions("");
+    setProblem(null);
+    setCard(null);
+    setCardError(null);
+  };
+
   const add = () => {
     const address = agentAddress(url);
     const found = remoteDelegateProblem({ name, url: address }, delegates);
@@ -155,76 +173,116 @@ function RemoteAgentForm({
         }
       )
     );
-    setName("");
-    setUrl("");
-    setSecret("");
-    setInstructions("");
-    setProblem(null);
-    setCard(null);
-    setCardError(null);
+    reset();
   };
 
+  return {
+    name,
+    setName,
+    url,
+    setUrl: (next: string) => {
+      setUrl(next);
+      setCard(null);
+      setCardError(null);
+    },
+    secret,
+    setSecret,
+    instructions,
+    setInstructions,
+    problem,
+    card,
+    cardError,
+    isReading,
+    readCard,
+    add,
+    reset,
+  };
+}
+
+type RemoteAgentDraft = ReturnType<typeof useRemoteAgentDraft>;
+
+function RemoteAgentForm({
+  draft,
+  secrets,
+  secretsFailed,
+}: {
+  draft: RemoteAgentDraft;
+  secrets: SecretResponse[];
+  secretsFailed: boolean;
+}) {
+  const t = useTranslations("AgentsPage.delegationConfig");
+  const { url, card, cardError, isReading, problem } = draft;
+
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">{t("externalHint")}</p>
-      <div className="space-y-1.5">
-        <Label htmlFor="remote-delegate-url">{t("url")}</Label>
+    <div className="space-y-4">
+      <p className="note">{t("externalHint")}</p>
+      <div className="space-y-2">
+        <FormLabel htmlFor="remote-delegate-url" icon={Link2}>
+          {t("url")}
+        </FormLabel>
         <div className="flex gap-2">
           <Input
             id="remote-delegate-url"
             value={url}
             placeholder={t("urlPlaceholder")}
-            onChange={(event) => {
-              setUrl(event.target.value);
-              setCard(null);
-              setCardError(null);
-            }}
+            onChange={(event) => draft.setUrl(event.target.value)}
           />
           <Button
             type="button"
             size="sm"
             variant="outline"
             disabled={!url.trim() || isReading}
-            onClick={readCard}
+            onClick={draft.readCard}
           >
             {isReading && <Loader2 className="animate-spin" />}
             {t("readCard")}
           </Button>
         </div>
         {card ? (
-          <div className="rounded-md border p-2 text-xs">
-            <p className="font-medium">{card.name}</p>
-            {card.description && (
-              <p className="text-muted-foreground">{card.description}</p>
-            )}
+          <div className="flex items-start gap-3 rounded-md border px-3 py-2">
+            <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium leading-5">
+                {card.name}
+              </p>
+              {card.description && (
+                <p className="line-clamp-2 text-xs text-muted-foreground">
+                  {card.description}
+                </p>
+              )}
+            </div>
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">{t("urlHint")}</p>
+          <p className="note">{t("urlHint")}</p>
         )}
         {cardError && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="form-error">
             {cardError}
           </p>
         )}
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="remote-delegate-name">{t("name")}</Label>
+      <div className="space-y-2">
+        <FormLabel htmlFor="remote-delegate-name" icon={Tag}>
+          {t("name")}
+        </FormLabel>
         <Input
           id="remote-delegate-name"
-          value={name}
+          value={draft.name}
           placeholder={t("namePlaceholder")}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event) => draft.setName(event.target.value)}
         />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="remote-delegate-secret">{t("secret")}</Label>
+      <div className="space-y-2">
+        <FormLabel htmlFor="remote-delegate-secret" icon={KeyRound}>
+          {t("secret")}
+        </FormLabel>
         <SecretSelect
           id="remote-delegate-secret"
-          value={secret}
+          value={draft.secret}
           secrets={secrets}
-          onChange={setSecret}
+          onChange={draft.setSecret}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="note">
           {secretsFailed ? t("secretsLoadFailed") : t("secretHint")}{" "}
           <Link
             href="/secrets"
@@ -236,23 +294,23 @@ function RemoteAgentForm({
           </Link>
         </p>
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="remote-delegate-instructions">{t("when")}</Label>
+      <div className="space-y-2">
+        <FormLabel htmlFor="remote-delegate-instructions" icon={MessageSquare}>
+          {t("when")}
+        </FormLabel>
         <Textarea
           id="remote-delegate-instructions"
-          value={instructions}
+          className="h-[100px] resize-none"
+          value={draft.instructions}
           placeholder={t("whenPlaceholder")}
-          onChange={(event) => setInstructions(event.target.value)}
+          onChange={(event) => draft.setInstructions(event.target.value)}
         />
       </div>
       {problem && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="form-error">
           {t(problem)}
         </p>
       )}
-      <Button type="button" size="sm" onClick={add}>
-        {t("addExternal")}
-      </Button>
     </div>
   );
 }
@@ -265,9 +323,12 @@ export default function DelegationConfig({
   onDelegatesChange,
 }: DelegationConfigProps) {
   const t = useTranslations("AgentsPage.delegationConfig");
+  const tCommon = useTranslations("Common");
   const router = useWorkspaceRouter();
   const [accordionValue, setAccordionValue] = useState("delegation");
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [tab, setTab] = useState<"workspace" | "external">("workspace");
+  const [query, setQuery] = useState("");
   // Catalog agents are listed but not installed here, so the runtime could
   // not resolve them by name.
   const otherAgents = useMemo(
@@ -287,6 +348,8 @@ export default function DelegationConfig({
     return agent ? [agent.id] : [];
   });
 
+  const remoteCount = delegates.filter(isRemoteDelegate).length;
+
   const add = (delegate: AgentToolConfig) => {
     if (delegates.some((d) => d.name === delegate.name)) return;
     onDelegatesChange([...delegates, delegate]);
@@ -295,6 +358,13 @@ export default function DelegationConfig({
     onDelegatesChange(delegates.filter((delegate) => delegate.name !== name));
   const update = (name: string, next: AgentToolConfig) =>
     onDelegatesChange(delegates.map((d) => (d.name === name ? next : d)));
+
+  const draft = useRemoteAgentDraft(delegates, add);
+  // Cancel drops whatever was typed into the form and closes the sheet.
+  const cancelExternal = () => {
+    draft.reset();
+    setIsSheetOpen(false);
+  };
 
   return (
     <AccordionControl
@@ -315,46 +385,88 @@ export default function DelegationConfig({
           className="ml-auto"
           open={isSheetOpen}
           onOpenChange={setIsSheetOpen}
+          panel
         >
-          <div className="flex flex-col space-y-6 overflow-y-auto pb-6">
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <AgentIcon className="h-4 w-4 text-muted-foreground" />
-                {t("available")}
-              </div>
-              <ResourcePicker
+          <PickerPanel
+            title={t("title")}
+            description={t("sheetDescription")}
+            // A form has nothing to search.
+            onSearch={tab === "workspace" ? setQuery : undefined}
+            footer={
+              tab === "external" && (
+                <div className="flex w-full justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="px-2 text-muted-foreground hover:text-foreground"
+                    onClick={cancelExternal}
+                  >
+                    {tCommon("cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className="px-2"
+                    disabled={!draft.url.trim()}
+                    onClick={draft.add}
+                  >
+                    {tCommon("add")}
+                  </Button>
+                </div>
+              )
+            }
+            tabs={
+              <CountSegmentedControl
+                layoutId="delegation-tabs"
+                value={tab}
+                onChange={setTab}
+                items={[
+                  {
+                    value: "workspace",
+                    label: t("tabWorkspace"),
+                    count: selectedIds.length || undefined,
+                  },
+                  {
+                    value: "external",
+                    label: t("tabExternal"),
+                    count: remoteCount || undefined,
+                  },
+                ]}
+              />
+            }
+          >
+            {tab === "workspace" ? (
+              <ResourcePickerList
+                query={query}
+                heading={t("available")}
                 items={otherAgents}
-                prefix="delegate"
                 selectedIds={selectedIds}
                 onAdd={(agent) => add({ type: "agent", name: agent.name })}
                 onRemove={(agent) => remove(agent.name)}
+                extractTitle={(agent) => agent.name}
+                extractSubtitle={(agent) => agent.description}
+                renderAvatar={(agent) => (
+                  <AgentAvatar agent={agent} size="md" />
+                )}
                 loading={false}
                 failed={agents === null}
                 onRefresh={() => router.refresh()}
-                emptyText={t("noOtherAgents")}
-                manageText={t("createAgent")}
-                manageHref="/agents/create"
-                extractTitle={(agent) => (
-                  <span className="flex items-center gap-2">
-                    <AgentIcon className="h-4 w-4" />
-                    {agent.name}
-                  </span>
-                )}
+                iconsType="agent"
+                emptyTitle={t("noOtherAgents")}
+                createText={t("createAgent")}
+                createHref="/agents/create"
               />
-            </section>
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                {t("external")}
+            ) : (
+              <div className="px-5 py-3">
+                <RemoteAgentForm
+                  draft={draft}
+                  secrets={secrets ?? []}
+                  secretsFailed={secrets === null}
+                />
               </div>
-              <RemoteAgentForm
-                delegates={delegates}
-                secrets={secrets ?? []}
-                secretsFailed={secrets === null}
-                onAdd={add}
-              />
-            </section>
-          </div>
+            )}
+          </PickerPanel>
         </ConfigSheet>
       }
     >

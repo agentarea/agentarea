@@ -1,9 +1,10 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import type { AttachableResources } from "@/hooks/use-attachable-resources";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { resolveMcpRef, type McpInstance } from "@/lib/mcp/resolveMcpRef";
-import type { AttachableResources } from "@/hooks/use-attachable-resources";
 import { ResourcePicker } from "./ResourcePicker";
 
 const McpIcon = ENTITY_ICONS.mcp;
@@ -15,11 +16,15 @@ const McpIcon = ENTITY_ICONS.mcp;
  * connections list.
  */
 export function McpPicker({
+  title,
+  description,
   resources,
   selectedIds,
   onAdd,
   onRemove,
 }: {
+  title: ReactNode;
+  description: ReactNode;
   resources: AttachableResources;
   selectedIds: string[];
   onAdd: (instance: McpInstance) => void;
@@ -33,29 +38,33 @@ export function McpPicker({
 
   return (
     <ResourcePicker
+      title={title}
+      description={description}
       items={mcpInstances}
-      prefix="mcp"
       selectedIds={selectedIds}
       onAdd={onAdd}
       onRemove={onRemove}
       loading={loading}
       failed={failed.includes("mcps")}
       onRefresh={refresh}
-      emptyText={t("noMcps")}
-      manageText={t("manageMcps")}
+      iconsType="mcp"
+      emptyTitle={t("emptyMcpsTitle")}
+      emptyHint={t("emptyMcpsHint")}
+      createText={t("manageMcps")}
+      createHref="/connections"
+      manageText={t("manageMcpsLink")}
       manageHref="/connections"
+      heading={t("mcpsHeading")}
+      extractTitle={(instance) => resolve(instance).displayName}
+      extractSubtitle={(instance) => {
+        const resolved = resolve(instance);
+        return resolved.status === "instance" ? resolved.server?.name : null;
+      }}
+      extractIcon={() => <McpIcon strokeWidth={1.85} />}
       extractIconSrc={(instance) => {
         const resolved = resolve(instance);
-        return resolved.status === "unresolved"
-          ? "/Icon.svg"
-          : (resolved.iconSrc ?? "/Icon.svg");
+        return resolved.status === "unresolved" ? null : resolved.iconSrc;
       }}
-      extractTitle={(instance) => (
-        <span className="flex items-center gap-2">
-          <McpIcon className="h-4 w-4" />
-          {resolve(instance).displayName}
-        </span>
-      )}
     />
   );
 }

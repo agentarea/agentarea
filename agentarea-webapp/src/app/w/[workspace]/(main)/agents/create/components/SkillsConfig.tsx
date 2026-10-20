@@ -1,15 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { Sparkles, Trash2 } from "lucide-react";
-import FormLabel from "@/components/FormLabel/FormLabel";
+import AccordionControl from "@/components/AccordionControl";
 import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
+import ConfigSheet from "@/components/ConfigSheet";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import { SkillPicker } from "@/components/ResourcePicker/SkillPicker";
 import { Accordion } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import Note from "@/components/ui/note";
-import type { AgentSkill } from "../types";
-import AccordionControl from "@/components/AccordionControl";
-import ConfigSheet from "@/components/ConfigSheet";
-import { SkillPicker } from "@/components/ResourcePicker/SkillPicker";
 import { useAttachableResources } from "@/hooks/use-attachable-resources";
+import type { AgentSkill } from "../types";
 
 type SkillsConfigProps = {
   selectedSkills: AgentSkill[];
@@ -36,7 +36,10 @@ const SkillsConfig = ({
   const note = useMemo(
     () => (
       <>
-        <p>Skills extend agent capabilities with specialized behaviors and knowledge.</p>
+        <p>
+          Skills extend agent capabilities with specialized behaviors and
+          knowledge.
+        </p>
       </>
     ),
     []
@@ -66,19 +69,16 @@ const SkillsConfig = ({
           className="ml-auto"
           open={isSheetOpen}
           onOpenChange={setIsSheetOpen}
+          panel
         >
-          <div className="flex flex-col space-y-4 overflow-y-auto">
-            <div className="flex items-center gap-2 font-semibold text-sm">
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
-              Available Skills
-            </div>
-            <SkillPicker
-              resources={resources}
-              selectedIds={selectedSkills.map((s) => s.id)}
-              onAdd={(skill) => handleAddSkill(skill as AgentSkill)}
-              onRemove={(skill) => handleRemoveSkill(skill.id)}
-            />
-          </div>
+          <SkillPicker
+            title="Skills"
+            description="Add skills to enhance your agent's capabilities"
+            resources={resources}
+            selectedIds={selectedSkills.map((s) => s.id)}
+            onAdd={(skill) => handleAddSkill(skill as AgentSkill)}
+            onRemove={(skill) => handleRemoveSkill(skill.id)}
+          />
         </ConfigSheet>
       }
     >
@@ -86,11 +86,7 @@ const SkillsConfig = ({
         {/* Selected Skills */}
         {selectedSkills.length > 0 && (
           <div className="space-y-2">
-            <Accordion
-              type="multiple"
-              id="skills-items"
-              className="space-y-2"
-            >
+            <Accordion type="multiple" id="skills-items" className="space-y-2">
               {selectedSkills.map((skill, index) => (
                 <CardAccordionItem
                   key={`skill-${skill.id}`}
@@ -132,7 +128,10 @@ const SkillsConfig = ({
         {/* Empty state */}
         {selectedSkills.length === 0 && (
           <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
-            <p>No skills assigned. Add skills to enhance this agent&apos;s capabilities.</p>
+            <p>
+              No skills assigned. Add skills to enhance this agent&apos;s
+              capabilities.
+            </p>
           </Note>
         )}
       </div>
