@@ -127,7 +127,7 @@ async def list_mcp_servers(
         search=pagination.search,
         limit=page_size,
         offset=offset,
-        ids=await readable_resource_ids(user_context.user_id),
+        ids=await readable_resource_ids(user_context),
         spec_ids=[str(spec_id) for spec_id in ids] if ids is not None else None,
     )
     return PaginatedResponse(
@@ -163,7 +163,7 @@ async def get_mcp_server(
         # A tenant spec; the catalog projection beside it is platform data with
         # no ownership tuples of its own. Checked after resolution because the
         # path may carry a slug.
-        await require_permission("read", "mcp_server", str(resolved_id), user_context.user_id)
+        await require_permission("read", "mcp_server", str(resolved_id), user_context)
     return MCPServerResponse.from_domain(server)
 
 
@@ -183,7 +183,7 @@ async def update_mcp_server(
     resolved_id = await _resolve_server_id(mcp_server_service, server_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="MCP Server not found")
-    await require_permission("edit", "mcp_server", str(resolved_id), user_context.user_id)
+    await require_permission("edit", "mcp_server", str(resolved_id), user_context)
     server = await mcp_server_service.update_mcp_server(resolved_id, data)
     if not server:
         raise HTTPException(status_code=404, detail="MCP Server not found")
@@ -204,7 +204,7 @@ async def delete_mcp_server(
     resolved_id = await _resolve_server_id(mcp_server_service, server_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="MCP Server not found")
-    await require_permission("delete", "mcp_server", str(resolved_id), user_context.user_id)
+    await require_permission("delete", "mcp_server", str(resolved_id), user_context)
     success = await mcp_server_service.delete_mcp_server(resolved_id)
     if not success:
         raise HTTPException(status_code=404, detail="MCP Server not found")
@@ -225,7 +225,7 @@ async def deploy_mcp_server(
     resolved_id = await _resolve_server_id(mcp_server_service, server_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="MCP Server not found")
-    await require_permission("edit", "mcp_server", str(resolved_id), user_context.user_id)
+    await require_permission("edit", "mcp_server", str(resolved_id), user_context)
     server = await mcp_server_service.get(resolved_id)
     if not server:
         raise HTTPException(status_code=404, detail="MCP Server not found")

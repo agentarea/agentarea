@@ -26,7 +26,7 @@ from agentarea_agents.application.execution_service import (
 )
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
-from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
@@ -59,6 +59,7 @@ from agentarea_api.api.v1.agents_tasks import (
     TaskInputSubmission,
     _resolve_model_info,
     escalations_caller_may_resolve,
+    started_by,
     task_execution_id,
 )
 
@@ -292,7 +293,7 @@ class RunsToolset(Toolset):
     open_world = False
 
     @tool_method(display_name="Start run", effect="write", output=RunStarted)
-    @unrestricted("any member may start a run, as POST /v1/agents/{id}/tasks allows")
+    @requires("execute", "agent", id_param="agent_id")
     async def start(
         self,
         agent_id: Annotated[str, Field(description="Agent id (UUID), from `agents_list`.")],
@@ -360,6 +361,7 @@ class RunsToolset(Toolset):
                     workspace_id=user_ctx.workspace_id,
                     user_id=user_ctx.user_id,
                     created_via="mcp",
+                    provenance=started_by(user_ctx),
                 )
             except BudgetCapExceededError as exc:
                 raise ToolError(str(exc)) from None

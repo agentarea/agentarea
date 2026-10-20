@@ -229,6 +229,15 @@ def _task_definition_after(existing: Trigger, update: TriggerUpdate) -> UUID | N
     return existing.task_definition_id
 
 
+def _source_identity(user_id: str | None) -> str | None:
+    """The person a firing came from -- who pressed "run now", or wrote the message -- if any.
+
+    It narrows the run and is recorded; it lends the run no authority. A
+    schedule or an event nobody sent leaves the run with none.
+    """
+    return f"user:{user_id}" if user_id else None
+
+
 class TriggerService:
     """High-level service for trigger management that orchestrates persistence and lifecycle."""
 
@@ -1073,6 +1082,17 @@ class TriggerService:
 
     # Validation Methods
 
+    async def agent_stands(self, agent_id: UUID) -> bool:
+        """Whether the agent a trigger runs still exists in its workspace and is active."""
+        if self.agent_repository is None:
+            raise DependencyUnavailableError(
+                "a trigger cannot fire without the agent repository",
+                dependency="agent_repository",
+                agent_id=str(agent_id),
+            )
+        agent = await self.agent_repository.get(agent_id)
+        return agent is not None and agent.status == "active"
+
     async def _validate_agent_exists(self, agent_id: UUID) -> None:
         """Validate that the agent exists before processing triggers.
 
@@ -1347,6 +1367,15 @@ class TriggerService:
         if not trigger:
             raise TriggerNotFoundError(f"Trigger {trigger_id} not found")
 
+        # The run acts as the agent, so the agent is what must still stand when it
+        # fires; whoever configured the trigger lends it nothing.
+        if not await self.agent_stands(trigger.agent_id):
+            reason = f"agent {trigger.agent_id} is gone or inactive"
+            execution = await self._record_execution_failure(
+                trigger_id, reason, trigger_data, 0, fired_by=fired_by
+            )
+            return TriggerFiring(outcome="error", reason=reason, execution=execution)
+
         # is_active governs the trigger's own mechanism -- whether the schedule
         # comes due, whether the webhook is accepted. It does not govern a person
         # asking for one run, and testing a trigger that is switched off (or not
@@ -1474,7 +1503,12 @@ class TriggerService:
                     provenance=(
                         provenance
                         or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id))
-                    ).model_copy(update={"task_definition_id": trigger.task_definition_id}),
+                    ).model_copy(
+                        update={
+                            "source_identity": _source_identity(fired_by or caller),
+                            "task_definition_id": trigger.task_definition_id,
+                        }
+                    ),
                 )
                 task = await self.task_service.route_or_submit_task(
                     task, follow_up_claim=follow_up_claim

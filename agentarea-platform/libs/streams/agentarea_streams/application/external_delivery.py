@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import Subject, UserContext
 from agentarea_common.base import RepositoryFactory
 from agentarea_common.base.tenant_scope import workspace_scope
 from agentarea_common.broker import BrokerClient, BrokerMessage, DedupCache
@@ -244,7 +244,8 @@ class ExternalDelivery:
             )
             return False
         secrets = self._secrets_for(session, context)
-        if not await self._readers.may_read(subscription.created_by, subscription.stream_id):
+        subscriber = Subject(kind="user", id=subscription.created_by)
+        if not await self._readers.may_read(subscriber, subscription.stream_id):
             await self._terminate(session, context, subscription, secrets)
             return False
         secret = await secrets.get_secret(subscription.secret_name or "")

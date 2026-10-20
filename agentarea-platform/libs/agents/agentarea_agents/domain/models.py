@@ -21,6 +21,8 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     __graph_resource__ = True
     # Running an agent is its own grant; its creator holds it from the start.
     __graph_owner_relations__ = (*OWNER_RELATIONS, INVOKER_RELATION)
+    #: A run executes as its agent, so the agent is a subject in the graph too.
+    __graph_principal__ = True
 
     @property
     def is_catalog(self) -> bool:

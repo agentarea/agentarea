@@ -104,7 +104,7 @@ class ClientsToolset(Toolset):
             clients = await service.list(
                 limit=limit,
                 offset=offset,
-                ids=await readable_resource_ids(user_ctx.user_id),
+                ids=await readable_resource_ids(user_ctx),
             )
             return json.dumps([_summary(c) for c in clients], default=str)
 

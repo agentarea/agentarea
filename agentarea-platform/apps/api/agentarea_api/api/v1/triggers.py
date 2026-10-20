@@ -25,7 +25,7 @@ from agentarea_api.api.deps.services import (
     get_trigger_health_check,
     get_trigger_service,
 )
-from agentarea_api.api.v1._trigger_creation import create_trigger_from_spec
+from agentarea_api.api.v1._trigger_creation import create_trigger_from_spec, require_may_bind
 from agentarea_common.auth.dependencies import UserContext, get_user_context
 from agentarea_common.auth.route_authz import requires, unrestricted
 from agentarea_common.base.pagination import MAX_PAGE
@@ -630,6 +630,9 @@ async def enable_trigger(
     Raises:
         HTTPException: If trigger not found
     """
+    trigger = await trigger_service.get_trigger(trigger_id)
+    if trigger is not None:
+        await require_may_bind(trigger.agent_id, user_context)
     try:
         success = await trigger_service.enable_trigger(trigger_id)
 

@@ -129,7 +129,7 @@ class StreamsToolset(Toolset):
         _check_range("offset", offset, 0, MAX_OFFSET)
         async with platform_read_context() as (_s, user_ctx, repo_factory, _b, _sec):
             rows = await _service(repo_factory).list_streams(
-                limit=limit, offset=offset, ids=await readable_resource_ids(user_ctx.user_id)
+                limit=limit, offset=offset, ids=await readable_resource_ids(user_ctx)
             )
             return json.dumps(
                 [StreamResponse.model_validate(r).model_dump(mode="json") for r in rows]
@@ -379,7 +379,7 @@ class StreamsToolset(Toolset):
             )
             try:
                 for output in payload.output_stream_ids:
-                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                    await require_permission("edit", "stream", str(output), user_ctx)
             except HTTPException as exc:
                 raise ToolError(exc.detail) from exc
             try:
@@ -419,7 +419,7 @@ class StreamsToolset(Toolset):
             try:
                 forward = await service.get_forward(UUID(stream_id), UUID(subscription_id))
                 for output in await service.existing_outputs(forward):
-                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                    await require_permission("edit", "stream", str(output), user_ctx)
                 await service.delete_forward(UUID(stream_id), UUID(subscription_id))
             except HTTPException as exc:
                 raise ToolError(exc.detail) from exc
@@ -488,7 +488,7 @@ class StreamsToolset(Toolset):
         async with platform_context() as (_s, user_ctx, repo_factory, _b, _sec):
             try:
                 for output in payload.output_stream_ids:
-                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                    await require_permission("edit", "stream", str(output), user_ctx)
                 row = await _service(repo_factory).create_processor(
                     stream_id=UUID(stream_id),
                     output_stream_ids=payload.output_stream_ids,
@@ -545,7 +545,7 @@ class StreamsToolset(Toolset):
                     *(payload.output_stream_ids or []),
                 }
                 for output in sorted(outputs, key=str):
-                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                    await require_permission("edit", "stream", str(output), user_ctx)
                 row = await service.update_processor(
                     UUID(stream_id),
                     UUID(subscription_id),
@@ -576,7 +576,7 @@ class StreamsToolset(Toolset):
             try:
                 processor = await service.get_processor(UUID(stream_id), UUID(subscription_id))
                 for output in await service.existing_outputs(processor):
-                    await require_permission("edit", "stream", str(output), user_ctx.user_id)
+                    await require_permission("edit", "stream", str(output), user_ctx)
                 await service.delete_processor(UUID(stream_id), UUID(subscription_id))
             except HTTPException as exc:
                 raise ToolError(exc.detail) from exc
@@ -662,7 +662,7 @@ class StreamsToolset(Toolset):
                 )
                 return page.model_dump_json()
             try:
-                await require_permission("read", "stream", str(filters.stream_id), user_ctx.user_id)
+                await require_permission("read", "stream", str(filters.stream_id), user_ctx)
                 events = await service.list_events(
                     filters.stream_id, after=after, before=None, limit=limit
                 )

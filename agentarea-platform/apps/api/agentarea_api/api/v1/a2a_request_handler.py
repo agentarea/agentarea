@@ -86,7 +86,7 @@ from agentarea_tasks.domain.exceptions import (
     AgentModelNotConfiguredError,
     BudgetCapExceededError,
 )
-from agentarea_tasks.domain.models import AgentTask, TaskUpdate
+from agentarea_tasks.domain.models import AgentTask, TaskProvenance, TaskUpdate
 from agentarea_tasks.task_service import TaskService
 from google.protobuf.json_format import MessageToDict
 from starlette.exceptions import HTTPException
@@ -246,6 +246,16 @@ def _scope(context: ServerCallContext) -> A2ACallScope:
     return context.state[A2A_SCOPE_KEY]
 
 
+def _a2a_provenance(user: UserContext) -> TaskProvenance:
+    """Who an A2A message came from: an agent's key names the key, anyone else the user."""
+    credential = user.credential
+    if credential is not None and credential.kind == "api_key" and credential.key_id:
+        source = f"a2a:{credential.key_id}"
+    else:
+        source = f"user:{user.user_id}"
+    return TaskProvenance(origin_type="a2a", origin_id=source, source_identity=source)
+
+
 def _user_context(scope: A2ACallScope) -> UserContext:
     """The caller as a workspace member; A2A serves only authenticated users."""
     auth = scope.auth
@@ -376,6 +386,7 @@ class AgentAreaRequestHandler(RequestHandler):
             method=context.state["method"],
             request_id=context.state.get("request_id"),
         )
+        task.provenance = _a2a_provenance(user)
         try:
             created = await self._tasks.submit_task(task)
         except AgentModelNotConfiguredError as e:

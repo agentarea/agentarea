@@ -56,7 +56,7 @@ def requires(action: str, resource_type: str, *, id_param: str | None = None) ->
                 ) from None
         else:
             resource_id = str(user_context.workspace_id)
-        await require_permission(action, resource_type, resource_id, user_context.user_id)
+        await require_permission(action, resource_type, resource_id, user_context)
 
     setattr(_check, AUTHZ_ATTR, {"action": action, "resource_type": resource_type})
     return Depends(_check)

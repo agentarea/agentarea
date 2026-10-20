@@ -122,7 +122,7 @@ async def grant_resource_owner(
     *,
     resource_id: UUID | str,
     workspace_id: str,
-    user_id: str,
+    owner: str,
     relations: tuple[str, ...] = OWNER_RELATIONS,
 ) -> None:
     """Attach a newly created resource to its workspace root project and own it.
@@ -151,9 +151,42 @@ async def grant_resource_owner(
                 namespace="resource",
                 object=resource_obj,
                 relation=relation,
-                subject_id=f"User:{user_id}",
+                subject_id=owner,
             ),
         )
+
+
+def _agent_enrollment(agent_id: UUID | str, workspace_id: str) -> tuple[RelationTuple, ...]:
+    subject = f"Agent:{agent_id}"
+    return (
+        RelationTuple(
+            namespace="Workspace", object=workspace_id, relation="members", subject_id=subject
+        ),
+        RelationTuple(
+            namespace="project",
+            object=root_project_id(workspace_id),
+            relation="writer",
+            subject_id=subject,
+        ),
+    )
+
+
+async def enroll_agent(*, agent_id: UUID | str, workspace_id: str) -> None:
+    """Give a new agent the relations its runs act with: member, and writer of the root project.
+
+    A run executes as its agent, so these are what it may reach. They are
+    ordinary grants: narrow them in access control like any other.
+    """
+    client = resolve_graph_client()
+    for relationship in _agent_enrollment(agent_id, workspace_id):
+        await write_tuple_idempotent(client, relationship)
+
+
+async def withdraw_agent(*, agent_id: UUID | str, workspace_id: str) -> None:
+    """Remove what :func:`enroll_agent` granted, once the agent is gone."""
+    client = resolve_graph_client()
+    for relationship in _agent_enrollment(agent_id, workspace_id):
+        await delete_tuple_idempotent(client, relationship)
 
 
 async def revoke_resource(resource_id: UUID | str) -> None:

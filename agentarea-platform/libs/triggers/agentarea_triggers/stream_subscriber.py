@@ -5,7 +5,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import Subject, UserContext
 from agentarea_common.auth.permission import PermissionService
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
@@ -84,8 +84,12 @@ class SubscriptionFollowUpClaim:
         await self._session.commit()
 
 
-class ConfigurerAuthority:
-    """Whether whoever configured a trigger may still run its agent."""
+class InvokerAuthority:
+    """Whether a person may make an agent act: a member who holds ``can_invoke`` on it.
+
+    Asked of whoever starts a run, never of whoever configured a trigger: a
+    trigger's run acts as its agent, so its configurer leaving stops nothing.
+    """
 
     def __init__(self, *, graph: OpenFGAClient, permissions: PermissionService):
         self._graph = graph
@@ -100,7 +104,9 @@ class ConfigurerAuthority:
             )
         ):
             return False
-        return await self._permissions.check(user_id, "execute", "agent", str(agent_id))
+        return await self._permissions.check(
+            Subject(kind="user", id=user_id).graph_subject, "execute", "agent", str(agent_id)
+        )
 
 
 class TriggerSubscriptionHandler:
@@ -110,7 +116,6 @@ class TriggerSubscriptionHandler:
         event_broker: EventBroker,
         secret_manager_factory: SecretManagerFactory,
         workflow_executor: WorkflowExecutor,
-        authority: ConfigurerAuthority,
         max_depth: int,
         trigger_service_factory: Callable[[AsyncSession, UserContext], TriggerService]
         | None = None,
@@ -125,7 +130,6 @@ class TriggerSubscriptionHandler:
         self._event_broker = event_broker
         self._secret_manager_factory = secret_manager_factory
         self._workflow_executor = workflow_executor
-        self._authority = authority
         self._trigger_service_factory = trigger_service_factory or self._build_trigger_service
         self._follow_up_claim_factory = follow_up_claim_factory
         self._sender_admission = sender_admission
@@ -234,27 +238,21 @@ class TriggerSubscriptionHandler:
             if isinstance(admission, Refused):
                 return HandlerResult(verdict=Verdict.SKIPPED, reason=admission.reason)
             caller = admission.user_id
-        if not await self._authority.may_run(
-            session,
-            user_id=trigger.created_by,
-            workspace_id=subscription.workspace_id,
-            agent_id=trigger.agent_id,
-        ):
+        # The run acts as the agent, so the agent is what must still stand; who
+        # configured the trigger lends it nothing and leaving stops nothing.
+        if not await service.agent_stands(trigger.agent_id):
             if not await service.trigger_repository.mark_needs_new_owner(trigger.id):
                 raise RuntimeError(
-                    f"trigger {trigger.id} could not be stopped for a new owner: no row updated"
+                    f"trigger {trigger.id} could not be stopped for attention: no row updated"
                 )
             logger.warning(
-                "Trigger %s stopped: %s can no longer run agent %s",
-                trigger.id,
-                trigger.created_by,
-                trigger.agent_id,
+                "Trigger %s stopped: agent %s is gone or inactive", trigger.id, trigger.agent_id
             )
             return HandlerResult(
                 verdict=Verdict.ERROR,
                 reason=(
-                    f"configurer_lost_access: {trigger.created_by} can no longer run agent "
-                    f"{trigger.agent_id}; the trigger needs a new owner"
+                    f"agent_unavailable: agent {trigger.agent_id} is gone or inactive; "
+                    "the trigger needs attention"
                 ),
             )
         stream = await service.stream_service.get_stream(event.stream_id)

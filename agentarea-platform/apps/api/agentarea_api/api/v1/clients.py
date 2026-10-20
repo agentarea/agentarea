@@ -249,7 +249,7 @@ async def list_clients(
     clients = await service.list(
         limit=limit,
         offset=offset,
-        ids=await readable_resource_ids(user_context.user_id),
+        ids=await readable_resource_ids(user_context),
     )
     return await client_responses(service, clients)
 

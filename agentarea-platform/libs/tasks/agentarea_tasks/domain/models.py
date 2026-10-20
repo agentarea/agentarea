@@ -26,7 +26,7 @@ def _require_aware(v: datetime | None) -> datetime | None:
 class TaskProvenance(BaseModel):
     """Why a task exists: who or what started it, and the event that caused it."""
 
-    origin_type: Literal["user", "trigger", "agent", "api"] | None = None
+    origin_type: Literal["user", "trigger", "agent", "api", "a2a"] | None = None
     origin_id: str | None = None
     correlation_id: str | None = None
     causation_id: str | None = None
@@ -39,6 +39,22 @@ class TaskProvenance(BaseModel):
     #: ``None`` when nothing human did (a schedule, an event). It narrows the run
     #: and is recorded; it never lends the run its own authority.
     source_identity: str | None = None
+
+    @classmethod
+    def started_by(cls, user_id: str, *, via_api_key: bool) -> "TaskProvenance":
+        """A run a person started from the app, the API or MCP."""
+        return cls(
+            origin_type="api" if via_api_key else "user",
+            origin_id=user_id,
+            source_identity=f"user:{user_id}",
+        )
+
+    @property
+    def source_user_id(self) -> str | None:
+        """The person who started the run, if a person did."""
+        if self.source_identity and self.source_identity.startswith("user:"):
+            return self.source_identity.removeprefix("user:")
+        return None
 
 
 class Task(BaseModel):

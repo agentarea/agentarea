@@ -491,7 +491,7 @@ async def get_agent(
     if agent:
         # A tenant row: the graph decides. Checked after resolution because the
         # path may carry a slug, and the graph is keyed by id.
-        await require_permission("read", "agent", str(resolved_id), user_context.user_id)
+        await require_permission("read", "agent", str(resolved_id), user_context)
     else:
         # Fall back to a read-only catalog projection (no DB row materialized).
         agent = await agent_service.get_with_catalog(resolved_id)
@@ -559,7 +559,7 @@ async def list_agents(
     instead of leaving a tuple nobody consults.
     """
     agents = await agent_service.list()
-    readable = await readable_resource_ids(user_context.user_id)
+    readable = await readable_resource_ids(user_context)
     agents = [
         agent
         for agent in agents
@@ -590,7 +590,7 @@ async def update_agent(
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-    await require_permission("edit", "agent", str(resolved_id), user_context.user_id)
+    await require_permission("edit", "agent", str(resolved_id), user_context)
     validate_code_tool_names(data.tools)
     agent = await agent_service.update_agent(id=resolved_id, payload=data)
     if not agent:
@@ -619,7 +619,7 @@ async def delete_agent(
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
-    await require_permission("delete", "agent", str(resolved_id), user_context.user_id)
+    await require_permission("delete", "agent", str(resolved_id), user_context)
     success = await agent_service.delete_agent(resolved_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")

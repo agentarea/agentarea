@@ -204,12 +204,13 @@ class TaskService(BaseTaskService):
         agent_id: UUID | None = None,
         task_id: UUID | None = None,
         task_policy: PolicyDocument | None = None,
+        source_user_id: str | None,
     ) -> EffectivePolicy:
         """Resolve workspace/agent/user/task policy via the injected port.
 
-        The per-user layer is resolved from the task creator (this service's
-        UserContext), so the snapshot a task carries reflects that specific
-        caller's permissions — the same agent can resolve differently per user.
+        The per-user layer is the person who started the run, as a session
+        policy: it only narrows what the agent may do. A run nobody started --
+        a schedule, an event -- has no user layer.
         """
         if not workspace_id:
             raise ValueError("workspace_id is required to resolve runtime policy")
@@ -219,15 +220,17 @@ class TaskService(BaseTaskService):
             agent_id=agent_id,
             task_id=task_id,
             task_policy=task_policy,
-            user_id=self.repository_factory.user_context.user_id,
+            user_id=source_user_id,
         )
 
     async def _resolve_limit_ceilings(
-        self, workspace_id: str, agent_id: UUID | None
+        self, workspace_id: str, agent_id: UUID | None, source_user_id: str | None
     ) -> dict[str, str]:
         """The limit ceilings the task's own policy layer may not raise past."""
         return _limit_ceilings(
-            await self._resolve_effective_policy(workspace_id=workspace_id, agent_id=agent_id)
+            await self._resolve_effective_policy(
+                workspace_id=workspace_id, agent_id=agent_id, source_user_id=source_user_id
+            )
         )
 
     @staticmethod
@@ -300,7 +303,9 @@ class TaskService(BaseTaskService):
         if not workspace_id:
             return
 
-        policy = effective_policy or await self._resolve_effective_policy(workspace_id=workspace_id)
+        policy = effective_policy or await self._resolve_effective_policy(
+            workspace_id=workspace_id, source_user_id=None
+        )
         budget = policy.budget
         cap_value = budget.monthly_spend_cap_usd if budget else None
         if cap_value is not None:
@@ -396,7 +401,7 @@ class TaskService(BaseTaskService):
         upper_bound_policy: EffectivePolicy | None = None,
         require_model: bool = False,
         scheduled_at: datetime | None = None,
-        provenance: TaskProvenance | None = None,
+        provenance: TaskProvenance,
         execution_id: str | None = None,
     ) -> AgentTask:
         """Persist a task with resolved governance policy. Does not dispatch to Temporal.
@@ -437,6 +442,7 @@ class TaskService(BaseTaskService):
             agent_id=agent_id,
             task_id=new_task_id,
             task_policy=task_policy,
+            source_user_id=provenance.source_user_id,
         )
         effective_policy.require_runtime_contract()
         if upper_bound_policy is not None:
@@ -485,7 +491,9 @@ class TaskService(BaseTaskService):
             if effective_policy.execution is not None
             else {},
             "effective_policy": effective_policy.to_json_dict(),
-            "limit_ceilings": await self._resolve_limit_ceilings(workspace_id, agent_id),
+            "limit_ceilings": await self._resolve_limit_ceilings(
+                workspace_id, agent_id, provenance.source_user_id
+            ),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": 1,
         }
@@ -502,7 +510,7 @@ class TaskService(BaseTaskService):
             task_parameters=parameters,
             metadata=metadata,
             scheduled_at=scheduled_at,
-            provenance=provenance or TaskProvenance(),
+            provenance=provenance,
             execution_id=execution_id,
         )
         stored_task = await self.create_task(task)
@@ -548,6 +556,7 @@ class TaskService(BaseTaskService):
         created_via: str = "api",
         task_id: UUID | None = None,
         trusted_metadata: dict[str, Any] | None = None,
+        provenance: TaskProvenance,
     ) -> AgentTask:
         """Start a new agent run from a validated DTO.
 
@@ -567,6 +576,8 @@ class TaskService(BaseTaskService):
                 task-scoped inputs before workflow dispatch.
             trusted_metadata: Trusted server-side metadata merged into the
                 workflow request. REST request bodies do not populate it.
+            provenance: Who started the run and from what; required, so no
+                entry point starts a run without saying.
 
         Returns:
             The created (or routed-into) ``AgentTask`` with execution info.
@@ -601,6 +612,7 @@ class TaskService(BaseTaskService):
             metadata_overrides=metadata_overrides,
             task_id=task_id,
             scheduled_at=payload.scheduled_at,
+            provenance=provenance,
         )
 
     async def reserve_run(
@@ -612,12 +624,16 @@ class TaskService(BaseTaskService):
         created_via: str = "api",
         task_id: UUID,
         trusted_metadata: dict[str, Any] | None = None,
+        provenance: TaskProvenance,
     ) -> AgentTask:
         """Persist a validated task before committing task-scoped inputs.
 
         Multipart uploads need an authoritative owner before object storage is
         mutated. The returned task is intentionally not dispatched; callers
         commit inputs and then pass it to :meth:`dispatch_reserved_run`.
+
+        ``provenance`` says who started the run and from what, as for
+        :meth:`start_run`.
         """
         metadata_overrides: dict[str, Any] = {"created_via": created_via}
         if trusted_metadata:
@@ -651,6 +667,7 @@ class TaskService(BaseTaskService):
             task_policy=task_policy,
             require_model=True,
             scheduled_at=payload.scheduled_at,
+            provenance=provenance,
         )
 
     async def dispatch_reserved_run(self, task: AgentTask) -> AgentTask:
@@ -1012,6 +1029,7 @@ class TaskService(BaseTaskService):
                 agent_id=task.agent_id,
                 task_id=task.id,
                 task_policy=requested_policy,
+                source_user_id=task.provenance.source_user_id,
             )
             next_policy.runtime_contract()
         except PolicyValidationError:
@@ -1028,7 +1046,9 @@ class TaskService(BaseTaskService):
             else {},
             "resolved_execution": resolved_execution.model_dump(exclude_none=True),
             "effective_policy": next_policy.to_json_dict(),
-            "limit_ceilings": await self._resolve_limit_ceilings(task.workspace_id, task.agent_id),
+            "limit_ceilings": await self._resolve_limit_ceilings(
+                task.workspace_id, task.agent_id, task.provenance.source_user_id
+            ),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": int(current_snapshot.get("revision") or 1) + 1,
         }
@@ -1163,6 +1183,7 @@ class TaskService(BaseTaskService):
             agent_id=task.agent_id,
             task_id=task.id,
             task_policy=requested_policy,
+            source_user_id=task.provenance.source_user_id,
         )
         policy.require_runtime_contract()
         await self._enforce_budget_cap(task.workspace_id, policy, task.agent_id)
@@ -1176,7 +1197,9 @@ class TaskService(BaseTaskService):
             if resolved_execution is not None
             else {},
             "effective_policy": policy.to_json_dict(),
-            "limit_ceilings": await self._resolve_limit_ceilings(task.workspace_id, task.agent_id),
+            "limit_ceilings": await self._resolve_limit_ceilings(
+                task.workspace_id, task.agent_id, task.provenance.source_user_id
+            ),
             "resolved_at": datetime.now(UTC).isoformat(),
             "revision": int(current.get("revision") or 1) + 1,
         }
@@ -1259,7 +1282,7 @@ class TaskService(BaseTaskService):
         status: str = "pending",
         task_policy: PolicyDocument | None = None,
         scheduled_at: datetime | None = None,
-        provenance: TaskProvenance | None = None,
+        provenance: TaskProvenance,
         follow_up_claim: FollowUpClaim | None = None,
     ) -> AgentTask:
         """Canonical entry point for creating and executing a task via Temporal workflow.
@@ -1319,7 +1342,7 @@ class TaskService(BaseTaskService):
                 agent_id=agent_id,
                 status=status,
                 task_parameters=parameters or {},
-                provenance=provenance or TaskProvenance(),
+                provenance=provenance,
             )
             routed = await self._try_route_to_active_workflow(
                 draft, trigger_id, session_key, follow_up_claim

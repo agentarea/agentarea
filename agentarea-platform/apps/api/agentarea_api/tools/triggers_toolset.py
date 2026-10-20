@@ -24,7 +24,7 @@ from agentarea_triggers.schemas.dto import TriggerCreate, TriggerTypeLiteral
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from ..api.v1._trigger_creation import require_stream_readable
+from ..api.v1._trigger_creation import require_may_bind, require_stream_readable
 from ..api.v1.triggers import TriggerStatus, trigger_status
 from .base import platform_context, platform_read_context
 
@@ -356,7 +356,7 @@ class TriggersToolset(Toolset):
         """
         async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
             try:
-                await require_stream_readable(UUID(stream_id), user_ctx.user_id)
+                await require_stream_readable(UUID(stream_id), user_ctx)
             except HTTPException as exc:
                 raise ToolError(exc.detail) from exc
             service = await _build_trigger_service(repo_factory, broker, secret)
@@ -405,8 +405,11 @@ class TriggersToolset(Toolset):
     @requires("edit", "trigger", id_param="trigger_id")
     async def enable(self, trigger_id: TriggerId) -> str:
         """Enable a trigger (resumes its schedule for cron triggers)."""
-        async with platform_context() as (_session, _user_ctx, repo_factory, broker, secret):
+        async with platform_context() as (_session, user_ctx, repo_factory, broker, secret):
             service = await _build_trigger_service(repo_factory, broker, secret)
+            trigger = await service.get_trigger(UUID(trigger_id))
+            if trigger is not None:
+                await require_may_bind(trigger.agent_id, user_ctx)
             ok = await service.enable_trigger(UUID(trigger_id))
             return json.dumps({"enabled": ok})
 

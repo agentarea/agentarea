@@ -123,7 +123,7 @@ class StreamEventsToolset(Toolset):
             service = _service(repo_factory)
             try:
                 found = await service.find_stream(stream)
-                await require_permission("read", "stream", str(found.id), user_ctx.user_id)
+                await require_permission("read", "stream", str(found.id), user_ctx)
                 if since_at is not None:
                     fetched = await service.list_events_since(
                         found.id, since=since_at, after=after_sequence, limit=limit + 1

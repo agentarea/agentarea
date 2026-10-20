@@ -39,7 +39,7 @@ async def readable_catalog_connections(
     items = list(item_ids)
     if not items:
         return {}
-    readable = await readable_resource_ids(user_context.user_id)
+    readable = await readable_resource_ids(user_context)
     return await CatalogConnectionRepository(session, user_context).by_catalog_item(items, readable)
 
 

@@ -11,7 +11,13 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import ServicePrincipal, UserContext
-from ..rebac.ownership import grant_resource_owner, owner_relations, revoke_resource
+from ..rebac.ownership import (
+    enroll_agent,
+    grant_resource_owner,
+    owner_relations,
+    revoke_resource,
+    withdraw_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,9 +286,13 @@ class WorkspaceScopedRepository[T]:
         await grant_resource_owner(
             resource_id=record_id,
             workspace_id=self.user_context.workspace_id,
-            user_id=self.user_context.user_id,
+            owner=self.user_context.graph_subject,
             relations=owner_relations(self.model_class),
         )
+        # A row that runs as a principal of its own (an agent) also gets the
+        # relations its runs act with.
+        if getattr(self.model_class, "__graph_principal__", False):
+            await enroll_agent(agent_id=record_id, workspace_id=self.user_context.workspace_id)
 
     async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:
         """Update a record by ID within the current workspace.
@@ -432,6 +442,10 @@ class WorkspaceScopedRepository[T]:
             return
         try:
             await revoke_resource(record_id)
+            if getattr(self.model_class, "__graph_principal__", False):
+                await withdraw_agent(
+                    agent_id=record_id, workspace_id=self.user_context.workspace_id
+                )
         except Exception:
             logger.exception(
                 "Deleted %s %s but could not remove its graph tuples",
