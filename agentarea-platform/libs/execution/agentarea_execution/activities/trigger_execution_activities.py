@@ -206,7 +206,10 @@ def make_trigger_activities(dependencies: ActivityDependencies):
 
                 # The one path every trigger kind starts its task through: it
                 # evaluates the conditions, stamps provenance, records the
-                # execution and counts failures toward auto-disable.
+                # execution and counts failures toward auto-disable. A failure a
+                # retry may not repeat, such as a task stored whose workflow did
+                # not start, raises: Temporal retries this activity and the retry
+                # starts that task.
                 firing = await trigger_service.fire(
                     trigger_id,
                     execution_data,
@@ -216,7 +219,9 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                         origin_id=str(trigger_id),
                         correlation_id=correlation_id,
                     ),
+                    raise_retryable=True,
                 )
+                await session.commit()
 
                 execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
                 execution_id = firing.execution.id if firing.execution else None
@@ -257,38 +262,9 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                 )
 
         except Exception as e:
-            from agentarea_triggers.domain.enums import ExecutionStatus
-            from agentarea_triggers.trigger_service import (
-                TriggerNotFoundError,
-                TriggerValidationError,
-            )
-
-            if isinstance(e, TriggerNotFoundError | TriggerValidationError):
-                raise
-
-            execution_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
-
+            # Not recorded here: Temporal retries this activity, and the workflow
+            # records the firing failed once, after the last attempt.
             logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
-
-            try:
-                database = get_database()
-                async with database.async_session_factory() as session:
-                    user_context = await _resolve_trigger_context(session, trigger_id)
-                    trigger_service = _trigger_service(session, user_context)
-
-                    await trigger_service.record_execution(
-                        trigger_id=trigger_id,
-                        status=ExecutionStatus.FAILED,
-                        execution_time_ms=execution_time_ms,
-                        error_message=str(e),
-                        trigger_data=execution_data,
-                    )
-            except Exception as record_error:
-                logger.error(
-                    f"Failed to record execution failure for trigger {trigger_id}: {record_error}",
-                    exc_info=True,
-                )
-
             raise
 
     @activity.defn(name="record_trigger_execution_activity")
@@ -327,6 +303,7 @@ def make_trigger_activities(dependencies: ActivityDependencies):
                     error_message=error_message,
                     trigger_data=trigger_data,
                 )
+                await session.commit()
 
                 logger.info(f"Recorded execution for trigger {trigger_id}: {status}")
 

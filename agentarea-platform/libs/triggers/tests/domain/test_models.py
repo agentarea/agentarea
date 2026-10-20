@@ -195,19 +195,12 @@ class TestTrigger:
             consecutive_failures=3,
         )
 
-        # Record success
+        # A started task says nothing yet of how it ends
         original_updated_at = trigger.updated_at
-        trigger.record_execution_success()
+        trigger.record_execution_started()
 
-        assert trigger.consecutive_failures == 0
+        assert trigger.consecutive_failures == 3
         assert trigger.last_execution_at is not None
-        assert trigger.updated_at > original_updated_at
-
-        # Record failure
-        original_updated_at = trigger.updated_at
-        trigger.record_execution_failure()
-
-        assert trigger.consecutive_failures == 1
         assert trigger.updated_at > original_updated_at
 
 

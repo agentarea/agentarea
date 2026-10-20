@@ -745,31 +745,43 @@ class TriggerService:
         if status == ExecutionStatus.SKIPPED:
             return
 
-        # Update execution tracking
-        if status == ExecutionStatus.SUCCESS:
-            trigger.record_execution_success()
-        else:
-            trigger.record_execution_failure()
-
-        # Update trigger in database
+        trigger.record_execution_started()
         await self.trigger_repository.update_execution_tracking(
-            trigger_id,
-            last_execution_at=trigger.last_execution_at,
-            consecutive_failures=trigger.consecutive_failures,
+            trigger_id, last_execution_at=trigger.last_execution_at
         )
+        if status != ExecutionStatus.SUCCESS:
+            await self._count_failure(trigger_id)
 
-        # Check if trigger should be disabled due to consecutive failures
-        if trigger.should_disable_due_to_failures():
-            logger.warning(
-                f"Trigger {trigger_id} reached failure threshold ({trigger.failure_threshold}), "
-                f"disabling trigger after {trigger.consecutive_failures} consecutive failures"
-            )
-            await self.disable_trigger(trigger_id)
+    async def record_run_outcome(
+        self, trigger_id: UUID, task_id: UUID, *, failed: bool, error: str | None = None
+    ) -> None:
+        """Count how a task the trigger started ended towards its failure_threshold.
 
-            # Publish trigger auto-disabled event
-            await self._publish_trigger_auto_disabled_event(
-                trigger_id, trigger.consecutive_failures
-            )
+        A completed task resets the count. A failed one marks the firing that
+        started it failed and counts once: a redelivered outcome finds it marked.
+        Raises FiringNotRecordedError while no firing names the task yet. The
+        trigger's row is locked before the firing's, the order a firing takes them.
+        """
+        if not await self.trigger_repository.lock(trigger_id):
+            logger.info(f"Trigger {trigger_id} is gone; the end of task {task_id} is not counted")
+            return
+        if not failed:
+            await self.trigger_repository.reset_failures(trigger_id)
+            return
+        if await self.trigger_execution_repository.mark_run_failed(trigger_id, task_id, error):
+            await self._count_failure(trigger_id)
+
+    async def _count_failure(self, trigger_id: UUID) -> None:
+        """Add one consecutive failure; reaching failure_threshold disables the trigger."""
+        count = await self.trigger_repository.count_failure(trigger_id)
+        if count is None or not count.active or count.failures < count.threshold:
+            return
+        logger.warning(
+            f"Disabling trigger {trigger_id} after {count.failures} consecutive failures, "
+            "its failure threshold"
+        )
+        await self.disable_trigger(trigger_id)
+        await self._publish_trigger_auto_disabled_event(trigger_id, count.failures)
 
     async def _publish_trigger_auto_disabled_event(
         self, trigger_id: UUID, consecutive_failures: int
@@ -815,16 +827,7 @@ class TriggerService:
         if not trigger:
             return False
 
-        # Reset failure count
-        trigger.consecutive_failures = 0
-        trigger.updated_at = datetime.utcnow()
-
-        # Update in database
-        await self.trigger_repository.update_execution_tracking(
-            trigger_id,
-            last_execution_at=trigger.last_execution_at,
-            consecutive_failures=0,
-        )
+        await self.trigger_repository.reset_failures(trigger_id)
 
         logger.info(f"Reset failure count for trigger {trigger_id}")
         return True
@@ -1321,10 +1324,20 @@ class TriggerService:
                     await self.task_service.restart_undispatched_task(existing)
                     logger.info(f"Started task {task_id} for trigger {trigger_id} on retry")
                     return TriggerFiring(
-                        outcome="reacted", reason="task started on retry", task_id=task_id
+                        outcome="reacted",
+                        reason="task started on retry",
+                        task_id=task_id,
+                        execution=await self._record_started_once(
+                            trigger_id, task_id, trigger_data, fired_by
+                        ),
                     )
                 return TriggerFiring(
-                    outcome="reacted", reason="task already started", task_id=task_id
+                    outcome="reacted",
+                    reason="task already started",
+                    task_id=task_id,
+                    execution=await self._record_started_once(
+                        trigger_id, task_id, trigger_data, fired_by
+                    ),
                 )
 
         start_time = time.time()
@@ -1408,12 +1421,6 @@ class TriggerService:
                 execution = await self._record_execution_success(
                     trigger_id, execution_time_ms, created_task_id, trigger_data, fired_by=fired_by
                 )
-                trigger.record_execution_success()
-                await self.trigger_repository.update_execution_tracking(
-                    trigger_id,
-                    last_execution_at=trigger.last_execution_at,
-                    consecutive_failures=trigger.consecutive_failures,
-                )
             except Exception as rec_err:
                 logger.warning(
                     f"Failed to record execution history (task was created successfully): {rec_err}",
@@ -1428,6 +1435,17 @@ class TriggerService:
             )
 
         except Exception as e:
+            if is_spend_cap_refusal(e):
+                # A spend cap or budget turned the firing away; the trigger is not
+                # failing, so the refusal is recorded without counting towards
+                # failure_threshold, and a retry would be refused the same way.
+                logger.info(f"Trigger {trigger_id} refused by a spend cap: {e}")
+                execution = await self._record_execution_skipped(
+                    trigger_id, str(e), trigger_data, fired_by=fired_by
+                )
+                return TriggerFiring(
+                    outcome="skipped", reason=str(e), verdict=verdict, execution=execution
+                )
             if raise_retryable and not is_permanent(e):
                 logger.warning(
                     f"Trigger {trigger_id} failed in a way a retry may not repeat; "
@@ -1436,34 +1454,12 @@ class TriggerService:
                 )
                 raise
             execution_time_ms = int((time.time() - start_time) * 1000)
-            if is_spend_cap_refusal(e):
-                # A spend cap or budget turned the firing away; the trigger is not
-                # failing, so the refusal is recorded without counting towards
-                # failure_threshold.
-                logger.info(f"Trigger {trigger_id} refused by a spend cap: {e}")
-                execution = await self._record_execution_skipped(
-                    trigger_id, str(e), trigger_data, fired_by=fired_by
-                )
-                return TriggerFiring(
-                    outcome="skipped", reason=str(e), verdict=verdict, execution=execution
-                )
             logger.error(f"Error executing trigger {trigger_id}: {e}", exc_info=True)
             execution = None
             try:
                 execution = await self._record_execution_failure(
                     trigger_id, str(e), trigger_data, execution_time_ms, fired_by=fired_by
                 )
-                trigger.record_execution_failure()
-                await self.trigger_repository.update_execution_tracking(
-                    trigger_id,
-                    last_execution_at=trigger.last_execution_at,
-                    consecutive_failures=trigger.consecutive_failures,
-                )
-                if trigger.should_disable_due_to_failures():
-                    logger.warning(
-                        f"Disabling trigger {trigger_id} due to consecutive failures", exc_info=True
-                    )
-                    await self.disable_trigger(trigger_id)
             except Exception as rec_err:
                 logger.warning(f"Failed to record execution failure: {rec_err}", exc_info=True)
             return TriggerFiring(
@@ -1497,6 +1493,24 @@ class TriggerService:
             task_id=task_id,
             trigger_data=trigger_data or {},
             fired_by=fired_by,
+        )
+
+    async def _record_started_once(
+        self,
+        trigger_id: UUID,
+        task_id: UUID,
+        trigger_data: dict[str, Any],
+        fired_by: str | None,
+    ) -> TriggerExecution | None:
+        """Record the firing of a task an earlier attempt started, unless it recorded it.
+
+        An attempt can start the task and die before recording its firing; the
+        task's end is counted against that record.
+        """
+        if await self.trigger_execution_repository.names_task(trigger_id, task_id):
+            return None
+        return await self._record_execution_success(
+            trigger_id, 0, task_id, trigger_data, fired_by=fired_by
         )
 
     async def _record_execution_skipped(

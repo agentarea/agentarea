@@ -22,13 +22,12 @@ from agentarea_common.auth.context import UserContext
 from agentarea_common.broker.redis_streams import RedisStreamsBroker
 from agentarea_common.config import RedisSettings, get_settings
 from agentarea_common.utils.types import UtcDatetime
-from agentarea_streams.domain import ENVELOPE_VERSION
+from agentarea_streams.domain import ENVELOPE_VERSION, Verdict
 from agentarea_streams.domain.feed import FeedFilter, RoutedEvent
 from agentarea_streams.domain.processing import Processing, ProcessingTask
 from agentarea_streams.infrastructure.event_repository import FACET_CAP, StreamEventRepository
 from agentarea_streams.infrastructure.live import EventNotice, EventNoticesHub, NoticeKind
 from agentarea_tasks.infrastructure.repository import TaskRepository
-from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.infrastructure.reaction_feed_repository import ReactionFeedRepository
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,7 +107,8 @@ class WorkspaceEventPage(BaseModel):
 
 
 def _started_task(row: Any) -> UUID | None:
-    return row.task_id if row.status == ExecutionStatus.SUCCESS.value else None
+    """The task the reaction started; its status turns ``failed`` when that task fails."""
+    return row.task_id if row.verdict == Verdict.REACTED.value else None
 
 
 async def feed_items(

@@ -30,6 +30,8 @@ STREAM_EVENTS_GROUPS = (ROUTER_GROUP, EVENTS_VIEW_GROUP)
 DELIVERY_GROUP = "delivery"
 # Projects task outcomes into each workspace's platform stream.
 PLATFORM_GROUP = "platform"
+# Counts how each task a trigger started ended towards the trigger's failure threshold.
+TRIGGER_OUTCOMES_GROUP = "trigger-outcomes"
 INGEST_GROUP = "ingest"
 
 # How long the broker keeps a topic's entries: enough to ride out a consumer

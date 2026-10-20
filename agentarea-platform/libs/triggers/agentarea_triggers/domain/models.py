@@ -109,16 +109,9 @@ class Trigger(BaseModel):
         """Check if trigger should be disabled due to consecutive failures."""
         return self.consecutive_failures >= self.failure_threshold
 
-    def record_execution_success(self) -> None:
-        """Record successful execution."""
+    def record_execution_started(self) -> None:
+        """Record that the trigger fired; failures are counted in the database, one at a time."""
         self.last_execution_at = datetime.utcnow()
-        self.consecutive_failures = 0
-        self.updated_at = datetime.utcnow()
-
-    def record_execution_failure(self) -> None:
-        """Record failed execution."""
-        self.last_execution_at = datetime.utcnow()
-        self.consecutive_failures += 1
         self.updated_at = datetime.utcnow()
 
 

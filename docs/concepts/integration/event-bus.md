@@ -46,7 +46,7 @@ two namespaces.
 |---|---|---|
 | `streams.events.0` to `streams.events.N-1` | webhook intake, the `ingest` group, forwards, the `platform` group | groups `router` and `events-view` |
 | `streams.ingest` | the Go event-service: items it polled | group `ingest` |
-| `tasks.events` | the `record` activity of every task run | groups `delivery` and `platform`; each API process's live feed, without a group |
+| `tasks.events` | the `record` activity of every task run | groups `delivery`, `platform` and `trigger-outcomes`; each API process's live feed, without a group |
 | `streams.external`, `streams.external.retry.1` to `.6` | the router's `EXTERNAL` handler; Delivery, for a retry | group `delivery` |
 | `domain.events.<type>` | the outbox relay | the router's subscription cache, without a group |
 | `<topic>.<group>.dlq` | a group, for a message it gave up on | operators, through DLQ replay |
@@ -117,6 +117,10 @@ cancelled, waiting for an approval, waiting for input. Triggers subscribe to it
 like any other stream. A trigger never reacts to an event that comes from a
 task it started, and a firing deeper than `AGENTAREA_EVENT_FORWARD_DEPTH` is
 skipped.
+
+**Trigger outcomes count.** The `trigger-outcomes` group reads how each task a
+trigger started ended. A failed task counts towards the trigger's
+`failure_threshold`, a completed one resets the count.
 
 **Delivery sends.** The `delivery` group on `tasks.events` sends each task
 event to where its task replies: the chat or mailbox it came from, the

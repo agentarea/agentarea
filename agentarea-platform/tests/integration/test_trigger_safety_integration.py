@@ -192,7 +192,12 @@ class TestTriggerSafetyIntegration:
         success_result = await trigger_service.execute_trigger(trigger_id, execution_data)
         assert success_result.status == ExecutionStatus.SUCCESS
 
-        # Verify failure count was reset
+        # Starting a task says nothing yet of how it ends
+        trigger_after_start = await trigger_service.get_trigger(trigger_id)
+        assert trigger_after_start.consecutive_failures == 3
+
+        # The task completing resets the count
+        await trigger_service.record_run_outcome(trigger_id, mock_task.id, failed=False)
         trigger_after_success = await trigger_service.get_trigger(trigger_id)
         assert trigger_after_success.consecutive_failures == 0
         assert trigger_after_success.is_active is True

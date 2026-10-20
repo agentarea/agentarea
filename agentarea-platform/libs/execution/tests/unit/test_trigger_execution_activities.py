@@ -22,6 +22,7 @@ from agentarea_execution.models import (
 )
 from agentarea_triggers.domain.enums import ExecutionStatus
 from agentarea_triggers.domain.models import ConditionVerdict, CronTrigger, TriggerExecution
+from agentarea_triggers.infrastructure.repository import FailureCount
 from agentarea_triggers.trigger_service import TriggerService
 from temporalio.testing import ActivityEnvironment
 
@@ -52,6 +53,9 @@ class _Harness:
         self.trigger_repo = AsyncMock()
         self.trigger_repo.get_trigger.return_value = trigger
         self.trigger_repo.disable_trigger.return_value = True
+        self.trigger_repo.count_failure.return_value = FailureCount(
+            trigger.consecutive_failures + 1, trigger.failure_threshold, trigger.is_active
+        )
         self.execution_repo = AsyncMock()
         self.execution_repo.create.side_effect = lambda **kwargs: TriggerExecution(**kwargs)
         self.task_service = AsyncMock()
@@ -157,6 +161,7 @@ async def test_a_cron_trigger_that_hits_its_failure_threshold_pauses_its_schedul
     assert "no model" in (result.error or "")
     harness.client.get_schedule_handle.assert_called_with(f"cron-trigger-{harness.trigger.id}")
     harness.schedule_handle.pause.assert_awaited()
+    harness.database.async_session_factory.return_value.commit.assert_awaited()
 
 
 async def test_a_recorded_workflow_failure_at_the_threshold_pauses_the_schedule():
@@ -171,6 +176,7 @@ async def test_a_recorded_workflow_failure_at_the_threshold_pauses_the_schedule(
     )
 
     harness.schedule_handle.pause.assert_awaited()
+    harness.database.async_session_factory.return_value.commit.assert_awaited()
 
 
 async def test_an_inactive_trigger_is_skipped_without_a_task():
@@ -271,3 +277,48 @@ async def test_evaluate_trigger_conditions_activity():
 
     assert result.conditions_met is True
     evaluate.assert_awaited_once_with(harness.trigger, event_data)
+
+
+async def test_a_task_whose_workflow_did_not_start_is_started_by_the_retry():
+    harness = _Harness(_trigger())
+
+    def stored_not_started(task, **_):
+        task.status = "failed"
+        task.execution_id = None
+        return task
+
+    harness.task_service.route_or_submit_task.side_effect = stored_not_started
+    with pytest.raises(Exception, match="did not start"):
+        await harness.fire()
+    harness.execution_repo.create.assert_not_called()
+
+    stored = harness.submitted()
+    harness.task_service.get_task.return_value = SimpleNamespace(
+        id=stored.id, status="failed", execution_id=None, query=stored.query
+    )
+    harness.execution_repo.names_task.return_value = False
+    result = await harness.fire()
+
+    harness.task_service.restart_undispatched_task.assert_awaited_once()
+    assert result.status is TriggerOutcome.SUCCESS
+    assert result.task_id == stored.id
+    recorded = harness.execution_repo.create.call_args.kwargs
+    assert (recorded["task_id"], recorded["status"]) == (stored.id, ExecutionStatus.SUCCESS.value)
+
+
+async def test_a_retry_records_the_firing_an_attempt_that_died_did_not():
+    harness = _Harness(_trigger())
+    first = await harness.fire()
+    harness.task_service.get_task.return_value = SimpleNamespace(
+        id=first.task_id, status="running", execution_id="wf"
+    )
+    harness.execution_repo.create.reset_mock()
+
+    harness.execution_repo.names_task.return_value = True
+    await harness.fire()
+    harness.execution_repo.create.assert_not_called()
+
+    harness.execution_repo.names_task.return_value = False
+    await harness.fire()
+    recorded = harness.execution_repo.create.call_args.kwargs
+    assert recorded["task_id"] == first.task_id

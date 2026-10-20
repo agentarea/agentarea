@@ -107,3 +107,15 @@ async def test_the_tail_ends_when_the_hub_closes():
     frames = [f async for f in iter_live_feed(subscribe=subscribe, streams=[], load=load)]
     assert len(frames) == 1
     assert frames[0].startswith(":")
+
+
+def test_a_reaction_whose_task_failed_still_names_the_task():
+    from types import SimpleNamespace
+
+    from agentarea_api.api.v1.stream_event_feed import _started_task
+
+    task_id = uuid4()
+    assert _started_task(SimpleNamespace(verdict="reacted", status="failed", task_id=task_id)) == (
+        task_id
+    )
+    assert _started_task(SimpleNamespace(verdict="skipped", status="skipped", task_id=None)) is None
