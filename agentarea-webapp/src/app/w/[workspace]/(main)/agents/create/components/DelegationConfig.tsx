@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  ChevronDown,
   Globe,
   KeyRound,
   Link2,
@@ -18,17 +19,16 @@ import type {
 } from "@/api/client/types.gen";
 import AccordionControl from "@/components/AccordionControl";
 import { AgentAvatar } from "@/components/AgentAvatar";
-import { CardAccordionItem } from "@/components/CardAccordionItem/CardAccordionItem";
 import ConfigSheet from "@/components/ConfigSheet";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
 import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
-import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import Note from "@/components/ui/note";
 import {
   Select,
@@ -41,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "@/components/WorkspaceLink";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { cn } from "@/lib/utils";
 import { readAgentCardAction } from "../../shared/actions";
 import {
   agentAddress,
@@ -329,6 +330,14 @@ export default function DelegationConfig({
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [tab, setTab] = useState<"workspace" | "external">("workspace");
   const [query, setQuery] = useState("");
+  // Delegates whose fields are shown under their row.
+  const [openNames, setOpenNames] = useState<string[]>([]);
+  const toggleOpen = (name: string) =>
+    setOpenNames((names) =>
+      names.includes(name)
+        ? names.filter((open) => open !== name)
+        : [...names, name]
+    );
   // Catalog agents are listed but not installed here, so the runtime could
   // not resolve them by name.
   const otherAgents = useMemo(
@@ -471,11 +480,11 @@ export default function DelegationConfig({
       }
     >
       {delegates.length > 0 ? (
-        <Accordion type="multiple" id="delegates" className="space-y-2">
+        <div className="overflow-hidden rounded-md border">
           {delegates.map((delegate) => {
             const remote = isRemoteDelegate(delegate);
             const local = remote ? undefined : byName.get(delegate.name);
-            const Icon = remote ? Globe : AgentIcon;
+            const open = openNames.includes(delegate.name);
             const urlInvalid =
               remote &&
               remoteDelegateProblem(
@@ -483,108 +492,167 @@ export default function DelegationConfig({
                 []
               ) === "urlInvalid";
             const field = (key: string) => `delegate-${delegate.name}-${key}`;
+            const when = delegate.settings?.description_override?.trim();
             return (
-              <CardAccordionItem
+              <div
                 key={delegate.name}
-                value={delegate.name}
-                title={
-                  <div className="flex min-w-0 flex-row items-center gap-2 px-[7px] py-[7px]">
-                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <h3 className="truncate text-sm font-medium">
-                      {delegate.name}
-                    </h3>
-                    {remote && <Badge variant="outline">A2A</Badge>}
-                  </div>
-                }
-                controls={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove(delegate.name)}
-                    className="h-4 w-4 shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
-                    aria-label={t("remove", { name: delegate.name })}
-                  >
-                    <Trash2 />
-                  </Button>
-                }
+                // An open delegate reads as one block: its row and its fields
+                // share a tint, apart from the rows around it.
+                className={cn(
+                  "border-b last:border-b-0",
+                  open && "bg-muted/40 dark:bg-zinc-700/20"
+                )}
               >
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor={field("when")}>{t("when")}</Label>
-                    <Textarea
-                      id={field("when")}
-                      value={delegate.settings?.description_override ?? ""}
-                      placeholder={local?.description || t("whenPlaceholder")}
-                      onChange={(event) =>
-                        update(
-                          delegate.name,
-                          patchDelegate(delegate, {
-                            description_override: event.target.value,
-                          })
-                        )
-                      }
+                <InteractiveListRow
+                  onClick={() => toggleOpen(delegate.name)}
+                  selected={open}
+                  pressed={open}
+                  className="px-3 py-2"
+                  selectedClassName=""
+                  dividerClassName=""
+                  start={
+                    remote ? (
+                      <EntityAvatar
+                        variant="soft"
+                        size={24}
+                        iconScale={0.45}
+                        icon={<Globe strokeWidth={1.85} />}
+                        aria-hidden
+                      />
+                    ) : (
+                      <AgentAvatar
+                        agent={
+                          local ?? { id: delegate.name, name: delegate.name }
+                        }
+                        size="sm"
+                      />
+                    )
+                  }
+                  // The row stays open-looking while its fields are shown.
+                  forceHoverActionsVisible={open}
+                  indicator={
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 text-muted-foreground transition-transform",
+                        open && "rotate-180"
+                      )}
                     />
-                    {!remote && (
-                      <p className="text-xs text-muted-foreground">
-                        {t("whenHintLocal")}
-                      </p>
+                  }
+                  hoverActionsWidth={76}
+                  hoverActions={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => remove(delegate.name)}
+                      className="h-7 w-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive dark:hover:bg-red-500/15 dark:hover:text-red-200"
+                      aria-label={t("remove", { name: delegate.name })}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  }
+                >
+                  {/* Name, then what the agent will be told about it, on
+                      one line. */}
+                  <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span className="shrink-0 text-[13px] font-medium leading-5">
+                      {delegate.name}
+                    </span>
+                    {remote && (
+                      <Badge variant="outline" className="shrink-0 self-center">
+                        A2A
+                      </Badge>
+                    )}
+                    <span className="truncate text-xs text-muted-foreground">
+                      {when ||
+                        (remote
+                          ? delegate.settings?.a2a_url
+                          : local?.description)}
+                    </span>
+                  </div>
+                </InteractiveListRow>
+                {open && (
+                  // Under the name, past the avatar (12px pad + 24px + 12px gap).
+                  <div className="space-y-4 pb-4 pl-12 pr-3 pt-1">
+                    <div className="space-y-2">
+                      <FormLabel htmlFor={field("when")} icon={MessageSquare}>
+                        {t("when")}
+                      </FormLabel>
+                      <Textarea
+                        id={field("when")}
+                        className="h-[100px] resize-none"
+                        value={delegate.settings?.description_override ?? ""}
+                        placeholder={local?.description || t("whenPlaceholder")}
+                        onChange={(event) =>
+                          update(
+                            delegate.name,
+                            patchDelegate(delegate, {
+                              description_override: event.target.value,
+                            })
+                          )
+                        }
+                      />
+                      {!remote && <p className="note">{t("whenHintLocal")}</p>}
+                    </div>
+                    {remote && (
+                      <>
+                        <div className="space-y-2">
+                          <FormLabel htmlFor={field("url")} icon={Link2}>
+                            {t("url")}
+                          </FormLabel>
+                          <Input
+                            id={field("url")}
+                            value={delegate.settings?.a2a_url ?? ""}
+                            aria-invalid={urlInvalid}
+                            onChange={(event) =>
+                              update(
+                                delegate.name,
+                                patchDelegate(delegate, {
+                                  a2a_url: event.target.value,
+                                })
+                              )
+                            }
+                            onBlur={(event) =>
+                              update(
+                                delegate.name,
+                                patchDelegate(delegate, {
+                                  a2a_url: agentAddress(event.target.value),
+                                })
+                              )
+                            }
+                          />
+                          {urlInvalid && (
+                            <p role="alert" className="form-error">
+                              {t("urlInvalid")}
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <FormLabel htmlFor={field("secret")} icon={KeyRound}>
+                            {t("secret")}
+                          </FormLabel>
+                          <SecretSelect
+                            id={field("secret")}
+                            value={delegate.settings?.auth_secret_name}
+                            secrets={secrets ?? []}
+                            onChange={(name) =>
+                              update(
+                                delegate.name,
+                                patchDelegate(delegate, {
+                                  auth_secret_name: name,
+                                })
+                              )
+                            }
+                          />
+                        </div>
+                      </>
                     )}
                   </div>
-                  {remote && (
-                    <>
-                      <div className="space-y-1.5">
-                        <Label htmlFor={field("url")}>{t("url")}</Label>
-                        <Input
-                          id={field("url")}
-                          value={delegate.settings?.a2a_url ?? ""}
-                          aria-invalid={urlInvalid}
-                          onChange={(event) =>
-                            update(
-                              delegate.name,
-                              patchDelegate(delegate, {
-                                a2a_url: event.target.value,
-                              })
-                            )
-                          }
-                          onBlur={(event) =>
-                            update(
-                              delegate.name,
-                              patchDelegate(delegate, {
-                                a2a_url: agentAddress(event.target.value),
-                              })
-                            )
-                          }
-                        />
-                        {urlInvalid && (
-                          <p role="alert" className="text-xs text-destructive">
-                            {t("urlInvalid")}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor={field("secret")}>{t("secret")}</Label>
-                        <SecretSelect
-                          id={field("secret")}
-                          value={delegate.settings?.auth_secret_name}
-                          secrets={secrets ?? []}
-                          onChange={(name) =>
-                            update(
-                              delegate.name,
-                              patchDelegate(delegate, {
-                                auth_secret_name: name,
-                              })
-                            )
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </CardAccordionItem>
+                )}
+              </div>
             );
           })}
-        </Accordion>
+        </div>
       ) : (
         <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
           <p>{t("empty")}</p>
