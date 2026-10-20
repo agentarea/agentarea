@@ -156,7 +156,7 @@ async def require_a2a_auth(
         agent_id=agent_id,
         permissions=[permission],
         auth_method="bearer" if subject else "anonymous",
-        agent_key_id=subject.api_key_id if subject and subject.bound_agent_id else None,
+        agent_key_id=subject.credential.key_id if subject and subject.bound_agent_id else None,
         metadata=_a2a_metadata(request, agent_name=agent.name, agent_status=agent.status),
     )
 

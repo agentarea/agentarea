@@ -48,6 +48,7 @@ from agentarea_api.api.deps.services import (
 )
 from agentarea_api.api.v1 import a2a_auth, a2a_request_handler, agents_a2a, agents_well_known
 from agentarea_common.auth.context import UserPrincipal
+from agentarea_common.auth.credential import Credential
 from agentarea_common.auth.dependencies import get_optional_principal
 from agentarea_common.config import get_settings
 from agentarea_common.events.contract import LLM_CHUNK, TASK_COMPLETED, TASK_STARTED
@@ -155,7 +156,7 @@ def _subject(request: Request) -> UserPrincipal | None:
             user_id=MEMBER,
             bound_workspace_id=WORKSPACE,
             bound_agent_id=str(AGENT_ID),
-            api_key_id="key-1",
+            credential=Credential(kind="api_key", key_id="key-1"),
             accessible_workspaces=[],
         )
     return None

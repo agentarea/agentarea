@@ -11,6 +11,7 @@ import pytest
 from agentarea_api.api.deps.services import get_audit_service, get_db_session
 from agentarea_api.api.v1.api_keys import APIKeyCreateRequest, get_api_key_service, router
 from agentarea_common.auth.authorization import AuthorizationService
+from agentarea_common.auth.credential import SESSION
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
@@ -19,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-MEMBER = UserContext(user_id="user-member", workspace_id="ws-acme", admin_workspaces=[])
+MEMBER = UserContext(user_id="user-member", workspace_id="ws-acme", admin_workspaces=[], credential=SESSION)
 LEAKED = "INSERT INTO api_keys (token_hash) VALUES ('deadbeefcafe')"
 
 

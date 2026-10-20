@@ -55,7 +55,7 @@ sequenceDiagram
     participant API
     participant DB
 
-    User->>API: POST /v1/mcp-access-tokens
+    User->>API: POST /v1/workspaces/{workspace}/api-keys
     API->>API: Generate 32 random bytes
     API->>API: Encode as URL-safe base64 → body
     API->>API: Prepend "aat_" → raw_token
@@ -74,7 +74,7 @@ sequenceDiagram
 
     Note over User,DB: Revocation
 
-    User->>API: DELETE /v1/mcp-access-tokens/{id}
+    User->>API: DELETE /v1/workspaces/{workspace}/api-keys/{id}
     API->>DB: SET is_active = false
     API-->>User: 204 No Content
 ```
@@ -83,12 +83,12 @@ sequenceDiagram
 
 ## API Reference
 
-Base path: `/v1/mcp-access-tokens`
+Base path: `/v1/workspaces/{workspace}/api-keys`
 
 <Tabs>
   <Tab title="Create Token">
     ```http
-    POST /v1/mcp-access-tokens
+    POST /v1/workspaces/{workspace}/api-keys
     Content-Type: application/json
     Authorization: Bearer <session-token>
 
@@ -121,7 +121,7 @@ Base path: `/v1/mcp-access-tokens`
 
   <Tab title="List Tokens">
     ```http
-    GET /v1/mcp-access-tokens
+    GET /v1/workspaces/{workspace}/api-keys
     Authorization: Bearer <session-token>
     ```
 
@@ -145,7 +145,7 @@ Base path: `/v1/mcp-access-tokens`
 
   <Tab title="Get Token">
     ```http
-    GET /v1/mcp-access-tokens/{id}
+    GET /v1/workspaces/{workspace}/api-keys/{id}
     Authorization: Bearer <session-token>
     ```
 
@@ -154,7 +154,7 @@ Base path: `/v1/mcp-access-tokens`
 
   <Tab title="Revoke Token">
     ```http
-    DELETE /v1/mcp-access-tokens/{id}
+    DELETE /v1/workspaces/{workspace}/api-keys/{id}
     Authorization: Bearer <session-token>
     ```
 
@@ -322,8 +322,10 @@ Base path: `/v1/mcp-access-tokens`
 </CardGroup>
 
 <Warning>
-A PAT grants access to **all MCP instances in its workspace**. Treat it with the same care as a root API key. If a token is compromised, revoke it immediately via `DELETE /v1/mcp-access-tokens/{id}` — revocation takes effect instantly.
+A PAT grants access to **all MCP instances in its workspace**. Treat it with the same care as a root API key. If a token is compromised, revoke it immediately via `DELETE /v1/workspaces/{workspace}/api-keys/{id}` — revocation takes effect instantly.
 </Warning>
+
+A token acts as the user who created it, with that user's roles, in the one workspace it was issued for. If the creator may invite members or grant access, so may the token. A token cannot create or revoke tokens, link a messenger account, or create or join a workspace: those need a signed-in session, so a leaked token cannot outlive its own revocation. Audit events name the token in `event_metadata.api_key_id`.
 
 ---
 

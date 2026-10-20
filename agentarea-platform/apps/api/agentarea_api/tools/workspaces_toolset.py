@@ -12,11 +12,15 @@ from typing import Annotated
 from agentarea_agents_sdk.mcp_server.auth import get_mcp_user_context
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
-from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
+from agentarea_agents_sdk.tools.tool_authz import (
+    enforced_in_handler,
+    requires_scope,
+    unrestricted,
+)
 from agentarea_agents_sdk.tools.tool_definition import toolset
 from agentarea_common.artifacts import ArtifactService, InvalidArtifactPathError
 from agentarea_common.auth.authorization import assert_workspace_admin
-from agentarea_common.auth.dependencies import ensure_not_workspace_bound
+from agentarea_common.auth.credential import Scope
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.workspaces import WorkspaceRepository
 from agentarea_common.workspaces.logo import (
@@ -89,6 +93,7 @@ class WorkspacesToolset(Toolset):
         return json.dumps([_describe(w) for w in await describe_workspaces(user_ctx, workspaces)])
 
     @tool_method(display_name="Create workspace", effect="write", output=WorkspaceOutput)
+    @requires_scope(Scope.WORKSPACES, "create workspaces")
     @unrestricted("anyone may create a workspace; they become its owner, as POST /v1/workspaces")
     async def create(
         self,
@@ -103,7 +108,6 @@ class WorkspacesToolset(Toolset):
         if len(name) > 255:
             raise ValueError("Workspace name must be at most 255 characters")
         user_ctx = get_mcp_user_context()
-        ensure_not_workspace_bound(user_ctx)
         async with get_database().async_session_factory() as session:
             workspace = await get_workspace_service(session, user_ctx).create_shared(
                 owner_user_id=user_ctx.user_id, name=name

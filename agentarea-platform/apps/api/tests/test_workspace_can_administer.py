@@ -19,6 +19,7 @@ from agentarea_api.tools import workspaces_toolset
 from agentarea_api.tools.workspaces_toolset import WorkspacesToolset
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext, UserPrincipal
+from agentarea_common.auth.credential import Credential
 from agentarea_common.auth.dependencies import get_principal
 from agentarea_common.auth.workspace_authorization import WorkspaceScopedAuthorizationService
 from agentarea_common.di.container import get_container
@@ -88,7 +89,10 @@ def test_a_member_does_not_administer_a_workspace_they_joined() -> None:
 
 def test_an_api_key_administers_only_the_workspace_it_was_issued_for() -> None:
     bound_to_joined = _alice(
-        bound_workspace_id="ws-other", accessible_workspaces=["ws-other"], admin_workspaces=[]
+        bound_workspace_id="ws-other",
+        accessible_workspaces=["ws-other"],
+        admin_workspaces=[],
+        credential=Credential(kind="api_key", key_id="key-1"),
     )
 
     assert _list(bound_to_joined) == {"other": False}

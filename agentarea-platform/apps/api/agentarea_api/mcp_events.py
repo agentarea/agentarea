@@ -173,8 +173,8 @@ class UnsubscribeParams(RequestParams):
 
 def subscriber_of(context: UserContext) -> str:
     """The principal a webhook subscription is keyed by: the key, the client, or the user."""
-    if context.api_key_id:
-        return f"key:{context.api_key_id}"
+    if context.credential is not None and context.credential.key_id:
+        return f"key:{context.credential.key_id}"
     if context.client_id:
         return f"client:{context.client_id}"
     return f"user:{context.user_id}"

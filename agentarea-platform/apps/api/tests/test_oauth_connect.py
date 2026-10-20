@@ -1181,14 +1181,14 @@ class _Callback:
         assert response.status_code == 302
         return response.headers["location"]
 
-    async def finish(self, *, user_id="user-1", token=None, bound_workspace_id=None):
+    async def finish(self, *, user_id="user-1", token=None, reachable=("ws-1",)):
         """Finish the flow the provider sent back; the callback runs first unless a token is given."""
         if token is None:
             location = await self.run()
             token = urllib.parse.parse_qs(urllib.parse.urlparse(location).query)["token"][0]
         response = await routes.oauth_finish(
             body=OAuthFinishRequest(token=token),
-            principal=SimpleNamespace(user_id=user_id, bound_workspace_id=bound_workspace_id),
+            principal=SimpleNamespace(user_id=user_id, accessible_workspaces=list(reachable)),
             db_session=AsyncMock(),
         )
         return response.location
@@ -1251,11 +1251,12 @@ async def test_a_sign_in_url_followed_by_someone_else_attaches_nothing(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_an_api_key_bound_to_another_workspace_cannot_finish(monkeypatch):
+async def test_a_starter_who_no_longer_reaches_the_workspace_cannot_finish(monkeypatch):
+    """Removed from it while at the provider, or holding a key issued for another one."""
     callback = _Callback(monkeypatch, _flow())
 
     with pytest.raises(HTTPException) as excinfo:
-        await callback.finish(bound_workspace_id="ws-other")
+        await callback.finish(reachable=["ws-other"])
 
     assert excinfo.value.status_code == 403
     callback.exchange.assert_not_awaited()

@@ -7,6 +7,8 @@ must raise rather than invent one.
 
 from dataclasses import dataclass
 
+from .credential import SESSION, Credential, Scope, ScopeRequiredError
+
 
 @dataclass
 class UserContext:
@@ -26,9 +28,9 @@ class UserContext:
     # The handle the request named the workspace by (``/v1/workspaces/{slug}``).
     # ``None`` for contexts minted outside HTTP, which name it by id.
     workspace_slug: str | None = None
-    # The API key that authenticated the request, if one did. The key acts as
-    # its creator, so ``user_id`` alone cannot tell a key from a signed-in user.
-    api_key_id: str | None = None
+    # What the request authenticated with; ``None`` for a context minted outside
+    # one, which is granted no scopes.
+    credential: Credential | None = None
 
     def __post_init__(self):
         """Refuse a context that names no principal or no workspace."""
@@ -50,17 +52,18 @@ class WorkspaceUnreachableError(PermissionError):
     """
 
 
-class WorkspaceBoundCredentialError(PermissionError):
-    """A credential confined to one workspace was used to act beyond it."""
+def granted_scopes(caller: "UserPrincipal | UserContext") -> frozenset[Scope]:
+    """The scopes the caller's credential grants; none for a context minted outside a request."""
+    return caller.credential.scopes if caller.credential is not None else frozenset()
 
 
-class UserSessionRequiredError(PermissionError):
-    """An API key was used for an action only a signed-in user may take.
+def ensure_scope(caller: "UserPrincipal | UserContext", scope: Scope, action: str) -> None:
+    """Refuse ``action`` unless the caller's credential grants ``scope``.
 
-    Minting or revoking keys and deciding who is in the workspace hand out or
-    take away access. A key that could do them would outlive its own revocation
-    through the keys and members it created.
+    ``action`` completes "This credential cannot ...".
     """
+    if scope not in granted_scopes(caller):
+        raise ScopeRequiredError(f"This credential cannot {action}; sign in as a user to do it")
 
 
 @dataclass
@@ -80,8 +83,7 @@ class UserPrincipal:
     bound_workspace_id: str | None = None
     # An agent's key reaches that one agent over A2A and no workspace at all.
     bound_agent_id: str | None = None
-    # The API key that authenticated the request, if one did.
-    api_key_id: str | None = None
+    credential: Credential = SESSION
     # ``None`` until resolved per request; ``[]`` means resolved and none.
     accessible_workspaces: list[str] | None = None
     admin_workspaces: list[str] | None = None
@@ -105,7 +107,7 @@ class UserPrincipal:
             ),
             email=self.email,
             client_id=self.client_id,
-            api_key_id=self.api_key_id,
+            credential=self.credential,
         )
 
 

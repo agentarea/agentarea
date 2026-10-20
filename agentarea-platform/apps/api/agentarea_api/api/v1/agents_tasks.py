@@ -142,7 +142,10 @@ class TaskWebhook(BaseModel):
 
 def _is_api_caller(user_context: UserContext) -> bool:
     """An API key or service client: who may set, and read back, caller context."""
-    return user_context.api_key_id is not None or user_context.client_id is not None
+    credential = user_context.credential
+    return (credential is not None and credential.kind == "api_key") or (
+        user_context.client_id is not None
+    )
 
 
 class TaskCreate(BaseModel):
