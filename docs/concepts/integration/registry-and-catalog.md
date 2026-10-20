@@ -87,8 +87,19 @@ An index entry names its content in one of two ways:
 - **A GitHub pointer**: `repo`, `path`, and optionally the `ref` commit and the
   folder's `tree_sha`. Fetching downloads that folder at that commit and checks
   the tree SHA. The tree SHA is also the item's version. A `github` registry
-  always produces pointers with both.
+  always produces pointers with both. A pointer without `tree_sha` has the
+  version `latest`; fetching reads the folder at `ref` or the branch head and
+  computes its tree SHA from the files.
 - **An inline `content` body**, which becomes a single `SKILL.md`.
+
+Without credentials, nothing reads GitHub through its REST API, whose anonymous
+limit of 60 requests an hour every tenant of a deployment shares. A ref resolves
+over git's smart HTTP protocol (`github.com/<repo>.git`, one `ls-refs`
+request), the files come from the commit's archive at `codeload.github.com`, and
+the folder's tree SHA is computed from them as git computes it. An archive is
+read once per commit and process, so a sync that stores several folders of one
+commit downloads it once. A registry with credentials reads through the REST
+API with its token instead.
 
 In `mirror` mode the sync stores each item's package and records where in the
 item's spec, so an install needs no network. In `upstream` mode the first install
@@ -105,12 +116,22 @@ been stored, runs read it from object storage and never from GitHub.
 
 Installing a catalog skill creates a workspace skill row that points at the
 item's package and records the item's version in `registry_item_installs`. For a
-GitHub pointer that version is the tree SHA. Attaching a catalog skill to an
-agent installs it the same way.
+GitHub pointer that version is the tree SHA of the folder the install fetched,
+also when the index names none. Attaching a catalog skill to an agent installs
+it the same way.
 
 When a later sync gives the item a different version, the installed skill shows
 "update available". Nothing changes until a workspace admin updates it, one skill
 at a time or all at once. An update moves the pointer to the new package.
+
+For an installed pointer whose index names no tree SHA, every sync of an
+`upstream` registry asks the source which tree the folder is now and keeps that
+as the item's version, even when the index itself did not change. The checks run
+after the sync has committed, within their own 120-second budget, so a slow
+GitHub costs checks and never the sync. They cover at most 50 installed items a
+sync, in `external_id` order: one `ls-refs` request per repository and branch,
+and the commit's archive, unpacked once for every folder of it, when the branch
+moved. A `mirror` registry versions such a pointer by the tree it stored.
 
 Editing an installed skill copies its package into the workspace's own prefix,
 `skills/<workspace>/<skill id>/`, and edits the copy. The catalog package is
@@ -192,10 +213,17 @@ link instead: an installed skill, agent or MCP server records `registry_item_id`
 - **Installed copies are not re-checked against policy at run time.** A new deny
   rule stops further installs, updates and runs of uninstalled catalog items. A
   skill installed before the rule keeps running until someone removes it.
-- **A pointer without a tree SHA is not pinned by the index.** An index entry may
-  omit `tree_sha`. Its version is then `latest`, and fetching reads the folder at
-  `ref` or the branch head, cached per process for an hour. Updates of such an
-  item are never detected.
+- **A pointer without a tree SHA is not pinned by the index.** Its catalog card
+  and previews read the folder at the branch head, cached per process for an
+  hour. An install is pinned, and its updates are found by the sync's check
+  above, not by the index; past the 50-a-sync budget they wait for a later sync.
+  Installs made before installs recorded the fetched tree hold the version
+  `latest`, so they show "update available" once; updating pins them.
+- **A token-free read is the archive, not the tree.** A repository whose
+  `.gitattributes` uses `export-ignore` or `export-subst`, or a folder holding a
+  submodule, archives differently from its git tree: the computed tree SHA then
+  differs and a pointer that names one is refused. An archive over 25 MB
+  compressed is refused too. Give such a registry credentials.
 - **An inline body stays in the catalog row.** An index that publishes `content`
   instead of a pointer has that body stored in the item's spec, in addition to
   the package built from it.

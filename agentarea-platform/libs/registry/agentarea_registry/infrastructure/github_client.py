@@ -1,9 +1,20 @@
-"""GitHub REST reads a skill registry sync makes."""
+"""The GitHub reads a skill registry sync makes.
 
+A registry with credentials reads through the REST API with its token. One
+without reads nothing through the REST API, whose 60 anonymous requests an hour
+every tenant of a deployment shares: the head resolves over git smart HTTP and
+the listing, the tree SHAs and the SKILL.md files come from the commit's archive
+(``agentarea_common.github_git``).
+"""
+
+import asyncio
+import posixpath
+from collections import OrderedDict
 from typing import Any
 from urllib.parse import quote
 
 import httpx
+from agentarea_common import github_git
 from agentarea_common.outbound import Destination, outbound_client
 
 GITHUB_API = "https://api.github.com"
@@ -11,6 +22,12 @@ GITHUB_RAW = "https://raw.githubusercontent.com"
 TIMEOUT_SECONDS = 30.0
 # The index reads a SKILL.md for its frontmatter only.
 RAW_READ_BYTES = 64 * 1024
+SKILL_FILE = "SKILL.md"
+# SKILL.md bodies an archive listing keeps, at most RAW_READ_BYTES each read.
+MAX_ARCHIVE_SKILL_BYTES = 64 * 1024 * 1024
+# A commit's folder trees never change: (repo, commit) -> {folder: tree SHA}.
+COMMIT_TREE_CACHE_ENTRIES = 32
+_commit_trees: OrderedDict[tuple[str, str], dict[str, str]] = OrderedDict()
 
 
 class GitHubApiError(RuntimeError):
@@ -22,7 +39,7 @@ class GitHubApiError(RuntimeError):
 
 
 class HttpGitHubSource:
-    """Reads one repository's commits, trees and blobs, with a token for private ones."""
+    """Reads one repository's commits, trees and blobs through the REST API, with a token."""
 
     def __init__(self, token: str | None = None, transport: httpx.AsyncBaseTransport | None = None):
         self._transport = transport
@@ -33,6 +50,7 @@ class HttpGitHubSource:
         }
         if token:
             self._headers["Authorization"] = f"Bearer {token}"
+        self._root_trees: dict[str, str] = {}
 
     async def _get(self, path: str, **params: Any) -> Any:
         async with outbound_client(
@@ -49,14 +67,16 @@ class HttpGitHubSource:
             )
         return response.json()
 
-    async def head(self, repo: str, ref: str | None) -> tuple[str, str]:
-        branch: str = ref or (await self._get(f"/repos/{repo}"))["default_branch"]
-        commit = await self._get(f"/repos/{repo}/commits/{quote(branch, safe='')}")
-        return commit["sha"], commit["commit"]["tree"]["sha"]
+    async def head(self, repo: str, ref: str | None) -> str:
+        commit = await self._get(f"/repos/{repo}/commits/{quote(ref or 'HEAD', safe='')}")
+        self._root_trees[commit["sha"]] = commit["commit"]["tree"]["sha"]
+        return commit["sha"]
 
-    async def tree(self, repo: str, tree_sha: str) -> tuple[list[dict[str, Any]], bool]:
-        data = await self._get(f"/repos/{repo}/git/trees/{tree_sha}", recursive="1")
-        return list(data.get("tree", [])), bool(data.get("truncated"))
+    async def tree(self, repo: str, commit: str) -> tuple[list[dict[str, Any]], str, bool]:
+        data = await self._get(
+            f"/repos/{repo}/git/trees/{self._root_trees.get(commit, commit)}", recursive="1"
+        )
+        return list(data.get("tree", [])), str(data.get("sha")), bool(data.get("truncated"))
 
     async def raw(self, repo: str, commit: str, path: str) -> bytes:
         headers = {"User-Agent": self._headers["User-Agent"]}
@@ -78,3 +98,117 @@ class HttpGitHubSource:
                     if len(body) >= RAW_READ_BYTES:
                         break
         return bytes(body[:RAW_READ_BYTES])
+
+
+class ArchiveGitHubSource:
+    """Reads a public repository without the REST API: refs over git, files from its archive."""
+
+    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
+        self._files: dict[tuple[str, str], dict[str, github_git.GitFile]] = {}
+
+    async def head(self, repo: str, ref: str | None) -> str:
+        try:
+            return await github_git.resolve_commit(repo, ref, transport=self._transport)
+        except github_git.GitHubGitError as e:
+            raise _api_error(e) from e
+
+    async def _snapshot(self, repo: str, commit: str) -> dict[str, github_git.GitFile]:
+        if (repo, commit) not in self._files:
+            try:
+                self._files[(repo, commit)] = await github_git.read_archive(
+                    repo,
+                    commit,
+                    prefix="",
+                    keep=lambda path, mode: (
+                        posixpath.basename(path) == SKILL_FILE and mode != github_git.SYMLINK_MODE
+                    ),
+                    max_kept_bytes=MAX_ARCHIVE_SKILL_BYTES,
+                    transport=self._transport,
+                )
+            except github_git.GitHubGitError as e:
+                raise _api_error(e) from e
+        return self._files[(repo, commit)]
+
+    async def tree(self, repo: str, commit: str) -> tuple[list[dict[str, Any]], str, bool]:
+        files = await self._snapshot(repo, commit)
+        trees = github_git.git_tree_shas({p: (f.mode, f.sha) for p, f in files.items()})
+        entries: list[dict[str, Any]] = [
+            {"path": path, "type": "blob", "mode": f.mode, "sha": f.sha}
+            for path, f in files.items()
+        ]
+        entries.extend({"path": p, "type": "tree", "sha": sha} for p, sha in trees.items() if p)
+        return entries, trees[""], False
+
+    async def raw(self, repo: str, commit: str, path: str) -> bytes:
+        entry = (await self._snapshot(repo, commit)).get(path)
+        if entry is None or entry.data is None:
+            raise GitHubApiError(f"{repo}/{path} is not in the archive of {commit}", 404)
+        return entry.data[:RAW_READ_BYTES]
+
+
+def _api_error(error: github_git.GitHubGitError) -> GitHubApiError:
+    if isinstance(error, github_git.GitHubGitNotFoundError):
+        return GitHubApiError(str(error), 404)
+    if isinstance(error, github_git.GitHubGitRateLimitError):
+        return GitHubApiError(str(error), 429)
+    return GitHubApiError(str(error))
+
+
+def github_source(token: str | None) -> HttpGitHubSource | ArchiveGitHubSource:
+    """The REST API with a registry's token, or the token-free archive without one."""
+    return HttpGitHubSource(token) if token else ArchiveGitHubSource()
+
+
+def clear_commit_trees() -> None:
+    _commit_trees.clear()
+
+
+async def commit_tree_shas(
+    repo: str, commit: str, *, transport: httpx.AsyncBaseTransport | None = None
+) -> dict[str, str]:
+    """The tree SHA of every folder of ``repo`` at ``commit`` (``""`` the root), token-free.
+
+    A commit never changes, so its archive is unpacked once per process and
+    the answer is kept for the last ``COMMIT_TREE_CACHE_ENTRIES`` commits.
+    """
+    key = (repo, commit)
+    cached = _commit_trees.get(key)
+    if cached is not None:
+        _commit_trees.move_to_end(key)
+        return cached
+    files = await github_git.read_archive(
+        repo, commit, prefix="", keep=lambda _path, _mode: False, transport=transport
+    )
+    trees = await asyncio.to_thread(
+        github_git.git_tree_shas, {p: (f.mode, f.sha) for p, f in files.items()}
+    )
+    _commit_trees[key] = trees
+    while len(_commit_trees) > COMMIT_TREE_CACHE_ENTRIES:
+        _commit_trees.popitem(last=False)
+    return trees
+
+
+class PointerTrees:
+    """The tree a GitHub pointer's folder is now, read token-free; one per run of checks.
+
+    Each ``(repo, ref)`` is resolved once per instance (one git ref read for
+    every pointer at that branch) and each commit unpacked once per process.
+    """
+
+    def __init__(self, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
+        self._commits: dict[tuple[str, str | None], str] = {}
+
+    async def __call__(self, source: dict[str, Any]) -> str:
+        repo, path = str(source["repo"]), str(source.get("path") or "").strip("/")
+        ref = source.get("ref")
+        commit = self._commits.get((repo, ref))
+        if commit is None:
+            commit = self._commits[(repo, ref)] = await github_git.resolve_commit(
+                repo, ref, transport=self._transport
+            )
+        tree = (await commit_tree_shas(repo, commit, transport=self._transport)).get(path)
+        if tree is None:
+            raise GitHubApiError(f"{repo}/{path} is not in {repo} at {commit}", 404)
+        return tree

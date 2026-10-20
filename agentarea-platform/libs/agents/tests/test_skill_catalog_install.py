@@ -108,7 +108,8 @@ async def test_install_without_a_ref_pins_the_resolved_commit():
     skill = await svc.install_catalog_skill(UUID(item.id))
 
     assert skill.source_url == f"https://github.com/owner/repo/tree/{COMMIT}/skills/pdf"
-    assert catalog.installed == [(item.id, str(skill.id), "latest")]
+    # The pin is the tree that was fetched, not the index's "latest".
+    assert catalog.installed == [(item.id, str(skill.id), TREE)]
 
 
 async def test_a_folder_that_is_not_the_pinned_tree_installs_nothing():

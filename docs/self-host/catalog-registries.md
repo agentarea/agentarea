@@ -30,6 +30,8 @@ A workspace adds its own sources itself, without the operator; see
   there during the Job; without storage credentials the Job fails that
   registry.
 - Each source reachable from the cluster: an index URL, or a GitHub repository.
+  Without credentials, GitHub is read at `github.com` and `codeload.github.com`;
+  with them, at `api.github.com` and `raw.githubusercontent.com`.
 </Info>
 
 ## Steps
@@ -159,11 +161,13 @@ lists them under **Platform registries** with their trust and last sync.
     Run `agentarea-api reconcile --force` to re-read every source.
   </Accordion>
   <Accordion title="Installs or syncs of GitHub sources fail with rate-limit errors">
-    A platform registry has no credentials, so its GitHub API calls and every
-    install-time fetch of an `upstream` skill are anonymous and share GitHub's
-    limit of 60 requests an hour per IP address. File contents are read from
-    `raw.githubusercontent.com`, outside that limit. Prefer `mirror` with an
-    index that carries `tree_sha` for each skill.
+    Without credentials, syncs and installs never call GitHub's REST API: refs
+    are read over git at `github.com` and files from `codeload.github.com`
+    archives, neither of which counts against the 60 anonymous requests an hour.
+    A rate-limit error then means GitHub throttled those endpoints (HTTP 429).
+    It clears on its own: the sync stops asking for the rest of that run, and
+    the next run retries. A registry with credentials reads through the REST API
+    with its token, at that token's limit.
   </Accordion>
 </AccordionGroup>
 

@@ -1,4 +1,4 @@
-"""Downloading one skill folder from GitHub at a pinned commit, verified by SHA."""
+"""Downloading one skill folder through the REST API, as a configured token does."""
 
 import hashlib
 import json
@@ -77,7 +77,7 @@ class FakeGitHub:
 
 
 def importer(github: FakeGitHub) -> GitHubSkillImporter:
-    return GitHubSkillImporter(transport=httpx.MockTransport(github))
+    return GitHubSkillImporter(github_token="t0k", transport=httpx.MockTransport(github))  # noqa: S106
 
 
 async def test_one_api_call_lists_the_pinned_folder_and_raw_serves_its_files():

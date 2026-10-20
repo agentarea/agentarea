@@ -38,16 +38,18 @@ class GitHubTreeTruncatedError(ValueError):
 
 
 class GitHubSource(Protocol):
-    async def head(self, repo: str, ref: str | None) -> tuple[str, str]:
-        """``(commit sha, root tree sha)`` of ``ref``, or of the default branch."""
+    async def head(self, repo: str, ref: str | None) -> str:
+        """The commit ``ref`` names, or the default branch's head."""
         ...
 
-    async def tree(self, repo: str, tree_sha: str) -> tuple[list[dict[str, Any]], bool]:
-        """Every entry under ``tree_sha`` recursively, and whether GitHub truncated it."""
+    async def tree(self, repo: str, commit: str) -> tuple[list[dict[str, Any]], str, bool]:
+        """Every entry of ``commit`` recursively, its root tree SHA, and whether
+        the listing was truncated.
+        """
         ...
 
     async def raw(self, repo: str, commit: str, path: str) -> bytes:
-        """The start of a file at ``commit``, read outside the rate-limited REST API."""
+        """The start of a file at ``commit``."""
         ...
 
 
@@ -70,7 +72,6 @@ async def build_github_skill_index(
     *,
     repo: str,
     commit: str,
-    root_tree: str,
     path: str | None,
     max_skills: int | None = None,
 ) -> list[dict[str, Any]]:
@@ -79,7 +80,7 @@ async def build_github_skill_index(
     ``max_skills`` refuses a repository with more folders than that, before any
     of them is read.
     """
-    entries, truncated = await source.tree(repo, root_tree)
+    entries, root_tree, truncated = await source.tree(repo, commit)
     if truncated:
         raise GitHubTreeTruncatedError(
             f"GitHub truncated the tree of {repo} at {commit}; set a path to a smaller folder"

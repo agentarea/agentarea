@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 import httpx
+from agentarea_common import github_git
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.url_safety import safe_async_client
 
@@ -149,6 +150,7 @@ class GitHubSkillImporter:
     DEFAULT_TIMEOUT = 30.0
 
     RAW_BASE = "https://raw.githubusercontent.com"
+    CODELOAD_BASE = github_git.CODELOAD
 
     def __init__(
         self,
@@ -176,15 +178,18 @@ class GitHubSkillImporter:
         ``ref`` names the commit; a branch or tag is resolved to its head, and
         none means the default branch's head, which is then the pin. With
         ``tree_sha`` the folder at that commit must be exactly that tree, else
-        nothing is downloaded. Every file is checked against its blob SHA, so
-        what is returned is the content the tree names. Links, submodules and
-        hidden files are left out, as a ZIP upload leaves hidden files out.
+        nothing is returned. What is returned is the content the tree names.
+        Links, submodules and hidden files are left out, as a ZIP upload leaves
+        hidden files out.
 
-        The API is asked once for a pinned commit (the recursive tree of the
-        commit), once more to resolve a missing ref, and once more when the
-        repository is too large to list whole. Files come from
-        raw.githubusercontent.com, which does not count against the 60/hour
-        unauthenticated API limit.
+        Without a token nothing goes through the REST API, whose anonymous
+        budget (60 requests an hour) the whole deployment shares: the ref is
+        resolved over git smart HTTP, the files come from the commit's archive,
+        and the folder's tree SHA is computed from them. With a token the API
+        is asked once for a pinned commit (the recursive tree of the commit),
+        once more to resolve a missing ref, and once more when the repository
+        is too large to list whole; files come from raw.githubusercontent.com,
+        each checked against its blob SHA.
 
         Raises:
             GitHubSourceGoneError: The repository or the folder is not there
@@ -199,6 +204,8 @@ class GitHubSkillImporter:
         owner, name = parts
         folder = path.strip("/")
         where = f"{repo}/{folder}" if folder else repo
+        if not self.github_token:
+            return await self._download_folder_from_archive(repo, folder, where, ref, tree_sha)
         api = f"{self.GITHUB_API_BASE}/repos/{owner}/{name}"
 
         async with outbound_client(
@@ -280,6 +287,57 @@ class GitHubSkillImporter:
 
             files = dict(await asyncio.gather(*(fetch(rel, sha) for rel, sha in blobs)))
         return GitHubFolder(commit=commit, tree_sha=str(resolved_tree), files=files)
+
+    async def _download_folder_from_archive(
+        self, repo: str, folder: str, where: str, ref: str | None, tree_sha: str | None
+    ) -> GitHubFolder:
+        def packaged(rel: str, mode: str) -> bool:
+            return mode != github_git.SYMLINK_MODE and not any(
+                p.startswith(".") for p in rel.split("/")
+            )
+
+        try:
+            commit = await github_git.resolve_commit(repo, ref, transport=self._transport)
+            entries = await github_git.read_archive(
+                repo,
+                commit,
+                prefix=folder,
+                keep=packaged,
+                max_kept_files=MAX_GITHUB_PACKAGE_FILES,
+                max_kept_bytes=MAX_GITHUB_PACKAGE_BYTES,
+                transport=self._transport,
+            )
+        except github_git.GitHubGitRateLimitError as e:
+            raise GitHubRateLimitError(str(e)) from e
+        except github_git.GitHubGitNotFoundError as e:
+            raise GitHubSourceGoneError(
+                f"The skill was removed upstream: {repo} is not on GitHub any more ({e})"
+            ) from e
+        except github_git.GitHubArchiveTooLargeError as e:
+            raise ValueError(
+                f"GitHub skill package exceeds its limits ({MAX_GITHUB_PACKAGE_FILES} files, "
+                f"{MAX_GITHUB_PACKAGE_BYTES // (1024 * 1024)} MB): {e}"
+            ) from e
+        except github_git.GitHubGitError as e:
+            raise GitHubSkillImporterError(str(e)) from e
+        if not entries:
+            raise GitHubSourceGoneError(
+                f"The skill was removed upstream: {where} is not in {repo} at {commit}"
+            )
+        resolved_tree = github_git.git_tree_shas(
+            {rel: (entry.mode, entry.sha) for rel, entry in entries.items()}
+        )[""]
+        if tree_sha and resolved_tree != tree_sha:
+            raise GitHubTreeMismatchError(
+                f"{where} at {commit} is tree {resolved_tree}, "
+                f"not {tree_sha} as the catalog pins it"
+            )
+        files = {rel: entry.data for rel, entry in entries.items() if entry.data is not None}
+        for rel in entries.keys() - files.keys():
+            logger.info("Leaving %s out of the skill package from %s", rel, where)
+        if not files:
+            raise ValueError(f"No files found in {where}")
+        return GitHubFolder(commit=commit, tree_sha=resolved_tree, files=files)
 
     async def _resolve_commit(self, client: httpx.AsyncClient, api: str, ref: str | None) -> str:
         if ref and _GIT_SHA.fullmatch(ref):
@@ -408,6 +466,8 @@ class GitHubSkillImporter:
             GitHubSkillImporterError: For other errors.
         """
         repo_info = self.parse_github_url(github_url)
+        if not self.github_token:
+            return await self._download_repo_archive(repo_info)
 
         # Determine the branch/ref to download
         ref = repo_info.branch or await self._get_default_branch(repo_info.owner, repo_info.repo)
@@ -423,14 +483,50 @@ class GitHubSkillImporter:
 
         async with safe_async_client(timeout=self.DEFAULT_TIMEOUT, follow_redirects=True) as client:
             try:
-                response = await client.get(zipball_url, headers=headers)
-                self._check_response(response)
-                return response.content
-
+                return await self._bounded_download(client, zipball_url, headers)
             except httpx.TimeoutException as e:
                 raise GitHubSkillImporterError(f"Timeout downloading repository: {e}") from e
             except httpx.RequestError as e:
                 raise GitHubSkillImporterError(f"Error downloading repository: {e}") from e
+
+    async def _download_repo_archive(self, repo_info: GitHubRepoInfo) -> bytes:
+        """The repository's ZIP from its archive endpoint: no REST call, no token."""
+        if not all(
+            _REPO_PART.fullmatch(p) and p not in (".", "..")
+            for p in (repo_info.owner, repo_info.repo)
+        ):
+            raise GitHubInvalidURLError(
+                f"Not a GitHub repository: {repo_info.owner}/{repo_info.repo}"
+            )
+        ref = quote(repo_info.branch or "HEAD", safe="")
+        url = f"{self.CODELOAD_BASE}/{repo_info.owner}/{repo_info.repo}/zip/{ref}"
+        logger.info("Downloading repository from %s", url)
+        # The host is fixed and answers directly: a redirect is not followed.
+        async with outbound_client(
+            Destination.VENDOR, timeout=self.DEFAULT_TIMEOUT, transport=self._transport
+        ) as client:
+            try:
+                return await self._bounded_download(client, url, {})
+            except httpx.TimeoutException as e:
+                raise GitHubSkillImporterError(f"Timeout downloading repository: {e}") from e
+            except httpx.RequestError as e:
+                raise GitHubSkillImporterError(f"Error downloading repository: {e}") from e
+
+    async def _bounded_download(
+        self, client: httpx.AsyncClient, url: str, headers: dict[str, str]
+    ) -> bytes:
+        """The body at ``url``, refused as soon as it passes the repository ZIP cap."""
+        body = bytearray()
+        async with client.stream("GET", url, headers=headers) as response:
+            if response.status_code != 200:
+                await response.aread()
+                self._check_response(response)
+            async for chunk in response.aiter_bytes():
+                body += chunk
+                if len(body) > MAX_GITHUB_REPO_ZIP_BYTES:
+                    mb = MAX_GITHUB_REPO_ZIP_BYTES // (1024 * 1024)
+                    raise ValueError(f"GitHub repository ZIP exceeds {mb} MB limit")
+        return bytes(body)
 
     async def get_repo_info(self, github_url: str) -> dict:
         """Get repository information from GitHub API.
@@ -495,6 +591,9 @@ class GitHubSkillImporter:
         """
         if response.status_code == 200:
             return
+
+        if response.status_code == 429:
+            raise GitHubRateLimitError("GitHub throttled the request; retry later.")
 
         if response.status_code == 403:
             # Check if it's rate limiting

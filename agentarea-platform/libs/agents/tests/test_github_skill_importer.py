@@ -132,156 +132,103 @@ class TestParseGitHubUrl:
 
 
 class TestDownloadRepo:
-    """Tests for download_repo method."""
+    """download_repo: codeload without a token, the API zipball with one."""
+
+    @staticmethod
+    def _importer(monkeypatch, handler, token=None):
+        from agentarea_agents.infrastructure import github_skill_importer as module
+
+        seen: list[httpx.Request] = []
+
+        def record(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return handler(request)
+
+        def client(**kwargs):
+            return httpx.AsyncClient(transport=httpx.MockTransport(record), **kwargs)
+
+        monkeypatch.setattr(module, "safe_async_client", client)
+        importer = GitHubSkillImporter(github_token=token, transport=httpx.MockTransport(record))
+        return importer, seen
 
     @pytest.mark.asyncio
-    async def test_download_repo_success(self):
-        """Test successful repository download."""
-        importer = GitHubSkillImporter()
+    async def test_download_repo_success(self, monkeypatch):
+        importer, seen = self._importer(monkeypatch, lambda _r: httpx.Response(200, content=b"PK"))
 
-        mock_zip_content = b"PK\x03\x04..."  # Fake ZIP content
-
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.content = mock_zip_content
-                mock_client.get.return_value = mock_response
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-
-                result = await importer.download_repo("https://github.com/owner/repo")
-
-                assert result == mock_zip_content
-                mock_client.get.assert_called_once()
+        assert await importer.download_repo("https://github.com/owner/repo") == b"PK"
+        assert [str(r.url) for r in seen] == ["https://codeload.github.com/owner/repo/zip/HEAD"]
 
     @pytest.mark.asyncio
-    async def test_download_repo_with_branch(self):
-        """Test download with explicit branch."""
-        importer = GitHubSkillImporter()
+    async def test_download_repo_with_branch(self, monkeypatch):
+        importer, seen = self._importer(monkeypatch, lambda _r: httpx.Response(200, content=b"PK"))
 
-        mock_zip_content = b"PK\x03\x04..."
+        await importer.download_repo("https://github.com/owner/repo/tree/develop")
 
-        with patch("httpx.AsyncClient") as mock_client_class:
-            mock_client = AsyncMock()
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = mock_zip_content
-            mock_client.get.return_value = mock_response
-            mock_client_class.return_value.__aenter__.return_value = mock_client
-
-            result = await importer.download_repo("https://github.com/owner/repo/tree/develop")
-
-            assert result == mock_zip_content
-            # Verify the URL contains the branch
-            call_args = mock_client.get.call_args
-            assert "develop" in call_args[0][0]
+        assert str(seen[0].url).endswith("/zip/develop")
 
     @pytest.mark.asyncio
-    async def test_download_repo_with_token(self):
-        """Test download includes auth header when token provided."""
-        importer = GitHubSkillImporter(github_token="test-token")
+    async def test_download_repo_with_token(self, monkeypatch):
+        importer, seen = self._importer(
+            monkeypatch, lambda _r: httpx.Response(200, content=b"PK"), token="test-token"
+        )
 
-        mock_zip_content = b"PK\x03\x04..."
+        await importer.download_repo("https://github.com/owner/repo/tree/main")
 
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.content = mock_zip_content
-                mock_client.get.return_value = mock_response
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-
-                await importer.download_repo("https://github.com/owner/repo")
-
-                # Verify auth header was included
-                call_kwargs = mock_client.get.call_args.kwargs
-                assert "Authorization" in call_kwargs["headers"]
-                assert "Bearer test-token" in call_kwargs["headers"]["Authorization"]
+        assert str(seen[0].url) == "https://api.github.com/repos/owner/repo/zipball/main"
+        assert seen[0].headers["Authorization"] == "Bearer test-token"
 
     @pytest.mark.asyncio
-    async def test_download_repo_rate_limit_error(self):
-        """Test rate limit error handling."""
-        importer = GitHubSkillImporter()
+    async def test_download_repo_rate_limit_error(self, monkeypatch):
+        limited = httpx.Response(
+            403, headers={"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1"}, text="limit"
+        )
+        importer, _ = self._importer(monkeypatch, lambda _r: limited, token="t")
 
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_response = MagicMock()
-                mock_response.status_code = 403
-                mock_response.headers = {
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": "1234567890",
-                }
-                mock_response.text = "Rate limit exceeded"
-                mock_client.get.return_value = mock_response
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-
-                with pytest.raises(GitHubRateLimitError, match="rate limit exceeded"):
-                    await importer.download_repo("https://github.com/owner/repo")
+        with pytest.raises(GitHubRateLimitError, match="rate limit exceeded"):
+            await importer.download_repo("https://github.com/owner/repo/tree/main")
 
     @pytest.mark.asyncio
-    async def test_download_repo_not_found_error(self):
-        """Test not found error handling."""
-        importer = GitHubSkillImporter()
+    async def test_download_repo_throttled_without_a_token(self, monkeypatch):
+        importer, _ = self._importer(monkeypatch, lambda _r: httpx.Response(429))
 
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_response = MagicMock()
-                mock_response.status_code = 404
-                mock_response.text = "Not Found"
-                mock_client.get.return_value = mock_response
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-
-                with pytest.raises(GitHubNotFoundError, match="not found"):
-                    await importer.download_repo("https://github.com/owner/repo")
+        with pytest.raises(GitHubRateLimitError):
+            await importer.download_repo("https://github.com/owner/repo")
 
     @pytest.mark.asyncio
-    async def test_download_repo_auth_error(self):
-        """Test authentication error handling."""
-        importer = GitHubSkillImporter(github_token="invalid-token")
+    async def test_download_repo_not_found_error(self, monkeypatch):
+        importer, _ = self._importer(monkeypatch, lambda _r: httpx.Response(404, text="Not Found"))
 
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_response = MagicMock()
-                mock_response.status_code = 401
-                mock_response.text = "Bad credentials"
-                mock_client.get.return_value = mock_response
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-
-                with pytest.raises(GitHubSkillImporterError, match="Authentication failed"):
-                    await importer.download_repo("https://github.com/owner/repo")
+        with pytest.raises(GitHubNotFoundError, match="not found"):
+            await importer.download_repo("https://github.com/owner/repo")
 
     @pytest.mark.asyncio
-    async def test_download_repo_timeout_error(self):
-        """Test timeout error handling."""
-        importer = GitHubSkillImporter()
+    async def test_download_repo_auth_error(self, monkeypatch):
+        importer, _ = self._importer(
+            monkeypatch, lambda _r: httpx.Response(401, text="Bad credentials"), token="bad"
+        )
 
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client.get.side_effect = httpx.TimeoutException("Timeout")
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-
-                with pytest.raises(GitHubSkillImporterError, match="Timeout"):
-                    await importer.download_repo("https://github.com/owner/repo")
+        with pytest.raises(GitHubSkillImporterError, match="Authentication failed"):
+            await importer.download_repo("https://github.com/owner/repo/tree/main")
 
     @pytest.mark.asyncio
-    async def test_download_repo_connection_error(self):
-        """Test connection error handling."""
-        importer = GitHubSkillImporter()
+    async def test_download_repo_timeout_error(self, monkeypatch):
+        def timeout(request):
+            raise httpx.ReadTimeout("slow", request=request)
 
-        with patch.object(importer, "_get_default_branch", return_value="main"):
-            with patch("httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client.get.side_effect = httpx.RequestError("Connection failed")
-                mock_client_class.return_value.__aenter__.return_value = mock_client
+        importer, _ = self._importer(monkeypatch, timeout)
 
-                with pytest.raises(GitHubSkillImporterError, match="Error downloading"):
-                    await importer.download_repo("https://github.com/owner/repo")
+        with pytest.raises(GitHubSkillImporterError, match="Timeout"):
+            await importer.download_repo("https://github.com/owner/repo")
+
+    @pytest.mark.asyncio
+    async def test_download_repo_connection_error(self, monkeypatch):
+        def refused(request):
+            raise httpx.ConnectError("refused", request=request)
+
+        importer, _ = self._importer(monkeypatch, refused)
+
+        with pytest.raises(GitHubSkillImporterError, match="Error downloading"):
+            await importer.download_repo("https://github.com/owner/repo")
 
 
 class TestGetDefaultBranch:
@@ -521,11 +468,25 @@ class TestImportStaysOnPublicAddresses:
         monkeypatch.setattr(
             "agentarea_agents.infrastructure.github_skill_importer.safe_async_client", client
         )
-        importer = GitHubSkillImporter()
+        importer = GitHubSkillImporter(github_token="t0k")  # noqa: S106
 
         with pytest.raises(GitHubSkillImporterError):
             await importer.download_repo("https://github.com/owner/repo/tree/main")
         assert hosts == ["api.github.com"]
+
+    @pytest.mark.asyncio
+    async def test_an_archive_redirect_is_not_followed(self):
+        hosts: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            hosts.append(request.url.host)
+            return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/"})
+
+        importer = GitHubSkillImporter(transport=httpx.MockTransport(handler))
+
+        with pytest.raises(GitHubSkillImporterError):
+            await importer.download_repo("https://github.com/owner/repo/tree/main")
+        assert hosts == ["codeload.github.com"]
 
     @pytest.mark.asyncio
     async def test_a_skill_file_fetch_refuses_a_non_public_address(self):

@@ -32,6 +32,7 @@ from uuid import UUID
 import httpx
 import yaml
 from agentarea_common.constants import PLATFORM_WORKSPACE_ID, REGISTRY_TRUST_LEVELS
+from agentarea_common.github_git import GitHubGitRateLimitError
 from agentarea_common.money import to_optional_money
 from agentarea_common.outbound import Destination, outbound_client
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
@@ -63,7 +64,11 @@ from agentarea_registry.domain.models import (
     Registry,
     RegistryItem,
 )
-from agentarea_registry.infrastructure.github_client import GitHubApiError, HttpGitHubSource
+from agentarea_registry.infrastructure.github_client import (
+    GitHubApiError,
+    PointerTrees,
+    github_source,
+)
 from agentarea_registry.infrastructure.repository import (
     DEFAULT_CATALOG_SORT,
     RegistryItemRepository,
@@ -95,6 +100,11 @@ MAX_SOURCE_REDIRECTS = 5
 MAX_WORKSPACE_GITHUB_SKILLS = 200
 # A whole sync of one workspace registry, so one cannot hold up the next.
 WORKSPACE_SYNC_DEADLINE_SECONDS = 120.0
+# Installed pointers without a tree SHA a sync asks the source about. Each is a
+# git ref read, and an archive download when the folder's branch moved.
+MAX_POINTER_CHECKS = 50
+# Their own budget, after the sync committed: a slow GitHub costs checks, not the sync.
+POINTER_CHECK_DEADLINE_SECONDS = 120.0
 
 VALID_REGISTRY_TYPES = (
     "mcp_servers",
@@ -120,6 +130,8 @@ CredentialsResolver = Callable[[Registry], Awaitable[str]]
 ItemContentMirror = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 # Opened once per sync of a registry, with the token its credentials resolve to.
 ContentMirror = Callable[[Registry, str | None], ItemContentMirror]
+# The tree SHA a GitHub pointer's folder is now, at its ref or the branch head.
+PointerVersion = Callable[[dict[str, Any]], Awaitable[str]]
 
 # Top-level catalog key -> registry type. Each catalog document carries exactly
 # one of these keys, so the registry type can be inferred from the payload shape
@@ -187,6 +199,18 @@ def sync_error_message(error: BaseException) -> str:
         # Our own validation of an entry, naming what the index published.
         return str(error)
     return "the sync failed; the server log has the cause"
+
+
+# The index version of a pointer that names no tree SHA.
+UNPINNED_VERSION = "latest"
+
+
+def _unpinned_pointer(spec: dict[str, Any] | None) -> tuple[str, str, str | None] | None:
+    """``(repo, path, ref)`` of a GitHub pointer that names no tree SHA, else ``None``."""
+    source = (spec or {}).get("source")
+    if not isinstance(source, dict) or source.get("type") != "github" or source.get("tree_sha"):
+        return None
+    return str(source.get("repo")), str(source.get("path") or ""), source.get("ref")
 
 
 def _parse_untrusted(body: bytes) -> Any:
@@ -475,11 +499,13 @@ class RegistryService:
         model_spec_repo: Any | None = None,
         agent_repo: Any | None = None,
         credentials_resolver: CredentialsResolver | None = None,
-        github_source_factory: Callable[[str | None], GitHubSource] = HttpGitHubSource,
+        github_source_factory: Callable[[str | None], GitHubSource] = github_source,
         content_mirror: ContentMirror | None = None,
         untrusted_client: Callable[..., httpx.AsyncClient] = _member_client,
+        pointer_versions: Callable[[], PointerVersion] = PointerTrees,
     ):
         self.untrusted_client = untrusted_client
+        self.pointer_versions = pointer_versions
         self.credentials_resolver = credentials_resolver
         self.content_mirror = content_mirror
         self.github_source_factory = github_source_factory
@@ -855,7 +881,7 @@ class RegistryService:
         try:
             try:
                 async with asyncio.timeout(deadline):
-                    return await self._sync(registry, force)
+                    stats = await self._sync(registry, force)
             except TimeoutError as e:
                 raise RegistrySyncError(f"the sync took longer than {deadline:g} s") from e
         except Exception as e:
@@ -866,6 +892,32 @@ class RegistryService:
             except Exception:
                 logger.exception("Could not record why registry %s failed to sync", registry_id)
             raise
+        stats["pointers_checked"] = await self._check_pointers_within_budget(registry)
+        return stats
+
+    async def _check_pointers_within_budget(self, registry: Registry) -> int:
+        """Run the pointer checks after the sync committed, within their own deadline.
+
+        Each found change is committed as it is found, so a deadline or a
+        failure keeps what was checked before it and never undoes the sync.
+        """
+        progress = {"checked": 0}
+        try:
+            async with asyncio.timeout(POINTER_CHECK_DEADLINE_SECONDS):
+                await self._check_unpinned_pointers(registry, progress)
+        except TimeoutError:
+            logger.warning(
+                "Pointer checks of registry %s took longer than %g s; %d checked, the rest "
+                "wait for the next sync",
+                registry.id,
+                POINTER_CHECK_DEADLINE_SECONDS,
+                progress["checked"],
+            )
+            await self.item_repo.session.rollback()
+        except Exception:
+            logger.exception("Pointer checks of registry %s failed", registry.id)
+            await self.item_repo.session.rollback()
+        return progress["checked"]
 
     async def _sync(self, registry: Registry, force: bool) -> dict[str, Any]:
         registry_id = registry.id
@@ -880,12 +932,12 @@ class RegistryService:
             else None
         )
         github: GitHubSource | None = None
-        head = root_tree = ""
+        head = ""
         if registry.source_type == "github":
             # A repository's version is its head commit, kept where an
             # index URL keeps its ETag.
             github = self.github_source_factory(token)
-            head, root_tree = await github.head(registry.source_url, registry.source_ref)
+            head = await github.head(registry.source_url, registry.source_ref)
             source_etag = head
         elif registry.scope == "workspace":
             source_etag = await self._untrusted_etag(registry.source_url)
@@ -913,7 +965,6 @@ class RegistryService:
                 github,
                 repo=registry.source_url,
                 commit=head,
-                root_tree=root_tree,
                 path=registry.source_path,
                 max_skills=MAX_WORKSPACE_GITHUB_SKILLS if registry.scope == "workspace" else None,
             )
@@ -963,6 +1014,10 @@ class RegistryService:
                     item_data["spec"] = await self._mirrored_spec(
                         mirror, item_data.get("spec", {}), existing
                     )
+                    stored_tree = (item_data["spec"].get("package") or {}).get("tree_sha")
+                    if stored_tree and (item_data.get("version") or "latest") == UNPINNED_VERSION:
+                        # A pointer with no tree SHA is the tree that was stored.
+                        item_data["version"] = stored_tree
 
                 if existing:
                     previous_spec = dict(existing.spec or {})
@@ -984,6 +1039,14 @@ class RegistryService:
                     apply_facets(existing, registry.registry_type)
 
                     new_version = item_data.get("version") or "latest"
+                    pointer = _unpinned_pointer(existing.spec)
+                    if (
+                        new_version == UNPINNED_VERSION
+                        and pointer is not None
+                        and pointer == _unpinned_pointer(previous_spec)
+                    ):
+                        # The same pointer: keep what the last check found it is.
+                        new_version = existing.version or new_version
                     existing.version = new_version
 
                     if existing.installed_version and existing.installed_version != new_version:
@@ -1099,6 +1162,55 @@ class RegistryService:
             "out_of_source": out_of_source,
             "deleted": deleted,
         }
+
+    async def _check_unpinned_pointers(self, registry: Registry, progress: dict[str, int]) -> None:
+        """Keep, as its version, the tree an installed pointer without a tree SHA is now.
+
+        An install pins such an item to the tree SHA of what it fetched; with
+        the item's version the folder's current tree, the update check compares
+        the two as it does for an index that carries tree SHAs. Asked of the
+        source for at most ``MAX_POINTER_CHECKS`` installed items per sync, in
+        ``external_id`` order; a failed check leaves that item as it was.
+        ``progress["checked"]`` counts them as they go.
+        """
+        if registry.registry_type != "skills" or registry.mode != "upstream":
+            return
+        lookup = self.pointer_versions()
+        for item in await self.item_repo.list_installed(registry.id):
+            pointer = _unpinned_pointer(item.spec)
+            if pointer is None:
+                continue
+            if progress["checked"] >= MAX_POINTER_CHECKS:
+                break
+            progress["checked"] += 1
+            try:
+                current = await lookup(dict((item.spec or {})["source"]))
+            except GitHubGitRateLimitError:
+                logger.warning(
+                    "GitHub throttled the check of catalog skill %s; the rest wait for the "
+                    "next sync",
+                    item.id,
+                    exc_info=True,
+                )
+                break
+            except Exception:
+                logger.warning(
+                    "Could not check the current tree of catalog skill %s (%s)",
+                    item.id,
+                    pointer,
+                    exc_info=True,
+                )
+                continue
+            if current != item.version:
+                logger.info(
+                    "Catalog skill %s (%s) is now tree %s (was %s)",
+                    item.id,
+                    pointer,
+                    current,
+                    item.version,
+                )
+                item.version = current
+                await self.item_repo.session.commit()
 
     async def retire_registry(self, registry_id: UUID, replacements: Collection[UUID] = ()) -> int:
         """Retire a registry no source feeds any more: everything in it is out of
@@ -1918,7 +2030,7 @@ class RegistryService:
                         f"{source.get('ref', 'HEAD')}{folder}"
                     ),
                 }
-                version = source.get("tree_sha") or "latest"
+                version = source.get("tree_sha") or UNPINNED_VERSION
                 if "provenance" not in entry:
                     entry = {
                         **entry,
