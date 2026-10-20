@@ -223,8 +223,7 @@
     "logout": "Logout",
     "workspaceSettings": "Workspace settings",
     "inboxPending": "{count, plural, one {Inbox, # approval waiting} other {Inbox, # approvals waiting}}",
-    "audit": "Audit",
-    "savedTasks": "Saved tasks"
+    "audit": "Audit"
   },
   "MembersPage": {
     "title": "Members",
