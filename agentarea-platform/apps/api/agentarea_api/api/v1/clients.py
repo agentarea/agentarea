@@ -220,7 +220,7 @@ async def create_client(
     await grant_resource_owner(
         resource_id=client.id,
         workspace_id=user_context.workspace_id,
-        user_id=user_context.user_id,
+        owner=user_context.graph_subject,
     )
     return await _to_response(service, client)
 

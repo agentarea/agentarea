@@ -18,6 +18,7 @@ def test_agent_task_carries_provenance_by_default_empty():
 
 async def test_repository_writes_provenance_columns():
     parent = uuid4()
+    definition = uuid4()
     now = datetime.now(UTC)
     provenance = TaskProvenance(
         origin_type="trigger",
@@ -26,6 +27,8 @@ async def test_repository_writes_provenance_columns():
         causation_id="evt",
         parent_task_id=parent,
         depth=2,
+        task_definition_id=definition,
+        source_identity="user:alice",
     )
     repo = TaskRepository.__new__(TaskRepository)
     captured: dict = {}
@@ -55,6 +58,8 @@ async def test_repository_writes_provenance_columns():
             causation_id="evt",
             parent_task_id=parent,
             depth=kwargs["depth"],
+            task_definition_id=kwargs["task_definition_id"],
+            source_identity=kwargs["source_identity"],
         )
 
     repo.create = AsyncMock(side_effect=create)
@@ -73,4 +78,6 @@ async def test_repository_writes_provenance_columns():
     assert captured["origin_type"] == "trigger"
     assert captured["parent_task_id"] == parent
     assert captured["depth"] == 2
+    assert captured["task_definition_id"] == definition
+    assert captured["source_identity"] == "user:alice"
     assert stored.provenance == provenance

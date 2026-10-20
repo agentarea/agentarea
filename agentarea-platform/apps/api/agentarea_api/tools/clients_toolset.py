@@ -144,7 +144,7 @@ class ClientsToolset(Toolset):
             await grant_resource_owner(
                 resource_id=client.id,
                 workspace_id=user_ctx.workspace_id,
-                user_id=user_ctx.user_id,
+                owner=user_ctx.graph_subject,
             )
             return json.dumps(_summary(client), default=str)
 

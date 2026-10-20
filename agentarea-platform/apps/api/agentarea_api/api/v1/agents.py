@@ -23,7 +23,7 @@ from agentarea_api.api.deps.services import (
     get_read_agent_service,
     get_trigger_service,
 )
-from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.context import Subject, UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
 from agentarea_common.auth.resource_visibility import readable_resource_ids
@@ -160,7 +160,7 @@ async def _grant_agent_owner(agent_id: UUID | str, user_id: str, workspace_id: s
     await grant_resource_owner(
         resource_id=agent_id,
         workspace_id=workspace_id,
-        user_id=user_id,
+        owner=Subject(kind="user", id=user_id).graph_subject,
         relations=owner_relations(Agent),
     )
 

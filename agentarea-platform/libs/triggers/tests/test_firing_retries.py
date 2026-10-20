@@ -26,6 +26,8 @@ from temporalio.service import RPCError, RPCStatusCode
 
 def _service(trigger: StreamTrigger) -> TriggerService:
     service = TriggerService(repository_factory=MagicMock(), event_broker=AsyncMock())
+    service.agent_repository = AsyncMock()
+    service.agent_repository.get.return_value = SimpleNamespace(status="active")
     service.trigger_repository = AsyncMock()
     service.trigger_repository.get_trigger.return_value = trigger
     service.trigger_execution_repository = AsyncMock()

@@ -340,7 +340,7 @@ async def create_skill(
         await grant_resource_owner(
             resource_id=skill.id,
             workspace_id=skill_service.user_context.workspace_id,
-            user_id=skill_service.user_context.user_id,
+            owner=skill_service.user_context.graph_subject,
         )
         return SkillResponse.from_skill(skill)
 
@@ -383,7 +383,7 @@ async def upload_skill(
         await grant_resource_owner(
             resource_id=skill.id,
             workspace_id=skill_service.user_context.workspace_id,
-            user_id=skill_service.user_context.user_id,
+            owner=skill_service.user_context.graph_subject,
         )
         return SkillResponse.from_skill(skill)
 
@@ -554,7 +554,7 @@ async def install_skill(
         await grant_resource_owner(
             resource_id=skill.id,
             workspace_id=skill_service.user_context.workspace_id,
-            user_id=skill_service.user_context.user_id,
+            owner=skill_service.user_context.graph_subject,
         )
     return SkillResponse.from_skill(skill)
 

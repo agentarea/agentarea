@@ -21,7 +21,7 @@ from agentarea_triggers.trigger_service import (
     TriggerValidationError,
 )
 
-from .conftest import make_trigger_repository_factory
+from .conftest import active_agent_repository, make_trigger_repository_factory
 
 
 class TestTriggerService:
@@ -44,8 +44,8 @@ class TestTriggerService:
 
     @pytest.fixture
     def mock_agent_repository(self):
-        """Mock agent repository."""
-        return AsyncMock()
+        """Mock agent repository whose agent exists and is active."""
+        return active_agent_repository()
 
     @pytest.fixture
     def mock_task_service(self):
@@ -1132,6 +1132,7 @@ class TestTriggerService:
         assert mock_trigger_execution_repository.create.call_args.kwargs["fired_by"] is None
         task = mock_task_service.route_or_submit_task.call_args.args[0]
         assert "fired_by" not in task.task_parameters
+        assert task.provenance.source_identity is None
 
     @pytest.mark.asyncio
     async def test_a_manual_run_records_who_asked_for_it(
@@ -1186,6 +1187,7 @@ class TestTriggerService:
         # claiming the schedule fired.
         assert task.task_parameters["fired_by"] == "user-42"
         assert task.task_parameters["trigger_name"] == sample_cron_trigger.name
+        assert task.provenance.source_identity == "user:user-42"
 
     @pytest.mark.asyncio
     async def test_a_manual_run_fires_a_disabled_trigger(
@@ -1217,6 +1219,28 @@ class TestTriggerService:
 
         assert result.status == ExecutionStatus.SUCCESS
         mock_task_service.route_or_submit_task.assert_called_once()
+
+    @pytest.mark.parametrize("agent", [None, MagicMock(status="inactive")])
+    @pytest.mark.asyncio
+    async def test_a_trigger_whose_agent_is_gone_or_inactive_does_not_run(
+        self,
+        agent,
+        trigger_service,
+        mock_trigger_repository,
+        mock_trigger_execution_repository,
+        mock_agent_repository,
+        mock_task_service,
+        sample_cron_trigger,
+    ):
+        """The run acts as the agent, so the agent is what must still stand."""
+        mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
+        mock_agent_repository.get.return_value = agent
+
+        firing = await trigger_service.fire(sample_cron_trigger.id, {"source": "test"})
+
+        assert firing.outcome == "error"
+        assert "gone or inactive" in (firing.reason or "")
+        mock_task_service.route_or_submit_task.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_execute_trigger_task_creation_error(

@@ -58,6 +58,8 @@ class _Harness:
         )
         self.execution_repo = AsyncMock()
         self.execution_repo.create.side_effect = lambda **kwargs: TriggerExecution(**kwargs)
+        self.agent_repo = AsyncMock()
+        self.agent_repo.get.return_value = SimpleNamespace(status="active")
         self.task_service = AsyncMock()
         self.task_service.get_task.return_value = None
         self.task_service.route_or_submit_task.side_effect = lambda task, **_: task
@@ -97,6 +99,12 @@ class _Harness:
                 patch(
                     "agentarea_triggers.trigger_service.TriggerExecutionRepository",
                     return_value=self.execution_repo,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "agentarea_agents.infrastructure.repository.AgentRepository",
+                    return_value=self.agent_repo,
                 )
             )
             stack.enter_context(

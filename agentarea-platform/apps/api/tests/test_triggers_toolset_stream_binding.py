@@ -105,7 +105,9 @@ async def test_create_stream_refuses_a_stream_the_caller_may_not_read(harness, m
             name="on push", agent_id=str(uuid4()), stream_id=str(stream_id)
         )
 
-    check.assert_awaited_once_with(stream_id, "u")
+    check.assert_awaited_once()
+    asked_stream, caller = check.await_args.args
+    assert (asked_stream, caller.user_id) == (stream_id, "u")
     harness.create_trigger_from_payload.assert_not_called()
 
 

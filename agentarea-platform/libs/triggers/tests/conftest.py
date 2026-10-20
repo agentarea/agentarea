@@ -1,4 +1,5 @@
 import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -47,6 +48,13 @@ if not _TEMPORALIO_AVAILABLE:
     sys.modules["temporalio.service"] = MagicMock()
 
 
+def active_agent_repository() -> AsyncMock:
+    """An agent repository whose agent exists and is active, so a firing may run it."""
+    repository = AsyncMock()
+    repository.get.return_value = SimpleNamespace(status="active")
+    return repository
+
+
 def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agent_repo=None):
     """Build a mock RepositoryFactory for TriggerService.
 
@@ -71,7 +79,9 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
     try:
         from agentarea_agents.infrastructure.repository import AgentRepository
 
-        mapping[AgentRepository] = agent_repo if agent_repo is not None else AsyncMock()
+        mapping[AgentRepository] = (
+            agent_repo if agent_repo is not None else active_agent_repository()
+        )
     except ImportError:
         pass
 

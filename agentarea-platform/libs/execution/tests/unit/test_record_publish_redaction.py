@@ -49,6 +49,7 @@ async def test_a_secret_in_tool_arguments_is_never_published(monkeypatch):
     redacted = {"command": "[omitted]", "password": "[redacted]"}
     workspace_id = str(uuid4())
     request = RecordRequest(
+        agent_id="agent-1",
         task_id=str(uuid4()),
         workspace_id=workspace_id,
         user_id="writer",

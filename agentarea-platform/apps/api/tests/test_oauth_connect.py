@@ -390,7 +390,7 @@ async def test_authorize_refuses_a_member_who_cannot_edit_the_instance(monkeypat
         await _authorize(OAuthAuthorizeRequest(instance_id=instance.id), user_context=user_context)
 
     assert excinfo.value.status_code == 403
-    deny.assert_awaited_once_with("edit", "mcp_instance", str(instance.id), user_context.user_id)
+    deny.assert_awaited_once_with("edit", "mcp_instance", str(instance.id), user_context)
     discover.assert_not_awaited()
 
 

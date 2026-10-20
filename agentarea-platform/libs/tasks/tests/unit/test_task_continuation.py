@@ -9,6 +9,7 @@ from agentarea_governance.domain.policies import (
     effective_policy_from_json,
 )
 from agentarea_tasks.domain.exceptions import BudgetCapExceededError
+from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.task_service import TaskService
 
 
@@ -42,6 +43,7 @@ def _waiting_task(task_id, policy):
         workspace_id=str(uuid4()),
         status="waiting_for_continuation",
         execution_id=f"task-{task_id}",
+        provenance=TaskProvenance.started_by("starter", via_api_key=False),
         metadata={
             "governance_snapshot": {
                 "requested_policy": {},
@@ -123,6 +125,10 @@ async def test_continue_execution_raises_token_and_tool_call_ceilings():
     ]
     assert requested.tokens.max_tokens == 50_000
     assert requested.execution.max_tool_calls_total == 150
+    # The user layer is the person who started the run, on every resolution.
+    assert {
+        call.kwargs["source_user_id"] for call in service._resolve_effective_policy.await_args_list
+    } == {"starter"}
     assert requested.execution.max_model_turns is None
     assert requested.budget is None
     _execution_id, payload = service.workflow_service.continue_execution.await_args.args

@@ -102,7 +102,11 @@ class TaskDefinitionService:
             description=definition.description,
             parameters={**definition.parameters, **(parameters or {})},
         )
-        provenance = TaskProvenance.started_by(user_context.user_id, via_api_key=False)
+        credential = user_context.credential
+        provenance = TaskProvenance.started_by(
+            user_context.user_id,
+            via_api_key=credential is not None and credential.kind == "api_key",
+        )
         return await self.task_service.start_run(
             payload,
             workspace_id=user_context.workspace_id,

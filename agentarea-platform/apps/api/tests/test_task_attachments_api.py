@@ -25,10 +25,35 @@ from agentarea_api.api.v1 import agents_tasks, files
 from agentarea_common.artifacts import attachment_content_disposition
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.di.container import get_container
 from agentarea_governance.domain.policies import PolicyValidationError
 from agentarea_tasks.domain.models import TaskProvenance
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+
+class _AllowAll(PermissionService):
+    """The PDP a run's start asks for ``execute`` on its agent; it allows, and remembers."""
+
+    def __init__(self):
+        self.checks: list[tuple[str, str, str, str]] = []
+
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        self.checks.append((subject, permission, resource_type, resource_id))
+        return True
+
+
+@pytest.fixture(autouse=True)
+def permissions():
+    container = get_container()
+    saved = dict(container._singletons)
+    allow = _AllowAll()
+    container.register_singleton(PermissionService, allow)
+    yield allow
+    container._singletons.clear()
+    container._singletons.update(saved)
+
 
 SHA_REVENUE = hashlib.sha256(b"revenue").hexdigest()
 SHA_MARGIN = hashlib.sha256(b"margin").hexdigest()
@@ -211,6 +236,9 @@ async def test_refs_attach_by_copy_then_dispatch_then_delete(monkeypatch):
     assert attached[0]["content_type"] == "text/csv"
 
     reserve_call = task_service.reserve_run.await_args
+    assert reserve_call.kwargs["provenance"] == TaskProvenance.started_by(
+        context.user_id, via_api_key=False
+    )
     reserved_task_id = reserve_call.kwargs["task_id"]
     assert UUID(str(reserved_task_id))
     # attach_object targeted the same reserved task id it dispatched.

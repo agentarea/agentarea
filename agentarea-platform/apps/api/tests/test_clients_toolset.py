@@ -116,11 +116,11 @@ def service(monkeypatch) -> FakeClientService:
 
     @asynccontextmanager
     async def fake_context():
-        user_ctx = SimpleNamespace(user_id="user-1", workspace_id="ws-1")
+        user_ctx = UserContext(user_id="user-1", workspace_id="ws-1")
         yield None, user_ctx, SimpleNamespace(), None, None
 
-    async def fake_grant(*, resource_id, workspace_id, user_id):
-        grants.append((str(resource_id), workspace_id, user_id))
+    async def fake_grant(*, resource_id, workspace_id, owner):
+        grants.append((str(resource_id), workspace_id, owner))
 
     monkeypatch.setattr(clients_toolset, "platform_context", fake_context)
     monkeypatch.setattr(clients_toolset, "platform_read_context", fake_context)
@@ -137,7 +137,7 @@ async def test_create_returns_endpoint_url_and_grants_ownership(service):
     assert result["mcp_endpoint_url"].endswith(f"/mcp/clients/{CLIENT_ID}")
     assert service.created[0].name == "codex"
     assert service.created[0].kind == "harness"
-    assert service.grants == [(str(CLIENT_ID), "ws-1", "user-1")]
+    assert service.grants == [(str(CLIENT_ID), "ws-1", "User:user-1")]
 
 
 async def test_create_rejects_unknown_kind_loudly(service):

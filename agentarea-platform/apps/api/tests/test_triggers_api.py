@@ -130,6 +130,7 @@ def mock_auth_context():
     """Create mock authentication context."""
     context = MagicMock()
     context.user_id = "test_user"
+    context.graph_subject = "User:test_user"
     return context
 
 
@@ -932,8 +933,8 @@ class _StreamReaders:
         self.unreadable = set(unreadable)
         self.checks: list[tuple[str, str, str, str]] = []
 
-    async def check(self, user_id: str, permission: str, resource_type: str, resource_id: str):
-        self.checks.append((user_id, permission, resource_type, resource_id))
+    async def check(self, subject: str, permission: str, resource_type: str, resource_id: str):
+        self.checks.append((subject, permission, resource_type, resource_id))
         return not (
             permission == "read" and resource_type == "stream" and resource_id in self.unreadable
         )
@@ -985,9 +986,10 @@ async def test_a_stream_trigger_checks_its_creator_may_read_the_stream(
         workspace_id="w",
     )
 
-    response = await async_client.post(
-        "/v1/workspaces/acme/triggers/", json=_stream_trigger_body(stream_id)
-    )
+    body = _stream_trigger_body(stream_id)
+    response = await async_client.post("/v1/workspaces/acme/triggers/", json=body)
 
     assert response.status_code == 201, response.text
-    assert ("test_user", "read", "stream", stream_id) in pdp.checks
+    assert ("User:test_user", "read", "stream", stream_id) in pdp.checks
+    # Binding a trigger to an agent needs the right to run that agent.
+    assert ("User:test_user", "execute", "agent", body["agent_id"]) in pdp.checks

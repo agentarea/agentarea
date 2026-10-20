@@ -87,7 +87,7 @@ async def create_mcp_server(
     await grant_resource_owner(
         resource_id=server.id,
         workspace_id=user_context.workspace_id,
-        user_id=user_context.user_id,
+        owner=user_context.graph_subject,
     )
     return MCPServerResponse.from_domain(server)
 
