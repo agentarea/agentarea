@@ -1,5 +1,7 @@
 """What the platform stream and its loop guard read of tasks and stream events, in one workspace."""
 
+import logging
+from dataclasses import dataclass
 from uuid import UUID
 
 from agentarea_streams.domain.platform import PlatformTask
@@ -8,6 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..loop_guard import ChainEvent, ChainTask
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TriggerOrigin:
+    """The trigger a task was started by, and the task's owner."""
+
+    trigger_id: UUID
+    owner: str
 
 
 async def load_platform_task(
@@ -35,6 +47,29 @@ async def load_platform_task(
         correlation_id=row.correlation_id,
         depth=row.depth,
     )
+
+
+async def load_trigger_origin(
+    session: AsyncSession, task_id: UUID, workspace_id: str
+) -> TriggerOrigin | None:
+    """The trigger that started the task; None for a task nothing fired."""
+    from agentarea_tasks.infrastructure.orm import TaskORM
+
+    row = (
+        await session.execute(
+            select(TaskORM.origin_type, TaskORM.origin_id, TaskORM.created_by).where(
+                TaskORM.id == task_id, TaskORM.workspace_id == workspace_id
+            )
+        )
+    ).one_or_none()
+    if row is None or row.origin_type != "trigger" or not row.origin_id:
+        return None
+    try:
+        trigger_id = UUID(row.origin_id)
+    except ValueError:
+        logger.exception("Task %s names a trigger origin that is no id: %r", task_id, row.origin_id)
+        return None
+    return TriggerOrigin(trigger_id=trigger_id, owner=row.created_by)
 
 
 class StoredCausationChain:

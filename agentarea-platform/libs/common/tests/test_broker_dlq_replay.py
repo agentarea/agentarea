@@ -114,6 +114,11 @@ def test_configured_routes_pair_each_group_with_its_dead_letter_stream():
             stream="tasks.events", group="platform", dlq="tasks.events.platform.dlq"
         ),
         ConsumerGroupRoute(
+            stream="tasks.events",
+            group="trigger-outcomes",
+            dlq="tasks.events.trigger-outcomes.dlq",
+        ),
+        ConsumerGroupRoute(
             stream="streams.events.0", group="router", dlq="streams.events.router.dlq"
         ),
         ConsumerGroupRoute(

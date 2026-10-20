@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 from uuid import UUID
 
 from agentarea_common.auth.context import UserContext
@@ -23,10 +23,17 @@ from ..domain.models import (
     TriggerSession,
     TriggerUpdate,
 )
+from ..logging_utils import FiringNotRecordedError
 from .orm import TriggerExecutionORM, TriggerORM
 
 # A trigger's firing; a forward's reaction to a stream event has no trigger.
 _A_FIRING = TriggerExecutionORM.trigger_id.is_not(None)
+
+
+class FailureCount(NamedTuple):
+    failures: int
+    threshold: int
+    active: bool
 
 
 def _value(value: Any) -> Any:
@@ -207,22 +214,61 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
         return await self.count()
 
     async def update_execution_tracking(
-        self, trigger_id: UUID, last_execution_at: datetime, consecutive_failures: int = 0
+        self, trigger_id: UUID, last_execution_at: datetime
     ) -> bool:
-        """Update trigger execution tracking fields."""
+        """Stamp when the trigger last fired; the failure count moves only by count/reset."""
         stmt = (
             update(TriggerORM)
             .where(TriggerORM.id == trigger_id)
-            .values(
-                last_execution_at=last_execution_at,
-                consecutive_failures=consecutive_failures,
-                updated_at=datetime.utcnow(),
-            )
+            .values(last_execution_at=last_execution_at, updated_at=datetime.utcnow())
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
 
         return cast(CursorResult[Any], result).rowcount > 0
+
+    async def lock(self, trigger_id: UUID) -> bool:
+        """Lock the trigger's row for this transaction; False when it is gone."""
+        found = await self.session.execute(
+            select(TriggerORM.id)
+            .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
+            .with_for_update()
+        )
+        return found.scalar_one_or_none() is not None
+
+    async def count_failure(self, trigger_id: UUID) -> FailureCount | None:
+        """Add one consecutive failure in one statement; the count after it."""
+        row = (
+            await self.session.execute(
+                update(TriggerORM)
+                .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
+                .values(
+                    consecutive_failures=TriggerORM.consecutive_failures + 1,
+                    updated_at=datetime.utcnow(),
+                )
+                .returning(
+                    TriggerORM.consecutive_failures,
+                    TriggerORM.failure_threshold,
+                    TriggerORM.is_active,
+                )
+            )
+        ).one_or_none()
+        await self.session.flush()
+        if row is None:
+            return None
+        return FailureCount(failures=row[0], threshold=row[1], active=row[2])
+
+    async def reset_failures(self, trigger_id: UUID) -> None:
+        await self.session.execute(
+            update(TriggerORM)
+            .where(
+                TriggerORM.id == trigger_id,
+                TriggerORM.consecutive_failures > 0,
+                self._get_workspace_filter(),
+            )
+            .values(consecutive_failures=0, updated_at=datetime.utcnow())
+        )
+        await self.session.flush()
 
     async def disable_trigger(self, trigger_id: UUID) -> bool:
         """Disable a trigger in the current workspace."""
@@ -241,11 +287,17 @@ class TriggerRepository(WorkspaceScopedRepository[TriggerORM]):
 
         Clears a "needs a new owner" stop: the next event re-checks the
         configurer's access and stops the trigger again if it is still missing.
+        Starts the failure count over, so one failure after it does not stop it again.
         """
         stmt = (
             update(TriggerORM)
             .where(TriggerORM.id == trigger_id, self._get_workspace_filter())
-            .values(is_active=True, needs_new_owner_at=None, updated_at=datetime.utcnow())
+            .values(
+                is_active=True,
+                needs_new_owner_at=None,
+                consecutive_failures=0,
+                updated_at=datetime.utcnow(),
+            )
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
@@ -407,6 +459,57 @@ class TriggerExecutionRepository(WorkspaceScopedRepository[TriggerExecutionORM])
     async def delete_execution(self, id: UUID) -> bool:
         """Delete a trigger execution by ID."""
         return await self.delete(id)
+
+    async def names_task(self, trigger_id: UUID, task_id: UUID) -> bool:
+        """Whether a firing of the trigger already records the task."""
+        found = await self.session.execute(
+            select(TriggerExecutionORM.id)
+            .where(
+                TriggerExecutionORM.trigger_id == trigger_id,
+                TriggerExecutionORM.task_id == task_id,
+                self._get_workspace_filter(),
+            )
+            .limit(1)
+        )
+        return found.scalar_one_or_none() is not None
+
+    async def mark_run_failed(self, trigger_id: UUID, task_id: UUID, error: str | None) -> bool:
+        """Mark the latest firing that started the task failed; False when it is not a success.
+
+        Raises FiringNotRecordedError when no firing of the trigger names the task.
+        """
+        latest = (
+            await self.session.execute(
+                select(TriggerExecutionORM.id, TriggerExecutionORM.status)
+                .where(
+                    TriggerExecutionORM.trigger_id == trigger_id,
+                    TriggerExecutionORM.task_id == task_id,
+                    self._get_workspace_filter(),
+                )
+                .order_by(desc(TriggerExecutionORM.executed_at))
+                .limit(1)
+                .with_for_update()
+            )
+        ).one_or_none()
+        if latest is None:
+            raise FiringNotRecordedError(
+                f"no firing of trigger {trigger_id} names task {task_id} yet",
+                trigger_id=str(trigger_id),
+                task_id=str(task_id),
+            )
+        if latest.status != ExecutionStatus.SUCCESS.value:
+            return False
+        await self.session.execute(
+            update(TriggerExecutionORM)
+            .where(TriggerExecutionORM.id == latest.id)
+            .values(
+                status=ExecutionStatus.FAILED.value,
+                error_message=error,
+                updated_at=datetime.utcnow(),
+            )
+        )
+        await self.session.flush()
+        return True
 
     async def list_by_trigger(
         self, trigger_id: UUID, limit: int = 100, offset: int = 0

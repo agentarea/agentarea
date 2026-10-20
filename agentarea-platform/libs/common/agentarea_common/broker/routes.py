@@ -15,6 +15,7 @@ from .topics import (
     STREAM_EVENTS_GROUPS,
     STREAMS_INGEST,
     TASK_EVENTS,
+    TRIGGER_OUTCOMES_GROUP,
     dead_letter_topic,
     stream_events_partitions,
 )
@@ -28,7 +29,7 @@ class ConsumerGroupRoute:
 
 
 def configured_routes(streams: EventStreamSettings) -> tuple[ConsumerGroupRoute, ...]:
-    """Ingest, delivery, the platform stream, then each stream-events partition per group."""
+    """Ingest, delivery, the platform stream, trigger outcomes, then each partition per group."""
     return (
         ConsumerGroupRoute(
             stream=STREAMS_INGEST,
@@ -44,6 +45,11 @@ def configured_routes(streams: EventStreamSettings) -> tuple[ConsumerGroupRoute,
             stream=TASK_EVENTS,
             group=PLATFORM_GROUP,
             dlq=dead_letter_topic(TASK_EVENTS, PLATFORM_GROUP),
+        ),
+        ConsumerGroupRoute(
+            stream=TASK_EVENTS,
+            group=TRIGGER_OUTCOMES_GROUP,
+            dlq=dead_letter_topic(TASK_EVENTS, TRIGGER_OUTCOMES_GROUP),
         ),
         *(
             ConsumerGroupRoute(

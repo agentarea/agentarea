@@ -13,6 +13,7 @@ from agentarea_triggers.domain.models import (
     TriggerExecution,
     TriggerUpdate,
 )
+from agentarea_triggers.infrastructure.repository import FailureCount
 from agentarea_triggers.trigger_service import (
     TriggerExecutionError,
     TriggerNotFoundError,
@@ -639,6 +640,7 @@ class TestTriggerService:
         mock_trigger_execution_repository.create.return_value = execution
         mock_trigger_repository.get_trigger.return_value = sample_cron_trigger
         mock_trigger_repository.update_execution_tracking.return_value = True
+        mock_trigger_repository.count_failure.return_value = FailureCount(5, 5, True)
         mock_trigger_repository.disable_trigger.return_value = True
 
         # Execute

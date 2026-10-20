@@ -6,7 +6,8 @@ consumer groups over every partition of ``streams.events`` (ADR-0043 §3, §4):
 the ``router`` reacts to each event, the ``events-view`` writes it into the
 read model. Both announce what they wrote to the events pages open on the
 workspace. The ``platform`` group on ``tasks.events`` writes task outcomes into
-each workspace's platform stream (ADR-0040 §5). The router's subscription cache
+each workspace's platform stream (ADR-0040 §5); the ``trigger-outcomes`` group
+counts how each task a trigger started ended. The router's subscription cache
 follows the change notices the outbox relay publishes to ``domain.events``.
 """
 
@@ -16,7 +17,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
+from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.permission import PermissionService
+from agentarea_common.base import RepositoryFactory
 from agentarea_common.broker import DedupCache
 from agentarea_common.broker.topics import (
     BUS_RETENTION,
@@ -26,6 +29,7 @@ from agentarea_common.broker.topics import (
     ROUTER_GROUP,
     STREAM_EVENTS,
     TASK_EVENTS,
+    TRIGGER_OUTCOMES_GROUP,
     dead_letter_topic,
     stream_events_partitions,
 )
@@ -62,7 +66,11 @@ from agentarea_triggers.channels.lazy_secret_manager import LazySecretReader
 from agentarea_triggers.channels.sender_admission import build_telegram_sender_admission
 from agentarea_triggers.infrastructure.causation_repository import load_platform_task
 from agentarea_triggers.infrastructure.reactions import TriggerExecutionReactionLog
+from agentarea_triggers.run_outcomes import TriggerRunOutcomes
 from agentarea_triggers.stream_subscriber import ConfigurerAuthority, TriggerSubscriptionHandler
+from agentarea_triggers.temporal_schedule_manager import TemporalScheduleManager
+from agentarea_triggers.trigger_service import TriggerService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .processor_sandbox import processor_runner
 
@@ -80,6 +88,7 @@ class StreamRuntime:
     polled: PolledItemConsumer
     polled_autoclaimer: StreamAutoclaimer
     platform: PlatformProjection
+    trigger_outcomes: TriggerRunOutcomes
     external: ExternalDelivery
     external_autoclaimers: list[StreamAutoclaimer]
     #: What the trigger batch workflow's activities run; the trigger worker registers them.
@@ -119,6 +128,15 @@ class StreamRuntime:
                 handler=self.platform.handle,
                 dead_letter_topic=dead_letter_topic(TASK_EVENTS, PLATFORM_GROUP),
                 on_dead_letter=self.platform.give_up,
+            )
+        )
+        self.subscriptions.append(
+            await self.bus.events.subscribe_many(
+                topics=[TASK_EVENTS],
+                group=TRIGGER_OUTCOMES_GROUP,
+                handler=self.trigger_outcomes.handle,
+                dead_letter_topic=dead_letter_topic(TASK_EVENTS, TRIGGER_OUTCOMES_GROUP),
+                on_dead_letter=self.trigger_outcomes.give_up,
             )
         )
 
@@ -186,6 +204,15 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
         reactions=TriggerExecutionReactionLog(),
         notices=notices,
     )
+    schedules = TemporalScheduleManager(task_queue=settings.triggers.QUEUE)
+
+    def outcome_trigger_service(session: AsyncSession, context: UserContext) -> TriggerService:
+        return TriggerService(
+            repository_factory=RepositoryFactory(session, context),
+            event_broker=dependencies.event_broker,
+            temporal_schedule_manager=schedules,
+        )
+
     consumers = settings.channel_delivery
     consumer_id = f"ingest-{socket.gethostname()}-{os.getpid()}"
     polled = PolledItemConsumer(
@@ -245,6 +272,9 @@ def build_stream_runtime(settings: Settings, dependencies: Any) -> StreamRuntime
             settings=settings.streams,
             bus=bus.bus,
             load_task=load_platform_task,
+        ),
+        trigger_outcomes=TriggerRunOutcomes(
+            session_factory=session_factory, trigger_service=outcome_trigger_service
         ),
         external=external,
         external_autoclaimers=[

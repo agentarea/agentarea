@@ -131,9 +131,13 @@ clears the mark; the next event checks again.
 
 **A trigger disables itself before it does damage.** Every trigger has a
 `failure_threshold` (default 5, bounded 1 to 100) and a `consecutive_failures`
-counter. A success resets the counter; crossing the threshold takes the trigger
-out of service. A firing turned away by its conditions neither counts nor
-resets. Nothing external has to notice a broken trigger.
+counter. What counts is how the run ends, not that it started: a firing that
+could not start its task counts, and so does a task that failed, whose firing
+is then marked `failed` with the task's error. A completed task resets the
+counter; crossing the threshold takes the trigger out of service and pauses a
+cron schedule. A firing turned away by its conditions and a task a person
+cancelled neither count nor reset. Nothing external has to notice a broken
+trigger.
 
 **The agent is told what started it.** A task's first message is the ask: the
 trigger's task text when it has one, which says what to do. Only a trigger
