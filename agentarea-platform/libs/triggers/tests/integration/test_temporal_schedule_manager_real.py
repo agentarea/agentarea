@@ -264,36 +264,17 @@ async def test_apply_brings_a_schedule_of_the_old_shape_up_to_date(temporal_sqli
     )
 
 
-async def test_schedules_of_triggers_that_are_gone_are_deleted(temporal_sqlite_client):
-    """Only trigger schedules are swept; a schedule of anything else is not ours to delete."""
-    from datetime import timedelta
-
-    from temporalio.client import (
-        Schedule,
-        ScheduleActionStartWorkflow,
-        ScheduleIntervalSpec,
-        ScheduleSpec,
-    )
-
+async def test_a_run_is_open_until_its_workflow_closes(temporal_sqlite_client):
+    """The overlap check asks Temporal, since a stored task status can outlive its run."""
     manager = TemporalScheduleManager(temporal_sqlite_client)
-    kept, gone = uuid.uuid4(), uuid.uuid4()
-    for trigger_id in (kept, gone):
-        await manager.apply_cron_schedule(trigger_id, "0 9 * * *", "UTC", paused=False)
-    await temporal_sqlite_client.create_schedule(
-        "someone-elses-schedule",
-        Schedule(
-            action=ScheduleActionStartWorkflow("Other", id="other", task_queue="other"),
-            spec=ScheduleSpec(intervals=[ScheduleIntervalSpec(every=timedelta(hours=1))]),
-        ),
+    workflow_id = f"agent-task-{uuid.uuid4()}"
+    handle = await temporal_sqlite_client.start_workflow(
+        "AgentExecutionWorkflow", id=workflow_id, task_queue=f"nobody-{uuid.uuid4()}"
     )
-    try:
-        removed = await manager.delete_cron_schedules_except({kept})
-        remaining = {
-            listed.id async for listed in await temporal_sqlite_client.list_schedules()
-        }
-    finally:
-        await manager.delete_cron_schedule(kept)
 
-    assert removed == 1
-    assert f"cron-trigger-{gone}" not in remaining
-    assert {f"cron-trigger-{kept}", "someone-elses-schedule"} <= remaining
+    running = await manager.workflow_is_open(workflow_id)
+    await handle.terminate("the run was stopped by hand")
+    terminated = await manager.workflow_is_open(workflow_id)
+    unknown = await manager.workflow_is_open(f"agent-task-{uuid.uuid4()}")
+
+    assert (running, terminated, unknown) == (True, False, False)

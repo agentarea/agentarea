@@ -347,19 +347,19 @@ class TemporalScheduleManager:
             return True
         return changed
 
-    async def delete_cron_schedules_except(self, keep: set[UUID]) -> int:
-        """Delete the schedule of every trigger not in ``keep``; returns how many went."""
+    async def workflow_is_open(self, workflow_id: str) -> bool:
+        """Whether the workflow is still running; one Temporal does not know is not."""
+        from temporalio.client import WorkflowExecutionStatus
+        from temporalio.service import RPCError, RPCStatusCode
+
         client = await self._ensure_client()
-        removed = 0
-        async for listed in await client.list_schedules():
-            if not listed.id.startswith(SCHEDULE_ID_PREFIX):
-                continue
-            if UUID(listed.id.removeprefix(SCHEDULE_ID_PREFIX)) in keep:
-                continue
-            await client.get_schedule_handle(listed.id).delete()
-            logger.info(f"Deleted schedule {listed.id}: its trigger is gone")
-            removed += 1
-        return removed
+        try:
+            description = await client.get_workflow_handle(workflow_id).describe()
+        except RPCError as e:
+            if e.status != RPCStatusCode.NOT_FOUND:
+                raise
+            return False
+        return description.status == WorkflowExecutionStatus.RUNNING
 
     async def get_schedule_info(self, trigger_id: UUID) -> dict[str, Any] | None:
         """Get information about a Temporal Schedule.

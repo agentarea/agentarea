@@ -108,7 +108,7 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
 
     # No run of the trigger is still going unless a test says so.
     task_repo = AsyncMock()
-    task_repo.oldest_unfinished_from.return_value = None
+    task_repo.unfinished_runs_from.return_value = []
 
     mapping = {
         TriggerRepository: trigger_repo,

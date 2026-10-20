@@ -4,8 +4,11 @@ The table is the truth and a schedule is its copy. A trigger is written first
 and its schedule after; when the second step fails (Temporal down, a lost
 update) the two disagree, and a restored Temporal has lost every schedule. A
 trigger that reads active and never fires says nothing, so this pass, run by a
-schedule of its own, repairs whatever drifted and deletes the schedules of
-triggers that are gone.
+schedule of its own, repairs whatever drifted.
+
+It never deletes a schedule: another deployment can share the Temporal
+namespace, and a trigger being created has its schedule before its row is
+committed. A schedule whose trigger is gone fails its firing, as it always did.
 """
 
 import logging
@@ -28,38 +31,49 @@ class CronSchedules(Protocol):
         self, trigger_id: UUID, cron_expression: str, timezone: str, *, paused: bool
     ) -> bool: ...
 
-    async def delete_cron_schedules_except(self, keep: set[UUID]) -> int: ...
+
+@dataclass(frozen=True)
+class CronRow:
+    id: UUID
+    cron_expression: str | None
+    timezone: str | None
+    is_active: bool
 
 
 @dataclass(frozen=True)
 class ScheduleSyncReport:
     changed: int
-    removed: int
     failed: int
+
+
+async def _cron_rows(
+    session_factory: async_sessionmaker[AsyncSession], trigger_id: UUID | None = None
+) -> list[CronRow]:
+    query = select(
+        TriggerORM.id, TriggerORM.cron_expression, TriggerORM.timezone, TriggerORM.is_active
+    ).where(TriggerORM.trigger_type == TriggerType.CRON.value)
+    if trigger_id is not None:
+        query = query.where(TriggerORM.id == trigger_id)
+    with unscoped("the schedule sync reads every workspace's cron triggers"):
+        async with session_factory() as session:
+            return [CronRow(*row) for row in await session.execute(query)]
 
 
 async def sync_cron_schedules(
     session_factory: async_sessionmaker[AsyncSession], schedules: CronSchedules
 ) -> ScheduleSyncReport:
-    """Apply every cron trigger's schedule, then delete the schedules no trigger owns.
+    """Apply every cron trigger's schedule as its row stands when it is applied.
 
-    One schedule Temporal refuses is logged and left to the next pass; the rest go on.
+    Each row is read again just before its schedule is applied, so an edit or a
+    delete made while the pass runs is not undone. One schedule Temporal refuses
+    is logged and left to the next pass; the rest go on.
     """
-    with unscoped("the schedule sync reads every workspace's cron triggers"):
-        async with session_factory() as session:
-            rows = (
-                await session.execute(
-                    select(
-                        TriggerORM.id,
-                        TriggerORM.cron_expression,
-                        TriggerORM.timezone,
-                        TriggerORM.is_active,
-                    ).where(TriggerORM.trigger_type == TriggerType.CRON.value)
-                )
-            ).all()
-
     changed = failed = 0
-    for row in rows:
+    for listed in await _cron_rows(session_factory):
+        current = await _cron_rows(session_factory, listed.id)
+        if not current:
+            continue
+        row = current[0]
         if not row.cron_expression:
             logger.error("Cron trigger %s has no cron expression; it has no schedule", row.id)
             failed += 1
@@ -75,12 +89,6 @@ async def sync_cron_schedules(
             )
             failed += 1
 
-    removed = await schedules.delete_cron_schedules_except({row.id for row in rows})
-    if changed or removed or failed:
-        logger.info(
-            "Schedule sync: %d brought in line, %d of gone triggers deleted, %d failed",
-            changed,
-            removed,
-            failed,
-        )
-    return ScheduleSyncReport(changed=changed, removed=removed, failed=failed)
+    if changed or failed:
+        logger.info("Schedule sync: %d brought in line, %d failed", changed, failed)
+    return ScheduleSyncReport(changed=changed, failed=failed)

@@ -1293,7 +1293,7 @@ class TriggerService:
         # policy never sees the run. Each event of a stream trigger is its own
         # work, and a person asking for a run gets it.
         if trigger.trigger_type == TriggerType.CRON and fired_by is None:
-            running = await self.task_repository.oldest_unfinished_from("trigger", str(trigger.id))
+            running = await self._run_still_going(trigger.id)
             if running is not None:
                 reason = f"The previous run is still going (task {running})"
                 logger.info(f"Trigger {trigger_id} skipped: {reason}")
@@ -1436,6 +1436,24 @@ class TriggerService:
             return TriggerFiring(
                 outcome="error", reason=str(e), verdict=verdict, execution=execution
             )
+
+    async def _run_still_going(self, trigger_id: UUID) -> UUID | None:
+        """The trigger's task whose workflow is still open, if any.
+
+        A stored status can outlive its run -- a terminated workflow, a lost
+        history, a status write that failed -- so the workflow is asked; a task
+        whose workflow never started is running nothing.
+        """
+        for task_id, workflow_id in await self.task_repository.unfinished_runs_from(
+            "trigger", str(trigger_id)
+        ):
+            if workflow_id is None:
+                continue
+            if self.temporal_schedule_manager is None:
+                return task_id
+            if await self.temporal_schedule_manager.workflow_is_open(workflow_id):
+                return task_id
+        return None
 
     async def _record_execution_success(
         self,

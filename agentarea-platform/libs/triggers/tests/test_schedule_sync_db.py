@@ -21,7 +21,6 @@ class _Schedules:
     def __init__(self, failing: set[UUID] | None = None):
         self.failing = failing or set()
         self.applied: dict[UUID, tuple[str, str, bool]] = {}
-        self.kept: set[UUID] | None = None
 
     async def apply_cron_schedule(
         self, trigger_id: UUID, cron_expression: str, timezone: str, *, paused: bool
@@ -30,10 +29,6 @@ class _Schedules:
             raise ConnectionError("Temporal is unavailable")
         self.applied[trigger_id] = (cron_expression, timezone, paused)
         return True
-
-    async def delete_cron_schedules_except(self, keep: set[UUID]) -> int:
-        self.kept = set(keep)
-        return 0
 
 
 @pytest.fixture
@@ -79,9 +74,6 @@ async def test_each_cron_trigger_gets_the_schedule_its_row_describes(maker):
     assert schedules.applied[active] == ("0 9 * * *", "UTC", False)
     assert schedules.applied[stopped] == ("0 9 * * *", "Europe/Berlin", True)
     assert stream not in schedules.applied
-    assert schedules.kept is not None
-    assert {active, stopped} <= schedules.kept
-    assert stream not in schedules.kept
     assert report.failed == 0
 
 
@@ -93,5 +85,3 @@ async def test_a_schedule_temporal_refuses_does_not_hold_back_the_rest(maker):
 
     assert fine in schedules.applied
     assert report.failed >= 1
-    assert schedules.kept is not None
-    assert refused in schedules.kept

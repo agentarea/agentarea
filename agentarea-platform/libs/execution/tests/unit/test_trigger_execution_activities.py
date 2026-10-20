@@ -62,7 +62,7 @@ class _Harness:
         self.agent_repo = AsyncMock()
         self.agent_repo.get.return_value = SimpleNamespace(status="active")
         self.task_repo = AsyncMock()
-        self.task_repo.oldest_unfinished_from.return_value = None
+        self.task_repo.unfinished_runs_from.return_value = []
         self.task_service = AsyncMock()
         self.task_service.get_task.return_value = None
         self.task_service.route_or_submit_task.side_effect = lambda task, **_: task
@@ -234,9 +234,12 @@ async def test_unmet_conditions_skip_the_firing():
 
 async def test_a_firing_gives_way_to_the_run_still_going():
     harness = _Harness(_trigger())
-    harness.task_repo.oldest_unfinished_from.return_value = uuid4()
+    harness.task_repo.unfinished_runs_from.return_value = [(uuid4(), "agent-task-1")]
 
-    result = await harness.fire()
+    result = await harness.fire(
+        None,
+        patch.object(TemporalScheduleManager, "workflow_is_open", AsyncMock(return_value=True)),
+    )
 
     assert result.status is TriggerOutcome.SKIPPED
     assert result.reason is TriggerSkipReason.PREVIOUS_RUN_ACTIVE

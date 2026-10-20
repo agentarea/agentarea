@@ -19,11 +19,22 @@ TEST_DATABASE_URL = os.getenv("STREAMS_TEST_DATABASE_URL", "")
 pytestmark = pytest.mark.skipif(not TEST_DATABASE_URL, reason="STREAMS_TEST_DATABASE_URL not set")
 
 
+class _Temporal:
+    """Which agent workflows are still open; the rest closed or were never known."""
+
+    def __init__(self) -> None:
+        self.open: set[str] = set()
+
+    async def workflow_is_open(self, workflow_id: str) -> bool:
+        return workflow_id in self.open
+
+
 class _Setup:
     def __init__(self, maker, workspace_id: str):
         self.maker = maker
         self.workspace_id = workspace_id
         self.started: list[UUID] = []
+        self.temporal = _Temporal()
 
     async def trigger(self, trigger_type: str = "cron") -> UUID:
         trigger_id, agent_id = uuid4(), uuid4()
@@ -49,14 +60,20 @@ class _Setup:
             await session.commit()
         return trigger_id
 
-    async def task(self, status: str, origin_id: UUID | None) -> UUID:
+    async def task(
+        self, status: str, origin_id: UUID | None, *, run: str = "open"
+    ) -> UUID:
+        """A task with its workflow ``open``, ``closed`` or ``none`` (never started)."""
         task_id = uuid4()
+        workflow_id = None if run == "none" else f"agent-task-{task_id}"
+        if run == "open":
+            self.temporal.open.add(workflow_id)
         async with self.maker() as session:
             await session.execute(
                 text(
                     "INSERT INTO tasks (id, agent_id, description, status, workspace_id, "
-                    "created_by, origin_type, origin_id) VALUES (:id, :agent, 'd', :status, "
-                    ":ws, 'owner', :origin_type, :origin_id)"
+                    "created_by, origin_type, origin_id, execution_id) VALUES (:id, :agent, "
+                    "'d', :status, :ws, 'owner', :origin_type, :origin_id, :execution_id)"
                 ),
                 {
                     "id": task_id,
@@ -65,6 +82,7 @@ class _Setup:
                     "ws": self.workspace_id,
                     "origin_type": "trigger" if origin_id else "user",
                     "origin_id": str(origin_id) if origin_id else None,
+                    "execution_id": workflow_id,
                 },
             )
             await session.commit()
@@ -73,13 +91,15 @@ class _Setup:
     async def fire(self, trigger_id: UUID, fired_by: str | None = None):
         async def submit(task, **_):
             task.status = "running"
+            task.execution_id = f"agent-task-{task.id}"
+            self.temporal.open.add(task.execution_id)
             self.started.append(task.id)
             async with self.maker() as stored:
                 await stored.execute(
                     text(
                         "INSERT INTO tasks (id, agent_id, description, status, workspace_id, "
-                        "created_by, origin_type, origin_id) VALUES (:id, :agent, 'd', 'running', "
-                        ":ws, 'owner', :origin_type, :origin_id)"
+                        "created_by, origin_type, origin_id, execution_id) VALUES (:id, :agent, "
+                        "'d', 'running', :ws, 'owner', :origin_type, :origin_id, :execution_id)"
                     ),
                     {
                         "id": task.id,
@@ -87,6 +107,7 @@ class _Setup:
                         "ws": self.workspace_id,
                         "origin_type": task.provenance.origin_type,
                         "origin_id": task.provenance.origin_id,
+                        "execution_id": task.execution_id,
                     },
                 )
                 await stored.commit()
@@ -101,6 +122,7 @@ class _Setup:
                 ),
                 event_broker=AsyncMock(),
                 task_service=task_service,
+                temporal_schedule_manager=self.temporal,  # type: ignore[arg-type]
             )
             firing = await service.fire(trigger_id, {"source": "cron"}, fired_by)
             await session.commit()
@@ -136,6 +158,15 @@ async def test_a_scheduled_firing_starts_once_the_last_run_ended(setup):
 
     assert firing.outcome == "reacted"
     assert setup.started == [firing.task_id]
+
+
+async def test_a_status_that_outlived_its_run_does_not_hold_the_schedule_back(setup):
+    """A terminated workflow, a lost history or a failed status write leaves a task 'running'."""
+    trigger_id = await setup.trigger()
+    await setup.task("running", trigger_id, run="closed")
+    await setup.task("pending", trigger_id, run="none")
+
+    assert (await setup.fire(trigger_id)).outcome == "reacted"
 
 
 async def test_runs_of_other_triggers_and_people_do_not_hold_a_schedule_back(setup):
