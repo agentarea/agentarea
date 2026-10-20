@@ -44,13 +44,14 @@ A workspace adds its own sources itself, without the operator; see
     |---|---|---|
     | `name` | required | The registry's name; unique among platform registries. The Job finds an existing registry by it. |
     | `source_url` | required unless `active: false` | An index URL, or `owner/repo` for `source_type: github`. |
-    | `type` | detected | `mcp_servers`, `skills`, `llm_providers`, `llm_models`, `agents`, `bundles` or `source_types`. Detected from the index's top-level key when unset, at the cost of one extra fetch. Detection fetches `source_url` as a document, so a `github` entry must set `type: skills`. |
+    | `type` | detected | `mcp_servers`, `skills`, `llm_providers`, `llm_models`, `agents`, `bundles` or `source_types`. Detected from the index's top-level key when unset, at the cost of one extra fetch. A `github` entry is `skills` without a fetch; any other `type` on it is refused. |
     | `source_type` | `url` | `url` or `github`. A `github` source holds skills. |
     | `source_ref` | default branch | `github`: the branch, tag or commit to read. |
     | `source_path` | repository root | `github`: the folder whose skill folders are indexed. |
     | `mode` | `mirror` | `mirror` copies each skill's content to object storage at sync; `upstream` keeps the index and fetches a version on first install or run. |
     | `trust` | `official` | `official`, `verified`, `community` or `private`; shown on every card and usable in install policy. |
     | `recommendation_priority` | `100` | Weight of the whole source in the Explore "Recommended" order, lower first. The shipped curated sources use `10`. |
+    | `credentials_secret_ref` | none | A secret of the `platform` workspace, by name or id, that a sync reads the source with: a GitHub token for a private repository. The registry keeps the reference and resolves it at each sync; the value is never copied. A `skills` registry with credentials must be `mode: mirror`. A name no platform secret has fails that registry. |
     | `description` | none | Shown with the registry. |
     | `active` | `true` | `false` retires the registry; see below. |
 
@@ -75,15 +76,20 @@ A workspace adds its own sources itself, without the operator; see
   </Step>
 
   <Step title="Change an existing registry">
-    For a registry that already exists, the Job applies `mode`, `trust` and
-    `recommendation_priority` and then syncs it. A changed `mode` clears the
-    stored ETag, so that sync reads the source in full: `upstream` to `mirror`
-    stores every skill's content; `mirror` to `upstream` deletes nothing
-    already stored.
+    For a registry that already exists, the Job applies every field of its
+    entry, logs the fields that changed (`Updated mode, source_url`), and then
+    syncs it: the source (`source_url`, `source_type`, `source_ref`,
+    `source_path`), `mode`,
+    `trust`, `recommendation_priority` and `credentials_secret_ref`. A field the
+    entry leaves out takes its default, so dropping `credentials_secret_ref`
+    drops the credentials. A changed source or `mode` clears the stored ETag,
+    so that sync reads the source in full: `upstream` to `mirror` stores every
+    skill's content; `mirror` to `upstream` deletes nothing already stored.
+    Items the new source does not publish leave the catalog as any dropped
+    item does.
 
-    The Job does not apply a changed `source_url`, `source_type`, `type`,
-    `source_ref` or `source_path` to an existing registry. To move a source,
-    retire the old name and add the new source under a new name.
+    A changed `type` is refused: retire the old name and add the new source
+    under a new name.
   </Step>
 
   <Step title="Retire a registry">

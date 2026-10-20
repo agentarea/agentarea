@@ -45,7 +45,7 @@ version a workspace runs.
 | `source_type` | `url`, `github`, `api`, `managed` | Where the index comes from. `url` is an index document in the platform format (JSON or YAML). `github` is a repository whose folders are skills; the platform builds the index itself. A workspace registry may use `url` or `github` only. |
 | `mode` | `mirror`, `upstream` | When a skill's content is copied. `mirror` copies every item's content into object storage at sync. `upstream` keeps only the index and fetches a version's content the first time it is installed or run, then keeps it. |
 | `trust` | `official`, `verified`, `community`, `private` | A label on every catalog card and installed skill, and a value policy rules can name. A workspace may give its own registry `private` or `community` only. |
-| `credentials_secret_ref` | a workspace secret id | The token a sync reads a private source with. The registry holds a reference and resolves it at sync time; the value is never copied. |
+| `credentials_secret_ref` | a secret id | The token a sync reads a private source with: a secret of the owning workspace, or of the `platform` workspace for a platform registry (named in the chart values). The registry holds a reference and resolves it at sync time; the value is never copied. |
 
 A workspace registry holds `skills` or `agents`. The other types materialize
 platform-wide entities at sync, so only the platform may publish them. Registry
@@ -142,8 +142,9 @@ answers `403` through the API and fails the task as non-retryable.
 
 ### Changing a live registry's mode
 
-Changing `mode`, `source_url`, `source_ref` or `source_path` clears the stored
-ETag, so the next sync reads the source in full. Going from `upstream` to
+Changing `mode`, `source_type`, `source_url`, `source_ref` or `source_path`
+clears the stored ETag, so the next sync reads the source in full. For a
+platform registry the reconcile applies such a change from the chart values. Going from `upstream` to
 `mirror`, that sync stores every item's package. Going from `mirror` to
 `upstream`, nothing is deleted: the packages stay in object storage, installed
 skills keep pointing at theirs, and an install of a version that was already

@@ -5,9 +5,11 @@ import json
 import logging
 import os
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
+from uuid import UUID
 
 import click
 import uvicorn
@@ -446,6 +448,81 @@ async def _registry_sync_lock(db: Database, key: str) -> AsyncIterator[bool]:
                     logger.exception("Could not release the reconcile lock %s", key)
 
 
+# What a manifest entry leaves out of its source is the default a new registry gets.
+_SOURCE_DEFAULTS: dict[str, str | None] = {
+    "source_type": "url",
+    "source_ref": None,
+    "source_path": None,
+}
+
+
+def manifest_registry_type(config: dict, detect: Callable[[str], str]) -> str:
+    """The registry type of a manifest entry: stated, implied by a GitHub source, or detected.
+
+    ``detect`` fetches the source to read its shape, so it is asked only for an
+    index entry that states no type.
+    """
+    registry_type = config.get("type")
+    if config.get("source_type") == "github":
+        if registry_type not in (None, "skills"):
+            raise ValueError(
+                f"Registry {config['name']!r}: a github source holds skills, not {registry_type!r}"
+            )
+        return "skills"
+    return registry_type or detect(config["source_url"])
+
+
+# Every field reconcile applies to an existing platform registry.
+_RECONCILED_FIELDS = (
+    "source_type",
+    "source_url",
+    "source_ref",
+    "source_path",
+    "mode",
+    "trust",
+    "recommendation_priority",
+    "credentials_secret_ref",
+)
+
+
+async def reconcile_existing_registry(
+    service: Any, existing: Any, config: dict, *, credentials_secret_ref: UUID | None
+) -> list[str]:
+    """Make an existing platform registry what its manifest entry says.
+
+    Returns the names of the fields that changed, never their values: one is
+    a credentials reference.
+
+    The source fields, ``mode``, ``trust``, ``recommendation_priority`` and the
+    credentials reference are applied in one update; the service clears the
+    stored ETag when the source or the mode changed, so the next sync reads the
+    source in full. A changed type is refused: the items of one type are not
+    another's.
+    """
+    registry_type = config.get("type")
+    if registry_type and registry_type != existing.registry_type:
+        raise ValueError(
+            f"Registry {existing.name!r} holds {existing.registry_type}, the manifest says "
+            f"{registry_type}: retire it (active: false) and add the new source under a new name"
+        )
+    wanted: dict[str, Any] = {
+        "source_url": config["source_url"],
+        **{field: config.get(field, default) for field, default in _SOURCE_DEFAULTS.items()},
+        **{field: config[field] for field in ("mode", "trust") if field in config},
+        "credentials_secret_ref": credentials_secret_ref,
+    }
+    if config.get("recommendation_priority") is not None:
+        wanted["recommendation_priority"] = config["recommendation_priority"]
+    changes = {field: value for field, value in wanted.items() if value != getattr(existing, field)}
+    changed = [field for field in _RECONCILED_FIELDS if field in changes]
+    if changed:
+        await service.update_registry(existing.id, **changes)
+        logger.info(
+            "Reconcile changed registry %s (%s): %s", existing.name, existing.id, ", ".join(changed)
+        )
+    return changed
+
+
 async def _reconcile(
     registries_config: str | None,
     sources: tuple[str, ...],
@@ -464,7 +541,11 @@ async def _reconcile(
     )
 
     from agentarea_api.registry_content import registry_content_mirror
-    from agentarea_api.registry_credentials import registry_credentials_resolver
+    from agentarea_api.registry_credentials import (
+        platform_secret_id,
+        record_registry_secret_reference,
+        registry_credentials_resolver,
+    )
 
     db = Database(get_db_settings())
     content_mirror = registry_content_mirror()
@@ -624,41 +705,33 @@ async def _reconcile(
                                 click.echo("Registry absent")
                             succeeded.append(registry_name)
                             continue
-                        configured_priority = config.get("recommendation_priority")
+                        # A platform registry's credentials are a secret of the
+                        # platform workspace, named in the manifest and resolved
+                        # here to its id: a reference, never the value.
+                        secret_ref = config.get("credentials_secret_ref")
+                        credentials = (
+                            await platform_secret_id(session, str(secret_ref))
+                            if secret_ref
+                            else None
+                        )
+                        had_credentials = bool(existing and existing.credentials_secret_ref)
                         if existing:
                             registry_id = existing.id
                             click.echo(f"Found existing registry: {registry_id}")
                             # Reconcile is the only way a manifest edit reaches an
-                            # installed platform: without this, changing a source's
-                            # weight would only ever affect brand-new installs.
-                            if (
-                                configured_priority is not None
-                                and configured_priority != existing.recommendation_priority
-                            ):
-                                await service.update_registry(
-                                    registry_id, recommendation_priority=configured_priority
-                                )
-                                click.echo(
-                                    f"Updated recommendation priority: {configured_priority}"
-                                )
-                            labels = {
-                                field: config[field]
-                                for field in ("mode", "trust")
-                                if field in config and config[field] != getattr(existing, field)
-                            }
-                            if labels:
-                                await service.update_registry(registry_id, **labels)
-                                click.echo(f"Updated {labels}")
+                            # installed platform: every field of the entry is applied.
+                            changes = await reconcile_existing_registry(
+                                service, existing, config, credentials_secret_ref=credentials
+                            )
+                            if changes:
+                                click.echo(f"Updated {', '.join(changes)}")
                         else:
-                            registry_type = config.get("type")
-                            if not registry_type:
-                                # Detection fetches the source to inspect its shape; the
-                                # subsequent sync_registry fetches it again to parse. The
-                                # extra GET is acceptable for a one-shot reconcile — set an
-                                # explicit `type` in the manifest to skip detection.
-                                registry_type = service.detect_type_from_source(
-                                    config["source_url"]
-                                )
+                            # Detection fetches an index to inspect its shape; the
+                            # sync fetches it again to parse. Set `type` to skip it.
+                            registry_type = manifest_registry_type(
+                                config, service.detect_type_from_source
+                            )
+                            if not config.get("type"):
                                 click.echo(f"Detected type: {registry_type}")
                             registry = await service.create_registry(
                                 name=registry_name,
@@ -667,14 +740,19 @@ async def _reconcile(
                                 source_url=config["source_url"],
                                 description=config.get("description"),
                                 sync_mode=config.get("sync_mode", "manual"),
-                                recommendation_priority=configured_priority,
+                                recommendation_priority=config.get("recommendation_priority"),
                                 mode=config.get("mode", "mirror"),
                                 trust=config.get("trust", "official"),
+                                credentials_secret_ref=credentials,
                                 source_ref=config.get("source_ref"),
                                 source_path=config.get("source_path"),
                             )
                             registry_id = registry.id
                             click.echo(f"Created registry: {registry_id}")
+                        if credentials is not None or had_credentials:
+                            await record_registry_secret_reference(
+                                session, registry_id, credentials
+                            )
 
                         replacements.append(registry_id)
                         stats = await service.sync_registry(registry_id, force=force)
