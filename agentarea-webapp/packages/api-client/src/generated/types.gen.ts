@@ -7669,7 +7669,7 @@ export type SkillVersionResponse = {
     /**
      * Reason
      */
-    reason: 'create' | 'edit' | 'install' | 'update' | 'rollback' | 'migrate';
+    reason: 'create' | 'edit' | 'install' | 'update' | 'rollback' | 'migrate' | 'refresh';
 };
 
 /**

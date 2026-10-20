@@ -194,8 +194,9 @@ class SkillVersionResponse(BaseModel):
 
     id: str
     digest: str | None
-    reason: Literal["create", "edit", "install", "update", "rollback", "migrate"]
-    # The catalog item version an installed package was pinned at.
+    reason: Literal["create", "edit", "install", "update", "rollback", "migrate", "refresh"]
+    # The catalog item version an installed package was pinned at, or the
+    # source commit a refresh read.
     catalog_version: str | None = None
     created_by: str
     created_at: str

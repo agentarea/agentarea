@@ -52,7 +52,7 @@
   "unscoped": {
     "apps/api/agentarea_api/api/v1/agents_well_known.py": 1,
     "apps/api/agentarea_api/api/v1/mcp_proxy.py": 1,
-    "libs/agents/agentarea_agents/infrastructure/skill_repository.py": 4,
+    "libs/agents/agentarea_agents/infrastructure/skill_repository.py": 5,
     "libs/common/agentarea_common/auth/dependencies.py": 1,
     "libs/common/agentarea_common/events/outbox_relay.py": 1,
     "libs/execution/agentarea_execution/activities/trigger_execution_activities.py": 1,
