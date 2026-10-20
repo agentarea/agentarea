@@ -62,7 +62,7 @@ A workspace adds its own sources itself, without the operator; see
       enabled: true
       registries:
         - name: system-skills-curated
-          source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json
+          source_url: https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json
           recommendation_priority: 10
         - name: acme-skills
           type: skills

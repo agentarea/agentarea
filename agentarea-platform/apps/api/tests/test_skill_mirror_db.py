@@ -8,12 +8,18 @@ that must carry each item's registry and trust to the install policy, whose
 rules are rows too. The repin reads catalog installs across every workspace
 and rewrites each under its own.
 
+A platform mirror whose index replaced its stubs with GitHub pointers (the
+curated index, once the backoffice produced it) stores each real folder at
+sync, pinned to its tree, and never fetches an unchanged tree again. Installs
+that still hold a stub then show the update, and the repin moves them.
+
 Set CATALOG_TEST_DATABASE_URL to a postgresql+asyncpg URL for a disposable,
 already-migrated database (``make check-db`` does).
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -25,6 +31,7 @@ from uuid import UUID, uuid4
 import pytest
 from agentarea_agents.application.skill_packages import clear_package_cache
 from agentarea_agents.application.skill_service import SkillService, repin_all_catalog_installs
+from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillRepository
 from agentarea_agents.infrastructure.github_skill_importer import GitHubFolder
 from agentarea_agents.infrastructure.skill_storage_service import (
     SkillStorageService,
@@ -165,6 +172,7 @@ async def _mirror_registry(session, workspace: str, storage, monkeypatch) -> UUI
             },
         ]
     }
+
     async def fetch(_self, _url):
         return index
 
@@ -297,7 +305,13 @@ async def _legacy_install(session, workspace: str, item_id: str, content: str) -
             "VALUES (:id, 'stub', :slug, 'content', :content, NULL, :item, :ws, 'u1', "
             "'private', now(), now())"
         ),
-        {"id": skill_id, "slug": f"stub-{skill_id[:8]}", "content": content, "item": item_id, "ws": workspace},
+        {
+            "id": skill_id,
+            "slug": f"stub-{skill_id[:8]}",
+            "content": content,
+            "item": item_id,
+            "ws": workspace,
+        },
     )
     await session.execute(
         text(
@@ -348,3 +362,247 @@ async def test_the_repin_moves_unedited_installs_in_every_workspace(session):
     assert rows[elsewhere].s3_path == pinned
     assert (rows[edited].s3_path, rows[edited].content) == (None, STUB + "\nmine")
     assert s3.under(pinned) == {"SKILL.md": STUB.encode()}
+
+
+CURATED = "pdf--o-r--0123456789"
+CURATED_STUB = f"""---
+name: "{CURATED}"
+description: "Fill PDF forms"
+---
+
+Fill PDF forms
+
+Imported system skill metadata. The original SKILL.md should be reviewed before execution.
+Source: https://github.com/o/r/blob/main/skills/pdf/SKILL.md
+Repository: o/r
+Path: skills/pdf/SKILL.md"""
+STUB_ENTRY = {
+    "name": CURATED,
+    "description": "Fill PDF forms",
+    "version": "latest",
+    "source_type": "content",
+    "content": CURATED_STUB,
+    "source_url": "https://github.com/o/r/blob/main/skills/pdf/SKILL.md",
+    "tags": ["category:documents"],
+}
+
+
+def _pointer_entry(**fields) -> dict:
+    return {
+        "name": CURATED,
+        "description": "Fill PDF forms",
+        "tags": ["category:documents"],
+        "recommendation_rank": 0,
+        "source": {"type": "github", "repo": "o/r", "path": "skills/pdf", "ref": COMMIT},
+        **fields,
+    }
+
+
+class CountingGitHub(FolderGitHub):
+    calls = 0
+
+    async def download_folder(self, repo, path, *, ref, tree_sha):
+        CountingGitHub.calls += 1
+        assert repo == "o/r"
+        return await super().download_folder(repo, path, ref=ref, tree_sha=tree_sha)
+
+
+@pytest.fixture
+def curated(monkeypatch):
+    """The curated index the platform reconciles, as its source currently publishes it."""
+    state = {"skills": [STUB_ENTRY]}
+    CountingGitHub.calls = 0
+    monkeypatch.setattr(RegistryService, "_fetch_source", staticmethod(lambda _url: state))
+    monkeypatch.setattr(registry_content, "GitHubSkillImporter", CountingGitHub)
+    return state
+
+
+async def _sync_curated(session, storage, registry_id: UUID | None = None) -> UUID:
+    context = _context(PLATFORM_WORKSPACE_ID)
+    with workspace_scope(PLATFORM_WORKSPACE_ID):
+        service = RegistryService(
+            RegistryRepository(session, context),
+            RegistryItemRepository(session, context),
+            server_repo=None,  # type: ignore[arg-type]
+            content_mirror=registry_content.registry_content_mirror(storage),
+        )
+        if registry_id is None:
+            registry_id = (
+                await service.create_registry(
+                    name=f"system-skills-curated-{uuid4().hex[:6]}",
+                    registry_type="skills",
+                    source_type="url",
+                    source_url="https://example.test/registry/system/skills.json",
+                )
+            ).id
+        stats = await service.sync_registry(registry_id)
+    assert stats["skipped"] == 0, stats["skipped_items"]
+    return registry_id
+
+
+async def _curated_item(session, registry_id: UUID) -> tuple[str, str, dict]:
+    row = (
+        await session.execute(
+            text("SELECT id, version, spec FROM registry_items WHERE registry_id = :r"),
+            {"r": registry_id},
+        )
+    ).one()
+    return str(row.id), row.version, row.spec
+
+
+async def test_a_mirror_whose_stubs_became_pointers_stores_each_real_folder_once(session, curated):
+    storage, s3 = _storage()
+    registry_id = await _sync_curated(session, storage)
+    curated["skills"] = [_pointer_entry(stars=10)]
+
+    await _sync_curated(session, storage, registry_id)
+
+    _, version, spec = await _curated_item(session, registry_id)
+    assert version == TREE
+    assert spec["package"] == {
+        "s3_path": f"skills/catalog/{package_digest(FOLDER)}/",
+        "source_url": f"https://github.com/o/r/tree/{COMMIT}/skills/pdf",
+        "tree_sha": TREE,
+    }
+    assert "content" not in spec
+    assert s3.under(spec["package"]["s3_path"]) == FOLDER
+    assert CountingGitHub.calls == 1
+
+    # Nothing about the folder changed: a re-sync reads GitHub for none of it,
+    # even when the entry around the pointer did (stars move every day).
+    curated["skills"] = [_pointer_entry(stars=11)]
+    await _sync_curated(session, storage, registry_id)
+    curated["skills"] = [
+        _pointer_entry(stars=11, source={**_pointer_entry()["source"], "tree_sha": TREE})
+    ]
+    await _sync_curated(session, storage, registry_id)
+
+    assert CountingGitHub.calls == 1
+    _, version, spec = await _curated_item(session, registry_id)
+    assert version == TREE
+    assert spec["replaced_body_sha256"] == hashlib.sha256(CURATED_STUB.encode()).hexdigest()
+
+
+EDITED_STUBS = {
+    "after-marker": CURATED_STUB + "\nMy notes",
+    "above-marker": CURATED_STUB.replace(
+        "Imported system", "# Always use pdftk\n\nImported system"
+    ),
+    "frontmatter": CURATED_STUB.replace(
+        'description: "Fill PDF forms"', 'description: "Fill PDF forms with pdftk"'
+    ),
+    "source-notes": CURATED_STUB.replace(
+        "Source: https://github.com/o/r/blob/main/skills/pdf/SKILL.md", "Source: my notes"
+    ),
+}
+
+
+@asynccontextmanager
+async def _session_of(session):
+    yield session
+
+
+async def _repin(session, storage) -> dict:
+    return {
+        r.skill_id: r.status
+        for _, r in await repin_all_catalog_installs(lambda: _session_of(session), storage)
+    }
+
+
+async def _install_rows(session, ids: list[str]) -> dict:
+    rows = await session.execute(
+        text(
+            "SELECT s.id, s.s3_path, s.content, rii.installed_version FROM skills s "
+            "JOIN registry_item_installs rii ON rii.installed_entity_id = s.id "
+            "WHERE s.id = ANY(CAST(:ids AS uuid[]))"
+        ),
+        {"ids": ids},
+    )
+    return {str(r.id): r for r in rows.all()}
+
+
+async def test_installs_holding_the_replaced_body_show_the_update_and_the_repin_moves_them(
+    session, curated
+):
+    storage, s3 = _storage()
+    packaged, legacy = f"ws-{uuid4()}", f"ws-{uuid4()}"
+    registry_id = await _sync_curated(session, storage)
+    item_id, stub_version, _ = await _curated_item(session, registry_id)
+    assert stub_version == "latest"
+    with workspace_scope(packaged):
+        on_stub = await _skills(session, packaged, storage).install_catalog_skill(item_id)
+    stub_package = f"skills/catalog/{package_digest({'SKILL.md': CURATED_STUB.encode()})}/"
+    assert on_stub.s3_path == stub_package
+    before_packages = await _legacy_install(session, legacy, item_id, CURATED_STUB)
+    edited = {
+        kind: await _legacy_install(session, f"ws-{uuid4()}", item_id, body)
+        for kind, body in EDITED_STUBS.items()
+    }
+
+    curated["skills"] = [_pointer_entry()]
+    await _sync_curated(session, storage, registry_id)
+
+    _, _, spec = await _curated_item(session, registry_id)
+    assert spec["replaced_body_sha256"] == hashlib.sha256(CURATED_STUB.encode()).hexdigest()
+    with workspace_scope(packaged):
+        svc = _skills(session, packaged, storage)
+        [listed] = await svc.list(include_catalog=False)
+        await svc.annotate_installs([listed])
+    assert listed.update_available is True
+
+    results = await _repin(session, storage)
+
+    assert results[str(on_stub.id)] == "repinned"
+    assert results[before_packages] == "repinned"
+    assert {kind: results[skill_id] for kind, skill_id in edited.items()} == dict.fromkeys(
+        EDITED_STUBS, "edited"
+    )
+    real = f"skills/catalog/{package_digest(FOLDER)}/"
+    rows = await _install_rows(session, [str(on_stub.id), before_packages, *edited.values()])
+    assert (rows[str(on_stub.id)].s3_path, rows[str(on_stub.id)].installed_version) == (real, TREE)
+    assert (rows[before_packages].s3_path, rows[before_packages].content) == (real, None)
+    assert rows[before_packages].installed_version == TREE
+    assert all(rows[skill_id].s3_path is None for skill_id in edited.values())
+    assert s3.under(stub_package) == {"SKILL.md": CURATED_STUB.encode()}
+    reasons = await session.execute(
+        text("SELECT reason FROM skill_versions WHERE skill_id = :id ORDER BY created_at, id"),
+        {"id": str(on_stub.id)},
+    )
+    assert [r.reason for r in reasons.all()] == ["install", "repin"]
+
+    again = await _repin(session, storage)
+    assert (again[str(on_stub.id)], again[before_packages]) == ("pinned", "pinned")
+    with workspace_scope(packaged):
+        versions = await CatalogSkillRepository(session, _context(packaged)).versions_for([item_id])
+    assert versions == {item_id: (TREE, TREE)}
+
+
+async def test_without_a_kept_digest_only_the_exact_stub_moves_even_to_a_moved_folder(
+    session, curated
+):
+    storage, _ = _storage()
+    registry_id = await _sync_curated(session, storage)
+    item_id, _, _ = await _curated_item(session, registry_id)
+    bare = await _legacy_install(session, f"ws-{uuid4()}", item_id, CURATED_STUB)
+    edited = {
+        kind: await _legacy_install(session, f"ws-{uuid4()}", item_id, body)
+        for kind, body in EDITED_STUBS.items()
+    }
+    # The old index recorded some folders under a parent they never lived in.
+    moved = {**_pointer_entry()["source"], "path": "plugins/pdf/skills/pdf-forms"}
+    curated["skills"] = [_pointer_entry(source=moved)]
+    await _sync_curated(session, storage, registry_id)
+    # An item replaced before the sync kept the body's digest.
+    await session.execute(
+        text(
+            "UPDATE registry_items SET spec = spec - 'replaced_body_sha256' WHERE registry_id = :r"
+        ),
+        {"r": registry_id},
+    )
+
+    results = await _repin(session, storage)
+
+    assert results[bare] == "repinned"
+    assert {kind: results[skill_id] for kind, skill_id in edited.items()} == dict.fromkeys(
+        EDITED_STUBS, "unverified"
+    )

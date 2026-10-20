@@ -524,7 +524,7 @@ The following table lists configurable parameters of the chart and their default
 | registryReconcile.registries[2].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/mcp-servers.json"` |  |
 | registryReconcile.registries[2].recommendation_priority | int | `10` |  |
 | registryReconcile.registries[3].name | string | `"system-skills-curated"` |  |
-| registryReconcile.registries[3].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills.json"` |  |
+| registryReconcile.registries[3].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/skills-curated.json"` |  |
 | registryReconcile.registries[3].recommendation_priority | int | `10` |  |
 | registryReconcile.registries[4].name | string | `"system-agents"` |  |
 | registryReconcile.registries[4].source_url | string | `"https://agentarea-mcp-registry.s3.amazonaws.com/registry/system/agents.json"` |  |

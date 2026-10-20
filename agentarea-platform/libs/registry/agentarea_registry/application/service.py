@@ -18,6 +18,7 @@ Entity-specific details (connection_type, source_type) live in spec JSONB.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -211,6 +212,23 @@ def _unpinned_pointer(spec: dict[str, Any] | None) -> tuple[str, str, str | None
     if not isinstance(source, dict) or source.get("type") != "github" or source.get("tree_sha"):
         return None
     return str(source.get("repo")), str(source.get("path") or ""), source.get("ref")
+
+
+def _keep_replaced_body(spec: dict[str, Any], previous: dict[str, Any] | None) -> None:
+    """Record in a GitHub pointer's ``spec`` the digest of the inline body it replaced.
+
+    Installs made from that body hold it; the repin moves an install to the
+    pointer's folder only while its SKILL.md is still exactly that body. The
+    digest is carried over by every later sync of the pointer.
+    """
+    if not isinstance(spec.get("source"), dict) or spec.get("content"):
+        return
+    previous = previous or {}
+    body = previous.get("content")
+    if isinstance(body, str) and body:
+        spec["replaced_body_sha256"] = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    elif isinstance(previous.get("replaced_body_sha256"), str):
+        spec["replaced_body_sha256"] = previous["replaced_body_sha256"]
 
 
 def _parse_untrusted(body: bytes) -> Any:
@@ -1010,6 +1028,8 @@ class RegistryService:
             external_id = item_data["external_id"]
             try:
                 existing = existing_by_id.get(external_id)
+                if registry.registry_type == "skills" and existing is not None:
+                    _keep_replaced_body(item_data.setdefault("spec", {}), existing.spec)
                 if mirror is not None:
                     item_data["spec"] = await self._mirrored_spec(
                         mirror, item_data.get("spec", {}), existing

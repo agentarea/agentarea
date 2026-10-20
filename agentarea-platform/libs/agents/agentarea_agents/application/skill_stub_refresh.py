@@ -11,8 +11,6 @@ skill at it, keeping its id, slug, name and agents.
 from __future__ import annotations
 
 import logging
-import posixpath
-import re
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -27,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agentarea_agents.application.skill_parser import SkillParser
 from agentarea_agents.application.skill_service import SkillService
+from agentarea_agents.application.skill_stub import REPO_NAME, StubSource, parse_stub
 from agentarea_agents.domain.skill_models import Skill, SkillSourceType
 from agentarea_agents.infrastructure.catalog_skill_repository import CatalogSkillRepository
 from agentarea_agents.infrastructure.github_skill_importer import (
@@ -41,26 +40,6 @@ from agentarea_agents.infrastructure.skill_storage_service import SkillStorageSe
 
 logger = logging.getLogger(__name__)
 
-STUB_MARKER = (
-    "Imported system skill metadata. The original SKILL.md should be reviewed before execution."
-)
-_STUB_FIELDS = ("Source", "Repository", "Path")
-_REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
-
-
-@dataclass(frozen=True)
-class StubSource:
-    """Where a stub says the original SKILL.md is."""
-
-    source_url: str
-    repo: str
-    path: str
-
-    @property
-    def folder(self) -> str:
-        path = self.path.strip("/")
-        return posixpath.dirname(path) if posixpath.basename(path).lower() == "skill.md" else path
-
 
 @dataclass
 class StubRefreshResult:
@@ -72,23 +51,6 @@ class StubRefreshResult:
     source_url: str | None = None
     commit: str | None = None
     detail: str | None = None
-
-
-def parse_stub(text: str) -> StubSource | None:
-    """The original a stub points at; ``None`` unless ``text`` carries the stub's
-    exact marker line followed by its Source, Repository and Path lines.
-    """
-    lines = [line.strip() for line in text.splitlines()]
-    if STUB_MARKER not in lines:
-        return None
-    fields: dict[str, str] = {}
-    for line in lines[lines.index(STUB_MARKER) + 1 :]:
-        key, sep, value = line.partition(": ")
-        if sep and key in _STUB_FIELDS and key not in fields:
-            fields[key] = value.strip()
-    if not all(fields.get(key) for key in _STUB_FIELDS):
-        return None
-    return StubSource(fields["Source"], fields["Repository"], fields["Path"])
 
 
 async def _stored_skill_md(storage: SkillStorageService, skill: Skill) -> str:
@@ -107,7 +69,7 @@ async def _stored_skill_md(storage: SkillStorageService, skill: Skill) -> str:
 
 async def _github_source(service: SkillService, skill: Skill, stub: StubSource) -> tuple[str, str]:
     """``(repo, folder)`` from the stub, else from its catalog item's GitHub source."""
-    if _REPO.fullmatch(stub.repo):
+    if REPO_NAME.fullmatch(stub.repo):
         return stub.repo, stub.folder
     if skill.registry_item_id is not None:
         item = await CatalogSkillRepository(

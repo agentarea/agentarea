@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
@@ -31,6 +32,7 @@ from agentarea_agents.application.skill_packages import (
     legacy_catalog_s3_path,
 )
 from agentarea_agents.application.skill_parser import SkillParser
+from agentarea_agents.application.skill_stub import bare_stub
 from agentarea_agents.domain.skill_models import Skill, SkillMember, SkillSourceType, SkillVersion
 from agentarea_agents.infrastructure.catalog_skill_repository import (
     CatalogSkillItem,
@@ -934,7 +936,9 @@ class SkillService:
         updated = await self._pin_to_catalog(skill, item)
         return SkillUpdateResult(str(skill_id), updated.name, "updated", updated)
 
-    async def _pin_to_catalog(self, skill: Skill, item: CatalogSkillItem) -> Skill:
+    async def _pin_to_catalog(
+        self, skill: Skill, item: CatalogSkillItem, *, reason: str = "update"
+    ) -> Skill:
         """Point ``skill`` at its item's current package and move the pin there.
 
         An edit it replaces stays in the skill's history: a pre-package copy is
@@ -953,7 +957,7 @@ class SkillService:
         updated = await self._get_repository().set_package(
             str(skill.id),
             package.s3_path,
-            reason="update",
+            reason=reason,
             catalog_version=pinned,
             source_url=package.source_url or (item.spec or {}).get("source_url"),
         )
@@ -975,8 +979,10 @@ class SkillService:
 
         Such an install copied its item's body (the stub an index carried)
         into the row, so it reads as edited. When the body is still exactly
-        what the item gave it, it is pinned to the item's current package in
-        place: same id, same agents. An edited body, or one the item no longer
+        what the item gave it, or the body its item's GitHub pointer replaced,
+        it is pinned to the item's current package in place: same id, same
+        agents, recorded as a ``repin``. An install pinned to the package of
+        such a body moves the same way. An edited body, or one the item no longer
         carries to compare with, is left alone; a gone item is reported.
 
         Raises:
@@ -992,20 +998,26 @@ class SkillService:
 
         if skill.registry_item_id is None:
             return result("not_installed")
-        if is_catalog_package(skill.s3_path):
-            return result("pinned")
         item = await self._get_catalog_repository().get_item(str(skill.registry_item_id))
-        if item is None:
+        if is_catalog_package(skill.s3_path):
+            if (
+                item is None
+                or item.version == item.installed_version
+                or await self._holds_the_body_its_item_replaced(skill, item) is not True
+            ):
+                return result("pinned")
+        elif item is None:
             return result("gone", "its catalog item is no longer listed")
-        as_installed = await self._holds_what_its_item_gave(skill, item)
-        if as_installed is None:
-            return result("unverified", "its catalog item no longer carries the body it gave")
-        if not as_installed:
-            return result("edited")
+        else:
+            as_installed = await self._holds_what_its_item_gave(skill, item)
+            if as_installed is None:
+                return result("unverified", "its catalog item no longer carries the body it gave")
+            if not as_installed:
+                return result("edited")
         if dry_run:
             return result("would_repin")
         try:
-            skill = await self._pin_to_catalog(skill, item)
+            skill = await self._pin_to_catalog(skill, item, reason="repin")
         except CatalogInstallRefusedError as e:
             return result("refused", str(e))
         except GitHubSourceGoneError as e:
@@ -1022,13 +1034,40 @@ class SkillService:
             return True
         body = spec.get("content")
         if not isinstance(body, str) or not body:
-            return None
+            return await self._holds_the_body_its_item_replaced(skill, item)
         if skill.s3_path is None:
             return skill.content == body
         if not (is_own_copy(skill) or is_workspace_package(skill.s3_path)):
             return False
         files = await self.storage_service.read_package(skill.s3_path)
         return files == {SKILL_MANIFEST: body.encode("utf-8")}
+
+    async def _holds_the_body_its_item_replaced(
+        self, skill: Skill, item: CatalogSkillItem
+    ) -> bool | None:
+        """Whether ``skill`` holds exactly the inline body its item's GitHub pointer replaced.
+
+        The sync that swapped the body for the pointer kept its digest; an item
+        replaced before digests were kept is matched against the stub an index
+        wrote for it (:func:`bare_stub`). ``None`` when neither tells.
+        """
+        spec = item.spec or {}
+        source = spec.get("source")
+        if not isinstance(source, dict) or source.get("type") != "github":
+            return None
+        files = await self.storage_service.read_package(skill.s3_path) if skill.s3_path else {}
+        if skill.content is not None:
+            files = {**files, SKILL_MANIFEST: skill.content.encode("utf-8")}
+        body = files.get(SKILL_MANIFEST) if list(files) == [SKILL_MANIFEST] else None
+        digest = spec.get("replaced_body_sha256")
+        if isinstance(digest, str):
+            return body is not None and hashlib.sha256(body).hexdigest() == digest
+        if body is None:
+            return None
+        stub = bare_stub(
+            body.decode("utf-8", errors="replace"), name=item.name, description=item.description
+        )
+        return True if stub is not None and stub.repo == source.get("repo") else None
 
     async def _resolve_for_edit(self, skill_id: UUID | str) -> Skill | None:
         """Resolve a skill id to an editable tenant row, forking if needed.

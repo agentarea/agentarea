@@ -69,7 +69,7 @@ async def test_a_stub_moved_into_a_workspace_package_is_repinned_and_kept_in_its
     assert result.status == "repinned"
     assert skill.s3_path.startswith("skills/catalog/")
     assert s3.under(own) == {"SKILL.md": STUB.encode()}
-    assert [v.reason for v in await repo.list_versions(skill.id)] == ["migrate", "update"]
+    assert [v.reason for v in await repo.list_versions(skill.id)] == ["migrate", "repin"]
 
 
 async def test_the_item_moved_to_a_folder_is_repinned_to_that_folder():

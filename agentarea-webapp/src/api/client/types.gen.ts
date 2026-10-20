@@ -7711,7 +7711,8 @@ export type SkillVersionResponse = {
     | "update"
     | "rollback"
     | "migrate"
-    | "refresh";
+    | "refresh"
+    | "repin";
 };
 
 /**

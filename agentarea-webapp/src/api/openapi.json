@@ -13502,7 +13502,8 @@
               "update",
               "rollback",
               "migrate",
-              "refresh"
+              "refresh",
+              "repin"
             ],
             "title": "Reason",
             "type": "string"
