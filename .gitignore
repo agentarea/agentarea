@@ -26,6 +26,8 @@ venv/
 env/
 ENV/
 .env
+# Local copies of .env, e.g. .env.bak-2026-10-07: they hold the same secrets.
+.env.bak*
 
 # IDE files
 .idea/
