@@ -7,6 +7,7 @@ services, implements the existence checker for preview status, and records an
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -64,7 +65,7 @@ class BundleService:
 
     async def analyze_text(self, text: str) -> ImportPreview:
         """Parse source text into a package and produce an import preview."""
-        package = parse_bundle(text)
+        package = await asyncio.to_thread(parse_bundle, text)
         return await self.analyze_bundle(package)
 
     async def analyze_bundle(self, package: Bundle) -> ImportPreview:

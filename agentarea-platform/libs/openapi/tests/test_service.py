@@ -1,6 +1,7 @@
 """Tests for OpenAPIConnectionService."""
 
 import json
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -1196,3 +1197,51 @@ async def test_a_spec_url_answering_anything_but_success_says_which(monkeypatch,
         await fetch_and_parse_spec(
             "http://127.0.0.1/swagger.json", policy=OutboundPolicy(allow_private=True)
         )
+
+
+def _merge_key_bomb(levels: int) -> str:
+    # Each level merges the one below twice, so composing doubles per level: a
+    # few hundred bytes take seconds at 22 levels and hours at 32.
+    lines = ["openapi: 3.0.0", "l0: &l0 {k: x}"]
+    lines += [f"l{i}: &l{i} {{<<: [*l{i - 1}, *l{i - 1}]}}" for i in range(1, levels + 1)]
+    return "\n".join(lines) + "\n"
+
+
+class TestUntrustedYamlSpec:
+    @pytest.mark.parametrize(
+        "spec_url",
+        ["http://127.0.0.1/openapi.yaml", "http://127.0.0.1/openapi"],
+    )
+    @pytest.mark.asyncio
+    async def test_a_merge_key_bomb_is_refused(self, spec_url, monkeypatch):
+        _serve(_merge_key_bomb(16), monkeypatch)
+
+        with pytest.raises(ValueError, match="not accepted"):
+            await fetch_and_parse_spec(spec_url, policy=OutboundPolicy(allow_private=True))
+
+    @pytest.mark.asyncio
+    async def test_aliases_are_refused(self, monkeypatch):
+        _serve("openapi: 3.0.0\na: &a [x]\nb: *a\n", monkeypatch)
+
+        with pytest.raises(ValueError, match="aliases"):
+            await fetch_and_parse_spec(
+                "http://127.0.0.1/openapi.yaml", policy=OutboundPolicy(allow_private=True)
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_yaml_spec_is_parsed_off_the_event_loop(self, monkeypatch):
+        _serve(BARE_DATE_YAML_SPEC, monkeypatch)
+        parse = service_module._load_yaml_spec
+        threads: list[str] = []
+
+        def recording(text: str):
+            threads.append(threading.current_thread().name)
+            return parse(text)
+
+        monkeypatch.setattr(service_module, "_load_yaml_spec", recording)
+
+        await fetch_and_parse_spec(
+            "http://127.0.0.1/openapi.yaml", policy=OutboundPolicy(allow_private=True)
+        )
+
+        assert threads and threads[0] != threading.main_thread().name

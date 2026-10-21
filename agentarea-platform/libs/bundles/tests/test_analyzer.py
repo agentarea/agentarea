@@ -336,3 +336,16 @@ policies:
     preview = await BundleAnalyzer().analyze(pkg)
 
     assert preview.installable is True
+
+
+def test_a_merge_key_bomb_is_refused():
+    lines = ["l0: &l0 {k: x}"]
+    lines += [f"l{i}: &l{i} {{<<: [*l{i - 1}, *l{i - 1}]}}" for i in range(1, 17)]
+
+    with pytest.raises(BundleParseError, match="not accepted"):
+        parse_bundle("\n".join(lines))
+
+
+def test_aliases_are_refused():
+    with pytest.raises(BundleParseError, match="aliases"):
+        parse_bundle("a: &a [x]\nb: *a\n")

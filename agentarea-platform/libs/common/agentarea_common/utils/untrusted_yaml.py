@@ -50,21 +50,33 @@ class _BoundedLoader(yaml.SafeLoader):
         super().flatten_mapping(node)
 
 
+class _TextTimestampLoader(_BoundedLoader):
+    pass
+
+
+_TextTimestampLoader.add_constructor(
+    "tag:yaml.org,2002:timestamp", _TextTimestampLoader.construct_yaml_str
+)
+
+
 def load_untrusted_yaml(
     text: str,
     *,
     max_nodes: int,
     max_bytes: int = DEFAULT_MAX_BYTES,
     max_depth: int = DEFAULT_MAX_DEPTH,
+    timestamps_as_text: bool = False,
 ) -> Any:
     """The single document in ``text``; ``UntrustedYamlError`` past a bound.
 
     CPU-bound in proportion to the budgets: a caller on an event loop with a
-    large budget runs it in a worker thread.
+    large budget runs it in a worker thread. ``timestamps_as_text`` keeps an
+    unquoted date as its source text, for documents stored as JSON.
     """
     if len(text.encode("utf-8")) > max_bytes:
         raise UntrustedYamlError(f"YAML is larger than {max_bytes} bytes")
-    loader = _BoundedLoader(text, max_nodes, max_depth)
+    loader_class = _TextTimestampLoader if timestamps_as_text else _BoundedLoader
+    loader = loader_class(text, max_nodes, max_depth)
     try:
         return loader.get_single_data()
     finally:
