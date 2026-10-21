@@ -559,6 +559,16 @@ class SkillsToolset(Toolset):
         skill_name: str = "",
         import_all: bool = False,
     ) -> str:
+        async with platform_read_context() as (_session, user_ctx, repo_factory, _broker, _secret):
+            from agentarea_agents.application.skill_service import SkillService
+
+            try:
+                await SkillService(
+                    repository_factory=repo_factory, user_context=user_ctx
+                ).require_github_import_allowed()
+            except CatalogInstallRefusedError as exc:
+                raise ToolError(str(exc)) from exc
+
         candidates: list[dict[str, str | None]] = []
         try:
             _repo_info, _branch, candidates = await _list_github_skill_candidates(github_url)
@@ -600,10 +610,6 @@ class SkillsToolset(Toolset):
             from agentarea_agents.application.skill_service import SkillService
 
             service = SkillService(repository_factory=repo_factory, user_context=_user_ctx)
-            try:
-                await service.require_github_import_allowed()
-            except CatalogInstallRefusedError as exc:
-                raise ToolError(str(exc)) from exc
             repo = service._get_repository()
             for candidate in selected:
                 try:
