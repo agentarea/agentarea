@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import {
   Banknote,
   Cpu,
@@ -7,7 +8,6 @@ import {
   KeyRound,
   RussianRuble,
 } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
 import type {
   CatalogComputeEstimate,
   CatalogItemPricingResponse,
@@ -15,11 +15,7 @@ import type {
 } from "@/api/client/types.gen";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import {
-  formatMoney,
-  formatPriceNumber,
-  isPerCall,
-} from "./catalog-pricing";
+import { formatMoney, formatPriceNumber, isPerCall } from "./catalog-pricing";
 
 /**
  * A tool price per call, or per the unit it is metered in: "0,04 / вызов" for
@@ -90,11 +86,7 @@ export function PriceChip({
 }
 
 /** "≈ 0,12 ₽/ч": what an hour of a hosted server's reserved compute costs. */
-export function ComputeChip({
-  compute,
-}: {
-  compute: CatalogComputeEstimate;
-}) {
+export function ComputeChip({ compute }: { compute: CatalogComputeEstimate }) {
   const t = useTranslations("CatalogPage.pricing");
   const locale = useLocale();
   if (compute.hourly == null || !compute.currency) return null;
