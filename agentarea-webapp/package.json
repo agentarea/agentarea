@@ -112,7 +112,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vite": "^8.1.6",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "@ai-sdk/provider-utils@<3.0.28": "3.0.28",
