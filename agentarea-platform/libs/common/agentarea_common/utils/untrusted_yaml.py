@@ -73,7 +73,7 @@ def load_untrusted_yaml(
     large budget runs it in a worker thread. ``timestamps_as_text`` keeps an
     unquoted date as its source text, for documents stored as JSON.
     """
-    if len(text.encode("utf-8")) > max_bytes:
+    if len(text.encode("utf-8", "surrogatepass")) > max_bytes:
         raise UntrustedYamlError(f"YAML is larger than {max_bytes} bytes")
     loader_class = _TextTimestampLoader if timestamps_as_text else _BoundedLoader
     loader = loader_class(text, max_nodes, max_depth)

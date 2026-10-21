@@ -1213,10 +1213,10 @@ class TestUntrustedYamlSpec:
         ["http://127.0.0.1/openapi.yaml", "http://127.0.0.1/openapi"],
     )
     @pytest.mark.asyncio
-    async def test_a_merge_key_bomb_is_refused(self, spec_url, monkeypatch):
+    async def test_a_merge_key_bomb_is_refused_at_its_first_alias(self, spec_url, monkeypatch):
         _serve(_merge_key_bomb(16), monkeypatch)
 
-        with pytest.raises(ValueError, match="not accepted"):
+        with pytest.raises(ValueError, match="aliases"):
             await fetch_and_parse_spec(spec_url, policy=OutboundPolicy(allow_private=True))
 
     @pytest.mark.asyncio
@@ -1245,3 +1245,12 @@ class TestUntrustedYamlSpec:
         )
 
         assert threads and threads[0] != threading.main_thread().name
+
+    @pytest.mark.asyncio
+    async def test_a_json_spec_nested_past_the_recursion_limit_is_refused(self, monkeypatch):
+        _serve("[" * 200_000, monkeypatch)
+
+        with pytest.raises(ValueError, match="nested too deeply"):
+            await fetch_and_parse_spec(
+                "http://127.0.0.1/openapi.json", policy=OutboundPolicy(allow_private=True)
+            )

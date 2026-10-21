@@ -157,6 +157,8 @@ async def fetch_and_parse_spec(
         return await _parse_yaml_spec(text)
     try:
         return json.loads(text)
+    except RecursionError as exc:
+        raise ValueError("The spec is nested too deeply") from exc
     except json.JSONDecodeError:
         return await _parse_yaml_spec(text)
 
