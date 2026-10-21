@@ -42,48 +42,50 @@ const ENTITY_ORDER: EntityKind[] = [
   "agent",
   "skill",
   "mcp",
+  "channel",
   "automation",
   "policy",
 ];
-const ENTITY_STATUS_KIND: Record<EntityStatus, StatusKind> = {
-  will_create: "queued",
-  already_exists: "active",
-  unsupported: "failed",
-};
+const ENTITY_STATUS: Record<EntityStatus, { kind: StatusKind; label: string }> =
+  {
+    will_create: { kind: "queued", label: "will create" },
+    will_update: { kind: "scheduled", label: "will update" },
+    unchanged: { kind: "active", label: "unchanged" },
+    orphaned: { kind: "attention", label: "orphaned" },
+    changes_not_applied: { kind: "attention", label: "changes not applied" },
+    already_exists: { kind: "active", label: "already exists" },
+    unsupported: { kind: "failed", label: "unsupported" },
+  };
 
 function EntityStatusChip({ status }: { status: EntityStatus }) {
-  const label =
-    status === "will_create"
-      ? "will create"
-      : status === "already_exists"
-        ? "already exists"
-        : "unsupported";
-
   return (
-    <StatusIndicator kind={ENTITY_STATUS_KIND[status]} size="sm">
-      {label}
+    <StatusIndicator kind={ENTITY_STATUS[status].kind} size="sm">
+      {ENTITY_STATUS[status].label}
     </StatusIndicator>
   );
 }
 
+const ACTION_CHIP_TONE: Record<InstallAction, string> = {
+  created:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  updated:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  reused: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  orphaned:
+    "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  unchanged: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  skipped: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+};
+
 function ActionChip({ action }: { action: InstallAction }) {
-  if (action === "created") {
-    return (
-      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-        created
-      </span>
-    );
-  }
-  if (action === "reused") {
-    return (
-      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-        reused
-      </span>
-    );
-  }
   return (
-    <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-      skipped
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-[10px] font-medium",
+        ACTION_CHIP_TONE[action]
+      )}
+    >
+      {action}
     </span>
   );
 }

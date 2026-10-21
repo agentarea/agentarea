@@ -47,7 +47,21 @@ export function formatApiError(value: unknown) {
       if (messages.length > 0) return messages.join(", ");
     }
 
-    if (typeof record.detail === "string") return record.detail;
+    if (typeof record.detail === "string") {
+      // A problem body may carry its causes under the `issues` extension.
+      const issues = Array.isArray(record.issues)
+        ? record.issues
+            .map((issue) =>
+              issue && typeof issue === "object"
+                ? (issue as Record<string, unknown>).message
+                : undefined
+            )
+            .filter((message): message is string => typeof message === "string")
+        : [];
+      return issues.length > 0
+        ? `${record.detail}: ${issues.join(", ")}`
+        : record.detail;
+    }
     if (Array.isArray(record.detail)) {
       return record.detail.map(itemMessage).join(", ");
     }

@@ -120,6 +120,7 @@
               "guides/agents/choose-a-model",
               "guides/agents/attach-skills",
               "guides/agents/add-a-skill-registry",
+              "guides/agents/deploy-from-a-folder",
               "guides/agents/delegate-to-another-workspace"
             ]
           },

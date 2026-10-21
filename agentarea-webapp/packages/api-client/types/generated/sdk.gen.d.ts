@@ -660,6 +660,10 @@ export declare const getBalanceV1BalanceGet: <ThrowOnError extends boolean = fal
  * Analyze Bundle
  *
  * Parse and analyze a bundle source, returning a non-destructive preview.
+ *
+ * For a bundle installed here before, each entity's status is a plan against
+ * that install: will_create, will_update, unchanged, orphaned (kept, not
+ * deleted), or changes_not_applied for a changed MCP server or GitHub skill.
  */
 export declare const analyzeBundleV1BundlesAnalyzePost: <ThrowOnError extends boolean = false>(options: Options<AnalyzeBundleV1BundlesAnalyzePostData, ThrowOnError>) => RequestResult<AnalyzeBundleV1BundlesAnalyzePostResponses, AnalyzeBundleV1BundlesAnalyzePostErrors, ThrowOnError>;
 /**
@@ -667,6 +671,8 @@ export declare const analyzeBundleV1BundlesAnalyzePost: <ThrowOnError extends bo
  *
  * Install a canonical bundle: MCP instances, skills, agents and automations.
  *
+ * A bundle installed here before is redeployed: what it created is updated in
+ * place where the plan says so, and what it no longer declares is kept.
  * All or nothing: a failure removes whatever this install had created. A
  * bundle or setup value that is invalid answers 422 (``code: bundle_invalid``);
  * any other install failure answers 400 (``code: bundle_install_failed``). Both

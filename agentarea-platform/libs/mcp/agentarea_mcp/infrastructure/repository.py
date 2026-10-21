@@ -81,6 +81,11 @@ class MCPServerRepository(WorkspaceScopedRepository[MCPServer]):
         """Get the read-only catalog (registry_items) repository for MCP specs."""
         return CatalogMcpRepository(session=self.session, user_context=self.user_context)
 
+    async def get_catalog_server(self, external_id: str) -> MCPServer | None:
+        """The catalog spec published under ``external_id``, as a read-only projection."""
+        item = await self._get_catalog_repository().get_by_external_id(external_id)
+        return _project_catalog_mcp_server(item) if item else None
+
     @staticmethod
     async def get_for_package_import(session: AsyncSession, server_id: str) -> MCPServer | None:
         """Load the linked server row for a package-import attempt."""

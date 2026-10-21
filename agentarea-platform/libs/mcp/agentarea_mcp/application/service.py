@@ -275,6 +275,10 @@ class MCPServerService(BaseCrudService[MCPServer]):
         """Get an MCP server spec by workspace-scoped slug."""
         return await self.repository.get_by_slug(slug)
 
+    async def get_catalog_server(self, external_id: str) -> MCPServer | None:
+        """The catalog spec published under ``external_id`` (e.g. ``ru.yookassa/mcp``)."""
+        return await self.repository.get_catalog_server(external_id)
+
     @audited("mcp_server.create", resource_type="mcp_server")
     async def create_mcp_server(self, payload: MCPServerCreate) -> MCPServer:
         refusal = _spec_endpoint_refusal(payload.remote_url, payload.json_spec)

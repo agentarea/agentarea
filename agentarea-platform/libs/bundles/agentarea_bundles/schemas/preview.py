@@ -20,7 +20,11 @@ class EntityKind(StrEnum):
 
 class EntityStatus(StrEnum):
     WILL_CREATE = "will_create"
-    ALREADY_EXISTS = "already_exists"
+    WILL_UPDATE = "will_update"  # installed by this bundle before; its spec changed
+    UNCHANGED = "unchanged"  # installed by this bundle before; spec is the same
+    ORPHANED = "orphaned"  # installed by this bundle before; gone from it now, kept in place
+    CHANGES_NOT_APPLIED = "changes_not_applied"  # changed, but this kind is not updated
+    ALREADY_EXISTS = "already_exists"  # same-name entity this bundle did not create; reused
     UNSUPPORTED = "unsupported"
 
 

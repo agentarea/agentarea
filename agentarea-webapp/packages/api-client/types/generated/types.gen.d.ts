@@ -567,11 +567,28 @@ export type AnalyticsResponse = {
  *
  * Analyze a bundle into an import preview.
  *
- * Provide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the
- * server fetches behind the SSRF guard). ``source_url`` is what a landing-page
- * deep-link (`/bundles/import?src=<url>`) uses for one-click installs.
+ * Provide exactly one of ``source`` (pasted text), ``source_url`` (a URL the
+ * server fetches behind the SSRF guard) or ``files`` (an agent folder).
+ * ``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)
+ * uses for one-click installs; ``files`` is what ``agentarea deploy`` sends.
  */
 export type AnalyzeRequest = {
+    /**
+     * Files
+     *
+     * An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.
+     */
+    files?: {
+        [key: string]: string;
+    } | null;
+    /**
+     * Setup Values
+     *
+     * Setup values the install will be given, so a redeploy plan shows what a changed value updates.
+     */
+    setup_values?: {
+        [key: string]: unknown;
+    };
     /**
      * Source
      *
@@ -1126,6 +1143,10 @@ export type BundleOutput = {
  */
 export type BundleAgent = {
     /**
+     * Description
+     */
+    description?: string;
+    /**
      * Instruction
      */
     instruction?: string;
@@ -1270,6 +1291,12 @@ export type BundleMcp = {
         [key: string]: string;
     };
     /**
+     * Catalog
+     *
+     * Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.
+     */
+    catalog?: string | null;
+    /**
      * Context Secret
      *
      * URL MCPs only. A ${setup.x} reference to a secret setup field whose value becomes the instance's context_secret: the key AgentArea signs each tool call's context with. Write-only, like a header secret.
@@ -1280,9 +1307,9 @@ export type BundleMcp = {
      *
      * Native MCP runtime spec. Must include 'type' (command|docker|url).
      */
-    json_spec: {
+    json_spec?: {
         [key: string]: unknown;
-    };
+    } | null;
     /**
      * Key
      *
@@ -1410,6 +1437,14 @@ export type BundleSkill = {
      */
     content?: string | null;
     /**
+     * Files
+     *
+     * Package files for source_type=files: relative path -> UTF-8 text, SKILL.md at the root.
+     */
+    files?: {
+        [key: string]: string;
+    } | null;
+    /**
      * Key
      */
     key: string;
@@ -1420,7 +1455,7 @@ export type BundleSkill = {
     /**
      * Source Type
      */
-    source_type?: 'content' | 'github';
+    source_type?: 'content' | 'files' | 'github';
     /**
      * Source Url
      *
@@ -2368,7 +2403,7 @@ export type EntityKind = 'mcp' | 'skill' | 'agent' | 'channel' | 'automation' | 
 /**
  * EntityStatus
  */
-export type EntityStatus = 'will_create' | 'already_exists' | 'unsupported';
+export type EntityStatus = 'will_create' | 'will_update' | 'unchanged' | 'orphaned' | 'changes_not_applied' | 'already_exists' | 'unsupported';
 /**
  * EscalationResolution
  */
@@ -3104,7 +3139,7 @@ export type InputSecretValue = {
 /**
  * InstallAction
  */
-export type InstallAction = 'created' | 'reused' | 'skipped';
+export type InstallAction = 'created' | 'updated' | 'unchanged' | 'orphaned' | 'reused' | 'skipped';
 /**
  * InstallRequest
  *
@@ -3137,6 +3172,14 @@ export type InstallResult = {
      * Installed Bundle Id
      */
     installed_bundle_id?: string | null;
+    /**
+     * Setup Values
+     *
+     * Non-secret setup values supplied to installs of this bundle, reused on redeploy.
+     */
+    setup_values?: {
+        [key: string]: unknown;
+    };
 };
 /**
  * InstalledEntity
@@ -3147,6 +3190,12 @@ export type InstalledEntity = {
      * Detail
      */
     detail?: string | null;
+    /**
+     * Fingerprint
+     *
+     * sha256 of the resolved non-secret spec last applied; a redeploy diffs on it.
+     */
+    fingerprint?: string | null;
     /**
      * Id
      *

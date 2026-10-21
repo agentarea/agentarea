@@ -23,6 +23,7 @@ import {
 } from './commands/router.js';
 import {flushAndExit} from './commands/output.js';
 import {runFilesSync} from './commands/filesSync.js';
+import {runDeploy, runInit} from './commands/deploy.js';
 
 interface CliOptions {
 	token?: string;
@@ -63,6 +64,10 @@ export async function handleCliCommand(
 
 	if (command === 'logout') {
 		return runLogout();
+	}
+
+	if (command === 'init') {
+		await flushAndExit(await runInit(subcommand));
 	}
 
 	if (command === 'workspace' && subcommand === 'use') {
@@ -142,6 +147,17 @@ export async function handleCliCommand(
 		}
 
 		await flushAndExit(await runFilesSync(pathArgs[0], pathArgs[1], rawFlags));
+	}
+
+	if (command === 'deploy') {
+		if (!loadedToken) {
+			console.error(
+				'Not signed in. Run `agentarea login --api-url=<api>` first (or pass --token).',
+			);
+			await flushAndExit(1);
+		}
+
+		await flushAndExit(await runDeploy(subcommand, rawFlags));
 	}
 
 	if (command === 'connect' || (command === 'mcp' && subcommand === 'sync')) {

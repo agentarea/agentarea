@@ -276,3 +276,16 @@ async def test_tool_model_settings_are_validated_on_update(session_factory):
                 agent.id,
                 AgentUpdate(tools=[_code_tool("agentarea/media", image_model_id=str(chat.id))]),
             )
+
+
+async def test_a_config_is_checked_without_writing_an_agent(session_factory):
+    """What create_agent refuses about the model and code tools, asked before any write."""
+    async with session_factory() as session:
+        service = _service(session, _context())
+        instance = await _seed_model_instance(session)
+
+        await service.validate_config(str(instance.id), [_code_tool("agentarea/web")])
+        with pytest.raises(InvalidModelIdError, match="expected the UUID"):
+            await service.validate_config("gpt-4o", [])
+        with pytest.raises(InvalidModelIdError, match="needs image_model_id"):
+            await service.validate_config(str(instance.id), [_code_tool("agentarea/media")])

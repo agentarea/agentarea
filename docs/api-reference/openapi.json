@@ -1129,8 +1129,29 @@
         "type": "object"
       },
       "AnalyzeRequest": {
-        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text) or ``source_url`` (a URL the\nserver fetches behind the SSRF guard). ``source_url`` is what a landing-page\ndeep-link (`/bundles/import?src=<url>`) uses for one-click installs.",
+        "description": "Analyze a bundle into an import preview.\n\nProvide exactly one of ``source`` (pasted text), ``source_url`` (a URL the\nserver fetches behind the SSRF guard) or ``files`` (an agent folder).\n``source_url`` is what a landing-page deep-link (`/bundles/import?src=<url>`)\nuses for one-click installs; ``files`` is what ``agentarea deploy`` sends.",
         "properties": {
+          "files": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An agent folder: relative POSIX path -> UTF-8 file text, rooted at agent.yaml. 5MB total.",
+            "title": "Files"
+          },
+          "setup_values": {
+            "additionalProperties": true,
+            "description": "Setup values the install will be given, so a redeploy plan shows what a changed value updates.",
+            "title": "Setup Values",
+            "type": "object"
+          },
           "source": {
             "anyOf": [
               {
@@ -2160,6 +2181,12 @@
         "additionalProperties": false,
         "description": "An agent to create for the package.",
         "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
           "instruction": {
             "default": "",
             "maxLength": 20000,
@@ -2345,6 +2372,19 @@
             "title": "Bindings",
             "type": "object"
           },
+          "catalog": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Id of a catalog MCP server, e.g. 'ru.yookassa/mcp' or 'io.github.owner/server/command'. Set this or json_spec.",
+            "title": "Catalog"
+          },
           "context_secret": {
             "anyOf": [
               {
@@ -2358,10 +2398,17 @@
             "title": "Context Secret"
           },
           "json_spec": {
-            "additionalProperties": true,
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Native MCP runtime spec. Must include 'type' (command|docker|url).",
-            "title": "Json Spec",
-            "type": "object"
+            "title": "Json Spec"
           },
           "key": {
             "description": "In-package reference key (agents point at this).",
@@ -2379,8 +2426,7 @@
         },
         "required": [
           "key",
-          "name",
-          "json_spec"
+          "name"
         ],
         "title": "BundleMcp",
         "type": "object"
@@ -2568,6 +2614,21 @@
             "description": "SKILL.md markdown for source_type=content.",
             "title": "Content"
           },
+          "files": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Package files for source_type=files: relative path -> UTF-8 text, SKILL.md at the root.",
+            "title": "Files"
+          },
           "key": {
             "minLength": 1,
             "title": "Key",
@@ -2583,6 +2644,7 @@
             "default": "content",
             "enum": [
               "content",
+              "files",
               "github"
             ],
             "title": "Source Type",
@@ -4442,6 +4504,10 @@
       "EntityStatus": {
         "enum": [
           "will_create",
+          "will_update",
+          "unchanged",
+          "orphaned",
+          "changes_not_applied",
           "already_exists",
           "unsupported"
         ],
@@ -5641,6 +5707,9 @@
       "InstallAction": {
         "enum": [
           "created",
+          "updated",
+          "unchanged",
+          "orphaned",
           "reused",
           "skipped"
         ],
@@ -5690,6 +5759,12 @@
               }
             ],
             "title": "Installed Bundle Id"
+          },
+          "setup_values": {
+            "additionalProperties": true,
+            "description": "Non-secret setup values supplied to installs of this bundle, reused on redeploy.",
+            "title": "Setup Values",
+            "type": "object"
           }
         },
         "required": [
@@ -5714,6 +5789,18 @@
               }
             ],
             "title": "Detail"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "sha256 of the resolved non-secret spec last applied; a redeploy diffs on it.",
+            "title": "Fingerprint"
           },
           "id": {
             "anyOf": [
@@ -24469,7 +24556,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/analyze": {
       "post": {
-        "description": "Parse and analyze a bundle source, returning a non-destructive preview.",
+        "description": "Parse and analyze a bundle source, returning a non-destructive preview.\n\nFor a bundle installed here before, each entity's status is a plan against\nthat install: will_create, will_update, unchanged, orphaned (kept, not\ndeleted), or changes_not_applied for a changed MCP server or GitHub skill.",
         "operationId": "analyze_bundle_v1_bundles_analyze_post",
         "parameters": [
           {
@@ -24533,7 +24620,7 @@
     },
     "/v1/workspaces/{workspace}/bundles/install": {
       "post": {
-        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422 (``code: bundle_invalid``);\nany other install failure answers 400 (``code: bundle_install_failed``). Both\nare problem+json with the message in ``detail`` and the blocking ``issues``.",
+        "description": "Install a canonical bundle: MCP instances, skills, agents and automations.\n\nA bundle installed here before is redeployed: what it created is updated in\nplace where the plan says so, and what it no longer declares is kept.\nAll or nothing: a failure removes whatever this install had created. A\nbundle or setup value that is invalid answers 422 (``code: bundle_invalid``);\nany other install failure answers 400 (``code: bundle_install_failed``). Both\nare problem+json with the message in ``detail`` and the blocking ``issues``.",
         "operationId": "install_bundle_v1_bundles_install_post",
         "parameters": [
           {

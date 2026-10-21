@@ -210,6 +210,11 @@ class AgentService(BaseCrudService[Agent]):
             )
         return model_id
 
+    async def validate_config(self, model_id: str | None, tools: list[dict[str, Any]]) -> None:
+        """Refuse what create_agent would refuse about the model and code tools, writing nothing."""
+        await self._validate_tool_models(tools)
+        await self._validate_model_id(model_id)
+
     async def _model_instance_kind(self, model_id: str, setting: str) -> str:
         """The kind of the workspace's model instance ``model_id``, or reject it."""
         try:
