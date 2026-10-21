@@ -23,7 +23,10 @@ metadata:
 # could publish a sandbox (Services) or run something beside it (pods), and no
 # Secret access, since AgentArea's sandbox images need no per-sandbox pull
 # credentials. SandboxSnapshots are only watched: the server opens that watch on
-# its namespace at start, and AgentArea takes no snapshots.
+# its namespace at start, and AgentArea takes no snapshots. The same holds for
+# the fast-sandbox (sandbox.fast.io) objects the server lists beside
+# BatchSandboxes: without those CRDs a permitted read is an empty list, a
+# forbidden one fails every sandbox list with 503.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -40,6 +43,9 @@ rules:
     verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [sandbox.opensandbox.io]
     resources: [sandboxsnapshots]
+    verbs: [get, list, watch]
+  - apiGroups: [sandbox.fast.io]
+    resources: [sandboxes, sandboxsnapshots]
     verbs: [get, list, watch]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
