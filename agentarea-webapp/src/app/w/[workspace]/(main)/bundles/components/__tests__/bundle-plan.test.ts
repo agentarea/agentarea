@@ -156,6 +156,28 @@ describe("install request", () => {
     ).toEqual([["no-delete", true]]);
   });
 
+  it("drops a policy whose agent is left out, keeps workspace-wide ones", () => {
+    const p = preview({
+      policies: [
+        {
+          key: "no-delete",
+          subject: "researcher",
+          target: "tool:delete_*",
+          effect: "deny",
+        },
+        { key: "budget", subject: "workspace", target: "spend", effect: "deny" },
+      ],
+    });
+    const edit = bundleEditReducer(initialEdit(p, models), {
+      type: "toggleAgent",
+      key: "researcher",
+      on: false,
+    });
+    expect(
+      buildInstallRequest(p, edit, true).bundle.policies?.map((x) => x.key)
+    ).toEqual(["budget"]);
+  });
+
   it("fills a model setup field the picker owns", () => {
     const p = preview();
     p.setup = [

@@ -23,7 +23,7 @@ test.describe("Scenario 10 MP - analyze and install a bundle", () => {
     if (user) await deleteKratosUser(user.identityId);
   });
 
-  test("pastes a bundle source, runs analysis, and expects review before install", async ({
+  test("pastes a bundle source, sets it up and starts its agent", async ({
     context,
     page,
   }) => {
@@ -58,11 +58,13 @@ test.describe("Scenario 10 MP - analyze and install a bundle", () => {
     );
     await page.getByRole("button", { name: "Analyze Package" }).click();
 
-    await expect(page.getByText("What will be installed")).toBeVisible({
+    // The same plan the catalog shows, then Start. One agent and nothing left
+    // to finish: the agent's chat opens straight away.
+    await expect(page.getByText(agentName).first()).toBeVisible({
       timeout: 25_000,
     });
-    await page.getByRole("button", { name: "Install Package" }).click();
-    await expect(page.getByText("Package installed successfully")).toBeVisible({
+    await page.getByRole("button", { name: /^\s*start\s*$/i }).click();
+    await expect(page).toHaveURL(/\/agents\/[^/]+\/new-task/, {
       timeout: 25_000,
     });
 

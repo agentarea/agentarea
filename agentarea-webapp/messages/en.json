@@ -3404,7 +3404,32 @@
     "skillInstallFailed": "Couldn't add the skill",
     "skillAttachFailed": "Couldn't add the skill to {agent}",
     "start": "Start",
-    "installBundle": "Install bundle"
+    "installBundle": "Install bundle",
+    "launch": {
+      "installed": "{name} is installed",
+      "agentsTitle": "Agents · {count}",
+      "agentsHint": "Each agent runs on its own. Open a chat to give one its first task.",
+      "openChat": "Open chat",
+      "todoTitle": "Left to finish · {count}",
+      "off_channel": "Channel is off. Turn it on once the bot is set up.",
+      "off_automation": "Schedule is off. Turn it on when you want it to run.",
+      "open": "Open",
+      "connectionsTitle": "Connections · {count}",
+      "connectionsHint": "Check that each one is authorized before an agent relies on it.",
+      "allAgents": "All agents",
+      "done": "Done",
+      "skippedTitle": "Not installed · {count}"
+    },
+    "target": {
+      "label": "Install into",
+      "notAdmin": "policies need an admin"
+    },
+    "importBack": "Back",
+    "importTitle": "Set up {name}",
+    "pasteLabel": "Package Source",
+    "pastePlaceholder": "Paste your agent package YAML or JSON here...",
+    "pasteHint": "Paste a valid agent package definition in YAML or JSON format.",
+    "analyze": "Analyze Package"
   },
   "ProjectOverviewPage": {
     "loadFailed": "Couldn't load the project",

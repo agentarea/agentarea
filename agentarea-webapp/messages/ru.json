@@ -3404,7 +3404,32 @@
     "skillInstallFailed": "Не удалось добавить навык",
     "skillAttachFailed": "Не удалось добавить навык агенту {agent}",
     "start": "Запустить",
-    "installBundle": "Установить бандл"
+    "installBundle": "Установить бандл",
+    "launch": {
+      "installed": "{name} установлен",
+      "agentsTitle": "Агенты · {count}",
+      "agentsHint": "Каждый агент работает сам по себе. Откройте чат, чтобы дать первую задачу.",
+      "openChat": "Открыть чат",
+      "todoTitle": "Осталось доделать · {count}",
+      "off_channel": "Канал выключен. Включите, когда бот настроен.",
+      "off_automation": "Расписание выключено. Включите, когда оно должно заработать.",
+      "open": "Открыть",
+      "connectionsTitle": "Подключения · {count}",
+      "connectionsHint": "Проверьте, что каждое авторизовано, прежде чем агент начнёт на него полагаться.",
+      "allAgents": "Все агенты",
+      "done": "Готово",
+      "skippedTitle": "Не установлено · {count}"
+    },
+    "target": {
+      "label": "Куда установить",
+      "notAdmin": "для политик нужен админ"
+    },
+    "importBack": "Назад",
+    "importTitle": "Настройка: {name}",
+    "pasteLabel": "Исходник пакета",
+    "pastePlaceholder": "Вставьте YAML или JSON пакета агентов...",
+    "pasteHint": "Вставьте определение пакета агентов в формате YAML или JSON.",
+    "analyze": "Проанализировать пакет"
   },
   "ProjectOverviewPage": {
     "loadFailed": "Не удалось загрузить проект",
