@@ -435,6 +435,7 @@ async def test_stopping_a_run_booked_for_later_records_it_cancelled_as_its_user(
     assert closing.user_context_data == {
         "user_id": "stop-user",
         "workspace_id": "stop-workspace",
+        "agent_id": str(uuid.UUID(int=9)),
     }
 
 
