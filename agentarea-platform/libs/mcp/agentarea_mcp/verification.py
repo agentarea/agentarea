@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import httpx
+from agentarea_common.analytics import count
 from agentarea_common.config import get_database, get_settings
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from mcp import MCPError
@@ -333,6 +334,7 @@ async def verify(
                 )
                 locked.verification = dict(payload)
                 await sess.flush()
+                count("connector_check", kind="mcp", outcome="server_spec_not_found")
                 return payload
 
             runtime_instance = _RuntimeInstance(locked, server_spec)
@@ -451,6 +453,7 @@ async def verify(
                         "tools_count": len(tools),
                     },
                 )
+                count("connector_check", kind="mcp", outcome="ok")
                 return payload
 
             except BaseException as e:
@@ -499,6 +502,7 @@ async def verify(
                             "error_code": "upstream_unauthorized",
                         },
                     )
+                    count("connector_check", kind="mcp", outcome="upstream_unauthorized")
                     return payload
 
                 # MCP protocol-level error — fail fast, no retry.
@@ -540,6 +544,7 @@ async def verify(
                     },
                     exc_info=True,
                 )
+                count("connector_check", kind="mcp", outcome="mcp_error")
                 return payload
 
         # Deadline exhausted. The gateway already owns runtime health and
@@ -569,6 +574,7 @@ async def verify(
                 "error_code": error_code,
             },
         )
+        count("connector_check", kind="mcp", outcome=error_code)
         return payload
 
     if session is not None:

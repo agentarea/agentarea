@@ -11,6 +11,7 @@ from pathlib import Path
 for _noisy_logger in ("LiteLLM", "LiteLLM Proxy", "LiteLLM Router", "httpcore", "httpx"):
     logging.getLogger(_noisy_logger).setLevel(logging.WARNING)
 
+from agentarea_common import __version__
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.di.container import get_container, register_factory, register_singleton
 from agentarea_common.events.broker import EventBroker
@@ -77,6 +78,11 @@ async def initialize_services():
         from agentarea_common.config import get_settings
 
         settings = get_settings()
+
+        if settings.analytics.ENABLED:
+            from agentarea_common.analytics import NOTICE
+
+            logger.info(NOTICE)
 
         # Shared graph client (used by the rebac API + PermissionService).
         openfga_client = None
@@ -241,12 +247,17 @@ async def app_lifespan(app: FastAPI):
     dispatch_stamps = DispatchStampWriter(get_database().async_session_factory)
     await dispatch_stamps.start()
 
+    from agentarea_common.analytics import start_analytics, stop_analytics
+
+    await start_analytics(get_database().async_session_factory)
+
     logger.info("Application started successfully")
 
     try:
         yield
     finally:
         await dispatch_stamps.stop()
+        await stop_analytics()
 
         if metrics_server is not None:
             metrics_server.shutdown()
@@ -369,7 +380,7 @@ def create_app() -> FastAPI:
             "Public endpoints include /, /health, /docs, /redoc, and "
             "/openapi.json."
         ),
-        version="0.1.0",
+        version=__version__,
         lifespan=_lifespan,
         openapi_tags=[
             {"name": "agents", "description": "Operations with AI agents"},
@@ -631,6 +642,7 @@ def create_app() -> FastAPI:
         """Health check endpoint."""
         return {
             "status": "healthy",
+            "version": __version__,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -712,7 +724,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "agentarea-api",
-        "version": "0.1.0",
+        "version": __version__,
         "connections": connection_health,
         "timestamp": datetime.now().isoformat(),
     }

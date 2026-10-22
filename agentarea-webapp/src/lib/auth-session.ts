@@ -80,9 +80,8 @@ interface WhoamiResult {
 }
 
 /**
- * Shared whoami call behind both `hasLiveSession` and
- * `getLiveSessionIdentityId`, so the two never drift on what counts as
- * "live" (tokenize_as=agentarea_jwt succeeding).
+ * The whoami call behind `getLiveSessionIdentityId`: "live" means
+ * tokenize_as=agentarea_jwt succeeds.
  *
  * The `fetchImpl` parameter exists purely for testability.
  */
@@ -134,22 +133,9 @@ async function fetchWhoami(
 }
 
 /**
- * Returns true only when the forwarded cookies resolve to a live Kratos
- * session that can be tokenized as an agentarea JWT.
- */
-export async function hasLiveSession(
-  cookieHeader: string | null,
-  opts: { orySdkUrl: string; fetchImpl?: typeof fetch }
-): Promise<boolean> {
-  const { tokenized } = await fetchWhoami(cookieHeader, opts);
-  return tokenized;
-}
-
-/**
  * Returns the Kratos identity id for a live session, or null when there is
  * none. Callers that need to check "is this session allowed to act on
- * resource X owned by identity Y" — not just "is someone logged in" — use
- * this instead of `hasLiveSession`.
+ * resource X owned by identity Y", and the proxy's login gate, use this.
  */
 export async function getLiveSessionIdentityId(
   cookieHeader: string | null,

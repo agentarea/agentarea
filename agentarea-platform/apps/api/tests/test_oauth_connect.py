@@ -787,6 +787,68 @@ async def test_authorize_uses_the_configured_platform_app_first(
     assert "platform-secret" not in json.dumps(vars(stored_state.await_args.args[1]))
 
 
+def _counted(monkeypatch) -> list[dict[str, str]]:
+    """Every ``oauth_connect`` count, as its labels."""
+    counted: list[dict[str, str]] = []
+    monkeypatch.setattr(service, "count", lambda _name, **labels: counted.append(labels))
+    return counted
+
+
+@pytest.mark.asyncio
+async def test_analytics_names_the_provider_of_a_configured_platform_app(
+    monkeypatch, platform_apps
+):
+    instance = _patch_instance_lookup(monkeypatch, remote_url=_GITHUB_MCP_URL)
+    _patch_discovery(monkeypatch, _github_metadata())
+    platform_apps.append(_github_app())
+    _patch_authorize(monkeypatch)
+    counted = _counted(monkeypatch)
+
+    await _authorize(OAuthAuthorizeRequest(instance_id=instance.id))
+
+    assert counted == [{"provider": "github.com", "outcome": "started"}]
+
+
+def _internal_metadata() -> AuthServerMetadata:
+    return AuthServerMetadata(
+        issuer="https://sso.corp.acme.internal",
+        authorization_endpoint="https://sso.corp.acme.internal/authorize",
+        token_endpoint="https://sso.corp.acme.internal/token",  # noqa: S106
+        registration_endpoint="https://sso.corp.acme.internal/register",
+        scopes_supported=[],
+        resource="https://mcp.corp.acme.internal/mcp",
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("platform_app", [False, True], ids=["dcr", "platform-app"])
+async def test_analytics_counts_an_internal_authorization_server_as_custom(
+    monkeypatch, platform_apps, platform_app
+):
+    """Only a public provider is named: an internal host stays unnamed even when the
+    operator configured it as a platform app."""
+    instance = _patch_instance_lookup(monkeypatch, remote_url="https://mcp.corp.acme.internal/mcp")
+    _patch_discovery(monkeypatch, _internal_metadata())
+    if platform_app:
+        platform_apps.append(
+            {
+                "issuer": "https://sso.corp.acme.internal",
+                "client_id": "internal",
+                "client_secret": "internal-secret",  # pragma: allowlist secret
+                "authorization_endpoint": "https://sso.corp.acme.internal/authorize",
+                "token_endpoint": "https://sso.corp.acme.internal/token",
+                "resource_origins": ["https://mcp.corp.acme.internal"],
+            }
+        )
+    _patch_authorize(monkeypatch)
+    _patch_registration(monkeypatch)
+    counted = _counted(monkeypatch)
+
+    await _authorize(OAuthAuthorizeRequest(instance_id=instance.id))
+
+    assert counted == [{"provider": "custom", "outcome": "started"}]
+
+
 @pytest.mark.asyncio
 async def test_a_custom_app_overrides_the_platform_app(monkeypatch, platform_apps):
     instance = _patch_instance_lookup(monkeypatch, remote_url=_GITHUB_MCP_URL)
@@ -1118,11 +1180,13 @@ def _flow(**overrides) -> OAuthState:
 class _Callback:
     """The callback's and the finish's collaborators, faked; records what they parked and attached."""
 
-    def __init__(self, monkeypatch, flow: OAuthState | None, *, exchange=None):
+    def __init__(
+        self, monkeypatch, flow: OAuthState | None, *, exchange=None, auth_config=None
+    ):
         self.flow = flow
         self.parked: list[tuple[str, ReturnedFlow]] = []
         self.exchange = exchange or AsyncMock()
-        self.auth_config = SimpleNamespace(id=uuid4())
+        self.auth_config = SimpleNamespace(id=uuid4(), config=auth_config or {})
         self.instance_update = AsyncMock()
         self.connection_update = AsyncMock(return_value=SimpleNamespace())
         self.after_connect = []
@@ -1557,3 +1621,60 @@ async def test_post_oauth_discovery_failure_is_logged_with_traceback(monkeypatch
         )
 
     assert [r for r in caplog.records if r.exc_info and "discovery" in r.getMessage()], caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("issuer_config", "provider"),
+    [
+        ({"platform_oauth_issuer": _GITHUB_ISSUER, "credential_mode": "managed"}, "github.com"),
+        ({"issuer": _GITHUB_ISSUER, "credential_mode": "custom"}, "github.com"),
+        ({"issuer": "https://sso.corp.acme.internal", "credential_mode": "dynamic"}, "custom"),
+        ({}, "custom"),
+    ],
+    ids=["platform-app", "custom-app-for-a-platform-issuer", "unconfigured-issuer", "no-issuer"],
+)
+async def test_analytics_names_a_completed_flow_by_its_auth_config(
+    monkeypatch, platform_apps, issuer_config, provider
+):
+    platform_apps.append(_github_app())
+    callback = _Callback(monkeypatch, _flow(), auth_config=issuer_config)
+    counted = _counted(monkeypatch)
+
+    await callback.finish()
+
+    assert counted == [{"provider": provider, "outcome": "succeeded"}]
+
+
+@pytest.mark.asyncio
+async def test_analytics_counts_a_sign_in_finished_by_someone_else(monkeypatch):
+    callback = _Callback(monkeypatch, _flow())
+    counted = _counted(monkeypatch)
+
+    with pytest.raises(HTTPException):
+        await callback.finish(user_id="someone-else")
+
+    assert counted == [{"provider": "unknown", "outcome": "failed:other_user"}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "outcome"),
+    [
+        ("access_denied", "failed:access_denied"),
+        ("temporarily_unavailable", "failed:temporarily_unavailable"),
+        ("evil.example/phish", "failed:other"),
+        ("x" * 40, "failed:other"),
+    ],
+)
+@pytest.mark.parametrize("with_state", [True, False], ids=["state", "no-state"])
+async def test_analytics_counts_a_provider_error_only_as_an_rfc_6749_code(
+    monkeypatch, error, outcome, with_state
+):
+    """The public callback's ``error`` is attacker-chosen: only the RFC's codes are labels."""
+    callback = _Callback(monkeypatch, _flow() if with_state else None)
+    counted = _counted(monkeypatch)
+
+    await callback.run(code=None, state="state" if with_state else None, error=error)
+
+    assert counted == [{"provider": "unknown", "outcome": outcome}]
