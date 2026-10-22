@@ -24,6 +24,7 @@ from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import requires_workspace_admin, unrestricted
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config.database import get_db_session
+from agentarea_common.extensions.account_balance import get_account_balance_source
 from agentarea_common.extensions.customer_pricing import get_customer_pricing
 from agentarea_common.money import ZERO, Money, to_money
 from agentarea_common.utils.types import UtcDatetime
@@ -580,6 +581,44 @@ async def get_dashboard(
         recent_tasks=recent_tasks,
         schedule=schedule,
         daily_spend=daily_spend,
+    )
+
+
+class BalanceResponse(BaseModel):
+    currency: str
+    # True once billing refuses runs on platform-paid models for want of money.
+    exhausted: bool
+    viewer_is_payer: bool
+    # Only the payer is told the amount.
+    amount: Money | None
+
+
+@router.get(
+    "/balance",
+    response_model=BalanceResponse | None,
+    dependencies=[
+        unrestricted("every member learns whether runs are paid for; the amount only the payer")
+    ],
+)
+async def get_balance(user_context: UserContextDep) -> BalanceResponse | None:
+    """The balance of the account paying for this workspace; null when the deployment sells none."""
+    source = get_account_balance_source()
+    if source is None:
+        return None
+    try:
+        balance = await source.balance(user_context)
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(
+            "Balance read failed for workspace %s", user_context.workspace_id, exc_info=True
+        )
+        raise HTTPException(status_code=503, detail="balance is unavailable") from error
+    return BalanceResponse(
+        currency=balance.currency,
+        exhausted=balance.exhausted,
+        viewer_is_payer=balance.viewer_is_payer,
+        amount=to_money(balance.amount) if balance.amount is not None else None,
     )
 
 

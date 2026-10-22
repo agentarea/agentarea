@@ -13,6 +13,7 @@ function intl(value: number, currency: string, locale: string, digits: number) {
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
+    currencyDisplay: "narrowSymbol",
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(value);
@@ -138,6 +139,12 @@ describe("formatMoney", () => {
   });
 });
 
+describe("formatMoney currency sign", () => {
+  it("writes the ruble sign, not the code, in English", () => {
+    expect(formatMoney(1250, "RUB", "en")).toBe("₽1,250.00");
+  });
+});
+
 describe("getCurrencySymbol", () => {
   it("returns the bare symbol for USD/en", () => {
     expect(getCurrencySymbol("USD", "en-US")).toBe("$");
@@ -145,6 +152,10 @@ describe("getCurrencySymbol", () => {
 
   it("returns the bare symbol for RUB/ru", () => {
     expect(getCurrencySymbol("RUB", "ru-RU")).toBe("₽");
+  });
+
+  it("returns the ruble sign, not the code, for RUB/en", () => {
+    expect(getCurrencySymbol("RUB", "en")).toBe("₽");
   });
 
   it("defaults to the 'en' locale when omitted", () => {

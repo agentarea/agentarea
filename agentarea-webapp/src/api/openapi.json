@@ -1574,6 +1574,41 @@
         "title": "AuditLogListResponse",
         "type": "object"
       },
+      "BalanceResponse": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "exhausted": {
+            "title": "Exhausted",
+            "type": "boolean"
+          },
+          "viewer_is_payer": {
+            "title": "Viewer Is Payer",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currency",
+          "exhausted",
+          "viewer_is_payer",
+          "amount"
+        ],
+        "title": "BalanceResponse",
+        "type": "object"
+      },
       "BlockedTaskBlocker": {
         "properties": {
           "agent_id": {
@@ -24221,6 +24256,68 @@
           "v1",
           "protected",
           "audit"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/balance": {
+      "get": {
+        "description": "The balance of the account paying for this workspace; null when the deployment sells none.",
+        "operationId": "get_balance_v1_balance_get",
+        "parameters": [
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/BalanceResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Balance V1 Balance Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Balance",
+        "tags": [
+          "v1",
+          "protected",
+          "dashboard"
         ]
       }
     },

@@ -8,13 +8,11 @@ import { BoardCrossMark, BoardRingMark } from "./BoardMarker";
  * a ring at the interior intersection). It mirrors the governance-board
  * aesthetic used across the redesign (see Dashboard).
  *
- * On large screens it fills its (relatively-positioned) parent and each cell
- * manages its own overflow. Below `lg` it collapses to a single stacked column
+ * Each row is as tall as its tallest cell, so the board grows with its content
+ * and scrolls with the page. Below `lg` it collapses to a single stacked column
  * with plain dashed separators and the markers are hidden.
  *
  * Reusable: pass any four nodes; tweak the vertical split with `leftFraction`.
- * The top row is as tall as its padded top-left content; an unpadded top-right
- * cell fills that height and scrolls instead of growing the row.
  */
 
 type PlusPos = "tl" | "tr" | "bl" | "br";
@@ -79,7 +77,7 @@ export function BoardGrid({
 }: {
   topLeft: ReactNode;
   topRight: ReactNode;
-  /** Off for a full-bleed list that should scroll within the top row. */
+  /** Off for a full-bleed list that draws its own padding. */
   topRightPadded?: boolean;
   bottomLeft: ReactNode;
   bottomRight: ReactNode;
@@ -89,16 +87,12 @@ export function BoardGrid({
 }) {
   const gridStyle: CSSProperties = {
     gridTemplateColumns: `minmax(0, ${leftFraction}fr) minmax(0, ${1 - leftFraction}fr)`,
-    gridTemplateRows: "minmax(0, auto) minmax(0, 1fr)",
   };
   const dashed = "border-dashed [border-color:var(--board-line)]";
 
   return (
-    <div className={cn("relative w-full lg:h-full", className)}>
-      <div
-        className="flex flex-col lg:absolute lg:inset-0 lg:grid"
-        style={gridStyle}
-      >
+    <div className={cn("relative w-full", className)}>
+      <div className="flex flex-col lg:grid" style={gridStyle}>
         {/* top-left */}
         <BoardCell
           padded
@@ -119,13 +113,7 @@ export function BoardGrid({
           className={cn("border-b", dashed)}
           markers={<PlusMark pos="br" />}
         >
-          {topRightPadded ? (
-            topRight
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col lg:absolute lg:inset-0">
-              {topRight}
-            </div>
-          )}
+          {topRight}
         </BoardCell>
 
         {/* bottom-left */}

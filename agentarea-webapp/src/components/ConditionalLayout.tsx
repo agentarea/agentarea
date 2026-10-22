@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import AuthGuard from "@/components/auth/AuthGuard";
+import { BalanceBanner } from "@/components/BalanceBanner";
 import InvitationDialog from "@/components/InvitationDialog/InvitationDialog";
 import { AppSidebarContent } from "@/components/MainLayout/components/AppSidebar";
 import QuickTaskDialog from "@/components/QuickTask/QuickTaskDialog";
@@ -111,9 +112,12 @@ export default function ConditionalLayout({
         <main
           id="workspace-main"
           tabIndex={-1}
-          className="flex-1 rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative"
+          className="flex flex-1 flex-col rounded-sm overflow-hidden max-h-screen bg-white dark:bg-zinc-800 h-full border border-sidebar-border relative"
         >
-          <AuthGuard>{children}</AuthGuard>
+          <BalanceBanner />
+          <div className="min-h-0 flex-1">
+            <AuthGuard>{children}</AuthGuard>
+          </div>
         </main>
       </div>
       <ThemeToggle className="fixed bottom-2 right-2 z-50" />

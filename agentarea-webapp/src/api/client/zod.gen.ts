@@ -264,6 +264,16 @@ export const zAuditLogListResponse = z.object({
 });
 
 /**
+ * BalanceResponse
+ */
+export const zBalanceResponse = z.object({
+  amount: z.string().nullable(),
+  currency: z.string(),
+  exhausted: z.boolean(),
+  viewer_is_payer: z.boolean(),
+});
+
+/**
  * BlockedTaskBlocker
  */
 export const zBlockedTaskBlocker = z.object({
@@ -5358,6 +5368,13 @@ export const zListAuditLogsV1AuditLogsGetQuery = z.object({
  * Successful Response
  */
 export const zListAuditLogsV1AuditLogsGetResponse = zAuditLogListResponse;
+
+/**
+ * Response Get Balance V1 Balance Get
+ *
+ * Successful Response
+ */
+export const zGetBalanceV1BalanceGetResponse = zBalanceResponse.nullable();
 
 export const zAnalyzeBundleV1BundlesAnalyzePostBody = zAnalyzeRequest;
 

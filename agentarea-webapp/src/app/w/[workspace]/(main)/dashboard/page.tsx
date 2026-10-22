@@ -17,7 +17,7 @@ export default async function DashboardPage() {
       header={{
         breadcrumb: [{ label: t("title") }],
       }}
-      className="!p-0 lg:!overflow-hidden"
+      className="!p-0"
     >
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardData />

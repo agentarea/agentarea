@@ -4115,5 +4115,15 @@
     "noModels": "No models found",
     "defaultConfiguration": "Default configuration",
     "unknownProvider": "Unknown provider"
+  },
+  "Balance": {
+    "label": "Balance",
+    "exhaustedShort": "Balance is out",
+    "exhaustedHint": "Agents on AgentArea models do not start",
+    "paidByOwner": "Paid by the owner",
+    "unavailable": "Unavailable",
+    "topUp": "Top up",
+    "bannerPayer": "Agents on AgentArea models do not start. Top up to get them running again.",
+    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up."
   }
 }

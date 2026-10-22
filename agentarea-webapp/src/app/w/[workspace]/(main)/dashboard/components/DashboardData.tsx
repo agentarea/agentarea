@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import { BalanceSection } from "@/components/BalanceSection";
 import { BoardGrid } from "@/components/board";
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
 import { getDashboard, getPricingCurrency } from "@/lib/api-dashboard";
@@ -43,7 +44,10 @@ export async function DashboardData() {
         />
       }
       topRight={
-        <BlockersPanel blockers={data.blockers} currency={currency} />
+        <>
+          <BalanceSection />
+          <BlockersPanel blockers={data.blockers} currency={currency} />
+        </>
       }
       topRightPadded={false}
       bottomLeft={<ScheduleCalendar schedule={data.schedule} />}
