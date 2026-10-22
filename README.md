@@ -151,6 +151,13 @@ see [Deploy](#deploy).
 
 ## What's inside
 
+AgentArea is a runtime of subsystems. Each subsystem is a set of services, and each
+service runs on the implementation you choose: bundled with the chart, or yours.
+
+<p align="center">
+  <img src="images/readme/subsystems.jpg" alt="The AgentArea runtime: its API, worker, MCP manager and event service, and eight subsystems (security, storage, compute, LLM, agents, tools, events, governance), each with its services and the implementations they run on, under the runtime interface and access layer, on Docker Compose, Kubernetes or Helm" width="100%">
+</p>
+
 <details open>
 <summary><b>Agents and the organization</b></summary>
 
