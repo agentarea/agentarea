@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/agentarea/mcp-manager/internal/broker"
 	"github.com/agentarea/mcp-manager/internal/config"
 	"github.com/agentarea/mcp-manager/internal/events"
 	"github.com/agentarea/mcp-manager/internal/mcpbase"
@@ -64,7 +65,7 @@ func (e *StartFailureError) FailureReason() string {
 // NewManager creates a new container manager
 func NewManager(cfg *config.Config, logger *slog.Logger) *Manager {
 	healthChecker := NewHealthChecker(cfg, logger)
-	eventPublisher := events.NewEventPublisher(cfg.Redis.URL, cfg.Redis.EventNamespace, logger)
+	eventPublisher := events.NewEventPublisher(broker.DialRedisStreams(cfg.Redis.URL, cfg.Redis.EventNamespace), logger)
 
 	// Create context for health monitoring
 	healthCtx, healthCancel := context.WithCancel(context.Background())

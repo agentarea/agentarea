@@ -1,10 +1,3 @@
-// Package broker provides a stream broker abstraction. The OSS deployment
-// uses Redis Streams; enterprise deployments can swap in Kafka behind the
-// same interface (Submit / EnsureGroup / Consume / Ack / Autoclaim).
-//
-// The Go side currently only needs Submit + EnsureGroup (it produces inbound
-// events; the Python worker consumes). The full interface is mirrored so
-// adding a Kafka backend later is a single-file swap.
 package broker
 
 import (
