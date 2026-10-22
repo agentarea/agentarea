@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { insertRows, type Row, type Rows, type Table } from "@kit/store/rows.ts";
+import { EVENT_LOG_MIGRATION } from "@kit/events/log.ts";
 import type { Migration } from "@kit/store/store.ts";
 import demo from "../data/tasks.json" with { type: "json" };
 import type { Activity, ActivityKind, Issue, LabelColor, PersonKind, Priority, Status, TasksData } from "../shared/tasks.ts";
@@ -81,6 +82,8 @@ export const MIGRATIONS: Migration[] = [
       );
       CREATE INDEX issue_activity_issue ON issue_activity (issue_id);
     `),
+  // Outgoing MCP Events (task.assigned), served by events/poll.
+  EVENT_LOG_MIGRATION,
 ];
 
 export const TABLES: Table[] = [

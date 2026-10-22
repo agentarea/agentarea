@@ -3,8 +3,9 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
+import { installEvents } from "@kit/events/install.ts";
 import type { AppStore } from "@kit/store/store.ts";
-import { McpServer, type ReadResourceResult } from "@modelcontextprotocol/server";
+import { McpServer, ProtocolError, type ReadResourceResult } from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -18,6 +19,7 @@ import {
   taskListSchema,
   type AddedComment,
 } from "../shared/schema.ts";
+import { EVENT_TYPES } from "./events.ts";
 import { TasksStore } from "./store.ts";
 import {
   buildDetail,
@@ -58,6 +60,7 @@ const show = (kind: string, value: string | null) => {
  */
 export function createServer(app: AppStore, appDir: string, current: TasksStore | null): McpServer {
   const server = new McpServer({ name: "Tasks MCP App", version: "0.1.0" });
+  installEvents(server, { app, types: EVENT_TYPES, ProtocolError });
   if (!current) {
     registerSetup(server, app);
     return server;

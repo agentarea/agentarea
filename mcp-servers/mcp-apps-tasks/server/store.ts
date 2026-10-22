@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { appendEvent, type EventData } from "@kit/events/log.ts";
 import { insertRows, readRows, syncRows, type Rows } from "@kit/store/rows.ts";
 import {
   PERSON_KINDS,
@@ -14,6 +15,7 @@ import {
   type TasksData,
 } from "../shared/tasks.ts";
 import { fromRows, TABLES, toRows } from "./db.ts";
+import { TASK_ASSIGNED } from "./events.ts";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HANDLE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
@@ -43,6 +45,8 @@ export type IssueFields = {
 export class TasksStore {
   readonly #rows: Rows;
   #seq: Record<"iss" | "cmt" | "act", number>;
+  /** Events the changes since `load` produce, appended by `save` in the same transaction. */
+  readonly #events: { name: string; data: EventData }[] = [];
 
   private constructor(
     readonly data: TasksData,
@@ -82,6 +86,27 @@ export class TasksStore {
   /** Writes what changed since `load` into `db`, inside the caller's transaction. */
   save(db: Database): void {
     syncRows(db, TABLES, this.#rows, toRows(this.data));
+    for (const event of this.#events.splice(0)) appendEvent(db, event.name, event.data);
+  }
+
+  #assigned(issue: Issue, actor: Person): void {
+    const assignee = this.data.people.find((p) => p.id === issue.assigneeId)!;
+    const project = this.data.projects.find((p) => p.id === issue.projectId)!;
+    const person = (p: Person) => ({ handle: p.handle, name: p.name, kind: p.kind });
+    this.#events.push({
+      name: TASK_ASSIGNED,
+      data: {
+        key: issue.key,
+        title: issue.title,
+        description: issue.description,
+        status: issue.status,
+        priority: issue.priority,
+        due: issue.dueDate,
+        project: { key: project.key, name: project.name },
+        assignee: person(assignee),
+        assignedBy: person(actor),
+      },
+    });
   }
 
   /** The tracker's clock: never earlier than the dataset's own `asOf`. */
@@ -189,6 +214,7 @@ export class TasksStore {
     project.nextNumber += 1;
     this.#record(issue, actor.id, at, "created", null, issue.status);
     this.data.issues.push(issue);
+    if (issue.assigneeId) this.#assigned(issue, actor);
     return issue;
   }
 
@@ -225,6 +251,7 @@ export class TasksStore {
     if (estimate !== undefined) apply("estimate", "estimate", estimate, (v) => (v === null ? null : String(v)));
     if (parentId !== undefined) apply("parent", "parentId", parentId);
     if (changed.length) issue.updatedAt = at;
+    if (changed.includes("assignee") && issue.assigneeId) this.#assigned(issue, actor);
     return { issue, changed };
   }
 
