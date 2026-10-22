@@ -9,23 +9,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// Event bus contract (ADR-0018): each event type has its own topic
-// `domain.events.<type>`, carried in CloudEvents binary content mode. Envelope
-// attributes become `ce_*` fields and the payload is a JSON string under
-// `data`. Keep these in sync with the Python `domain_events_topic(type)` and
-// event-type strings.
+// Topics and event types must match the Python domain_events_topic(type).
 const (
 	eventSource = "agentarea-mcp-manager"
 
 	statusChangedType = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
 	errorType         = "agentarea.mcp.v1.MCPServerInstanceError"
 
-	// Retention matches every bus topic (Python BUS_RETENTION): enough to ride
-	// out a consumer outage. Consumers tail these live.
 	Retention = 72 * time.Hour
 )
 
-// Submitter appends one message to a topic.
 type Submitter interface {
 	Submit(ctx context.Context, topic string, fields map[string]string, retention time.Duration) (string, error)
 }
@@ -53,19 +46,15 @@ type ErrorEvent struct {
 	Timestamp  time.Time `json:"timestamp"`
 }
 
-// EventPublisher publishes MCP instance events to the bus.
 type EventPublisher struct {
 	broker Submitter
 	logger *slog.Logger
 }
 
-// NewEventPublisher publishes through broker.
 func NewEventPublisher(broker Submitter, logger *slog.Logger) *EventPublisher {
 	return &EventPublisher{broker: broker, logger: logger}
 }
 
-// buildEventFields encodes an event as CloudEvents binary content mode fields.
-// `subject` is the partition key (empty -> omitted).
 func buildEventFields(eventType, subject string, data any) (map[string]string, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {

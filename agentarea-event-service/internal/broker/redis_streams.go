@@ -1,6 +1,3 @@
-// Package broker is the Redis Streams adapter behind the producers' Submitter
-// ports. Callers name topics logically; the adapter puts the namespace in
-// front and owns retention, so swapping the broker touches only this package.
 package broker
 
 import (
