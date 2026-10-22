@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { CreditCard, LogOut, Settings } from "lucide-react";
 import {
   DropdownMenu,
@@ -20,15 +20,30 @@ import {
 } from "@/components/ui/sidebar";
 import Link from "@/components/WorkspaceLink";
 import { useAuth } from "@/hooks/useAuth";
+import { useBalance } from "@/hooks/useBalance";
 import { APP_VERSION } from "@/lib/app-version";
 import { deterministicHue } from "@/lib/avatar-hue";
+import { formatMoney } from "@/lib/money";
 import { useWorkspaceBillingUrl } from "@/lib/use-billing-url";
+import { cn } from "@/lib/utils";
 
 export function NavUser() {
   const t = useTranslations("NavUser");
   // Empty on any deployment that does not sell, which is the open default,
   // and off a workspace page.
   const billingUrl = useWorkspaceBillingUrl();
+  const locale = useLocale();
+  const balance = useBalance();
+  const balanceExhausted =
+    balance.status === "ready" && balance.balance.exhausted;
+  const balanceAmount =
+    balance.status === "ready" && balance.balance.amount !== null
+      ? formatMoney(
+          Number(balance.balance.amount),
+          balance.balance.currency,
+          locale
+        )
+      : null;
   const { isMobile } = useSidebar();
   const { user: authUser, isLoaded, signOut } = useAuth();
   const user = authUser
@@ -124,6 +139,18 @@ export function NavUser() {
                   <Link href={billingUrl} className="flex w-full items-center">
                     <CreditCard className="mr-2 size-4" />
                     {t("billing")}
+                    {balanceAmount ? (
+                      <span
+                        className={cn(
+                          "ml-auto text-xs tabular-nums",
+                          balanceExhausted
+                            ? "text-red-600 dark:text-red-400"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        {balanceAmount}
+                      </span>
+                    ) : null}
                   </Link>
                 </DropdownMenuItem>
               ) : null}

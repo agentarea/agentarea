@@ -328,6 +328,9 @@ import type {
   GetApiKeyV1ApiKeysTokenIdGetData,
   GetApiKeyV1ApiKeysTokenIdGetErrors,
   GetApiKeyV1ApiKeysTokenIdGetResponses,
+  GetBalanceV1BalanceGetData,
+  GetBalanceV1BalanceGetErrors,
+  GetBalanceV1BalanceGetResponses,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
@@ -3778,6 +3781,34 @@ export const listAuditLogsV1AuditLogsGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/audit-logs/",
+    ...options,
+  });
+
+/**
+ * Get Balance
+ *
+ * The balance of the account paying for this workspace; null when the deployment sells none.
+ */
+export const getBalanceV1BalanceGet = <ThrowOnError extends boolean = false>(
+  options?: Options<GetBalanceV1BalanceGetData, ThrowOnError>
+): RequestResult<
+  GetBalanceV1BalanceGetResponses,
+  GetBalanceV1BalanceGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetBalanceV1BalanceGetResponses,
+    GetBalanceV1BalanceGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/balance",
     ...options,
   });
 

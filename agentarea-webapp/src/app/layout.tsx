@@ -8,6 +8,9 @@ import { SessionProvider } from "@ory/elements-react/client";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import ConditionalLayout from "@/components/ConditionalLayout";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { BalanceProvider } from "@/hooks/useBalance";
+import { getBalance } from "@/lib/api-dashboard";
+import type { BalanceState } from "@/lib/balance";
 // @ory/nextjs is vendored under src/lib/ory rather than installed, so the
 // session helper comes from there. main still imported the package path; the
 // billing-URL fix below is main's and is kept.
@@ -121,9 +124,12 @@ export default async function RootLayout({
   const runtimeConfig = getRuntimeConfig();
   // Anonymous visitors (landing, auth) have no workspaces to switch between,
   // and listing them would provision a personal workspace for nobody.
-  const { workspaces } = session
+  const { workspaces, active } = session
     ? await getWorkspaceContext()
-    : { workspaces: [] };
+    : { workspaces: [], active: null };
+  const balance: BalanceState = active
+    ? await getBalance()
+    : { status: "none" };
 
   return (
     <html lang={locale} suppressHydrationWarning className={inter.variable}>
@@ -139,12 +145,14 @@ export default async function RootLayout({
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <NextIntlClientProvider>
               <NuqsAdapter>
-                <ConditionalLayout
-                  sidebarDefaultOpen={sidebarDefaultOpen}
-                  workspaces={workspaces}
-                >
-                  {children}
-                </ConditionalLayout>
+                <BalanceProvider balance={balance}>
+                  <ConditionalLayout
+                    sidebarDefaultOpen={sidebarDefaultOpen}
+                    workspaces={workspaces}
+                  >
+                    {children}
+                  </ConditionalLayout>
+                </BalanceProvider>
               </NuqsAdapter>
             </NextIntlClientProvider>
           </ThemeProvider>

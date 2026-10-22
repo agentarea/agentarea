@@ -55,7 +55,11 @@ export function formatMoney(
     new Intl.NumberFormat(locale, {
       ...(currency == null
         ? { style: "decimal" as const }
-        : { style: "currency" as const, currency }),
+        : {
+            style: "currency" as const,
+            currency,
+            currencyDisplay: "narrowSymbol" as const,
+          }),
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
     }).format(v);
@@ -86,6 +90,7 @@ export function getCurrencySymbol(
   const parts = new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
+    currencyDisplay: "narrowSymbol",
   }).formatToParts(0);
   return parts.find((part) => part.type === "currency")?.value ?? currency;
 }

@@ -1,12 +1,15 @@
 // Dashboard-specific fetcher for server-only callers.
 
 import "server-only";
+import { cache } from "react";
 import type {
   AgentOverviewResponse,
+  BalanceResponse,
   DashboardResponse,
   WorkspaceSettingsResponse,
 } from "@/api/client";
 import { env } from "@/env";
+import type { BalanceState } from "./balance";
 import { getAuthToken } from "./getAuthToken";
 import { getRequestWorkspaceSlug } from "./workspace-context";
 import { fillWorkspace } from "./workspace-url";
@@ -61,6 +64,17 @@ async function request<T>(
 export function getDashboard() {
   return request<DashboardResponse>("/v1/workspaces/{workspace}/dashboard");
 }
+
+/** The workspace layout and the dashboard both ask; one request per render. */
+export const getBalance = cache(async (): Promise<BalanceState> => {
+  const result = await request<BalanceResponse | null>(
+    "/v1/workspaces/{workspace}/balance"
+  );
+  if (result.status !== 200) return { status: "error" };
+  return result.data
+    ? { status: "ready", balance: result.data }
+    : { status: "none" };
+});
 
 export function getWorkspaceSettings() {
   return request<WorkspaceSettingsResponse>(

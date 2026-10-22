@@ -82,7 +82,7 @@ function ListSkeleton({
 export default function DashboardSkeleton() {
   const t = useTranslations("DashboardPage");
   return (
-    <div aria-hidden="true" className="h-full">
+    <div aria-hidden="true">
       <BoardGrid
         topLeft={<SpendSkeleton />}
         topRight={

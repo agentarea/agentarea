@@ -4,7 +4,6 @@ import { Shield } from "lucide-react";
 import type { Blockers } from "@/api/client";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { BoardSectionHeader } from "@/components/board";
-import EmptyState from "@/components/EmptyState";
 import { CollapsibleGroup } from "@/components/ui/group-header";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
 import { StatusIndicator } from "@/components/ui/status-indicator";
@@ -141,16 +140,15 @@ export function BlockersPanel({
         />
       </div>
 
-      <div className="min-h-0 flex-1 lg:overflow-y-auto">
+      <div className="min-h-0 flex-1">
         {total === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col justify-center">
-            <EmptyState
-              iconsType="healthy"
-              accentClassName="text-emerald-500"
-              title={t("nothingBlocking")}
-              description={t("allClearHint")}
-              className="border-0 bg-transparent p-6 shadow-none hover:bg-transparent dark:bg-transparent dark:hover:bg-transparent"
+          <div className="flex items-center gap-2.5 px-6 py-3 text-[13px] text-muted-foreground">
+            <StatusIndicator
+              kind="done"
+              size="sm"
+              aria-label={t("nothingBlocking")}
             />
+            {t("nothingBlocking")}
           </div>
         ) : (
           groups.map((g) => (

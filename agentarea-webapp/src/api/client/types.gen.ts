@@ -861,6 +861,28 @@ export type AuditLogListResponse = {
 };
 
 /**
+ * BalanceResponse
+ */
+export type BalanceResponse = {
+  /**
+   * Amount
+   */
+  amount: string | null;
+  /**
+   * Currency
+   */
+  currency: string;
+  /**
+   * Exhausted
+   */
+  exhausted: boolean;
+  /**
+   * Viewer Is Payer
+   */
+  viewer_is_payer: boolean;
+};
+
+/**
  * BlockedTaskBlocker
  */
 export type BlockedTaskBlocker = {
@@ -13357,6 +13379,35 @@ export type ListAuditLogsV1AuditLogsGetResponses = {
 
 export type ListAuditLogsV1AuditLogsGetResponse =
   ListAuditLogsV1AuditLogsGetResponses[keyof ListAuditLogsV1AuditLogsGetResponses];
+
+export type GetBalanceV1BalanceGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/v1/workspaces/{workspace}/balance";
+};
+
+export type GetBalanceV1BalanceGetErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetBalanceV1BalanceGetError =
+  GetBalanceV1BalanceGetErrors[keyof GetBalanceV1BalanceGetErrors];
+
+export type GetBalanceV1BalanceGetResponses = {
+  /**
+   * Response Get Balance V1 Balance Get
+   *
+   * Successful Response
+   */
+  200: BalanceResponse | null;
+};
+
+export type GetBalanceV1BalanceGetResponse =
+  GetBalanceV1BalanceGetResponses[keyof GetBalanceV1BalanceGetResponses];
 
 export type AnalyzeBundleV1BundlesAnalyzePostData = {
   body: AnalyzeRequest;
