@@ -5217,7 +5217,7 @@ export const zGetTaskSummaryV1AgentsAgentIdTasksTaskIdSummaryGetResponse =
   zTaskSummary;
 
 export const zDeleteWalletV1AgentsAgentIdWalletDeletePath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 /**
@@ -5226,7 +5226,7 @@ export const zDeleteWalletV1AgentsAgentIdWalletDeletePath = z.object({
 export const zDeleteWalletV1AgentsAgentIdWalletDeleteResponse = z.void();
 
 export const zGetWalletV1AgentsAgentIdWalletGetPath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 /**
@@ -5237,7 +5237,7 @@ export const zGetWalletV1AgentsAgentIdWalletGetResponse = zWalletResponse;
 export const zCreateWalletV1AgentsAgentIdWalletPostBody = zCreateWalletRequest;
 
 export const zCreateWalletV1AgentsAgentIdWalletPostPath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 /**
@@ -5248,7 +5248,7 @@ export const zCreateWalletV1AgentsAgentIdWalletPostResponse = zWalletResponse;
 export const zUpdateWalletV1AgentsAgentIdWalletPutBody = zUpdateWalletRequest;
 
 export const zUpdateWalletV1AgentsAgentIdWalletPutPath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 /**
@@ -5257,7 +5257,7 @@ export const zUpdateWalletV1AgentsAgentIdWalletPutPath = z.object({
 export const zUpdateWalletV1AgentsAgentIdWalletPutResponse = zWalletResponse;
 
 export const zGetWalletBalanceV1AgentsAgentIdWalletBalanceGetPath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 /**
@@ -5269,7 +5269,7 @@ export const zGetWalletBalanceV1AgentsAgentIdWalletBalanceGetResponse =
 export const zFundWalletV1AgentsAgentIdWalletFundPostBody = zFundWalletRequest;
 
 export const zFundWalletV1AgentsAgentIdWalletFundPostPath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 /**
@@ -5278,7 +5278,7 @@ export const zFundWalletV1AgentsAgentIdWalletFundPostPath = z.object({
 export const zFundWalletV1AgentsAgentIdWalletFundPostResponse = zWalletResponse;
 
 export const zGetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetPath = z.object({
-  agent_id: z.string().uuid(),
+  agent_id: z.string(),
 });
 
 export const zGetPaymentHistoryV1AgentsAgentIdWalletPaymentsGetQuery = z.object(

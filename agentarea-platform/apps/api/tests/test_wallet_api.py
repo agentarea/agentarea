@@ -3,10 +3,11 @@
 from datetime import datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
-from agentarea_api.api.v1.wallet import ensure_agent_exists, get_wallet_service, router
+from agentarea_api.api.deps.services import get_agent_service
+from agentarea_api.api.v1.wallet import get_wallet_service, resolve_agent_id, router
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import get_user_context
@@ -79,7 +80,7 @@ def client(mock_service):
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_wallet_service] = lambda: mock_service
-    app.dependency_overrides[ensure_agent_exists] = lambda: None
+    app.dependency_overrides[resolve_agent_id] = lambda: UUID(AGENT_ID)
     # Wallet credentials and budgets are admin-gated; act as the workspace owner.
     app.dependency_overrides[get_user_context] = lambda: UserContext(
         user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"]
@@ -362,3 +363,74 @@ class TestWalletMutationsRequireAdmin:
 
         assert resp.status_code == 403
         mock_service.delete_wallet.assert_not_called()
+
+
+# ------------------------------------------------------------------
+# The path names the agent by UUID or by slug, as the webapp URLs do
+# ------------------------------------------------------------------
+
+
+class _FakeAgentService:
+    def __init__(self, agent_id, slug):
+        self._agent = MagicMock(id=agent_id, slug=slug)
+
+    async def get(self, agent_id):
+        return self._agent if agent_id == self._agent.id else None
+
+    async def get_by_slug(self, slug):
+        return self._agent if slug == self._agent.slug else None
+
+
+@pytest.fixture
+def agent_client(mock_service):
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_wallet_service] = lambda: mock_service
+    app.dependency_overrides[get_agent_service] = lambda: _FakeAgentService(
+        AGENT_UUID, "seo-machine-metrica"
+    )
+    app.dependency_overrides[get_user_context] = lambda: UserContext(
+        user_id="user-1", workspace_id="ws-1", admin_workspaces=["ws-1"]
+    )
+    return TestClient(app)
+
+
+AGENT_UUID = uuid4()
+
+
+class TestAgentReference:
+    def test_payments_by_slug_query_the_agent_uuid(self, agent_client, mock_service):
+        mock_service.get_payment_history.return_value = ([], 0)
+
+        resp = agent_client.get("/agents/seo-machine-metrica/wallet/payments")
+
+        assert resp.status_code == 200
+        assert mock_service.get_payment_history.call_args.kwargs["agent_id"] == str(AGENT_UUID)
+
+    def test_wallet_by_slug_reads_the_agent_uuid(self, agent_client, mock_service):
+        mock_service.get_wallet.return_value = _mock_wallet(agent_id=AGENT_UUID)
+
+        resp = agent_client.get("/agents/seo-machine-metrica/wallet")
+
+        assert resp.status_code == 200
+        mock_service.get_wallet.assert_called_once_with(str(AGENT_UUID))
+
+    def test_payments_by_uuid(self, agent_client, mock_service):
+        mock_service.get_payment_history.return_value = ([], 0)
+
+        resp = agent_client.get(f"/agents/{AGENT_UUID}/wallet/payments")
+
+        assert resp.status_code == 200
+        assert mock_service.get_payment_history.call_args.kwargs["agent_id"] == str(AGENT_UUID)
+
+    def test_unknown_slug_is_404(self, agent_client, mock_service):
+        resp = agent_client.get("/agents/no-such-agent/wallet/payments")
+
+        assert resp.status_code == 404
+        mock_service.get_payment_history.assert_not_called()
+
+    def test_unknown_uuid_is_404(self, agent_client, mock_service):
+        resp = agent_client.get(f"/agents/{uuid4()}/wallet/payments")
+
+        assert resp.status_code == 404
+        mock_service.get_payment_history.assert_not_called()
