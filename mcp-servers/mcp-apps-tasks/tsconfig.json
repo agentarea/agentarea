@@ -23,5 +23,5 @@
       "*": ["./node_modules/@types/*", "./node_modules/*"]
     }
   },
-  "include": ["app", "host", "server", "shared", "scripts", "vite.config.ts", "../mcp-apps-kit/store"]
+  "include": ["app", "host", "server", "shared", "scripts", "vite.config.ts", "../mcp-apps-kit/store", "../mcp-apps-kit/events"]
 }

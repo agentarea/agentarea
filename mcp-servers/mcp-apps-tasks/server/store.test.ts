@@ -1,6 +1,8 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { MIGRATIONS } from "./db.ts";
+import { headPosition, readEvents } from "@kit/events/log.ts";
+import { TASK_ASSIGNED } from "./events.ts";
 import { TasksStore } from "./store.ts";
 
 function emptyDb(): Database {
@@ -77,5 +79,64 @@ describe("people and projects", () => {
       store.save(db);
     })();
     expect(TasksStore.load(db).project("sales").leadId).toBe("usr_03");
+  });
+});
+
+describe("task.assigned events", () => {
+  function change(db: Database, fn: (store: TasksStore) => void) {
+    db.transaction(() => {
+      const store = TasksStore.load(db);
+      fn(store);
+      store.save(db);
+    })();
+  }
+  const assigned = (db: Database, after = 0) =>
+    readEvents(db, { name: TASK_ASSIGNED, after, limit: 50, admits: () => true }).events.map((e) => e.data);
+
+  test("creating an assigned issue records who got it, from whom, in which project", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    change(db, (store) => store.create("OPS", { title: "Hire a designer", assignee: "sales-bot", priority: "high" }));
+    expect(assigned(db)).toEqual([
+      {
+        key: "OPS-1",
+        title: "Hire a designer",
+        description: "",
+        status: "todo",
+        priority: "high",
+        due: null,
+        project: { key: "OPS", name: "Operations" },
+        assignee: { handle: "sales-bot", name: "Sales Agent", kind: "agent" },
+        assignedBy: { handle: "artem", name: "Artem Astapenko", kind: "human" },
+      },
+    ]);
+  });
+
+  test("assigning, reassigning and unassigning: an event for each new assignee only", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    change(db, (store) => store.create("OPS", { title: "Unowned" }));
+    expect(assigned(db)).toEqual([]);
+    change(db, (store) => store.update("OPS-1", { assignee: "sales-bot" }));
+    change(db, (store) => store.update("OPS-1", { assignee: "sales-bot", status: "in_progress" }));
+    change(db, (store) => store.update("OPS-1", { assignee: "artem" }, "sales-bot"));
+    change(db, (store) => store.update("OPS-1", { assignee: null }));
+    expect(assigned(db).map((d) => [(d.assignee as { handle: string }).handle, (d.assignedBy as { handle: string }).handle])).toEqual([
+      ["sales-bot", "artem"],
+      ["artem", "sales-bot"],
+    ]);
+  });
+
+  test("a change that rolls back records no event", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    const head = headPosition(db);
+    expect(() =>
+      change(db, (store) => {
+        store.create("OPS", { title: "Doomed", assignee: "sales-bot" });
+        throw new Error("abort");
+      }),
+    ).toThrow("abort");
+    expect(assigned(db, head)).toEqual([]);
   });
 });
