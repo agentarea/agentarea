@@ -11,6 +11,7 @@ from uuid import UUID
 
 from agentarea_agents.domain.config_hash import compute_agent_config_hash
 from agentarea_agents_sdk import ToolManager
+from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_common.auth.context import UserContext
 from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 from agentarea_llm.domain.model_kind import ModelKind
@@ -399,6 +400,10 @@ def make_config_activities(
                     raise ApplicationError(str(exc), non_retryable=True) from exc
             if not agent:
                 raise AgentNotFoundError(f"Agent {request.agent_id} not found")
+            if agent.status == AgentStatus.ARCHIVED:
+                raise ApplicationError(
+                    str(AgentArchivedError(agent.id)), type="AgentArchived", non_retryable=True
+                )
 
             tools, skills = await _resolve_task_resources(agent, request.task_parameters, ctx)
             skills, withheld_skills = await _runnable_skills(skills, ctx)

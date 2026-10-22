@@ -520,6 +520,12 @@
     "fundWallet": "Fund wallet"
   },
   "AgentsPage": {
+    "archived": {
+      "title": "This agent is archived",
+      "description": "It is hidden from the agent list and takes no new runs. Its past runs still show it.",
+      "restore": "Restore",
+      "restoreFailed": "Couldn't restore this agent. Please try again."
+    },
     "createAgent": "Create agent",
     "noToolsConf": "No tools configured",
     "name": "Name",
@@ -1945,6 +1951,7 @@
     "parentTask": "Parent Task",
     "agentInfo": "Agent info",
     "failedToLoadAgent": "Failed to load agent details.",
+    "agentArchived": "Archived",
     "model": "Model",
     "descriptionGoal": "Description / Goal",
     "instruction": "Instruction",

@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import ToolsDisplay from "@/components/ToolsDisplay";
 import { Badge } from "@/components/ui/badge";
 import ModelBadge from "@/components/ui/model-badge";
+import { StatusIndicator } from "@/components/ui/status-indicator";
 import {
   getAgentAction as getAgent,
   listModelInstancesAction as listModelInstances,
@@ -130,6 +131,7 @@ export default function ModelInfo({
 
   // Triggers come from the Triggers API, filtered by agent.
   const validTriggers = triggers.filter((tr) => tr && (tr.name || tr.id));
+  const archived = agent.status === "archived";
   const skills = agentSkillViews(agent.skills);
 
   return (
@@ -145,6 +147,9 @@ export default function ModelInfo({
           </div>
         </div>
       )}
+      {archived && (
+        <StatusIndicator kind="off">{t("agentArchived")}</StatusIndicator>
+      )}
 
       {/* Model */}
       <div className="space-y-1.5">
@@ -159,7 +164,7 @@ export default function ModelInfo({
             configName={agent.model_info?.config_name}
           />
         </div>
-        {task && (
+        {task && !archived && (
           <ModelPicker
             agentId={task.agent_id}
             taskId={task.id}

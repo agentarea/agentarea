@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.audit import audited
 from agentarea_common.auth.permission import require_permission
 
@@ -36,10 +37,13 @@ class TaskDefinitionService:
         self.task_service = task_service
 
     async def _require_agent(self, agent_id: UUID) -> None:
-        if await self.agent_repository.get(agent_id) is None:
+        agent = await self.agent_repository.get(agent_id)
+        if agent is None:
             raise TaskDefinitionValidationError(
                 f"Agent {agent_id} does not exist in this workspace"
             )
+        if agent.status == AgentStatus.ARCHIVED:
+            raise TaskDefinitionValidationError(f"Agent {agent_id} is archived; restore it first")
 
     async def _require_unused(self, definition_id: UUID, what: str) -> None:
         if count := await self.trigger_repository.count(task_definition_id=definition_id):

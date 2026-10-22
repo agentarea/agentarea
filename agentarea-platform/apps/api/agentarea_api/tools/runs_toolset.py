@@ -28,6 +28,7 @@ from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -463,6 +464,8 @@ class RunsToolset(Toolset):
                 retried = await service.retry_last_turn(UUID(run_id))
             except RunStillClosingError:
                 raise ToolError(RUN_STILL_CLOSING) from None
+            except AgentArchivedError as exc:
+                raise ToolError(str(exc)) from None
             if not retried:
                 raise ToolError("Only a failed run whose execution has finished can be retried")
             return json.dumps({"retried": True, "run_id": run_id})
@@ -622,6 +625,8 @@ class RunsToolset(Toolset):
                     delivered = await service.queue_follow_up(UUID(run_id), body["message"])
                 except RunStillClosingError:
                     raise ToolError(RUN_STILL_CLOSING) from None
+                except AgentArchivedError as exc:
+                    raise ToolError(str(exc)) from None
             else:
                 workflow = await get_temporal_workflow_service()
                 delivered = await workflow.send_workflow_command(

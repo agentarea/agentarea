@@ -11897,6 +11897,36 @@ export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponses = {
 
 export type GetAgentOverviewV1AgentsAgentIdOverviewGetResponse = GetAgentOverviewV1AgentsAgentIdOverviewGetResponses[keyof GetAgentOverviewV1AgentsAgentIdOverviewGetResponses];
 
+export type RestoreAgentV1AgentsAgentIdRestorePostData = {
+    body?: never;
+    path: {
+        /**
+         * Agent Id
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/agents/{agent_id}/restore';
+};
+
+export type RestoreAgentV1AgentsAgentIdRestorePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RestoreAgentV1AgentsAgentIdRestorePostError = RestoreAgentV1AgentsAgentIdRestorePostErrors[keyof RestoreAgentV1AgentsAgentIdRestorePostErrors];
+
+export type RestoreAgentV1AgentsAgentIdRestorePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: AgentResponse;
+};
+
+export type RestoreAgentV1AgentsAgentIdRestorePostResponse = RestoreAgentV1AgentsAgentIdRestorePostResponses[keyof RestoreAgentV1AgentsAgentIdRestorePostResponses];
+
 export type ListAgentTasksV1AgentsAgentIdTasksGetData = {
     body?: never;
     path: {

@@ -122,7 +122,7 @@ async def get_inbox_items(
         # Sequential awaits: agent_service and task_service share one AsyncSession
         # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
         # single connection ("another operation is in progress").
-        agents_result = await agent_service.list()
+        agents_result = await agent_service.list(include_archived=True)
         tasks = await task_service.task_repository.list_by_statuses(
             statuses=query_statuses,
             agent_id=agent_id,
@@ -199,7 +199,7 @@ async def list_approval_decisions(
     Read from the audit trail, where the tool audit records every decision.
     """
     try:
-        agents = await agent_service.list()
+        agents = await agent_service.list(include_archived=True)
         decisions, total = await AuditRepository(repository_factory.session).resource_events_page(
             user_context.workspace_id,
             resource_type="task",

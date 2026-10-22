@@ -539,7 +539,7 @@ async def list_relationships(
     collection_repo = factory.create_repository(SkillCollectionRepository)
     mcp_repo = factory.create_repository(MCPServerRepository)
 
-    agent_names = {str(a.id): a.name for a in await agent_repo.list_all()}
+    agent_names = {str(a.id): a.name for a in await agent_repo.list_all(include_archived=True)}
     collection_names = {str(c.id): c.name for c in await collection_repo.list_all()}
     mcp_names = {str(m.id): m.name for m in await mcp_repo.list_all()}
     skill_counts = await collection_repo.skill_counts()
@@ -792,7 +792,7 @@ async def resolve_access(
 
     factory = RepositoryFactory(db_session, user_context)
     agent_repo = factory.create_repository(AgentRepository)
-    agent_names = {str(a.id): a.name for a in await agent_repo.list_all()}
+    agent_names = {str(a.id): a.name for a in await agent_repo.list_all(include_archived=True)}
 
     agent_uuid = (
         payload.subject_id.split(":", 1)[1]

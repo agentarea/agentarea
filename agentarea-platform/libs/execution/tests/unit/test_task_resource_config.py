@@ -36,9 +36,10 @@ def skill(name="Research"):
     )
 
 
-def agent(*, tools=None, skills=None):
+def agent(*, tools=None, skills=None, status="active"):
     return SimpleNamespace(
         id=uuid4(),
+        status=status,
         name="Coordinator",
         description="Coordinate work",
         instruction="Do the task",
@@ -680,6 +681,21 @@ async def test_a_skill_the_install_policy_refuses_fails_the_run_without_retries(
     )
 
     with pytest.raises(ApplicationError, match="refused by policy") as error:
+        await functions["build_agent_config_activity"](request)
+    assert error.value.non_retryable
+
+
+@pytest.mark.asyncio
+async def test_an_archived_agent_fails_the_run_without_retries(activity_context):
+    ctx, functions = activity_context
+    archived = agent(status="archived")
+    ctx.get_agent_service.return_value.get_with_skills.return_value = archived
+    request = AgentConfigRequest(
+        agent_id=archived.id,
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
+    )
+
+    with pytest.raises(ApplicationError, match="archived") as error:
         await functions["build_agent_config_activity"](request)
     assert error.value.non_retryable
 

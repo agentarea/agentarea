@@ -38,8 +38,8 @@ class FakeAgentRepo:
         self._agents = agents or []
         self.created_kwargs = []
 
-    async def list_all(self):
-        return list(self._agents)
+    async def list_all(self, include_archived=False):
+        return [a for a in self._agents if include_archived or a.status != "archived"]
 
     async def get(self, _id):
         return next((a for a in self._agents if str(a.id) == str(_id)), None)

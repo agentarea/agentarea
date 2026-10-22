@@ -26,6 +26,7 @@ from pydantic import ValidationError
 
 CALLER = UserContext(user_id="user-1", workspace_id="ws-1")
 AGENT = uuid4()
+ARCHIVED_AGENT = uuid4()
 OTHER_AGENT = uuid4()
 
 
@@ -68,7 +69,11 @@ class _Definitions:
 
 class _Agents:
     async def get(self, agent_id):
-        return SimpleNamespace(id=agent_id) if agent_id in (AGENT, OTHER_AGENT) else None
+        if agent_id == ARCHIVED_AGENT:
+            return SimpleNamespace(id=agent_id, status="archived")
+        if agent_id in (AGENT, OTHER_AGENT):
+            return SimpleNamespace(id=agent_id, status="active")
+        return None
 
 
 class _Permissions(PermissionService):
@@ -167,6 +172,15 @@ async def test_a_saved_task_names_an_agent_of_the_workspace():
 
     with pytest.raises(TaskDefinitionValidationError, match="does not exist"):
         await service.create(_create(agent_id=uuid4()))
+
+    assert definitions.rows == {}
+
+
+async def test_a_saved_task_cannot_name_an_archived_agent():
+    service, definitions, _ = _service()
+
+    with pytest.raises(TaskDefinitionValidationError, match="archived"):
+        await service.create(_create(agent_id=ARCHIVED_AGENT))
 
     assert definitions.rows == {}
 

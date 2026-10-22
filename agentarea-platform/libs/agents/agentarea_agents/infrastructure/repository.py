@@ -1,6 +1,8 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.auth.context import UserContext
 from agentarea_common.base.workspace_scoped_repository import WorkspaceScopedRepository
 from sqlalchemy import and_, delete, select
@@ -14,6 +16,11 @@ from agentarea_agents.domain.skill_models import Skill, agent_skills_table
 class AgentRepository(WorkspaceScopedRepository[Agent]):
     def __init__(self, session: AsyncSession, user_context: UserContext):
         super().__init__(session, Agent, user_context)
+
+    def _listing_conditions(self, filters: dict[str, Any]) -> list[Any]:
+        if "status" in filters:
+            return []
+        return [self.model_class.status != AgentStatus.ARCHIVED]
 
     async def get(self, id: UUID | str) -> Agent | None:
         """Get an agent by ID. Delegates to get_by_id for compatibility."""

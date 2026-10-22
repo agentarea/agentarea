@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.audit import audited
 from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
@@ -927,7 +928,7 @@ class TriggerService:
                 agent_id=str(agent_id),
             )
         agent = await self.agent_repository.get(agent_id)
-        return agent is not None and agent.status == "active"
+        return agent is not None and agent.status == AgentStatus.ACTIVE
 
     async def _validate_agent_exists(self, agent_id: UUID) -> None:
         """Validate that the agent exists before processing triggers.
@@ -952,6 +953,10 @@ class TriggerService:
                 error_msg = f"Agent with ID {agent_id} does not exist"
                 logger.error(error_msg, agent_id=agent_id)
                 raise TriggerValidationError(error_msg, agent_id=str(agent_id))
+            if agent.status == AgentStatus.ARCHIVED:
+                raise TriggerValidationError(
+                    f"Agent {agent_id} is archived; restore it first", agent_id=str(agent_id)
+                )
 
             logger.debug("Agent validation successful", agent_id=agent_id)
 

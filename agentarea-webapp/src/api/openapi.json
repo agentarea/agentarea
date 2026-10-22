@@ -21036,7 +21036,7 @@
     },
     "/v1/workspaces/{workspace}/agents/{agent_id}": {
       "delete": {
-        "description": "Delete an agent (by UUID or workspace-scoped slug).",
+        "description": "Archive an agent (by UUID or workspace-scoped slug).\n\nIt leaves every list and runs nothing more, but stays readable by id so the\nruns it made still show it. ``POST /{agent_id}/restore`` brings it back.",
         "operationId": "delete_agent_v1_agents__agent_id__delete",
         "parameters": [
           {
@@ -21351,6 +21351,69 @@
           "v1",
           "protected",
           "dashboard"
+        ]
+      }
+    },
+    "/v1/workspaces/{workspace}/agents/{agent_id}/restore": {
+      "post": {
+        "description": "Bring an archived agent back into the workspace.",
+        "operationId": "restore_agent_v1_agents__agent_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Slug of the workspace the request acts in",
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Slug of the workspace the request acts in",
+              "maxLength": 120,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore Agent",
+        "tags": [
+          "v1",
+          "protected",
+          "agents"
         ]
       }
     },

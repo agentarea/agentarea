@@ -778,6 +778,9 @@ import type {
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
+  RestoreAgentV1AgentsAgentIdRestorePostData,
+  RestoreAgentV1AgentsAgentIdRestorePostErrors,
+  RestoreAgentV1AgentsAgentIdRestorePostResponses,
   RestoreWorkspaceFileV1FilesRestoreFilePathPostData,
   RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors,
   RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses,
@@ -2433,7 +2436,10 @@ export const getAllToolsV1AgentsToolsGet = <
 /**
  * Delete Agent
  *
- * Delete an agent (by UUID or workspace-scoped slug).
+ * Archive an agent (by UUID or workspace-scoped slug).
+ *
+ * It leaves every list and runs nothing more, but stays readable by id so the
+ * runs it made still show it. ``POST /{agent_id}/restore`` brings it back.
  */
 export const deleteAgentV1AgentsAgentIdDelete = <
   ThrowOnError extends boolean = false,
@@ -2585,6 +2591,36 @@ export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/agents/{agent_id}/overview",
+    ...options,
+  });
+
+/**
+ * Restore Agent
+ *
+ * Bring an archived agent back into the workspace.
+ */
+export const restoreAgentV1AgentsAgentIdRestorePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RestoreAgentV1AgentsAgentIdRestorePostData, ThrowOnError>
+): RequestResult<
+  RestoreAgentV1AgentsAgentIdRestorePostResponses,
+  RestoreAgentV1AgentsAgentIdRestorePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RestoreAgentV1AgentsAgentIdRestorePostResponses,
+    RestoreAgentV1AgentsAgentIdRestorePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/restore",
     ...options,
   });
 

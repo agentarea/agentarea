@@ -4977,6 +4977,15 @@ export const zGetAgentOverviewV1AgentsAgentIdOverviewGetPath = z.object({
 export const zGetAgentOverviewV1AgentsAgentIdOverviewGetResponse =
   zAgentOverviewResponse;
 
+export const zRestoreAgentV1AgentsAgentIdRestorePostPath = z.object({
+  agent_id: z.string(),
+});
+
+/**
+ * Successful Response
+ */
+export const zRestoreAgentV1AgentsAgentIdRestorePostResponse = zAgentResponse;
+
 export const zListAgentTasksV1AgentsAgentIdTasksGetPath = z.object({
   agent_id: z.string().uuid(),
 });

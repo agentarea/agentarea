@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Any
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.rebac.ownership import INVOKER_RELATION, OWNER_RELATIONS
 from sqlalchemy import JSON, Boolean, String, UniqueConstraint
@@ -42,7 +43,7 @@ class Agent(BaseModel, WorkspaceScopedMixin):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    status: Mapped[str] = mapped_column(String, nullable=False, default=AgentStatus.ACTIVE)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     instruction: Mapped[str | None] = mapped_column(String, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)
