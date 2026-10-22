@@ -21,7 +21,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 
@@ -61,7 +60,7 @@ func NewObjectStore(ctx context.Context, cfg workspace.RepositoryConfig) (Object
 	if cfg.Bucket == "" {
 		return nil, errors.New("MCP storage S3 bucket is required")
 	}
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.Region))
+	awsCfg, err := workspace.S3Config(ctx, cfg.Region, cfg.AccessKey, cfg.SecretKey)
 	if err != nil {
 		return nil, fmt.Errorf("load MCP storage S3 configuration: %w", err)
 	}
