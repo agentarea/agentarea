@@ -234,8 +234,7 @@ export function fromRows(rows: Rows): CrmData {
   const account = rows.account[0];
   if (!account || rows.pipelines.length === 0) {
     throw new Error(
-      "The CRM is empty: its storage holds no account, pipeline or owners yet, and this app has no tools to add them. " +
-        "Demo data is written only when a new instance starts with AGENTAREA_MCP_SEED_DEMO=1.",
+      "The CRM is empty: its storage holds no account, pipeline or owners yet; set it up with setup_crm.",
     );
   }
   const stages = groupBy(rows.stages, "pipeline_id");

@@ -8,7 +8,7 @@ import { McpServer, type ReadResourceResult } from "@modelcontextprotocol/server
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { ACTIVITY_TYPES, COMPANY_SIZES, CURRENCIES, DEAL_STATUSES } from "../shared/crm.ts";
+import { ACTIVITY_TYPES, COMPANY_SIZES, CURRENCIES, DEAL_STATUSES, OWNER_KINDS } from "../shared/crm.ts";
 import {
   activityRowSchema,
   companyRowSchema,
@@ -52,8 +52,12 @@ export const VIEW_FILES = VIEWS.map((view) => view.file);
  * one transaction there. `current` is the CRM as of this request, for the
  * owners, stages and sources the tool descriptions name.
  */
-export function createServer(app: AppStore, appDir: string, current: CrmStore): McpServer {
+export function createServer(app: AppStore, appDir: string, current: CrmStore | null): McpServer {
   const server = new McpServer({ name: "Sales CRM MCP App", version: "0.1.0" });
+  if (!current) {
+    registerSetup(server, app);
+    return server;
+  }
   const { data } = current;
   const read = <T>(fn: (store: CrmStore) => T) => app.read((db) => fn(CrmStore.load(db)));
   const write = <T>(fn: (store: CrmStore) => T) =>
@@ -403,6 +407,21 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore): 
       }),
   );
 
+  server.registerTool(
+    "add_owner",
+    {
+      title: "Add owner",
+      description: "Add a sales rep, human or AI agent, who can then own companies, contacts, deals and activities.",
+      inputSchema: ownerFields,
+      annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    },
+    async (fields) =>
+      write((store) => {
+        const owner = store.addOwner(fields);
+        return { content: [{ type: "text" as const, text: `Added owner ${owner.id} ${owner.name} (${owner.kind}).` }] };
+      }),
+  );
+
   for (const view of VIEWS) {
     registerAppResource(
       server,
@@ -422,4 +441,50 @@ export function createServer(app: AppStore, appDir: string, current: CrmStore): 
   }
 
   return server;
+}
+
+const ownerFields = z.object({
+  name: z.string().min(1).describe("Full name"),
+  title: z.string().optional().describe("Role, e.g. Account Executive"),
+  email: z.string().optional(),
+  kind: z.enum(OWNER_KINDS).optional().describe("human or agent, default human"),
+});
+
+/** An instance whose storage holds no CRM yet offers one tool: the one that writes it. */
+function registerSetup(server: McpServer, app: AppStore): void {
+  server.registerTool(
+    "setup_crm",
+    {
+      title: "Set up CRM",
+      description:
+        "This CRM is empty. Write the account, its currencies, the sales owners and the pipeline stages; " +
+        "the other tools appear once it is set up. Owners can be added later.",
+      inputSchema: z.object({
+        account: z.string().min(1).describe("Company whose CRM this is"),
+        base_currency: z.enum(CURRENCIES).describe("Currency forecasts and totals are shown in"),
+        usd_rate: z.number().positive().describe("Price of one USD in RUB, e.g. 92"),
+        owners: z.array(ownerFields).min(1),
+        stages: z.array(z.string().min(1)).min(1).optional().describe("Open stage names, first to last; Won and Lost are added. Default: Lead in, Qualified, Proposal sent, Negotiation"),
+        sources: z.array(z.string().min(1)).optional().describe("Lead sources deals can name"),
+        lost_reasons: z.array(z.string().min(1)).optional().describe("Reasons a deal can be lost with"),
+      }),
+      annotations: { readOnlyHint: false, idempotentHint: false, destructiveHint: false },
+    },
+    async ({ base_currency, usd_rate, lost_reasons, ...rest }) => {
+      const store = await app.transact((db) =>
+        CrmStore.setup(db, { ...rest, baseCurrency: base_currency, usdRate: usd_rate, lostReasons: lost_reasons }),
+      );
+      const { owners, pipelines } = store.data;
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Set up ${store.data.account.name}: ${owners.length} owner${owners.length === 1 ? "" : "s"}, ` +
+              `stages ${pipelines[0].stages.map((s) => s.name).join(" → ")}. Reconnect to see the CRM tools.`,
+          },
+        ],
+      };
+    },
+  );
 }

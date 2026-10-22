@@ -26,9 +26,9 @@ for (const file of VIEW_FILES) {
 
 // The tracker lives in the instance's MCP storage (MCP_MANAGER_URL, MCP_INSTANCE_ID, MCP_STORAGE_TOKEN), never on local disk.
 const store = await openAppStore({ file: DB_FILE, migrations: MIGRATIONS, seed: seedDemo });
-await store.read(TasksStore.load).catch((error: Error) => {
-  console.warn(`${error.message} Until it has data, every MCP request fails.`);
-});
+if (!(await store.read(TasksStore.loadIfSetUp))) {
+  console.log("The tracker is empty: until setup_tracker writes it, the server offers only that tool.");
+}
 
 // Host header validation follows the bind address: on for loopback, off for
 // 0.0.0.0 unless MCP_ALLOWED_HOSTS narrows it.
@@ -38,7 +38,7 @@ app.use(cors());
 // Stateless for both protocol eras: 2026-07-28 requests and 2025 clients each
 // get a fresh server over the shared store, and no session is ever minted.
 const mcp = toNodeHandler(
-  createMcpHandler(async () => createServer(store, appDir, await store.read(TasksStore.load)), {
+  createMcpHandler(async () => createServer(store, appDir, await store.read(TasksStore.loadIfSetUp)), {
     legacy: "stateless",
     onerror: (error) => console.error("MCP request failed:", error),
   })

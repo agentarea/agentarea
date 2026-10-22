@@ -144,8 +144,7 @@ export function fromRows(rows: Rows): TasksData {
   const tracker = rows.tracker[0];
   if (!tracker) {
     throw new Error(
-      "The tracker is empty: its storage holds no people or projects yet, and this app has no tools to add them. " +
-        "Demo data is written only when a new instance starts with AGENTAREA_MCP_SEED_DEMO=1.",
+      "The tracker is empty: its storage holds no people or projects yet; set it up with setup_tracker.",
     );
   }
   const labels = groupBy(rows.issue_labels, "issue_id");

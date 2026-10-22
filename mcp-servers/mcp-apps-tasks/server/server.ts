@@ -8,6 +8,7 @@ import { McpServer, type ReadResourceResult } from "@modelcontextprotocol/server
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { PERSON_KINDS } from "../shared/tasks.ts";
 import {
   addedCommentSchema,
   boardSnapshotSchema,
@@ -55,8 +56,12 @@ const show = (kind: string, value: string | null) => {
  * one transaction there. `current` is the tracker as of this request, for the
  * people and projects the tool descriptions name.
  */
-export function createServer(app: AppStore, appDir: string, current: TasksStore): McpServer {
+export function createServer(app: AppStore, appDir: string, current: TasksStore | null): McpServer {
   const server = new McpServer({ name: "Tasks MCP App", version: "0.1.0" });
+  if (!current) {
+    registerSetup(server, app);
+    return server;
+  }
   const { data } = current;
   const read = <T>(fn: (store: TasksStore) => T) => app.read((db) => fn(TasksStore.load(db)));
   const write = <T>(fn: (store: TasksStore) => T) =>
@@ -281,6 +286,36 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore)
       }),
   );
 
+  server.registerTool(
+    "add_person",
+    {
+      title: "Add person",
+      description: "Add a teammate, human or agent, who can then be an assignee, project lead or comment author.",
+      inputSchema: personFields,
+      annotations: { readOnlyHint: false, idempotentHint: false },
+    },
+    async (fields) =>
+      write((store) => {
+        const person = store.addPerson(fields);
+        return { content: [{ type: "text" as const, text: `Added ${person.name} as @${person.handle} (${person.kind}).` }] };
+      }),
+  );
+
+  server.registerTool(
+    "create_project",
+    {
+      title: "Create project",
+      description: "Create a project. Its issues get keys from the project key: OPS-1, OPS-2 and so on.",
+      inputSchema: projectFields(personArg("Project lead")),
+      annotations: { readOnlyHint: false, idempotentHint: false },
+    },
+    async (fields) =>
+      write((store) => {
+        const project = store.createProject(fields);
+        return { content: [{ type: "text" as const, text: `Created project ${project.key} (${project.name}).` }] };
+      }),
+  );
+
   for (const view of VIEWS) {
     registerAppResource(
       server,
@@ -300,4 +335,53 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore)
   }
 
   return server;
+}
+
+const personFields = z.object({
+  name: z.string().min(1).describe("Full name"),
+  handle: z.string().min(1).describe('Short unique handle, e.g. "maya"; tools accept it in place of the name'),
+  kind: z.enum(PERSON_KINDS).optional().describe("human or agent, default human"),
+  title: z.string().optional().describe("Role, e.g. Head of Sales"),
+});
+
+const projectFields = (lead: z.ZodString) =>
+  z.object({
+    key: z.string().min(1).describe('Issue key prefix, 2-10 latin letters and digits, e.g. "OPS"'),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    lead,
+  });
+
+/** An instance whose storage holds no tracker yet offers one tool: the one that writes it. */
+function registerSetup(server: McpServer, app: AppStore): void {
+  server.registerTool(
+    "setup_tracker",
+    {
+      title: "Set up tracker",
+      description:
+        "This tracker is empty. Write its team, whose tracker it is (the default actor), and its first projects; " +
+        "the other tools appear once it is set up. People and projects can be added later.",
+      inputSchema: z.object({
+        people: z.array(personFields).min(1),
+        viewer: z.string().describe("Handle of the person whose tracker this is; \"me\" in later calls"),
+        projects: z.array(projectFields(z.string().describe("Handle of the project lead"))).min(1),
+      }),
+      annotations: { readOnlyHint: false, idempotentHint: false },
+    },
+    async (setup) => {
+      const store = await app.transact((db) => TasksStore.setup(db, setup));
+      const { people, projects } = store.data;
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Set up the tracker with ${people.length === 1 ? "1 person" : `${people.length} people`} and ` +
+              `${plural(projects.length, "project")}: ${projects.map((p) => p.key).join(", ")}. ` +
+              "Reconnect to see the task tools.",
+          },
+        ],
+      };
+    },
+  );
 }
