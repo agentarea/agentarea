@@ -56,3 +56,19 @@ class AgentDeleted(DomainEvent):
     def __init__(self, agent_id: UUID) -> None:
         super().__init__()
         self.agent_id = agent_id
+
+
+class AgentArchived(DomainEvent):
+    """Event emitted when an agent is archived."""
+
+    def __init__(self, agent_id: UUID) -> None:
+        super().__init__()
+        self.agent_id = agent_id
+
+
+class AgentRestored(DomainEvent):
+    """Event emitted when an archived agent is restored."""
+
+    def __init__(self, agent_id: UUID) -> None:
+        super().__init__()
+        self.agent_id = agent_id

@@ -121,6 +121,7 @@ import {
   removeSkillMember,
   resolveEscalation,
   resolvePrincipals,
+  restoreAgent,
   resumeAgentTask,
   retryAgentTask,
   sendTaskCommand,
@@ -156,6 +157,10 @@ export async function getAgentAction(agentId: string) {
 
 export async function installAgentAction(agentId: string) {
   return await installAgent(agentId);
+}
+
+export async function restoreAgentAction(agentId: string) {
+  return await restoreAgent(agentId);
 }
 
 export async function listModelInstancesAction(params?: {

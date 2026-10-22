@@ -6,6 +6,7 @@ import { ChatProvider } from "../shared/ChatContext";
 import { isRunningTask } from "../shared/taskStatus";
 import AgentHeaderControls from "./components/AgentHeaderControls";
 import AgentHeaderTabs from "./components/AgentHeaderTabs";
+import ArchivedAgentBanner from "./components/ArchivedAgentBanner";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -23,6 +24,7 @@ export default async function AgentLayout({ params, children }: Props) {
   // Catalog (built-in, not-yet-forked) agents have no tasks/settings/payments to
   // operate on — only the read-only preview. Hide the operational tabs.
   const isCatalog = Boolean((agent as { is_catalog?: boolean }).is_catalog);
+  const isArchived = agent.status === "archived";
 
   // In-progress count for the Tasks tab pill. Best-effort: a failed lookup
   // just hides the number.
@@ -51,7 +53,11 @@ export default async function AgentLayout({ params, children }: Props) {
             { label: agent.name, href: `/agents/${agentRef}` },
           ],
           controls: (
-            <AgentHeaderControls agentRef={agentRef} isCatalog={isCatalog} />
+            <AgentHeaderControls
+              agentRef={agentRef}
+              isCatalog={isCatalog}
+              isArchived={isArchived}
+            />
           ),
         }}
         className="p-0 h-full"
@@ -61,6 +67,7 @@ export default async function AgentLayout({ params, children }: Props) {
           )
         }
       >
+        {isArchived && <ArchivedAgentBanner agentId={agent.id} />}
         {children}
       </ContentBlock>
     </ChatProvider>

@@ -103,6 +103,15 @@ class WorkspaceScopedRepository[T]:
             conditions.append(getattr(self.model_class, field) == value)
         return conditions
 
+    def _listing_conditions(self, filters: dict[str, Any]) -> list[Any]:
+        """Conditions every listing and count adds unless ``filters`` overrides them.
+
+        For rows that stay readable by id but leave the working set, such as an
+        archived agent. ``list_all(include_archived=True)`` skips them, for
+        callers that name rows rather than offer them.
+        """
+        return []
+
     def _get_creator_workspace_filter(self):
         """Get the creator and workspace filter for queries."""
         model = cast(Any, self.model_class)
@@ -169,6 +178,7 @@ class WorkspaceScopedRepository[T]:
         limit: int | None = None,
         offset: int | None = None,
         ids: set[str] | None = None,
+        include_archived: bool = False,
         **filters: Any,
     ) -> list[T]:
         """List records in the current workspace, optionally narrowed to ``ids``.
@@ -182,6 +192,7 @@ class WorkspaceScopedRepository[T]:
             limit: Maximum number of records to return
             offset: Number of records to skip
             ids: Restrict to these record ids; ``None`` applies no id filter
+            include_archived: Also return rows ``_listing_conditions`` leaves out
             **filters: Additional field filters
 
         Returns:
@@ -197,6 +208,8 @@ class WorkspaceScopedRepository[T]:
                 query = query.where(cast(Any, self.model_class).id.in_(as_record_ids(ids)))
 
             query = query.where(*self._field_filters(filters))
+            if not include_archived:
+                query = query.where(*self._listing_conditions(filters))
 
             # Order by newest first
             if hasattr(self.model_class, "created_at"):
@@ -227,6 +240,7 @@ class WorkspaceScopedRepository[T]:
         query = select(func.count(cast(Any, self.model_class).id))
         query = query.where(self._get_workspace_filter())
         query = query.where(*self._field_filters(filters))
+        query = query.where(*self._listing_conditions(filters))
 
         result = await self.session.execute(query)
         return result.scalar() or 0

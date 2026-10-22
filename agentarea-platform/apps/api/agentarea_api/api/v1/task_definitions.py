@@ -9,6 +9,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from agentarea_api.api.deps.services import get_task_definition_service
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.utils.types import UtcDatetime
@@ -174,6 +175,8 @@ async def run_task_definition(
         raise HTTPException(status_code=422, detail="Task policy rejected") from e
     except AgentModelNotConfiguredError as e:
         raise HTTPException(status_code=422, detail="Agent model is not configured") from e
+    except AgentArchivedError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
         logger.error("Agent validation failed for task definition %s", definition_id, exc_info=True)
         raise HTTPException(status_code=404, detail="Agent validation error") from e

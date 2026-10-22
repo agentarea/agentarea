@@ -1,6 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import {
-  AlertTriangle,
   Boxes,
   CalendarClock,
   Clock,
@@ -13,6 +12,7 @@ import type {
   TriggerExecutionResponse,
   TriggerResponse,
 } from "@/api/client/types.gen";
+import NoticeBanner from "@/components/NoticeBanner";
 import {
   EmptyRow,
   FactRow,
@@ -75,7 +75,11 @@ export type TriggerOverviewModel = {
    * shown (header, "When to run") and how "Next run" reads while idle. */
   isStream: boolean;
   /** The stream whose events fire it, and when that stream last received one. */
-  stream: { id: string; name: string | null; lastEventAt: string | null } | null;
+  stream: {
+    id: string;
+    name: string | null;
+    lastEventAt: string | null;
+  } | null;
   lastExecutionAt: string | null;
   nextRunTime: string | null;
   metrics: {
@@ -239,15 +243,13 @@ export async function TriggerOverviewView({
         }
       />
 
-
       {model.needsOwner && (
-        <div className="mx-4 mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:shrink-0 dark:border-amber-700/60 dark:bg-amber-900/20 dark:text-amber-200">
-          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div>
-            <div className="font-medium">{t("needsOwnerTitle")}</div>
-            <div className="text-xs">{t("needsOwnerBody")}</div>
-          </div>
-        </div>
+        <NoticeBanner
+          title={t("needsOwnerTitle")}
+          className="mx-4 mt-3 md:shrink-0"
+        >
+          {t("needsOwnerBody")}
+        </NoticeBanner>
       )}
 
       <div className="w-full bg-muted/20 px-4 pb-11 pt-[18px] md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
@@ -313,9 +315,7 @@ export async function TriggerOverviewView({
             value={next ? next.value : "—"}
             unit={relUnit(next, t)}
             bar={null}
-            sub={
-              model.cron ? model.scheduleText : t("noScheduleStream")
-            }
+            sub={model.cron ? model.scheduleText : t("noScheduleStream")}
           />
         </StatStrip>
 

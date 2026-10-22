@@ -23,6 +23,7 @@ from agentarea_api.api.deps.services import (
     get_read_agent_service,
     get_trigger_service,
 )
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.auth.context import Subject, UserContext
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.permission import require_permission
@@ -592,7 +593,10 @@ async def update_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     await require_permission("edit", "agent", str(resolved_id), user_context)
     validate_code_tool_names(data.tools)
-    agent = await agent_service.update_agent(id=resolved_id, payload=data)
+    try:
+        agent = await agent_service.update_agent(id=resolved_id, payload=data)
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     await _reassert_creator_ownership(agent, user_context)
@@ -615,12 +619,44 @@ async def delete_agent(
     user_context: UserContextDep,
     agent_service: AgentService = Depends(get_agent_service),
 ):
-    """Delete an agent (by UUID or workspace-scoped slug)."""
+    """Archive an agent (by UUID or workspace-scoped slug).
+
+    It leaves every list and runs nothing more, but stays readable by id so the
+    runs it made still show it. ``POST /{agent_id}/restore`` brings it back.
+    """
     resolved_id = await _resolve_agent_id(agent_service, agent_id)
     if not resolved_id:
         raise HTTPException(status_code=404, detail="Agent not found")
     await require_permission("delete", "agent", str(resolved_id), user_context)
-    success = await agent_service.delete_agent(resolved_id)
+    success = await agent_service.archive_agent(resolved_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success"}
+
+
+@router.post(
+    "/{agent_id}/restore",
+    response_model=AgentResponse,
+    dependencies=[
+        enforced_in_handler("per-object permission resolved by the PDP once the object is loaded")
+    ],
+)
+async def restore_agent(
+    agent_id: str,
+    user_context: UserContextDep,
+    session: DatabaseSessionDep,
+    agent_service: AgentService = Depends(get_agent_service),
+):
+    """Bring an archived agent back into the workspace."""
+    resolved_id = await _resolve_agent_id(agent_service, agent_id)
+    if not resolved_id:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await require_permission("delete", "agent", str(resolved_id), user_context)
+    if not await agent_service.restore_agent(resolved_id):
+        raise HTTPException(status_code=404, detail="Agent not found")
+    agent = await agent_service.get_with_skills(resolved_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    response = AgentResponse.from_domain(agent, include_skills=True)
+    await _overlay_approval_flags(session, user_context, [response])
+    return response

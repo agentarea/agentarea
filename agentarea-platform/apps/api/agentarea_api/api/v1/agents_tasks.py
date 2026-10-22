@@ -28,6 +28,7 @@ from agentarea_api.api.deps.services import (
     get_task_service,
     get_temporal_workflow_service,
 )
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
@@ -656,7 +657,7 @@ async def get_all_tasks(
         # Sequential awaits: agent_service and task_service share one AsyncSession
         # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
         # single connection ("another operation is in progress").
-        agents_result = await agent_service.list()
+        agents_result = await agent_service.list(include_archived=True)
         agent_map = {str(agent.id): agent.name for agent in agents_result}
         task_orms = await task_service.task_repository.list_page(
             limit=limit,
@@ -983,6 +984,8 @@ async def create_task_for_agent_with_stream(
             raise HTTPException(status_code=422, detail="Task policy rejected") from exc
         except AgentModelNotConfiguredError as exc:
             raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+        except AgentArchivedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
         try:
             created_task = await task_service.dispatch_reserved_run(created_task)
@@ -1026,6 +1029,8 @@ async def create_task_for_agent_with_stream(
             creation_error = ("Task policy rejected", "policy_validation_error")
         except AgentModelNotConfiguredError:
             creation_error = ("Agent model is not configured", "model_not_configured")
+        except AgentArchivedError as exc:
+            creation_error = (str(exc), "agent_archived")
         except BudgetCapExceededError as exc:
             scope = "Agent" if exc.agent_id else "Workspace"
             spend = "LLM spend" if exc.kind == "llm" else "spend"
@@ -1215,6 +1220,8 @@ async def create_task_for_agent_sync(
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except AgentModelNotConfiguredError as exc:
         raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         # Agent validation errors
         logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
@@ -1321,6 +1328,8 @@ async def schedule_task_for_agent(
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except AgentModelNotConfiguredError as exc:
         raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
         raise HTTPException(status_code=404, detail="Agent validation error") from exc
@@ -2128,6 +2137,8 @@ async def retry_agent_task(
         retried = await task_service.retry_last_turn(task_id)
     except RunStillClosingError as exc:
         raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except BudgetCapExceededError:
         raise
     except PolicyValidationError as exc:
@@ -2430,6 +2441,8 @@ async def send_task_command(
         raise
     except RunStillClosingError as exc:
         raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except Exception as e:

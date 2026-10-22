@@ -345,6 +345,8 @@ export function getAgentStatusPresentation(status: string): StatusPresentation {
     case "inactive":
     case "disabled":
       return { label: "Inactive", kind: "off" };
+    case "archived":
+      return { label: "Archived", kind: "off" };
     case "error":
     case "failed":
       return { label: "Error", kind: "failed" };

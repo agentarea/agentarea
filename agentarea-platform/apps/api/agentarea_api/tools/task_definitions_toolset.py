@@ -13,6 +13,7 @@ from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_tasks.application.task_definition_service import TaskDefinitionService
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError, BudgetCapExceededError
 from agentarea_tasks.domain.task_definitions import (
@@ -159,6 +160,7 @@ class TaskDefinitionsToolset(Toolset):
             except (
                 TaskDefinitionNotFoundError,
                 AgentModelNotConfiguredError,
+                AgentArchivedError,
                 BudgetCapExceededError,
             ) as exc:
                 raise ToolError(str(exc)) from None

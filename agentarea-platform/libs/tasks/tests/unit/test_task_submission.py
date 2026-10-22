@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
     EffectivePolicy,
@@ -519,6 +520,24 @@ async def test_create_and_execute_blocks_agent_without_model():
     mocks["agent_repo"].get = AsyncMock(return_value=agent)
 
     with pytest.raises(AgentModelNotConfiguredError):
+        await service.create_and_execute_task_with_workflow(
+            agent_id=agent.id,
+            description="do x",
+            workspace_id="ws-abc",
+            user_id="user-123",
+            provenance=_STARTED,
+        )
+
+    mocks["task_manager"].submit_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_archived_agent_takes_no_new_run():
+    service, mocks = _make_service()
+    agent = mocks["agent_repo"].get.return_value
+    agent.status = AgentStatus.ARCHIVED
+
+    with pytest.raises(AgentArchivedError):
         await service.create_and_execute_task_with_workflow(
             agent_id=agent.id,
             description="do x",

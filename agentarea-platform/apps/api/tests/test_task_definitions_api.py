@@ -56,7 +56,9 @@ class _Definitions:
 
 class _Agents:
     async def get(self, agent_id):
-        return SimpleNamespace(id=agent_id) if agent_id in (AGENT, OTHER_AGENT) else None
+        if agent_id in (AGENT, OTHER_AGENT):
+            return SimpleNamespace(id=agent_id, status="active")
+        return None
 
 
 class _Session:

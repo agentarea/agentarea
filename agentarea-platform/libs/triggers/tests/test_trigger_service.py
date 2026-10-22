@@ -205,6 +205,15 @@ class TestTriggerService:
             await trigger_service.create_trigger(sample_cron_trigger_data)
 
     @pytest.mark.asyncio
+    async def test_create_trigger_archived_agent(
+        self, trigger_service, mock_agent_repository, sample_cron_trigger_data
+    ):
+        mock_agent_repository.get.return_value = MagicMock(status="archived")
+
+        with pytest.raises(TriggerValidationError, match="archived"):
+            await trigger_service.create_trigger(sample_cron_trigger_data)
+
+    @pytest.mark.asyncio
     async def test_create_trigger_invalid_cron_expression(
         self, trigger_service, mock_agent_repository, sample_agent_id
     ):

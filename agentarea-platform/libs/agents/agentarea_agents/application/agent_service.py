@@ -7,6 +7,7 @@ from uuid import UUID
 
 from agentarea_agents_sdk.tools.a2a_agent_tool import agent_address, delegate_tool_name
 from agentarea_agents_sdk.tools.media_toolset import MEDIA_TOOLSET
+from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_common.audit import audited
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.base import RepositoryFactory
@@ -25,7 +26,13 @@ from agentarea_agents.application.approval_sync import (
     sync_agent_approval_rules,
 )
 from agentarea_agents.application.skill_service import SkillService
-from agentarea_agents.domain.events import AgentCreated, AgentDeleted, AgentUpdated
+from agentarea_agents.domain.events import (
+    AgentArchived,
+    AgentCreated,
+    AgentDeleted,
+    AgentRestored,
+    AgentUpdated,
+)
 from agentarea_agents.domain.models import Agent
 from agentarea_agents.infrastructure.catalog_agent_repository import (
     CatalogAgentItem,
@@ -345,7 +352,9 @@ class AgentService(BaseCrudService[Agent]):
             targets,
         )
 
-    async def list(self, include_catalog: bool = False) -> builtins.list[Agent]:
+    async def list(
+        self, include_catalog: bool = False, include_archived: bool = False
+    ) -> builtins.list[Agent]:
         """List the workspace's own agents.
 
         Catalog (built-in) agents live in the registry and are discovered via
@@ -353,19 +362,23 @@ class AgentService(BaseCrudService[Agent]):
         default. Pass ``include_catalog=True`` to also project unforked catalog
         items as read-only (ADR-003).
 
+        Archived agents are left out unless ``include_archived``; they still
+        count as forks, so their catalog item is not offered again.
+
         Forked copies (a tenant ``agents`` row carrying ``registry_item_id``) are
         always flagged ``update_available`` when the catalog version has moved on
         from the version recorded at fork time.
         """
         repo = self._get_agent_repository()
-        tenant_agents = await repo.list_all()
+        all_agents = await repo.list_all(include_archived=True)
+        tenant_agents = [
+            a for a in all_agents if include_archived or a.status != AgentStatus.ARCHIVED
+        ]
 
         catalog_repo = self._get_catalog_repository()
         catalog_items = await catalog_repo.list_items()
         forked_by_item: dict[str, Agent] = {
-            str(a.registry_item_id): a
-            for a in tenant_agents
-            if getattr(a, "registry_item_id", None)
+            str(a.registry_item_id): a for a in all_agents if getattr(a, "registry_item_id", None)
         }
         for item in catalog_items:
             forked = forked_by_item.get(item.id)
@@ -550,15 +563,16 @@ class AgentService(BaseCrudService[Agent]):
         if ``id`` is neither a tenant agent nor a known catalog item.
         """
         existing = await self.get(id)
-        if existing is not None:
-            return existing
-        item = await self._get_catalog_repository().get_item(str(id))
-        if item is None:
-            return None
-        forked = await self._get_agent_repository().get_by_registry_item_id(item.id)
-        if forked is not None:
-            return forked
-        return await self._fork_catalog_agent(item)
+        if existing is None:
+            item = await self._get_catalog_repository().get_item(str(id))
+            if item is None:
+                return None
+            existing = await self._get_agent_repository().get_by_registry_item_id(item.id)
+            if existing is None:
+                return await self._fork_catalog_agent(item)
+        if existing.status == AgentStatus.ARCHIVED:
+            await self.restore_agent(existing.id)
+        return existing
 
     @audited("agent.update", resource_type="agent", resource_id_param="id")
     async def update_agent(self, id: UUID, payload: AgentUpdate) -> Agent | None:
@@ -571,9 +585,13 @@ class AgentService(BaseCrudService[Agent]):
             item = await self._get_catalog_repository().get_item(str(id))
             if item is None:
                 return None
-            agent = await self._fork_catalog_agent(item)
+            agent = await self._get_agent_repository().get_by_registry_item_id(
+                item.id
+            ) or await self._fork_catalog_agent(item)
 
         await self._check_write_access(agent)
+        if agent.status == AgentStatus.ARCHIVED:
+            raise AgentArchivedError(agent.id)
 
         patch = payload.model_dump(exclude_unset=True)
         tools_edited = "tools" in patch and payload.tools is not None
@@ -666,8 +684,38 @@ class AgentService(BaseCrudService[Agent]):
         repo = self._get_agent_repository()
         return await repo.get_with_skills(id)
 
+    @audited("agent.archive", resource_type="agent", resource_id_param="id")
+    async def archive_agent(self, id: UUID) -> bool:
+        """Take an agent out of the working set; its runs keep pointing at it."""
+        agent = await self.get(id)
+        if not agent:
+            return False
+        await self._check_write_access(agent)
+        if agent.status != AgentStatus.ARCHIVED:
+            agent.status = AgentStatus.ARCHIVED
+            await self.update(agent)
+            await self.event_broker.publish(AgentArchived(agent_id=agent.id))
+        return True
+
+    @audited("agent.restore", resource_type="agent", resource_id_param="id")
+    async def restore_agent(self, id: UUID) -> bool:
+        agent = await self.get(id)
+        if not agent:
+            return False
+        await self._check_write_access(agent)
+        if agent.status == AgentStatus.ARCHIVED:
+            agent.status = AgentStatus.ACTIVE
+            await self.update(agent)
+            await self.event_broker.publish(AgentRestored(agent_id=agent.id))
+        return True
+
     @audited("agent.delete", resource_type="agent", resource_id_param="id")
     async def delete_agent(self, id: UUID) -> bool:
+        """Remove the row for good: rolls back an agent whose creation failed half-way.
+
+        People archive agents instead (``archive_agent``), so the runs an agent
+        made still show it.
+        """
         agent = await self.get(id)
         if not agent:
             return False

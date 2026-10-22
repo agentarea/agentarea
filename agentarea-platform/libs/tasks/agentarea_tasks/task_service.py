@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_common.artifacts.workspace import WorkspaceValidationError, normalize_workspace_path
 from agentarea_common.audit import audited
 from agentarea_common.events.broker import EventBroker
@@ -353,6 +354,7 @@ class TaskService(BaseTaskService):
 
         Raises:
             ValueError: If the agent does not exist.
+            AgentArchivedError: If the agent is archived.
         """
         if not self.agent_repository:
             logger.warning("Agent repository not available - skipping agent validation")
@@ -361,6 +363,8 @@ class TaskService(BaseTaskService):
         agent = await self.agent_repository.get(agent_id)
         if not agent:
             raise ValueError(f"Agent with ID {agent_id} does not exist")
+        if agent.status == AgentStatus.ARCHIVED:
+            raise AgentArchivedError(agent_id)
         return agent
 
     @staticmethod
@@ -1115,6 +1119,11 @@ class TaskService(BaseTaskService):
             if task.status in _STOPPED_TASK_STATUSES and execution_status == "running":
                 raise RunStillClosingError(task.id)
             return False
+
+        if self.agent_repository is not None:
+            agent = await self.agent_repository.get(task.agent_id)
+            if agent is not None and agent.status == AgentStatus.ARCHIVED:
+                raise AgentArchivedError(task.agent_id)
 
         await self._refresh_governance_snapshot(task)
         resume = await self._conversation_resume(task)

@@ -47,7 +47,7 @@ smaller and the model cannot act in the wrong workspace.
     ```
 
     ```text
-    agentarea/agents	5	Create, list, update, and delete agents in the workspace.
+    agentarea/agents	6	Create, list, update, archive, and restore agents in the workspace.
     agentarea/runs	12	Start, monitor, and manage agent execution runs.
     agentarea/inbox	1	Inspect agent inbox messages awaiting human input.
     ```

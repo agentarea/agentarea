@@ -18,6 +18,7 @@ from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
 from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.auth.authorization import AuthorizationService
 from agentarea_common.auth.resource_visibility import readable_resource_ids
 from agentarea_common.di.container import resolve
@@ -56,8 +57,12 @@ class AgentRefOutput(BaseModel):
     name: str = Field(description="Agent name.")
 
 
-class AgentDeletedOutput(BaseModel):
-    deleted: bool = Field(description="False when no such agent existed.")
+class AgentArchivedOutput(BaseModel):
+    archived: bool = Field(description="False when no such agent existed.")
+
+
+class AgentRestoredOutput(BaseModel):
+    restored: bool = Field(description="False when no such agent existed.")
 
 
 def _build_service(repo_factory, event_broker) -> AgentService:
@@ -68,12 +73,12 @@ def _build_service(repo_factory, event_broker) -> AgentService:
 @toolset(
     namespace="agentarea/agents",
     display_name="Agent Management",
-    description="Create, list, update, and delete agents in the workspace.",
+    description="Create, list, update, archive, and restore agents in the workspace.",
     category="platform",
     plane="build",
 )
 class AgentsToolset(Toolset):
-    """Manage agents: list, get, create, update, delete."""
+    """Manage agents: list, get, create, update, archive, restore."""
 
     open_world = False
 
@@ -225,21 +230,46 @@ class AgentsToolset(Toolset):
 
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
-            agent = await service.update_agent(UUID(agent_id), payload)
+            try:
+                agent = await service.update_agent(UUID(agent_id), payload)
+            except AgentArchivedError as exc:
+                raise ToolError(str(exc)) from exc
             if not agent:
                 raise ToolError("Agent not found")
             return json.dumps({"id": str(agent.id), "name": agent.name}, default=str)
 
     @tool_method(
-        display_name="Delete agent",
+        display_name="Archive agent",
         effect="destructive",
         idempotent=True,
-        output=AgentDeletedOutput,
+        output=AgentArchivedOutput,
     )
     @requires("delete", "agent", id_param="agent_id")
-    async def delete(self, agent_id: Annotated[str, Field(description=_AGENT_ID)]) -> str:
-        """Delete an agent by ID."""
+    async def archive(self, agent_id: Annotated[str, Field(description=_AGENT_ID)]) -> str:
+        """Archive an agent by ID.
+
+        It leaves the agent list, its triggers stop, and it takes no new runs;
+        the runs it already made keep showing it. ``restore`` brings it back.
+        """
         async with platform_context() as (_s, _u, repo_factory, event_broker, _):
             service = _build_service(repo_factory, event_broker)
-            deleted = await service.delete_agent(UUID(agent_id))
-            return json.dumps({"deleted": deleted})
+            archived = await service.archive_agent(UUID(agent_id))
+            return json.dumps({"archived": archived})
+
+    @tool_method(
+        display_name="Restore agent",
+        effect="write",
+        idempotent=True,
+        output=AgentRestoredOutput,
+    )
+    @requires("delete", "agent", id_param="agent_id")
+    async def restore(self, agent_id: Annotated[str, Field(description=_AGENT_ID)]) -> str:
+        """Bring an archived agent back.
+
+        A trigger that fired while the agent was archived was stopped then, and
+        stays off until it is turned on again.
+        """
+        async with platform_context() as (_s, _u, repo_factory, event_broker, _):
+            service = _build_service(repo_factory, event_broker)
+            restored = await service.restore_agent(UUID(agent_id))
+            return json.dumps({"restored": restored})
