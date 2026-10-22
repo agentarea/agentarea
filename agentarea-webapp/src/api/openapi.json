@@ -23156,16 +23156,6 @@
         "operationId": "delete_wallet_v1_agents__agent_id__wallet_delete",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23175,6 +23165,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           }
@@ -23211,16 +23210,6 @@
         "operationId": "get_wallet_v1_agents__agent_id__wallet_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23230,6 +23219,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           }
@@ -23273,16 +23271,6 @@
         "operationId": "create_wallet_v1_agents__agent_id__wallet_post",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23292,6 +23280,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           }
@@ -23345,16 +23342,6 @@
         "operationId": "update_wallet_v1_agents__agent_id__wallet_put",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23364,6 +23351,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           }
@@ -23419,16 +23415,6 @@
         "operationId": "get_wallet_balance_v1_agents__agent_id__wallet_balance_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23438,6 +23424,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           }
@@ -23483,16 +23478,6 @@
         "operationId": "fund_wallet_v1_agents__agent_id__wallet_fund_post",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23502,6 +23487,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           }
@@ -23557,16 +23551,6 @@
         "operationId": "get_payment_history_v1_agents__agent_id__wallet_payments_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "agent_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Agent Id",
-              "type": "string"
-            }
-          },
-          {
             "description": "Slug of the workspace the request acts in",
             "in": "path",
             "name": "workspace",
@@ -23576,6 +23560,15 @@
               "maxLength": 120,
               "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
               "type": "string"
             }
           },
