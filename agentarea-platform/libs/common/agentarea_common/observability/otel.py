@@ -39,13 +39,11 @@ def _configure_tracing(service_name: str) -> None:
     """Install the tracer provider and OTLP span exporter."""
     from opentelemetry import trace
     from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+    from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from temporalio.contrib.opentelemetry import create_tracer_provider
 
     exporter = _create_otlp_span_exporter()
-    # Temporal's OpenTelemetryPlugin refuses any other global provider, and
-    # the worker exits on start; outside workflows it behaves as a plain one.
-    provider = create_tracer_provider(resource=Resource.create({SERVICE_NAME: service_name}))
+    provider = TracerProvider(resource=Resource.create({SERVICE_NAME: service_name}))
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
 

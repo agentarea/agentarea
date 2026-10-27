@@ -43,3 +43,8 @@ reason = "filelock ReadWriteLock on Windows acting on another user's SQLite side
 id = "GHSA-v4x8-3wr5-3wq8"
 ignoreUntil = 2027-01-28
 reason = "filelock ReadWriteLock reopening its SQLite database by name (symlink swap); ReadWriteLock is not used by the platform, litellm or huggingface-hub (FileLock only). Fix is 4.2.1, blocked by litellm's filelock<4."
+
+[[IgnoredVulns]]
+id = "GHSA-gcqx-w48m-w2h4"
+ignoreUntil = 2027-01-28
+reason = "deepmerge <=4.3.1 prototype poisoning in mergeObject(); no fixed release. In agentarea-webapp only through @svgr/plugin-svgo, a build-time SVG-to-component step that merges the repo's own svgo config; no runtime path merges untrusted objects with it. Re-check for a fixed deepmerge or an svgr release that drops it."
