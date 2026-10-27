@@ -64,6 +64,7 @@ export function McpToolSettings({
       </div>
       {tools.length > 0 && (
         <MethodsList
+          wide
           methods={tools}
           selectedMethods={Object.fromEntries(
             tools.map((tool) => [tool.name, enabled(tool.name)])

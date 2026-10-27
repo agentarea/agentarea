@@ -24,6 +24,8 @@ export interface MethodsListProps {
   onApprovalToggle?: (methodName: string, requiresApproval: boolean) => void;
   /** Label override (default: "Available methods") */
   label?: string;
+  /** Two columns on a wide screen, where the list has the room. */
+  wide?: boolean;
 }
 
 export const MethodsList: React.FC<MethodsListProps> = ({
@@ -37,6 +39,7 @@ export const MethodsList: React.FC<MethodsListProps> = ({
   approvalStates,
   onApprovalToggle,
   label,
+  wide = false,
 }) => {
   const t = useTranslations("MethodsList");
 
@@ -73,7 +76,12 @@ export const MethodsList: React.FC<MethodsListProps> = ({
         </div>
       )}
       <Divider className="my-2" />
-      <div className="max-h-60 space-y-0.5 overflow-y-auto">
+      <div
+        className={cn(
+          "max-h-60 space-y-0.5 overflow-y-auto",
+          wide && "lg:grid lg:grid-cols-2 lg:gap-x-4 lg:gap-y-0.5 lg:space-y-0"
+        )}
+      >
         {methods.map((method) => {
           const methodId = `${toolName}-${method.name}`;
           const isChecked = selectedMethods[method.name] === true;

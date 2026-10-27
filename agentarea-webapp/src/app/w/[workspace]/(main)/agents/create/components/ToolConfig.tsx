@@ -561,9 +561,10 @@ const ToolConfig = ({
   };
 
   // A toolset's methods, ticked in place under its row in the sheet.
-  const renderBuiltinMethods = (tool: BuiltinTool) =>
+  const renderBuiltinMethods = (tool: BuiltinTool, wide = false) =>
     tool.available_methods?.length ? (
       <MethodsList
+        wide={wide}
         methods={tool.available_methods}
         selectedMethods={selectedMethods[tool.name] || {}}
         onMethodToggle={(methodName, checked) =>
@@ -581,7 +582,7 @@ const ToolConfig = ({
 
   // An OpenAPI connection's operations, picked one by one; with "all tools"
   // on, every one is ticked.
-  const renderOpenapiOperations = (connectionId: string) => {
+  const renderOpenapiOperations = (connectionId: string, wide = false) => {
     const index = (openapiFields ?? []).findIndex(
       (field) => field.openapi_connection_id === connectionId
     );
@@ -591,6 +592,7 @@ const ToolConfig = ({
     const allowed = watchedOpenapiConfigs?.[index]?.allowed_tools ?? null;
     return (
       <MethodsList
+        wide={wide}
         label={t("create.openapiOperationsLabel")}
         methods={operations}
         selectedMethods={Object.fromEntries(
@@ -970,7 +972,7 @@ const ToolConfig = ({
                         control={control}
                         setValue={setValue}
                       />
-                      {renderBuiltinMethods(builtinTool)}
+                      {renderBuiltinMethods(builtinTool, true)}
                     </>
                   )}
                 </SelectedItemRow>
@@ -1125,7 +1127,7 @@ const ToolConfig = ({
                       {t("create.allToolsIncludingNew")}
                     </label>
                   </div>
-                  {renderOpenapiOperations(item.openapi_connection_id)}
+                  {renderOpenapiOperations(item.openapi_connection_id, true)}
                 </SelectedItemRow>
               );
             })}
