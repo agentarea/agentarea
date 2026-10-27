@@ -374,6 +374,7 @@ export default function DelegationConfig({
   return (
     <AccordionControl
       id="delegation"
+      count={delegates.length}
       accordionValue={accordionValue}
       setAccordionValue={setAccordionValue}
       title={

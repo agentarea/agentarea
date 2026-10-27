@@ -41,6 +41,7 @@ const SkillsConfig = ({
   return (
     <AccordionControl
       id="skills"
+      count={selectedSkills.length}
       accordionValue={accordionValue}
       setAccordionValue={setAccordionValue}
       title={

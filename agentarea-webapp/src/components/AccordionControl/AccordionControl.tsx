@@ -46,6 +46,8 @@ type AccordionControlProps = {
   triggerClassName?: string;
   chevron?: React.ReactNode;
   itemClassName?: string;
+  /** How many items the section holds, read even while it is collapsed. */
+  count?: number;
 } & (DropdownControlProps | CustomControlProps);
 
 export default function AccordionControl({
@@ -58,6 +60,7 @@ export default function AccordionControl({
   triggerClassName,
   chevron,
   itemClassName,
+  count,
   ...props
 }: AccordionControlProps) {
   const isDropdown = "dropdownItems" in props;
@@ -125,6 +128,11 @@ export default function AccordionControl({
             }
           >
             {title}
+            {!!count && (
+              <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
+                {count}
+              </span>
+            )}
           </AccordionTrigger>
           <AccordionContent className="pt-4">{children}</AccordionContent>
         </AccordionItem>

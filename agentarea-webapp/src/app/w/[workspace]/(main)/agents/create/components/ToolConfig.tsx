@@ -706,6 +706,12 @@ const ToolConfig = ({
       {/* Builtin Tools Section */}
       <AccordionControl
         id="tools"
+        count={
+          visibleBuiltinToolFields.length +
+          toolFields.length +
+          (openapiFields?.length ?? 0) +
+          toolGroups.filter(([, members]) => isToolGroupEnabled(members)).length
+        }
         accordionValue={accordionValue}
         setAccordionValue={setAccordionValue}
         title={title}

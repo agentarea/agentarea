@@ -131,6 +131,7 @@ const TriggersConfig = ({
   return (
     <AccordionControl
       id="triggers"
+      count={drafts.length}
       accordionValue={accordionValue}
       setAccordionValue={setAccordionValue}
       title={title}
