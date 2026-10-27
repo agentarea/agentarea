@@ -2,6 +2,7 @@ import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
+import { InfoHint } from "@/components/InfoHint";
 import {
   Control,
   Controller,
@@ -218,6 +219,7 @@ const BasicInformation = ({
               />
               <span className="text-muted-foreground">{t("answerCheck")}</span>
             </label>
+            <InfoHint label={t("answerCheck")}>{t("answerCheckHint")}</InfoHint>
             <span className="text-xs text-muted-foreground">
               {t("answerCheckDescription")}
             </span>

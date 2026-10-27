@@ -3,7 +3,6 @@
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowUpRight } from "lucide-react";
-import EmptyState from "@/components/EmptyState";
 import SearchInput from "@/components/SearchInput/SearchInput";
 import { BlueprintBadge } from "@/components/ui/blueprint-badge";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
@@ -21,12 +20,8 @@ import {
 import { useWorkspacePath } from "@/hooks/useWorkspaceNavigation";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
 import { resolveMcpRef } from "@/lib/mcp/resolveMcpRef";
-import { skillDisplay } from "@/lib/skill-display";
-import {
-  PICKER_BARE_EMPTY_STATE,
-  PickerRow,
-  PickerRowsSkeleton,
-} from "./PickerRow";
+import { PickerEmptyState, PickerRow, PickerRowsSkeleton } from "./PickerRow";
+import { SkillPickerPanel, useSkillSearch } from "./SkillPickerPanel";
 import type { TaskResourceRef } from "./TaskResourceAttach";
 
 type Tab = "skills" | "mcps";
@@ -35,8 +30,6 @@ type Row = {
   id: string;
   title: string;
   subtitle: string | null;
-  /** Short hash, set in mono after the subtitle. */
-  ref: string | null;
   iconSrc: string | null;
   /** Everything a search may match, beyond what is shown. */
   searchText: string;
@@ -81,25 +74,8 @@ export function TaskResourcePanelView({
   const openInNewTab = (path: string) =>
     window.open(inWorkspace(path), "_blank", "noopener,noreferrer");
   const [tab, setTab] = useState<Tab>("skills");
-  const [query, setQuery] = useState("");
-
-  const skillRows: Row[] = resources.skills.map((skill) => {
-    const display = skillDisplay(skill);
-    const selected = skills.some((item) => item.id === skill.id);
-    return {
-      id: skill.id,
-      ...display,
-      iconSrc: null,
-      searchText: skill.name,
-      selected,
-      toggle: () =>
-        onSkillsChange(
-          selected
-            ? skills.filter((item) => item.id !== skill.id)
-            : [...skills, { id: skill.id, name: skill.name }]
-        ),
-    };
-  });
+  const skillSearch = useSkillSearch();
+  const query = skillSearch.query;
 
   const mcpRows: Row[] = resources.mcpInstances.map((instance) => {
     // Same resolver the connections list uses, so a server carries the name
@@ -117,7 +93,6 @@ export function TaskResourcePanelView({
       title: resolved.displayName,
       subtitle:
         resolved.status === "instance" ? (resolved.server?.name ?? null) : null,
-      ref: null,
       iconSrc,
       searchText: instance.name ?? "",
       selected,
@@ -134,73 +109,74 @@ export function TaskResourcePanelView({
   });
 
   const isSkills = tab === "skills";
-  const rows = isSkills ? skillRows : mcpRows;
   const needle = query.trim().toLowerCase();
   const visible = needle
-    ? rows.filter((row) =>
-        [row.title, row.subtitle, row.ref, row.searchText].some((text) =>
+    ? mcpRows.filter((row) =>
+        [row.title, row.subtitle, row.searchText].some((text) =>
           text?.toLowerCase().includes(needle)
         )
       )
-    : rows;
-  const Icon = isSkills ? ENTITY_ICONS.skill : ENTITY_ICONS.mcp;
-  const heading = isSkills ? t("skillsHeading") : t("mcpsHeading");
-  const iconsType = isSkills ? "skills" : "mcp";
-
-  const emptyState = (props: {
-    title: string;
-    description?: string;
-    action?: { label: string; onClick: () => void };
-  }) => (
-    <div className="flex h-full flex-col justify-center">
-      <EmptyState
-        iconsType={iconsType}
-        className={PICKER_BARE_EMPTY_STATE}
-        {...props}
-      />
-    </div>
-  );
+    : mcpRows;
+  const McpIcon = ENTITY_ICONS.mcp;
 
   // Only what is picked; a "0" on every untouched tab would be noise.
   const selectedCount = (count: number) => (count > 0 ? count : undefined);
 
   let body: ReactNode;
-  if (resources.loading) {
+  if (isSkills) {
+    body = (
+      <SkillPickerPanel
+        resources={resources}
+        search={skillSearch}
+        selectedIds={skills.map((item) => item.id)}
+        onAdd={(skill) =>
+          onSkillsChange(
+            skills.some((item) => item.id === skill.id)
+              ? skills
+              : [...skills, { id: skill.id, name: skill.name }]
+          )
+        }
+        onRemove={(skillId) =>
+          onSkillsChange(skills.filter((item) => item.id !== skillId))
+        }
+      />
+    );
+  } else if (resources.loading) {
     body = <PickerRowsSkeleton />;
-  } else if (resources.failed.includes(tab)) {
-    body = emptyState({
-      title: t("loadFailed"),
-      action: { label: t("refresh"), onClick: resources.refresh },
-    });
-  } else if (!rows.length) {
-    body = isSkills
-      ? emptyState({
-          title: t("emptySkillsTitle"),
-          description: t("emptySkillsHint"),
-          action: {
-            label: t("manageSkills"),
-            onClick: () => openInNewTab("/skills/create"),
-          },
-        })
-      : emptyState({
-          title: t("emptyMcpsTitle"),
-          description: t("emptyMcpsHint"),
-          action: {
-            label: t("manageMcps"),
-            onClick: () => openInNewTab("/connections"),
-          },
-        });
+  } else if (resources.failed.includes("mcps")) {
+    body = (
+      <PickerEmptyState
+        iconsType="mcp"
+        title={t("loadFailed")}
+        action={{ label: t("refresh"), onClick: resources.refresh }}
+      />
+    );
+  } else if (!mcpRows.length) {
+    body = (
+      <PickerEmptyState
+        iconsType="mcp"
+        title={t("emptyMcpsTitle")}
+        description={t("emptyMcpsHint")}
+        action={{
+          label: t("manageMcps"),
+          onClick: () => openInNewTab("/connections"),
+        }}
+      />
+    );
   } else if (!visible.length) {
-    body = emptyState({
-      title: t("nothingFoundTitle"),
-      description: t("nothingFound", { query }),
-    });
+    body = (
+      <PickerEmptyState
+        iconsType="mcp"
+        title={t("nothingFoundTitle")}
+        description={t("nothingFound", { query })}
+      />
+    );
   } else {
     body = (
       <>
         <div className="px-3">
           <MenuSectionLabel>
-            {heading} ({visible.length})
+            {t("mcpsHeading")} ({visible.length})
           </MenuSectionLabel>
         </div>
         {visible.map((row) => (
@@ -218,21 +194,11 @@ export function TaskResourcePanelView({
                   className="h-full w-full object-contain"
                 />
               ) : (
-                <Icon strokeWidth={1.85} />
+                <McpIcon strokeWidth={1.85} />
               )
             }
             title={row.title}
-            subtitle={
-              row.subtitle || row.ref ? (
-                <>
-                  {row.subtitle}
-                  {row.subtitle && row.ref ? " · " : null}
-                  {row.ref ? (
-                    <span className="font-mono">{row.ref}</span>
-                  ) : null}
-                </>
-              ) : null
-            }
+            subtitle={row.subtitle}
           />
         ))}
       </>
@@ -254,7 +220,7 @@ export function TaskResourcePanelView({
       <div className="space-y-2 border-b px-5 pb-3 pt-2">
         <SearchInput
           delay={150}
-          onDebouncedChange={setQuery}
+          onDebouncedChange={skillSearch.setQuery}
           placeholder={tCommon("search")}
         />
         <CountSegmentedControl
