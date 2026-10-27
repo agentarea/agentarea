@@ -171,7 +171,7 @@ rejected by the API server.
 | sandboxes.networkPolicy.dns | object | `{"namespace":"kube-system","podLabels":{"k8s-app":"kube-dns"}}` | Labels of the cluster DNS pods sandboxes may query. |
 | sandboxes.networkPolicy.extraEgress | list | `[]` | Additional egress rules, as NetworkPolicy egress entries. |
 | opensandbox-base.rbac.create | bool | `false` |  |
-| opensandbox-base.fastSandbox.crds.install | bool | `false` |  |
+| opensandbox-base.fastSandbox.crds.install | bool | `true` |  |
 | opensandbox-base.fastSandbox.namespaces.createSystem | bool | `false` |  |
 | opensandbox-base.fastSandbox.namespaces.create | bool | `false` |  |
 | opensandbox-base.fastSandbox.rbac.create | bool | `false` |  |

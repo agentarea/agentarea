@@ -216,14 +216,16 @@ sandboxes:
     extraEgress: []
 
 # The BatchSandbox CRDs (vendored OpenSandbox base chart), installed with the
-# controller. Only the OpenSandbox CRDs: no fast-sandbox CRDs, namespaces or RBAC,
-# and no user-facing CRD roles.
+# controller. The OpenSandbox and fast-sandbox CRDs only: no fast-sandbox
+# namespaces or RBAC, and no user-facing CRD roles. The server lists and watches
+# sandbox.fast.io objects on the Kubernetes runtime whatever runs; without their
+# CRDs every informer retry is a 404 and a logged traceback.
 opensandbox-base:
   rbac:
     create: false
   fastSandbox:
     crds:
-      install: false
+      install: true
     namespaces:
       createSystem: false
       create: false
