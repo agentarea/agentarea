@@ -59,6 +59,7 @@ from agentarea_mcp.infrastructure.repository import (
     MCPServerInstanceRepository,
     MCPServerRepository,
 )
+from agentarea_mcp.tool_context import CallerContext
 from agentarea_mcp.transport_spec import instance_transport_spec
 from agentarea_openapi.application.url_validator import validate_url
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -215,6 +216,17 @@ def _jsonrpc_methods(payload: Any) -> list[str]:
     return [
         m["method"] for m in messages if isinstance(m, dict) and isinstance(m.get("method"), str)
     ]
+
+
+def _single_tool_call(body: bytes | None) -> str | None:
+    """The tool a request body calls when it is exactly one tools/call, else None."""
+    if not body:
+        return None
+    try:
+        calls = _iter_jsonrpc_tool_calls(json.loads(body))
+    except ValueError:
+        return None
+    return calls[0][0] if len(calls) == 1 else None
 
 
 def _iter_jsonrpc_tool_calls(payload: Any) -> list[tuple[str, dict[str, Any]]]:
@@ -493,6 +505,22 @@ async def proxy_instance(
             )
         except _MCPHeaderMismatchError as exc:
             return JSONResponse(status_code=400, content=exc.body)
+    # Who this request is for, signed for an instance that takes caller context.
+    # The caller's own X-AgentArea-Context never passes _filter_inbound_headers.
+    caller = CallerContext(
+        workspace_id=str(user_context.workspace_id),
+        user_id=str(user_context.user_id),
+        user_email=user_context.email,
+        client_id=user_context.client_id,
+    )
+    try:
+        outbound_headers.update(
+            await instance_service.call_context_headers(
+                instance, caller, tool=_single_tool_call(body)
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="MCP demand gateway is not configured") from exc
     params = dict(request.query_params)
 
     client = _upstream_client(instance_type, policy=policy)

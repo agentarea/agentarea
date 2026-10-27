@@ -84,10 +84,16 @@ export const MIGRATIONS: Migration[] = [
     `),
   // Outgoing MCP Events (task.assigned), served by events/poll.
   EVENT_LOG_MIGRATION,
+  // People tied to the platform identity the caller context names.
+  (db) =>
+    db.run(`
+      ALTER TABLE people ADD COLUMN platform_id TEXT;
+      CREATE UNIQUE INDEX people_platform_id ON people (platform_id) WHERE platform_id IS NOT NULL;
+    `),
 ];
 
 export const TABLES: Table[] = [
-  { name: "people", columns: ["id", "name", "handle", "kind", "title"], key: ["id"] },
+  { name: "people", columns: ["id", "name", "handle", "kind", "title", "platform_id"], key: ["id"] },
   { name: "tracker", columns: ["id", "as_of", "viewer_id"], key: ["id"] },
   { name: "projects", columns: ["id", "key", "name", "description", "lead_id", "next_number"], key: ["id"] },
   { name: "labels", columns: ["name", "color"], key: ["name"] },
@@ -106,7 +112,9 @@ export const TABLES: Table[] = [
 
 export function toRows(data: TasksData): Rows {
   return {
-    people: data.people.map((p) => ({ id: p.id, name: p.name, handle: p.handle, kind: p.kind, title: p.title })),
+    people: data.people.map((p) => ({
+      id: p.id, name: p.name, handle: p.handle, kind: p.kind, title: p.title, platform_id: p.platformId ?? null,
+    })),
     tracker: [{ id: 1, as_of: data.asOf, viewer_id: data.viewerId }],
     projects: data.projects.map((p) => ({
       id: p.id, key: p.key, name: p.name, description: p.description, lead_id: p.leadId, next_number: p.nextNumber,
@@ -159,6 +167,7 @@ export function fromRows(rows: Rows): TasksData {
     viewerId: str(tracker.viewer_id),
     people: rows.people.map((p) => ({
       id: str(p.id), name: str(p.name), handle: str(p.handle), kind: p.kind as PersonKind, title: str(p.title),
+      platformId: opt(p.platform_id),
     })),
     projects: rows.projects.map((p) => ({
       id: str(p.id), key: str(p.key), name: str(p.name), description: str(p.description), leadId: str(p.lead_id),

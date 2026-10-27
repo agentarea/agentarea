@@ -765,6 +765,7 @@ def dispatch_env(monkeypatch):
     service._resolve_mcp_url_and_headers = AsyncMock(
         return_value=("http://deepwiki.invalid/mcp", {}, None)
     )
+    service.context_key = AsyncMock(return_value=None)
     policy: dict = {}
 
     async def effective(_session, _user_ctx):

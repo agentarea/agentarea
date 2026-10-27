@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/agentarea/mcp-manager/internal/mcpbase"
+	"github.com/agentarea/mcp-manager/internal/mcpcontext"
 	"github.com/agentarea/mcp-manager/internal/mcpspec"
 	"github.com/agentarea/mcp-manager/internal/mcpstorage"
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -58,6 +59,7 @@ type BackendProvider struct {
 	logger  *slog.Logger
 	secrets secrets.SecretResolver
 	storage *mcpstorage.Issuer
+	context *mcpcontext.Issuer
 	hook    InstanceSpecHook
 }
 
@@ -75,6 +77,11 @@ func NewBackendProvider(backend Backend, secretResolver secrets.SecretResolver, 
 // its workload is created.
 func (p *BackendProvider) SetInstanceSpecHook(hook InstanceSpecHook) {
 	p.hook = hook
+}
+
+// SetContextIssuer installs the issuer of opted-in instances' caller-context key.
+func (p *BackendProvider) SetContextIssuer(issuer *mcpcontext.Issuer) {
+	p.context = issuer
 }
 
 // CreateInstance creates a new Kubernetes deployment/service for the MCP server
@@ -97,6 +104,19 @@ func (p *BackendProvider) CreateInstance(ctx context.Context, instance *models.M
 		spec.Environment = make(map[string]string, len(storageEnvironment))
 	}
 	for key, value := range storageEnvironment {
+		spec.Environment[key] = value
+	}
+	contextEnvironment, err := p.context.Environment(instance)
+	if err != nil {
+		p.logger.Error("Failed to issue MCP caller-context key",
+			slog.String("instance_id", instance.InstanceID),
+			slog.String("error", err.Error()))
+		return err
+	}
+	if len(contextEnvironment) > 0 && spec.Environment == nil {
+		spec.Environment = make(map[string]string, len(contextEnvironment))
+	}
+	for key, value := range contextEnvironment {
 		spec.Environment[key] = value
 	}
 	if p.hook != nil {

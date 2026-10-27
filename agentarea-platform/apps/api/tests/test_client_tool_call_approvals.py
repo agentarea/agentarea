@@ -335,6 +335,7 @@ def dispatch(monkeypatch):
     monkeypatch.setattr(client_mcp, "_catalog_server_spec", no_catalog_entry)
     service = MagicMock()
     service.repository.get_by_id = AsyncMock(return_value=instance)
+    service.context_key = AsyncMock(return_value=None)
     service._resolve_mcp_url_and_headers = AsyncMock(
         return_value=("http://deepwiki.invalid/mcp", {}, None)
     )
@@ -381,6 +382,7 @@ async def test_tools_call_hands_the_approval_link_to_the_agent(monkeypatch):
     monkeypatch.setattr(connector_tools_toolset, "platform_context", _ctx)
     service = MagicMock()
     service.needs_connecting = AsyncMock(return_value=False)
+    service.context_key = AsyncMock(return_value=None)
     instance = SimpleNamespace(
         id=uuid4(),
         name="Instantly",

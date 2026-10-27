@@ -70,12 +70,12 @@ function workingHours(ms: number): number {
 // ---------------------------------------------------------------------------
 
 const PEOPLE: Person[] = [
-  { id: "usr_01", name: "Maya Chen", handle: "maya", kind: "human", title: "Engineering Manager" },
-  { id: "usr_02", name: "Daniel Okafor", handle: "daniel", kind: "human", title: "Senior Frontend Engineer" },
-  { id: "usr_03", name: "Priya Raman", handle: "priya", kind: "human", title: "Platform Engineer" },
-  { id: "usr_04", name: "Lena Fischer", handle: "lena", kind: "human", title: "Growth Marketing Lead" },
-  { id: "agt_01", name: "Atlas", handle: "atlas", kind: "agent", title: "Triage and QA agent" },
-  { id: "agt_02", name: "Relay", handle: "relay", kind: "agent", title: "Release and operations agent" },
+  { id: "usr_01", name: "Maya Chen", handle: "maya", kind: "human", title: "Engineering Manager", platformId: null },
+  { id: "usr_02", name: "Daniel Okafor", handle: "daniel", kind: "human", title: "Senior Frontend Engineer", platformId: null },
+  { id: "usr_03", name: "Priya Raman", handle: "priya", kind: "human", title: "Platform Engineer", platformId: null },
+  { id: "usr_04", name: "Lena Fischer", handle: "lena", kind: "human", title: "Growth Marketing Lead", platformId: null },
+  { id: "agt_01", name: "Atlas", handle: "atlas", kind: "agent", title: "Triage and QA agent", platformId: null },
+  { id: "agt_02", name: "Relay", handle: "relay", kind: "agent", title: "Release and operations agent", platformId: null },
 ];
 const VIEWER = "usr_01";
 const AGENTS = PEOPLE.filter((p) => p.kind === "agent").map((p) => p.id);

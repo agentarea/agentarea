@@ -29,6 +29,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/egress"
 	"github.com/agentarea/mcp-manager/internal/environment"
 	"github.com/agentarea/mcp-manager/internal/features"
+	"github.com/agentarea/mcp-manager/internal/mcpcontext"
 	"github.com/agentarea/mcp-manager/internal/mcpgateway"
 	"github.com/agentarea/mcp-manager/internal/mcpstorage"
 	"github.com/agentarea/mcp-manager/internal/models"
@@ -166,7 +167,7 @@ func runControlPlane(
 	if containerManager != nil {
 		containerManager.SetSecretResolver(secretResolver)
 	}
-	providerManager := initProviderManager(runtime.envType, backend, containerManager, secretResolver, mcpstorage.NewIssuer(gatewaySecret, managerURL), logger)
+	providerManager := initProviderManager(runtime.envType, backend, containerManager, secretResolver, mcpstorage.NewIssuer(gatewaySecret, managerURL), mcpcontext.NewIssuer(gatewaySecret), logger)
 
 	sandboxControlConfig, err := sandboxcontrol.LoadConfigFromEnv(cfg.Redis.URL)
 	if err != nil {
@@ -673,12 +674,14 @@ func initProviderManager(
 	containerManager *container.Manager,
 	secretResolver secrets.SecretResolver,
 	storage *mcpstorage.Issuer,
+	callerContext *mcpcontext.Issuer,
 	logger *slog.Logger,
 ) *providers.ProviderManager {
 	urlProvider := providers.NewURLProvider(logger)
 	switch {
 	case envType == "docker" && containerManager != nil:
 		dockerProvider := providers.NewDockerProvider(secretResolver, containerManager, storage, logger)
+		dockerProvider.SetContextIssuer(callerContext)
 		return providers.NewProviderManager(dockerProvider, nil, urlProvider)
 	case envType == "kubernetes" || envType == "dataplane":
 		// Both drive workloads through a Backend rather than a local container
@@ -688,6 +691,7 @@ func initProviderManager(
 		// with "no container provider available".
 		adapter := &backendAdapter{inner: backend}
 		backendProvider := providers.NewBackendProvider(adapter, secretResolver, storage, logger)
+		backendProvider.SetContextIssuer(callerContext)
 		return providers.NewProviderManager(nil, backendProvider, urlProvider)
 	default:
 		// Fallback - only URL provider

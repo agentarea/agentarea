@@ -38,6 +38,8 @@ export type Person = {
   handle: string;
   kind: PersonKind;
   title: string;
+  /** The platform identity this person is, "user:<id>" or "agent:<id>"; null for someone outside it. */
+  platformId: string | null;
 };
 
 export type Project = {

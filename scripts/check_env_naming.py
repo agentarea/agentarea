@@ -113,6 +113,8 @@ WHITELIST = {
     "PORT", "HOST", "PATH", "HOME", "USER", "CI", "VERSION", "TZ",
     "KUBERNETES_SERVICE_HOST", "KUBERNETES_SERVICE_PORT", "KUBECONFIG",
     "REGISTRIES_CONFIG",
+    # what the manager hands a platform-run MCP app container (mcp-apps-kit reads them)
+    "MCP_MANAGER_URL", "MCP_INSTANCE_ID", "MCP_STORAGE_TOKEN", "MCP_CONTEXT_KEY",
 }
 
 # Fixture and tooling paths hold throwaway names, not deployed configuration.

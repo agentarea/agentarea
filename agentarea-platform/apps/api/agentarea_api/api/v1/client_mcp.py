@@ -62,10 +62,12 @@ from agentarea_governance.tool_calls import (
     run_tool_call,
 )
 from agentarea_mcp.application.mcp_aggregator import NS_SEP, AggregatedMember, MCPAggregatorProxy
+from agentarea_mcp.application.mcp_client import call_headers
 from agentarea_mcp.application.tool_list_cache import RedisToolListCache
 from agentarea_mcp.domain.client_models import ClientOpenAPIConnectionLink, ClientPlatformToolset
 from agentarea_mcp.domain.metering import mcp_tool_connection
 from agentarea_mcp.domain.transport import MCPTransport
+from agentarea_mcp.tool_context import CallerContext, context_header
 from agentarea_openapi.application.metering import openapi_tool_connection
 from mcp.server import Server
 from mcp.types import (
@@ -208,6 +210,38 @@ class ClientScope:
     instances: dict[str, Any] | None = None
     # The OpenAPI operations the client carries, by the name it serves each under.
     openapi: dict[str, ClientOpenAPIOperation] | None = None
+    # The key each connection that takes caller context is signed with, by id.
+    context_keys: dict[str, str] | None = None
+
+
+async def _context_keys(
+    instance_service: MCPServerInstanceService, instances: list[Any]
+) -> dict[str, str]:
+    """The caller-context key of every connection that takes one, read while the session is open."""
+    keys: dict[str, str] = {}
+    for instance in instances:
+        key = await instance_service.context_key(instance)
+        if key:
+            keys[str(instance.id)] = key
+    return keys
+
+
+def _caller_headers(scope: ClientScope, namespaced_name: str) -> dict[str, str]:
+    """The signed caller context for one call of ``namespaced_name``, or {} when its connection takes none."""
+    owner = scope.proxy.owner_of(namespaced_name)
+    if owner is None or not scope.context_keys:
+        return {}
+    member, tool = owner
+    instance_id = str(member.mcp_instance_id)
+    caller = CallerContext(
+        workspace_id=str(scope.user_context.workspace_id),
+        user_id=str(scope.user_context.user_id),
+        user_email=scope.user_context.email,
+        client_id=scope.user_context.client_id,
+    )
+    return context_header(
+        caller, scope.context_keys.get(instance_id), instance_id=instance_id, tool=tool
+    )
 
 
 def _platform_tools(client_id: str, attached: list[ClientPlatformToolset]) -> frozenset[str]:
@@ -386,6 +420,7 @@ async def _resolve_client_scope(client_id: str) -> ClientScope | None:
                 client_name=client.name,
                 instances=instances,
                 openapi=client_openapi_operations(openapi_links, connections),
+                context_keys=await _context_keys(instance_service, list(instances.values())),
             )
 
 
@@ -845,14 +880,19 @@ async def call_instance_tool(
         client_id=user_ctx.client_id,
     )
     name = proxy.qualified_name(proxy.members[0], tool_name)
-    scope = replace(scope, instances={str(instance.id): instance})
+    scope = replace(
+        scope,
+        instances={str(instance.id): instance},
+        context_keys=await _context_keys(instance_service, [instance]),
+    )
     try:
         connection = await _scope_tool_connection(scope, name)
     except ToolCostError as error:
         return _refusal(f"the tool's cost declaration is invalid: {error}")
 
     async def invoke() -> ToolCallOutcome:
-        return _call_outcome(await proxy.call_namespaced_tool_result(name, arguments))
+        with call_headers(_caller_headers(scope, name)):
+            return _call_outcome(await proxy.call_namespaced_tool_result(name, arguments))
 
     return await _governed_call(
         scope,
@@ -1094,7 +1134,10 @@ async def _call_tool(_ctx: object, params: CallToolRequestParams) -> CallToolRes
                 return _call_outcome(
                     await client_platform_server().call_tool_result(params.name, arguments)
                 )
-        return _call_outcome(await scope.proxy.call_namespaced_tool_result(params.name, arguments))
+        with call_headers(_caller_headers(scope, params.name)):
+            return _call_outcome(
+                await scope.proxy.call_namespaced_tool_result(params.name, arguments)
+            )
 
     try:
         connection = await _scope_tool_connection(scope, params.name)
