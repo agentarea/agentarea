@@ -21,7 +21,7 @@ version: 0.0.29
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "0.1.1"
+appVersion: "0.1.2"
 home: https://agentarea.ai
 icon: https://raw.githubusercontent.com/agentarea/agentarea/main/agentarea-webapp/public/Icon.png
 sources:
@@ -33,19 +33,19 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/images: |
     - name: agentarea/agentarea-api
-      image: agentarea/agentarea-api:0.1.1
+      image: agentarea/agentarea-api:0.1.2
     - name: agentarea/agentarea-events
-      image: agentarea/agentarea-events:0.1.1
+      image: agentarea/agentarea-events:0.1.2
     - name: agentarea/agentarea-frontend
-      image: agentarea/agentarea-frontend:0.1.1
+      image: agentarea/agentarea-frontend:0.1.2
     - name: agentarea/agentarea-mcp-base
-      image: agentarea/agentarea-mcp-base:0.1.1
+      image: agentarea/agentarea-mcp-base:0.1.2
     - name: agentarea/agentarea-mcp-manager
-      image: agentarea/agentarea-mcp-manager:0.1.1
+      image: agentarea/agentarea-mcp-manager:0.1.2
     - name: agentarea/agentarea-mcp-runner
-      image: agentarea/agentarea-mcp-runner:0.1.1
+      image: agentarea/agentarea-mcp-runner:0.1.2
     - name: agentarea/agentarea-worker
-      image: agentarea/agentarea-worker:0.1.1
+      image: agentarea/agentarea-worker:0.1.2
     - name: amazon/aws-cli
       image: amazon/aws-cli:2.38.2
     - name: busybox

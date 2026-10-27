@@ -26,7 +26,7 @@ import (
 	"github.com/agentarea/event-service/internal/transport"
 )
 
-const version = "0.1.1"
+const version = "0.1.2"
 
 func main() {
 	// Structured logging
