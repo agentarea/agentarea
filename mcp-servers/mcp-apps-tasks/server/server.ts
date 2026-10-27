@@ -3,6 +3,7 @@ import {
   registerAppTool,
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
+import type { Caller } from "@kit/context/caller.ts";
 import { installEvents } from "@kit/events/install.ts";
 import type { AppStore } from "@kit/store/store.ts";
 import { McpServer, ProtocolError, type ReadResourceResult } from "@modelcontextprotocol/server";
@@ -20,7 +21,7 @@ import {
   type AddedComment,
 } from "../shared/schema.ts";
 import { EVENT_TYPES } from "./events.ts";
-import { TasksStore } from "./store.ts";
+import { platformIdOf, TasksStore } from "./store.ts";
 import {
   buildDetail,
   buildSnapshot,
@@ -52,36 +53,58 @@ const show = (kind: string, value: string | null) => {
   return value;
 };
 
+/** Who the platform says is calling, and whether this app runs where it always says so. */
+export type Identity = { caller: Caller | null; required: boolean };
+
+export const NO_CALLER =
+  "This call carries no caller context, so it cannot say who makes the change. Call through AgentArea.";
+
 /**
  * The app is the view resources plus their tools. The data is not part of
  * it: it lives in `app`, the instance's store; every tool call is one read or
  * one transaction there. `current` is the tracker as of this request, for the
  * people and projects the tool descriptions name.
  */
-export function createServer(app: AppStore, appDir: string, current: TasksStore | null): McpServer {
+export function createServer(app: AppStore, appDir: string, current: TasksStore | null, identity: Identity): McpServer {
   const server = new McpServer({ name: "Tasks MCP App", version: "0.1.0" });
   installEvents(server, { app, types: EVENT_TYPES, ProtocolError });
   if (!current) {
-    registerSetup(server, app);
+    registerSetup(server, app, identity);
     return server;
   }
   const { data } = current;
-  const read = <T>(fn: (store: TasksStore) => T) => app.read((db) => fn(TasksStore.load(db)));
+  const { caller } = identity;
+  // A read names the caller when they are on the board; a write adds them first.
+  const read = <T>(fn: (store: TasksStore) => T) =>
+    app.read((db) => {
+      const store = TasksStore.load(db);
+      if (caller) store.identify(caller, false);
+      return fn(store);
+    });
   const write = <T>(fn: (store: TasksStore) => T) =>
     app.transact((db) => {
       const store = TasksStore.load(db);
+      if (caller) store.identify(caller, true);
+      else if (identity.required) throw new Error(NO_CALLER);
       const result = fn(store);
       store.save(db);
       return result;
     });
   const projectKeys = data.projects.map((p) => `${p.key} (${p.name})`).join(", ");
   const handles = data.people.map((p) => `${p.handle}${p.kind === "agent" ? " (agent)" : ""}`).join(", ");
-  const viewer = data.people.find((p) => p.id === data.viewerId)!;
+  const me = caller
+    ? (data.people.find((p) => p.platformId === platformIdOf(caller))?.name ?? "you, the caller")
+    : data.people.find((p) => p.id === data.viewerId)!.name;
+  const viewer = { name: me };
 
   const projectArg = z.string().describe(`Project key: ${projectKeys}`);
   const personArg = (role: string) =>
     z.string().describe(`${role}: a person id, handle or name (${handles}); "me" is ${viewer.name}`);
-  const actorArg = personArg(`Who makes the change, recorded in the activity log; defaults to ${viewer.name}`).optional();
+  // With a caller the platform names who acts; without one (no platform) a call may say.
+  const actorField = caller
+    ? {}
+    : { actor: personArg(`Who makes the change, recorded in the activity log; defaults to ${viewer.name}`).optional() };
+  const authorField = caller ? {} : { author: personArg(`Comment author; defaults to ${viewer.name}`).optional() };
   const keyArg = z.string().describe('Issue key, e.g. "WEB-12"');
   const assigneeFilter = z
     .string()
@@ -202,13 +225,14 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
         due: dueArg.optional(),
         estimate: estimateArg.optional(),
         parent: keyArg.optional().describe("Key of the parent issue, making this a sub-issue (same project)"),
-        actor: actorArg,
+        ...actorField,
       }),
       outputSchema: taskDetailSchema,
       annotations: { readOnlyHint: false, idempotentHint: false },
     },
-    async ({ project, actor, ...fields }) =>
+    async ({ project, ...rest }) =>
       write((store) => {
+        const { actor, ...fields } = rest as typeof rest & { actor?: string };
         const issue = store.create(project, fields, actor);
         return detailResult(store, issue.key, `Created ${issue.key}.`);
       }),
@@ -220,7 +244,7 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
       title: "Update task",
       description:
         "Change any field of an issue. Pass only the fields to change; null clears assignee, due, estimate or parent. " +
-        "`labels` replaces the whole set. Each real change is recorded in the activity log under `actor`; repeating " +
+        "`labels` replaces the whole set. Each real change is recorded in the activity log under who made it; repeating " +
         "the same update changes nothing.",
       inputSchema: z.object({
         key: keyArg,
@@ -233,13 +257,14 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
         due: dueArg.nullable().optional(),
         estimate: estimateArg.nullable().optional(),
         parent: keyArg.nullable().optional().describe("Key of the new parent issue, or null to detach"),
-        actor: actorArg,
+        ...actorField,
       }),
       outputSchema: taskDetailSchema,
       annotations: { readOnlyHint: false, idempotentHint: true },
     },
-    async ({ key, actor, ...fields }) =>
+    async ({ key, ...rest }) =>
       write((store) => {
+        const { actor, ...fields } = rest as typeof rest & { actor?: string };
         const { issue, changed } = store.update(key, fields, actor);
         if (!changed.length) return detailResult(store, issue.key, `${issue.key} already had these values; nothing changed.`);
         const detail = buildDetail(store, issue.key);
@@ -261,13 +286,14 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
       inputSchema: z.object({
         key: keyArg,
         body: z.string().min(1).describe("Comment text, markdown"),
-        author: personArg(`Comment author; defaults to ${viewer.name}`).optional(),
+        ...authorField,
       }),
       outputSchema: addedCommentSchema,
       annotations: { readOnlyHint: false, idempotentHint: false },
     },
-    async ({ key, body, author }) =>
+    async ({ key, body, ...rest }) =>
       write((store) => {
+        const { author } = rest as typeof rest & { author?: string };
         const { issue, comment } = store.comment(key, body, author);
         const person = store.data.people.find((p) => p.id === comment.authorId)!;
         const result: AddedComment = {
@@ -301,6 +327,26 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
       write((store) => {
         const person = store.addPerson(fields);
         return { content: [{ type: "text" as const, text: `Added ${person.name} as @${person.handle} (${person.kind}).` }] };
+      }),
+  );
+
+  server.registerTool(
+    "link_person",
+    {
+      title: "Link person",
+      description:
+        "Tie a person already on the board to their AgentArea identity, so their own calls act as them: " +
+        '"user:<user id>" for a member, "agent:<agent id>" for an agent.',
+      inputSchema: z.object({
+        person: personArg("Person to link"),
+        platformId: platformIdArg,
+      }),
+      annotations: { readOnlyHint: false, idempotentHint: true },
+    },
+    async ({ person: ref, platformId }) =>
+      write((store) => {
+        const person = store.linkPerson(ref, platformId);
+        return { content: [{ type: "text" as const, text: `@${person.handle} is ${person.platformId}.` }] };
       }),
   );
 
@@ -340,11 +386,14 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
   return server;
 }
 
+const platformIdArg = z.string().describe('AgentArea identity: "user:<user id>" or "agent:<agent id>"');
+
 const personFields = z.object({
   name: z.string().min(1).describe("Full name"),
   handle: z.string().min(1).describe('Short unique handle, e.g. "maya"; tools accept it in place of the name'),
   kind: z.enum(PERSON_KINDS).optional().describe("human or agent, default human"),
   title: z.string().optional().describe("Role, e.g. Head of Sales"),
+  platformId: platformIdArg.optional().describe('Their AgentArea identity, "user:<id>" or "agent:<id>", when they have one'),
 });
 
 const projectFields = (lead: z.ZodString) =>
@@ -356,7 +405,7 @@ const projectFields = (lead: z.ZodString) =>
   });
 
 /** An instance whose storage holds no tracker yet offers one tool: the one that writes it. */
-function registerSetup(server: McpServer, app: AppStore): void {
+function registerSetup(server: McpServer, app: AppStore, identity: Identity): void {
   server.registerTool(
     "setup_tracker",
     {
@@ -372,7 +421,17 @@ function registerSetup(server: McpServer, app: AppStore): void {
       annotations: { readOnlyHint: false, idempotentHint: false },
     },
     async (setup) => {
-      const store = await app.transact((db) => TasksStore.setup(db, setup));
+      const { caller } = identity;
+      if (!caller && identity.required) throw new Error(NO_CALLER);
+      // Whoever sets the tracker up is its owner on the board: their own calls act as them.
+      const team = caller
+        ? setup.people.map((p) =>
+            p.handle.trim().replace(/^@/, "").toLowerCase() === setup.viewer.trim().replace(/^@/, "").toLowerCase()
+              ? { ...p, platformId: platformIdOf(caller) }
+              : p,
+          )
+        : setup.people;
+      const store = await app.transact((db) => TasksStore.setup(db, { ...setup, people: team }));
       const { people, projects } = store.data;
       return {
         content: [

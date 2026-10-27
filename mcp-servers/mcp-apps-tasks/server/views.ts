@@ -143,7 +143,7 @@ export function buildSnapshot(store: TasksStore, filter: { project?: string; ass
     asOf: data.asOf,
     now,
     generatedAt: new Date().toISOString(),
-    viewer: index.ref(data.viewerId),
+    viewer: index.ref(store.viewerId),
     project: filter.project ? store.project(filter.project).key : null,
     assignee:
       filter.assignee === undefined ? null : filter.assignee === "unassigned" ? "unassigned" : store.person(filter.assignee).id,

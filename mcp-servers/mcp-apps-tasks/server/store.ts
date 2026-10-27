@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { Caller } from "@kit/context/caller.ts";
 import { appendEvent, type EventData } from "@kit/events/log.ts";
 import { insertRows, readRows, syncRows, type Rows } from "@kit/store/rows.ts";
 import {
@@ -21,7 +22,12 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HANDLE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
 const PROJECT_KEY = /^[A-Z][A-Z0-9]{1,9}$/;
 
-export type PersonFields = { name: string; handle: string; kind?: PersonKind; title?: string };
+export type PersonFields = { name: string; handle: string; kind?: PersonKind; title?: string; platformId?: string };
+
+const PLATFORM_ID = /^(user|agent):[^\s:]+$/;
+
+/** The platform identity a caller is, as people store it. */
+export const platformIdOf = (caller: Caller) => `${caller.kind}:${caller.id}`;
 export type ProjectFields = { key: string; name: string; description?: string; lead: string };
 export type TrackerSetup = { people: PersonFields[]; viewer: string; projects: ProjectFields[] };
 
@@ -47,6 +53,8 @@ export class TasksStore {
   #seq: Record<"iss" | "cmt" | "act", number>;
   /** Events the changes since `load` produce, appended by `save` in the same transaction. */
   readonly #events: { name: string; data: EventData }[] = [];
+  /** Who "me" is for this request: the caller the platform named, when there is one. */
+  #me: { person: Person } | { unknown: Caller } | null = null;
 
   private constructor(
     readonly data: TasksData,
@@ -118,9 +126,58 @@ export class TasksStore {
     return `${kind}_${String(++this.#seq[kind]).padStart(3, "0")}`;
   }
 
+  /** The person "me" is: the caller when the platform named one, else the tracker's owner. */
+  get viewerId(): string {
+    if (this.#me && "person" in this.#me) return this.#me.person.id;
+    return this.data.viewerId;
+  }
+
+  /**
+   * Makes `caller` "me" for this request. A caller not yet on the board is added
+   * when `join` (a write); a read leaves them unknown, and "me" then refuses.
+   */
+  identify(caller: Caller, join: boolean): void {
+    const platformId = platformIdOf(caller);
+    const known = this.data.people.find((p) => p.platformId === platformId);
+    if (known) {
+      this.#me = { person: known };
+      return;
+    }
+    if (!join) {
+      this.#me = { unknown: caller };
+      return;
+    }
+    const short = caller.id.slice(0, 8);
+    const local = caller.email?.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "-").replace(/^[^a-z0-9]+/, "");
+    const base = (local || `${caller.kind}-${short}`).slice(0, 28);
+    let handle = base;
+    for (let n = 2; this.data.people.some((p) => p.handle.toLowerCase() === handle) || handle === "me" || handle === "unassigned"; n++) {
+      handle = `${base}-${n}`;
+    }
+    const person = this.addPerson({
+      name: caller.email ?? (caller.kind === "agent" ? `Agent ${short}` : `User ${short}`),
+      handle,
+      kind: caller.kind === "agent" ? "agent" : "human",
+      platformId,
+    });
+    this.#me = { person };
+  }
+
+  /** Ties a person already on the board to their platform identity. */
+  linkPerson(ref: string, platformId: string): Person {
+    const person = this.person(ref);
+    const id = checkPlatformId(platformId);
+    const other = this.data.people.find((p) => p.platformId === id);
+    if (other && other.id !== person.id) throw new Error(`${id} is already @${other.handle}.`);
+    person.platformId = id;
+    return person;
+  }
+
   person(ref: string): Person {
     const needle = ref.trim().replace(/^@/, "").toLowerCase();
     if (needle === "me") {
+      if (this.#me && "person" in this.#me) return this.#me.person;
+      if (this.#me) throw new Error('"me" is not on this board yet: make a change first, or ask someone to add you.');
       const viewer = this.data.people.find((p) => p.id === this.data.viewerId);
       if (!viewer) throw new Error('"me" means nobody until the tracker is set up; name the person by handle.');
       return viewer;
@@ -265,7 +322,16 @@ export class TasksStore {
     const kind = fields.kind ?? "human";
     if (!PERSON_KINDS.includes(kind)) throw new Error(`A person is ${PERSON_KINDS.join(" or ")}.`);
     const next = Math.max(0, ...this.data.people.map((p) => Number.parseInt(p.id.split("_")[1] ?? "0", 10) || 0)) + 1;
-    const person: Person = { id: `usr_${String(next).padStart(2, "0")}`, name, handle, kind, title: fields.title?.trim() ?? "" };
+    const platformId = fields.platformId === undefined ? null : checkPlatformId(fields.platformId);
+    if (platformId && this.data.people.some((p) => p.platformId === platformId)) throw new Error(`${platformId} is already on the board.`);
+    const person: Person = {
+      id: `usr_${String(next).padStart(2, "0")}`,
+      name,
+      handle,
+      kind,
+      title: fields.title?.trim() ?? "",
+      platformId,
+    };
     this.data.people.push(person);
     return person;
   }
@@ -299,6 +365,12 @@ export class TasksStore {
     return { issue, comment };
   }
 
+}
+
+function checkPlatformId(value: string): string {
+  const id = value.trim();
+  if (!PLATFORM_ID.test(id)) throw new Error(`"${value}" is not a platform identity; use "user:<id>" or "agent:<id>".`);
+  return id;
 }
 
 function checkDate(value: string): string {

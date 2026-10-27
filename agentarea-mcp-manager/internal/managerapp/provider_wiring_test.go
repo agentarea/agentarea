@@ -38,7 +38,7 @@ func TestDataPlaneDeploymentResolvesAContainerProvider(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	for _, envType := range []string{"dataplane", "kubernetes"} {
 		t.Run(envType, func(t *testing.T) {
-			manager := initProviderManager(envType, wiringBackendStub{}, nil, nil, nil, logger)
+			manager := initProviderManager(envType, wiringBackendStub{}, nil, nil, nil, nil, logger)
 			for _, instanceType := range []string{"docker", "command"} {
 				instance := &models.MCPServerInstance{
 					InstanceID: "abc-123",
@@ -60,7 +60,7 @@ func TestDataPlaneDeploymentResolvesAContainerProvider(t *testing.T) {
 // never occupy the data plane.
 func TestDataPlaneDeploymentKeepsURLInstancesOnTheURLProvider(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	manager := initProviderManager("dataplane", wiringBackendStub{}, nil, nil, nil, logger)
+	manager := initProviderManager("dataplane", wiringBackendStub{}, nil, nil, nil, nil, logger)
 	provider, err := manager.GetProvider(&models.MCPServerInstance{
 		InstanceID: "abc-123",
 		JSONSpec:   map[string]any{"type": "url", "endpoint_url": "https://mcp.example.com"},

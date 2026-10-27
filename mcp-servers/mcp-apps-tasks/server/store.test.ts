@@ -140,3 +140,67 @@ describe("task.assigned events", () => {
     expect(assigned(db, head)).toEqual([]);
   });
 });
+
+describe("callers the platform names", () => {
+  const maya = { kind: "user" as const, id: "6f1c2b7e-0000-4000-8000-000000000001", workspaceId: "ws-1", email: "Maya.Chen@acme.ru" };
+  const bot = { kind: "agent" as const, id: "7b146d29-d8fd-45c7-8d46-91d02a8f5b06", workspaceId: "ws-1" };
+  function asCaller(db: Database, caller: typeof maya | typeof bot, fn: (store: TasksStore) => void) {
+    db.transaction(() => {
+      const store = TasksStore.load(db);
+      store.identify(caller, true);
+      fn(store);
+      store.save(db);
+    })();
+  }
+
+  test("a new caller joins the board on their first change, and the change is theirs", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    asCaller(db, maya, (store) => store.create("OPS", { title: "Mine" }));
+    const store = TasksStore.load(db);
+    const joined = store.data.people.find((p) => p.platformId === `user:${maya.id}`)!;
+    expect([joined.handle, joined.name, joined.kind]).toEqual(["maya.chen", "Maya.Chen@acme.ru", "human"]);
+    expect(store.issue("OPS-1").creatorId).toBe(joined.id);
+  });
+
+  test("a linked person is the caller; an agent's \"me\" is itself", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    db.transaction(() => {
+      const store = TasksStore.load(db);
+      store.linkPerson("sales-bot", `agent:${bot.id}`);
+      store.save(db);
+    })();
+    asCaller(db, bot, (store) => {
+      store.create("OPS", { title: "Bot work", assignee: "me" });
+    });
+    const issue = TasksStore.load(db).issue("OPS-1");
+    const salesBot = TasksStore.load(db).person("sales-bot").id;
+    expect([issue.creatorId, issue.assigneeId]).toEqual([salesBot, salesBot]);
+  });
+
+  test("a read names a known caller as the viewer and refuses \"me\" for an unknown one", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, team);
+    const store = TasksStore.load(db);
+    store.identify(maya, false);
+    expect(() => store.person("me")).toThrow("not on this board yet");
+    expect(store.viewerId).toBe(store.data.viewerId);
+  });
+
+  test("one identity is one person", () => {
+    const db = emptyDb();
+    const store = TasksStore.setup(db, team);
+    store.linkPerson("artem", `user:${maya.id}`);
+    expect(() => store.linkPerson("sales-bot", `user:${maya.id}`)).toThrow("already @artem");
+    expect(() => store.linkPerson("artem", "maya")).toThrow("not a platform identity");
+  });
+
+  test("a handle a caller would take is never reused", () => {
+    const db = emptyDb();
+    TasksStore.setup(db, { ...team, people: [...team.people, { name: "Other Maya", handle: "maya.chen" }] });
+    asCaller(db, maya, (store) => store.create("OPS", { title: "x" }));
+    expect(TasksStore.load(db).data.people.find((p) => p.platformId === `user:${maya.id}`)!.handle).toBe("maya.chen-2");
+  });
+});
+

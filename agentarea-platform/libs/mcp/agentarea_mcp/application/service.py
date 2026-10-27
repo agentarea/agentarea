@@ -74,13 +74,15 @@ from agentarea_mcp.schemas.dto import (
     MCPServerUpdate,
 )
 from agentarea_mcp.tool_context import (
-    CONTEXT_HEADER,
     CONTEXT_SECRET_NAME,
     CONTEXT_SIGNING_FLAG,
+    CallContext,
     ProgressCallback,
     ToolCallContext,
+    context_enabled,
+    context_header,
     context_meta,
-    sign_context,
+    derived_context_key,
 )
 from agentarea_mcp.tool_result import split_tool_content
 from agentarea_mcp.tool_serialization import serialize_mcp_tool
@@ -1187,6 +1189,39 @@ class MCPServerInstanceService:
             await self.env_service.delete_instance_environment(instance.id, [CONTEXT_SECRET_NAME])
             spec.pop(CONTEXT_SIGNING_FLAG, None)
 
+    async def context_key(
+        self, instance: MCPServerInstance, *, transport_spec: dict[str, Any] | None = None
+    ) -> str | None:
+        """The key calls to ``instance`` are signed with, or None when it takes no caller context.
+
+        A URL instance's is the secret its owner set; a platform-run instance
+        whose spec opts in with ``context`` gets the key derived from the
+        gateway secret, which the manager hands its container.
+        """
+        if instance.transport == MCPTransport.URL:
+            return await self._context_secret(instance)
+        if instance.transport in CONTAINER_TRANSPORTS:
+            spec = (
+                transport_spec
+                if transport_spec is not None
+                else await self.get_transport_spec_for_instance(instance)
+            )
+            if context_enabled(spec):
+                return derived_context_key(get_settings().mcp.gateway_secret(), str(instance.id))
+        return None
+
+    async def call_context_headers(
+        self,
+        instance: MCPServerInstance,
+        call_context: CallContext,
+        *,
+        tool: str | None,
+        transport_spec: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
+        """The signed ``X-AgentArea-Context`` header for one call, or {} when the instance takes none."""
+        key = await self.context_key(instance, transport_spec=transport_spec)
+        return context_header(call_context, key, instance_id=str(instance.id), tool=tool)
+
     async def _context_secret(self, instance: MCPServerInstance) -> str | None:
         if not (instance.json_spec or {}).get(CONTEXT_SIGNING_FLAG):
             return None
@@ -1361,18 +1396,12 @@ class MCPServerInstanceService:
             timeout_seconds = tool_timeout_seconds(transport_spec)
             meta: dict[str, Any] | None = None
             per_call_headers: dict[str, str] | None = None
-            if instance_type == MCPTransport.URL:
-                secret = await self._context_secret(instance) if call_context else None
-                if call_context is not None and secret:
+            if call_context is not None:
+                per_call_headers = await self.call_context_headers(
+                    instance, call_context, tool=tool_name, transport_spec=transport_spec
+                )
+                if per_call_headers:
                     meta = context_meta(call_context)
-                    per_call_headers = {
-                        CONTEXT_HEADER: sign_context(
-                            call_context,
-                            secret=secret,
-                            audience=str(instance.id),
-                            tool=tool_name,
-                        ),
-                    }
             # A platform-managed connection's address is the operator's, as the
             # manager gateway's is: it may be, and is, inside the cluster.
             if instance_type == MCPTransport.URL and instance.managed_by != MANAGED_BY_PLATFORM:
