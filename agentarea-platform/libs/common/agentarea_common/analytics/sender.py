@@ -17,7 +17,7 @@ from agentarea_common import __version__
 from agentarea_common.config import get_app_settings
 from agentarea_common.outbound import Destination, outbound_client
 
-from .constants import COLLECTOR_KEY, COLLECTOR_URL
+from .constants import COLLECTOR_URL
 
 logger = logging.getLogger(__name__)
 
@@ -119,11 +119,7 @@ class AnalyticsSender:
             for start in range(0, len(events), MAX_BATCH):
                 batch = events[start : start + MAX_BATCH]
                 try:
-                    response = await client.post(
-                        f"{COLLECTOR_URL}/v1/events",
-                        json=batch,
-                        headers={"Authorization": f"Bearer {COLLECTOR_KEY}"},
-                    )
+                    response = await client.post(f"{COLLECTOR_URL}/v1/events", json=batch)
                     response.raise_for_status()
                 except Exception as error:
                     self._dropped(len(batch), error)

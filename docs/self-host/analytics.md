@@ -40,7 +40,8 @@ Anonymous usage analytics is on (what is sent: https://docs.agentarea.ai/self-ho
 
 The webapp reads no variable of its own. It asks the API with
 `GET /v1/analytics`, which returns `{enabled, install_id, collector_url,
-collector_key, edition}`, so the backend and the UI cannot disagree.
+edition}`, so the backend and the UI cannot disagree. Events go to the collector
+without a key.
 
 Analytics never stops AgentArea. If it cannot start, for example because the
 database is not reachable at that moment, the process logs an error and runs with
@@ -232,7 +233,7 @@ Check that it is off: the start-up line above is absent from the API and worker
 logs, and `GET /v1/analytics` returns:
 
 ```json
-{"enabled": false, "install_id": null, "collector_url": null, "collector_key": null, "edition": null}
+{"enabled": false, "install_id": null, "collector_url": null, "edition": null}
 ```
 
 ## Related

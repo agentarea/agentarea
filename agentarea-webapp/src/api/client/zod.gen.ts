@@ -133,7 +133,6 @@ export const zAgentToolConfig = z.object({
  * AnalyticsResponse
  */
 export const zAnalyticsResponse = z.object({
-  collector_key: z.string().nullable(),
   collector_url: z.string().nullable(),
   edition: z.string().nullable(),
   enabled: z.boolean(),

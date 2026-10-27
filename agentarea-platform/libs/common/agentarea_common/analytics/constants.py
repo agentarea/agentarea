@@ -1,9 +1,8 @@
 """Where analytics goes, and what the operator is told about it."""
 
+# Installations send no key: our edge in front of Pulse adds the agentarea product's
+# key for this host, so the key never ships and can change without a release.
 COLLECTOR_URL = "https://analytics.agentarea.ai"
-# An append-only Pulse key: it can only add events to the agentarea product, which it
-# pins, so it is safe to ship in every installation. Infra provisions the real key.
-COLLECTOR_KEY = "pc_agentarea_placeholder"
 
 DOCS_URL = "https://docs.agentarea.ai/self-host/analytics"
 

@@ -90,18 +90,14 @@ async function flush(): Promise<void> {
   if (
     events.length === 0 ||
     !current?.enabled ||
-    !current.collector_url ||
-    !current.collector_key
+    !current.collector_url
   ) {
     return;
   }
   try {
     const response = await fetch(`${current.collector_url}/v1/events`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${current.collector_key}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(events),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });

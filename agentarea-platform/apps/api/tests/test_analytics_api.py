@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from agentarea_api.api.v1 import analytics
-from agentarea_common.analytics import COLLECTOR_KEY, COLLECTOR_URL, Installation
+from agentarea_common.analytics import COLLECTOR_URL, Installation
 from agentarea_common.auth.dependencies import get_principal
 from agentarea_common.config import get_app_settings, get_settings
 from fastapi.routing import APIRoute
@@ -36,7 +36,6 @@ async def test_on_it_names_the_installation_and_the_collector(analytics_enabled,
         "enabled": True,
         "install_id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
         "collector_url": COLLECTOR_URL,
-        "collector_key": COLLECTOR_KEY,
         "edition": get_app_settings().EDITION,
     }
 
@@ -55,7 +54,6 @@ async def test_off_it_names_nothing_and_touches_no_table(analytics_enabled, monk
         "enabled": False,
         "install_id": None,
         "collector_url": None,
-        "collector_key": None,
         "edition": None,
     }
 

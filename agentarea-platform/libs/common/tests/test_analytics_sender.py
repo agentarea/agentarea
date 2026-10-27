@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 from agentarea_common import __version__
-from agentarea_common.analytics import COLLECTOR_KEY, COLLECTOR_URL, AnalyticsSender
+from agentarea_common.analytics import COLLECTOR_URL, AnalyticsSender
 from agentarea_common.config import get_app_settings
 
 
@@ -51,7 +51,7 @@ async def test_events_are_posted_in_batches_of_at_most_500():
     assert [len(batch) for batch in collector.batches()] == [500, 500, 201]
     request = collector.requests[0]
     assert str(request.url) == f"{COLLECTOR_URL}/v1/events"
-    assert request.headers["Authorization"] == f"Bearer {COLLECTOR_KEY}"
+    assert "Authorization" not in request.headers
 
 
 async def test_every_event_carries_the_installation_context():

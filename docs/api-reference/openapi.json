@@ -1081,17 +1081,6 @@
       },
       "AnalyticsResponse": {
         "properties": {
-          "collector_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Collector Key"
-          },
           "collector_url": {
             "anyOf": [
               {
@@ -1134,7 +1123,6 @@
           "enabled",
           "install_id",
           "collector_url",
-          "collector_key",
           "edition"
         ],
         "title": "AnalyticsResponse",

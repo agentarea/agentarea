@@ -566,10 +566,6 @@ export type AgentUpdate = {
  */
 export type AnalyticsResponse = {
     /**
-     * Collector Key
-     */
-    collector_key: string | null;
-    /**
      * Collector Url
      */
     collector_url: string | null;

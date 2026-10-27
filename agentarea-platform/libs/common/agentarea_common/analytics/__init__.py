@@ -4,7 +4,7 @@ Analytics, not telemetry: OpenTelemetry and Prometheus go to the operator's own
 monitoring, this goes to us. ``AGENTAREA_ANALYTICS_ENABLED=false`` turns it off.
 """
 
-from .constants import COLLECTOR_KEY, COLLECTOR_URL, DOCS_URL, NOTICE
+from .constants import COLLECTOR_URL, DOCS_URL, NOTICE
 from .counters import count, count_run_refused
 from .hashing import pseudonymize
 from .models import Installation
@@ -14,7 +14,6 @@ from .runtime import current_sender, start_analytics, stop_analytics
 from .sender import MAX_BATCH, AnalyticsSender
 
 __all__ = [
-    "COLLECTOR_KEY",
     "COLLECTOR_URL",
     "DOCS_URL",
     "MAX_BATCH",
