@@ -13,6 +13,7 @@ import pytest
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
     MAX_TOOL_NAME_LENGTH,
     McpToolIdentity,
+    mcp_tool_rule_target,
     qualify_mcp_tool_name,
     server_label,
 )
@@ -181,3 +182,18 @@ class TestExecution:
 
         assert tool.name == "mcp__github__search"
         assert service.calls == [(server.id, "search", {"q": "agentarea"})]
+
+
+class TestRuleTarget:
+    def test_names_exactly_one_tool_even_with_glob_characters(self):
+        from fnmatch import fnmatch
+
+        target = mcp_tool_rule_target("inst", "get*[v1]?")
+        pattern = target.removeprefix("tool:")
+
+        assert target == "tool:mcp:inst:get[*][[]v1][?]"
+        assert fnmatch("mcp:inst:get*[v1]?", pattern)
+        assert not fnmatch("mcp:inst:get_all[v1]x", pattern)
+
+    def test_plain_name_is_unchanged(self):
+        assert mcp_tool_rule_target("inst", "search") == "tool:mcp:inst:search"

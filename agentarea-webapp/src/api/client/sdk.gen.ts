@@ -381,6 +381,9 @@ import type {
   GetMcpAuthConfigV1McpAuthConfigsConfigIdGetData,
   GetMcpAuthConfigV1McpAuthConfigsConfigIdGetErrors,
   GetMcpAuthConfigV1McpAuthConfigsConfigIdGetResponses,
+  GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetData,
+  GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors,
+  GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses,
   GetMcpServerInstanceV1McpServerInstancesInstanceIdGetData,
   GetMcpServerInstanceV1McpServerInstancesInstanceIdGetErrors,
   GetMcpServerInstanceV1McpServerInstancesInstanceIdGetResponses,
@@ -5962,6 +5965,38 @@ export const runTestAuthV1McpServerInstancesInstanceIdTestAuthPost = <
     url: "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/test-auth",
     ...options,
   });
+
+/**
+ * Get Mcp Server Instance Tool Policies
+ *
+ * The workspace default and the workspace-layer verdict for each tool of this connection.
+ */
+export const getMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGet =
+  <ThrowOnError extends boolean = false>(
+    options: Options<
+      GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetData,
+      ThrowOnError
+    >
+  ): RequestResult<
+    GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses,
+    GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors,
+    ThrowOnError
+  > =>
+    (options.client ?? client).get<
+      GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses,
+      GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors,
+      ThrowOnError
+    >({
+      security: [
+        {
+          key: "HTTPBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/tool-policies",
+      ...options,
+    });
 
 /**
  * Verify Mcp Server Instance

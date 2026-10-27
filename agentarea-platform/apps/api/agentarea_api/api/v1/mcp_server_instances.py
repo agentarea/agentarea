@@ -1,7 +1,11 @@
 import logging
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
+from agentarea_agents_sdk.tools.mcp_tool_identity import (
+    mcp_tool_policy_aliases,
+    mcp_tool_rule_target,
+)
 from agentarea_api.api.deps.services import AgentServiceDep, get_mcp_server_instance_service
 from agentarea_api.api.v1._approval_policy_sync import (
     approval_targets_for_agents,
@@ -14,9 +18,14 @@ from agentarea_api.api.v1.mcp_oauth_links import (
 )
 from agentarea_common.auth.dependencies import UserContextDep
 from agentarea_common.auth.route_authz import requires, requires_workspace_admin, unrestricted
+from agentarea_common.auth.tool_authorization import ToolAuthorizationAction, decide_tool_policy
+from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.config import get_settings
 from agentarea_common.config.database import get_db_session
 from agentarea_common.utils.types import UtcDatetime
+from agentarea_governance.application import GovernancePolicyResolver, GovernancePolicyService
+from agentarea_governance.domain.policies import PolicyValidationError
+from agentarea_governance.domain.rules import PolicyEffect, PolicyRule, PolicySubjectType
 from agentarea_mcp.application.service import MCPServerInstanceService, derive_bundle_verification
 from agentarea_mcp.application.validation_service import MCPValidationError
 from agentarea_mcp.domain.env_schema import normalize_env_schema
@@ -552,6 +561,133 @@ async def list_mcp_server_instance_consumers(
         )
 
     return consumers
+
+
+ToolVerdict = Literal["allow", "approval", "deny"]
+
+_VERDICTS: dict[ToolAuthorizationAction, ToolVerdict] = {
+    ToolAuthorizationAction.ALLOW: "allow",
+    ToolAuthorizationAction.REQUIRE_APPROVAL: "approval",
+    ToolAuthorizationAction.DENY: "deny",
+}
+_STRICTNESS: dict[ToolVerdict, int] = {"allow": 0, "approval": 1, "deny": 2}
+
+
+class MCPInstanceToolPolicy(BaseModel):
+    """One tool of a connection: its workspace default and the workspace's verdict on it."""
+
+    name: str
+    # The workspace rule naming exactly this tool of this connection; none is allow.
+    # An approval rule that names its approvers is not a default: it was set elsewhere.
+    default: ToolVerdict
+    # What all of the workspace's rules make of the tool, as the tool PDP decides it.
+    effective: ToolVerdict
+    # The PDP's reason, when the effective verdict is stricter than the default.
+    reason: str | None = None
+
+
+class MCPInstanceToolPolicies(BaseModel):
+    tools: list[MCPInstanceToolPolicy]
+
+
+def _default_verdict(rules: list[PolicyRule], target: str) -> ToolVerdict:
+    effects = {
+        rule.effect
+        for rule in rules
+        if rule.target == target
+        and not rule.condition
+        and not (rule.effect == PolicyEffect.APPROVAL and (rule.params or {}).get("approvers"))
+    }
+    if PolicyEffect.DENY in effects:
+        return "deny"
+    if PolicyEffect.APPROVAL in effects:
+        return "approval"
+    return "allow"
+
+
+def tool_policies_for_instance(
+    instance_id: str,
+    instance_name: str | None,
+    tool_names: list[str],
+    workspace_rules: list[PolicyRule],
+    workspace_policy: dict[str, Any],
+) -> list[MCPInstanceToolPolicy]:
+    """Each tool's workspace default beside the verdict the workspace layer gives it.
+
+    The verdict is the one PDP's, over every name a rule may give the tool, so a
+    bare-name rule, a glob, an allowlist or an approval on every tool all count.
+    """
+    result: list[MCPInstanceToolPolicy] = []
+    for name in tool_names:
+        default = _default_verdict(workspace_rules, mcp_tool_rule_target(instance_id, name))
+        decision = decide_tool_policy(
+            workspace_policy,
+            name,
+            aliases=mcp_tool_policy_aliases(instance_id, instance_name, name),
+        )
+        effective = _VERDICTS[decision.action]
+        stricter = _STRICTNESS[effective] > _STRICTNESS[default]
+        result.append(
+            MCPInstanceToolPolicy(
+                name=name,
+                default=default,
+                effective=effective,
+                reason=decision.reason if stricter else None,
+            )
+        )
+    return result
+
+
+@router.get(
+    "/{instance_id}/tool-policies",
+    response_model=MCPInstanceToolPolicies,
+    dependencies=[
+        unrestricted(
+            "workspace member; reads the workspace policy layer, as the effective-policy "
+            "preview does"
+        )
+    ],
+)
+async def get_mcp_server_instance_tool_policies(
+    instance_id: UUID,
+    user_context: UserContextDep,
+    session: DatabaseSessionDep,
+    service: MCPServerInstanceService = Depends(get_mcp_server_instance_service),
+) -> MCPInstanceToolPolicies:
+    """The workspace default and the workspace-layer verdict for each tool of this connection."""
+    instance = await service.get(instance_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="MCP Server Instance not found")
+
+    tool_names = list(
+        dict.fromkeys(
+            tool["name"]
+            for tool in instance.get_available_tools()
+            if isinstance(tool, dict) and isinstance(tool.get("name"), str) and tool["name"]
+        )
+    )
+    repository_factory = RepositoryFactory(session, user_context)
+    workspace_rules = await GovernancePolicyService(repository_factory).list_rules(
+        subject_type=PolicySubjectType.WORKSPACE,
+        subject_id=user_context.workspace_id,
+        enabled=True,
+    )
+    try:
+        workspace_policy = await GovernancePolicyResolver(repository_factory).resolve(
+            workspace_id=user_context.workspace_id
+        )
+    except PolicyValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return MCPInstanceToolPolicies(
+        tools=tool_policies_for_instance(
+            str(instance.id),
+            instance.name,
+            tool_names,
+            workspace_rules,
+            workspace_policy.to_json_dict(),
+        )
+    )
 
 
 @router.patch(

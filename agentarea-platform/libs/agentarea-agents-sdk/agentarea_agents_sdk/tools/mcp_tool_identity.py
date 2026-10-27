@@ -103,3 +103,31 @@ class McpToolIdentity:
 def mcp_tool_target(server_ref: str, raw_name: str) -> str:
     """How a policy rule names one tool of one attached server."""
     return f"{_PREFIX}:{server_ref}:{raw_name}"
+
+
+_GLOB = re.compile(r"([*?\[])")
+
+
+def mcp_tool_rule_target(instance_id: str, raw_name: str) -> str:
+    """The rule target naming exactly this tool: targets match as fnmatch globs."""
+    literal = _GLOB.sub(r"[\1]", raw_name)
+    return f"tool:{mcp_tool_target(instance_id, literal)}"
+
+
+def mcp_tool_policy_aliases(
+    instance_id: str, instance_name: str | None, raw_name: str
+) -> tuple[str, ...]:
+    """Every name a policy rule may give one tool of one MCP instance.
+
+    The canonical ``mcp:<instance id>:<raw>``, the server referenced by name, the
+    ``mcp__<server>__<raw>`` an agent calls it by, and the raw name the server
+    advertises — so a rule written against any of them governs the tool.
+    """
+    names = [mcp_tool_target(instance_id, raw_name)]
+    if instance_name:
+        names += [
+            mcp_tool_target(instance_name, raw_name),
+            qualify_mcp_tool_name(instance_name, raw_name),
+        ]
+    names.append(raw_name)
+    return tuple(names)

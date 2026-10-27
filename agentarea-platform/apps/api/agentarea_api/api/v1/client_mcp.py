@@ -35,8 +35,7 @@ from agentarea_agents_sdk.mcp_server.auth import (
     use_mcp_user_context,
 )
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
-    mcp_tool_target,
-    qualify_mcp_tool_name,
+    mcp_tool_policy_aliases,
     server_label,
 )
 from agentarea_agents_sdk.tools.openapi_tool import _slugify_name
@@ -501,14 +500,9 @@ def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
         return ()
     member, raw_name = owner
     instance_id = str(member.mcp_instance_id)
-    names = [mcp_tool_target(instance_id, raw_name)]
-    if instance_name := scope.proxy.instance_names.get(instance_id):
-        names += [
-            mcp_tool_target(instance_name, raw_name),
-            qualify_mcp_tool_name(instance_name, raw_name),
-        ]
-    names.append(raw_name)
-    return tuple(names)
+    return mcp_tool_policy_aliases(
+        instance_id, scope.proxy.instance_names.get(instance_id), raw_name
+    )
 
 
 def _restricting_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
