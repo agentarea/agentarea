@@ -3612,6 +3612,40 @@ export type McpInstanceHealthResponse = {
 };
 
 /**
+ * MCPInstanceToolPolicies
+ */
+export type McpInstanceToolPolicies = {
+    /**
+     * Tools
+     */
+    tools: Array<McpInstanceToolPolicy>;
+};
+
+/**
+ * MCPInstanceToolPolicy
+ *
+ * One tool of a connection: its workspace default and the workspace's verdict on it.
+ */
+export type McpInstanceToolPolicy = {
+    /**
+     * Default
+     */
+    default: 'allow' | 'approval' | 'deny';
+    /**
+     * Effective
+     */
+    effective: 'allow' | 'approval' | 'deny';
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
  * MCPServerConnectionCreateRequest
  */
 export type McpServerConnectionCreateRequest = {
@@ -5031,7 +5065,7 @@ export type OpenApiConnectionResponse = {
     /**
      * Base Url
      */
-    base_url: string;
+    base_url: string | null;
     /**
      * Cost
      */
@@ -15042,6 +15076,36 @@ export type RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses = {
      */
     200: unknown;
 };
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetData = {
+    body?: never;
+    path: {
+        /**
+         * Instance Id
+         */
+        instance_id: string;
+    };
+    query?: never;
+    url: '/v1/workspaces/{workspace}/mcp-server-instances/{instance_id}/tool-policies';
+};
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetError = GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors[keyof GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetErrors];
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: McpInstanceToolPolicies;
+};
+
+export type GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponse = GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses[keyof GetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponses];
 
 export type VerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostData = {
     body?: never;

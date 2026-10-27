@@ -18,16 +18,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import Link from "@/components/WorkspaceLink";
+import { useIsBelow } from "@/hooks/use-mobile";
 import {
   markdownBeyondSummary,
   markdownExceedsPreview,
   splitMarkdownSummary,
 } from "@/lib/markdown-plain-text";
-import Link from "@/components/WorkspaceLink";
-import { useIsBelow } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
   OTHER_GROUP_KEY,
+  titleAddsToName,
   type PrincipalLookup,
   type Tool,
   type ToolAnnotations,
@@ -35,7 +36,6 @@ import {
   type ToolPrincipal,
   type ToolRow,
   type ToolsTableConsumer,
-  titleAddsToName,
 } from "../tool-facets";
 import { useToolFacets } from "../useToolFacets";
 
@@ -140,7 +140,9 @@ function PrincipalList({ principals }: { principals: ToolPrincipal[] }) {
             {principal.name}
           </span>
           {principal.viaAllTools && (
-            <span className="text-muted-foreground">· {t("allToolsGrant")}</span>
+            <span className="text-muted-foreground">
+              · {t("allToolsGrant")}
+            </span>
           )}
           {principal.needsConfirm && (
             <span className="text-amber-600 dark:text-amber-400">
@@ -177,7 +179,10 @@ function EquippedCount({ principals }: { principals: ToolPrincipal[] }) {
             <div className="space-y-1">
               <div className="font-medium">{t("equippedBy")}</div>
               {principals.map((principal) => (
-                <div key={principal.agentId} className="flex items-center gap-1.5">
+                <div
+                  key={principal.agentId}
+                  className="flex items-center gap-1.5"
+                >
                   <span>{principal.name}</span>
                   {principal.viaAllTools && (
                     <span className="opacity-70">· {t("allToolsGrant")}</span>
@@ -218,20 +223,49 @@ function ToolName({ row }: { row: ToolRow }) {
   const title = titleAddsToName(row.name, rawTitle) ? rawTitle : null;
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="break-all font-mono text-[12.5px] font-medium">{row.name}</span>
+      <span className="break-all font-mono text-[12.5px] font-medium">
+        {row.name}
+      </span>
       {title && (
-        <span className="break-words text-[12px] text-muted-foreground">{title}</span>
+        <span className="break-words text-[12px] text-muted-foreground">
+          {title}
+        </span>
       )}
     </div>
   );
 }
 
-/** Columns for tool rows: name, description, hints, who holds it, expand chevron. */
+/**
+ * Policy controls: `cell` draws one tool's, `group` the one that sets every
+ * tool of a group (or of the whole list shown) at once; `null` where the
+ * viewer may only read. Given, the table gets a policy column.
+ */
+export interface ToolPolicyControls {
+  cell: (toolName: string) => ReactNode;
+  group: ((toolNames: string[]) => ReactNode) | null;
+}
+
+// The row opens on click; a policy control in it must not open it.
+function StopRowClick({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="normal-case"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Columns for tool rows: name, description, hints, who holds it, policy, expand chevron. */
 function useToolColumns(
   principalsFor: PrincipalLookup | null,
   isOpen: (row: ToolRow) => boolean,
   showHints: boolean,
-  viewport: Viewport
+  viewport: Viewport,
+  policy: ToolPolicyControls | null,
+  bulkToolNames: string[]
 ): Column<ToolRow>[] {
   const t = useTranslations(TOOLS_NAMESPACE);
   const { narrow, mobile } = viewport;
@@ -271,7 +305,9 @@ function useToolColumns(
       accessor: "annotations",
       header: t("columns.hints"),
       headerClassName: "w-[200px]",
-      render: (_value, row) => <AnnotationBadges annotations={row?.annotations} />,
+      render: (_value, row) => (
+        <AnnotationBadges annotations={row?.annotations} />
+      ),
     });
   }
   if (principalsFor) {
@@ -281,6 +317,20 @@ function useToolColumns(
       headerClassName: mobile ? "w-[76px]" : "w-[130px]",
       render: (_value, row) =>
         row ? <EquippedCount principals={principalsFor(row.name)} /> : null,
+    });
+  }
+  if (policy) {
+    columns.push({
+      accessor: "policy",
+      // The header sets every tool of the table at once, where the viewer may.
+      header: policy.group ? (
+        <StopRowClick>{policy.group(bulkToolNames)}</StopRowClick>
+      ) : (
+        t("columns.policy")
+      ),
+      headerClassName: mobile ? "w-[136px]" : "w-[176px]",
+      render: (_value, row) =>
+        row ? <StopRowClick>{policy.cell(row.name)}</StopRowClick> : null,
     });
   }
   columns.push({
@@ -374,29 +424,41 @@ function ToolRowsTable({
   isOpen,
   toggle,
   viewport,
+  policy,
+  bulkToolNames,
 }: {
   rows: ToolRow[];
   principalsFor: PrincipalLookup | null;
   isOpen: (row: ToolRow) => boolean;
   toggle: (row: ToolRow) => void;
   viewport: Viewport;
+  policy: ToolPolicyControls | null;
+  /** The tools the header's policy control sets: every one the table stands for. */
+  bulkToolNames: string[];
 }) {
   const columns = useToolColumns(
     principalsFor,
     isOpen,
     rows.some((row) => hasHints(row.annotations)),
-    viewport
+    viewport,
+    policy,
+    bulkToolNames
   );
   return (
     <Table
       data={rows}
       columns={columns}
       className="table-fixed"
-      onRowClick={(row) => canExpand(row, principalsFor, viewport) && toggle(row)}
+      onRowClick={(row) =>
+        canExpand(row, principalsFor, viewport) && toggle(row)
+      }
       rowProps={(row) =>
         canExpand(row, principalsFor, viewport)
           ? {}
-          : { className: "cursor-default hover:bg-transparent dark:hover:bg-transparent" }
+          : {
+              className:
+                "cursor-default hover:bg-transparent dark:hover:bg-transparent",
+            }
       }
       isExpanded={isOpen}
       renderExpanded={(row) => (
@@ -443,15 +505,55 @@ export function ToolsToolbar({
     { value: "all", label: t("facets.all"), count: facetCounts.all },
     ...(principalsFor
       ? [
-          { value: "equipped" as const, label: t("facets.equipped"), count: facetCounts.equipped },
-          { value: "unequipped" as const, label: t("facets.unequipped"), count: facetCounts.unequipped },
+          {
+            value: "equipped" as const,
+            label: t("facets.equipped"),
+            count: facetCounts.equipped,
+          },
+          {
+            value: "unequipped" as const,
+            label: t("facets.unequipped"),
+            count: facetCounts.unequipped,
+          },
         ]
       : []),
     ...(hasDestructive
-      ? [{ value: "destructive" as const, label: t("facets.destructive"), count: facetCounts.destructive }]
+      ? [
+          {
+            value: "destructive" as const,
+            label: t("facets.destructive"),
+            count: facetCounts.destructive,
+          },
+        ]
       : []),
     ...(hasReadOnly
-      ? [{ value: "readOnly" as const, label: t("facets.readOnly"), count: facetCounts.readOnly }]
+      ? [
+          {
+            value: "readOnly" as const,
+            label: t("facets.readOnly"),
+            count: facetCounts.readOnly,
+          },
+        ]
+      : []),
+    // Shown while some tool has the policy, or while it is the chosen filter,
+    // so the last change of a filtered list does not pull the tab from under it.
+    ...(facetCounts.denied || facet === "denied"
+      ? [
+          {
+            value: "denied" as const,
+            label: t("facets.denied"),
+            count: facetCounts.denied,
+          },
+        ]
+      : []),
+    ...(facetCounts.approval || facet === "approval"
+      ? [
+          {
+            value: "approval" as const,
+            label: t("facets.approval"),
+            count: facetCounts.approval,
+          },
+        ]
       : []),
   ];
 
@@ -488,6 +590,7 @@ export function ToolsTable({
   label,
   consumers,
   facets: givenFacets,
+  policy = null,
 }: {
   tools: Tool[];
   label?: string;
@@ -502,6 +605,8 @@ export function ToolsTable({
    * subheader; the table then shows no toolbar of its own.
    */
   facets?: ToolFacetsState;
+  /** Policy controls; absent, the table has no policy column. */
+  policy?: ToolPolicyControls | null;
 }) {
   const t = useTranslations(TOOLS_NAMESPACE);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
@@ -550,7 +655,9 @@ export function ToolsTable({
             variant="plain"
             defaultOpen={group.open}
             label={
-              group.key === OTHER_GROUP_KEY ? t("otherGroup") : prettyGroup(group.label)
+              group.key === OTHER_GROUP_KEY
+                ? t("otherGroup")
+                : prettyGroup(group.label)
             }
             count={group.rows.length}
           >
@@ -560,6 +667,8 @@ export function ToolsTable({
               isOpen={isOpen}
               toggle={toggle}
               viewport={viewport}
+              policy={policy}
+              bulkToolNames={group.rows.map((row) => row.name)}
             />
           </CollapsibleGroup>
         ))}
@@ -572,6 +681,8 @@ export function ToolsTable({
           isOpen={isOpen}
           toggle={toggle}
           viewport={viewport}
+          policy={policy}
+          bulkToolNames={rows.map((row) => row.name)}
         />
         {truncated && (
           <p className="note">

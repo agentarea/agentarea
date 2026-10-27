@@ -161,7 +161,9 @@ export default function OpenAPIConnectionOverview({
         meta={
           <>
             <HeroMeta icon={<FileJson />}>OpenAPI</HeroMeta>
-            <HeroMeta icon={<Globe />}>{hostOf(connection.base_url)}</HeroMeta>
+            {connection.base_url && (
+              <HeroMeta icon={<Globe />}>{hostOf(connection.base_url)}</HeroMeta>
+            )}
             {connection.spec_url && (
               <HeroMeta icon={<ExternalLink />}>
                 <a
@@ -237,7 +239,13 @@ export default function OpenAPIConnectionOverview({
             <SectionCard>
               <SectionCardHead icon={<Link2 />} title={tDetail("connection.title")} />
               <CardField label={t("baseUrl")}>
-                <CopyableText text={connection.base_url} />
+                {connection.base_url ? (
+                  <CopyableText text={connection.base_url} />
+                ) : (
+                  <p className="text-[12.5px] text-muted-foreground">
+                    {t("baseUrlByPlatform")}
+                  </p>
+                )}
               </CardField>
               <CardField label={t("specUrl")}>
                 {connection.spec_url ? (

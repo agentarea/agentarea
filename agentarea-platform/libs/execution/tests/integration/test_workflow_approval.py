@@ -49,7 +49,11 @@ from agentarea_execution.testing import TaskLogFake, make_record_activity
 from agentarea_execution.workflows.agent.approval import ToolApprovalMixin
 from agentarea_execution.workflows.agent.patches import TOOL_CONFIG_ALIASES_PATCH
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
-from agentarea_execution.workflows.helpers import tool_config_aliases, tool_policy_aliases
+from agentarea_execution.workflows.helpers import (
+    mcp_tool_restricting_aliases,
+    tool_config_aliases,
+    tool_policy_aliases,
+)
 from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument, PolicyResolver
 from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.schemas.dto import RunCreate
@@ -234,8 +238,11 @@ async def _mock_execute_mcp(request: MCPToolRequest) -> dict[str, Any]:
             workspace_id=request.workspace_id,
             effective_policy=request.effective_policy,
             aliases=tool_policy_aliases(request.mcp_route, request.tool_name),
-            restricting_aliases=tool_config_aliases(
-                request.tool_name, request.tools, request.openapi_operation_tools
+            restricting_aliases=(
+                *mcp_tool_restricting_aliases(request.mcp_route, request.tool_name),
+                *tool_config_aliases(
+                    request.tool_name, request.tools, request.openapi_operation_tools
+                ),
             ),
         )
     )

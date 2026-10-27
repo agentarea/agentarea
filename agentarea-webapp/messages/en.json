@@ -654,6 +654,11 @@
       "answerCheckDescription": "Before the answer is shown, look for tool names, codes, JSON, error texts and other scripts, and have the model rewrite it once. The reply then appears only after the check.",
       "answerCheckLanguage": "Answer language",
       "answerCheckLanguagePlaceholder": "ru, en, zh… (empty: any)",
+      "answerCheckHint": "Models sometimes leak their internals into the reply: Chinese characters, tool names like web_search, internal codes, chunks of JSON, error texts, stray English words in a Russian answer. Chinese models do this more often.\n\nThe check looks for these traces in the final answer. If it finds any, the agent's model rewrites the answer once. The extra model call happens only when something is found.",
+      "loadMode": "How the model sees the tools",
+      "loadModeExplicit": "All at once",
+      "loadModeSearchable": "On demand",
+      "loadModeHint": "All at once: on every step the model gets the full description of every tool of this connection. It never misses a tool, but each call spends more tokens.\n\nOn demand: the model sees only tool names with a short description and loads the full description of a tool when it needs it. Use it for connections with many tools.",
       "llmModel": "LLM Model",
       "selectModel": "Select a model",
       "noConfigurationsYet": "No configurations yet",
@@ -670,6 +675,14 @@
         "emptyDescription": "No tools, skills or triggers",
         "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
         "unavailableSkills": "This preset expects skills the catalog does not have: {skills}"
+      },
+      "skills": {
+        "title": "Skills",
+        "description": "Add skills to enhance your agent's capabilities.",
+        "trigger": "Skill",
+        "note": "Skills extend agent capabilities with specialized behaviors and knowledge.",
+        "empty": "No skills assigned. Add skills to enhance this agent's capabilities.",
+        "remove": "Remove skill"
       },
       "toolGroups": {
         "sandbox": {
@@ -951,7 +964,8 @@
           "description": "Description",
           "equipped": "Equipped by",
           "hints": "Server hints",
-          "agents": "Agents"
+          "agents": "Agents",
+          "policy": "Policy"
         },
         "searchPlaceholder": "Search tools…",
         "truncated": "Showing the first {shown} of {total} — refine the search to narrow it down.",
@@ -967,7 +981,9 @@
           "equipped": "Equipped",
           "unequipped": "Not equipped",
           "destructive": "Destructive",
-          "readOnly": "Read-only"
+          "readOnly": "Read-only",
+          "denied": "Denied",
+          "approval": "Approval"
         },
         "refresh": "Refresh",
         "discover": "Discover tools",
@@ -984,7 +1000,18 @@
         "facetsLabel": "Tool filter",
         "noneDescription": "Once the server answers, its tools show up here. Discover them now, or wait for the first verification.",
         "emptyDescription": "Nothing matches this filter and search.",
-        "showAll": "Show all tools"
+        "showAll": "Show all tools",
+        "policy": {
+          "label": "Tool policy",
+          "saveFailed": "Couldn't change the tool policy",
+          "groupLabel": "Policy for every tool in the group",
+          "mixed": "Mixed",
+          "scope": "The policy is the workspace default for every agent and client that calls these tools; an agent's own rules can only tighten it. Called through the connection's own MCP address, a tool that needs approval is refused: nobody is there to approve it.",
+          "adminOnly": "Only a workspace admin can change it.",
+          "allPrefix": "All:",
+          "failedMore": "{names} and {count} more",
+          "stricter": "{effect} by another rule"
+        }
       },
       "consumers": {
         "empty": "No agents attach this MCP server yet.",
@@ -1017,7 +1044,8 @@
         "copyFailed": "Failed to copy",
         "verifyFailed": "Couldn't start verification",
         "saveConfigFailed": "Couldn't save the configuration",
-        "consumersLoadFailed": "Couldn't load which agents use this connection"
+        "consumersLoadFailed": "Couldn't load which agents use this connection",
+        "toolPoliciesLoadFailed": "Couldn't load the tool policies"
       },
       "tabs": {
         "label": "Connection sections",
@@ -1230,6 +1258,7 @@
       },
       "specLink": "Spec",
       "specPasted": "Pasted as JSON, no URL to re-read",
+      "baseUrlByPlatform": "Provided by the platform",
       "headersTitle": "Headers",
       "queryParamsTitle": "Query parameters",
       "stats": {
@@ -2926,9 +2955,7 @@
     "loading": "Loading…",
     "loadFailed": "Could not load the list. Try refreshing.",
     "refresh": "Refresh list",
-    "noMcps": "No MCP servers connected yet.",
     "manageMcps": "Connect an MCP server",
-    "noSkills": "No skills available yet.",
     "manageSkills": "Create a skill",
     "attachTitle": "Add to this task",
     "attachDescription": "Agent defaults stay as they are.",
@@ -2948,7 +2975,12 @@
     "emptyFilesTitle": "No files yet",
     "emptyFilesHint": "Upload files to the workspace, then pick the ones every task should get.",
     "uploadFiles": "Upload files",
-    "manageFilesLink": "Manage files"
+    "manageFilesLink": "Manage files",
+    "catalogHeading": "From the catalog",
+    "catalogBadge": "Catalog",
+    "catalogSearchFailed": "Could not search the catalog.",
+    "catalogInstalling": "Adding to the workspace…",
+    "catalogInstallFailed": "Could not add the skill"
   },
   "QuickTask": {
     "title": "New task",

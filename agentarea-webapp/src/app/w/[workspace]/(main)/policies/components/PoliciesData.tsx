@@ -1,5 +1,5 @@
 import RetryEmptyState from "@/components/EmptyState/RetryEmptyState";
-import { listAgents, listPolicies } from "@/lib/api";
+import { listAgents, listMCPServerInstances, listPolicies } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
 import type { Policy } from "@/types/policies";
 import PoliciesEditableView from "./PoliciesEditableView";
@@ -13,13 +13,14 @@ interface AgentLike {
 export async function PoliciesData() {
   let agents: AgentLike[] = [];
 
-  const [policiesRes, agentsRes] = await Promise.all([
+  const [policiesRes, agentsRes, connectionsRes] = await Promise.all([
     listPolicies().catch((reason) => ({
       data: null,
       error: reason,
       status: undefined,
     })),
     listAgents().catch((reason) => ({ data: null, error: reason })),
+    listMCPServerInstances().catch((reason) => ({ data: null, error: reason })),
   ]);
 
   if (policiesRes.error) {
@@ -46,5 +47,19 @@ export async function PoliciesData() {
     }));
   }
 
-  return <PoliciesEditableView policies={policies} agents={agents} />;
+  // Without names a rule on a connection's tool still reads, as a removed one.
+  if (connectionsRes.error) {
+    console.error("Failed to load connections for policy names:", connectionsRes.error);
+  }
+  const connectionNames = new Map(
+    (connectionsRes.data ?? []).map((connection) => [connection.id, connection.name])
+  );
+
+  return (
+    <PoliciesEditableView
+      policies={policies}
+      agents={agents}
+      connectionNames={connectionNames}
+    />
+  );
 }

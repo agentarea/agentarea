@@ -7,12 +7,14 @@ import {
   toToolRows,
   type Tool,
   type ToolFacet,
+  type ToolPolicyLookup,
   type ToolsTableConsumer,
 } from "./tool-facets";
 
 export function useToolFacets(
   tools: Tool[],
-  consumers: ToolsTableConsumer[] | null | undefined
+  consumers: ToolsTableConsumer[] | null | undefined,
+  policyOf: ToolPolicyLookup = null
 ) {
   const [query, setQuery] = useState("");
   const [facet, setFacet] = useState<ToolFacet>("all");
@@ -29,15 +31,15 @@ export function useToolFacets(
   const searching = query.trim().length > 0;
 
   const filtered = useMemo(
-    () => filterTools(tools, { query, facet, principalsFor }),
-    [tools, query, facet, principalsFor]
+    () => filterTools(tools, { query, facet, principalsFor, policyOf }),
+    [tools, query, facet, principalsFor, policyOf]
   );
 
   // Counts make the toolbar answer "how many destructive tools does this
   // server even expose" without clicking each chip.
   const facetCounts = useMemo(
-    () => countToolFacets(tools, principalsFor),
-    [tools, principalsFor]
+    () => countToolFacets(tools, principalsFor, policyOf),
+    [tools, principalsFor, policyOf]
   );
 
   // MCP and OpenAPI tools alike: name-ordered rows, name-prefix groups once

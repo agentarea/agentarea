@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { TableRowNav } from "./TableRowNav";
 
 export type Column<T = unknown> = {
-  header: string;
+  header: React.ReactNode;
   accessor: string;
   render?(value: unknown, item?: T): React.ReactNode;
   headerClassName?: string;

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { ArrowRight, Globe, Wrench } from "lucide-react";
+import { InfoHint } from "@/components/InfoHint";
 import {
   Control,
   FieldErrors,
@@ -34,6 +35,7 @@ import {
   McpInstance,
   resolveMcpRef,
 } from "@/lib/mcp/resolveMcpRef";
+import { OpenAPIConnectionMark } from "@/app/w/[workspace]/(main)/connections/components/MCPCard";
 import type { OpenAPIConnection } from "@/app/w/[workspace]/(main)/connections/types";
 import type { AgentFormValues, MCPToolConfig } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
@@ -769,9 +771,10 @@ const ToolConfig = ({
                   prefix="openapi"
                   extractTitle={(connection) => (
                     <div className="flex min-w-0 flex-row items-center gap-1 px-[7px] py-[7px]">
-                      <div className="relative shrink-0">
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                      </div>
+                      <OpenAPIConnectionMark
+                        connection={connection}
+                        className="h-5 w-5 rounded text-[8px]"
+                      />
                       <h3 className="truncate text-sm font-medium transition-colors duration-300 group-hover:text-accent group-data-[state=open]:text-accent dark:group-hover:text-accent dark:group-data-[state=open]:text-accent">
                         {connection.name}
                       </h3>
@@ -782,9 +785,11 @@ const ToolConfig = ({
                   selectedIds={(openapiFields || []).map((f) => f.openapi_connection_id)}
                   renderContent={(connection) => (
                     <div className="space-y-2 p-2">
-                      <p className="text-xs text-muted-foreground">
-                        {connection.base_url}
-                      </p>
+                      {connection.base_url && (
+                        <p className="text-xs text-muted-foreground">
+                          {connection.base_url}
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         {connection.available_tools?.length ?? 0} operations available
                       </p>
@@ -1147,7 +1152,9 @@ const ToolConfig = ({
                       className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <OpenAPIConnectionMark
+                          connection={connection ?? { base_url: null, name: displayName }}
+                        />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{displayName}</p>
                           {connection?.base_url && (
@@ -1182,7 +1189,7 @@ const ToolConfig = ({
                         <div
                           className="inline-flex items-center rounded-md border text-xs"
                           role="group"
-                          aria-label="Load mode"
+                          aria-label={t("create.loadMode")}
                         >
                           <button
                             type="button"
@@ -1199,9 +1206,8 @@ const ToolConfig = ({
                                 : "text-muted-foreground hover:text-foreground")
                             }
                             aria-pressed={currentLoadMode === "explicit"}
-                            title="Send every operation schema in every LLM call (default behavior, larger context)."
                           >
-                            Explicit
+                            {t("create.loadModeExplicit")}
                           </button>
                           <button
                             type="button"
@@ -1218,11 +1224,13 @@ const ToolConfig = ({
                                 : "text-muted-foreground hover:text-foreground")
                             }
                             aria-pressed={currentLoadMode === "searchable"}
-                            title="Defer schemas behind a load_tools meta-tool; only a name+description catalog goes into the system prompt."
                           >
-                            Searchable
+                            {t("create.loadModeSearchable")}
                           </button>
                         </div>
+                        <InfoHint label={t("create.loadMode")}>
+                          {t("create.loadModeHint")}
+                        </InfoHint>
                       <Button
                         type="button"
                         variant="ghost"

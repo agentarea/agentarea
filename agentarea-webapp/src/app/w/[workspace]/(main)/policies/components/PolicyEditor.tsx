@@ -37,6 +37,7 @@ import {
   GITHUB_IMPORT_REGISTRY_ID,
   GITHUB_IMPORT_TRUST,
   isInstallTarget,
+  parseConnectionToolName,
   REGISTRY_TRUST_LEVELS,
   registryTarget,
   registryTrustTarget,
@@ -50,6 +51,7 @@ import {
   updatePolicyRuleAction,
 } from "./actions";
 import { EFFECT_STYLES, INSTALL_RULE_STYLE } from "./policy-effects";
+import type { ConnectionNames } from "./policy-rules";
 
 // What the editor is operating on. Create modes pre-scope the rule to a
 // subject (workspace, or a picked agent); edit mode locks the subject.
@@ -723,30 +725,45 @@ function ToolSelector({
   values,
   onChange,
   emptyText,
+  connectionNames,
 }: {
   options: ToolOption[];
   values: string[];
   onChange: (next: string[]) => void;
   emptyText: string;
+  connectionNames: ConnectionNames;
 }) {
   const t = useTranslations("PoliciesPage.editor");
   const visibleOptions = useMemo(() => {
     const byId = new Map(options.map((option) => [option.id, option]));
     for (const value of values) {
-      if (!byId.has(value)) {
-        byId.set(value, {
-          id: value,
-          label: humanizeToolName(value),
-          source: "custom",
-          parameterKeys: [],
-          agents: [],
-        });
-      }
+      if (byId.has(value)) continue;
+      // A tool named through its connection, as a connection's Tools tab sets it.
+      const viaConnection = parseConnectionToolName(value);
+      byId.set(
+        value,
+        viaConnection
+          ? {
+              id: value,
+              label: viaConnection.tool,
+              source: "mcp",
+              sourceName: connectionNames.get(viaConnection.connectionId),
+              parameterKeys: [],
+              agents: [],
+            }
+          : {
+              id: value,
+              label: humanizeToolName(value),
+              source: "custom",
+              parameterKeys: [],
+              agents: [],
+            }
+      );
     }
     return Array.from(byId.values()).sort((a, b) =>
       a.label.localeCompare(b.label)
     );
-  }, [options, values]);
+  }, [options, values, connectionNames]);
 
   const toggle = (toolId: string) => {
     if (values.includes(toolId)) {
@@ -1223,6 +1240,10 @@ export default function PolicyEditor({
     return selectedAgents;
   }, [agents, selectedAgents, subjectType]);
 
+  const connectionNames = useMemo<ConnectionNames>(
+    () => new Map(mcpInstances.map((instance) => [instance.id, instance.name])),
+    [mcpInstances]
+  );
   const toolCatalog = useMemo(
     () =>
       buildToolCatalog(
@@ -1866,6 +1887,7 @@ export default function PolicyEditor({
                   values={form.tools}
                   onChange={(next) => update("tools", next)}
                   emptyText={t("tools.noToolsAttached")}
+                  connectionNames={connectionNames}
                 />
                 <p className="text-xs text-muted-foreground">
                   {t("tools.everyCallHint")}
@@ -1895,6 +1917,7 @@ export default function PolicyEditor({
                     values={form.tools}
                     onChange={(next) => update("tools", next)}
                     emptyText={t("tools.noToolsAttached")}
+                    connectionNames={connectionNames}
                   />
                   <p className="text-xs text-muted-foreground">
                     {t("tools.everyCallHint")}
