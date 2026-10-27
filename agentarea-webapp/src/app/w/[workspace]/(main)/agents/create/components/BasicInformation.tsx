@@ -88,7 +88,7 @@ const BasicInformation = ({
           </FormLabel>
           <Input
             id="name"
-            {...register("name", { required: "Agent name is required" })}
+            {...register("name", { required: t("nameRequired") })}
             readOnly={Boolean(suggestedName) && !nameReady}
             defaultValue={suggestedName}
             onFocus={
@@ -117,7 +117,7 @@ const BasicInformation = ({
           <Controller
             name="model_id"
             control={control}
-            rules={{ required: "Model is required" }}
+            rules={{ required: t("modelRequired") }}
             render={({ field }) => (
               <ProviderModelSelector
                 modelInstances={llmModelInstances}

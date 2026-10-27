@@ -716,7 +716,12 @@
       "behavior": {
         "title": "Behavior",
         "note": "How the agent answers: rich UI in the chat, and a check of its answer before it is sent."
-      }
+      },
+      "nameRequired": "Give the agent a name.",
+      "modelRequired": "Pick the model the agent runs on.",
+      "configureInstanceTitle": "Set up {name}",
+      "editInstanceTitle": "Edit {name}",
+      "configureMcpServer": "Set up an MCP server"
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",

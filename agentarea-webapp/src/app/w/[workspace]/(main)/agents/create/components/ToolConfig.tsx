@@ -199,6 +199,7 @@ const ToolConfig = ({
     );
   const tMcp = useTranslations("MCPServersPage.createInstance");
   const tPickers = useTranslations("Pickers");
+  const tCommon = useTranslations("Common");
 
   // Configure server overlay (like marketplace, but in sheet)
   const [configureServerSheetOpen, setConfigureServerSheetOpen] =
@@ -1138,8 +1139,13 @@ const ToolConfig = ({
         className="md:min-w-[500px]"
         title={
           selectedServer
-            ? `${isEditingInstance ? "Edit" : "Configure"} ${selectedServer.name} Instance`
-            : "Configure MCP Server"
+            ? t(
+                isEditingInstance
+                  ? "create.editInstanceTitle"
+                  : "create.configureInstanceTitle",
+                { name: selectedServer.name }
+              )
+            : t("create.configureMcpServer")
         }
         description={selectedServer?.description || ""}
         triggerClassName="hidden"
@@ -1395,7 +1401,7 @@ const ToolConfig = ({
                   disabled={isCreating}
                   type="button"
                 >
-                  Cancel
+                  {tCommon("cancel")}
                 </Button>
               }
             />
