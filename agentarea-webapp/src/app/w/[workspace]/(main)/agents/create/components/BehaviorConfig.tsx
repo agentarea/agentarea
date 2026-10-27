@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   Languages,
@@ -94,6 +94,10 @@ const BehaviorConfig = ({ register, control, errors }: BehaviorConfigProps) => {
   const t = useTranslations("AgentsPage.create");
   const [accordionValue, setAccordionValue] = useState("behavior");
   const languageError = getNestedErrorMessage(errors, "answer_check.language");
+  // A refused save opens the section, so the field it points at is seen.
+  useEffect(() => {
+    if (languageError) setAccordionValue("behavior");
+  }, [languageError]);
 
   return (
     <AccordionControl

@@ -241,6 +241,23 @@ export default function AgentForm({
     toTriggerDrafts(initialData?.triggers ?? [])
   );
   const [showTriggerErrors, setShowTriggerErrors] = useState(false);
+  // Bumped when a save is refused, so the form brings the first problem into
+  // view once the sections holding it have opened.
+  const [revealRequest, setRevealRequest] = useState(0);
+  useEffect(() => {
+    if (!revealRequest) return;
+    const timer = setTimeout(() => {
+      const first = formRef.current?.querySelector<HTMLElement>(
+        '[aria-invalid="true"], .form-error, [role="alert"]'
+      );
+      if (!first) return;
+      first.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (first.matches("input, textarea"))
+        first.focus({ preventScroll: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [revealRequest]);
+  const revealFirstError = () => setRevealRequest((request) => request + 1);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
   const selectModel = (next: ModelSelection) => {
@@ -310,6 +327,7 @@ export default function AgentForm({
 
     if (create && hasIncompleteTriggers(triggerDrafts)) {
       setShowTriggerErrors(true);
+      revealFirstError();
       return;
     }
 
@@ -355,6 +373,7 @@ export default function AgentForm({
               ? formErrors.join(", ")
               : [result.message ?? "", ...fieldErrors].join(" ")
           );
+          revealFirstError();
 
           if (onError) {
             onError(result);
@@ -363,6 +382,7 @@ export default function AgentForm({
       } catch (error) {
         console.error("Agent save failed", error);
         setFormError(`${t("saveFailed")}: ${formatApiError(error)}`);
+        revealFirstError();
 
         if (onError) {
           onError(error);
@@ -434,7 +454,7 @@ export default function AgentForm({
           <form
             ref={formRef}
             id="agent-form"
-            onSubmit={handleSubmit(handleFormSubmit)}
+            onSubmit={handleSubmit(handleFormSubmit, revealFirstError)}
             className="overflow-auto h-full py-5 pr-5"
           >
             {formError && <FormError className="mb-4">{formError}</FormError>}

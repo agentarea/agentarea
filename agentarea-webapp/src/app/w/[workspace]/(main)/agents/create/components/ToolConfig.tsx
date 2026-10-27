@@ -163,6 +163,11 @@ const ToolConfig = ({
     (field) => !groupedToolNames.has(field.tool_name)
   );
   const [accordionValue, setAccordionValue] = useState<string>("tools");
+  // A refused save opens the section, so the tool it points at is seen.
+  const hasToolErrors = Boolean(errors.tools_config);
+  useEffect(() => {
+    if (hasToolErrors) setAccordionValue("tools");
+  }, [hasToolErrors]);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [toolTab, setToolTab] = useState<"builtin" | "openapi" | "mcp">(
     "builtin"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Zap } from "lucide-react";
 import type { TriggerSpec } from "@/api/client/types.gen";
@@ -79,6 +79,10 @@ const TriggersConfig = ({
   const t = useTranslations("AgentsPage.create");
   const tTrigger = useTranslations("TriggersPage.create");
   const tType = useTranslations("TriggersPage.type");
+  // A refused save opens the section, so the trigger it points at is seen.
+  useEffect(() => {
+    if (showErrors) setAccordionValue("triggers");
+  }, [showErrors]);
   // Triggers whose fields are shown under their row.
   const [openKeys, setOpenKeys] = useState<string[]>([]);
   const toggleOpen = (key: string) =>
