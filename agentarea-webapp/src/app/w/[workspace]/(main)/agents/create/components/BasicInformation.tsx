@@ -160,7 +160,6 @@ const BasicInformation = ({
             {...register("description")}
             placeholder={t("descriptionPlaceholder")}
             className="h-[100px] resize-none"
-            // className="mt-2 text-base px-4 py-3 border-2 border-slate-200 focus:border-blue-400 transition-colors h-32"
             aria-invalid={!!getNestedErrorMessage(errors, "description")}
           />
           {getNestedErrorMessage(errors, "description") && (
@@ -182,7 +181,8 @@ const BasicInformation = ({
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder={t("instructionPlaceholder")}
-                className="h-[200px] resize-none"
+                // Grows with the instruction, scrolling only past 60% of the screen.
+                className="min-h-[200px] max-h-[60vh] resize-none"
                 aria-invalid={!!getNestedErrorMessage(errors, "instruction")}
               />
             )}
