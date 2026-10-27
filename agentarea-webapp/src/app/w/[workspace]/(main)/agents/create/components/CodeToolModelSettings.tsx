@@ -1,13 +1,12 @@
-import type {
-  ModelInstanceResponse,
-  ModelKind,
-} from "@/api/client/types.gen";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
+import { ImageIcon, Video, X, type LucideIcon } from "lucide-react";
 import { Control, UseFormSetValue, useWatch } from "react-hook-form";
+import type { ModelInstanceResponse, ModelKind } from "@/api/client/types.gen";
+import ConfigSheet from "@/components/ConfigSheet";
 import FormError from "@/components/FormError";
-import Link from "@/components/WorkspaceLink";
+import FormLabel from "@/components/FormLabel/FormLabel";
+import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
@@ -31,21 +30,32 @@ const MODEL_FIELDS: Record<
 export const hasCodeToolModelSettings = (toolName: string) =>
   toolName in MODEL_FIELDS;
 
+const KIND_ICONS: Record<SettingsKind, LucideIcon> = {
+  image: ImageIcon,
+  video: Video,
+};
+
+/** A model of one kind, picked the way the form picks the agent's LLM model. */
 function KindModelSelect({
+  id,
   kind,
   value,
   onChange,
 }: {
+  id: string;
   kind: SettingsKind;
   value: string | null | undefined;
   onChange: (value: string | null) => void;
 }) {
   const t = useTranslations("AgentsPage.create.codeToolModels");
+  const tCreate = useTranslations("AgentsPage.create");
   const tCommon = useTranslations("Common");
   const [instances, setInstances] = useState<ModelInstanceResponse[] | null>(
     null
   );
   const [error, setError] = useState<string | null>(null);
+  const [selectOpen, setSelectOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const load = useCallback(() => {
     setError(null);
@@ -67,13 +77,18 @@ function KindModelSelect({
     load();
   }, [load]);
 
+  const addModel = () => {
+    setSelectOpen(false);
+    setSheetOpen(true);
+  };
+
   const label = t(`${kind}.label`);
 
   return (
-    <div className="space-y-1">
-      <div className="text-xs font-medium text-foreground">
+    <div className="space-y-2">
+      <FormLabel htmlFor={id} icon={KIND_ICONS[kind]}>
         {label}
-      </div>
+      </FormLabel>
       {error ? (
         <div className="flex flex-col items-start gap-2">
           <FormError className="w-full">{error}</FormError>
@@ -89,12 +104,23 @@ function KindModelSelect({
             onValueChange={onChange}
             disabled={instances === null}
             placeholder={t("placeholder")}
+            open={selectOpen}
+            onOpenChange={setSelectOpen}
+            onAddProvider={addModel}
             emptyMessage={
-              <div className="text-center text-sm text-muted-foreground">
-                <p>{t(`${kind}.empty`)}</p>
-                <Link href="/models" className="text-primary underline">
+              <div className="flex flex-col items-center gap-2 px-6">
+                <div>{t(`${kind}.empty`)}</div>
+                <div className="note">
+                  {tCreate("createAndUseProviderConfiguration")}
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={addModel}
+                  className="mt-2"
+                >
                   {t("addModel")}
-                </Link>
+                </Button>
               </div>
             }
           />
@@ -112,6 +138,25 @@ function KindModelSelect({
           )}
         </div>
       )}
+      <ConfigSheet
+        title={tCreate("createConfiguration")}
+        className="md:min-w-[500px]"
+        description=""
+        triggerClassName="hidden"
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+      >
+        <ProviderConfigForm
+          className="overflow-y-auto pb-6"
+          onAfterSubmit={() => {
+            load();
+            setSheetOpen(false);
+          }}
+          onCancel={() => setSheetOpen(false)}
+          isClear={true}
+          autoRedirect={false}
+        />
+      </ConfigSheet>
     </div>
   );
 }
@@ -138,10 +183,11 @@ export function CodeToolModelSettings({
   const missing = fields.every(({ field }) => !tool?.[field]);
 
   return (
-    <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+    <div className="space-y-4">
       {fields.map(({ field, kind }) => (
         <KindModelSelect
           key={field}
+          id={`builtin-tool-${index}-${field}`}
           kind={kind}
           value={tool?.[field]}
           onChange={(value) =>
@@ -151,11 +197,7 @@ export function CodeToolModelSettings({
           }
         />
       ))}
-      {missing && (
-        <p className="text-xs text-muted-foreground">
-          {t("pickAtLeastOne")}
-        </p>
-      )}
+      {missing && <p className="note">{t("pickAtLeastOne")}</p>}
     </div>
   );
 }
