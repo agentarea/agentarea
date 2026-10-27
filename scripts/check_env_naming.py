@@ -106,7 +106,7 @@ WHITELIST = {
     # next.js build contract
     "NODE_ENV", "NEXT_TELEMETRY_DISABLED", "NEXT_PUBLIC_APP_URL",
     "NEXT_PUBLIC_APP_VERSION", "NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_KRATOS_URL",
-    "NEXT_PUBLIC_NODE_ENV", "__NEXT_PRIVATE_ORIGIN", "NEXT_RUNTIME",
+    "NEXT_PUBLIC_NODE_ENV", "__NEXT_PRIVATE_ORIGIN", "NEXT_RUNTIME", "NEXT_PHASE",
     # proxy configuration, read by http clients themselves
     "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
     # platform / shell
