@@ -161,7 +161,7 @@ async def test_project_instructions_reach_the_run_but_not_the_agents_config_hash
     )
     request = AgentConfigRequest(
         agent_id=saved.id,
-        user_context_data={"user_id": "user", "workspace_id": "workspace"},
+        user_context_data={"user_id": "user", "workspace_id": "workspace", "agent_id": "agent-1"},
         execution_context={"project_id": str(uuid4())},
     )
     without = await functions["build_agent_config_activity"](request)

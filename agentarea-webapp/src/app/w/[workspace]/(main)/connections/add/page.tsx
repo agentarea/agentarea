@@ -1,9 +1,14 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import ContentBlock from "@/components/ContentBlock/ContentBlock";
+import ContentBlock from "@/components/ContentBlock";
 import { FormSkeleton } from "@/components/Skeleton";
 import { AddMCPServerForm } from "./form";
 import AddMCPServerHeaderControls from "./header-controls";
+
+export const metadata: Metadata = {
+  title: "Add MCP Server",
+};
 
 export default async function AddMCPServerPage() {
   const t = await getTranslations("MCPServersPage");
@@ -13,13 +18,8 @@ export default async function AddMCPServerPage() {
       header={{
         breadcrumb: [
           { label: t("title"), href: "/connections" },
-          { label: "Add Server" },
+          { label: t("newServer.title") },
         ],
-        description: "Connect an MCP server to your workspace",
-        backLink: {
-          label: "Back to MCP Servers",
-          href: "/connections",
-        },
         controls: <AddMCPServerHeaderControls />,
       }}
     >

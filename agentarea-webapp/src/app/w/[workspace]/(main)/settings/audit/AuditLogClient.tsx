@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import { AuditAction, AuditActor, AuditResource } from "./AuditCells";
 import { AuditChangeList } from "./AuditChangeList";
+import { auditChangeLines } from "./auditChanges";
 
 /** Metadata keys worth a line under the resource, with their label keys. */
 const DETAIL_KEYS = ["tool", "decision", "reason", "comment"] as const;
@@ -77,12 +78,46 @@ function ResourceCell({
   );
 }
 
+/**
+ * What an event recorded, with no resource line: the fields it changed, and
+ * their before/after once the row is open.
+ */
+function DetailsCell({
+  event,
+  expanded,
+}: {
+  event: AuditEvent;
+  expanded: boolean;
+}) {
+  const fields = auditChangeLines(event.changes).map((line) => line.field);
+  return (
+    <div className="min-w-0">
+      {expanded ? (
+        <AuditChangeList changes={event.changes} className="space-y-1" />
+      ) : fields.length > 0 ? (
+        <span className="break-words font-mono text-xs text-muted-foreground">
+          {fields.join(", ")}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+      <AuditDetails event={event} />
+    </div>
+  );
+}
+
 interface Props {
   initialEvents: AuditEvent[];
   initialCursor: string | null;
   /** The API query the page loaded with, for the next pages. */
   query: AuditQuery;
   filtered: boolean;
+  /**
+   * Every event is about one resource, as on a detail page's Activity tab:
+   * the resource column would repeat it on every row and link back to the
+   * page it is on, so it shows only what each event recorded.
+   */
+  resourceScoped?: boolean;
 }
 
 export default function AuditLogClient({
@@ -90,6 +125,7 @@ export default function AuditLogClient({
   initialCursor,
   query,
   filtered,
+  resourceScoped = false,
 }: Props) {
   const t = useTranslations("AuditLogPage");
   const [events, setEvents] = useState<AuditEvent[]>(initialEvents);
@@ -150,11 +186,14 @@ export default function AuditLogClient({
     },
     {
       accessor: "resource",
-      header: t("table.resource"),
-      rowLink: true,
-      render: (_: unknown, event: AuditEvent) => (
-        <ResourceCell event={event} expanded={expandedId === event.id} />
-      ),
+      header: resourceScoped ? t("table.details") : t("table.resource"),
+      rowLink: !resourceScoped,
+      render: (_: unknown, event: AuditEvent) =>
+        resourceScoped ? (
+          <DetailsCell event={event} expanded={expandedId === event.id} />
+        ) : (
+          <ResourceCell event={event} expanded={expandedId === event.id} />
+        ),
     },
     {
       accessor: "actor_id",
@@ -194,7 +233,11 @@ export default function AuditLogClient({
           data={events}
           columns={columns}
           // A row leads to its resource, like a row in any other table.
-          rowHref={(event: AuditEvent) => event.resource?.href ?? ""}
+          rowHref={
+            resourceScoped
+              ? undefined
+              : (event: AuditEvent) => event.resource?.href ?? ""
+          }
         />
       )}
 

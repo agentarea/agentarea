@@ -6,6 +6,7 @@ import logging
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.auth import UserContextDep
 from agentarea_common.auth.route_authz import unrestricted
 from agentarea_common.di.container import get_container
@@ -159,6 +160,7 @@ async def get_network_topology(
             query = (
                 select(Agent)
                 .where(Agent.workspace_id.in_(accessible_workspaces))
+                .where(Agent.status != AgentStatus.ARCHIVED)
                 .options(
                     selectinload(Agent.skills.and_(Skill.workspace_id.in_(accessible_workspaces)))
                 )

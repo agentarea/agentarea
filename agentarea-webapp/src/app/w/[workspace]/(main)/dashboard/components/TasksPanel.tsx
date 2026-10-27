@@ -108,7 +108,7 @@ export function TasksPanel({
         />
       </div>
 
-      <div className="min-h-0 flex-1 lg:overflow-y-auto">
+      <div className="min-h-0 flex-1">
         {active.length === 0 && recent.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col justify-center">
             <EmptyState

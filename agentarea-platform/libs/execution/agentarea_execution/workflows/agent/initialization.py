@@ -96,6 +96,9 @@ class InitializationMixin(DelegationMixin, ContinueAsNewMixin):
         self.state.user_context_data = {
             "user_id": self.state.user_id,
             "workspace_id": self.state.workspace_id,
+            # The run acts as its agent: the graph is asked about the agent, and
+            # the user above is only who the run is attributed to.
+            "agent_id": str(request.agent_id),
         }
         self.state.goal = self._build_goal_from_request(request)
         self.state.status = ExecutionStatus.INITIALIZING

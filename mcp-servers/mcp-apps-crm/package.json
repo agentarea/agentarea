@@ -5,6 +5,7 @@
   "scripts": {
     "seed": "bun scripts/seed.ts",
     "build": "bun run build:app && bun run build:server",
+    "test": "bun test",
     "build:app": "INPUT=app/pipeline.html vite build && INPUT=app/deal.html vite build",
     "build:server": "bun build server/main.ts --target=bun --outfile dist/server.js",
     "build:host": "INPUT=host/index.html vite build && INPUT=host/sandbox.html vite build",
@@ -14,10 +15,10 @@
     "host": "bun host/serve.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/express": "2.0.0",
+    "@modelcontextprotocol/express": "2.0.2",
     "@modelcontextprotocol/ext-apps": "^2.0.0",
     "@modelcontextprotocol/node": "2.0.0",
-    "@modelcontextprotocol/server": "2.0.0",
+    "@modelcontextprotocol/server": "2.3.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.3",
@@ -34,7 +35,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.3.1",
     "@tailwindcss/vite": "^4.1.13",
     "@types/bun": "1.4.3",
     "@types/cors": "^2.8.19",
@@ -48,5 +49,8 @@
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
     "vite-plugin-singlefile": "^2.3.0"
+  },
+  "overrides": {
+    "hono": "^4.13.11"
   }
 }

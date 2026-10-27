@@ -125,6 +125,14 @@ export const deleteAgent = async (agentId: string) => {
   return { data, error };
 };
 
+export const restoreAgent = async (agentId: string) => {
+  const result = await sdk.restoreAgentV1AgentsAgentIdRestorePost({
+    client: serverClient,
+    path: { agent_id: agentId },
+  });
+  return withStatus(result);
+};
+
 export const installAgent = async (agentId: string) => {
   const result = await sdk.installAgentV1AgentsAgentIdInstallPost({
     client: serverClient,

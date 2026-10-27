@@ -28,6 +28,7 @@ except ImportError:
     pytest.skip("Triggers not available", allow_module_level=True)
 
 # Import API components
+from agentarea_agents.domain.models import Agent
 from agentarea_api.api.deps.services import (
     get_secret_manager,
     get_trigger_service,
@@ -38,10 +39,10 @@ from agentarea_common.auth.dependencies import get_user_context
 from agentarea_common.auth.test_utils import create_test_user_context
 from agentarea_common.base.repository_factory import RepositoryFactory
 from agentarea_common.events.broker import EventBroker
-from agentarea_common.testing import allow_all_permissions, install_graph_ownership_stub
+from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_tasks.task_service import TaskService
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.asyncio, pytest.mark.usefixtures("permissive_pdp")]
 
 
 class TestTriggerE2EScenarios:
@@ -67,19 +68,6 @@ class TestTriggerE2EScenarios:
         return task_service
 
     @pytest.fixture
-    def mock_agent_repository(self):
-        """Mock agent repository for testing."""
-        agent_repo = AsyncMock()
-
-        # Mock agent existence check
-        mock_agent = MagicMock()
-        mock_agent.id = uuid4()
-        mock_agent.name = "Test Agent"
-        agent_repo.get.return_value = mock_agent
-
-        return agent_repo
-
-    @pytest.fixture
     def mock_temporal_schedule_manager(self):
         """Mock temporal schedule manager for testing."""
         return AsyncMock(spec=TemporalScheduleManager)
@@ -99,7 +87,6 @@ class TestTriggerE2EScenarios:
         self,
         repository_factory,
         mock_event_broker,
-        mock_agent_repository,
         mock_task_service,
         mock_temporal_schedule_manager,
     ):
@@ -111,17 +98,12 @@ class TestTriggerE2EScenarios:
             llm_condition_evaluator=None,
             temporal_schedule_manager=mock_temporal_schedule_manager,
         )
-        # Swap in the mock agent repository so agent-existence validation
-        # doesn't require a real Agent row in the test database.
-        service.agent_repository = mock_agent_repository
         return service
 
     @pytest.fixture
     def test_app(self, trigger_service, monkeypatch):
         """Create test FastAPI app with trigger endpoints."""
-        # Every route now clears a permission check and every create records
-        # ownership in the graph; neither is the subject here.
-        allow_all_permissions()
+        # Every create records ownership in the graph; it is not the subject here.
         install_graph_ownership_stub(monkeypatch)
 
         app = FastAPI()
@@ -146,9 +128,19 @@ class TestTriggerE2EScenarios:
         return TestClient(test_app)
 
     @pytest.fixture
-    def sample_agent_id(self):
-        """Sample agent ID for testing."""
-        return uuid4()
+    async def sample_agent_id(self, db_session, user_context):
+        """An agent of the workspace that exists and is active, so its triggers may fire."""
+        agent = Agent(
+            id=uuid4(),
+            name="Test Agent",
+            slug=f"agent-{uuid4().hex[:8]}",
+            status="active",
+            workspace_id=user_context.workspace_id,
+            created_by=user_context.user_id,
+        )
+        db_session.add(agent)
+        await db_session.flush()
+        return agent.id
 
     # End-to-End Trigger Creation and Execution Tests
 
@@ -182,7 +174,7 @@ class TestTriggerE2EScenarios:
         assert created_trigger.is_active is True
 
         # Verify schedule was created
-        mock_temporal_schedule_manager.create_cron_schedule.assert_called_once()
+        mock_temporal_schedule_manager.apply_cron_schedule.assert_awaited_once()
 
         # Step 2: Simulate trigger execution
         execution_data = {
@@ -214,14 +206,18 @@ class TestTriggerE2EScenarios:
         assert disable_result is True
 
         # Verify schedule was paused
-        mock_temporal_schedule_manager.pause_cron_schedule.assert_called_once()
+        assert (
+            mock_temporal_schedule_manager.apply_cron_schedule.await_args.kwargs["paused"] is True
+        )
 
         # Re-enable trigger
         enable_result = await trigger_service.enable_trigger(created_trigger.id)
         assert enable_result is True
 
         # Verify schedule was resumed
-        mock_temporal_schedule_manager.unpause_cron_schedule.assert_called_once()
+        assert (
+            mock_temporal_schedule_manager.apply_cron_schedule.await_args.kwargs["paused"] is False
+        )
 
         # Step 4: Delete trigger
         delete_result = await trigger_service.delete_trigger(created_trigger.id)

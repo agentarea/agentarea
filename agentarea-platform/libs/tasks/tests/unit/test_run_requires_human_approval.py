@@ -21,13 +21,14 @@ from agentarea_governance.domain.policies import (
     PolicyDocument,
     PolicyResolver,
 )
-from agentarea_tasks.domain.models import AgentTask
+from agentarea_tasks.domain.models import AgentTask, TaskProvenance
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 
 WORKSPACE = "ws-acme"
 USER = "user-123"
+_STARTED = TaskProvenance.started_by(USER, via_api_key=False)
 
 _BASELINE = PolicyDocument.model_validate(
     {
@@ -108,6 +109,7 @@ async def test_start_run_with_the_flag_requires_approval_in_the_effective_policy
         RunCreate(agent_id=uuid4(), description="deploy", requires_human_approval=True),
         workspace_id=WORKSPACE,
         user_id=USER,
+        provenance=_STARTED,
         created_via="mcp",
     )
 
@@ -124,6 +126,7 @@ async def test_reserve_run_with_the_flag_requires_approval_in_the_effective_poli
         RunCreate(agent_id=uuid4(), description="deploy", requires_human_approval=True),
         workspace_id=WORKSPACE,
         user_id=USER,
+        provenance=_STARTED,
         task_id=uuid4(),
     )
 
@@ -165,6 +168,7 @@ async def test_the_flag_joins_a_caller_task_policy_instead_of_replacing_it():
         ),
         workspace_id=WORKSPACE,
         user_id=USER,
+        provenance=_STARTED,
     )
 
     approval = _approval(task_manager.submit_task.await_args.args[0])
@@ -180,6 +184,7 @@ async def test_without_the_flag_no_approval_is_added():
         RunCreate(agent_id=uuid4(), description="deploy"),
         workspace_id=WORKSPACE,
         user_id=USER,
+        provenance=_STARTED,
     )
 
     assert _approval(task_manager.submit_task.await_args.args[0]) == {}

@@ -83,7 +83,7 @@ class AgentDelegationTool(BaseTool):
             raise ToolExecutionError(self.name, "message is required")
 
         try:
-            from agentarea_tasks.domain.models import AgentTask
+            from agentarea_tasks.domain.models import AgentTask, TaskProvenance
 
             task = AgentTask(
                 id=uuid4(),
@@ -96,6 +96,7 @@ class AgentDelegationTool(BaseTool):
                 status="submitted",
                 task_parameters={},
                 metadata={"source": "agent_delegation", "delegated": True},
+                provenance=TaskProvenance(origin_type="agent"),
             )
 
             created_task = await self._task_service.submit_task(task)

@@ -64,7 +64,7 @@ export function SpendTrendChart({
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart
         data={cumulative}
-        margin={{ top: 10, right: 8, bottom: 0, left: 0 }}
+        margin={{ top: 10, right: 8, bottom: 0, left: 24 }}
       >
         <defs>
           <linearGradient id="spendTrendFill" x1="0" y1="0" x2="0" y2="1">
@@ -85,7 +85,7 @@ export function SpendTrendChart({
           tick={{ fontSize: 10.5, fill: "currentColor", opacity: 0.5 }}
           axisLine={false}
           tickLine={false}
-          width={40}
+          width="auto"
           className="text-muted-foreground [&_text]:font-mono"
         />
         <XAxis

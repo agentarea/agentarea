@@ -179,14 +179,18 @@ async def get_wallet_service(
     )
 
 
-async def ensure_agent_exists(
-    agent_id: UUID,
+async def resolve_agent_id(
+    agent_id: str,
     agent_service: AgentService = Depends(get_agent_service),
-) -> None:
-    """Reject wallet operations for agents outside the caller's workspace."""
-    agent = await agent_service.get(agent_id)
+) -> UUID:
+    """The UUID of the agent the path names by UUID or slug, in the caller's workspace."""
+    try:
+        agent = await agent_service.get(UUID(agent_id))
+    except ValueError:
+        agent = await agent_service.get_by_slug(agent_id)
     if agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
+    return agent.id
 
 
 # ---------------------------------------------------------------------------
@@ -201,10 +205,9 @@ async def ensure_agent_exists(
     dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
 )
 async def create_wallet(
-    agent_id: UUID,
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     request: CreateWalletRequest,
     user_context: UserContextDep,
-    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Create a wallet for an agent."""
@@ -238,8 +241,7 @@ async def create_wallet(
     dependencies=[requires_workspace_admin()],
 )
 async def get_wallet(
-    agent_id: UUID,
-    _agent_exists: None = Depends(ensure_agent_exists),
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     wallet_service=Depends(get_wallet_service),
 ):
     """Get wallet configuration for an agent (no decrypted credentials)."""
@@ -258,10 +260,9 @@ async def get_wallet(
     dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
 )
 async def update_wallet(
-    agent_id: UUID,
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     request: UpdateWalletRequest,
     user_context: UserContextDep,
-    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Update wallet configuration."""
@@ -300,9 +301,8 @@ async def update_wallet(
     dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
 )
 async def delete_wallet(
-    agent_id: UUID,
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     user_context: UserContextDep,
-    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Delete wallet and associated credentials."""
@@ -321,8 +321,7 @@ async def delete_wallet(
     dependencies=[requires_workspace_admin()],
 )
 async def get_wallet_balance(
-    agent_id: UUID,
-    _agent_exists: None = Depends(ensure_agent_exists),
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     wallet_service=Depends(get_wallet_service),
 ):
     """Get current service budget status."""
@@ -349,8 +348,7 @@ async def get_wallet_balance(
     dependencies=[requires_workspace_admin()],
 )
 async def get_payment_history(
-    agent_id: UUID,
-    _agent_exists: None = Depends(ensure_agent_exists),
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     wallet_service=Depends(get_wallet_service),
     protocol: str | None = Query(None, description="Filter by protocol (x402, mpp)"),
     status: str | None = Query(None, description="Filter by status"),
@@ -385,10 +383,9 @@ async def get_payment_history(
     dependencies=[enforced_in_handler("workspace admin, asserted in the handler")],
 )
 async def fund_wallet(
-    agent_id: UUID,
+    agent_id: Annotated[UUID, Depends(resolve_agent_id)],
     request: FundWalletRequest,
     user_context: UserContextDep,
-    _agent_exists: None = Depends(ensure_agent_exists),
     wallet_service=Depends(get_wallet_service),
 ):
     """Update the service budget amount."""

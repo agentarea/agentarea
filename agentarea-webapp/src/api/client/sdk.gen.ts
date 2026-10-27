@@ -142,6 +142,9 @@ import type {
   CreateStreamV1StreamsPostData,
   CreateStreamV1StreamsPostErrors,
   CreateStreamV1StreamsPostResponses,
+  CreateTaskDefinitionV1TaskDefinitionsPostData,
+  CreateTaskDefinitionV1TaskDefinitionsPostErrors,
+  CreateTaskDefinitionV1TaskDefinitionsPostResponses,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostData,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostErrors,
   CreateTaskForAgentSyncV1AgentsAgentIdTasksSyncPostResponses,
@@ -232,6 +235,9 @@ import type {
   DeleteStreamV1StreamsStreamIdDeleteData,
   DeleteStreamV1StreamsStreamIdDeleteErrors,
   DeleteStreamV1StreamsStreamIdDeleteResponses,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteData,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses,
   DeleteTriggerV1TriggersTriggerIdDeleteData,
   DeleteTriggerV1TriggersTriggerIdDeleteErrors,
   DeleteTriggerV1TriggersTriggerIdDeleteResponses,
@@ -322,6 +328,9 @@ import type {
   GetApiKeyV1ApiKeysTokenIdGetData,
   GetApiKeyV1ApiKeysTokenIdGetErrors,
   GetApiKeyV1ApiKeysTokenIdGetResponses,
+  GetBalanceV1BalanceGetData,
+  GetBalanceV1BalanceGetErrors,
+  GetBalanceV1BalanceGetResponses,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetData,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetErrors,
   GetCatalogItemV1RegistriesCatalogItemsItemIdGetResponses,
@@ -438,6 +447,9 @@ import type {
   GetTaskByIdV1TasksTaskIdGetData,
   GetTaskByIdV1TasksTaskIdGetErrors,
   GetTaskByIdV1TasksTaskIdGetResponses,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetData,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses,
   GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetData,
   GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetErrors,
   GetTaskEventsV1AgentsAgentIdTasksTaskIdEventsGetResponses,
@@ -646,6 +658,9 @@ import type {
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetData,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetErrors,
   ListTaskArtifactsV1AgentsAgentIdTasksTaskIdArtifactsGetResponses,
+  ListTaskDefinitionsV1TaskDefinitionsGetData,
+  ListTaskDefinitionsV1TaskDefinitionsGetErrors,
+  ListTaskDefinitionsV1TaskDefinitionsGetResponses,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetData,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetErrors,
   ListTaskSandboxFilesV1AgentsAgentIdTasksTaskIdSandboxFilesGetResponses,
@@ -766,6 +781,9 @@ import type {
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostData,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostErrors,
   ResolveTaskEscalationV1AgentsAgentIdTasksTaskIdResolveEscalationPostResponses,
+  RestoreAgentV1AgentsAgentIdRestorePostData,
+  RestoreAgentV1AgentsAgentIdRestorePostErrors,
+  RestoreAgentV1AgentsAgentIdRestorePostResponses,
   RestoreWorkspaceFileV1FilesRestoreFilePathPostData,
   RestoreWorkspaceFileV1FilesRestoreFilePathPostErrors,
   RestoreWorkspaceFileV1FilesRestoreFilePathPostResponses,
@@ -790,6 +808,9 @@ import type {
   RotateSecretV1SecretsSecretIdValuePutData,
   RotateSecretV1SecretsSecretIdValuePutErrors,
   RotateSecretV1SecretsSecretIdValuePutResponses,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostData,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostErrors,
   RunTestAuthV1McpServerInstancesInstanceIdTestAuthPostResponses,
@@ -901,6 +922,9 @@ import type {
   UpdateSkillV1SkillsSkillIdPutData,
   UpdateSkillV1SkillsSkillIdPutErrors,
   UpdateSkillV1SkillsSkillIdPutResponses,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutData,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses,
   UpdateTriggerV1TriggersTriggerIdPutData,
   UpdateTriggerV1TriggersTriggerIdPutErrors,
   UpdateTriggerV1TriggersTriggerIdPutResponses,
@@ -2415,7 +2439,10 @@ export const getAllToolsV1AgentsToolsGet = <
 /**
  * Delete Agent
  *
- * Delete an agent (by UUID or workspace-scoped slug).
+ * Archive an agent (by UUID or workspace-scoped slug).
+ *
+ * It leaves every list and runs nothing more, but stays readable by id so the
+ * runs it made still show it. ``POST /{agent_id}/restore`` brings it back.
  */
 export const deleteAgentV1AgentsAgentIdDelete = <
   ThrowOnError extends boolean = false,
@@ -2567,6 +2594,36 @@ export const getAgentOverviewV1AgentsAgentIdOverviewGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/agents/{agent_id}/overview",
+    ...options,
+  });
+
+/**
+ * Restore Agent
+ *
+ * Bring an archived agent back into the workspace.
+ */
+export const restoreAgentV1AgentsAgentIdRestorePost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<RestoreAgentV1AgentsAgentIdRestorePostData, ThrowOnError>
+): RequestResult<
+  RestoreAgentV1AgentsAgentIdRestorePostResponses,
+  RestoreAgentV1AgentsAgentIdRestorePostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RestoreAgentV1AgentsAgentIdRestorePostResponses,
+    RestoreAgentV1AgentsAgentIdRestorePostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/agents/{agent_id}/restore",
     ...options,
   });
 
@@ -3724,6 +3781,34 @@ export const listAuditLogsV1AuditLogsGet = <
       },
     ],
     url: "/v1/workspaces/{workspace}/audit-logs/",
+    ...options,
+  });
+
+/**
+ * Get Balance
+ *
+ * The balance of the account paying for this workspace; null when the deployment sells none.
+ */
+export const getBalanceV1BalanceGet = <ThrowOnError extends boolean = false>(
+  options?: Options<GetBalanceV1BalanceGetData, ThrowOnError>
+): RequestResult<
+  GetBalanceV1BalanceGetResponses,
+  GetBalanceV1BalanceGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetBalanceV1BalanceGetResponses,
+    GetBalanceV1BalanceGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/balance",
     ...options,
   });
 
@@ -10390,6 +10475,212 @@ export const listOutcomesV1StreamsStreamIdSubscriptionsSubscriptionIdOutcomesGet
     });
 
 /**
+ * List Task Definitions
+ *
+ * List the workspace's saved tasks, newest first.
+ */
+export const listTaskDefinitionsV1TaskDefinitionsGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options?: Options<ListTaskDefinitionsV1TaskDefinitionsGetData, ThrowOnError>
+): RequestResult<
+  ListTaskDefinitionsV1TaskDefinitionsGetResponses,
+  ListTaskDefinitionsV1TaskDefinitionsGetErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListTaskDefinitionsV1TaskDefinitionsGetResponses,
+    ListTaskDefinitionsV1TaskDefinitionsGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/",
+    ...options,
+  });
+
+/**
+ * Create Task Definition
+ *
+ * Save a task: the agent, what to ask it, and the parameters.
+ */
+export const createTaskDefinitionV1TaskDefinitionsPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<CreateTaskDefinitionV1TaskDefinitionsPostData, ThrowOnError>
+): RequestResult<
+  CreateTaskDefinitionV1TaskDefinitionsPostResponses,
+  CreateTaskDefinitionV1TaskDefinitionsPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateTaskDefinitionV1TaskDefinitionsPostResponses,
+    CreateTaskDefinitionV1TaskDefinitionsPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Task Definition
+ *
+ * Delete a saved task no trigger runs. Runs started from it stay.
+ */
+export const deleteTaskDefinitionV1TaskDefinitionsDefinitionIdDelete = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteData,
+    ThrowOnError
+  >
+): RequestResult<
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses,
+  DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteResponses,
+    DeleteTaskDefinitionV1TaskDefinitionsDefinitionIdDeleteErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+    ...options,
+  });
+
+/**
+ * Get Task Definition
+ *
+ * Get a saved task.
+ */
+export const getTaskDefinitionV1TaskDefinitionsDefinitionIdGet = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetData,
+    ThrowOnError
+  >
+): RequestResult<
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses,
+  GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetResponses,
+    GetTaskDefinitionV1TaskDefinitionsDefinitionIdGetErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+    ...options,
+  });
+
+/**
+ * Update Task Definition
+ *
+ * Change a saved task; only the fields sent change.
+ */
+export const updateTaskDefinitionV1TaskDefinitionsDefinitionIdPut = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutData,
+    ThrowOnError
+  >
+): RequestResult<
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses,
+  UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutResponses,
+    UpdateTaskDefinitionV1TaskDefinitionsDefinitionIdPutErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Run Task Definition
+ *
+ * Run a saved task now with its agent, text and parameters; the run acts as the agent.
+ *
+ * ``parameters`` in the body are merged over the saved ones for this run only.
+ */
+export const runTaskDefinitionV1TaskDefinitionsDefinitionIdRunPost = <
+  ThrowOnError extends boolean = false,
+>(
+  options: Options<
+    RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostData,
+    ThrowOnError
+  >
+): RequestResult<
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
+  RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostResponses,
+    RunTaskDefinitionV1TaskDefinitionsDefinitionIdRunPostErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "HTTPBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/v1/workspaces/{workspace}/task-definitions/{definition_id}/run",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
  * Get All Tasks
  *
  * Get one page of the workspace's tasks across all agents, newest first.
@@ -10953,6 +11244,7 @@ export const enableTriggerV1TriggersTriggerIdEnablePost = <
  * Args:
  * trigger_id: The unique identifier of the trigger
  * request: The events to run the trigger on
+ * user_context: The person replaying the events; the run is theirs
  * trigger_service: Injected trigger service
  *
  * Returns:

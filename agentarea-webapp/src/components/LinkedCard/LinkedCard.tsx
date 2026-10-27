@@ -21,6 +21,12 @@ interface LinkedCardProps {
    * already its own tile (an `EntityAvatar`).
    */
   bareIcon?: boolean;
+  /** Tighter padding, a 32px plate and a smaller title — for pickers. */
+  compact?: boolean;
+  /** A picker's current choice: primary border, announced as pressed. */
+  selected?: boolean;
+  /** Drop the corner "View" hint — for a card that picks, not navigates. */
+  hideHoverLink?: boolean;
   className?: string;
 }
 
@@ -34,6 +40,9 @@ export default function LinkedCard({
   topRight,
   type = "view",
   bareIcon = false,
+  compact = false,
+  selected,
+  hideHoverLink = false,
   className,
 }: LinkedCardProps) {
   const t = useTranslations("Common");
@@ -53,7 +62,7 @@ export default function LinkedCard({
   const CardContent = (
     <Card
       className={cn(
-        "group h-full flex flex-col justify-between px-4 py-4 cursor-pointer transition-[box-shadow,border-color,background-color,transform] duration-300",
+        "group h-full flex flex-col justify-between cursor-pointer transition-[box-shadow,border-color,background-color,transform] duration-300",
         "border border-zinc-200 dark:border-zinc-800",
         "bg-white dark:bg-zinc-900",
         "hover:shadow-lg hover:shadow-zinc-200/50 dark:hover:shadow-zinc-950/50",
@@ -61,9 +70,13 @@ export default function LinkedCard({
         "hover:bg-white dark:hover:bg-zinc-800",
         "hover:-translate-y-0.5 relative",
         "active:scale-[0.99]",
+        compact ? "px-3 py-2" : "px-4 py-4",
+        selected &&
+          "border-primary/50 hover:border-primary/50 dark:border-primary/60 dark:hover:border-primary/60",
         className
       )}
-      onClick={onClick}
+      // Without a link the wrapper below is the button, so it takes the click.
+      onClick={href ? onClick : undefined}
     >
         <div className="absolute inset-0 opacity-[0.015] dark:opacity-[0.03] pointer-events-none" 
            style={{
@@ -78,13 +91,14 @@ export default function LinkedCard({
         />
 
       <div className="flex flex-col h-full z-10">
-        <div className={cn("flex gap-3 mb-2", subtitle ? "items-start" : "items-center")}>
+        <div className={cn("flex", compact ? "gap-2.5" : "mb-2 gap-3", subtitle ? "items-start" : "items-center")}>
           {hasIcon && bareIcon ? (
             <div className="flex-shrink-0">{icon as ReactNode}</div>
           ) : hasIcon ? (
             <div
               className={cn(
-                "flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-colors duration-300",
+                "flex flex-shrink-0 items-center justify-center rounded-lg transition-colors duration-300",
+                compact ? "h-7 w-7" : "h-10 w-10",
                 // A real logo gets the light plate — it carries its own colour
                 // and needs a ground, not a tint. A category glyph keeps the
                 // tinted box: it inherits `currentColor` and means "a kind of
@@ -100,7 +114,10 @@ export default function LinkedCard({
                   alt={title}
                   width={24}
                   height={24}
-                  className="h-6 w-6 rounded object-contain transition-transform duration-300 group-hover:scale-110"
+                  className={cn(
+                    "rounded object-contain transition-transform duration-300 group-hover:scale-110",
+                    compact ? "h-4 w-4" : "h-6 w-6"
+                  )}
                 />
               ) : IconComponent ? (
                 <IconComponent className="h-5 w-5 transition-colors duration-300" />
@@ -117,8 +134,9 @@ export default function LinkedCard({
               <div className={cn("min-w-0 flex-1", subtitle ? "pt-0.5" : null)}>
                 <h4
                   className={cn(
-                    "block truncate font-medium text-[15px] text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight group-hover:text-primary dark:group-hover:text-zinc-50 transition-colors duration-300",
-                    subtitle ? "mb-1" : null
+                    compact ? "text-[13px]" : "text-[15px]",
+                    "block truncate font-medium text-zinc-900 dark:text-zinc-100 leading-tight tracking-tight group-hover:text-primary dark:group-hover:text-zinc-50 transition-colors duration-300",
+                    subtitle ? (compact ? "mb-0.5" : "mb-1") : null
                   )}
                 >
                   {title}
@@ -144,16 +162,18 @@ export default function LinkedCard({
       {/* Tucked into the corner when the card ends on its title block. Under a
           body it sits below it instead: lifted there, the hover text landed
           on whatever the body put in that corner (model badges, "+N"). */}
-      <div
-        className={cn(
-          "flex justify-end -mb-2 -mr-2",
-          children ? "-mt-1" : "-mt-4"
-        )}
-      >
-        <HoverLink
-          text={t(type === "config" ? "configure" : type === "edit" ? "edit" : "view")}
-        />
-      </div>
+      {!hideHoverLink && (
+        <div
+          className={cn(
+            "flex justify-end -mb-2 -mr-2",
+            children ? "-mt-1" : "-mt-4"
+          )}
+        >
+          <HoverLink
+            text={t(type === "config" ? "configure" : type === "edit" ? "edit" : "view")}
+          />
+        </div>
+      )}
     </Card>
   );
 
@@ -170,6 +190,10 @@ export default function LinkedCard({
       className="block h-full"
       role="button"
       tabIndex={0}
+      aria-pressed={selected}
+      // The click belongs to the element that is the button: one dispatched at
+      // it (assistive tech, tests) never reached a handler on the card inside.
+      onClick={onClick}
       onKeyDown={(e) => {
         if (!onClick) return;
         if (e.key === "Enter" || e.key === " ") {

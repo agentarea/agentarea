@@ -120,6 +120,10 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     A stream trigger's run is told the journaled event it fired on.
 #     A fired task's end counts towards its trigger's failure_threshold once,
 #     by a conditional update of its firing row, and disables the trigger.
+#     A schedule gives way while a task its trigger started has not ended,
+#     a status the tasks table holds and a mock does not.
+#     Every cron trigger's schedule follows its row, read across workspaces
+#     with no workspace bound.
 #     A source added without a trigger holds a picked workspace secret by a
 #     secret_references row, whose RESTRICT key refuses deleting that secret.
 #     The phase-4 migration leaves a JSON-null webhook_config an object, not
@@ -203,6 +207,8 @@ PY_SUITES=(
   libs/triggers/tests/test_platform_stream_db.py
   libs/triggers/tests/test_trigger_batch_db.py
   libs/triggers/tests/test_trigger_run_outcomes_db.py
+  libs/triggers/tests/test_trigger_overlap_db.py
+  libs/triggers/tests/test_schedule_sync_db.py
   libs/openapi/tests/test_record_dispatch_db.py
   libs/openapi/tests/test_platform_connection_db.py
   libs/mcp/tests/test_dispatch_stamps_db.py

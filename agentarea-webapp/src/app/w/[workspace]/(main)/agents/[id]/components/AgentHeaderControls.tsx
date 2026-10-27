@@ -11,14 +11,17 @@ import { useFormSubmittingState } from "../../shared/useFormSubmittingState";
 /**
  * Right-hand controls of the agent header. On the settings / wallet forms it
  * is the "Save changes" submit; everywhere else it is the primary "New task"
- * shortcut (hidden on the new-task page itself and for catalog previews).
+ * shortcut (hidden on the new-task page itself, for catalog previews and for
+ * an archived agent, which takes no edits and no runs).
  */
 export default function AgentHeaderControls({
   agentRef,
   isCatalog = false,
+  isArchived = false,
 }: {
   agentRef: string;
   isCatalog?: boolean;
+  isArchived?: boolean;
 }) {
   const pathname = useWorkspacePathname();
   const onSettings = pathname?.endsWith("/settings");
@@ -29,6 +32,8 @@ export default function AgentHeaderControls({
   const isSubmitting = useFormSubmittingState(
     onWallet ? "wallet-form" : "agent-form"
   );
+
+  if (isArchived) return null;
 
   if (onSettings || onWallet) {
     const formId = onWallet ? "wallet-form" : "agent-form";

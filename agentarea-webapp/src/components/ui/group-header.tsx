@@ -5,11 +5,14 @@ import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export type GroupHeaderVariant = "band" | "plain";
+
 /**
  * Linear-style list group header — a hatched band with an optional collapse
  * chevron, a small rounded-square color marker, the group label, and a count
  * pill. Shared by the Skills list and the Dashboard blockers panel so grouping
- * looks identical everywhere.
+ * looks identical everywhere. The `plain` variant drops the band for a heading
+ * that sits above its own table or grid (Automation, Connections).
  */
 export function GroupHeader({
   label,
@@ -19,6 +22,7 @@ export function GroupHeader({
   collapsed = false,
   onToggle,
   sticky = true,
+  variant = "band",
   className,
 }: {
   label: ReactNode;
@@ -29,13 +33,17 @@ export function GroupHeader({
   icon?: ReactNode;
   collapsed?: boolean;
   onToggle?: () => void;
-  /** Stick to the top of the scroll container (default true). */
+  /** Stick to the top of the scroll container (default true; band only). */
   sticky?: boolean;
+  variant?: GroupHeaderVariant;
   className?: string;
 }) {
   const cls = cn(
-    "skill-hatch flex h-9 w-full items-center gap-2 border-b border-zinc-100 px-4 dark:border-zinc-800/70",
-    sticky && "sticky top-0 z-10",
+    "flex h-9 w-full items-center gap-2 text-left",
+    variant === "band"
+      ? "skill-hatch border-b border-zinc-100 px-4 dark:border-zinc-800/70"
+      : "px-1",
+    variant === "band" && sticky && "sticky top-0 z-10",
     className
   );
   const inner = (
@@ -50,7 +58,10 @@ export function GroupHeader({
       )}
       {icon ? (
         <span
-          className="flex shrink-0 items-center justify-center [&>svg]:h-[14px] [&>svg]:w-[14px]"
+          className={cn(
+            "flex shrink-0 items-center justify-center [&>svg]:h-[14px] [&>svg]:w-[14px]",
+            !color && variant === "plain" && "text-muted-foreground"
+          )}
           style={{ color }}
         >
           {icon}
@@ -97,6 +108,7 @@ export function CollapsibleGroup({
   icon,
   defaultOpen = true,
   sticky,
+  variant,
   headerClassName,
   children,
 }: {
@@ -106,6 +118,7 @@ export function CollapsibleGroup({
   icon?: ReactNode;
   defaultOpen?: boolean;
   sticky?: boolean;
+  variant?: GroupHeaderVariant;
   headerClassName?: string;
   children: ReactNode;
 }) {
@@ -120,6 +133,7 @@ export function CollapsibleGroup({
         collapsed={!open}
         onToggle={() => setOpen((o) => !o)}
         sticky={sticky}
+        variant={variant}
         className={headerClassName}
       />
       {open && children}

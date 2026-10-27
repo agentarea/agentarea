@@ -8,6 +8,10 @@ import {
   runTriggerNow,
 } from "@/lib/api";
 import { apiErrorMessage } from "@/lib/api-errors";
+import {
+  loadExecutionsPage,
+  type ExecutionsPage,
+} from "./executions/executionsPage";
 
 export async function enableTriggerAction(triggerId: string) {
   const result = await enableTrigger(triggerId);
@@ -60,4 +64,16 @@ export async function runTriggerNowAction(triggerId: string) {
     taskId: result.data.task_id ?? null,
     reason: result.data.reason ?? null,
   };
+}
+
+/** The next page of runs for the executions list as it scrolls. */
+export async function fetchExecutionsPageAction(
+  triggerId: string,
+  page: number
+): Promise<ExecutionsPage | null> {
+  try {
+    return await loadExecutionsPage(triggerId, page);
+  } catch {
+    return null;
+  }
 }

@@ -123,11 +123,15 @@ Everyone else is refused and the reaction is `skipped`: an unlinked sender is
 told at most once a day how to link, a linked sender without access is told
 they have none, and group chats and other bots are ignored.
 
-**A trigger stops when its configurer loses access.** Before firing, the
-trigger checks that the person who configured it is still a member of the
-workspace and may run its agent. If not, the trigger is stopped and marked
-`needs_owner`, and the reaction is an `error` naming why. Enabling it again
-clears the mark; the next event checks again.
+**A trigger's run acts as its agent.** The run reaches what the agent was
+granted, not what the person who configured the trigger can reach, so that
+person leaving the workspace stops nothing. Pointing a trigger at an agent,
+switching it on, pressing "run now" and replaying events each require being
+allowed to run that agent (`can_invoke`), so nobody sets an agent going that
+they could not start by hand. When the trigger fires, only the agent is checked:
+if it was deleted or is no longer active, the trigger is stopped and marked
+`needs_owner`, and the reaction is an `error` reading `agent_unavailable`.
+Enabling it again clears the mark.
 
 **A trigger disables itself before it does damage.** Every trigger has a
 `failure_threshold` (default 5, bounded 1 to 100) and a `consecutive_failures`
@@ -225,8 +229,8 @@ Every other provider has to be pointed at the source's URL by hand, and nothing
 reports that this step was skipped.
 
 **Sender admission exists for Telegram only.** Other messengers with a `reply`
-block, such as Slack and Discord, admit any sender the provider delivers, and
-the task runs as the trigger's configurer.
+block, such as Slack and Discord, admit any sender the provider delivers; the
+task acts as the agent with no person's policy narrowing it.
 
 **A batch replies to one address.** A batch's task answers the newest event's
 sender only, even when its events came from several chats.

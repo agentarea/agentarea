@@ -22,8 +22,18 @@ type ServerSpecLike = {
   json_spec?: Record<string, unknown> | null;
 };
 
-// The API rejects these in an instance update and restores them itself.
-const TRANSPORT_FIELDS = new Set(["type", "endpoint_url", "image", "command", "args"]);
+// The API rejects these in an instance update and restores them itself
+// (INSTANCE_TRANSPORT_FIELDS in agentarea_mcp/schemas/dto.py).
+const TRANSPORT_FIELDS = new Set([
+  "type",
+  "endpoint_url",
+  "image",
+  "command",
+  "args",
+  "port",
+  "package",
+  "source",
+]);
 
 export function parseFieldSpecs(value: unknown): CredentialFieldSpec[] {
   if (!Array.isArray(value)) return [];
@@ -153,6 +163,63 @@ export function credentialUpdateSpec(
   }
   spec[target] = { ...stringRecord(instanceJsonSpec[target]), ...entered };
   return spec;
+}
+
+// How the API returns a value it keeps in the secret store.
+const MASKED_VALUE = "******";
+
+export interface StoredHeader {
+  name: string;
+  secret: boolean;
+  value?: string;
+}
+
+/** A remote connection's headers as the API returns them, secrets masked. */
+export function storedHeaders(instanceJsonSpec: Record<string, unknown>): StoredHeader[] {
+  return Object.entries(stringRecord(instanceJsonSpec.headers)).map(([name, value]) =>
+    value === MASKED_VALUE ? { name, secret: true } : { name, secret: false, value }
+  );
+}
+
+/**
+ * The instance update that makes a remote connection's headers exactly `rows`.
+ * A blank value keeps a stored secret; a header left out is removed, from
+ * `env_vars` too, since every secret a remote connection holds is sent as a
+ * header.
+ */
+export function headersUpdateSpec(
+  instanceJsonSpec: Record<string, unknown>,
+  rows: { name: string; value: string }[]
+): Record<string, unknown> {
+  const stored = stringRecord(instanceJsonSpec.headers);
+  const headers: Record<string, string> = {};
+  for (const row of rows) {
+    const name = row.name.trim();
+    const value = row.value.trim();
+    if (!name) continue;
+    if (value) headers[name] = value;
+    else if (stored[name] === MASKED_VALUE) headers[name] = MASKED_VALUE;
+  }
+  const removed = new Set(Object.keys(stored).filter((name) => !(name in headers)));
+
+  const spec: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(instanceJsonSpec)) {
+    if (!TRANSPORT_FIELDS.has(key)) spec[key] = value;
+  }
+  spec.headers = headers;
+  if (Array.isArray(instanceJsonSpec.env_vars)) {
+    spec.env_vars = stringList(instanceJsonSpec.env_vars).filter((name) => !removed.has(name));
+  }
+  if (isRecord(instanceJsonSpec.environment)) {
+    spec.environment = Object.fromEntries(
+      Object.entries(instanceJsonSpec.environment).filter(([name]) => !removed.has(name))
+    );
+  }
+  return spec;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function stringList(value: unknown): string[] {

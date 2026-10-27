@@ -125,6 +125,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
             "causation_id": entity.provenance.causation_id,
             "parent_task_id": entity.provenance.parent_task_id,
             "depth": entity.provenance.depth,
+            "task_definition_id": entity.provenance.task_definition_id,
+            "source_identity": entity.provenance.source_identity,
         }
 
         # Remove None values and system fields that will be auto-populated
@@ -351,6 +353,26 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
         result = await self.session.execute(stmt)
         return [self._orm_to_domain(t) for t in result.scalars().all()]
 
+    async def unfinished_runs_from(
+        self, origin_type: str, origin_id: str
+    ) -> list[tuple[UUID, str | None]]:
+        """Tasks this origin started whose stored status has not ended, oldest first.
+
+        Each comes with its workflow id, or None when its workflow never started.
+        The stored status can outlive the run, so whoever acts on it checks the run.
+        """
+        stmt = (
+            select(TaskORM.id, TaskORM.execution_id)
+            .where(
+                self._get_workspace_filter(),
+                TaskORM.origin_type == origin_type,
+                TaskORM.origin_id == origin_id,
+                TaskORM.status.not_in(ENDED_TASK_STATUSES),
+            )
+            .order_by(TaskORM.created_at)
+        )
+        return [(row.id, row.execution_id) for row in await self.session.execute(stmt)]
+
     async def count_by_statuses(self, statuses: list[str], agent_id: UUID | None = None) -> int:
         """Count tasks matching any of the given statuses in the current workspace.
 
@@ -527,6 +549,8 @@ class TaskRepository(WorkspaceScopedRepository[TaskORM]):
                     "causation_id": task_orm.causation_id,
                     "parent_task_id": task_orm.parent_task_id,
                     "depth": task_orm.depth,
+                    "task_definition_id": task_orm.task_definition_id,
+                    "source_identity": task_orm.source_identity,
                 },
             }
         )

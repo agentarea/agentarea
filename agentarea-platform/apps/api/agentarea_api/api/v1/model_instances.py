@@ -278,7 +278,7 @@ async def delete_model_instance(
     provider_service: ProviderService = Depends(get_provider_service),
 ):
     """Delete a model instance."""
-    await require_permission("delete", "model_instance", str(instance_id), user_context.user_id)
+    await require_permission("delete", "model_instance", str(instance_id), user_context)
     success = await provider_service.delete_model_instance(instance_id)
     if not success:
         raise HTTPException(status_code=404, detail="Model instance not found")

@@ -17,7 +17,7 @@ CLIENT_ID = "11111111-1111-1111-1111-111111111111"
 
 
 def _ctx(user_id="user-1", client_id=None):
-    return SimpleNamespace(user_id=user_id, client_id=client_id)
+    return UserPrincipal(user_id=user_id, client_id=client_id)
 
 
 def _patch_permission(monkeypatch, allowed: bool):
@@ -42,7 +42,7 @@ async def test_user_with_use_relation_is_allowed(monkeypatch):
 
     await _authorize_client_access(_ctx(), CLIENT_ID)
 
-    service.check.assert_awaited_once_with("user-1", "use", "client", CLIENT_ID)
+    service.check.assert_awaited_once_with("User:user-1", "use", "client", CLIENT_ID)
 
 
 @pytest.mark.asyncio

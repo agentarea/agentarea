@@ -1,0 +1,73 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
+import { Gauge, ScrollText, Wrench } from "lucide-react";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+
+const TABS = [
+  { key: "", icon: Gauge, labelKey: "overview" },
+  { key: "tools", icon: Wrench, labelKey: "tools", counted: true },
+  { key: "activity", icon: ScrollText, labelKey: "activity" },
+] as const;
+
+type TabKey = (typeof TABS)[number]["key"];
+
+/**
+ * Connection detail navigation: the same solid segmented control as the agent
+ * and automation detail pages.
+ */
+export default function ConnectionDetailTabs({
+  basePath,
+  toolCount,
+  without = [],
+}: {
+  /** The overview's path, e.g. `/connections/<id>`; the tabs hang off it. */
+  basePath: string;
+  /** Discovered tools, shown next to the Tools tab. */
+  toolCount?: number;
+  /** Tabs this kind of connection has nothing for. */
+  without?: TabKey[];
+}) {
+  const t = useTranslations("MCPServersPage.instanceDetail.tabs");
+  const pathname = useWorkspacePathname();
+  const router = useWorkspaceRouter();
+
+  const hrefFor = (key: string) => (key ? `${basePath}/${key}` : basePath);
+  const tabs = TABS.filter((tab) => !without.includes(tab.key));
+
+  const activeTab =
+    tabs.find((tab) => {
+      const href = hrefFor(tab.key);
+      return tab.key
+        ? pathname === href || pathname.startsWith(`${href}/`)
+        : pathname === href;
+    })?.key ?? "";
+
+  return (
+    <nav aria-label={t("label")} className="min-w-0 flex-1">
+      <CountSegmentedControl
+        items={tabs.map((tab) => {
+          const Icon = tab.icon;
+          return {
+            value: tab.key,
+            label: (
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <Icon className="h-4 w-4" strokeWidth={1.8} />
+                {t(tab.labelKey)}
+              </span>
+            ),
+            count:
+              "counted" in tab && tab.counted && toolCount ? toolCount : undefined,
+          };
+        })}
+        value={activeTab}
+        onChange={(next) => router.push(hrefFor(next))}
+        variant="solid"
+        itemClassName="max-md:min-h-11"
+        className="max-w-full"
+        layoutId="connection-section-control"
+      />
+    </nav>
+  );
+}

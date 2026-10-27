@@ -13,6 +13,7 @@ from typing import Any, Protocol
 
 import yaml
 from agentarea_agents.application.skill_parser import SkillParser
+from agentarea_common.utils.untrusted_yaml import load_untrusted_yaml
 from agentarea_governance.domain.rules import (
     PolicyEffect,
     PolicyRule,
@@ -73,6 +74,10 @@ class _NoExistence:
         return False
 
 
+_BUNDLE_MAX_BYTES = 5 * 1024 * 1024
+_BUNDLE_MAX_NODES = 200_000
+
+
 def parse_bundle(text: str) -> Bundle:
     """Parse YAML or JSON source text into a canonical :class:`Bundle`.
 
@@ -81,7 +86,7 @@ def parse_bundle(text: str) -> Bundle:
     if not text or not text.strip():
         raise BundleParseError("empty package source")
     try:
-        data = yaml.safe_load(text)
+        data = load_untrusted_yaml(text, max_nodes=_BUNDLE_MAX_NODES, max_bytes=_BUNDLE_MAX_BYTES)
     except yaml.YAMLError as exc:
         raise BundleParseError(f"invalid YAML/JSON: {exc}") from exc
     if not isinstance(data, dict):

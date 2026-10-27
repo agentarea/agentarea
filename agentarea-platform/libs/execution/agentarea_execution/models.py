@@ -851,6 +851,8 @@ class RecordRequest(BaseModel):
     task_id: str
     workspace_id: str
     user_id: str
+    # The run acts as its agent; the activity's context says so.
+    agent_id: str
     execution_id: str | None = None
     rows: list[LogRow] = Field(default_factory=list)
     events_json: list[str] = Field(default_factory=list)
@@ -999,6 +1001,7 @@ class TriggerSkipReason(StrEnum):
     TRIGGER_INACTIVE = "trigger_inactive"
     CONDITIONS_NOT_MET = "conditions_not_met"
     NO_NEW_DATA = "no_new_data"
+    PREVIOUS_RUN_ACTIVE = "previous_run_active"
 
 
 class ExecuteTriggerResult(BaseModel):

@@ -5,3 +5,4 @@ export { default as InfoPanelField } from "./InfoPanelField";
 export { default as InfoPanelValueBox } from "./InfoPanelValueBox";
 export { default as InfoPanelSection } from "./InfoPanelSection";
 export { default as InfoPanelExpandableText } from "./InfoPanelExpandableText";
+export { default as InfoPanelRow } from "./InfoPanelRow";

@@ -4,34 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"strings"
 	"time"
 
-	redis "github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 )
 
-// Event bus contract (ADR-0018): events are XADDed to per-type Redis Streams
-// in CloudEvents binary content mode. Envelope attributes become `ce_*` fields
-// and the payload is a JSON string under `data`. The Python API consumes these
-// via RedisStreamsEventStream — keep these constants in sync with the Python
-// `domain_events_topic(type)` (`domain.events.<type>`, under the namespace
-// AGENTAREA_EVENT_NAMESPACE) and event-type strings.
+// Topics and event types must match the Python domain_events_topic(type).
 const (
 	eventSource = "agentarea-mcp-manager"
 
 	statusChangedType = "agentarea.mcp.v1.MCPServerInstanceStatusChanged"
 	errorType         = "agentarea.mcp.v1.MCPServerInstanceError"
 
-	// Retention contract for these ephemeral notification streams: they are a
-	// bounded buffer for live tailing (Publish-Subscribe), not a durable log.
-	// Approximate trimming (~) keeps XADD O(1) while capping memory. Consumers
-	// tail live ("$"); a late reader only sees the last ~streamMaxLen entries.
-	streamMaxLen = 1000
+	Retention = 72 * time.Hour
 )
 
-func streamFor(namespace, eventType string) string {
-	return namespace + ".domain.events." + eventType
+type Submitter interface {
+	Submit(ctx context.Context, topic string, fields map[string]string, retention time.Duration) (string, error)
+}
+
+func topicFor(eventType string) string {
+	return "domain.events." + eventType
 }
 
 // StatusUpdateEvent represents a container status update event
@@ -53,46 +46,22 @@ type ErrorEvent struct {
 	Timestamp  time.Time `json:"timestamp"`
 }
 
-// EventPublisher handles publishing events to Redis
 type EventPublisher struct {
-	redisClient *redis.Client
-	namespace   string
-	logger      *slog.Logger
+	broker Submitter
+	logger *slog.Logger
 }
 
-// NewEventPublisher creates a new event publisher
-func NewEventPublisher(redisURL, namespace string, logger *slog.Logger) *EventPublisher {
-	var opts *redis.Options
-	if parsed, err := redis.ParseURL(redisURL); err == nil {
-		opts = parsed
-	} else {
-		var addr string
-		if cutAddr, found := strings.CutPrefix(redisURL, "redis://"); found {
-			addr = cutAddr
-		} else {
-			addr = redisURL
-		}
-		opts = &redis.Options{Addr: addr}
-	}
-
-	rdb := redis.NewClient(opts)
-
-	return &EventPublisher{
-		redisClient: rdb,
-		namespace:   namespace,
-		logger:      logger,
-	}
+func NewEventPublisher(broker Submitter, logger *slog.Logger) *EventPublisher {
+	return &EventPublisher{broker: broker, logger: logger}
 }
 
-// buildEventFields encodes an event as Redis stream fields in CloudEvents
-// binary content mode. `subject` is the partition key (empty -> omitted).
-func buildEventFields(eventType, subject string, data any) (map[string]any, error) {
+func buildEventFields(eventType, subject string, data any) (map[string]string, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
 
-	fields := map[string]any{
+	fields := map[string]string{
 		"ce_id":              uuid.NewString(),
 		"ce_type":            eventType,
 		"ce_source":          eventSource,
@@ -107,18 +76,13 @@ func buildEventFields(eventType, subject string, data any) (map[string]any, erro
 	return fields, nil
 }
 
-// publish XADDs the event to the stream for its type.
 func (p *EventPublisher) publish(ctx context.Context, eventType, subject string, data any) error {
 	fields, err := buildEventFields(eventType, subject, data)
 	if err != nil {
 		return err
 	}
-	return p.redisClient.XAdd(ctx, &redis.XAddArgs{
-		Stream: streamFor(p.namespace, eventType),
-		MaxLen: streamMaxLen,
-		Approx: true,
-		Values: fields,
-	}).Err()
+	_, err = p.broker.Submit(ctx, topicFor(eventType), fields, Retention)
+	return err
 }
 
 // PublishStatusUpdate publishes a container status update event
@@ -192,9 +156,4 @@ func (p *EventPublisher) PublishValidating(ctx context.Context, instanceID, name
 func (p *EventPublisher) PublishFailed(ctx context.Context, instanceID, name, errorMsg string) error {
 	_ = p.PublishError(ctx, instanceID, name, errorMsg)
 	return p.PublishStatusUpdate(ctx, instanceID, name, "failed", "", "")
-}
-
-// Close closes the Redis connection
-func (p *EventPublisher) Close() error {
-	return p.redisClient.Close()
 }

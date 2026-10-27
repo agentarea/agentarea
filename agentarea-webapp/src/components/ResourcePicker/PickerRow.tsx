@@ -66,7 +66,7 @@ export function PickerRow({
             checked={selected}
             tabIndex={-1}
             aria-hidden
-            className="pointer-events-none"
+            className="pointer-events-none border-zinc-300 dark:border-zinc-600 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
           />
         )
       }

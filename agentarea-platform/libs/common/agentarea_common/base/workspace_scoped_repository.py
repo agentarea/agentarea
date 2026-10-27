@@ -11,7 +11,13 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.context import ServicePrincipal, UserContext
-from ..rebac.ownership import grant_resource_owner, owner_relations, revoke_resource
+from ..rebac.ownership import (
+    enroll_agent,
+    grant_resource_owner,
+    owner_relations,
+    revoke_resource,
+    withdraw_agent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +103,15 @@ class WorkspaceScopedRepository[T]:
             conditions.append(getattr(self.model_class, field) == value)
         return conditions
 
+    def _listing_conditions(self, filters: dict[str, Any]) -> list[Any]:
+        """Conditions every listing and count adds unless ``filters`` overrides them.
+
+        For rows that stay readable by id but leave the working set, such as an
+        archived agent. ``list_all(include_archived=True)`` skips them, for
+        callers that name rows rather than offer them.
+        """
+        return []
+
     def _get_creator_workspace_filter(self):
         """Get the creator and workspace filter for queries."""
         model = cast(Any, self.model_class)
@@ -163,6 +178,7 @@ class WorkspaceScopedRepository[T]:
         limit: int | None = None,
         offset: int | None = None,
         ids: set[str] | None = None,
+        include_archived: bool = False,
         **filters: Any,
     ) -> list[T]:
         """List records in the current workspace, optionally narrowed to ``ids``.
@@ -176,6 +192,7 @@ class WorkspaceScopedRepository[T]:
             limit: Maximum number of records to return
             offset: Number of records to skip
             ids: Restrict to these record ids; ``None`` applies no id filter
+            include_archived: Also return rows ``_listing_conditions`` leaves out
             **filters: Additional field filters
 
         Returns:
@@ -191,6 +208,8 @@ class WorkspaceScopedRepository[T]:
                 query = query.where(cast(Any, self.model_class).id.in_(as_record_ids(ids)))
 
             query = query.where(*self._field_filters(filters))
+            if not include_archived:
+                query = query.where(*self._listing_conditions(filters))
 
             # Order by newest first
             if hasattr(self.model_class, "created_at"):
@@ -221,6 +240,7 @@ class WorkspaceScopedRepository[T]:
         query = select(func.count(cast(Any, self.model_class).id))
         query = query.where(self._get_workspace_filter())
         query = query.where(*self._field_filters(filters))
+        query = query.where(*self._listing_conditions(filters))
 
         result = await self.session.execute(query)
         return result.scalar() or 0
@@ -280,9 +300,13 @@ class WorkspaceScopedRepository[T]:
         await grant_resource_owner(
             resource_id=record_id,
             workspace_id=self.user_context.workspace_id,
-            user_id=self.user_context.user_id,
+            owner=self.user_context.graph_subject,
             relations=owner_relations(self.model_class),
         )
+        # A row that runs as a principal of its own (an agent) also gets the
+        # relations its runs act with.
+        if getattr(self.model_class, "__graph_principal__", False):
+            await enroll_agent(agent_id=record_id, workspace_id=self.user_context.workspace_id)
 
     async def update(self, id: UUID | str, creator_scoped: bool = False, **kwargs: Any) -> T | None:
         """Update a record by ID within the current workspace.
@@ -432,6 +456,10 @@ class WorkspaceScopedRepository[T]:
             return
         try:
             await revoke_resource(record_id)
+            if getattr(self.model_class, "__graph_principal__", False):
+                await withdraw_agent(
+                    agent_id=record_id, workspace_id=self.user_context.workspace_id
+                )
         except Exception:
             logger.exception(
                 "Deleted %s %s but could not remove its graph tuples",

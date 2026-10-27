@@ -2,11 +2,14 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
 
 from agentarea_common.events.contract import require_known_type
 from pydantic import BaseModel, Field, field_validator
+
+if TYPE_CHECKING:
+    from agentarea_common.auth.context import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +29,50 @@ def _require_aware(v: datetime | None) -> datetime | None:
 class TaskProvenance(BaseModel):
     """Why a task exists: who or what started it, and the event that caused it."""
 
-    origin_type: Literal["user", "trigger", "agent", "api"] | None = None
+    origin_type: Literal["user", "trigger", "agent", "api", "a2a"] | None = None
     origin_id: str | None = None
     correlation_id: str | None = None
     causation_id: str | None = None
     parent_task_id: UUID | None = None
     #: The causation depth of the event that started the task; 0 when none did.
     depth: int = 0
+    #: The saved task definition the run was asked from, if any.
+    task_definition_id: UUID | None = None
+    #: Who started the run, as ``<kind>:<id>`` (``user:<id>``, ``client:<id>``);
+    #: ``None`` when nothing human did (a schedule, an event). It narrows the run
+    #: and is recorded; it never lends the run its own authority.
+    source_identity: str | None = None
+
+    @classmethod
+    def started_by(cls, user_id: str, *, via_api_key: bool) -> TaskProvenance:
+        """A run a person started from the app, the API or MCP."""
+        return cls(
+            origin_type="api" if via_api_key else "user",
+            origin_id=user_id,
+            source_identity=f"user:{user_id}",
+        )
+
+    @classmethod
+    def started_by_caller(cls, caller: UserContext) -> TaskProvenance:
+        """A run ``caller`` started: a person from the app, API or MCP, or an agent in its run.
+
+        An agent starting a run is recorded as the agent. The person its own run
+        is attributed to did not start this one, so no person narrows it.
+        """
+        if caller.subject is not None and caller.subject.kind == "agent":
+            return cls(origin_type="agent", origin_id=caller.subject.id)
+        credential = caller.credential
+        return cls.started_by(
+            caller.user_id,
+            via_api_key=credential is not None and credential.kind == "api_key",
+        )
+
+    @property
+    def source_user_id(self) -> str | None:
+        """The person who started the run, if a person did."""
+        if self.source_identity and self.source_identity.startswith("user:"):
+            return self.source_identity.removeprefix("user:")
+        return None
 
 
 class Task(BaseModel):

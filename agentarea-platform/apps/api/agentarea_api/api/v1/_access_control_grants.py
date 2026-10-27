@@ -33,10 +33,12 @@ async def grant_resource_owner(
     *,
     resource_id: UUID | str,
     workspace_id: str,
-    user_id: str,
+    owner: str,
     relations: tuple[str, ...] = OWNER_RELATIONS,
 ) -> None:
     """Assert ownership from a request handler, surfacing failure as a 503.
+
+    ``owner`` is the graph subject that created the resource (``User:<id>``).
 
     Repository-created rows are already granted; this stays for the paths that
     materialize a resource some other way (catalog install, copy-on-write fork)
@@ -46,7 +48,7 @@ async def grant_resource_owner(
         await _grant_resource_owner(
             resource_id=resource_id,
             workspace_id=workspace_id,
-            user_id=user_id,
+            owner=owner,
             relations=relations,
         )
     except ResourceOwnershipError as exc:

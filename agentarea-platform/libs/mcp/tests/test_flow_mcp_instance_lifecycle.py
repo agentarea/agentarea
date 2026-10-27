@@ -13,6 +13,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agentarea_common.auth.context import UserContext
 from agentarea_common.testing import install_graph_ownership_stub
 from agentarea_common.testing.flows import MainFlow
 from agentarea_mcp.application.service import MCPServerInstanceService
@@ -60,9 +61,9 @@ def _make_service(
     instances = instances or {}
 
     repo = MagicMock()
-    repo.user_context = MagicMock()
-    repo.user_context.user_id = "user-" + str(uuid.uuid4())
-    repo.user_context.workspace_id = "ws-" + str(uuid.uuid4())
+    repo.user_context = UserContext(
+        user_id="user-" + str(uuid.uuid4()), workspace_id="ws-" + str(uuid.uuid4())
+    )
     # Workspace-owned spec → no copy-on-write on connect.
     server_spec.workspace_id = repo.user_context.workspace_id
     repo.session = MagicMock()

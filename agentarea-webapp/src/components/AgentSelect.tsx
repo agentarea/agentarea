@@ -8,14 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EntityIcon } from "@/lib/entity-icons";
 
 export interface SelectableAgent {
   id: string;
   name: string;
   description?: string | null;
   icon?: string | null;
- 
 }
 
 /** Pick one agent from a dropdown.
@@ -34,6 +32,7 @@ export function AgentSelect({
   ariaLabel,
   className,
   disabled,
+  invalid,
 }: {
   agents: SelectableAgent[];
   value: string;
@@ -45,15 +44,22 @@ export function AgentSelect({
   ariaLabel?: string;
   className?: string;
   disabled?: boolean;
+  /** Marks the field invalid for assistive tech while its error is shown. */
+  invalid?: boolean;
 }) {
   return (
-    <Select name={name} value={value} onValueChange={onChange} disabled={disabled}>
+    <Select
+      name={name}
+      value={value}
+      onValueChange={onChange}
+      disabled={disabled}
+    >
       <SelectTrigger
         id={id}
         aria-label={ariaLabel}
+        aria-invalid={invalid || undefined}
         className={className ?? "h-9 gap-2 [&>span]:flex-1 [&>span]:text-left"}
       >
-        <EntityIcon kind="agent" className="h-4 w-4 shrink-0 text-primary" />
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>

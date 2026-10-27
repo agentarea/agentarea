@@ -529,6 +529,12 @@
     "fundWallet": "Fund wallet"
   },
   "AgentsPage": {
+    "archived": {
+      "title": "This agent is archived",
+      "description": "It is hidden from the agent list and takes no new runs. Its past runs still show it.",
+      "restore": "Restore",
+      "restoreFailed": "Couldn't restore this agent. Please try again."
+    },
     "createAgent": "Create agent",
     "noToolsConf": "No tools configured",
     "name": "Name",
@@ -855,7 +861,10 @@
         "toolsFound": "{count} tools found",
         "encryptionNote": "Credentials are encrypted at rest and scoped to this workspace.",
         "connectionFailed": "Connection failed",
-        "createFailed": "Failed to create connection"
+        "createFailed": "Failed to create connection",
+        "tokenPlaceholder": "Bearer your-token",
+        "verified": "Verified",
+        "needsVerification": "Needs verification"
       }
     },
     "instanceForm": {
@@ -905,11 +914,6 @@
       "connectAnother": "Connect another account"
     },
     "instanceDetail": {
-      "activity": {
-        "title": "Activity ({count})",
-        "loading": "Loading activity…",
-        "empty": "No changes recorded for this connection yet."
-      },
       "header": {
         "label": "Instance",
         "untitled": "Untitled instance"
@@ -952,46 +956,30 @@
         "description": "Description",
         "status": "Status"
       },
-      "types": {
-        "docker": "Docker",
-        "externalUrl": "External URL",
-        "command": "Command"
-      },
-      "labels": {
-        "connectionUrl": "Connection URL",
-        "value": "Value"
-      },
       "serverSpec": {
         "title": "Server Spec"
       },
       "command": {
-        "title": "Command",
         "note": "Runs in a sandbox container via supergateway."
       },
-      "external": {
-        "title": "External Server",
-        "customHeaders": "Custom Headers"
-      },
       "container": {
-        "title": "Container",
         "port": "Port"
       },
       "tools": {
-        "title": "Available Tools ({count})",
         "count": "{count} tools",
         "columns": {
           "name": "Name",
           "description": "Description",
-          "equipped": "Equipped by"
+          "equipped": "Equipped by",
+          "hints": "Server hints",
+          "agents": "Agents"
         },
         "searchPlaceholder": "Search tools…",
-        "shown": "{shown} of {total}",
         "truncated": "Showing the first {shown} of {total} — refine the search to narrow it down.",
         "empty": "No tools match the current filter.",
         "otherGroup": "Other",
         "equippedBy": "Equipped by",
         "equippedNone": "No agent has this tool enabled.",
-        "grantedCount": "{count} granted",
         "equippedHint": "Agents that carry this tool in their configuration. Policy and approval rules are still evaluated when the tool is called.",
         "allToolsGrant": "all tools",
         "approval": "approval",
@@ -1007,36 +995,35 @@
         "noneDiscovered": "No tools discovered yet",
         "discovered": "Discovered {count, plural, one {# tool} other {# tools}}",
         "discoverFailed": "Couldn't discover tools",
-        "discoverUnverified": "Couldn't discover tools: the server did not pass verification"
+        "discoverUnverified": "Couldn't discover tools: the server did not pass verification",
+        "hints": {
+          "readOnlyHint": "read-only",
+          "destructiveHint": "destructive",
+          "idempotentHint": "idempotent",
+          "openWorldHint": "open-world"
+        },
+        "facetsLabel": "Tool filter",
+        "noneDescription": "Once the server answers, its tools show up here. Discover them now, or wait for the first verification.",
+        "emptyDescription": "Nothing matches this filter and search.",
+        "showAll": "Show all tools"
       },
       "consumers": {
-        "title": "Used by ({count})",
-        "loading": "Loading consumers…",
         "empty": "No agents attach this MCP server yet.",
-        "columns": {
-          "agent": "Agent",
-          "tools": "Enabled tools"
-        },
         "allTools": "all tools",
-        "none": "none",
-        "confirmSuffix": " (confirm)",
-        "more": "+{count} more",
-        "collapse": "Show less"
+        "heading": "Used by",
+        "toolCount": "{count, plural, one {# tool} other {# tools}}"
       },
       "bundle": {
-        "members": "Sources"
+        "members": "Sources",
+        "memberSub": "Connection in this bundle"
       },
       "env": {
         "title": "Environment Variables",
-        "notSet": "not set",
-        "columns": {
-          "key": "Key",
-          "value": "Value"
-        }
+        "notSet": "not set"
       },
       "details": {
         "title": "Details",
-        "id": "Instance ID",
+        "id": "Connection ID",
         "created": "Created",
         "updated": "Updated"
       },
@@ -1052,6 +1039,58 @@
         "verifyFailed": "Couldn't start verification",
         "saveConfigFailed": "Couldn't save the configuration",
         "consumersLoadFailed": "Couldn't load which agents use this connection"
+      },
+      "tabs": {
+        "label": "Connection sections",
+        "overview": "Overview",
+        "tools": "Tools",
+        "activity": "Activity"
+      },
+      "showMore": "Show more",
+      "showLess": "Show less",
+      "meta": {
+        "github": "GitHub",
+        "repository": "Repository",
+        "website": "Website"
+      },
+      "stats": {
+        "tools": "Tools",
+        "toolsSub": "discovered on the server",
+        "agents": "Agents",
+        "agentsNone": "no agent uses it yet",
+        "agentsUnknown": "couldn't load",
+        "unrestricted": "{count, plural, one {# holds} other {# hold}} every tool",
+        "restricted": "each with chosen tools",
+        "lastCall": "Last call",
+        "callSucceeded": "Succeeded",
+        "callFailed": "Failed",
+        "verification": "Verification"
+      },
+      "verification": {
+        "succeeded": "Verified",
+        "in_progress": "Verifying",
+        "failed": "Failed",
+        "never_attempted": "Not verified"
+      },
+      "verify": {
+        "stuck": "Verification may be stuck. You can retry it.",
+        "verify": "Verify",
+        "failedTitle": "Verification failed",
+        "code": "Code: {code}",
+        "retry": "Retry verification"
+      },
+      "connection": {
+        "title": "Connection",
+        "connectUrl": "Connect URL",
+        "connectUrlHint": "MCP clients connect through this address.",
+        "endpoint": "Endpoint",
+        "headers": "Headers",
+        "noHeaders": "No custom headers",
+        "image": "Docker image",
+        "command": "Command"
+      },
+      "authorization": {
+        "title": "Authorization"
       }
     },
     "table": {
@@ -1080,7 +1119,10 @@
     "sections": {
       "attention": "Needs attention",
       "active": "In use",
-      "idle": "Idle"
+      "idle": "Idle",
+      "mcp": "MCP",
+      "openapi": "OpenAPI",
+      "all": "All connections"
     },
     "listFilters": {
       "all": "All",
@@ -1100,21 +1142,85 @@
       "description": "Tools for working with MCP servers"
     },
     "newServer": {
-      "title": "New MCP Server",
-      "description": "Connect an MCP server to your workspace",
-      "docker": {
-        "title": "New Docker-based Server",
-        "serverName": "Docker-based Server Name",
-        "serverNamePlaceholder": "File System MCP",
-        "serverNameRequired": "Server name is required",
-        "dockerImageUrl": "Docker Image URL",
-        "dockerImageUrlPlaceholder": "ghcr.io/anthropic/mcp-file-server:latest",
-        "dockerImageUrlRequired": "Docker image URL is required",
-        "version": "Version",
-        "versionPlaceholder": "1.0.0",
-        "versionRequired": "Version is required"
+      "title": "New MCP server",
+      "submit": "Add server",
+      "mode": {
+        "form": "Form",
+        "json": "JSON"
       },
-      "addFailed": "Couldn't add the server"
+      "type": {
+        "label": "Server type",
+        "placeholder": "Select server type",
+        "docker": "Docker image",
+        "command": "Command (npx / uvx)",
+        "external": "External URL"
+      },
+      "config": {
+        "label": "MCP config",
+        "hint": "Paste an MCP config: both the servers and mcpServers formats work. The fields are filled in from it.",
+        "invalid": "Invalid JSON"
+      },
+      "name": "Server name",
+      "namePlaceholder": "e.g. File System MCP",
+      "nameRequired": "Server name is required",
+      "description": "Description",
+      "descriptionPlaceholder": "What this MCP server does",
+      "descriptionRequired": "Description is required",
+      "dockerImageUrl": "Docker image URL",
+      "dockerImageUrlHint": "The full URL of a Docker image that implements the Model Context Protocol. The image should expose port 8999.",
+      "version": "Version",
+      "command": "Command",
+      "commandHint": "The command runs in a sandbox container and is served over HTTP.",
+      "args": "Arguments",
+      "argsHint": "Space-separated arguments passed to the command.",
+      "endpointUrl": "Endpoint URL",
+      "endpointUrlHint": "The URL where your MCP server is running.",
+      "tags": "Tags",
+      "tagsPlaceholder": "e.g. files, database, web",
+      "tagsHint": "Comma-separated.",
+      "env": {
+        "label": "Environment variables & secrets",
+        "add": "Add variable",
+        "keyPlaceholder": "KEY (e.g. TELEGRAM_API_ID)",
+        "valuePlaceholder": "Value",
+        "hint": "Values are saved on this server so it runs right away. Variables are stored as secrets by default; unlock a row to keep it as plain config you can read back later. Leave a value blank to just declare the field."
+      },
+      "headers": {
+        "label": "Headers",
+        "add": "Add header",
+        "hint": "Custom headers for authentication or configuration. Their values are stored as secrets."
+      },
+      "auth": {
+        "label": "Authentication",
+        "none": "No authentication",
+        "createNew": "+ Create new auth config",
+        "hint": "Pick an existing auth config or create a new one.",
+        "newTitle": "New auth config",
+        "configName": "Config name",
+        "configNamePlaceholder": "e.g. My API key",
+        "type": "Auth type",
+        "types": {
+          "api_key": "API key",
+          "bearer": "Bearer token",
+          "oauth2": "OAuth2"
+        },
+        "headerName": "Header name",
+        "headerValue": "Header value",
+        "headerValuePlaceholder": "Your API key",
+        "bearerToken": "Bearer token",
+        "bearerTokenPlaceholder": "Your bearer token",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "tokenUrl": "Token URL",
+        "authorizeUrl": "Authorize URL",
+        "scopes": "Scopes",
+        "save": "Save auth config"
+      },
+      "unexpectedError": "An unexpected error occurred.",
+      "addFailed": "Couldn't add the server",
+      "dockerImageUrlRequired": "Enter the Docker image URL",
+      "commandRequired": "Enter the command to run",
+      "endpointUrlRequired": "Enter the server's endpoint URL"
     },
     "authConfigs": {
       "loadFailed": "Couldn't load authentication configs",
@@ -1128,34 +1234,40 @@
       "usage": "Couldn't load which agents use these connections"
     },
     "openapiDetail": {
-      "back": "Back to connections",
-      "notFound": "Connection not found",
-      "refreshing": "Refreshing...",
       "refreshFromSpec": "Refresh from spec URL",
-      "deleting": "Deleting...",
       "deleteTitle": "Delete connection?",
-      "type": "Type",
-      "status": "Status",
       "baseUrl": "Base URL",
       "specUrl": "Spec URL",
-      "customHeaders": "Custom headers ({count})",
-      "noCustomHeaders": "No custom headers. Click Add to set Authorization or any other request header your provider needs.",
-      "customQueryParams": "Query parameters ({count})",
-      "noCustomQueryParams": "No query parameters. Click Add to send a key the API expects in the URL, such as api_key.",
+      "noCustomHeaders": "No custom headers. Add Authorization or any other request header your provider needs.",
+      "noCustomQueryParams": "No query parameters. Add a key the API expects in the URL, such as api_key.",
       "noToolsWithSpec": "No tools discovered yet. Click “Refresh from spec URL” to parse the spec again.",
       "noTools": "No tools were parsed from this spec.",
-      "availableTools": "Available tools ({count})",
       "oauthError": "Couldn't connect the account: {reason}",
       "errors": {
-        "loadFailed": "Couldn't load the connection",
-        "reloadFailed": "Couldn't reload the connection",
         "discoverFailed": "Couldn't refresh tools from the spec",
         "saveHeadersFailed": "Couldn't save the headers",
         "saveQueryParamsFailed": "Couldn't save the query parameters",
         "deleteFailed": "Couldn't delete the connection"
+      },
+      "specLink": "Spec",
+      "specPasted": "Pasted as JSON, no URL to re-read",
+      "headersTitle": "Headers",
+      "queryParamsTitle": "Query parameters",
+      "stats": {
+        "fromSpecUrl": "from the spec URL",
+        "fromSpecJson": "from the pasted spec",
+        "headers": "Headers",
+        "queryParams": "Query parameters",
+        "secretCount": "{count, plural, =0 {none encrypted} one {# encrypted} other {# encrypted}}"
       }
     },
-    "sourceFilter": "From the catalog: {name}"
+    "sourceFilter": "From the catalog: {name}",
+    "group": {
+      "grouping": "Grouping",
+      "byState": "State",
+      "byType": "Type",
+      "none": "No grouping"
+    }
   },
   "Models": {
     "title": "Provider Management",
@@ -1608,7 +1720,6 @@
       },
       "uploadHint": "Drag and drop or browse to select a ZIP file",
       "loadingDuplicate": "Loading the original skill and pre-filling this form...",
-      "cancel": "Cancel",
       "writeContent": "Write content",
       "uploadFiles": "Upload files",
       "descriptionLabel": "Description",
@@ -1861,6 +1972,7 @@
     "parentTask": "Parent Task",
     "agentInfo": "Agent info",
     "failedToLoadAgent": "Failed to load agent details.",
+    "agentArchived": "Archived",
     "model": "Model",
     "descriptionGoal": "Description / Goal",
     "instruction": "Instruction",
@@ -2040,7 +2152,7 @@
       "inactive": "Inactive",
       "paused": "Paused",
       "error": "Error",
-      "needs_owner": "Needs a new owner"
+      "needs_owner": "Agent unavailable"
     },
     "create": {
       "title": "Create Trigger",
@@ -2054,6 +2166,7 @@
       "selectType": "Select trigger type",
       "agent": "Agent",
       "selectAgent": "Select an agent",
+      "agentRequired": "Pick the agent that will run this automation",
       "cronExpression": "Cron Expression",
       "cronPlaceholder": "e.g., 0 9 * * 1-5",
       "timezone": "Timezone",
@@ -2066,6 +2179,7 @@
       "schedule": "Schedule",
       "automationName": "Automation name",
       "automationNamePlaceholder": "Untitled automation",
+      "suggestedName": "{type} automation",
       "taskInstructions": "Task",
       "whenToRun": "When to run",
       "runSettings": "Run settings",
@@ -2095,13 +2209,15 @@
         "selectedTools": "{count, plural, one {# selected tool} other {# selected tools}}",
         "noTools": "No tools enabled",
         "approval": "Approval required",
-        "toolListUnavailable": "Tool list unavailable",
         "skillsOnDemand": "Available for activation",
         "configureAgent": "Configure agent",
         "carriedOver": "These came from an older version of this trigger. Move them onto the agent — triggers no longer carry their own.",
         "viewInNetwork": "See this in the network",
         "disabledMethods": "Disabled methods",
-        "builtin": "Built-in"
+        "builtin": "Built-in",
+        "clearFiles": "Clear",
+        "showAllFiles": "Show all ({count})",
+        "showLessFiles": "Show less"
       },
       "taskText": "Task text",
       "taskTextPlaceholder": "Text to pass into each task created by this trigger",
@@ -2111,19 +2227,19 @@
       "taskMcps": "Additional MCP",
       "taskTextFromStream": "The event's data is attached to the task automatically. The text here is the instruction the agent follows.",
       "taskFilesHint": "Select workspace files to include in every task.",
-      "searchFiles": "Search files",
-      "noFiles": "No more files to select.",
-      "manageFiles": "Manage workspace files",
       "taskMcpsHint": "Select MCP servers to make available to every task.",
       "taskSkillsHint": "Select skills to make available to every task.",
       "loadingResources": "Loading…",
       "resourcesLoadFailed": "Could not load resources. Try refreshing the list.",
-      "refreshResources": "Refresh list",
       "removeResource": "Remove {name}",
       "stream": "Stream",
       "streamHint": "Fires on events that arrive in this stream after the trigger is created.",
       "noStreams": "No streams yet",
       "streamsLoadFailed": "Could not load streams",
+      "typeKinds": "Kinds",
+      "typeItems": "Types",
+      "typeSearch": "Search trigger types",
+      "typeNotFound": "No types found",
       "session": {
         "continue": "Continue the conversation",
         "continueHint": "The next event of the same session (a chat, a thread) joins the task that is waiting for it.",
@@ -2138,6 +2254,33 @@
         "noWindow": "No time limit",
         "maxEvents": "Fire at",
         "maxEventsPlaceholder": "events"
+      },
+      "cron": {
+        "frequency": {
+          "every_minute": "Minutes",
+          "hourly": "Hourly",
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "monthly": "Monthly",
+          "custom": "Custom"
+        },
+        "interval": "Interval",
+        "atMinute": "At minute",
+        "time": "Time",
+        "hour": "Hour",
+        "minute": "Minute",
+        "day": "Day",
+        "dayOfMonth": "Day of month",
+        "expression": "Cron expression",
+        "expressionFields": "minute hour day month weekday",
+        "everyMinutes": "{count, plural, =1 {Every minute} other {Every # minutes}}",
+        "everyHours": "{count, plural, =1 {Every hour} other {Every # hours}}",
+        "runsEveryMinutes": "{count, plural, =1 {Runs every minute} other {Runs every # minutes}}",
+        "runsEveryHours": "{count, plural, =1 {Runs every hour at minute {minute}} other {Runs every # hours at minute {minute}}}",
+        "runsDaily": "Runs daily at {time}",
+        "runsWeekly": "Runs every {day} at {time}",
+        "runsMonthly": "Runs on the {day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} of every month at {time}",
+        "runsCustom": "Custom cron expression"
       }
     },
     "detail": {
@@ -2205,7 +2348,6 @@
       },
       "metricsLoadFailed": "Failed to load metrics",
       "executionsLoadFailed": "Failed to load executions",
-      "periodHours": "Over the last {hours}h",
       "durationRange": "{min}s — {max}s range",
       "failures": "Failures",
       "timeouts": "{count} timed out",
@@ -2213,8 +2355,6 @@
       "spendPerRun": "{cost} per run",
       "noCostedRuns": "No costed runs yet",
       "cost": "Cost",
-      "firstPage": "First page",
-      "noExecutionsOnPage": "No runs on this page",
       "lastEvent": "Last event",
       "noEventsYet": "No events yet",
       "needsOwnerTitle": "This trigger stopped",
@@ -2227,7 +2367,27 @@
       "batchOff": "Fires on every event",
       "batchWindowOrCount": "One task for the events of {window}, or sooner at {count} events",
       "batchWindow": "One task for the events of each {window}",
-      "batchCount": "One task for every {count} events"
+      "batchCount": "One task for every {count} events",
+      "columnStatus": "Status",
+      "columnStarted": "Started",
+      "columnDuration": "Duration",
+      "openTask": "Open task",
+      "copyExecutionId": "Copy ID",
+      "idCopied": "Copied",
+      "metricsPeriod": "Period",
+      "periodOption": {
+        "24h": "24 hours",
+        "7d": "7 days",
+        "30d": "30 days",
+        "all": "All time"
+      },
+      "noFailures": "No failures",
+      "periodLabel": {
+        "24h": "Over the last 24 hours",
+        "7d": "Over the last 7 days",
+        "30d": "Over the last 30 days",
+        "all": "All time"
+      }
     },
     "error": {
       "createFailed": "Failed to create trigger",
@@ -2685,8 +2845,6 @@
     "availableTools": "Available Tools:"
   },
   "OpenAPIConnection": {
-    "method": "Method",
-    "operation": "Operation",
     "addHeader": "Add",
     "editHeaders": "Edit",
     "saveHeaders": "Save headers",
@@ -2695,7 +2853,7 @@
     "headerName": "Header name",
     "headerValue": "Header value",
     "secretValuePlaceholder": "Secret value (leave blank to keep)",
-    "headersEditorHint": "Add headers like Authorization: Bearer <token>. Non-safe headers are stored encrypted.",
+    "headersEditorHint": "Add headers like Authorization: Bearer YOUR_TOKEN. Non-safe headers are stored encrypted.",
     "editQueryParams": "Edit",
     "saveQueryParams": "Save query parameters",
     "queryParamName": "Parameter name",
@@ -2704,35 +2862,34 @@
     "queryParamsEditorHint": "Add parameters the API expects in every request's query string, such as api_key. Locked values are stored encrypted."
   },
   "OpenAPIForm": {
-    "openApiSpec": "OpenAPI Spec",
+    "openApiSpec": "OpenAPI spec",
     "url": "URL",
-    "pasteJson": "Paste JSON",
+    "pasteJson": "JSON",
     "urlHint": "Paste a URL to auto-detect name, base URL, and available tools.",
     "jsonHint": "Paste the full OpenAPI 3.x JSON. Name, base URL, and tools will be auto-detected.",
-    "detectedTools": "Detected Tools",
-    "tool": "tool",
+    "detectedTools": "Detected tools",
     "name": "Name",
     "baseUrl": "Base URL",
     "baseUrlHint": "The base URL for API requests",
     "baseUrlAbsoluteRequired": "Enter an absolute HTTP or HTTPS base URL.",
-    "description": "Description (optional)",
-    "customHeaders": "Custom Headers (optional)",
-    "addHeader": "Add Header",
+    "description": "Description",
+    "customHeaders": "Custom headers",
+    "addHeader": "Add header",
     "headersHint": "Add headers for authentication or custom API requirements.",
-    "headerName": "Header name",
-    "headerValue": "Value",
-    "secretHeadersHint": "Secret headers are encrypted and never returned in API responses.",
-    "customQueryParams": "Query Parameters (optional)",
-    "addQueryParam": "Add Parameter",
+    "customQueryParams": "Query parameters",
+    "addQueryParam": "Add parameter",
     "queryParamsHint": "For APIs that take their key in the URL, such as ?api_key=. Locked values are stored encrypted and never returned.",
-    "creating": "Creating...",
-    "createConnection": "Create Connection",
-    "cancel": "Cancel",
+    "createConnection": "Create connection",
     "failedToFetchSpec": "Failed to fetch spec",
     "validJsonNoOperations": "Valid JSON but no OpenAPI 3.x operations found.",
     "invalidJson": "Invalid JSON",
     "invalidJsonHint": "Invalid JSON. Please check the spec content.",
-    "failedToCreate": "Failed to create connection"
+    "failedToCreate": "Failed to create connection",
+    "title": "Add OpenAPI connection",
+    "specRequired": "Add an OpenAPI spec first: its URL or the JSON itself.",
+    "nameRequired": "Enter a name for the connection.",
+    "namePlaceholder": "e.g. Stripe API",
+    "descriptionPlaceholder": "What this API is for"
   },
   "TaskDetailsCard": {
     "title": "Task Details",
@@ -2807,7 +2964,12 @@
     "emptySkillsHint": "Package a procedure once, then attach it to any task or agent.",
     "emptyMcpsTitle": "No MCP servers yet",
     "emptyMcpsHint": "Connect one to give this task — and any agent — its tools.",
-    "nothingFoundTitle": "Nothing found"
+    "nothingFoundTitle": "Nothing found",
+    "filesHeading": "Files",
+    "emptyFilesTitle": "No files yet",
+    "emptyFilesHint": "Upload files to the workspace, then pick the ones every task should get.",
+    "uploadFiles": "Upload files",
+    "manageFilesLink": "Manage files"
   },
   "QuickTask": {
     "title": "New task",
@@ -2867,7 +3029,8 @@
       "resource": "Resource",
       "actor": "Actor",
       "ip": "IP",
-      "when": "When"
+      "when": "When",
+      "details": "Details"
     },
     "loadFailed": "Couldn't load the audit log",
     "noMatches": "No events match these filters.",
@@ -3808,10 +3971,7 @@
   },
   "ConnectionCost": {
     "title": "Cost per call",
-    "edit": "Edit",
-    "save": "Save",
-    "saving": "Saving…",
-    "cancel": "Cancel",
+    "saveCost": "Save the cost",
     "saveFailed": "Could not save the cost",
     "hint": "What a call of this connection costs on your own key. Spend caps count it; the vendor bills you.",
     "mode": "Cost",
@@ -3967,5 +4127,24 @@
     "customized": "Edited in this workspace",
     "notFromCatalog": "Not installed from the catalog",
     "sourceUnreachable": "The source could not be reached"
+  },
+  "ModelSelector": {
+    "placeholder": "Select a model",
+    "configurations": "Configurations",
+    "models": "Models",
+    "search": "Search configurations and models",
+    "noModels": "No models found",
+    "defaultConfiguration": "Default configuration",
+    "unknownProvider": "Unknown provider"
+  },
+  "Balance": {
+    "label": "Balance",
+    "exhaustedShort": "Balance is out",
+    "exhaustedHint": "Agents on AgentArea models do not start",
+    "paidByOwner": "Paid by the owner",
+    "unavailable": "Unavailable",
+    "topUp": "Top up",
+    "bannerPayer": "Agents on AgentArea models do not start. Top up to get them running again.",
+    "bannerMember": "Agents on AgentArea models do not start. Ask the workspace owner to top up."
   }
 }

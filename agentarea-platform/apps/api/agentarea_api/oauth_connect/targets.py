@@ -172,9 +172,7 @@ class MCPInstanceTarget:
     async def ensure_may_authorize(self) -> None:
         # Completing the flow attaches the caller's provider account to the
         # instance, so starting it is an edit.
-        await require_permission(
-            "edit", "mcp_instance", str(self.instance.id), self.user_context.user_id
-        )
+        await require_permission("edit", "mcp_instance", str(self.instance.id), self.user_context)
 
     async def create_connection(self) -> tuple[TargetKind, UUID]:
         return "mcp_instance", self.instance.id

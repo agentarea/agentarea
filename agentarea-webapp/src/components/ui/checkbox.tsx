@@ -30,6 +30,7 @@ const Checkbox = React.forwardRef<
       <CheckboxPrimitive.Indicator
         className={cn("flex items-center justify-center text-current")}
       >
+        {/* Part of a group picked: a dash, so it reads apart from "all". */}
         {state === "indeterminate" ? (
           <Minus className="h-3 w-3" />
         ) : (

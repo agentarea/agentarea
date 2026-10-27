@@ -1,16 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Code, Globe, Lock, LockOpen, Package, Plus, Server, Tag, Terminal, X } from "lucide-react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import {
+  Braces,
+  Code,
+  FileText,
+  GitBranch,
+  Globe,
+  KeyRound,
+  ListChecks,
+  Package,
+  Plus,
+  Server,
+  ShieldCheck,
+  Tag,
+  Tags,
+  Terminal,
+} from "lucide-react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
+import { announceFormSubmitting } from "@/app/w/[workspace]/(main)/agents/shared/useFormSubmittingState";
 import { AdminOnlyHint } from "@/components/AdminOnlyState";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import Divider from "@/components/ui/divider";
+import { Input } from "@/components/ui/input";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Select,
   SelectContent,
@@ -21,17 +39,23 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useViewerCapabilities } from "@/components/ViewerCapabilities";
 import { apiErrorMessage } from "@/lib/api-errors";
+import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig } from "@/lib/server-actions";
+import { HeaderRows } from "../components/HeaderRows";
+import { SecretRows } from "../components/SecretRows";
 import {
   addMCPServer,
   type MCPServerFormState,
   type MCPServerFormValues,
 } from "./actions";
-import { listMCPAuthConfigsAction as listMCPAuthConfigs, createMCPAuthConfigAction as createMCPAuthConfig } from "@/lib/server-actions";
 
-// Define the header schema for external servers
+/** The header's submit button targets the form by this id. */
+export const ADD_MCP_SERVER_FORM_ID = "add-mcp-server-form";
+
+// Header rows for external servers; rows left without a name are dropped on
+// submit rather than blocking it.
 const HeaderSchema = z.object({
-  key: z.string().min(1, "Header key is required"),
-  value: z.string().min(1, "Header value is required"),
+  key: z.string(),
+  value: z.string(),
 });
 
 // Environment variable rows for docker / command servers. The key names a
@@ -46,14 +70,11 @@ const EnvVarSchema = z.object({
   secret: z.boolean(),
 });
 
-// Define the unified schema for client-side validation
-// Create base schema without refine for shape access
+// The shape of the form; the messages are attached per locale in the component.
 const BaseMCPServerSchema = z.object({
-  type: z.enum(["docker", "command", "external"], {
-    required_error: "Server type is required",
-  }),
-  name: z.string().min(1, "Server name is required"),
-  description: z.string().min(1, "Description is required"),
+  type: z.enum(["docker", "command", "external"]),
+  name: z.string().min(1),
+  description: z.string().min(1),
   dockerImageUrl: z.string().optional(),
   version: z.string().optional(),
   command: z.string().optional(),
@@ -64,24 +85,17 @@ const BaseMCPServerSchema = z.object({
   tags: z.string().optional(),
 });
 
-const MCPServerSchema = BaseMCPServerSchema.refine(
-  (data) => {
-    if (data.type === "docker") {
-      return data.dockerImageUrl && data.dockerImageUrl.trim() !== "";
-    } else if (data.type === "command") {
-      return data.command && data.command.trim() !== "";
-    } else if (data.type === "external") {
-      return data.endpointUrl && data.endpointUrl.trim() !== "";
-    }
-    return false;
-  },
-  {
-    message: "Required fields missing for selected server type",
-    path: ["type"],
-  }
-);
-
 type FormValues = z.infer<typeof BaseMCPServerSchema>;
+type ServerType = FormValues["type"];
+type ConfigMode = "form" | "json";
+
+const SERVER_TYPES: ServerType[] = ["docker", "command", "external"];
+
+const REQUIRED_FIELD = {
+  docker: "dockerImageUrl",
+  command: "command",
+  external: "endpointUrl",
+} as const satisfies Record<ServerType, keyof FormValues>;
 
 const initialState: MCPServerFormState = {
   message: "",
@@ -108,9 +122,14 @@ interface AuthConfig {
 
 type AuthType = "api_key" | "bearer" | "oauth2";
 
+const AUTH_TYPES: AuthType[] = ["api_key", "bearer", "oauth2"];
+
 export function AddMCPServerForm() {
-  const t = useTranslations("MCPServersPage.authConfigs");
+  const t = useTranslations("MCPServersPage.newServer");
+  const tAuth = useTranslations("MCPServersPage.authConfigs");
+  const tCommon = useTranslations("Common");
   const { canAdminister } = useViewerCapabilities();
+  const formRef = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<MCPServerFormState>(initialState);
   const [authConfigs, setAuthConfigs] = useState<AuthConfig[]>([]);
   const [authConfigsError, setAuthConfigsError] = useState<string | null>(null);
@@ -124,21 +143,41 @@ export function AddMCPServerForm() {
   const [jsonInput, setJsonInput] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
 
+  const schema = useMemo(
+    () =>
+      BaseMCPServerSchema.extend({
+        name: z.string().min(1, t("nameRequired")),
+        description: z.string().min(1, t("descriptionRequired")),
+      }).superRefine((data, ctx) => {
+        // Each type has one field it can't run without; the error goes on
+        // that field so it shows where the user has to type.
+        const field = REQUIRED_FIELD[data.type];
+        if (!data[field]?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: t(`${field}Required`),
+            path: [field],
+          });
+        }
+      }),
+    [t]
+  );
+
   const fetchAuthConfigs = useCallback(async () => {
     setAuthConfigsError(null);
     try {
       const result = await listMCPAuthConfigs();
       if (result.error || !result.data) {
         console.error("Failed to load MCP auth configs", result.error);
-        setAuthConfigsError(apiErrorMessage(result, t("loadFailed")));
+        setAuthConfigsError(apiErrorMessage(result, tAuth("loadFailed")));
         return;
       }
       setAuthConfigs(result.data as AuthConfig[]);
     } catch (e) {
       console.error("Failed to load MCP auth configs", e);
-      setAuthConfigsError(t("loadFailed"));
+      setAuthConfigsError(tAuth("loadFailed"));
     }
-  }, [t]);
+  }, [tAuth]);
 
   const handleCreateAuthConfig = useCallback(async (formEl: HTMLFormElement) => {
     setNewAuthSaving(true);
@@ -174,7 +213,7 @@ export function AddMCPServerForm() {
 
       if (result.error || !result.data) {
         console.error("Failed to create MCP auth config", result.error);
-        setNewAuthError(apiErrorMessage(result, t("createFailed")));
+        setNewAuthError(apiErrorMessage(result, tAuth("createFailed")));
         return;
       }
       await fetchAuthConfigs();
@@ -184,11 +223,11 @@ export function AddMCPServerForm() {
       setNewAuthType("api_key");
     } catch (e) {
       console.error("Failed to create MCP auth config", e);
-      setNewAuthError(t("createFailed"));
+      setNewAuthError(tAuth("createFailed"));
     } finally {
       setNewAuthSaving(false);
     }
-  }, [fetchAuthConfigs, t]);
+  }, [fetchAuthConfigs, tAuth]);
 
   const {
     register,
@@ -196,9 +235,10 @@ export function AddMCPServerForm() {
     handleSubmit,
     formState: { errors },
     setValue,
+    getValues,
     watch,
   } = useForm<FormValues>({
-    resolver: zodResolver(MCPServerSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       type: "docker",
       name: "",
@@ -214,22 +254,7 @@ export function AddMCPServerForm() {
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "headers",
-  });
-
-  const {
-    fields: envFields,
-    append: appendEnv,
-    remove: removeEnv,
-  } = useFieldArray({
-    control,
-    name: "env",
-  });
-
   const watchedType = watch("type");
-  const watchedEnv = watch("env");
 
   // Fetch auth configs when type is external
   useEffect(() => {
@@ -238,22 +263,17 @@ export function AddMCPServerForm() {
     }
   }, [watchedType, canAdminister, fetchAuthConfigs]);
 
-  // Dispatch submitting state for header controls
-  const dispatchSubmitting = (submitting: boolean) => {
-    const form = document.getElementById("add-mcp-server-form");
-    if (form) {
-      form.setAttribute("data-submitting", String(submitting));
-      form.dispatchEvent(new CustomEvent("form-submitting", { detail: { isSubmitting: submitting } }));
-    }
-  };
-
   const onSubmit = async (data: FormValues) => {
-    dispatchSubmitting(true);
+    announceFormSubmitting(formRef.current, true);
     setState(initialState);
+    let leaving = false;
 
     try {
       const input: MCPServerFormValues = {
         ...data,
+        headers: data.headers
+          .filter((header) => header.key.trim())
+          .map((header) => ({ ...header, key: header.key.trim() })),
         version: data.version || "1.0.0",
         authConfigId:
           selectedAuthConfigId && selectedAuthConfigId !== "none"
@@ -269,16 +289,18 @@ export function AddMCPServerForm() {
         setState(result);
       }
     } catch (e: unknown) {
-      // Next.js redirect throws — let it propagate
+      // Next.js redirect throws — let it propagate, and keep the header
+      // button busy until the new connection opens.
       if ((e as { digest?: string } | null)?.digest?.startsWith("NEXT_REDIRECT")) {
+        leaving = true;
         throw e;
       }
       setState({
-        message: "An unexpected error occurred.",
-        errors: { _form: [e instanceof Error ? e.message : "Unknown error"] },
+        message: t("unexpectedError"),
+        errors: { _form: [e instanceof Error ? e.message : t("unexpectedError")] },
       });
     } finally {
-      dispatchSubmitting(false);
+      if (!leaving) announceFormSubmitting(formRef.current, false);
     }
   };
 
@@ -386,9 +408,9 @@ export function AddMCPServerForm() {
       }
       setJsonError(null);
     } catch {
-      setJsonError("Invalid JSON");
+      setJsonError(t("config.invalid"));
     }
-  }, [setValue, watch]);
+  }, [setValue, watch, t]);
 
   // When switching to JSON mode, populate from current form state
   const toggleJsonMode = useCallback(() => {
@@ -418,509 +440,521 @@ export function AddMCPServerForm() {
     return error?.message;
   };
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} id="add-mcp-server-form" className="overflow-auto h-full">
-      <div className="form-content lg:max-w-xl lg:mx-auto">
-        {/* Display general form errors */}
-        {state.errors?._form && (
-          <div className="form-error text-sm text-destructive">
-            {state.errors._form.join(", ")}
-          </div>
-        )}
+  const fieldError = (field: keyof typeof combinedErrors) => {
+    const message = getErrorMessage(
+      combinedErrors[field] as string | string[] | { message?: string } | undefined
+    );
+    return message ? (
+      <p role="alert" className="form-error">
+        {message}
+      </p>
+    ) : null;
+  };
 
-        {/* Server Type Selector — hidden in JSON mode (auto-detected) */}
-        {!jsonMode && (
-          <div className="space-y-2">
-            <FormLabel htmlFor="type" icon={Server} required>
-              <span id="server-type-label">Server Type</span>
-            </FormLabel>
+  const formError =
+    state.errors?._form?.join(", ") ||
+    (state.message && state.errors ? state.message : null);
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={handleSubmit(onSubmit)}
+      id={ADD_MCP_SERVER_FORM_ID}
+      className="mx-auto w-full max-w-4xl"
+    >
+      <div className="form-content">
+        {formError && <FormError>{formError}</FormError>}
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            {jsonMode ? (
+              <FormLabel htmlFor="mcp-config" icon={Braces} required>
+                {t("config.label")}
+              </FormLabel>
+            ) : (
+              <FormLabel htmlFor="type" icon={Server} required>
+                <span id="server-type-label">{t("type.label")}</span>
+              </FormLabel>
+            )}
+            <SegmentedControl<ConfigMode>
+              value={jsonMode ? "json" : "form"}
+              onChange={(mode) => {
+                if ((mode === "json") !== jsonMode) toggleJsonMode();
+              }}
+              layoutId="mcp-config-mode-control"
+              items={[
+                {
+                  value: "form",
+                  label: (
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                      <ListChecks aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      {t("mode.form")}
+                    </span>
+                  ),
+                },
+                {
+                  value: "json",
+                  label: (
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
+                      <Braces aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      {t("mode.json")}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </div>
+
+          {jsonMode ? (
+            <>
+              <Textarea
+                id="mcp-config"
+                value={jsonInput}
+                onChange={(e) => applyJsonToForm(e.target.value)}
+                placeholder={'{\n  "servers": {\n    "github": {\n      "type": "http",\n      "url": "https://api.githubcopilot.com/mcp/"\n    }\n  }\n}'}
+                className="h-[260px] resize-none font-mono text-xs"
+                aria-invalid={Boolean(jsonError)}
+              />
+              {jsonError ? (
+                <p role="alert" className="form-error">
+                  {jsonError}
+                </p>
+              ) : (
+                <p className="note">{t("config.hint")}</p>
+              )}
+            </>
+          ) : (
             <Controller
               control={control}
               name="type"
               render={({ field }) => (
-                <Select
-                  value={field.value}
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                  }}
-                >
+                <Select value={field.value} onValueChange={field.onChange}>
                   <SelectTrigger
                     id="type"
                     aria-labelledby="server-type-label"
                     aria-required="true"
                   >
-                    <SelectValue placeholder="Select server type" />
+                    <SelectValue placeholder={t("type.placeholder")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="docker">Docker Image</SelectItem>
-                    <SelectItem value="command">Command (npx / uvx)</SelectItem>
-                    <SelectItem value="external">External URL</SelectItem>
+                    {SERVER_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {t(`type.${type}`)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               )}
             />
-            {combinedErrors.type && (
-              <p className="form-error">
-                {getErrorMessage(combinedErrors.type)}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Form / JSON Mode Toggle */}
-        <div className="flex items-center gap-1 rounded-md border p-0.5 w-fit">
-          <button
-            type="button"
-            className={`px-3 py-1 text-sm rounded transition-colors ${!jsonMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            onClick={() => jsonMode && toggleJsonMode()}
-          >
-            Form
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1 text-sm rounded transition-colors ${jsonMode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            onClick={() => !jsonMode && toggleJsonMode()}
-          >
-            JSON
-          </button>
+          )}
+          {fieldError("type")}
+          {/* In JSON mode the fields are hidden: say here what the config
+              still lacks. */}
+          {jsonMode && (
+            <>
+              {fieldError("name")}
+              {fieldError("description")}
+              {fieldError(REQUIRED_FIELD[watchedType])}
+            </>
+          )}
         </div>
+      </div>
 
-        {jsonMode ? (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Paste your MCP config JSON — supports both <code className="text-xs">servers</code> and <code className="text-xs">mcpServers</code> formats
-            </p>
-            <Textarea
-              value={jsonInput}
-              onChange={(e) => applyJsonToForm(e.target.value)}
-              placeholder={'{\n  "servers": {\n    "github": {\n      "type": "http",\n      "url": "https://api.githubcopilot.com/mcp/"\n    }\n  }\n}'}
-              rows={14}
-              className="font-mono text-sm"
-            />
-            {jsonError && (
-              <p className="text-sm text-red-500">{jsonError}</p>
-            )}
-          </div>
-        ) : (
+      {!jsonMode && (
         <>
-        {/* Common Fields */}
-        <div className="space-y-2">
-          <FormLabel htmlFor="name" icon={Server} required>Server Name</FormLabel>
-          <Input
-            id="name"
-            {...register("name")}
-            placeholder="e.g. File System MCP"
-            aria-invalid={!!combinedErrors.name}
-          />
-          {combinedErrors.name && (
-            <p className="form-error">
-              {getErrorMessage(combinedErrors.name)}
-            </p>
-          )}
-        </div>
+          <Divider className="my-6" />
 
-        <div className="space-y-2">
-          <FormLabel htmlFor="description" required>Description</FormLabel>
-          <Textarea
-            id="description"
-            {...register("description")}
-            placeholder="Describe what this MCP server does"
-            rows={3}
-            aria-invalid={!!combinedErrors.description}
-          />
-          {combinedErrors.description && (
-            <p className="form-error">
-              {getErrorMessage(combinedErrors.description)}
-            </p>
-          )}
-        </div>
-
-        {/* Docker-specific Fields */}
-        {watchedType === "docker" && (
-          <>
+          <div className="form-content">
             <div className="space-y-2">
-              <FormLabel htmlFor="dockerImageUrl" icon={Package} required>Docker Image URL</FormLabel>
+              <FormLabel htmlFor="name" icon={Tag} required>
+                {t("name")}
+              </FormLabel>
               <Input
-                id="dockerImageUrl"
-                {...register("dockerImageUrl")}
-                placeholder="e.g. ghcr.io/anthropic/mcp-file-server:latest"
-                aria-invalid={!!combinedErrors.dockerImageUrl}
+                id="name"
+                {...register("name")}
+                placeholder={t("namePlaceholder")}
+                autoComplete="off"
+                aria-invalid={!!combinedErrors.name}
               />
-              {combinedErrors.dockerImageUrl && (
-                <p className="form-error">
-                  {getErrorMessage(combinedErrors.dockerImageUrl)}
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Enter the full URL to a Docker image that implements the Model
-                Context Protocol. The image should expose port 8999.
-              </p>
+              {fieldError("name")}
             </div>
 
             <div className="space-y-2">
-              <FormLabel htmlFor="version" icon={Tag}>Version</FormLabel>
-              <Input
-                id="version"
-                {...register("version")}
-                placeholder="e.g. 1.0.0"
-                defaultValue="1.0.0"
-                aria-invalid={!!combinedErrors.version}
+              <FormLabel htmlFor="description" icon={FileText} required>
+                {t("description")}
+              </FormLabel>
+              <Textarea
+                id="description"
+                {...register("description")}
+                placeholder={t("descriptionPlaceholder")}
+                className="h-[100px] resize-none"
+                aria-invalid={!!combinedErrors.description}
               />
-              {combinedErrors.version && (
-                <p className="form-error">
-                  {getErrorMessage(combinedErrors.version)}
-                </p>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Command-specific Fields */}
-        {watchedType === "command" && (
-          <>
-            <div className="space-y-2">
-              <FormLabel htmlFor="command" icon={Terminal} required>Command</FormLabel>
-              <Input
-                id="command"
-                {...register("command")}
-                placeholder="e.g. npx, uvx, node"
-                aria-invalid={!!combinedErrors.command}
-              />
-              {combinedErrors.command && (
-                <p className="form-error">
-                  {getErrorMessage(combinedErrors.command)}
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground">
-                The command runs in a sandbox container and is served over HTTP.
-              </p>
+              {fieldError("description")}
             </div>
 
-            <div className="space-y-2">
-              <FormLabel htmlFor="args" icon={Code} optional>Arguments</FormLabel>
-              <Input
-                id="args"
-                {...register("args")}
-                placeholder="e.g. -y @modelcontextprotocol/server-filesystem /tmp"
-              />
-              <p className="text-sm text-muted-foreground">
-                Space-separated arguments passed to the command.
-              </p>
-            </div>
-          </>
-        )}
-
-        {/* Environment variables & secrets (docker / command) */}
-        {!jsonMode && (watchedType === "docker" || watchedType === "command") && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Environment variables &amp; secrets</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => appendEnv({ key: "", value: "", secret: true })}
-              >
-                <Plus className="mr-2" />
-                Add variable
-              </Button>
-            </div>
-
-            {envFields.map((field, index) => {
-              const isSecret = !!watchedEnv?.[index]?.secret;
-              return (
-                <div key={field.id} className="flex items-center gap-2">
+            {watchedType === "docker" && (
+              <>
+                <div className="space-y-2">
+                  <FormLabel htmlFor="dockerImageUrl" icon={Package} required>
+                    {t("dockerImageUrl")}
+                  </FormLabel>
                   <Input
-                    {...register(`env.${index}.key`)}
-                    placeholder="KEY (e.g. TELEGRAM_API_ID)"
-                    className="flex-1 font-mono"
+                    id="dockerImageUrl"
+                    {...register("dockerImageUrl")}
+                    placeholder="ghcr.io/anthropic/mcp-file-server:latest"
+                    aria-invalid={!!combinedErrors.dockerImageUrl}
                   />
-                  <Input
-                    {...register(`env.${index}.value`)}
-                    type={isSecret ? "password" : "text"}
-                    placeholder="value"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant={isSecret ? "default" : "outline"}
-                    size="sm"
-                    title={isSecret ? "Stored as a secret" : "Mark as secret"}
-                    onClick={() => setValue(`env.${index}.secret`, !isSecret)}
-                  >
-                    {isSecret ? (
-                      <Lock />
-                    ) : (
-                      <LockOpen />
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeEnv(index)}
-                  >
-                    <X />
-                  </Button>
+                  {fieldError("dockerImageUrl") ?? (
+                    <p className="note">{t("dockerImageUrlHint")}</p>
+                  )}
                 </div>
-              );
-            })}
 
-            <p className="text-sm text-muted-foreground">
-              Values are saved on this server so it runs right away. Variables
-              are stored as secrets by default (kept in the secret manager, never
-              in plaintext) — unlock a row to store it as plain config you can
-              read back later. Leave a value blank to just declare the field.
-            </p>
-          </div>
-        )}
+                <div className="space-y-2">
+                  <FormLabel htmlFor="version" icon={GitBranch} optional>
+                    {t("version")}
+                  </FormLabel>
+                  <Input
+                    id="version"
+                    {...register("version")}
+                    placeholder="1.0.0"
+                    aria-invalid={!!combinedErrors.version}
+                  />
+                  {fieldError("version")}
+                </div>
+              </>
+            )}
 
-        {/* External-specific Fields */}
-        {watchedType === "external" && (
-          <>
-            <div className="space-y-2">
-              <FormLabel htmlFor="endpointUrl" icon={Globe} required>Endpoint URL</FormLabel>
-              <Input
-                id="endpointUrl"
-                {...register("endpointUrl")}
-                placeholder="e.g. https://api.example.com/mcp"
-                aria-invalid={!!combinedErrors.endpointUrl}
-              />
-              {combinedErrors.endpointUrl && (
-                <p className="form-error">
-                  {getErrorMessage(combinedErrors.endpointUrl)}
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground">
-                Enter the URL where your external MCP server is running.
-              </p>
-            </div>
+            {watchedType === "command" && (
+              <>
+                <div className="space-y-2">
+                  <FormLabel htmlFor="command" icon={Terminal} required>
+                    {t("command")}
+                  </FormLabel>
+                  <Input
+                    id="command"
+                    {...register("command")}
+                    placeholder="npx, uvx, node"
+                    className="font-mono"
+                    aria-invalid={!!combinedErrors.command}
+                  />
+                  {fieldError("command") ?? (
+                    <p className="note">{t("commandHint")}</p>
+                  )}
+                </div>
 
-            {/* Headers */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Headers (optional)</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => append({ key: "", value: "" })}
-                >
-                  <Plus className="mr-2" />
-                  Add Header
-                </Button>
+                <div className="space-y-2">
+                  <FormLabel htmlFor="args" icon={Code} optional>
+                    {t("args")}
+                  </FormLabel>
+                  <Input
+                    id="args"
+                    {...register("args")}
+                    placeholder="-y @modelcontextprotocol/server-filesystem /tmp"
+                    className="font-mono"
+                  />
+                  <p className="note">{t("argsHint")}</p>
+                </div>
+              </>
+            )}
+
+            {watchedType === "external" && (
+              <div className="space-y-2">
+                <FormLabel htmlFor="endpointUrl" icon={Globe} required>
+                  {t("endpointUrl")}
+                </FormLabel>
+                <Input
+                  id="endpointUrl"
+                  {...register("endpointUrl")}
+                  placeholder="https://api.example.com/mcp"
+                  type="url"
+                  aria-invalid={!!combinedErrors.endpointUrl}
+                />
+                {fieldError("endpointUrl") ?? (
+                  <p className="note">{t("endpointUrlHint")}</p>
+                )}
               </div>
+            )}
 
-              {fields.map((field, index) => (
-                <div key={field.id} className="flex items-center gap-2">
-                  <Input
-                    {...register(`headers.${index}.key`)}
-                    placeholder="Header name"
-                    className="flex-1"
-                  />
-                  <Input
-                    {...register(`headers.${index}.value`)}
-                    placeholder="Header value"
-                    className="flex-1"
-                  />
+            <div className="space-y-2">
+              <FormLabel htmlFor="tags" icon={Tags} optional>
+                {t("tags")}
+              </FormLabel>
+              <Input
+                id="tags"
+                {...register("tags")}
+                placeholder={t("tagsPlaceholder")}
+              />
+              <p className="note">{t("tagsHint")}</p>
+            </div>
+          </div>
+
+          <Divider className="my-6" />
+
+          <div className="form-content">
+            {(watchedType === "docker" || watchedType === "command") && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <FormLabel icon={KeyRound} optional>
+                    {t("env.label")}
+                  </FormLabel>
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={() => remove(index)}
+                    size="xs"
+                    onClick={() =>
+                      setValue("env", [
+                        ...getValues("env"),
+                        { key: "", value: "", secret: true },
+                      ])
+                    }
                   >
-                    <X />
+                    <Plus />
+                    {t("env.add")}
                   </Button>
                 </div>
-              ))}
-
-              <p className="text-sm text-muted-foreground">
-                Add any custom headers required for authentication or
-                configuration.
-              </p>
-            </div>
-
-            {/* Auth Config Selector */}
-            <div className="space-y-2">
-              <Label htmlFor="authConfigId">Authentication (optional)</Label>
-              <Select
-                value={selectedAuthConfigId}
-                disabled={!canAdminister}
-                onValueChange={(value) => {
-                  if (value === "__new__") {
-                    setShowNewAuthForm(true);
-                    setSelectedAuthConfigId("");
-                  } else {
-                    setSelectedAuthConfigId(value);
-                    setShowNewAuthForm(false);
-                  }
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="No authentication" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No authentication</SelectItem>
-                  {authConfigs.map((config) => (
-                    <SelectItem key={config.id} value={config.id}>
-                      {config.name} ({config.auth_type})
-                    </SelectItem>
-                  ))}
-                  <SelectItem value="__new__">+ Create new auth config</SelectItem>
-                </SelectContent>
-              </Select>
-              {!canAdminister && <AdminOnlyHint action="manageMcpAuth" />}
-              {authConfigsError && (
-                <p role="alert" className="form-error">
-                  {authConfigsError}
-                </p>
-              )}
-
-              {/* Inline Auth Config Creation Form */}
-              {showNewAuthForm && (
-                <div className="mt-3 rounded-md border p-4 space-y-3">
-                  <p className="text-sm font-medium">New Authentication Config</p>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="newAuthName">Config Name</Label>
-                    <Input
-                      id="newAuthName"
-                      name="newAuthName"
-                      value={newAuthName}
-                      onChange={(e) => setNewAuthName(e.target.value)}
-                      placeholder="e.g. My API Key"
+                <Controller
+                  control={control}
+                  name="env"
+                  render={({ field }) => (
+                    <SecretRows
+                      rows={field.value.map((row) => ({
+                        name: row.key,
+                        value: row.value,
+                        secret: row.secret,
+                      }))}
+                      onChange={(rows) =>
+                        field.onChange(
+                          rows.map((row) => ({
+                            key: row.name,
+                            value: row.value,
+                            secret: row.secret,
+                          }))
+                        )
+                      }
+                      namePlaceholder={t("env.keyPlaceholder")}
+                      valuePlaceholder={t("env.valuePlaceholder")}
+                      nameClassName="font-mono"
                     />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="newAuthType">Auth Type</Label>
-                    <Select
-                      value={newAuthType}
-                      onValueChange={(v) => setNewAuthType(v as AuthType)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="api_key">API Key</SelectItem>
-                        <SelectItem value="bearer">Bearer Token</SelectItem>
-                        <SelectItem value="oauth2">OAuth2</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <input type="hidden" name="newAuthType" value={newAuthType} />
-                  </div>
-
-                  {newAuthType === "api_key" && (
-                    <>
-                      <div className="space-y-1">
-                        <Label htmlFor="headerName">Header Name</Label>
-                        <Input id="headerName" name="headerName" defaultValue="Authorization" placeholder="Authorization" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="headerValue">Header Value</Label>
-                        <Input id="headerValue" name="headerValue" type="password" placeholder="Your API key" />
-                      </div>
-                    </>
                   )}
+                />
+                <p className="note">{t("env.hint")}</p>
+              </div>
+            )}
 
-                  {newAuthType === "bearer" && (
-                    <div className="space-y-1">
-                      <Label htmlFor="bearerToken">Bearer Token</Label>
-                      <Input id="bearerToken" name="bearerToken" type="password" placeholder="Your bearer token" />
-                    </div>
-                  )}
-
-                  {newAuthType === "oauth2" && (
-                    <>
-                      <div className="space-y-1">
-                        <Label htmlFor="clientId">Client ID</Label>
-                        <Input id="clientId" name="clientId" placeholder="OAuth2 client ID" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="clientSecret">Client Secret</Label>
-                        <Input id="clientSecret" name="clientSecret" type="password" placeholder="OAuth2 client secret" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="tokenUrl">Token URL</Label>
-                        <Input id="tokenUrl" name="tokenUrl" placeholder="https://provider.com/oauth/token" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="authorizeUrl">Authorize URL (optional)</Label>
-                        <Input id="authorizeUrl" name="authorizeUrl" placeholder="https://provider.com/oauth/authorize" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="scopes">Scopes (optional)</Label>
-                        <Input id="scopes" name="scopes" placeholder="read write" />
-                      </div>
-                    </>
-                  )}
-
-                  {newAuthError && (
-                    <p role="alert" className="form-error">
-                      {newAuthError}
-                    </p>
-                  )}
-
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={newAuthSaving || !newAuthName}
-                      onClick={(e) => {
-                        const form = (e.target as HTMLElement).closest(".rounded-md.border") as HTMLElement;
-                        if (form) {
-                          const tempForm = document.createElement("form");
-                          form.querySelectorAll("input, select").forEach((el) => {
-                            const clone = el.cloneNode(true) as HTMLInputElement;
-                            tempForm.appendChild(clone);
-                          });
-                          handleCreateAuthConfig(tempForm);
-                        }
-                      }}
-                    >
-                      {newAuthSaving ? "Saving..." : "Save Auth Config"}
-                    </Button>
+            {watchedType === "external" && (
+              <>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <FormLabel icon={KeyRound} optional>
+                      {t("headers.label")}
+                    </FormLabel>
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
-                      onClick={() => setShowNewAuthForm(false)}
+                      size="xs"
+                      onClick={() =>
+                        setValue("headers", [
+                          ...getValues("headers"),
+                          { key: "", value: "" },
+                        ])
+                      }
                     >
-                      Cancel
+                      <Plus />
+                      {t("headers.add")}
                     </Button>
                   </div>
+                  <Controller
+                    control={control}
+                    name="headers"
+                    render={({ field }) => (
+                      <HeaderRows
+                        alwaysSecret
+                        rows={field.value.map((row) => ({
+                          name: row.key,
+                          value: row.value,
+                        }))}
+                        onChange={(rows) =>
+                          field.onChange(
+                            rows.map((row) => ({ key: row.name, value: row.value }))
+                          )
+                        }
+                      />
+                    )}
+                  />
+                  <p className="note">{t("headers.hint")}</p>
                 </div>
-              )}
 
-              <p className="text-sm text-muted-foreground">
-                Select an existing auth configuration or create a new one.
-              </p>
-            </div>
-          </>
-        )}
-        </>
-        )}
+                <div className="space-y-2">
+                  <FormLabel htmlFor="authConfigId" icon={ShieldCheck} optional>
+                    {t("auth.label")}
+                  </FormLabel>
+                  <Select
+                    value={selectedAuthConfigId}
+                    disabled={!canAdminister}
+                    onValueChange={(value) => {
+                      if (value === "__new__") {
+                        setShowNewAuthForm(true);
+                        setSelectedAuthConfigId("");
+                      } else {
+                        setSelectedAuthConfigId(value);
+                        setShowNewAuthForm(false);
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="authConfigId">
+                      <SelectValue placeholder={t("auth.none")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t("auth.none")}</SelectItem>
+                      {authConfigs.map((config) => (
+                        <SelectItem key={config.id} value={config.id}>
+                          {config.name} ({config.auth_type})
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__new__">{t("auth.createNew")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!canAdminister && <AdminOnlyHint action="manageMcpAuth" />}
+                  {authConfigsError ? (
+                    <p role="alert" className="form-error">
+                      {authConfigsError}
+                    </p>
+                  ) : (
+                    <p className="note">{t("auth.hint")}</p>
+                  )}
 
-        {/* Common Fields - Tags */}
-        {!jsonMode && (
-          <div className="space-y-2">
-            <Label htmlFor="tags">Tags (comma separated)</Label>
-            <Input
-              id="tags"
-              {...register("tags")}
-              placeholder="e.g. files, database, web"
-            />
+                  {/* Inline auth config creation. Its inputs are collected
+                      from this panel on save, not submitted with the form. */}
+                  {showNewAuthForm && (
+                    <div
+                      data-auth-config-panel
+                      className="mt-3 space-y-4 rounded-lg border p-4"
+                    >
+                      <p className="text-sm font-medium">{t("auth.newTitle")}</p>
+
+                      <div className="space-y-2">
+                        <FormLabel htmlFor="newAuthName" required>
+                          {t("auth.configName")}
+                        </FormLabel>
+                        <Input
+                          id="newAuthName"
+                          name="newAuthName"
+                          value={newAuthName}
+                          onChange={(e) => setNewAuthName(e.target.value)}
+                          placeholder={t("auth.configNamePlaceholder")}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <FormLabel htmlFor="newAuthType">{t("auth.type")}</FormLabel>
+                        <Select
+                          value={newAuthType}
+                          onValueChange={(v) => setNewAuthType(v as AuthType)}
+                        >
+                          <SelectTrigger id="newAuthType">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {AUTH_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {t(`auth.types.${type}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <input type="hidden" name="newAuthType" value={newAuthType} />
+                      </div>
+
+                      {newAuthType === "api_key" && (
+                        <>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="headerName">{t("auth.headerName")}</FormLabel>
+                            <Input id="headerName" name="headerName" defaultValue="Authorization" placeholder="Authorization" />
+                          </div>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="headerValue">{t("auth.headerValue")}</FormLabel>
+                            <Input id="headerValue" name="headerValue" type="password" placeholder={t("auth.headerValuePlaceholder")} />
+                          </div>
+                        </>
+                      )}
+
+                      {newAuthType === "bearer" && (
+                        <div className="space-y-2">
+                          <FormLabel htmlFor="bearerToken">{t("auth.bearerToken")}</FormLabel>
+                          <Input id="bearerToken" name="bearerToken" type="password" placeholder={t("auth.bearerTokenPlaceholder")} />
+                        </div>
+                      )}
+
+                      {newAuthType === "oauth2" && (
+                        <>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="clientId">{t("auth.clientId")}</FormLabel>
+                            <Input id="clientId" name="clientId" />
+                          </div>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="clientSecret">{t("auth.clientSecret")}</FormLabel>
+                            <Input id="clientSecret" name="clientSecret" type="password" />
+                          </div>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="tokenUrl">{t("auth.tokenUrl")}</FormLabel>
+                            <Input id="tokenUrl" name="tokenUrl" placeholder="https://provider.com/oauth/token" />
+                          </div>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="authorizeUrl" optional>{t("auth.authorizeUrl")}</FormLabel>
+                            <Input id="authorizeUrl" name="authorizeUrl" placeholder="https://provider.com/oauth/authorize" />
+                          </div>
+                          <div className="space-y-2">
+                            <FormLabel htmlFor="scopes" optional>{t("auth.scopes")}</FormLabel>
+                            <Input id="scopes" name="scopes" placeholder="read write" />
+                          </div>
+                        </>
+                      )}
+
+                      {newAuthError && (
+                        <p role="alert" className="form-error">
+                          {newAuthError}
+                        </p>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="xs"
+                          isLoading={newAuthSaving}
+                          disabled={newAuthSaving || !newAuthName}
+                          onClick={(e) => {
+                            const panel = (e.currentTarget as HTMLElement).closest(
+                              "[data-auth-config-panel]"
+                            );
+                            if (panel) {
+                              const tempForm = document.createElement("form");
+                              panel.querySelectorAll("input, select").forEach((el) => {
+                                tempForm.appendChild(el.cloneNode(true));
+                              });
+                              handleCreateAuthConfig(tempForm);
+                            }
+                          }}
+                        >
+                          {t("auth.save")}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() => setShowNewAuthForm(false)}
+                        >
+                          {tCommon("cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
-        )}
-
-        {/* Display success/failure message */}
-        {state.message && !state.errors && (
-          <p className="text-green-600">{state.message}</p>
-        )}
-        {state.message && state.errors && (
-          <p className="text-sm text-destructive">{state.message}</p>
-        )}
-      </div>
+        </>
+      )}
     </form>
   );
 }

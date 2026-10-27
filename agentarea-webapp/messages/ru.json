@@ -529,6 +529,12 @@
     "fundWallet": "Пополнить кошелёк"
   },
   "AgentsPage": {
+    "archived": {
+      "title": "Агент в архиве",
+      "description": "Его нет в списке агентов, и он не берёт новые запуски. Прошлые запуски его по-прежнему показывают.",
+      "restore": "Восстановить",
+      "restoreFailed": "Не удалось восстановить агента. Попробуйте ещё раз."
+    },
     "createAgent": "Создать агента",
     "noToolsConf": "Нет настроенных инструментов",
     "name": "Имя",
@@ -855,7 +861,10 @@
         "toolsFound": "Найдено инструментов: {count}",
         "encryptionNote": "Учётные данные шифруются при хранении и доступны только в этом рабочем пространстве.",
         "connectionFailed": "Не удалось подключиться",
-        "createFailed": "Не удалось создать подключение"
+        "createFailed": "Не удалось создать подключение",
+        "tokenPlaceholder": "Bearer ваш-токен",
+        "verified": "Проверено",
+        "needsVerification": "Нужна проверка"
       }
     },
     "instanceForm": {
@@ -905,11 +914,6 @@
       "connectAnother": "Подключить ещё один аккаунт"
     },
     "instanceDetail": {
-      "activity": {
-        "title": "Активность ({count})",
-        "loading": "Загрузка активности…",
-        "empty": "Для этого подключения пока нет записанных изменений."
-      },
       "header": {
         "label": "Инстанс",
         "untitled": "Без названия"
@@ -952,46 +956,30 @@
         "description": "Описание",
         "status": "Статус"
       },
-      "types": {
-        "docker": "Docker",
-        "externalUrl": "Внешний URL",
-        "command": "Команда"
-      },
-      "labels": {
-        "connectionUrl": "URL подключения",
-        "value": "Значение"
-      },
       "serverSpec": {
         "title": "Спецификация"
       },
       "command": {
-        "title": "Команда",
         "note": "Запускается в sandbox-контейнере через supergateway."
       },
-      "external": {
-        "title": "Внешний сервер",
-        "customHeaders": "Заголовки"
-      },
       "container": {
-        "title": "Контейнер",
         "port": "Порт"
       },
       "tools": {
-        "title": "Доступные инструменты ({count})",
         "count": "{count} инструментов",
         "columns": {
           "name": "Имя",
           "description": "Описание",
-          "equipped": "Выдан агентам"
+          "equipped": "Выдан агентам",
+          "hints": "Пометки сервера",
+          "agents": "Агенты"
         },
         "searchPlaceholder": "Поиск инструментов…",
-        "shown": "{shown} из {total}",
         "truncated": "Показаны первые {shown} из {total} — уточните поиск.",
         "empty": "Нет инструментов, подходящих под фильтр.",
         "otherGroup": "Прочее",
         "equippedBy": "Выдан агентам",
         "equippedNone": "Ни один агент не включил этот инструмент.",
-        "grantedCount": "выдан {count}",
         "equippedHint": "Агенты, у которых этот инструмент есть в конфигурации. Политики и правила подтверждения всё равно проверяются в момент вызова.",
         "allToolsGrant": "все инструменты",
         "approval": "подтверждение",
@@ -1007,36 +995,35 @@
         "noneDiscovered": "Инструменты пока не найдены",
         "discovered": "{count, plural, one {Найден # инструмент} few {Найдено # инструмента} many {Найдено # инструментов} other {Найдено # инструмента}}",
         "discoverFailed": "Не удалось найти инструменты",
-        "discoverUnverified": "Не удалось найти инструменты: сервер не прошёл проверку"
+        "discoverUnverified": "Не удалось найти инструменты: сервер не прошёл проверку",
+        "hints": {
+          "readOnlyHint": "только чтение",
+          "destructiveHint": "изменяет данные",
+          "idempotentHint": "идемпотентный",
+          "openWorldHint": "внешний мир"
+        },
+        "facetsLabel": "Фильтр инструментов",
+        "noneDescription": "Как только сервер ответит, его инструменты появятся здесь. Найдите их сейчас или дождитесь первой проверки.",
+        "emptyDescription": "Под этот фильтр и поиск ничего не подходит.",
+        "showAll": "Показать все инструменты"
       },
       "consumers": {
-        "title": "Используют ({count})",
-        "loading": "Загрузка потребителей…",
         "empty": "Пока ни один агент не подключил этот MCP сервер.",
-        "columns": {
-          "agent": "Агент",
-          "tools": "Включённые инструменты"
-        },
         "allTools": "все инструменты",
-        "none": "нет",
-        "confirmSuffix": " (подтверждение)",
-        "more": "+{count} ещё",
-        "collapse": "Свернуть"
+        "heading": "Кто использует",
+        "toolCount": "{count, plural, one {# инструмент} few {# инструмента} many {# инструментов} other {# инструмента}}"
       },
       "bundle": {
-        "members": "Источники"
+        "members": "Источники",
+        "memberSub": "Подключение из набора"
       },
       "env": {
         "title": "Переменные окружения",
-        "notSet": "не задано",
-        "columns": {
-          "key": "Ключ",
-          "value": "Значение"
-        }
+        "notSet": "не задано"
       },
       "details": {
         "title": "Детали",
-        "id": "ID инстанса",
+        "id": "ID подключения",
         "created": "Создан",
         "updated": "Обновлён"
       },
@@ -1052,6 +1039,58 @@
         "verifyFailed": "Не удалось запустить проверку",
         "saveConfigFailed": "Не удалось сохранить настройки",
         "consumersLoadFailed": "Не удалось загрузить агентов, которые используют это подключение"
+      },
+      "tabs": {
+        "label": "Разделы подключения",
+        "overview": "Обзор",
+        "tools": "Инструменты",
+        "activity": "Активность"
+      },
+      "showMore": "Показать больше",
+      "showLess": "Свернуть",
+      "meta": {
+        "github": "GitHub",
+        "repository": "Репозиторий",
+        "website": "Сайт"
+      },
+      "stats": {
+        "tools": "Инструменты",
+        "toolsSub": "найдено на сервере",
+        "agents": "Агенты",
+        "agentsNone": "пока никто не использует",
+        "agentsUnknown": "не удалось загрузить",
+        "unrestricted": "{count, plural, one {# держит} few {# держат} many {# держат} other {# держат}} все инструменты",
+        "restricted": "у каждого свой набор",
+        "lastCall": "Последний вызов",
+        "callSucceeded": "Успешно",
+        "callFailed": "С ошибкой",
+        "verification": "Проверка"
+      },
+      "verification": {
+        "succeeded": "Пройдена",
+        "in_progress": "Идёт",
+        "failed": "Не пройдена",
+        "never_attempted": "Не проводилась"
+      },
+      "verify": {
+        "stuck": "Проверка, похоже, зависла. Можно запустить её заново.",
+        "verify": "Проверить",
+        "failedTitle": "Проверка не пройдена",
+        "code": "Код: {code}",
+        "retry": "Проверить снова"
+      },
+      "connection": {
+        "title": "Подключение",
+        "connectUrl": "URL для подключения",
+        "connectUrlHint": "Через этот адрес подключаются MCP-клиенты.",
+        "endpoint": "Адрес сервера",
+        "headers": "Заголовки",
+        "noHeaders": "Своих заголовков нет",
+        "image": "Docker-образ",
+        "command": "Команда"
+      },
+      "authorization": {
+        "title": "Авторизация"
       }
     },
     "table": {
@@ -1080,7 +1119,10 @@
     "sections": {
       "attention": "Требуют внимания",
       "active": "В работе",
-      "idle": "Простаивают"
+      "idle": "Простаивают",
+      "mcp": "MCP",
+      "openapi": "OpenAPI",
+      "all": "Все подключения"
     },
     "listFilters": {
       "all": "Все",
@@ -1100,21 +1142,85 @@
       "description": "Инструменты для работы с MCP серверами"
     },
     "newServer": {
-      "title": "Новый MCP сервер",
-      "description": "Подключите MCP сервер к вашему рабочему пространству",
-      "docker": {
-        "title": "Новый Docker-based сервер",
-        "serverName": "Имя Docker-based сервера",
-        "serverNamePlaceholder": "File System MCP",
-        "serverNameRequired": "Имя сервера является обязательным",
-        "dockerImageUrl": "URL-адрес Docker образа",
-        "dockerImageUrlPlaceholder": "ghcr.io/anthropic/mcp-file-server:latest",
-        "dockerImageUrlRequired": "URL-адрес Docker образа является обязательным",
-        "version": "Версия",
-        "versionPlaceholder": "1.0.0",
-        "versionRequired": "Версия является обязательной"
+      "title": "Новый MCP-сервер",
+      "submit": "Добавить сервер",
+      "mode": {
+        "form": "Форма",
+        "json": "JSON"
       },
-      "addFailed": "Не удалось добавить сервер"
+      "type": {
+        "label": "Тип сервера",
+        "placeholder": "Выберите тип сервера",
+        "docker": "Docker-образ",
+        "command": "Команда (npx / uvx)",
+        "external": "Внешний URL"
+      },
+      "config": {
+        "label": "Конфигурация MCP",
+        "hint": "Вставьте конфигурацию MCP: подходят оба формата, servers и mcpServers. Поля заполнятся из неё.",
+        "invalid": "Неверный JSON"
+      },
+      "name": "Название сервера",
+      "namePlaceholder": "например, File System MCP",
+      "nameRequired": "Введите название сервера",
+      "description": "Описание",
+      "descriptionPlaceholder": "Что делает этот MCP-сервер",
+      "descriptionRequired": "Введите описание",
+      "dockerImageUrl": "URL Docker-образа",
+      "dockerImageUrlHint": "Полный URL Docker-образа, реализующего Model Context Protocol. Образ должен открывать порт 8999.",
+      "version": "Версия",
+      "command": "Команда",
+      "commandHint": "Команда запускается в изолированном контейнере и отдаётся по HTTP.",
+      "args": "Аргументы",
+      "argsHint": "Аргументы команды через пробел.",
+      "endpointUrl": "URL сервера",
+      "endpointUrlHint": "Адрес, по которому работает ваш MCP-сервер.",
+      "tags": "Теги",
+      "tagsPlaceholder": "например, files, database, web",
+      "tagsHint": "Через запятую.",
+      "env": {
+        "label": "Переменные окружения и секреты",
+        "add": "Добавить переменную",
+        "keyPlaceholder": "KEY (например, TELEGRAM_API_ID)",
+        "valuePlaceholder": "Значение",
+        "hint": "Значения сохраняются на сервере, чтобы он сразу запустился. По умолчанию переменные хранятся как секреты; откройте замок, чтобы хранить значение открыто и видеть его потом. Оставьте значение пустым, чтобы только объявить поле."
+      },
+      "headers": {
+        "label": "Заголовки",
+        "add": "Добавить заголовок",
+        "hint": "Заголовки для аутентификации или настройки. Их значения хранятся как секреты."
+      },
+      "auth": {
+        "label": "Аутентификация",
+        "none": "Без аутентификации",
+        "createNew": "+ Новая конфигурация аутентификации",
+        "hint": "Выберите существующую конфигурацию аутентификации или создайте новую.",
+        "newTitle": "Новая конфигурация аутентификации",
+        "configName": "Название конфигурации",
+        "configNamePlaceholder": "например, Мой API-ключ",
+        "type": "Тип аутентификации",
+        "types": {
+          "api_key": "API-ключ",
+          "bearer": "Bearer-токен",
+          "oauth2": "OAuth2"
+        },
+        "headerName": "Имя заголовка",
+        "headerValue": "Значение заголовка",
+        "headerValuePlaceholder": "Ваш API-ключ",
+        "bearerToken": "Bearer-токен",
+        "bearerTokenPlaceholder": "Ваш bearer-токен",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "tokenUrl": "Token URL",
+        "authorizeUrl": "Authorize URL",
+        "scopes": "Scopes",
+        "save": "Сохранить конфигурацию"
+      },
+      "unexpectedError": "Произошла непредвиденная ошибка.",
+      "addFailed": "Не удалось добавить сервер",
+      "dockerImageUrlRequired": "Введите URL Docker-образа",
+      "commandRequired": "Введите команду для запуска",
+      "endpointUrlRequired": "Введите URL сервера"
     },
     "authConfigs": {
       "loadFailed": "Не удалось загрузить конфигурации аутентификации",
@@ -1128,34 +1234,40 @@
       "usage": "Не удалось загрузить, какие агенты используют эти подключения"
     },
     "openapiDetail": {
-      "back": "Назад к подключениям",
-      "notFound": "Подключение не найдено",
-      "refreshing": "Обновление...",
       "refreshFromSpec": "Обновить из спецификации",
-      "deleting": "Удаление...",
       "deleteTitle": "Удалить подключение?",
-      "type": "Тип",
-      "status": "Статус",
       "baseUrl": "Базовый URL",
       "specUrl": "URL спецификации",
-      "customHeaders": "Свои заголовки ({count})",
-      "noCustomHeaders": "Своих заголовков нет. Нажмите «Добавить», чтобы задать Authorization или другой заголовок, который нужен провайдеру.",
-      "customQueryParams": "Параметры запроса ({count})",
-      "noCustomQueryParams": "Параметров запроса нет. Нажмите «Добавить», чтобы передавать ключ, который API ждёт в URL, например api_key.",
+      "noCustomHeaders": "Своих заголовков нет. Добавьте Authorization или любой другой заголовок, который нужен провайдеру.",
+      "noCustomQueryParams": "Параметров нет. Добавьте ключ, который API ждёт в URL, например api_key.",
       "noToolsWithSpec": "Инструменты пока не найдены. Нажмите «Обновить из спецификации», чтобы разобрать её заново.",
       "noTools": "Из этой спецификации не удалось получить инструменты.",
-      "availableTools": "Доступные инструменты ({count})",
       "oauthError": "Не удалось подключить аккаунт: {reason}",
       "errors": {
-        "loadFailed": "Не удалось загрузить подключение",
-        "reloadFailed": "Не удалось заново загрузить подключение",
         "discoverFailed": "Не удалось обновить инструменты из спецификации",
         "saveHeadersFailed": "Не удалось сохранить заголовки",
         "saveQueryParamsFailed": "Не удалось сохранить параметры запроса",
         "deleteFailed": "Не удалось удалить подключение"
+      },
+      "specLink": "Спецификация",
+      "specPasted": "Вставлена как JSON, перечитать не откуда",
+      "headersTitle": "Заголовки",
+      "queryParamsTitle": "Параметры запроса",
+      "stats": {
+        "fromSpecUrl": "из спецификации по ссылке",
+        "fromSpecJson": "из вставленной спецификации",
+        "headers": "Заголовки",
+        "queryParams": "Параметры запроса",
+        "secretCount": "{count, plural, =0 {без шифрования} one {# зашифрован} few {# зашифрованы} many {# зашифрованы} other {# зашифрованы}}"
       }
     },
-    "sourceFilter": "Из каталога: {name}"
+    "sourceFilter": "Из каталога: {name}",
+    "group": {
+      "grouping": "Группировка",
+      "byState": "Состояние",
+      "byType": "Тип",
+      "none": "Без группировки"
+    }
   },
   "Models": {
     "title": "Управление провайдерами",
@@ -1608,7 +1720,6 @@
       },
       "uploadHint": "Перетащите ZIP-файл или выберите его для загрузки",
       "loadingDuplicate": "Загружаю исходный навык и предзаполняю форму...",
-      "cancel": "Отмена",
       "writeContent": "Написать контент",
       "uploadFiles": "Загрузить файлы",
       "descriptionLabel": "Описание",
@@ -1861,6 +1972,7 @@
     "parentTask": "Родительская задача",
     "agentInfo": "Информация об агенте",
     "failedToLoadAgent": "Не удалось загрузить детали агента.",
+    "agentArchived": "В архиве",
     "model": "Модель",
     "descriptionGoal": "Описание / Цель",
     "instruction": "Инструкция",
@@ -2040,7 +2152,7 @@
       "inactive": "Неактивен",
       "paused": "Приостановлен",
       "error": "Ошибка",
-      "needs_owner": "Нужен новый владелец"
+      "needs_owner": "Агент недоступен"
     },
     "create": {
       "title": "Создать триггер",
@@ -2054,6 +2166,7 @@
       "selectType": "Выберите тип триггера",
       "agent": "Агент",
       "selectAgent": "Выберите агента",
+      "agentRequired": "Выберите агента, который будет выполнять автоматизацию",
       "cronExpression": "Выражение Cron",
       "cronPlaceholder": "напр., 0 9 * * 1-5",
       "timezone": "Часовой пояс",
@@ -2066,6 +2179,7 @@
       "schedule": "Расписание",
       "automationName": "Название автоматизации",
       "automationNamePlaceholder": "Новая автоматизация",
+      "suggestedName": "Автоматизация {type}",
       "taskInstructions": "Задача",
       "whenToRun": "Когда запускать",
       "runSettings": "Настройки запуска",
@@ -2095,13 +2209,15 @@
         "selectedTools": "{count, plural, one {# выбранный инструмент} few {# выбранных инструмента} other {# выбранных инструментов}}",
         "noTools": "Нет включённых инструментов",
         "approval": "Нужно подтверждение",
-        "toolListUnavailable": "Список инструментов недоступен",
         "skillsOnDemand": "Доступны для активации",
         "configureAgent": "Настроить агента",
         "carriedOver": "Достались от прежней версии этого триггера. Перенесите их на агента — триггеры больше не носят свои ресурсы.",
         "viewInNetwork": "Посмотреть в сети",
         "disabledMethods": "Отключённые методы",
-        "builtin": "Встроенный"
+        "builtin": "Встроенный",
+        "clearFiles": "Очистить",
+        "showAllFiles": "Показать все ({count})",
+        "showLessFiles": "Свернуть"
       },
       "taskText": "Текст задачи",
       "taskTextPlaceholder": "Текст, передаваемый в каждую задачу этого триггера",
@@ -2111,19 +2227,19 @@
       "taskMcps": "Дополнительные MCP",
       "taskTextFromStream": "Данные события прикладываются к задаче автоматически. Текст здесь — это инструкция, которой следует агент.",
       "taskFilesHint": "Выберите файлы рабочего пространства для каждой задачи.",
-      "searchFiles": "Поиск файлов",
-      "noFiles": "Нет других файлов для выбора.",
-      "manageFiles": "Управление файлами",
       "taskMcpsHint": "Выберите MCP-серверы, доступные каждой задаче.",
       "taskSkillsHint": "Выберите навыки, доступные каждой задаче.",
       "loadingResources": "Загрузка…",
       "resourcesLoadFailed": "Не удалось загрузить ресурсы. Обновите список.",
-      "refreshResources": "Обновить список",
       "removeResource": "Убрать {name}",
       "stream": "Поток",
       "streamHint": "Срабатывает на события, пришедшие в этот поток после создания триггера.",
       "noStreams": "Потоков пока нет",
       "streamsLoadFailed": "Не удалось загрузить потоки",
+      "typeKinds": "Виды",
+      "typeItems": "Типы",
+      "typeSearch": "Поиск по типам триггеров",
+      "typeNotFound": "Типы не найдены",
       "session": {
         "continue": "Продолжать разговор",
         "continueHint": "Следующее событие той же сессии (чат, тред) попадает в задачу, которая его ждёт.",
@@ -2138,6 +2254,33 @@
         "noWindow": "Без ограничения по времени",
         "maxEvents": "Срабатывать на",
         "maxEventsPlaceholder": "событиях"
+      },
+      "cron": {
+        "frequency": {
+          "every_minute": "Минуты",
+          "hourly": "Ежечасно",
+          "daily": "Ежедневно",
+          "weekly": "Еженедельно",
+          "monthly": "Ежемесячно",
+          "custom": "Своё"
+        },
+        "interval": "Интервал",
+        "atMinute": "Минута",
+        "time": "Время",
+        "hour": "Час",
+        "minute": "Минута",
+        "day": "День",
+        "dayOfMonth": "День месяца",
+        "expression": "Cron-выражение",
+        "expressionFields": "минута час день месяц день_недели",
+        "everyMinutes": "{count, plural, =1 {Каждую минуту} one {Каждую # минуту} few {Каждые # минуты} other {Каждые # минут}}",
+        "everyHours": "{count, plural, =1 {Каждый час} one {Каждый # час} few {Каждые # часа} other {Каждые # часов}}",
+        "runsEveryMinutes": "{count, plural, =1 {Запуск каждую минуту} one {Запуск каждую # минуту} few {Запуск каждые # минуты} other {Запуск каждые # минут}}",
+        "runsEveryHours": "{count, plural, =1 {Запуск каждый час в :{minute}} one {Запуск каждый # час в :{minute}} few {Запуск каждые # часа в :{minute}} other {Запуск каждые # часов в :{minute}}}",
+        "runsDaily": "Запуск ежедневно в {time}",
+        "runsWeekly": "Запуск еженедельно: {day}, {time}",
+        "runsMonthly": "Запуск {day}-го числа каждого месяца в {time}",
+        "runsCustom": "Своё cron-выражение"
       }
     },
     "detail": {
@@ -2205,7 +2348,6 @@
       },
       "metricsLoadFailed": "Не удалось загрузить метрики",
       "executionsLoadFailed": "Не удалось загрузить список выполнений",
-      "periodHours": "За последние {hours} ч",
       "durationRange": "разброс {min}s — {max}s",
       "failures": "Сбои",
       "timeouts": "таймаутов: {count}",
@@ -2213,8 +2355,6 @@
       "spendPerRun": "{cost} за запуск",
       "noCostedRuns": "Оплаченных запусков ещё не было",
       "cost": "Стоимость",
-      "firstPage": "Первая страница",
-      "noExecutionsOnPage": "На этой странице запусков нет",
       "lastEvent": "Последнее событие",
       "noEventsYet": "Событий пока нет",
       "needsOwnerTitle": "Триггер остановлен",
@@ -2227,7 +2367,27 @@
       "batchOff": "Срабатывает на каждое событие",
       "batchWindowOrCount": "Одна задача на события за {window}, или раньше, если набралось {count}",
       "batchWindow": "Одна задача на события за каждые {window}",
-      "batchCount": "Одна задача на каждые {count} событий"
+      "batchCount": "Одна задача на каждые {count} событий",
+      "columnStatus": "Статус",
+      "columnStarted": "Запуск",
+      "columnDuration": "Длительность",
+      "openTask": "Открыть задачу",
+      "copyExecutionId": "Скопировать ID",
+      "idCopied": "Скопировано",
+      "metricsPeriod": "Период",
+      "periodOption": {
+        "24h": "24 часа",
+        "7d": "7 дней",
+        "30d": "30 дней",
+        "all": "Всё время"
+      },
+      "noFailures": "Без сбоев",
+      "periodLabel": {
+        "24h": "За последние 24 часа",
+        "7d": "За последние 7 дней",
+        "30d": "За последние 30 дней",
+        "all": "За всё время"
+      }
     },
     "error": {
       "createFailed": "Не удалось создать триггер",
@@ -2685,8 +2845,6 @@
     "availableTools": "Доступные инструменты:"
   },
   "OpenAPIConnection": {
-    "method": "Метод",
-    "operation": "Операция",
     "addHeader": "Добавить",
     "editHeaders": "Изменить",
     "saveHeaders": "Сохранить заголовки",
@@ -2695,7 +2853,7 @@
     "headerName": "Имя заголовка",
     "headerValue": "Значение заголовка",
     "secretValuePlaceholder": "Секретное значение (оставьте пустым, чтобы не менять)",
-    "headersEditorHint": "Добавьте заголовки, например Authorization: Bearer <token>. Небезопасные заголовки шифруются.",
+    "headersEditorHint": "Добавьте заголовки, например Authorization: Bearer ВАШ_ТОКЕН. Небезопасные заголовки шифруются.",
     "editQueryParams": "Изменить",
     "saveQueryParams": "Сохранить параметры",
     "queryParamName": "Имя параметра",
@@ -2706,33 +2864,32 @@
   "OpenAPIForm": {
     "openApiSpec": "Спецификация OpenAPI",
     "url": "URL",
-    "pasteJson": "Вставить JSON",
+    "pasteJson": "JSON",
     "urlHint": "Вставьте URL для автоматического определения имени, базового URL и доступных инструментов.",
     "jsonHint": "Вставьте полный JSON OpenAPI 3.x. Имя, базовый URL и инструменты будут определены автоматически.",
     "detectedTools": "Обнаруженные инструменты",
-    "tool": "инструмент",
     "name": "Имя",
     "baseUrl": "Базовый URL",
     "baseUrlHint": "Базовый URL для API запросов",
     "baseUrlAbsoluteRequired": "Введите абсолютный базовый URL с HTTP или HTTPS.",
-    "description": "Описание (необязательно)",
-    "customHeaders": "Пользовательские заголовки (необязательно)",
+    "description": "Описание",
+    "customHeaders": "Пользовательские заголовки",
     "addHeader": "Добавить заголовок",
     "headersHint": "Добавьте заголовки для аутентификации или пользовательских требований API.",
-    "headerName": "Имя заголовка",
-    "headerValue": "Значение",
-    "secretHeadersHint": "Секретные заголовки шифруются и никогда не возвращаются в ответах API.",
-    "customQueryParams": "Параметры запроса (необязательно)",
+    "customQueryParams": "Параметры запроса",
     "addQueryParam": "Добавить параметр",
     "queryParamsHint": "Для API, которые принимают ключ в URL, например ?api_key=. Значения с замком хранятся зашифрованными и не возвращаются.",
-    "creating": "Создание...",
-    "createConnection": "Создать соединение",
-    "cancel": "Отмена",
+    "createConnection": "Создать подключение",
     "failedToFetchSpec": "Не удалось получить спецификацию",
     "validJsonNoOperations": "JSON валиден, но операции OpenAPI 3.x не найдены.",
     "invalidJson": "Неверный JSON",
     "invalidJsonHint": "Неверный JSON. Пожалуйста, проверьте содержимое спецификации.",
-    "failedToCreate": "Не удалось создать соединение"
+    "failedToCreate": "Не удалось создать соединение",
+    "title": "Новое подключение OpenAPI",
+    "specRequired": "Сначала добавьте спецификацию OpenAPI: ссылку на неё или сам JSON.",
+    "nameRequired": "Введите название подключения.",
+    "namePlaceholder": "например, Stripe API",
+    "descriptionPlaceholder": "Для чего нужен этот API"
   },
   "TaskDetailsCard": {
     "title": "Детали задачи",
@@ -2807,7 +2964,12 @@
     "emptySkillsHint": "Опишите процедуру один раз — и подключайте её к любой задаче или агенту.",
     "emptyMcpsTitle": "MCP-серверов пока нет",
     "emptyMcpsHint": "Подключите сервер, чтобы его инструменты были у этой задачи и у любого агента.",
-    "nothingFoundTitle": "Ничего не найдено"
+    "nothingFoundTitle": "Ничего не найдено",
+    "filesHeading": "Файлы",
+    "emptyFilesTitle": "Файлов пока нет",
+    "emptyFilesHint": "Загрузите файлы в рабочее пространство, потом выберите те, что нужны каждой задаче.",
+    "uploadFiles": "Загрузить файлы",
+    "manageFilesLink": "Управлять файлами"
   },
   "QuickTask": {
     "title": "Новая задача",
@@ -2867,7 +3029,8 @@
       "resource": "Ресурс",
       "actor": "Исполнитель",
       "ip": "IP",
-      "when": "Когда"
+      "when": "Когда",
+      "details": "Подробности"
     },
     "loadFailed": "Не удалось загрузить журнал аудита",
     "noMatches": "Нет событий, подходящих под фильтры.",
@@ -3808,10 +3971,7 @@
   },
   "ConnectionCost": {
     "title": "Стоимость вызова",
-    "edit": "Изменить",
-    "save": "Сохранить",
-    "saving": "Сохраняем…",
-    "cancel": "Отмена",
+    "saveCost": "Сохранить стоимость",
     "saveFailed": "Не удалось сохранить стоимость",
     "hint": "Сколько стоит вызов этого подключения на вашем ключе. Лимиты расходов учитывают её; счёт выставляет поставщик.",
     "mode": "Стоимость",
@@ -3967,5 +4127,24 @@
     "customized": "Изменён в этом рабочем пространстве",
     "notFromCatalog": "Установлен не из каталога",
     "sourceUnreachable": "Источник недоступен"
+  },
+  "ModelSelector": {
+    "placeholder": "Выберите модель",
+    "configurations": "Конфигурации",
+    "models": "Модели",
+    "search": "Поиск по конфигурациям и моделям",
+    "noModels": "Модели не найдены",
+    "defaultConfiguration": "Конфигурация по умолчанию",
+    "unknownProvider": "Неизвестный провайдер"
+  },
+  "Balance": {
+    "label": "Баланс",
+    "exhaustedShort": "Баланс закончился",
+    "exhaustedHint": "Агенты на моделях AgentArea не запускаются",
+    "paidByOwner": "Оплачивает владелец",
+    "unavailable": "Недоступен",
+    "topUp": "Пополнить",
+    "bannerPayer": "Агенты на моделях AgentArea не запускаются. Пополните баланс, чтобы они снова работали.",
+    "bannerMember": "Агенты на моделях AgentArea не запускаются. Попросите владельца воркспейса пополнить баланс."
   }
 }

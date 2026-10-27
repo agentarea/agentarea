@@ -3,7 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useWorkspacePathname, useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { BarChart3, Gauge, List, Pencil } from "lucide-react";
+import SubheaderToolbar from "@/components/SubheaderToolbar";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
+import MetricsPeriodSelect from "./metrics/MetricsPeriodSelect";
 
 const TABS = [
   { key: "", icon: Gauge, labelKey: "overview" },
@@ -41,8 +43,8 @@ export default function TriggerDetailTabs({
         : pathname === href;
     })?.key ?? "";
 
-  return (
-    <nav aria-label="Trigger sections" className="min-w-0 flex-1">
+  const tabs = (
+    <nav aria-label="Trigger sections" className="min-w-0">
       <CountSegmentedControl
         items={TABS.map((tab) => {
           const Icon = tab.icon;
@@ -65,10 +67,18 @@ export default function TriggerDetailTabs({
         value={activeTab}
         onChange={(next) => router.push(hrefFor(next))}
         variant="solid"
-        itemClassName="max-md:min-h-11"
         className="max-w-full"
         layoutId="trigger-section-control"
       />
     </nav>
+  );
+
+  // The subheader's usual layout: sections on the left, the open section's
+  // own controls on the right — here, the metrics window.
+  return (
+    <SubheaderToolbar
+      categories={tabs}
+      controls={activeTab === "metrics" ? <MetricsPeriodSelect /> : undefined}
+    />
   );
 }

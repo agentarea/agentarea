@@ -641,7 +641,7 @@ class MCPServerInstanceService:
         await grant_resource_owner(
             resource_id=resource_id,
             workspace_id=self.repository.user_context.workspace_id,
-            user_id=self.repository.user_context.user_id,
+            owner=self.repository.user_context.graph_subject,
         )
 
     async def create_instance(self, payload: MCPServerInstanceCreate) -> MCPServerInstance | None:

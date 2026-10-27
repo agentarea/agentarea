@@ -151,7 +151,11 @@ def _request(**overrides) -> MCPToolRequest:
         "tool_args": {"q": "agentarea"},
         "workspace_id": "ws-paid",
         "user_id": "user-1",
-        "user_context_data": {"user_id": "user-1", "workspace_id": "ws-paid"},
+        "user_context_data": {
+            "user_id": "user-1",
+            "workspace_id": "ws-paid",
+            "agent_id": "agent-1",
+        },
         "task_id": str(uuid4()),
         "execution_id": "exec-1",
         "tool_call_id": "call_1",

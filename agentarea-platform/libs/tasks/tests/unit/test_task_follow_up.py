@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
+from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
     EffectivePolicy,
@@ -46,6 +48,14 @@ class _Tasks:
 
     async def sum_task_llm_spend(self, task_id: UUID) -> Decimal:
         return Decimal("0.0080") if task_id == self.task.id else Decimal(0)
+
+
+class _Agents:
+    def __init__(self, status: str):
+        self.status = status
+
+    async def get(self, agent_id: UUID) -> Any:
+        return MagicMock(id=agent_id, status=self.status)
 
 
 class _Conversation:
@@ -138,10 +148,20 @@ def _task(status: str, metadata: dict[str, Any], result: dict[str, Any] | None =
     )
 
 
-def _service(task: Task, workflows: _Workflows, conversation: _Conversation | None = None):
+def _service(
+    task: Task,
+    workflows: _Workflows,
+    conversation: _Conversation | None = None,
+    *,
+    agent_status: str = AgentStatus.ACTIVE,
+):
     tasks = _Tasks(task)
     conversation = conversation or _Conversation([], logged_up_to=SNAPSHOT["next_seq"])
-    repositories = {TaskRepository: tasks, TaskConversationRepository: conversation}
+    repositories = {
+        TaskRepository: tasks,
+        TaskConversationRepository: conversation,
+        AgentRepository: _Agents(agent_status),
+    }
     factory = MagicMock()
     factory.create_repository = MagicMock(
         side_effect=lambda cls: repositories.get(cls, MagicMock())
@@ -357,3 +377,22 @@ async def test_unreachable_running_workflow_is_not_restarted():
 
     assert await service.queue_follow_up(task.id, "And then?") is False
     assert engine.resumed == []
+
+
+@pytest.mark.asyncio
+async def test_an_archived_agents_closed_run_takes_no_follow_up_or_retry():
+    for status, call in (
+        ("completed", lambda service, task: service.queue_follow_up(task.id, "And then?")),
+        ("failed", lambda service, task: service.retry_last_turn(task.id)),
+    ):
+        task = _task(status, {"conversation_resume": SNAPSHOT})
+        service, engine, _ = _service(
+            task,
+            _Workflows(running=False, execution_status=status),
+            agent_status=AgentStatus.ARCHIVED,
+        )
+
+        with pytest.raises(AgentArchivedError):
+            await call(service, task)
+
+        assert engine.resumed == []

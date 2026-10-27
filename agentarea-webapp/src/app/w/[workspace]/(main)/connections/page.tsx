@@ -14,10 +14,11 @@ import {
   type RegistryItem,
 } from "../bundles/components/catalog-data";
 import { AddConnectionDropdown } from "./components/AddConnectionDropdown";
+import ConnectionsDisplayMenu from "./components/ConnectionsDisplayMenu";
 import ConnectionsFilterSection from "./components/ConnectionsFilterSection";
 import MCPServersContent from "./components/MCPServersContent";
 import MCPSkeleton, { mcpSkeletonColumns } from "./components/MCPSkeleton";
-import { parseListFilter } from "./list-sections";
+import { parseGroupBy, parseListFilter } from "./list-sections";
 
 export const metadata: Metadata = {
   title: "Connections",
@@ -43,6 +44,7 @@ export default async function MCPServersPage({
       ? resolvedSearchParams.search
       : "";
   const filter = parseListFilter(resolvedSearchParams.filter);
+  const groupBy = parseGroupBy(resolvedSearchParams.group);
   // Opened from a catalog item with several connections: only those.
   const source = parseCatalogSource(resolvedSearchParams.source);
   const sourceItem = source ? (await getCatalogItem(source)).data : null;
@@ -81,7 +83,12 @@ export default async function MCPServersPage({
             </Suspense>
           }
           search={<SearchInput urlParamName="search" urlPath="/connections" />}
-          controls={<ViewModeTabs currentTab={tab} />}
+          controls={
+            <>
+              <ConnectionsDisplayMenu currentGroup={groupBy} />
+              <ViewModeTabs currentTab={tab} />
+            </>
+          }
         />
       }
     >
@@ -91,7 +98,7 @@ export default async function MCPServersPage({
         </FormError>
       )}
       <Suspense
-        key={`${searchQuery}-${tab}-${filter}-${source ?? ""}`}
+        key={`${searchQuery}-${tab}-${filter}-${groupBy}-${source ?? ""}`}
         fallback={
           <div id="my-connections">
             <MCPSkeleton viewMode={tab} columns={mcpSkeletonColumns(t)} />
@@ -102,6 +109,7 @@ export default async function MCPServersPage({
           searchQuery={searchQuery}
           viewMode={tab}
           filter={filter}
+          groupBy={groupBy}
           source={source}
         />
       </Suspense>

@@ -33,6 +33,7 @@ from .secrets_toolset import SecretsToolset
 from .skills_toolset import SkillsToolset
 from .stream_events_toolset import StreamEventsToolset
 from .streams_toolset import StreamsToolset
+from .task_definitions_toolset import TaskDefinitionsToolset
 from .triggers_toolset import TriggersToolset
 from .workspace_config_toolset import WorkspaceConfigToolset
 from .workspaces_toolset import WorkspacesToolset
@@ -47,6 +48,7 @@ def get_platform_tools() -> list[Toolset]:
     return [
         AgentsToolset(),
         RunsToolset(),
+        TaskDefinitionsToolset(),
         SkillsToolset(),
         ProjectsToolset(),
         ClientsToolset(),

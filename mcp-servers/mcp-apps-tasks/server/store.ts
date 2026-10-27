@@ -1,19 +1,29 @@
 import type { Database } from "bun:sqlite";
-import { readRows, syncRows, type Rows } from "@kit/store/rows.ts";
-import type {
-  Activity,
-  ActivityKind,
-  Comment,
-  Issue,
-  Person,
-  Priority,
-  Project,
-  Status,
-  TasksData,
+import { appendEvent, type EventData } from "@kit/events/log.ts";
+import { insertRows, readRows, syncRows, type Rows } from "@kit/store/rows.ts";
+import {
+  PERSON_KINDS,
+  type Activity,
+  type ActivityKind,
+  type Comment,
+  type Issue,
+  type Person,
+  type PersonKind,
+  type Priority,
+  type Project,
+  type Status,
+  type TasksData,
 } from "../shared/tasks.ts";
 import { fromRows, TABLES, toRows } from "./db.ts";
+import { TASK_ASSIGNED } from "./events.ts";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const HANDLE = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+const PROJECT_KEY = /^[A-Z][A-Z0-9]{1,9}$/;
+
+export type PersonFields = { name: string; handle: string; kind?: PersonKind; title?: string };
+export type ProjectFields = { key: string; name: string; description?: string; lead: string };
+export type TrackerSetup = { people: PersonFields[]; viewer: string; projects: ProjectFields[] };
 
 export type IssueFields = {
   title?: string;
@@ -35,6 +45,8 @@ export type IssueFields = {
 export class TasksStore {
   readonly #rows: Rows;
   #seq: Record<"iss" | "cmt" | "act", number>;
+  /** Events the changes since `load` produce, appended by `save` in the same transaction. */
+  readonly #events: { name: string; data: EventData }[] = [];
 
   private constructor(
     readonly data: TasksData,
@@ -54,9 +66,47 @@ export class TasksStore {
     return new TasksStore(fromRows(rows), rows);
   }
 
+  /** The tracker as stored, or null while its storage holds no tracker yet. */
+  static loadIfSetUp(db: Database): TasksStore | null {
+    return db.query("SELECT 1 FROM tracker").get() ? TasksStore.load(db) : null;
+  }
+
+  /** Writes a new tracker into empty storage: its people, whose tracker it is, and its first projects. */
+  static setup(db: Database, setup: TrackerSetup): TasksStore {
+    if (db.query("SELECT 1 FROM tracker").get()) throw new Error("The tracker is already set up; add people and projects with add_person and create_project.");
+    const empty: TasksData = { version: 1, asOf: new Date().toISOString(), viewerId: "", people: [], projects: [], labels: [], issues: [] };
+    const store = new TasksStore(empty, {});
+    for (const person of setup.people) store.addPerson(person);
+    empty.viewerId = store.person(setup.viewer).id;
+    for (const project of setup.projects) store.createProject(project);
+    insertRows(db, TABLES, toRows(empty));
+    return store;
+  }
+
   /** Writes what changed since `load` into `db`, inside the caller's transaction. */
   save(db: Database): void {
     syncRows(db, TABLES, this.#rows, toRows(this.data));
+    for (const event of this.#events.splice(0)) appendEvent(db, event.name, event.data);
+  }
+
+  #assigned(issue: Issue, actor: Person): void {
+    const assignee = this.data.people.find((p) => p.id === issue.assigneeId)!;
+    const project = this.data.projects.find((p) => p.id === issue.projectId)!;
+    const person = (p: Person) => ({ handle: p.handle, name: p.name, kind: p.kind });
+    this.#events.push({
+      name: TASK_ASSIGNED,
+      data: {
+        key: issue.key,
+        title: issue.title,
+        description: issue.description,
+        status: issue.status,
+        priority: issue.priority,
+        due: issue.dueDate,
+        project: { key: project.key, name: project.name },
+        assignee: person(assignee),
+        assignedBy: person(actor),
+      },
+    });
   }
 
   /** The tracker's clock: never earlier than the dataset's own `asOf`. */
@@ -70,7 +120,11 @@ export class TasksStore {
 
   person(ref: string): Person {
     const needle = ref.trim().replace(/^@/, "").toLowerCase();
-    if (needle === "me") return this.data.people.find((p) => p.id === this.data.viewerId)!;
+    if (needle === "me") {
+      const viewer = this.data.people.find((p) => p.id === this.data.viewerId);
+      if (!viewer) throw new Error('"me" means nobody until the tracker is set up; name the person by handle.');
+      return viewer;
+    }
     const person = this.data.people.find(
       (p) => p.id === needle || p.handle.toLowerCase() === needle || p.name.toLowerCase() === needle,
     );
@@ -160,6 +214,7 @@ export class TasksStore {
     project.nextNumber += 1;
     this.#record(issue, actor.id, at, "created", null, issue.status);
     this.data.issues.push(issue);
+    if (issue.assigneeId) this.#assigned(issue, actor);
     return issue;
   }
 
@@ -196,7 +251,41 @@ export class TasksStore {
     if (estimate !== undefined) apply("estimate", "estimate", estimate, (v) => (v === null ? null : String(v)));
     if (parentId !== undefined) apply("parent", "parentId", parentId);
     if (changed.length) issue.updatedAt = at;
+    if (changed.includes("assignee") && issue.assigneeId) this.#assigned(issue, actor);
     return { issue, changed };
+  }
+
+  addPerson(fields: PersonFields): Person {
+    const name = fields.name.trim();
+    if (!name) throw new Error("A person needs a name.");
+    const handle = fields.handle.trim().replace(/^@/, "").toLowerCase();
+    if (!HANDLE.test(handle)) throw new Error(`"${fields.handle}" is not a handle; use up to 32 latin letters, digits, ".", "_" or "-".`);
+    if (handle === "me" || handle === "unassigned") throw new Error(`"${handle}" is reserved; pick another handle.`);
+    if (this.data.people.some((p) => p.handle.toLowerCase() === handle)) throw new Error(`The handle "${handle}" is taken.`);
+    const kind = fields.kind ?? "human";
+    if (!PERSON_KINDS.includes(kind)) throw new Error(`A person is ${PERSON_KINDS.join(" or ")}.`);
+    const next = Math.max(0, ...this.data.people.map((p) => Number.parseInt(p.id.split("_")[1] ?? "0", 10) || 0)) + 1;
+    const person: Person = { id: `usr_${String(next).padStart(2, "0")}`, name, handle, kind, title: fields.title?.trim() ?? "" };
+    this.data.people.push(person);
+    return person;
+  }
+
+  createProject(fields: ProjectFields): Project {
+    const key = fields.key.trim().toUpperCase();
+    if (!PROJECT_KEY.test(key)) throw new Error(`"${fields.key}" is not a project key; use 2-10 latin letters and digits, starting with a letter.`);
+    if (this.data.projects.some((p) => p.key === key)) throw new Error(`The project key ${key} is taken.`);
+    const name = fields.name.trim();
+    if (!name) throw new Error("A project needs a name.");
+    const project: Project = {
+      id: `prj_${key.toLowerCase()}`,
+      key,
+      name,
+      description: fields.description?.trim() ?? "",
+      leadId: this.person(fields.lead).id,
+      nextNumber: 1,
+    };
+    this.data.projects.push(project);
+    return project;
   }
 
   comment(ref: string, body: string, authorRef?: string): { issue: Issue; comment: Comment } {

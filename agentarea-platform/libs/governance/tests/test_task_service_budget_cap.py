@@ -19,6 +19,7 @@ from agentarea_governance.domain.rules import (
 )
 from agentarea_governance.infrastructure.repository import PolicyRuleRepository
 from agentarea_tasks.domain.exceptions import BudgetCapExceededError
+from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.task_service import TaskService
 
@@ -272,6 +273,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 description="A test",
                 workspace_id=workspace_id,
                 user_id="user-123",
+                provenance=TaskProvenance.started_by("user-123", via_api_key=False),
                 title="Test task",
                 query="do something",
                 task_policy=_runtime_task_policy(),
@@ -311,6 +313,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 description="run a workflow",
                 workspace_id=workspace_id,
                 user_id="user-123",
+                provenance=TaskProvenance.started_by("user-123", via_api_key=False),
                 task_policy=_runtime_task_policy(),
             )
 
@@ -343,6 +346,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                 description="blocked task",
                 workspace_id=workspace_id,
                 user_id="user-123",
+                provenance=TaskProvenance.started_by("user-123", via_api_key=False),
                 task_policy=_runtime_task_policy(),
             )
 
@@ -369,6 +373,7 @@ class TestCreationEntryPointsInvokeBudgetCap:
                     description="run a workflow",
                     workspace_id=workspace_id,
                     user_id="user-123",
+                    provenance=TaskProvenance.started_by("user-123", via_api_key=False),
                     task_policy=PolicyDocument(budget=BudgetPolicy(monthly_spend_cap_usd="200.00")),
                 )
 

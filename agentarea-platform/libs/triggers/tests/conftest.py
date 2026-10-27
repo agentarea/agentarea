@@ -1,7 +1,11 @@
 import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from agentarea_common.auth.context import UserContext
+from agentarea_common.auth.permission import PermissionService
+from agentarea_common.di.container import get_container
 
 # Real (SQLite-backed) Temporal server fixtures, shared across packages. Needed
 # for schedule tests: the time-skipping test server does not implement the
@@ -47,6 +51,43 @@ if not _TEMPORALIO_AVAILABLE:
     sys.modules["temporalio.service"] = MagicMock()
 
 
+CALLER = UserContext(user_id="test-user", workspace_id="test-workspace")
+
+
+class RecordingPermissions(PermissionService):
+    """The PDP the trigger service asks before binding or starting an agent.
+
+    Allows unless ``allowed`` is turned off, and remembers every question.
+    """
+
+    def __init__(self) -> None:
+        self.allowed = True
+        self.checks: list[tuple[str, str, str, str]] = []
+
+    async def check(self, subject, permission, resource_type, resource_id) -> bool:
+        self.checks.append((subject, permission, resource_type, resource_id))
+        return self.allowed
+
+
+@pytest.fixture(autouse=True)
+def permissions():
+    """Every test runs with a PDP registered; one that refuses turns ``allowed`` off."""
+    container = get_container()
+    saved = dict(container._singletons)
+    recorder = RecordingPermissions()
+    container.register_singleton(PermissionService, recorder)
+    yield recorder
+    container._singletons.clear()
+    container._singletons.update(saved)
+
+
+def active_agent_repository() -> AsyncMock:
+    """An agent repository whose agent exists and is active, so a firing may run it."""
+    repository = AsyncMock()
+    repository.get.return_value = SimpleNamespace(status="active")
+    return repository
+
+
 def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agent_repo=None):
     """Build a mock RepositoryFactory for TriggerService.
 
@@ -63,21 +104,31 @@ def make_trigger_repository_factory(trigger_repo=None, execution_repo=None, agen
     trigger_repo = trigger_repo if trigger_repo is not None else AsyncMock()
     execution_repo = execution_repo if execution_repo is not None else AsyncMock()
 
+    from agentarea_tasks.infrastructure.repository import TaskRepository
+
+    # No run of the trigger is still going unless a test says so.
+    task_repo = AsyncMock()
+    task_repo.unfinished_runs_from.return_value = []
+
     mapping = {
         TriggerRepository: trigger_repo,
         TriggerExecutionRepository: execution_repo,
+        TaskRepository: task_repo,
     }
 
     try:
         from agentarea_agents.infrastructure.repository import AgentRepository
 
-        mapping[AgentRepository] = agent_repo if agent_repo is not None else AsyncMock()
+        mapping[AgentRepository] = (
+            agent_repo if agent_repo is not None else active_agent_repository()
+        )
     except ImportError:
         pass
 
     factory = MagicMock()
     factory.create_repository.side_effect = lambda cls, *a, **k: mapping.get(cls, AsyncMock())
     factory.session = AsyncMock()
+    factory.user_context = CALLER
     return factory
 
 

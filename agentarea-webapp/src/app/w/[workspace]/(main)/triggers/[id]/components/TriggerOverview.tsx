@@ -12,6 +12,7 @@ import {
   getTriggerExecutions,
   getTriggerMetrics,
 } from "@/lib/api";
+import { nextCronRun } from "@/lib/cron/nextCronRun";
 import { optionalApiData, requireApiData } from "@/lib/server-resource";
 import { getTriggerStatusPresentation } from "@/lib/status";
 import { normalizeTaskParameters } from "../../components/taskParameters";
@@ -34,6 +35,24 @@ const RECENT_EXECUTIONS = 5;
  * orchestrates, then hands a plain view model to
  * {@link TriggerOverviewView}.
  */
+
+/**
+ * When the trigger next fires. Only a schedule has a next run — a webhook or a
+ * stream waits for something to arrive — and a switched-off one has none. The
+ * API's `next_run_time` is never filled in, so it is worked out from the cron
+ * expression in the trigger's timezone unless the API does send one.
+ */
+function nextRunTime(trigger: TriggerResponse): string | null {
+  if (!trigger.is_active || !trigger.cron_expression) return null;
+  if (trigger.next_run_time) return trigger.next_run_time;
+  return (
+    nextCronRun(
+      trigger.cron_expression,
+      trigger.timezone,
+      new Date()
+    )?.toISOString() ?? null
+  );
+}
 export async function TriggerOverview({ triggerId }: { triggerId: string }) {
   const trigger = requireApiData<TriggerResponse>(
     await getTrigger(triggerId),
@@ -71,7 +90,7 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
       ?.executions ?? [];
   const agent = agentResponse.data as AgentResponse | undefined;
   const streamName = streamResponse
-    ? optionalApiData(streamResponse, "stream")?.name ?? null
+    ? (optionalApiData(streamResponse, "stream")?.name ?? null)
     : null;
 
   const taskParameters = normalizeTaskParameters(trigger.task_parameters);
@@ -117,7 +136,7 @@ export async function TriggerOverview({ triggerId }: { triggerId: string }) {
         }
       : null,
     lastExecutionAt: trigger.last_execution_at ?? null,
-    nextRunTime: trigger.next_run_time ?? null,
+    nextRunTime: nextRunTime(trigger),
     metrics: metrics
       ? {
           total: metrics.total_executions,

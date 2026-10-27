@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Any
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.base.models import BaseModel, WorkspaceScopedMixin
 from agentarea_common.rebac.ownership import INVOKER_RELATION, OWNER_RELATIONS
 from sqlalchemy import JSON, Boolean, String, UniqueConstraint
@@ -21,6 +22,8 @@ class Agent(BaseModel, WorkspaceScopedMixin):
     __graph_resource__ = True
     # Running an agent is its own grant; its creator holds it from the start.
     __graph_owner_relations__ = (*OWNER_RELATIONS, INVOKER_RELATION)
+    #: A run executes as its agent, so the agent is a subject in the graph too.
+    __graph_principal__ = True
 
     @property
     def is_catalog(self) -> bool:
@@ -40,7 +43,7 @@ class Agent(BaseModel, WorkspaceScopedMixin):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    status: Mapped[str] = mapped_column(String, nullable=False, default=AgentStatus.ACTIVE)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     instruction: Mapped[str | None] = mapped_column(String, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String, nullable=True)

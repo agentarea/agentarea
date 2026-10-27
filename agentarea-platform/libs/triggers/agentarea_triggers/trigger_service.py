@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
+from agentarea_common.agent_status import AgentStatus
 from agentarea_common.audit import audited
 from agentarea_common.config import get_settings
 from agentarea_common.events.base_events import EventEnvelope
@@ -34,6 +35,7 @@ from agentarea_streams.domain import (
     StreamNotFoundError,
     value_at,
 )
+from agentarea_tasks.infrastructure.repository import TaskRepository
 from pydantic import ValidationError
 
 from .condition_models import validate_condition_models
@@ -76,6 +78,7 @@ from .trigger_validation import validate_trigger_configuration
 if TYPE_CHECKING:
     from agentarea_tasks.domain.interfaces import FollowUpClaim
     from agentarea_tasks.domain.models import TaskProvenance
+    from agentarea_tasks.domain.task_definitions import TaskDefinition
 
 logger = TriggerLogger(__name__)
 
@@ -115,10 +118,15 @@ def event_text(trigger_data: dict[str, Any]) -> str | None:
     return "\n".join(texts) if texts else None
 
 
-def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | None:
+def resolve_task_query(
+    trigger: Trigger,
+    trigger_data: dict[str, Any],
+    definition: TaskDefinition | None = None,
+) -> str | None:
     """What the agent is being asked to do, or None when nothing says.
 
-    The trigger's task text is what to do; the event is what to do it with, and
+    The trigger's task text is what to do -- or, for a trigger that runs a saved
+    task, that ``definition``'s text; the event is what to do it with, and
     reaches the agent whole in the block ``compose_task_input`` appends, its own
     text included. So a task text always wins. Only a trigger without one -- a
     chat channel whose every message is the request -- takes the event's text
@@ -129,6 +137,8 @@ def resolve_task_query(trigger: Trigger, trigger_data: dict[str, Any]) -> str | 
     an agent against "every weekday at 06:45 it scores the inbound queue"
     produces a task about the schedule instead of the work.
     """
+    if definition is not None:
+        return definition.description.strip()
     task_text = trigger.task_parameters.get("text")
     if isinstance(task_text, str) and task_text.strip():
         return task_text.strip()
@@ -158,7 +168,10 @@ class TriggerTaskInput:
 
 
 def compose_task_input(
-    trigger: Trigger, trigger_data: dict[str, Any], event: TriggerEvent | None = None
+    trigger: Trigger,
+    trigger_data: dict[str, Any],
+    event: TriggerEvent | None = None,
+    definition: TaskDefinition | None = None,
 ) -> TriggerTaskInput | None:
     """The task a firing starts: its ask, plus the event that fired it. None when nothing asks.
 
@@ -168,7 +181,7 @@ def compose_task_input(
     channel, poller or replay carried in ``trigger_data`` stand in, scrubbed,
     and a schedule tick carries none.
     """
-    ask = resolve_task_query(trigger, trigger_data)
+    ask = resolve_task_query(trigger, trigger_data, definition)
     if ask is None:
         return None
     if event is None:
@@ -189,7 +202,11 @@ def compose_task_input(
     )
 
 
-def _validate_batch(batch: TriggerBatchWindow | None, task_parameters: dict[str, Any]) -> None:
+def _validate_batch(
+    batch: TriggerBatchWindow | None,
+    task_parameters: dict[str, Any],
+    task_definition_id: UUID | None = None,
+) -> None:
     """A batch fits the deployment's cap, and says what to do with its events."""
     if batch is None:
         return
@@ -198,11 +215,29 @@ def _validate_batch(batch: TriggerBatchWindow | None, task_parameters: dict[str,
         raise TriggerValidationError(
             f"batch max_events is {batch.max_events}; a batch holds at most {cap} events"
         )
+    if task_definition_id is not None:
+        return
     text = (task_parameters or {}).get("text")
     if not isinstance(text, str) or not text.strip():
         raise TriggerValidationError(
             "a batched trigger needs task text: what to do with the events of each batch"
         )
+
+
+def _task_definition_after(existing: Trigger, update: TriggerUpdate) -> UUID | None:
+    """The saved task a trigger runs once ``update`` is applied; sent as null, none."""
+    if "task_definition_id" in update.model_fields_set:
+        return update.task_definition_id
+    return existing.task_definition_id
+
+
+def _source_identity(user_id: str | None) -> str | None:
+    """The person a firing came from -- who pressed "run now", or wrote the message -- if any.
+
+    It narrows the run and is recorded; it lends the run no authority. A
+    schedule or an event nobody sent leaves the run with none.
+    """
+    return f"user:{user_id}" if user_id else None
 
 
 class TriggerService:
@@ -226,6 +261,9 @@ class TriggerService:
         )
 
         self.repository_factory = repository_factory
+        # Whoever this service acts for: a person through the API, an agent in a
+        # run, a trigger's configurer when the schedule fires it.
+        self._caller = repository_factory.user_context
         self.event_broker = event_broker
         self.task_service = task_service
         self.llm_condition_evaluator = llm_condition_evaluator
@@ -240,6 +278,14 @@ class TriggerService:
         self.model_instance_repository = repository_factory.create_repository(
             ModelInstanceRepository
         )
+        from agentarea_tasks.infrastructure.task_definition_repository import (
+            TaskDefinitionRepository,
+        )
+
+        self.task_definition_repository = repository_factory.create_repository(
+            TaskDefinitionRepository
+        )
+        self.task_repository = repository_factory.create_repository(TaskRepository)
 
         # Create agent repository using factory for validation
         try:
@@ -267,6 +313,9 @@ class TriggerService:
         """
         correlation_id = generate_correlation_id()
         set_correlation_id(correlation_id)
+        # Refused before anything else, and not wrapped as a failure to create:
+        # a caller who may not run the agent is told so (403).
+        await self._require_may_invoke(trigger_data.agent_id)
 
         try:
             logger.info(
@@ -280,6 +329,9 @@ class TriggerService:
 
             # Validate trigger configuration
             await self._validate_trigger_configuration(trigger_data)
+            await self._validate_task_definition(
+                trigger_data.task_definition_id, trigger_data.agent_id
+            )
 
             # Create the trigger
             trigger = await self.trigger_repository.create_from_model(trigger_data)
@@ -292,24 +344,7 @@ class TriggerService:
                 trigger_type=trigger.trigger_type.value,
             )
 
-            # Schedule cron trigger if applicable
-            if trigger.trigger_type == TriggerType.CRON and isinstance(trigger, CronTrigger):
-                try:
-                    await self.schedule_cron_trigger(trigger)
-                    logger.info(
-                        "Successfully scheduled cron trigger",
-                        trigger_id=trigger.id,
-                        cron_expression=trigger.cron_expression,
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to schedule cron trigger: {e}",
-                        trigger_id=trigger.id,
-                        cron_expression=trigger.cron_expression,
-                        exc_info=True,
-                    )
-                    # Don't fail the trigger creation if scheduling fails
-                    # The trigger can be rescheduled later
+            await self._apply_schedule(trigger)
 
             return trigger
 
@@ -417,6 +452,11 @@ class TriggerService:
 
         # Validate update data
         await self._validate_trigger_update(existing_trigger, trigger_update)
+        # Pointing the trigger at an agent, or switching it on, binds it.
+        if trigger_update.agent_id is not None or (
+            trigger_update.is_active is True and not existing_trigger.is_active
+        ):
+            await self._require_may_invoke(trigger_update.agent_id or existing_trigger.agent_id)
 
         # Update the trigger
         updated_trigger = await self.trigger_repository.update_by_id(trigger_id, trigger_update)
@@ -427,30 +467,12 @@ class TriggerService:
             if trigger_update.is_active is False and existing_trigger.is_active:
                 await self._close_open_batches(existing_trigger, "trigger disabled")
 
-            # Update schedule if it's a cron trigger
-            if updated_trigger.trigger_type == TriggerType.CRON and isinstance(
-                updated_trigger, CronTrigger
+            if (
+                trigger_update.cron_expression is not None
+                or trigger_update.timezone is not None
+                or trigger_update.is_active is not None
             ):
-                try:
-                    # Check if schedule settings or active status changed
-                    cron_changed = (
-                        trigger_update.cron_expression is not None
-                        or trigger_update.timezone is not None
-                        or trigger_update.is_active is not None
-                    )
-
-                    if cron_changed and self.temporal_schedule_manager:
-                        await self.temporal_schedule_manager.update_cron_schedule(
-                            trigger_id=updated_trigger.id,
-                            cron_expression=updated_trigger.cron_expression,
-                            timezone=updated_trigger.timezone,
-                        )
-                        logger.info(f"Updated schedule for cron trigger {trigger_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to update schedule for cron trigger {trigger_id}: {e}",
-                        exc_info=True,
-                    )
+                await self._apply_schedule(updated_trigger)
 
         return updated_trigger
 
@@ -529,29 +551,18 @@ class TriggerService:
         Returns:
             True if the trigger was successfully enabled, False if not found
         """
+        trigger = await self.get_trigger(trigger_id)
+        if trigger is not None:
+            await self._require_may_invoke(trigger.agent_id)
         # Enable trigger in database
         success = await self.trigger_repository.enable_trigger(trigger_id)
 
         if success:
             logger.info(f"Enabled trigger {trigger_id}")
 
-            # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)
-
-            # Enable schedule if it's a cron trigger
-            if (
-                trigger
-                and trigger.trigger_type == TriggerType.CRON
-                and self.temporal_schedule_manager
-            ):
-                try:
-                    await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
-                    logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to unpause schedule for cron trigger {trigger_id}: {e}",
-                        exc_info=True,
-                    )
+            if trigger is not None:
+                await self._apply_schedule(trigger)
 
         return success
 
@@ -570,25 +581,10 @@ class TriggerService:
         if success:
             logger.info(f"Disabled trigger {trigger_id}")
 
-            # Get trigger to check type
             trigger = await self.get_trigger(trigger_id)
             if trigger is not None:
                 await self._close_open_batches(trigger, "trigger disabled")
-
-            # Pause schedule if it's a cron trigger
-            if (
-                trigger
-                and trigger.trigger_type == TriggerType.CRON
-                and self.temporal_schedule_manager
-            ):
-                try:
-                    await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
-                    logger.info(f"Paused schedule for cron trigger {trigger_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to pause schedule for cron trigger {trigger_id}: {e}",
-                        exc_info=True,
-                    )
+                await self._apply_schedule(trigger)
 
         return success
 
@@ -862,157 +858,30 @@ class TriggerService:
 
     # Temporal Schedule Management
 
-    async def schedule_cron_trigger(self, trigger: CronTrigger) -> None:
-        """Schedule a cron trigger using Temporal Schedules.
+    async def _apply_schedule(self, trigger: Trigger) -> None:
+        """Bring a cron trigger's schedule to the trigger as stored.
 
-        Args:
-            trigger: The cron trigger to schedule
-
-        Raises:
-            DependencyUnavailableError: If temporal_schedule_manager is not available
-            TriggerExecutionError: If scheduling fails
+        The trigger is already written; a schedule Temporal refuses now is
+        brought in line by the schedule sync within minutes (see ``schedule_sync``).
         """
-        if not self.temporal_schedule_manager:
-            error_msg = "Temporal schedule manager not available - cannot schedule cron trigger"
-            logger.error(error_msg, trigger_id=trigger.id)
-            raise DependencyUnavailableError(
-                error_msg, dependency="temporal_schedule_manager", trigger_id=str(trigger.id)
+        if not isinstance(trigger, CronTrigger):
+            return
+        if self.temporal_schedule_manager is None:
+            logger.warning(
+                f"No schedule manager to apply trigger {trigger.id}'s schedule; "
+                "the schedule sync applies it"
             )
-
+            return
         try:
-            logger.info(
-                "Scheduling cron trigger",
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
+            await self.temporal_schedule_manager.apply_cron_schedule(
+                trigger.id, trigger.cron_expression, trigger.timezone, paused=not trigger.is_active
             )
-
-            await self.temporal_schedule_manager.create_cron_schedule(
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
-                paused=not trigger.is_active,
-            )
-
-            logger.info(
-                "Successfully scheduled cron trigger",
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-            )
-
-        except Exception as e:
-            error_msg = f"Failed to schedule cron trigger: {e}"
+        except Exception:
             logger.error(
-                error_msg,
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
+                f"Could not bring the schedule of trigger {trigger.id} in line; "
+                "the schedule sync retries it",
                 exc_info=True,
             )
-            raise TriggerExecutionError(
-                error_msg,
-                trigger_id=str(trigger.id),
-                cron_expression=trigger.cron_expression,
-                original_error=str(e),
-            ) from None
-
-    async def unschedule_cron_trigger(self, trigger_id: UUID) -> None:
-        """Unschedule a cron trigger by deleting its Temporal Schedule.
-
-        Args:
-            trigger_id: The ID of the trigger to unschedule
-
-        Raises:
-            Exception: If unscheduling fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot unschedule trigger {trigger_id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.delete_cron_schedule(trigger_id)
-            logger.info(f"Unscheduled cron trigger {trigger_id}")
-        except Exception as e:
-            logger.error(f"Failed to unschedule cron trigger {trigger_id}: {e}", exc_info=True)
-            raise
-
-    async def update_cron_schedule(self, trigger: CronTrigger) -> None:
-        """Update a cron trigger's Temporal Schedule.
-
-        Args:
-            trigger: The updated cron trigger
-
-        Raises:
-            Exception: If schedule update fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot update schedule for trigger {trigger.id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.update_cron_schedule(
-                trigger_id=trigger.id,
-                cron_expression=trigger.cron_expression,
-                timezone=trigger.timezone,
-            )
-            logger.info(f"Updated schedule for cron trigger {trigger.id}")
-        except Exception as e:
-            logger.error(
-                f"Failed to update schedule for cron trigger {trigger.id}: {e}", exc_info=True
-            )
-            raise
-
-    async def pause_cron_schedule(self, trigger_id: UUID) -> None:
-        """Pause a cron trigger's Temporal Schedule.
-
-        Args:
-            trigger_id: The ID of the trigger to pause
-
-        Raises:
-            Exception: If pausing fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot pause trigger {trigger_id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.pause_cron_schedule(trigger_id)
-            logger.info(f"Paused schedule for cron trigger {trigger_id}")
-        except Exception as e:
-            logger.error(
-                f"Failed to pause schedule for cron trigger {trigger_id}: {e}", exc_info=True
-            )
-            raise
-
-    async def unpause_cron_schedule(self, trigger_id: UUID) -> None:
-        """Unpause a cron trigger's Temporal Schedule.
-
-        Args:
-            trigger_id: The ID of the trigger to unpause
-
-        Raises:
-            Exception: If unpausing fails
-        """
-        if not self.temporal_schedule_manager:
-            logger.warning(
-                f"Temporal schedule manager not available, cannot unpause trigger {trigger_id}"
-            )
-            return
-
-        try:
-            await self.temporal_schedule_manager.unpause_cron_schedule(trigger_id)
-            logger.info(f"Unpaused schedule for cron trigger {trigger_id}")
-        except Exception as e:
-            logger.error(
-                f"Failed to unpause schedule for cron trigger {trigger_id}: {e}", exc_info=True
-            )
-            raise
 
     async def get_cron_schedule_info(self, trigger_id: UUID) -> dict | None:
         """Get information about a cron trigger's Temporal Schedule.
@@ -1039,6 +908,28 @@ class TriggerService:
 
     # Validation Methods
 
+    async def _require_may_invoke(self, agent_id: UUID) -> None:
+        """Refuse binding or starting ``agent_id`` unless the caller may make it act (403).
+
+        A trigger's runs act as its agent, so wiring one is the grant to check:
+        nobody sets an agent going on a schedule, or presses "run now", for an
+        agent they could not start by hand. A scheduled firing asks nobody.
+        """
+        from agentarea_common.auth.permission import require_permission
+
+        await require_permission("execute", "agent", str(agent_id), self._caller)
+
+    async def agent_stands(self, agent_id: UUID) -> bool:
+        """Whether the agent a trigger runs still exists in its workspace and is active."""
+        if self.agent_repository is None:
+            raise DependencyUnavailableError(
+                "a trigger cannot fire without the agent repository",
+                dependency="agent_repository",
+                agent_id=str(agent_id),
+            )
+        agent = await self.agent_repository.get(agent_id)
+        return agent is not None and agent.status == AgentStatus.ACTIVE
+
     async def _validate_agent_exists(self, agent_id: UUID) -> None:
         """Validate that the agent exists before processing triggers.
 
@@ -1062,6 +953,10 @@ class TriggerService:
                 error_msg = f"Agent with ID {agent_id} does not exist"
                 logger.error(error_msg, agent_id=agent_id)
                 raise TriggerValidationError(error_msg, agent_id=str(agent_id))
+            if agent.status == AgentStatus.ARCHIVED:
+                raise TriggerValidationError(
+                    f"Agent {agent_id} is archived; restore it first", agent_id=str(agent_id)
+                )
 
             logger.debug("Agent validation successful", agent_id=agent_id)
 
@@ -1092,7 +987,9 @@ class TriggerService:
     async def _validate_trigger_configuration(self, trigger_data: TriggerCreate) -> None:
         """Validate trigger configuration; see ``validate_trigger_configuration``."""
         await validate_trigger_configuration(trigger_data, self.model_instance_repository)
-        _validate_batch(trigger_data.batch, trigger_data.task_parameters)
+        _validate_batch(
+            trigger_data.batch, trigger_data.task_parameters, trigger_data.task_definition_id
+        )
         if trigger_data.trigger_type == TriggerType.STREAM and trigger_data.stream_id:
             try:
                 await self.stream_service.get_stream(trigger_data.stream_id)
@@ -1100,6 +997,21 @@ class TriggerService:
                 raise TriggerValidationError(
                     f"Stream {trigger_data.stream_id} does not exist in this workspace"
                 ) from error
+
+    async def _validate_task_definition(self, definition_id: UUID | None, agent_id: UUID) -> None:
+        """A trigger runs a saved task of its own workspace, and of its own agent."""
+        if definition_id is None:
+            return
+        definition = await self.task_definition_repository.get_definition(definition_id)
+        if definition is None:
+            raise TriggerValidationError(
+                f"Task definition {definition_id} does not exist in this workspace"
+            )
+        if definition.agent_id != agent_id:
+            raise TriggerValidationError(
+                f"Task definition {definition_id} runs agent {definition.agent_id}, "
+                f"not the trigger's agent {agent_id}"
+            )
 
     async def _validate_trigger_update(
         self, existing_trigger: Trigger, trigger_update: TriggerUpdate
@@ -1119,6 +1031,13 @@ class TriggerService:
 
         if trigger_update.agent_id is not None:
             await self._validate_agent_exists(trigger_update.agent_id)
+
+        definition_set = "task_definition_id" in trigger_update.model_fields_set
+        if definition_set or trigger_update.agent_id is not None:
+            await self._validate_task_definition(
+                _task_definition_after(existing_trigger, trigger_update),
+                trigger_update.agent_id or existing_trigger.agent_id,
+            )
 
         if trigger_update.cron_expression is not None:
             error = cron_expression_error(trigger_update.cron_expression)
@@ -1154,6 +1073,7 @@ class TriggerService:
                 trigger_update.task_parameters
                 if trigger_update.task_parameters is not None
                 else existing_trigger.task_parameters,
+                _task_definition_after(existing_trigger, trigger_update),
             )
 
         if trigger_update.event_filter is not None:
@@ -1173,9 +1093,16 @@ class TriggerService:
 
             # Editing a schedule into the state create_trigger refuses is the
             # same mistake, made later. An update that leaves task_parameters
-            # alone leaves the existing text alone with it.
-            if trigger_update.task_parameters is not None:
-                task_text = trigger_update.task_parameters.get("text")
+            # and the saved task alone leaves the existing text alone with them.
+            if (
+                trigger_update.task_parameters is not None or definition_set
+            ) and _task_definition_after(existing_trigger, trigger_update) is None:
+                task_parameters = (
+                    trigger_update.task_parameters
+                    if trigger_update.task_parameters is not None
+                    else existing_trigger.task_parameters
+                )
+                task_text = task_parameters.get("text")
                 if not isinstance(task_text, str) or not task_text.strip():
                     raise TriggerValidationError("Task text is required for CRON triggers")
 
@@ -1294,6 +1221,32 @@ class TriggerService:
                 outcome="skipped", reason="trigger is inactive", execution=execution
             )
 
+        # A person pressing "run now" starts the agent, so they must be allowed to.
+        if fired_by is not None:
+            await self._require_may_invoke(trigger.agent_id)
+        # The run acts as the agent, so the agent is what must still stand when it
+        # fires; whoever configured the trigger lends it nothing. A trigger whose
+        # agent is gone stops once, with that reason, on every path.
+        if not await self.agent_stands(trigger.agent_id):
+            reason = f"agent_unavailable: agent {trigger.agent_id} is gone or inactive"
+            await self.trigger_repository.mark_needs_new_owner(trigger.id)
+            execution = await self._record_execution_failure(
+                trigger_id, reason, trigger_data, 0, fired_by=fired_by
+            )
+            return TriggerFiring(outcome="error", reason=reason, execution=execution)
+
+        definition = None
+        if trigger.task_definition_id is not None:
+            definition = await self.task_definition_repository.get_definition(
+                trigger.task_definition_id
+            )
+            if definition is None:
+                reason = f"Task definition {trigger.task_definition_id} no longer exists"
+                execution = await self._record_execution_failure(
+                    trigger_id, reason, trigger_data, fired_by=fired_by
+                )
+                return TriggerFiring(outcome="error", reason=reason, execution=execution)
+
         if task_id is not None and self.task_service:
             existing = await self.task_service.get_task(task_id)
             if existing is not None:
@@ -1306,7 +1259,7 @@ class TriggerService:
                     # Starting it now is the retry. A failure raises and is retried.
                     # The stored row keeps only the ask, so the message is composed
                     # again from the same event.
-                    retried_input = compose_task_input(trigger, trigger_data, event)
+                    retried_input = compose_task_input(trigger, trigger_data, event, definition)
                     if retried_input is None:
                         # The trigger lost its instruction since the first attempt;
                         # the stored ask is no longer what it would run.
@@ -1340,6 +1293,20 @@ class TriggerService:
                     ),
                 )
 
+        # A schedule comes due again whether or not its last run has finished;
+        # the firing workflow ends once the task starts, so Temporal's overlap
+        # policy never sees the run. Each event of a stream trigger is its own
+        # work, and a person asking for a run gets it.
+        if trigger.trigger_type == TriggerType.CRON and fired_by is None:
+            running = await self._run_still_going(trigger.id)
+            if running is not None:
+                reason = f"The previous run is still going (task {running})"
+                logger.info(f"Trigger {trigger_id} skipped: {reason}")
+                execution = await self._record_execution_skipped(trigger_id, reason, trigger_data)
+                return TriggerFiring(
+                    outcome="skipped", reason=reason, execution=execution, blocked_by=running
+                )
+
         start_time = time.time()
         verdict: ConditionVerdict | None = None
         try:
@@ -1359,7 +1326,7 @@ class TriggerService:
 
             created_task_id = None
             if self.task_service:
-                task_input = compose_task_input(trigger, trigger_data, event)
+                task_input = compose_task_input(trigger, trigger_data, event, definition)
                 if task_input is None:
                     execution = await self._record_execution_failure(
                         trigger_id,
@@ -1373,7 +1340,9 @@ class TriggerService:
                     )
 
                 task_params = task_input.stamp(
-                    await self._build_task_parameters(trigger, trigger_data, fired_by, delivery)
+                    await self._build_task_parameters(
+                        trigger, trigger_data, fired_by, delivery, definition
+                    )
                 )
 
                 from agentarea_tasks.domain.models import AgentTask, TaskProvenance
@@ -1391,8 +1360,15 @@ class TriggerService:
                     agent_id=trigger.agent_id,
                     task_parameters=task_params,
                     status="submitted",
-                    provenance=provenance
-                    or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id)),
+                    provenance=(
+                        provenance
+                        or TaskProvenance(origin_type="trigger", origin_id=str(trigger.id))
+                    ).model_copy(
+                        update={
+                            "source_identity": _source_identity(fired_by or caller),
+                            "task_definition_id": trigger.task_definition_id,
+                        }
+                    ),
                 )
                 task = await self.task_service.route_or_submit_task(
                     task, follow_up_claim=follow_up_claim
@@ -1465,6 +1441,24 @@ class TriggerService:
             return TriggerFiring(
                 outcome="error", reason=str(e), verdict=verdict, execution=execution
             )
+
+    async def _run_still_going(self, trigger_id: UUID) -> UUID | None:
+        """The trigger's task whose workflow is still open, if any.
+
+        A stored status can outlive its run -- a terminated workflow, a lost
+        history, a status write that failed -- so the workflow is asked; a task
+        whose workflow never started is running nothing.
+        """
+        for task_id, workflow_id in await self.task_repository.unfinished_runs_from(
+            "trigger", str(trigger_id)
+        ):
+            if workflow_id is None:
+                continue
+            if self.temporal_schedule_manager is None:
+                return task_id
+            if await self.temporal_schedule_manager.workflow_is_open(workflow_id):
+                return task_id
+        return None
 
     async def _record_execution_success(
         self,
@@ -1565,6 +1559,7 @@ class TriggerService:
         trigger_data: dict[str, Any],
         fired_by: str | None = None,
         delivery: FiringDelivery | None = None,
+        definition: TaskDefinition | None = None,
     ) -> dict[str, Any]:
         """Build task parameters from trigger and execution data using LLM extraction.
 
@@ -1573,15 +1568,17 @@ class TriggerService:
             trigger_data: Trigger execution data
             fired_by: Principal who asked for this run, when a person did
             delivery: Where a stream firing's task replies and the session it joins
+            definition: The saved task the trigger runs, whose parameters replace its own
 
         Returns:
             Task parameters
         """
-        # Start with trigger's task parameters. Reserved keys stored there
+        # Start with the asked task parameters. Reserved keys stored there
         # predate the create/update check; only the firing's delivery below may
         # name where replies go and the session, and only compose_task_input the
         # event file and the follow-up message.
-        params = dict(drop_reserved_parameters(trigger.task_parameters) or {})
+        asked = definition.parameters if definition is not None else trigger.task_parameters
+        params = dict(drop_reserved_parameters(asked) or {})
 
         # Add trigger metadata
         params.update(
@@ -1606,7 +1603,7 @@ class TriggerService:
             delivery.stamp(params)
 
         # Use LLM to extract additional parameters if instruction is provided
-        llm_instruction = trigger.task_parameters.get("llm_parameter_extraction")
+        llm_instruction = asked.get("llm_parameter_extraction")
         if llm_instruction and self.llm_condition_evaluator:
             try:
                 trigger_context = {

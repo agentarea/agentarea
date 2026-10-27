@@ -70,6 +70,16 @@ async def world():
     raw = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     ctx = UserContext(user_id="u", workspace_id=str(uuid4()))
     settings = EventStreamSettings()
+    agent_id = uuid4()
+    async with raw() as session:
+        await session.execute(
+            text(
+                "INSERT INTO agents (id, workspace_id, created_by, name, slug, status) "
+                "VALUES (:id, :ws, 'u', 'Order clerk', :slug, 'active')"
+            ),
+            {"id": agent_id, "ws": ctx.workspace_id, "slug": f"order-clerk-{agent_id.hex[:8]}"},
+        )
+        await session.commit()
     with workspace_scope(ctx.workspace_id), patch(GRANT, new=AsyncMock()):
         async with maker() as session:
             streams = StreamService(RepositoryFactory(session, ctx), settings)
@@ -77,7 +87,7 @@ async def world():
             trigger = await TriggerRepository(session, ctx).create_from_model(
                 TriggerCreate(
                     name="Order paid",
-                    agent_id=uuid4(),
+                    agent_id=agent_id,
                     trigger_type=TriggerType.STREAM,
                     task_parameters={"text": INSTRUCTION},
                     created_by="u",
@@ -99,7 +109,7 @@ async def world():
         subscription_id=subscription.id,
     )
     async with raw() as session:
-        for table in ("trigger_executions", "triggers", "streams", "event_outbox"):
+        for table in ("trigger_executions", "triggers", "streams", "event_outbox", "agents"):
             await session.execute(
                 text(f"DELETE FROM {table} WHERE workspace_id = :ws"), {"ws": ctx.workspace_id}
             )
@@ -110,13 +120,10 @@ async def world():
 async def _deliver(world, data: dict, *, key: str) -> tuple[_Tasks, StreamEvent, HandlerResult]:
     """Hand one order.paid event to the trigger as the router would."""
     tasks = _Tasks()
-    authority = MagicMock()
-    authority.may_run = AsyncMock(return_value=True)
     handler = TriggerSubscriptionHandler(
         event_broker=AsyncMock(),
         secret_manager_factory=MagicMock(),
         workflow_executor=MagicMock(),
-        authority=authority,
         max_depth=8,
         trigger_service_factory=lambda session, context: TriggerService(
             repository_factory=RepositoryFactory(session, context),

@@ -28,10 +28,11 @@ from agentarea_api.api.deps.services import (
     get_task_service,
     get_temporal_workflow_service,
 )
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.artifacts import secure_download_headers
 from agentarea_common.auth.context import UserContext
 from agentarea_common.auth.dependencies import UserContextDep
-from agentarea_common.auth.route_authz import enforced_in_handler, unrestricted
+from agentarea_common.auth.route_authz import enforced_in_handler, requires, unrestricted
 from agentarea_common.base import ReadRepositoryFactoryDep
 from agentarea_common.base.pagination import MAX_OFFSET, MAX_PAGE
 from agentarea_common.config import get_settings
@@ -138,6 +139,11 @@ class TaskWebhook(BaseModel):
     )
 
     model_config = {"extra": "forbid"}
+
+
+def started_by(user_context: UserContext) -> TaskProvenance:
+    """The provenance of a run the caller started from the app, the API or MCP."""
+    return TaskProvenance.started_by_caller(user_context)
 
 
 def _is_api_caller(user_context: UserContext) -> bool:
@@ -651,7 +657,7 @@ async def get_all_tasks(
         # Sequential awaits: agent_service and task_service share one AsyncSession
         # via ReadRepositoryFactoryDep, and asyncpg forbids concurrent ops on a
         # single connection ("another operation is in progress").
-        agents_result = await agent_service.list()
+        agents_result = await agent_service.list(include_archived=True)
         agent_map = {str(agent.id): agent.name for agent in agents_result}
         task_orms = await task_service.task_repository.list_page(
             limit=limit,
@@ -911,9 +917,7 @@ async def _with_sse_heartbeats(
 
 @router.post(
     "/",
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("execute", "agent", id_param="agent_id")],
 )
 async def create_task_for_agent_with_stream(
     agent_id: UUID,
@@ -969,6 +973,7 @@ async def create_task_for_agent_with_stream(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 task_id=reserved_task_id,
                 trusted_metadata={
                     **caller_metadata,
@@ -979,6 +984,8 @@ async def create_task_for_agent_with_stream(
             raise HTTPException(status_code=422, detail="Task policy rejected") from exc
         except AgentModelNotConfiguredError as exc:
             raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+        except AgentArchivedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
         try:
             created_task = await task_service.dispatch_reserved_run(created_task)
@@ -1015,12 +1022,15 @@ async def create_task_for_agent_with_stream(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 trusted_metadata=caller_metadata or None,
             )
         except PolicyValidationError:
             creation_error = ("Task policy rejected", "policy_validation_error")
         except AgentModelNotConfiguredError:
             creation_error = ("Agent model is not configured", "model_not_configured")
+        except AgentArchivedError as exc:
+            creation_error = (str(exc), "agent_archived")
         except BudgetCapExceededError as exc:
             scope = "Agent" if exc.agent_id else "Workspace"
             spend = "LLM spend" if exc.kind == "llm" else "spend"
@@ -1136,9 +1146,7 @@ async def create_task_for_agent_with_stream(
 @router.post(
     "/sync",
     response_model=TaskResponse,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("execute", "agent", id_param="agent_id")],
 )
 async def create_task_for_agent_sync(
     agent_id: UUID,
@@ -1173,6 +1181,7 @@ async def create_task_for_agent_sync(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 task_id=reserved_task_id,
                 trusted_metadata={
                     **caller_metadata,
@@ -1197,6 +1206,7 @@ async def create_task_for_agent_sync(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 trusted_metadata=caller_metadata or None,
             )
 
@@ -1210,6 +1220,8 @@ async def create_task_for_agent_sync(
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except AgentModelNotConfiguredError as exc:
         raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         # Agent validation errors
         logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
@@ -1233,9 +1245,7 @@ class ScheduleTaskCreate(TaskCreate):
     "/schedule",
     response_model=TaskResponse,
     status_code=201,
-    dependencies=[
-        unrestricted("workspace member; the workspace-scoped repository is the boundary")
-    ],
+    dependencies=[requires("execute", "agent", id_param="agent_id")],
 )
 async def schedule_task_for_agent(
     agent_id: UUID,
@@ -1274,6 +1284,7 @@ async def schedule_task_for_agent(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 task_id=reserved_task_id,
                 trusted_metadata={
                     **caller_metadata,
@@ -1299,6 +1310,7 @@ async def schedule_task_for_agent(
                 payload,
                 workspace_id=user_context.workspace_id,
                 user_id=user_context.user_id,
+                provenance=started_by(user_context),
                 trusted_metadata=caller_metadata or None,
             )
 
@@ -1316,6 +1328,8 @@ async def schedule_task_for_agent(
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except AgentModelNotConfiguredError as exc:
         raise HTTPException(status_code=422, detail="Agent model is not configured") from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         logger.error("Agent validation failed for agent %s", agent_id, exc_info=True)
         raise HTTPException(status_code=404, detail="Agent validation error") from exc
@@ -2123,6 +2137,8 @@ async def retry_agent_task(
         retried = await task_service.retry_last_turn(task_id)
     except RunStillClosingError as exc:
         raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except BudgetCapExceededError:
         raise
     except PolicyValidationError as exc:
@@ -2425,6 +2441,8 @@ async def send_task_command(
         raise
     except RunStillClosingError as exc:
         raise HTTPException(status_code=409, detail=_RUN_STILL_CLOSING) from exc
+    except AgentArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except PolicyValidationError as exc:
         raise HTTPException(status_code=422, detail="Task policy rejected") from exc
     except Exception as e:

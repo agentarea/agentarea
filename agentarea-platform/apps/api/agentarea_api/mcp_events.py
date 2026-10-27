@@ -224,7 +224,7 @@ class MCPEvents:
                 raise EventsError(
                     ErrorCode.NOT_FOUND, f"no event type {name!r}", {"kind": "event"}
                 ) from None
-        if not await self._readers().may_read(context.user_id, stream_id):
+        if not await self._readers().may_read(context, stream_id):
             raise EventsError(ErrorCode.FORBIDDEN, "you may not read this stream")
         return context, stream_id
 
@@ -233,7 +233,7 @@ class MCPEvents:
         events: list[dict[str, Any]] = []
         for context in await self._scope.workspaces():
             slug = context.workspace_slug or await workspace_slug_for(context.workspace_id)
-            readable = await readers.readable(context.user_id)
+            readable = await readers.readable(context)
             async with _session(context, write=False) as session:
                 streams = await self._service(session, context).list_streams(
                     limit=1000, offset=0, ids=readable

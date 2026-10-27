@@ -35,6 +35,7 @@ from temporalio.testing import WorkflowEnvironment
 from temporalio.worker import Worker
 
 GITHUB_ID = str(uuid.uuid4())
+AGENT_ID = uuid.uuid4()
 OFFERED = "mcp__github__search"
 
 _llm_calls: list[LLMCallRequest] = []
@@ -173,7 +174,7 @@ async def _run(tool_name: str) -> None:
             async with worker:
                 request = AgentExecutionRequest(
                     task_id=uuid.uuid4(),
-                    agent_id=uuid.uuid4(),
+                    agent_id=AGENT_ID,
                     user_id="test_user",
                     workspace_id="test-workspace",
                     task_query="Search GitHub for agentarea",
@@ -208,8 +209,13 @@ async def test_offered_mcp_tool_reaches_the_activity_with_its_route():
     assert str(sent.server_instance_id) == GITHUB_ID
     assert sent.mcp_route is not None
     assert sent.mcp_route.raw_name == "search"
-    # The activity runs as the task's principal; without it every tool call fails.
-    assert sent.user_context_data == {"user_id": "test_user", "workspace_id": "test-workspace"}
+    # The activity runs as the task's agent, attributed to its principal (ADR-0046);
+    # without it every tool call fails.
+    assert sent.user_context_data == {
+        "user_id": "test_user",
+        "workspace_id": "test-workspace",
+        "agent_id": str(AGENT_ID),
+    }
 
 
 @pytest.mark.asyncio

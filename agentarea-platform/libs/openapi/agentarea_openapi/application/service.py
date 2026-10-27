@@ -1,5 +1,6 @@
 """Service layer for OpenAPI connection management."""
 
+import asyncio
 import json
 import logging
 import urllib.parse
@@ -13,6 +14,7 @@ import yaml
 from agentarea_common.constants import MANAGED_BY_PLATFORM
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.tool_cost import manual_connector
+from agentarea_common.utils.untrusted_yaml import load_untrusted_yaml
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from agentarea_openapi.application.spec_parser import parse_openapi_spec
@@ -62,20 +64,29 @@ _SAFE_HEADERS = frozenset(
 )
 
 
-class _SpecLoader(yaml.SafeLoader):
-    """SafeLoader that keeps timestamps as their source text.
-
-    A spec is stored and returned as JSON, and SafeLoader would turn an
-    unquoted ``version: 2024-01-01`` into a ``datetime.date`` that neither
-    json nor the response models accept.
-    """
-
-
-_SpecLoader.add_constructor("tag:yaml.org,2002:timestamp", _SpecLoader.construct_yaml_str)
+# A spec is stored and returned as JSON, so an unquoted ``version: 2024-01-01``
+# stays text instead of becoming a ``datetime.date``. The byte limit bounds the
+# work once aliases and merge keys are refused, so the node budget only has to
+# clear the largest real spec.
+_SPEC_MAX_NODES = 2_000_000
+_SPEC_MAX_DEPTH = 128
 
 
 def _load_yaml_spec(text: str) -> Any:
-    return yaml.load(text, Loader=_SpecLoader)  # noqa: S506 -- a SafeLoader subclass
+    return load_untrusted_yaml(
+        text,
+        max_nodes=_SPEC_MAX_NODES,
+        max_bytes=_SPEC_MAX_SIZE,
+        max_depth=_SPEC_MAX_DEPTH,
+        timestamps_as_text=True,
+    )
+
+
+async def _parse_yaml_spec(text: str) -> Any:
+    try:
+        return await asyncio.to_thread(_load_yaml_spec, text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"The spec is not acceptable YAML: {exc}") from exc
 
 
 def _secret_key(connection_id: str | UUID, header_name: str) -> str:
@@ -143,11 +154,13 @@ async def fetch_and_parse_spec(
     text = content.decode(resp.encoding or "utf-8", errors="replace")
 
     if url.endswith((".yaml", ".yml")):
-        return _load_yaml_spec(text)
+        return await _parse_yaml_spec(text)
     try:
         return json.loads(text)
+    except RecursionError as exc:
+        raise ValueError("The spec is nested too deeply") from exc
     except json.JSONDecodeError:
-        return _load_yaml_spec(text)
+        return await _parse_yaml_spec(text)
 
 
 class OpenAPIConnectionService:

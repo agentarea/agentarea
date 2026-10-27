@@ -51,6 +51,7 @@ from agentarea_execution.workflows.agent.patches import TOOL_CONFIG_ALIASES_PATC
 from agentarea_execution.workflows.agent_execution_workflow import AgentExecutionWorkflow
 from agentarea_execution.workflows.helpers import tool_config_aliases, tool_policy_aliases
 from agentarea_governance.domain.policies import EffectivePolicy, PolicyDocument, PolicyResolver
+from agentarea_tasks.domain.models import TaskProvenance
 from agentarea_tasks.schemas.dto import RunCreate
 from agentarea_tasks.task_service import TaskService
 from temporalio import activity, workflow
@@ -597,6 +598,7 @@ async def _effective_policy_of_a_run_started_with_the_approval_flag() -> dict[st
         workspace_id="test-workspace",
         user_id="test-user",
         created_via="mcp",
+        provenance=TaskProvenance.started_by("test-user", via_api_key=False),
     )
     assert task.effective_policy is not None
     return task.effective_policy

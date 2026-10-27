@@ -5,6 +5,7 @@ import re
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from agentarea_agents.tools import skills_toolset
 from agentarea_agents.tools.skills_toolset import SkillsToolset
@@ -78,6 +79,7 @@ async def test_import_from_github_downloads_repo_once_for_multiple_skills(monkey
     monkeypatch.setattr(skills_toolset, "_list_github_skill_candidates", fake_candidates)
     monkeypatch.setattr(skills_toolset, "extract_skill_package", fake_package_zip)
     monkeypatch.setattr(skills_toolset, "platform_context", fake_platform_context)
+    monkeypatch.setattr(skills_toolset, "platform_read_context", fake_platform_context)
     monkeypatch.setattr(github_skill_importer.GitHubSkillImporter, "download_repo", fake_download)
     monkeypatch.setattr(skill_service, "SkillService", FakeSkillService)
 
@@ -95,20 +97,18 @@ async def test_import_from_github_downloads_repo_once_for_multiple_skills(monkey
 
 
 @pytest.mark.asyncio
-async def test_import_from_github_is_refused_when_the_install_policy_excludes_github(
+async def test_import_from_github_is_refused_by_the_install_policy_before_any_request(
     monkeypatch,
 ):
     from agentarea_agents.application import skill_service
-    from agentarea_agents.infrastructure import github_skill_importer
     from agentarea_governance.application.catalog_install import CatalogInstallRefusedError
 
     created: list[object] = []
+    requests: list[str] = []
 
-    async def fake_candidates(_github_url: str):
-        return None, "main", [{"name": "One", "package_path": "skills/one"}]
-
-    async def fake_download(self, github_url: str):
-        return b"repo-zip"
+    async def record_send(_client, request, **_kwargs):
+        requests.append(str(request.url))
+        return httpx.Response(404, request=request)
 
     @asynccontextmanager
     async def fake_platform_context():
@@ -126,14 +126,15 @@ async def test_import_from_github_is_refused_when_the_install_policy_excludes_gi
         async def create_from_zip(self, **kwargs):
             created.append(kwargs)
 
-    monkeypatch.setattr(skills_toolset, "_list_github_skill_candidates", fake_candidates)
+    monkeypatch.setattr(httpx.AsyncClient, "send", record_send)
     monkeypatch.setattr(skills_toolset, "platform_context", fake_platform_context)
-    monkeypatch.setattr(github_skill_importer.GitHubSkillImporter, "download_repo", fake_download)
+    monkeypatch.setattr(skills_toolset, "platform_read_context", fake_platform_context)
     monkeypatch.setattr(skill_service, "SkillService", RefusingSkillService)
 
     with pytest.raises(ToolError, match="registry:github"):
         await SkillsToolset().import_from_github(github_url="https://github.com/acme/repo")
 
+    assert requests == []
     assert created == []
 
 
@@ -147,7 +148,22 @@ async def test_import_from_github_rejects_large_import_all_selection(monkeypatch
     async def fake_candidates(_github_url: str):
         return None, "main", candidates
 
+    @asynccontextmanager
+    async def fake_platform_context():
+        yield (None, SimpleNamespace(user_id="u1", workspace_id="ws-1"), object(), None, None)
+
+    class AdmittingSkillService:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def require_github_import_allowed(self):
+            pass
+
+    from agentarea_agents.application import skill_service
+
     monkeypatch.setattr(skills_toolset, "_list_github_skill_candidates", fake_candidates)
+    monkeypatch.setattr(skills_toolset, "platform_read_context", fake_platform_context)
+    monkeypatch.setattr(skill_service, "SkillService", AdmittingSkillService)
 
     with pytest.raises(ToolError, match=re.escape("Refusing to import")):
         await SkillsToolset()._import_github_packages(

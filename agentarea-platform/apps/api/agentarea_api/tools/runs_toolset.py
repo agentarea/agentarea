@@ -26,8 +26,9 @@ from agentarea_agents.application.execution_service import (
 )
 from agentarea_agents_sdk.tools.base_tool import ToolError
 from agentarea_agents_sdk.tools.decorator_tool import Toolset, tool_method
-from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, unrestricted
+from agentarea_agents_sdk.tools.tool_authz import enforced_in_handler, requires, unrestricted
 from agentarea_agents_sdk.tools.tool_definition import toolset
+from agentarea_common.agent_status import AgentArchivedError
 from agentarea_common.auth.context import UserContext
 from agentarea_common.money import serialize_money
 from agentarea_llm.application.model_instance_service import ModelInstanceService
@@ -59,6 +60,7 @@ from agentarea_api.api.v1.agents_tasks import (
     TaskInputSubmission,
     _resolve_model_info,
     escalations_caller_may_resolve,
+    started_by,
     task_execution_id,
 )
 
@@ -292,7 +294,7 @@ class RunsToolset(Toolset):
     open_world = False
 
     @tool_method(display_name="Start run", effect="write", output=RunStarted)
-    @unrestricted("any member may start a run, as POST /v1/agents/{id}/tasks allows")
+    @requires("execute", "agent", id_param="agent_id")
     async def start(
         self,
         agent_id: Annotated[str, Field(description="Agent id (UUID), from `agents_list`.")],
@@ -360,6 +362,7 @@ class RunsToolset(Toolset):
                     workspace_id=user_ctx.workspace_id,
                     user_id=user_ctx.user_id,
                     created_via="mcp",
+                    provenance=started_by(user_ctx),
                 )
             except BudgetCapExceededError as exc:
                 raise ToolError(str(exc)) from None
@@ -461,6 +464,8 @@ class RunsToolset(Toolset):
                 retried = await service.retry_last_turn(UUID(run_id))
             except RunStillClosingError:
                 raise ToolError(RUN_STILL_CLOSING) from None
+            except AgentArchivedError as exc:
+                raise ToolError(str(exc)) from None
             if not retried:
                 raise ToolError("Only a failed run whose execution has finished can be retried")
             return json.dumps({"retried": True, "run_id": run_id})
@@ -620,6 +625,8 @@ class RunsToolset(Toolset):
                     delivered = await service.queue_follow_up(UUID(run_id), body["message"])
                 except RunStillClosingError:
                     raise ToolError(RUN_STILL_CLOSING) from None
+                except AgentArchivedError as exc:
+                    raise ToolError(str(exc)) from None
             else:
                 workflow = await get_temporal_workflow_service()
                 delivered = await workflow.send_workflow_command(

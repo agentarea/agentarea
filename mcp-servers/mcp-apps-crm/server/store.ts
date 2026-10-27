@@ -1,21 +1,42 @@
 import type { Database } from "bun:sqlite";
-import { readRows, syncRows, type Rows } from "@kit/store/rows.ts";
-import type {
-  Activity,
-  ActivityType,
-  Company,
-  CompanySize,
-  Contact,
-  CrmData,
-  Currency,
-  Deal,
-  DealStatus,
-  Stage,
+import { insertRows, readRows, syncRows, type Rows } from "@kit/store/rows.ts";
+import {
+  OWNER_KINDS,
+  type Activity,
+  type ActivityType,
+  type Company,
+  type CompanySize,
+  type Contact,
+  type CrmData,
+  type Currency,
+  type Deal,
+  type DealStatus,
+  type Owner,
+  type OwnerKind,
+  type Stage,
 } from "../shared/crm.ts";
 import { fromRows, TABLES, toRows } from "./db.ts";
 import { Lookup } from "./lookup.ts";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export type OwnerFields = { name: string; title?: string; email?: string; kind?: OwnerKind };
+
+export type CrmSetup = {
+  account: string;
+  baseCurrency: Currency;
+  /** Price of one USD in RUB. */
+  usdRate: number;
+  owners: OwnerFields[];
+  /** Names of the open stages, first to last; Won and Lost close the pipeline. */
+  stages?: string[];
+  sources?: string[];
+  lostReasons?: string[];
+};
+
+const DEFAULT_STAGES = ["Lead in", "Qualified", "Proposal sent", "Negotiation"];
+const DEFAULT_SOURCES = ["Inbound — website", "Outbound", "Referral", "Event", "Partner"];
+const DEFAULT_LOST_REASONS = ["Price too high", "Chose a competitor", "No budget", "No decision", "Not a fit"];
 
 export type DealPatch = {
   title?: string;
@@ -70,6 +91,65 @@ export class CrmStore {
   static load(db: Database): CrmStore {
     const rows = readRows(db, TABLES);
     return new CrmStore(fromRows(rows), rows);
+  }
+
+  /** The CRM as stored, or null while its storage holds no account and pipeline yet. */
+  static loadIfSetUp(db: Database): CrmStore | null {
+    return db.query("SELECT 1 FROM account").get() && db.query("SELECT 1 FROM pipelines").get() ? CrmStore.load(db) : null;
+  }
+
+  /** Writes a new CRM into empty storage: the account, its currencies, owners and the sales pipeline. */
+  static setup(db: Database, setup: CrmSetup): CrmStore {
+    if (db.query("SELECT 1 FROM account").get()) throw new Error("The CRM is already set up; add owners with add_owner.");
+    const account = setup.account.trim();
+    if (!account) throw new Error("The account needs a name.");
+    if (!Number.isFinite(setup.usdRate) || setup.usdRate <= 0) throw new Error("usd_rate is the price of one USD in RUB, a positive number.");
+    const names = (setup.stages ?? DEFAULT_STAGES).map((n) => n.trim()).filter(Boolean);
+    if (names.length === 0) throw new Error("The pipeline needs at least one open stage.");
+    const stages: Stage[] = [
+      ...names.map((name, i) => ({
+        id: `stage_${i + 1}`,
+        name,
+        probability: Math.round(((i + 1) / (names.length + 1)) * 100) / 100,
+        rottenAfterDays: 14,
+        outcome: null,
+      })),
+      { id: "won", name: "Won", probability: 1, rottenAfterDays: null, outcome: "won" },
+      { id: "lost", name: "Lost", probability: 0, rottenAfterDays: null, outcome: "lost" },
+    ];
+    const data: CrmData = {
+      version: 1,
+      asOf: new Date().toISOString(),
+      account: { name: account, baseCurrency: setup.baseCurrency },
+      fxRates: setup.baseCurrency === "RUB" ? { RUB: 1, USD: setup.usdRate } : { RUB: 1 / setup.usdRate, USD: 1 },
+      lostReasons: setup.lostReasons ?? DEFAULT_LOST_REASONS,
+      sources: setup.sources ?? DEFAULT_SOURCES,
+      owners: [],
+      pipelines: [{ id: "default", name: "Sales pipeline", stages }],
+      companies: [],
+      contacts: [],
+      deals: [],
+      activities: [],
+    };
+    const store = new CrmStore(data, {});
+    if (setup.owners.length === 0) throw new Error("The CRM needs at least one owner.");
+    for (const owner of setup.owners) store.addOwner(owner);
+    insertRows(db, TABLES, toRows(data));
+    return store;
+  }
+
+  addOwner(fields: OwnerFields): Owner {
+    const name = fields.name.trim();
+    if (!name) throw new Error("An owner needs a name.");
+    const kind = fields.kind ?? "human";
+    if (!OWNER_KINDS.includes(kind)) throw new Error(`An owner is ${OWNER_KINDS.join(" or ")}.`);
+    const email = fields.email?.trim() ?? "";
+    if (email && this.data.owners.some((o) => o.email.toLowerCase() === email.toLowerCase())) {
+      throw new Error(`An owner with ${email} already exists.`);
+    }
+    const owner: Owner = { id: nextId(this.data.owners.map((o) => o.id), "own_", 2), name, title: fields.title?.trim() ?? "", email, kind };
+    this.data.owners.push(owner);
+    return owner;
   }
 
   /** Writes what changed since `load` into `db`, inside the caller's transaction. */

@@ -66,7 +66,7 @@ TriggerStatus = Literal["active", "inactive", "needs_owner"]
 
 
 def trigger_status(trigger: Any) -> TriggerStatus:
-    """'needs_owner' while a trigger stopped for its configurer's lost access stays off."""
+    """'needs_owner' while a trigger stopped because its agent is gone or inactive stays off."""
     if trigger.is_active:
         return "active"
     if getattr(trigger, "needs_new_owner_at", None) is not None:
@@ -81,6 +81,9 @@ class TriggerResponse(BaseModel):
     name: str
     description: str
     agent_id: UUID
+    task_definition_id: UUID | None = Field(
+        default=None, description="Saved task each firing asks, in place of task_parameters."
+    )
     trigger_type: str
     is_active: bool
     task_parameters: dict[str, Any]
@@ -137,6 +140,7 @@ class TriggerResponse(BaseModel):
             "name": trigger.name,
             "description": trigger.description,
             "agent_id": trigger.agent_id,
+            "task_definition_id": getattr(trigger, "task_definition_id", None),
             "trigger_type": trigger.trigger_type.value
             if hasattr(trigger.trigger_type, "value")
             else str(trigger.trigger_type),
@@ -1049,6 +1053,7 @@ async def get_execution_correlations(
 async def execute_trigger(
     trigger_id: UUID,
     request: TriggerExecuteRequest,
+    user_context: UserContext = Depends(get_user_context),
     trigger_service: TriggerService = Depends(get_trigger_service),
 ) -> dict[str, Any]:
     """Execute a trigger with the provided event data.
@@ -1065,6 +1070,7 @@ async def execute_trigger(
     Args:
         trigger_id: The unique identifier of the trigger
         request: The events to run the trigger on
+        user_context: The person replaying the events; the run is theirs
         trigger_service: Injected trigger service
 
     Returns:
@@ -1076,7 +1082,10 @@ async def execute_trigger(
     try:
         trigger_data: dict[str, Any] = {"events": request.events}
 
-        execution = await trigger_service.execute_trigger(trigger_id, trigger_data)
+        # A person replaying events starts the run: it is theirs to narrow.
+        execution = await trigger_service.execute_trigger(
+            trigger_id, trigger_data, fired_by=user_context.user_id
+        )
 
         if execution is None:
             return {

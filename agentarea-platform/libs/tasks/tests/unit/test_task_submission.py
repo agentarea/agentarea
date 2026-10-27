@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 from agentarea_agents.infrastructure.repository import AgentRepository
+from agentarea_common.agent_status import AgentArchivedError, AgentStatus
 from agentarea_governance.domain.policies import (
     BudgetPolicy,
     EffectivePolicy,
@@ -21,10 +22,12 @@ from agentarea_governance.domain.policies import (
     TokenPolicy,
 )
 from agentarea_tasks.domain.exceptions import AgentModelNotConfiguredError
-from agentarea_tasks.domain.models import AgentTask
+from agentarea_tasks.domain.models import AgentTask, TaskProvenance
 from agentarea_tasks.infrastructure.repository import TaskRepository
 from agentarea_tasks.schemas.dto import RunCreate, RunExecutionConfig
 from agentarea_tasks.task_service import TaskService
+
+_STARTED = TaskProvenance.started_by("user-123", via_api_key=False)
 
 
 def _make_service(temporal_executor=None):
@@ -174,6 +177,7 @@ async def test_create_and_execute_sets_default_metadata():
         description="generate vk post",
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
     )
 
     submitted = mocks["task_manager"].submit_task.await_args.args[0]
@@ -183,6 +187,38 @@ async def test_create_and_execute_sets_default_metadata():
     assert snapshot["resolved_execution"] == snapshot["effective_policy"]["execution"]
     assert snapshot["effective_policy"]["execution"]["max_model_turns"] == 100
     assert snapshot["effective_policy"] == submitted.effective_policy
+    assert submitted.provenance == _STARTED
+
+
+@pytest.mark.asyncio
+async def test_the_user_policy_layer_is_the_person_who_started_the_run():
+    service, _ = _make_service()
+
+    await service.create_and_execute_task_with_workflow(
+        agent_id=uuid4(),
+        description="started by a person",
+        workspace_id="ws-abc",
+        user_id="user-123",
+        provenance=_STARTED,
+    )
+
+    assert service.policy_resolver.resolve.await_args.kwargs["user_id"] == "user-123"
+
+
+@pytest.mark.asyncio
+async def test_a_run_nobody_started_has_no_user_policy_layer():
+    service, _ = _make_service()
+
+    await service.create_and_execute_task_with_workflow(
+        agent_id=uuid4(),
+        description="fired by a schedule",
+        workspace_id="ws-abc",
+        user_id="user-123",
+        provenance=TaskProvenance(origin_type="trigger", origin_id="trg-1"),
+    )
+
+    resolutions = service.policy_resolver.resolve.await_args_list
+    assert {call.kwargs["user_id"] for call in resolutions} == {None}
 
 
 @pytest.mark.asyncio
@@ -197,6 +233,7 @@ async def test_typed_execution_request_is_snapshotted_without_free_form_paramete
         ),
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
     )
 
     submitted = mocks["task_manager"].submit_task.await_args.args[0]
@@ -219,6 +256,7 @@ async def test_typed_and_legacy_execution_requests_cannot_conflict():
             ),
             workspace_id="ws-abc",
             user_id="user-123",
+            provenance=_STARTED,
         )
 
 
@@ -236,6 +274,7 @@ async def test_typed_execution_and_task_policy_cannot_conflict():
             ),
             workspace_id="ws-abc",
             user_id="user-123",
+            provenance=_STARTED,
         )
 
 
@@ -251,6 +290,7 @@ async def test_legacy_iteration_limit_is_translated_and_not_persisted_in_paramet
         ),
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
     )
 
     submitted = mocks["task_manager"].submit_task.await_args.args[0]
@@ -280,6 +320,7 @@ async def test_delegated_task_cannot_loosen_parent_execution_policy():
             description="Delegated work",
             workspace_id="ws-abc",
             user_id="user-123",
+            provenance=_STARTED,
             upper_bound_policy=parent_policy,
         )
 
@@ -307,6 +348,7 @@ async def test_delegated_agent_keeps_its_own_agent_cap_not_the_parents():
         description="Delegated work",
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
         upper_bound_policy=policy("10.00"),
     )
 
@@ -448,6 +490,7 @@ async def test_create_and_execute_routes_to_active_workflow_when_the_session_con
         workspace_id="ws-abc",
         parameters={"trigger_id": "trg-1", "session": {"key": "c-99", "continue": True}},
         user_id="user-123",
+        provenance=_STARTED,
     )
 
     mocks["task_manager"].submit_task.assert_not_awaited()
@@ -482,6 +525,25 @@ async def test_create_and_execute_blocks_agent_without_model():
             description="do x",
             workspace_id="ws-abc",
             user_id="user-123",
+            provenance=_STARTED,
+        )
+
+    mocks["task_manager"].submit_task.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_an_archived_agent_takes_no_new_run():
+    service, mocks = _make_service()
+    agent = mocks["agent_repo"].get.return_value
+    agent.status = AgentStatus.ARCHIVED
+
+    with pytest.raises(AgentArchivedError):
+        await service.create_and_execute_task_with_workflow(
+            agent_id=agent.id,
+            description="do x",
+            workspace_id="ws-abc",
+            user_id="user-123",
+            provenance=_STARTED,
         )
 
     mocks["task_manager"].submit_task.assert_not_awaited()
@@ -499,6 +561,7 @@ async def test_model_override_in_parameters_bypasses_model_guard():
         description="do x",
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
         parameters={"model_override": "inst-override"},
     )
 
@@ -531,6 +594,7 @@ async def test_followup_routing_is_not_blocked_by_missing_model():
         workspace_id="ws-abc",
         parameters={"trigger_id": "trg-1", "session": {"key": "c-99", "continue": True}},
         user_id="user-123",
+        provenance=_STARTED,
     )
 
     assert result.status == "routed"
@@ -548,6 +612,7 @@ async def test_create_and_execute_accepts_task_id_override_for_a2a_callers():
         description="agent-to-agent ping",
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
         task_id=pre_id,
         title="A2A Message Task",
         metadata_overrides={"task_source": "a2a_protocol"},
@@ -585,6 +650,7 @@ async def test_start_run_forwards_reserved_id_and_trusted_attachment_metadata():
         ),
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
         task_id=task_id,
         trusted_metadata={"workspace_attachments": attachments},
     )
@@ -607,6 +673,7 @@ async def test_reserve_then_dispatch_persists_before_starting_workflow():
         RunCreate(agent_id=agent_id, description="Analyze upload"),
         workspace_id="ws-abc",
         user_id="user-123",
+        provenance=_STARTED,
         task_id=task_id,
         trusted_metadata={"workspace_attachments": [{"filename": "report.csv"}]},
     )
@@ -616,6 +683,7 @@ async def test_reserve_then_dispatch_persists_before_starting_workflow():
     assert reserve_call.kwargs["task_id"] == task_id
     assert reserve_call.kwargs["status"] == "preparing"
     assert reserve_call.kwargs["require_model"] is True
+    assert reserve_call.kwargs["provenance"] == _STARTED
     assert reserve_call.kwargs["metadata_overrides"]["workspace_attachments"] == [
         {"filename": "report.csv"}
     ]

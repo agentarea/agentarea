@@ -104,7 +104,7 @@ class ClientsToolset(Toolset):
             clients = await service.list(
                 limit=limit,
                 offset=offset,
-                ids=await readable_resource_ids(user_ctx.user_id),
+                ids=await readable_resource_ids(user_ctx),
             )
             return json.dumps([_summary(c) for c in clients], default=str)
 
@@ -144,7 +144,7 @@ class ClientsToolset(Toolset):
             await grant_resource_owner(
                 resource_id=client.id,
                 workspace_id=user_ctx.workspace_id,
-                user_id=user_ctx.user_id,
+                owner=user_ctx.graph_subject,
             )
             return json.dumps(_summary(client), default=str)
 

@@ -55,7 +55,7 @@ export default async function AgentsBrowsePage({
         controls: (
           <Button
             asChild
-            className="shrink-0 min-h-11 md:min-h-6"
+            className="shrink-0"
             size="xs"
             data-test="deploy-button"
           >

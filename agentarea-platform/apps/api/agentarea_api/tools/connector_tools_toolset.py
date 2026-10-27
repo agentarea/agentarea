@@ -344,7 +344,7 @@ class ConnectorToolsToolset(Toolset):
         ):
             service = _instance_service(repo_factory, event_broker, secret_mgr)
             openapi_service = await get_openapi_connection_service(repo_factory, secret_mgr)
-            readable = await readable_resource_ids(user_ctx.user_id)
+            readable = await readable_resource_ids(user_ctx)
             instances = [
                 instance
                 for instance in await service.list()
@@ -466,9 +466,7 @@ class ConnectorToolsToolset(Toolset):
             [instance] = instances
             if not _platform_managed(instance):
                 try:
-                    await require_permission(
-                        "use", "mcp_instance", str(instance.id), user_ctx.user_id
-                    )
+                    await require_permission("use", "mcp_instance", str(instance.id), user_ctx)
                 except HTTPException as exc:
                     raise ToolError(exc.detail) from exc
 
@@ -506,9 +504,7 @@ class ConnectorToolsToolset(Toolset):
     ) -> str | InputRequiredResult:
         if not _platform_managed(connection):
             try:
-                await require_permission(
-                    "use", "openapi_connection", str(connection.id), user_ctx.user_id
-                )
+                await require_permission("use", "openapi_connection", str(connection.id), user_ctx)
             except HTTPException as exc:
                 raise ToolError(exc.detail) from exc
 
