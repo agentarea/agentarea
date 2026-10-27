@@ -1237,6 +1237,25 @@ export const zMcpContainersHealthResponse = z.object({
 });
 
 /**
+ * MCPInstanceToolPolicy
+ *
+ * One tool of a connection: its workspace default and the workspace's verdict on it.
+ */
+export const zMcpInstanceToolPolicy = z.object({
+  default: z.enum(["allow", "approval", "deny"]),
+  effective: z.enum(["allow", "approval", "deny"]),
+  name: z.string(),
+  reason: z.string().nullish(),
+});
+
+/**
+ * MCPInstanceToolPolicies
+ */
+export const zMcpInstanceToolPolicies = z.object({
+  tools: z.array(zMcpInstanceToolPolicy),
+});
+
+/**
  * MCPServerCreate
  *
  * Payload for creating an MCP server spec (catalog template).
@@ -2494,7 +2513,7 @@ export const zQueryParamOutput = z.object({
 export const zOpenApiConnectionResponse = z.object({
   auth_config_id: z.uuid().nullish(),
   available_tools: z.array(zOpenApiToolResponse),
-  base_url: z.string(),
+  base_url: z.string().nullable(),
   cost: z.record(z.string(), z.unknown()).nullish(),
   created_at: z.iso.datetime(),
   custom_headers: z.array(zHeaderOutput).nullish(),
@@ -5923,6 +5942,17 @@ export const zRunTestAuthV1McpServerInstancesInstanceIdTestAuthPostPath =
   z.object({
     instance_id: z.uuid(),
   });
+
+export const zGetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetPath =
+  z.object({
+    instance_id: z.uuid(),
+  });
+
+/**
+ * Successful Response
+ */
+export const zGetMcpServerInstanceToolPoliciesV1McpServerInstancesInstanceIdToolPoliciesGetResponse =
+  zMcpInstanceToolPolicies;
 
 export const zVerifyMcpServerInstanceV1McpServerInstancesInstanceIdVerifyPostPath =
   z.object({
