@@ -27,6 +27,10 @@ const MODEL_FIELDS: Record<
   ],
 };
 
+/** Whether a toolset asks for models of its own. */
+export const hasCodeToolModelSettings = (toolName: string) =>
+  toolName in MODEL_FIELDS;
+
 function KindModelSelect({
   kind,
   value,

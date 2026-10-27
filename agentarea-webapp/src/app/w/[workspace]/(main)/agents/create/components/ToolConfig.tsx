@@ -1,8 +1,7 @@
 import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import Image from "next/image";
-import { Globe, Wrench } from "lucide-react";
+import { Globe, Pencil, Wrench } from "lucide-react";
 import {
   Control,
   FieldErrors,
@@ -16,9 +15,10 @@ import {
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
-import { Accordion } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import Note from "@/components/ui/note";
+import { EntityAvatar } from "@/components/ui/entity-avatar";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
 import {
   checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
@@ -46,8 +46,16 @@ import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
 import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
 import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { McpToolsTab } from "./McpToolsTab";
-import { TriggerControl } from "./TriggerControl";
-import { CodeToolModelSettings } from "./CodeToolModelSettings";
+import {
+  CodeToolModelSettings,
+  hasCodeToolModelSettings,
+} from "./CodeToolModelSettings";
+import {
+  enabledMcpToolCount,
+  McpToolSettings,
+  type McpToolState,
+} from "./McpToolSettings";
+import { SelectedItemRow, SelectedItems } from "./SelectedItemRow";
 
 type MCPServer = McpServerResponse;
 type ToolGroup = NonNullable<ToolResponse["group"]>;
@@ -61,6 +69,13 @@ const TOOL_GROUP_MESSAGES: Record<
     description: "create.toolGroups.sandbox.description",
   },
 };
+
+/** How many of a tool's methods the agent gets, quiet at the row's edge. */
+const countLabel = (picked: number, total: number) => (
+  <span className="text-xs tabular-nums text-muted-foreground">
+    {picked}/{total}
+  </span>
+);
 
 interface BuiltinTool {
   name: string;
@@ -161,6 +176,16 @@ const ToolConfig = ({
     control,
     name: "tools_config.openapi_configs",
   });
+  const watchedMcpConfigs = useWatch({
+    control,
+    name: "tools_config.mcp_server_configs",
+  });
+  // Picked tools whose settings are shown under their row.
+  const [openTools, setOpenTools] = useState<string[]>([]);
+  const toggleTool = (key: string) =>
+    setOpenTools((keys) =>
+      keys.includes(key) ? keys.filter((open) => open !== key) : [...keys, key]
+    );
   const tMcp = useTranslations("MCPServersPage.createInstance");
   const tPickers = useTranslations("Pickers");
 
@@ -589,6 +614,33 @@ const ToolConfig = ({
     );
   };
 
+  const handleMcpToolState = (
+    index: number,
+    tools: McpAvailableTool[],
+    toolName: string,
+    state: McpToolState
+  ) => {
+    // null means "all, including ones added later" — materialise on first toggle
+    const current: MCPToolConfig[] =
+      getValues(`tools_config.mcp_server_configs.${index}.allowed_tools`) ??
+      tools.map((tool) => ({ tool_name: tool.name }));
+    const requiresApproval = state === "approval_required";
+    const next =
+      state === "disabled"
+        ? current.filter((config) => config.tool_name !== toolName)
+        : current.some((config) => config.tool_name === toolName)
+          ? current.map((config) =>
+              config.tool_name === toolName
+                ? { ...config, requires_user_confirmation: requiresApproval }
+                : config
+            )
+          : [
+              ...current,
+              { tool_name: toolName, requires_user_confirmation: requiresApproval },
+            ];
+    setValue(`tools_config.mcp_server_configs.${index}.allowed_tools`, next);
+  };
+
   const handleAddTools = (servers: McpInstance[]) => {
     if (!servers?.length) return;
 
@@ -829,314 +881,255 @@ const ToolConfig = ({
           </ConfigSheet>
         }
       >
-        <div className="space-y-4">
-          {toolGroups.map(([group, members]) => (
-            <div
-              key={group}
-              className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-2"
-            >
-              <div className="min-w-0">
-                <label
-                  htmlFor={`tool-group-${group}`}
-                  className="cursor-pointer text-sm font-medium"
-                >
-                  {t(TOOL_GROUP_MESSAGES[group].label)}
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  {t(TOOL_GROUP_MESSAGES[group].description)}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {members
-                    .map((member) => getBuiltinToolDisplayInfo(member).displayName)
-                    .join(", ")}
-                </p>
-              </div>
-              <Switch
-                id={`tool-group-${group}`}
-                checked={isToolGroupEnabled(members)}
-                onCheckedChange={(enabled) =>
-                  setToolGroupEnabled(members, enabled)
-                }
-              />
-            </div>
-          ))}
-
-          {/* Built-in Tools Section */}
-          {visibleBuiltinToolFields.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-foreground">
-                {t("create.builtinTools")}
-              </h4>
-              <Accordion
-                type="multiple"
-                id="builtin-tools-items"
-                className="space-y-2"
-              >
-                {(builtinToolFields ?? []).map((item, index) => {
-                  const builtinTool = builtinTools.find(
-                    (tool) => tool.name === item.tool_name
-                  );
-                  if (!builtinTool || builtinTool.group) return null;
-
-                  const { IconComponent, displayName, description } =
-                    getBuiltinToolDisplayInfo(builtinTool);
-
-                  return (
-                    <TriggerControl
-                      name={`tools_config.builtin_tools.${index}.tool_name`}
-                      enabledName={`tools_config.builtin_tools.${index}.enabled`}
-                      key={`builtin-tool-${index}`}
-                      trigger={{
-                        id: builtinTool.name,
-                        name: displayName,
-                        description,
-                        icon: IconComponent,
-                        available_methods: builtinTool.available_methods,
-                      }}
-                      index={index}
-                      control={control}
-                      removeEvent={() => removeBuiltinTool?.(index)}
-                      // editEvent={() => {}}
-                      selectedMethods={selectedMethods[builtinTool.name] || {}}
-                      onMethodToggle={(methodName: string, checked: boolean) =>
-                        handleMethodToggle(
-                          builtinTool.name,
-                          methodName,
-                          checked
-                        )
-                      }
+        <div className="space-y-2">
+          {toolGroups.length > 0 && (
+            <div className="overflow-hidden rounded-md border">
+              {toolGroups.map(([group, members]) => (
+                <SelectedItemRow
+                  key={group}
+                  avatar={
+                    <EntityAvatar
+                      variant="soft"
+                      size={24}
+                      iconScale={0.45}
+                      icon={<Wrench strokeWidth={1.85} />}
+                      aria-hidden
+                    />
+                  }
+                  title={
+                    <label
+                      htmlFor={`tool-group-${group}`}
+                      className="cursor-pointer"
                     >
+                      {t(TOOL_GROUP_MESSAGES[group].label)}
+                    </label>
+                  }
+                  subtitle={t(TOOL_GROUP_MESSAGES[group].description)}
+                  end={
+                    <Switch
+                      id={`tool-group-${group}`}
+                      checked={isToolGroupEnabled(members)}
+                      onCheckedChange={(enabled) =>
+                        setToolGroupEnabled(members, enabled)
+                      }
+                    />
+                  }
+                />
+              ))}
+            </div>
+          )}
+
+          <SelectedItems
+            count={
+              visibleBuiltinToolFields.length +
+              toolFields.length +
+              (openapiFields?.length ?? 0)
+            }
+            empty={t("create.agentToolsDescription")}
+          >
+            {(builtinToolFields ?? []).map((item, index) => {
+              const builtinTool = builtinTools.find(
+                (tool) => tool.name === item.tool_name
+              );
+              if (!builtinTool || builtinTool.group) return null;
+              const { IconComponent, displayName, description } =
+                getBuiltinToolDisplayInfo(builtinTool);
+              const methods = builtinTool.available_methods ?? [];
+              const picked = methods.filter(
+                (method) => selectedMethods[builtinTool.name]?.[method.name]
+              ).length;
+              const key = `builtin-${builtinTool.name}`;
+              const hasSettings =
+                methods.length > 0 ||
+                hasCodeToolModelSettings(builtinTool.name);
+              return (
+                <SelectedItemRow
+                  key={key}
+                  open={openTools.includes(key)}
+                  onOpenChange={hasSettings ? () => toggleTool(key) : undefined}
+                  avatar={
+                    <EntityAvatar
+                      variant="soft"
+                      size={24}
+                      iconScale={0.45}
+                      icon={<IconComponent strokeWidth={1.85} />}
+                      aria-hidden
+                    />
+                  }
+                  title={displayName}
+                  subtitle={description}
+                  end={methods.length > 0 && countLabel(picked, methods.length)}
+                  removeLabel={t("create.removeTool", { name: displayName })}
+                  onRemove={() => removeBuiltinTool?.(index)}
+                >
+                  {hasSettings && (
+                    <>
                       <CodeToolModelSettings
                         toolName={builtinTool.name}
                         index={index}
                         control={control}
                         setValue={setValue}
                       />
-                    </TriggerControl>
-                  );
-                })}
-              </Accordion>
-            </div>
-          )}
+                      {renderBuiltinMethods(builtinTool)}
+                    </>
+                  )}
+                </SelectedItemRow>
+              );
+            })}
 
-          {/* MCP Tools Section */}
-          {toolFields.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Image
-                  src="/mcp.svg"
-                  alt="MCP"
-                  width={14}
-                  height={14}
-                  className="text-current"
-                />
-                {t("create.mcpServers")}
-              </h4>
-              <Accordion
-                type="multiple"
-                id="mcp-tools-items"
-                className="space-y-2"
-              >
-                {toolFields.map((item, index) => (
-                  <TriggerControl
-                    name={`tools_config.mcp_server_configs.${index}.mcp_server_id`}
-                    enabledName={`tools_config.mcp_server_configs.${index}.enabled`}
-                    key={`tool-${index}`}
-                    trigger={resolveInstanceTrigger(item.mcp_server_id)}
-                    index={index}
-                    control={control}
-                    removeEvent={() => removeTool(index)}
-                    editEvent={() => editTool(index)}
-                    allowedToolsFieldName={`tools_config.mcp_server_configs.${index}.allowed_tools`}
-                    onAllToolsChange={(all) => {
-                      const trigger = resolveInstanceTrigger(item.mcp_server_id);
+            {toolFields.map((item, index) => {
+              const trigger = resolveInstanceTrigger(item.mcp_server_id);
+              const allowed =
+                watchedMcpConfigs?.[index]?.allowed_tools ?? null;
+              const tools = trigger.available_tools;
+              const key = `mcp-${item.mcp_server_id}`;
+              return (
+                <SelectedItemRow
+                  key={key}
+                  open={openTools.includes(key)}
+                  onOpenChange={() => toggleTool(key)}
+                  avatar={
+                    <EntityAvatar
+                      variant="soft"
+                      size={24}
+                      iconScale={trigger.iconSrc ? 0.68 : 0.45}
+                      src={trigger.iconSrc}
+                      icon={<Wrench strokeWidth={1.85} />}
+                      aria-hidden
+                    />
+                  }
+                  title={trigger.name}
+                  badge={
+                    <Badge variant="outline" className="shrink-0 self-center">
+                      MCP
+                    </Badge>
+                  }
+                  subtitle={trigger.description}
+                  end={
+                    tools.length > 0 &&
+                    countLabel(enabledMcpToolCount(tools, allowed), tools.length)
+                  }
+                  actionCount={1}
+                  actions={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => editTool(index)}
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      aria-label={t("create.editTool", { name: trigger.name })}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  }
+                  removeLabel={t("create.removeTool", { name: trigger.name })}
+                  onRemove={() => removeTool(index)}
+                >
+                  <McpToolSettings
+                    id={key}
+                    tools={tools}
+                    allowed={allowed}
+                    onAllToolsChange={(all) =>
                       setValue(
                         `tools_config.mcp_server_configs.${index}.allowed_tools`,
-                        all ? null : initialMcpAllowedTools(trigger.available_tools) ?? []
-                      );
-                    }}
-                    onToolStateChange={(toolName, state) => {
-                      const trigger = resolveInstanceTrigger(item.mcp_server_id);
-                      const allTools = trigger?.available_tools || [];
-                      // null means "all, including ones added later" — materialise on first toggle
-                      const currentAllowed: MCPToolConfig[] =
-                        getValues(`tools_config.mcp_server_configs.${index}.allowed_tools`) ??
-                        allTools.map((t) => ({ tool_name: t.name }));
-
-                      let newAllowed: MCPToolConfig[];
-                      if (state === "disabled") {
-                        newAllowed = currentAllowed.filter((t) => t.tool_name !== toolName);
-                      } else {
-                        const existing = currentAllowed.find((t) => t.tool_name === toolName);
-                        if (existing) {
-                          newAllowed = currentAllowed.map((t) =>
-                            t.tool_name === toolName
-                              ? { ...t, requires_user_confirmation: state === "approval_required" }
-                              : t
-                          );
-                        } else {
-                          newAllowed = [
-                            ...currentAllowed,
-                            { tool_name: toolName, requires_user_confirmation: state === "approval_required" },
-                          ];
-                        }
-                      }
-                      setValue(`tools_config.mcp_server_configs.${index}.allowed_tools`, newAllowed);
-                    }}
+                        all ? null : (initialMcpAllowedTools(tools) ?? [])
+                      )
+                    }
+                    onToolStateChange={(toolName, state) =>
+                      handleMcpToolState(index, tools, toolName, state)
+                    }
                   />
-                ))}
-              </Accordion>
-            </div>
-          )}
+                </SelectedItemRow>
+              );
+            })}
 
-          {/* OpenAPI Tools Section */}
-          {openapiFields && openapiFields.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Globe className="h-[14px] w-[14px] text-muted-foreground" />
-                {t("create.openAPIConnections")}
-              </h4>
-              <div className="space-y-2">
-                {openapiFields.map((item, index) => {
-                  const connection = openapiConnections.find(
-                    (c) => c.id === item.openapi_connection_id
-                  );
-                  const displayName =
-                    item.openapi_connection_name ||
-                    connection?.name ||
-                    item.openapi_connection_id;
-                  const allowedTools =
-                    watchedOpenapiConfigs?.[index]?.allowed_tools ?? null;
-                  const allTools = connection?.available_tools || [];
-                  const activeCount =
-                    allowedTools === null
-                      ? allTools.length
-                      : allowedTools.length;
-
-                  const currentLoadMode = item.load_mode ?? "explicit";
-
-                  return (
-                    <div
-                      key={`openapi-${index}`}
-                      className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
+            {(openapiFields ?? []).map((item, index) => {
+              const connection = openapiConnections.find(
+                (c) => c.id === item.openapi_connection_id
+              );
+              const displayName =
+                item.openapi_connection_name ||
+                connection?.name ||
+                item.openapi_connection_id;
+              const allowedTools =
+                watchedOpenapiConfigs?.[index]?.allowed_tools ?? null;
+              const allTools = connection?.available_tools || [];
+              const activeCount =
+                allowedTools === null ? allTools.length : allowedTools.length;
+              const loadMode =
+                watchedOpenapiConfigs?.[index]?.load_mode ?? "explicit";
+              const key = `openapi-${item.openapi_connection_id}`;
+              return (
+                <SelectedItemRow
+                  key={key}
+                  open={openTools.includes(key)}
+                  onOpenChange={() => toggleTool(key)}
+                  avatar={
+                    <EntityAvatar
+                      variant="soft"
+                      size={24}
+                      iconScale={0.45}
+                      icon={<Globe strokeWidth={1.85} />}
+                      aria-hidden
+                    />
+                  }
+                  title={displayName}
+                  badge={
+                    <Badge variant="outline" className="shrink-0 self-center">
+                      OpenAPI
+                    </Badge>
+                  }
+                  subtitle={connection?.base_url}
+                  end={
+                    allTools.length > 0 &&
+                    countLabel(activeCount, allTools.length)
+                  }
+                  removeLabel={t("create.removeTool", { name: displayName })}
+                  onRemove={() => removeOpenapiTool?.(index)}
+                >
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">
+                      {t("create.loadMode.label")}
+                    </p>
+                    <SegmentedControl
+                      layoutId={`${key}-load-mode`}
+                      value={loadMode}
+                      onChange={(mode) =>
+                        handleOpenapiLoadModeChange(
+                          item.openapi_connection_id,
+                          mode
+                        )
+                      }
+                      items={(["explicit", "searchable"] as const).map(
+                        (mode) => ({
+                          value: mode,
+                          label: t(`create.loadMode.${mode}`),
+                        })
+                      )}
+                    />
+                    <p className="note">
+                      {t(`create.loadMode.${loadMode}Hint`)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={`${key}-all-tools`}
+                      size="xs"
+                      checked={allowedTools === null}
+                      onCheckedChange={(all) => handleOpenapiAllTools(index, all)}
+                    />
+                    <label
+                      htmlFor={`${key}-all-tools`}
+                      className="cursor-pointer text-xs text-foreground"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{displayName}</p>
-                          {connection?.base_url && (
-                            <p className="truncate text-xs text-muted-foreground">
-                              {connection.base_url}
-                            </p>
-                          )}
-                          {(allowedTools !== null || allTools.length > 0) && (
-                            <p className="text-xs text-muted-foreground">
-                              {activeCount} of {allTools.length} operations
-                            </p>
-                          )}
-                          <div className="mt-1 flex items-center gap-2">
-                            <Switch
-                              id={`openapi-all-tools-${index}`}
-                              size="xs"
-                              checked={allowedTools === null}
-                              onCheckedChange={(all) =>
-                                handleOpenapiAllTools(index, all)
-                              }
-                            />
-                            <label
-                              htmlFor={`openapi-all-tools-${index}`}
-                              className="cursor-pointer text-xs text-foreground"
-                            >
-                              {t("create.allToolsIncludingNew")}
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div
-                          className="inline-flex items-center rounded-md border text-xs"
-                          role="group"
-                          aria-label="Load mode"
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleOpenapiLoadModeChange(
-                                item.openapi_connection_id,
-                                "explicit"
-                              )
-                            }
-                            className={
-                              "px-2 py-0.5 rounded-l-md " +
-                              (currentLoadMode === "explicit"
-                                ? "bg-accent text-accent-foreground"
-                                : "text-muted-foreground hover:text-foreground")
-                            }
-                            aria-pressed={currentLoadMode === "explicit"}
-                            title="Send every operation schema in every LLM call (default behavior, larger context)."
-                          >
-                            Explicit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleOpenapiLoadModeChange(
-                                item.openapi_connection_id,
-                                "searchable"
-                              )
-                            }
-                            className={
-                              "px-2 py-0.5 rounded-r-md border-l " +
-                              (currentLoadMode === "searchable"
-                                ? "bg-accent text-accent-foreground"
-                                : "text-muted-foreground hover:text-foreground")
-                            }
-                            aria-pressed={currentLoadMode === "searchable"}
-                            title="Defer schemas behind a load_tools meta-tool; only a name+description catalog goes into the system prompt."
-                          >
-                            Searchable
-                          </button>
-                        </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeOpenapiTool?.(index)}
-                        className="h-6 w-6 shrink-0 text-muted-foreground/60 hover:bg-transparent hover:text-red-500"
-                        aria-label="Remove OpenAPI connection"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                         
-                        >
-                          <path d="M3 6h18" />
-                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                        </svg>
-                      </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Empty state - only show if no tools at all */}
-          {(!builtinToolFields || builtinToolFields.length === 0) &&
-            toolFields.length === 0 &&
-            (!openapiFields || openapiFields.length === 0) && (
-            <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
-              <p>{t("create.agentToolsDescription")}</p>  
-              <p>{t("create.agentToolsNote")}</p>
-            </Note>
-          )}
+                      {t("create.allToolsIncludingNew")}
+                    </label>
+                  </div>
+                  {renderOpenapiOperations(item.openapi_connection_id)}
+                </SelectedItemRow>
+              );
+            })}
+          </SelectedItems>
         </div>
       </AccordionControl>
 

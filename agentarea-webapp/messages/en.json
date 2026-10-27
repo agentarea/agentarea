@@ -702,7 +702,16 @@
       "loadingOpenapiConnections": "Loading OpenAPI connections...",
       "loadInstanceFailed": "Couldn't load the MCP connection for editing",
       "updateInstanceFailed": "Couldn't update the MCP connection",
-      "triggerStreamRequired": "Pick the stream this trigger listens to"
+      "triggerStreamRequired": "Pick the stream this trigger listens to",
+      "removeTool": "Remove {name}",
+      "editTool": "Edit {name}",
+      "loadMode": {
+        "label": "How the agent sees operations",
+        "explicit": "Explicit",
+        "searchable": "Searchable",
+        "explicitHint": "Every operation's schema goes into every LLM call: simplest, but the context grows with the spec.",
+        "searchableHint": "Only names and descriptions go into the prompt; the agent loads the schemas it needs. Keeps cost flat for a large spec."
+      }
     },
     "browseCatalog": "Browse the catalog",
     "newTask": "New task",
@@ -744,6 +753,14 @@
       "nameTaken": "Another delegate already has this name.",
       "urlInvalid": "Enter an http(s) URL.",
       "empty": "No delegates. Add agents this agent can hand tasks to.",
+      "remove": "Remove {name}"
+    },
+    "skillsConfig": {
+      "title": "Skills",
+      "note": "Skills extend the agent with specialized behaviors and knowledge.",
+      "sheetDescription": "Add skills to extend what your agent can do",
+      "add": "Skill",
+      "empty": "No skills. Add skills to extend what this agent can do.",
       "remove": "Remove {name}"
     },
     "a2aAccess": {
