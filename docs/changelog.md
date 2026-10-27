@@ -30,6 +30,9 @@ Stay up to date with the latest AgentArea releases, bug fixes, and new features.
 - A Telegram trigger is saved only after Telegram accepts the webhook registration; a refused or unreachable registration fails the save with 502.
 - Workspace billing routes moved under the workspace: `/v1/workspaces/{workspace}/billing/*`.
 
+### Fixed
+- Gemini models work with the AgentArea MCP server again: `inbox_list` no longer offers `""` as a `status` value, which made Gemini reject every request. Omit `status` to list every inbox status; an explicit `status: ""` is now refused.
+
 ---
 
 ## [0.8.0] - 2026-01-20

@@ -1,7 +1,7 @@
 """InboxToolset — read tasks and held tool calls that need user attention."""
 
 import json
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from agentarea_agents_sdk.tools.base_tool import ToolError
@@ -44,7 +44,7 @@ class InboxPage(BaseModel):
     page_size: int = Field(description="Runs per page.")
     tool_call_approvals: list[HeldToolCallOutput] = Field(
         description="Client tool calls waiting on a person's approval; empty unless status is "
-        "empty or waiting_for_approval."
+        "omitted or waiting_for_approval."
     )
 
 
@@ -65,9 +65,9 @@ class InboxToolset(Toolset):
     async def list(
         self,
         status: Annotated[
-            InboxStatus | Literal[""],
-            Field(description="Only runs in this status; empty for every inbox status."),
-        ] = "",
+            InboxStatus | None,
+            Field(description="Only runs in this status; omit for every inbox status."),
+        ] = None,
         agent_id: Annotated[
             str, Field(description="Only runs of this agent id, from `agents_list`; empty for any.")
         ] = "",
