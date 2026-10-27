@@ -181,8 +181,8 @@ const BasicInformation = ({
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder={t("instructionPlaceholder")}
-                // Grows with the instruction, scrolling only past 60% of the screen.
-                className="min-h-[200px] max-h-[60vh] resize-none"
+                // Grows with the instruction, scrolling only past half the screen.
+                className="min-h-[200px] max-h-[50vh] resize-none"
                 aria-invalid={!!getNestedErrorMessage(errors, "instruction")}
               />
             )}
