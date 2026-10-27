@@ -726,7 +726,9 @@
       "validationFailed": "Некоторые поля заполнены неверно.",
       "createFailed": "Не удалось создать агента",
       "testAgent": "Протестировать агента",
-      "closeTest": "Закрыть тестовый чат"
+      "closeTest": "Закрыть тестовый чат",
+      "newAgent": "Новый агент",
+      "chatPlaceholder": "Напишите задачу для {name}"
     },
     "delegationConfig": {
       "title": "Делегирование",

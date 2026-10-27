@@ -21,6 +21,7 @@ import type {
 import type { StreamOptions } from "@/app/w/[workspace]/(main)/triggers/create/streamOptions";
 import FullChat from "@/components/Chat/FullChat";
 import FormError from "@/components/FormError";
+import { InfoPanelHeader } from "@/components/InfoPanel";
 import { LoadingSpinner } from "@/components/LoadingSpinner";
 import { Button } from "@/components/ui/button";
 import Divider from "@/components/ui/divider";
@@ -405,32 +406,34 @@ export default function AgentForm({
   // Chat content component
   const chatContent = (
     <>
-      <div className="min-h-[40px] text-sm flex items-center gap-2 border-b border-zinc-200 bg-white px-4 dark:border-zinc-700 dark:bg-zinc-800">
-        Test{" "}
-        {agentName ? (
-          <span className="font-bold">{agentName}</span>
-        ) : (
-          "New Agent"
-        )}
-        {!isMobile && (
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            className="ml-auto h-6 w-6"
-            aria-label={t("closeTest")}
-            onClick={() => setIsChatOpen(false)}
-          >
-            <X />
-          </Button>
-        )}
-      </div>
+      <InfoPanelHeader
+        className="border-b border-zinc-200 dark:border-zinc-700"
+        label={t("testAgent")}
+        title={agentName || t("newAgent")}
+        right={
+          !isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              type="button"
+              className="h-6 w-6"
+              aria-label={t("closeTest")}
+              onClick={() => setIsChatOpen(false)}
+            >
+              <X />
+            </Button>
+          )
+        }
+      />
       <div className="relative h-full py-5 px-3 flex-1 overflow-auto">
         <div className="absolute inset-0 bg-[url('/lines.png')] dark:bg-[url('/lines-dark.png')] bg-[size:450px_450px] bg-center bg-repeat opacity-20 pointer-events-none" />
         <div className="relative z-1 h-full">
           <FullChat
             agent={{ id: agentId || "new", name: agentName }}
-            placeholder={placeholder || `Write a new task for ${agentName}`}
+            placeholder={
+              placeholder ||
+              t("chatPlaceholder", { name: agentName || t("newAgent") })
+            }
             welcomeComponent={welcomeComponent}
           />
         </div>
@@ -593,7 +596,7 @@ export default function AgentForm({
           className="w-full sm:max-w-lg flex flex-col p-0"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>{agentName} Chat</SheetTitle>
+            <SheetTitle>{t("testAgent")}</SheetTitle>
           </SheetHeader>
           <div className="overflow-hidden h-full flex flex-col">
             {chatContent}

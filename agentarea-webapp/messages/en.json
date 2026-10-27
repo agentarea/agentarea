@@ -726,7 +726,9 @@
       "validationFailed": "Some fields are invalid.",
       "createFailed": "Couldn't create the agent",
       "testAgent": "Test agent",
-      "closeTest": "Close test chat"
+      "closeTest": "Close test chat",
+      "newAgent": "New agent",
+      "chatPlaceholder": "Write a task for {name}"
     },
     "delegationConfig": {
       "title": "Delegation",
