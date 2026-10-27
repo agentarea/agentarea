@@ -92,12 +92,13 @@ export default function AccordionControl({
                 {isDropdown ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
+                      {/* Sized like the ConfigSheet trigger beside it. */}
                       <Button
-                        className="focus-visible:ring-0"
+                        className="gap-1.5 focus-visible:ring-0"
                         type="button"
-                        size="sm"
+                        size="xs"
                       >
-                        <Plus />
+                        <Plus className="h-4 w-4" />
                         {isDropdown && props.addText ? props.addText : "Add"}
                       </Button>
                     </DropdownMenuTrigger>
