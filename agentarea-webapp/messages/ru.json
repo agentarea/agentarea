@@ -681,6 +681,7 @@
       "createAndUseProviderConfiguration": "Создайте и используйте конфигурацию провайдера",
       "createConfiguration": "Создать конфигурацию",
       "triggerEnabled": "Включён",
+      "triggerOff": "Выкл.",
       "removeTrigger": "Удалить триггер",
       "noTriggers": "Триггеров нет. Агент запускается, только когда для него создают задачу.",
       "triggersManagedElsewhere": "Расписания и каналы этого агента настраиваются в разделе «Автоматизация».",

@@ -681,6 +681,7 @@
       "createAndUseProviderConfiguration": "Create and use a provider configuration",
       "createConfiguration": "Create Configuration",
       "triggerEnabled": "Enabled",
+      "triggerOff": "Off",
       "removeTrigger": "Remove trigger",
       "noTriggers": "No triggers. The agent runs only when a task is started for it.",
       "triggersManagedElsewhere": "Schedules and channels of this agent are managed in Automation.",
