@@ -1,3 +1,5 @@
+import type { ToolPolicy } from "./tool-policy";
+
 // Untrusted safety hints supplied by the MCP server (per the MCP spec, clients
 // must not rely on these for security — we surface them for labeling only).
 export interface ToolAnnotations {
@@ -60,7 +62,12 @@ export type ToolFacet =
   | "equipped"
   | "unequipped"
   | "destructive"
-  | "readOnly";
+  | "readOnly"
+  | "denied"
+  | "approval";
+
+/** A tool's workspace policy; `null` where the list has none to show. */
+export type ToolPolicyLookup = ((toolName: string) => ToolPolicy) | null;
 
 export interface ToolGroup {
   key: string;
@@ -134,7 +141,8 @@ export function buildPrincipalLookup(
 function matchesFacet(
   tool: Tool,
   facet: ToolFacet,
-  principalsFor: PrincipalLookup | null
+  principalsFor: PrincipalLookup | null,
+  policyOf: ToolPolicyLookup
 ): boolean {
   switch (facet) {
     case "equipped":
@@ -145,6 +153,10 @@ function matchesFacet(
       return tool.annotations?.destructiveHint === true;
     case "readOnly":
       return tool.annotations?.readOnlyHint === true;
+    case "denied":
+      return policyOf?.(tool.name) === "deny";
+    case "approval":
+      return policyOf?.(tool.name) === "approval";
     default:
       return true;
   }
@@ -156,7 +168,13 @@ export function filterTools(
     query,
     facet,
     principalsFor,
-  }: { query: string; facet: ToolFacet; principalsFor: PrincipalLookup | null }
+    policyOf = null,
+  }: {
+    query: string;
+    facet: ToolFacet;
+    principalsFor: PrincipalLookup | null;
+    policyOf?: ToolPolicyLookup;
+  }
 ): Tool[] {
   const needle = query.trim().toLowerCase();
   return tools.filter((tool) => {
@@ -164,21 +182,27 @@ export function filterTools(
       const haystack = `${tool.name} ${tool.title ?? ""} ${tool.description ?? ""}`;
       if (!haystack.toLowerCase().includes(needle)) return false;
     }
-    return matchesFacet(tool, facet, principalsFor);
+    return matchesFacet(tool, facet, principalsFor, policyOf);
   });
 }
 
 export function countToolFacets(
   tools: Tool[],
-  principalsFor: PrincipalLookup | null
+  principalsFor: PrincipalLookup | null,
+  policyOf: ToolPolicyLookup = null
 ): Record<ToolFacet, number> {
   let equipped = 0;
   let destructive = 0;
   let readOnly = 0;
+  let denied = 0;
+  let approval = 0;
   for (const tool of tools) {
     if (principalsFor && principalsFor(tool.name).length > 0) equipped++;
     if (tool.annotations?.destructiveHint) destructive++;
     if (tool.annotations?.readOnlyHint) readOnly++;
+    const policy = policyOf?.(tool.name);
+    if (policy === "deny") denied++;
+    if (policy === "approval") approval++;
   }
   return {
     all: tools.length,
@@ -186,6 +210,8 @@ export function countToolFacets(
     unequipped: tools.length - equipped,
     destructive,
     readOnly,
+    denied,
+    approval,
   };
 }
 
@@ -334,4 +360,3 @@ export function titleAddsToName(name: string, title?: string | null): boolean {
     return !word.startsWith(stem);
   });
 }
-

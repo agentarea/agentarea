@@ -108,6 +108,33 @@ export function toolTarget(name: string): string {
   return `tool:${name}`;
 }
 
+// A tool named through the connection that serves it, as the runtime checks
+// it: "mcp:<connection id>:<tool>". Raw tool names are only unique per server.
+export function connectionToolName(connectionId: string, tool: string): string {
+  return `mcp:${connectionId}:${tool}`;
+}
+
+export function parseConnectionToolName(
+  name: string
+): { connectionId: string; tool: string } | null {
+  const match = /^mcp:([^:]+):(.+)$/.exec(name);
+  return match ? { connectionId: match[1], tool: match[2] } : null;
+}
+
+/**
+ * A rule's tool name for people: "<connection> › <tool>" for a tool named
+ * through its connection, the name itself otherwise.
+ */
+export function describeToolName(
+  name: string,
+  connectionNames: ReadonlyMap<string, string>
+): string {
+  const parsed = parseConnectionToolName(name);
+  if (!parsed) return name;
+  const connection = connectionNames.get(parsed.connectionId) ?? "Removed connection";
+  return `${connection} › ${parsed.tool}`;
+}
+
 // Known, dimension-mapped targets for cap/safety effects.
 export const CAP_TARGETS = ["spend", "service", "tokens"] as const;
 export type CapTarget = (typeof CAP_TARGETS)[number];

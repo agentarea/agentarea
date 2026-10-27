@@ -95,7 +95,28 @@ describe("countToolFacets", () => {
       unequipped: 2,
       destructive: 1,
       readOnly: 1,
+      denied: 0,
+      approval: 0,
     });
+  });
+
+  it("counts the tools the workspace denies or holds for approval", () => {
+    const policyOf = (name: string) =>
+      name === annotated[0].name
+        ? "deny"
+        : name === annotated[1].name
+          ? "approval"
+          : "allow";
+    const counts = countToolFacets(annotated, null, policyOf);
+    expect([counts.denied, counts.approval]).toEqual([1, 1]);
+    expect(
+      filterTools(annotated, {
+        query: "",
+        facet: "denied",
+        principalsFor: null,
+        policyOf,
+      }).map((tool) => tool.name)
+    ).toEqual([annotated[0].name]);
   });
 
   it("counts nothing as equipped without consumer data", () => {
@@ -274,4 +295,3 @@ describe("titleAddsToName", () => {
     expect(titleAddsToName("get_file", "  ")).toBe(false);
   });
 });
-

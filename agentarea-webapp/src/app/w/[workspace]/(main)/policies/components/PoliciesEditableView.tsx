@@ -6,6 +6,7 @@ import EmptyState from "@/components/EmptyState";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import type { Policy } from "@/types/policies";
 import PoliciesList from "./PoliciesList";
+import type { ConnectionNames } from "./policy-rules";
 
 interface AgentOption {
   id: string;
@@ -17,11 +18,13 @@ interface AgentOption {
 interface PoliciesEditableViewProps {
   policies: Policy[];
   agents: AgentOption[];
+  connectionNames: ConnectionNames;
 }
 
 export default function PoliciesEditableView({
   policies,
   agents,
+  connectionNames,
 }: PoliciesEditableViewProps) {
   const router = useWorkspaceRouter();
   const t = useTranslations("PoliciesPage");
@@ -50,6 +53,7 @@ export default function PoliciesEditableView({
         <PoliciesList
           policies={policies}
           agents={agents}
+          connectionNames={connectionNames}
           onEditRule={handleEditRule}
         />
       )}
