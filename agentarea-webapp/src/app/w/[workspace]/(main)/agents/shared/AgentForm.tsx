@@ -10,6 +10,7 @@ import React, {
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { useFieldArray, useForm } from "react-hook-form";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import type {
   AgentPresetResponse,
   ApiKeyResponse,
@@ -103,6 +104,13 @@ interface AgentFormProps {
   welcomeComponent?: React.ReactNode;
 }
 
+/** Share of the width the test chat opens to, in percent. */
+const CHAT_PANEL_SIZE = 40;
+const CHAT_SLIDE_MS = 300;
+/** Panels ease to a new size, except while their handle is dragged. */
+const slideClassName =
+  "transition-[flex-grow] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none";
+
 export default function AgentForm({
   className,
   mcpServers,
@@ -127,6 +135,22 @@ export default function AgentForm({
   const formRef = useRef<HTMLFormElement>(null);
   const isMobile = useIsMobile();
   const { isChatOpen, setIsChatOpen } = useChat();
+  // The test chat slides in and out instead of popping: its panel stays in
+  // the group and grows from nothing; the chat itself mounts only while seen.
+  const chatPanelRef = useRef<ImperativePanelHandle>(null);
+  const [chatMounted, setChatMounted] = useState(isChatOpen);
+  const [isResizing, setIsResizing] = useState(false);
+  useEffect(() => {
+    const panel = chatPanelRef.current;
+    if (isChatOpen) {
+      setChatMounted(true);
+      panel?.resize(CHAT_PANEL_SIZE);
+      return;
+    }
+    panel?.collapse();
+    const timer = setTimeout(() => setChatMounted(false), CHAT_SLIDE_MS);
+    return () => clearTimeout(timer);
+  }, [isChatOpen]);
   const t = useTranslations("AgentsPage.form");
   const tCommon = useTranslations("Common");
   const [formError, setFormError] = useState<string | null>(null);
@@ -402,8 +426,9 @@ export default function AgentForm({
         <ResizablePanel
           id="agent-form-panel"
           order={1}
-          defaultSize={isMobile || !isChatOpen ? 100 : 60}
+          defaultSize={isMobile || !isChatOpen ? 100 : 100 - CHAT_PANEL_SIZE}
           minSize={isMobile ? 100 : 30}
+          className={cn(!isResizing && slideClassName)}
         >
           <form
             ref={formRef}
@@ -505,18 +530,30 @@ export default function AgentForm({
             {/* Submit button moved to header controls */}
           </form>
         </ResizablePanel>
-        {!isMobile && isChatOpen && (
+        {!isMobile && (
           <>
-            <ResizableHandle withHandle />
+            <ResizableHandle
+              withHandle
+              onDragging={setIsResizing}
+              className={cn(!isChatOpen && "hidden")}
+            />
             <ResizablePanel
+              ref={chatPanelRef}
               id="agent-test-chat-panel"
               order={2}
-              defaultSize={40}
+              defaultSize={isChatOpen ? CHAT_PANEL_SIZE : 0}
               minSize={20}
+              collapsible
+              collapsedSize={0}
+              // Dragging below the minimum closes the chat, like its X.
+              onCollapse={() => setIsChatOpen(false)}
+              className={cn(!isResizing && slideClassName)}
             >
-              <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
-                {chatContent}
-              </div>
+              {chatMounted && (
+                <div className="overflow-hidden h-full flex flex-col border-l border-zinc-200 dark:border-zinc-700">
+                  {chatContent}
+                </div>
+              )}
             </ResizablePanel>
           </>
         )}
