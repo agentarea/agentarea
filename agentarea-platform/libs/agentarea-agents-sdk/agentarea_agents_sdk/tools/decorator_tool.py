@@ -124,6 +124,11 @@ def tool_method(
     the platform (a remote MCP server, an upstream API, GitHub). Left unset, a
     method takes ``open_world`` from its toolset.
 
+    An optional filter is ``X | None = None``, never a sentinel value such as
+    ``Literal[""]``: Gemini cannot take ``""`` as an allowed value and rejects
+    the whole request, every tool included. ``test_tool_schema_portability.py``
+    fails on a tool schema that offers one.
+
     Usage:
         @tool_method(effect="read")
         async def list(self): ...
