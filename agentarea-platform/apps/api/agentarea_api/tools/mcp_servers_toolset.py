@@ -88,7 +88,9 @@ class MCPServerSpecOutput(BaseModel):
     version: str = Field(description="Version of the spec.")
     tags: builtins.list[str] = Field(description="Tags for search and categorization.")
     is_public: bool = Field(description="Whether the spec is visible across workspaces.")
-    remote_url: str | None = Field(description="Endpoint of an HTTP-based server.")
+    remote_url: str | None = Field(
+        description="Endpoint of an HTTP-based server; null for one the platform provides."
+    )
     docker_image_url: str | None = Field(description="Image of a container-based server.")
     status: str = Field(description="Lifecycle status, e.g. 'draft', 'active'.")
 
@@ -164,7 +166,7 @@ def _serialize_server(server: Any) -> dict:
         "version": server.version,
         "tags": server.tags,
         "is_public": server.is_public,
-        "remote_url": server.remote_url,
+        "remote_url": server.visible_remote_url,
         "docker_image_url": server.docker_image_url,
         "status": server.status,
     }

@@ -128,6 +128,7 @@ def _spec(**overrides) -> SimpleNamespace:
         "tags": [],
         "is_public": False,
         "remote_url": None,
+        "visible_remote_url": None,
         "docker_image_url": None,
         "status": "active",
         "env_schema": [],

@@ -346,6 +346,29 @@ class TestMcpExport:
         assert bundle.agents[0].mcps == []
 
     @pytest.mark.asyncio
+    async def test_a_platform_managed_mcp_is_not_exported_with_its_address(
+        self, export_service, mock_agent_service, mock_mcp_instance_service
+    ):
+        platform = _mcp_instance("Example MCP", secret_names=("AGENTAREA_PLATFORM_TOKEN",))
+        platform.managed_by = "platform"
+        mock_mcp_instance_service.list.return_value = [platform]
+        mock_mcp_instance_service.get_transport_spec_for_instance.return_value = {
+            "type": "url",
+            "endpoint_url": "http://agentarea-llm-gateway.agentarea.svc.cluster.local:8080/tools/x",
+        }
+        mock_agent_service.list.return_value = [
+            _agent("Agent", tools=[{"type": "mcp", "name": "Example MCP"}])
+        ]
+
+        exported = await export_service.export_workspace()
+        bundle = parse_bundle(exported)
+
+        assert "svc.cluster.local" not in exported
+        assert "AGENTAREA_PLATFORM_TOKEN" not in exported
+        assert bundle.mcps == []
+        assert bundle.agents[0].mcps == []
+
+    @pytest.mark.asyncio
     async def test_plain_configuration_is_exported_and_credentials_become_setup_fields(
         self, export_service, mock_mcp_instance_service
     ):

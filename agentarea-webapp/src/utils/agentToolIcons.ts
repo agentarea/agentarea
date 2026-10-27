@@ -11,7 +11,7 @@ import { Agent } from "@/types";
 export type OpenApiConnectionRef = {
   id: string;
   name: string;
-  base_url: string;
+  base_url: string | null;
 };
 
 /**

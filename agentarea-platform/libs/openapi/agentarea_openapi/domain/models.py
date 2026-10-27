@@ -75,6 +75,18 @@ class OpenAPIConnection(BaseModel, WorkspaceScopedMixin):
         """The workspace's own connections, plus the platform-managed ones."""
         return or_(cls.workspace_id == workspace_id, cls.managed_by == MANAGED_BY_PLATFORM)
 
+    @property
+    def visible_base_url(self) -> str | None:
+        """The address a tenant may see: their own, never the operator's.
+
+        A platform-managed connection is callable from every workspace, but its
+        base URL is the deployment's internal topology (an in-cluster gateway
+        route); a tenant needs its tools, not where it runs.
+        """
+        if self.managed_by == MANAGED_BY_PLATFORM:
+            return None
+        return self.base_url
+
     def __init__(
         self,
         name: str,

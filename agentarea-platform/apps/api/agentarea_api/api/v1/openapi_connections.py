@@ -13,6 +13,7 @@ from agentarea_common.utils.url_safety import OutboundPolicy
 from agentarea_openapi.application.service import OpenAPIConnectionService, fetch_and_parse_spec
 from agentarea_openapi.application.spec_parser import openapi_spec_info, parse_openapi_spec
 from agentarea_openapi.application.url_validator import validate_url
+from agentarea_openapi.domain.models import OpenAPIConnection
 from agentarea_openapi.schemas.dto import (
     HeaderOutput,
     OpenAPIConnectionCreate,
@@ -38,7 +39,7 @@ class OpenAPIToolResponse(BaseModel):
 class OpenAPIConnectionResponse(BaseModel):
     id: UUID
     name: str
-    base_url: str
+    base_url: str | None
     description: str | None = None
     spec_url: str | None = None
     auth_config_id: UUID | None = None
@@ -84,6 +85,14 @@ def _format_query_params(raw: list[dict[str, Any]] | None) -> list[QueryParamOut
         )
         for p in raw
     ]
+
+
+def _connection_response(conn: OpenAPIConnection) -> OpenAPIConnectionResponse:
+    resp = OpenAPIConnectionResponse.model_validate(conn)
+    resp.base_url = conn.visible_base_url
+    resp.custom_headers = _format_headers(conn.custom_headers)
+    resp.custom_query_params = _format_query_params(conn.custom_query_params)
+    return resp
 
 
 class SpecPreviewRequest(BaseModel):
@@ -168,10 +177,7 @@ async def create_connection(
 ):
     try:
         conn = await service.create_connection(request)
-        resp = OpenAPIConnectionResponse.model_validate(conn)
-        resp.custom_headers = _format_headers(conn.custom_headers)
-        resp.custom_query_params = _format_query_params(conn.custom_query_params)
-        return resp
+        return _connection_response(conn)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except ValueError as e:
@@ -195,13 +201,7 @@ async def list_connections(
     connections, _total = await service.list_connections(
         status=status, search=search, limit=limit, offset=offset
     )
-    results = []
-    for c in connections:
-        resp = OpenAPIConnectionResponse.model_validate(c)
-        resp.custom_headers = _format_headers(c.custom_headers)
-        resp.custom_query_params = _format_query_params(c.custom_query_params)
-        results.append(resp)
-    return results
+    return [_connection_response(c) for c in connections]
 
 
 @router.get(
@@ -218,10 +218,7 @@ async def get_connection(
     conn = await service.get_connection(connection_id)
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
-    resp = OpenAPIConnectionResponse.model_validate(conn)
-    resp.custom_headers = _format_headers(conn.custom_headers)
-    resp.custom_query_params = _format_query_params(conn.custom_query_params)
-    return resp
+    return _connection_response(conn)
 
 
 @router.patch(
@@ -246,10 +243,7 @@ async def update_connection(
 
     if not conn:
         raise HTTPException(status_code=404, detail="Connection not found")
-    resp = OpenAPIConnectionResponse.model_validate(conn)
-    resp.custom_headers = _format_headers(conn.custom_headers)
-    resp.custom_query_params = _format_query_params(conn.custom_query_params)
-    return resp
+    return _connection_response(conn)
 
 
 @router.delete(

@@ -486,7 +486,7 @@ async def get_network_topology(
                 metadata={
                     k: v
                     for k, v in {
-                        "base_url": getattr(conn, "base_url", None),
+                        "base_url": conn.visible_base_url,
                         "description": getattr(conn, "description", None),
                         "tool_count": tool_count,
                         "network_scope": "egress",

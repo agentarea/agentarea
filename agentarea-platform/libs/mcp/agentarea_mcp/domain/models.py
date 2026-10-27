@@ -115,6 +115,43 @@ class MCPServer(BaseModel, WorkspaceScopedMixin, AuditMixin):
             ),
         )
 
+    @property
+    def _holds_platform_address(self) -> bool:
+        # A platform spec that is no catalog mirror is only ever readable by a
+        # tenant because it backs a platform-managed connection.
+        return self.workspace_id == PLATFORM_WORKSPACE_ID and self.registry_item_id is None
+
+    @property
+    def visible_remote_url(self) -> str | None:
+        """The address a tenant may see: their own or the catalog's, never the operator's.
+
+        The spec behind a platform-managed connection is readable from every
+        workspace, but its address is the deployment's internal topology (an
+        in-cluster gateway route); a tenant needs its tools, not where it runs.
+        """
+        if self._holds_platform_address:
+            return None
+        return self.remote_url
+
+    @property
+    def visible_json_spec(self) -> dict[str, Any] | None:
+        """``json_spec`` without the remotes' URLs wherever ``visible_remote_url`` hides it."""
+        spec = self.json_spec
+        if not self._holds_platform_address or not spec:
+            return spec
+        remotes = spec.get("remotes")
+        if not isinstance(remotes, list):
+            return spec
+        return {
+            **spec,
+            "remotes": [
+                {key: value for key, value in remote.items() if key != "url"}
+                if isinstance(remote, dict)
+                else remote
+                for remote in remotes
+            ],
+        }
+
     def __init__(
         self,
         name: str,

@@ -45,8 +45,11 @@ class OpenAPIConnectionOutput(BaseModel):
     id: str = Field(description="Connection id.")
     name: str = Field(description="Display name.")
     description: str | None = Field(description="Human-readable summary.")
-    base_url: str = Field(
-        description="Base URL requests are sent to; may hold {name} placeholders."
+    base_url: str | None = Field(
+        description=(
+            "Base URL requests are sent to; may hold {name} placeholders. "
+            "Null for a connection the platform provides."
+        )
     )
     spec_url: str | None = Field(description="URL the OpenAPI spec is fetched from.")
     auth_config_id: str | None = Field(description="Attached OAuth2 auth config, if any.")
@@ -108,7 +111,7 @@ def _serialize(conn: Any) -> dict:
         "id": str(conn.id),
         "name": conn.name,
         "description": conn.description,
-        "base_url": conn.base_url,
+        "base_url": conn.visible_base_url,
         "spec_url": conn.spec_url,
         "auth_config_id": str(conn.auth_config_id) if conn.auth_config_id else None,
         "custom_headers": [
