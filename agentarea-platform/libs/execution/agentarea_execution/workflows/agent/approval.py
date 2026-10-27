@@ -13,6 +13,7 @@ with workflow.unsafe.imports_passed_through():
         comparable_url,
         decide_tool_action,
         external_urls,
+        mcp_tool_restricting_aliases,
         sanitize_tool_event_value,
         tool_config_aliases,
         tool_definition_name,
@@ -57,8 +58,11 @@ class ToolApprovalMixin(BudgetMixin):
         )
 
     def _restricting_tool_aliases(self, tool_name: str) -> tuple[str, ...]:
-        """Agent-config names that may deny this tool or put it behind approval."""
-        return tool_config_aliases(tool_name, *self._policy_tool_configs())
+        """Names that may deny this tool or put it behind approval, never allow it."""
+        return (
+            *mcp_tool_restricting_aliases(self.state.mcp_tool_routes, tool_name),
+            *tool_config_aliases(tool_name, *self._policy_tool_configs()),
+        )
 
     def _announce_tool_call(self, tool_call: ToolCall) -> None:
         """Record the model's tool.call for a call refused before it ran, so its result has one."""

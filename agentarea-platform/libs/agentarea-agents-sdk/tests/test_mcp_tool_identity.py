@@ -92,12 +92,18 @@ class TestIdentity:
         instance_id = str(uuid4())
         identity = McpToolIdentity("mcp__github__search", instance_id, "search", instance_id)
         assert identity.canonical == f"mcp:{instance_id}:search"
-        assert identity.policy_names == (identity.canonical, "search")
+        assert identity.policy_names == (identity.canonical,)
 
     def test_attachment_by_name_is_also_a_policy_name(self):
         instance_id = str(uuid4())
         identity = McpToolIdentity("mcp__github__search", instance_id, "search", "github")
-        assert identity.policy_names == (f"mcp:{instance_id}:search", "mcp:github:search", "search")
+        assert identity.policy_names == (f"mcp:{instance_id}:search", "mcp:github:search")
+
+    def test_the_raw_name_the_server_chose_only_narrows(self):
+        instance_id = str(uuid4())
+        identity = McpToolIdentity("mcp__github__search", instance_id, "search", instance_id)
+        assert "search" not in identity.policy_names
+        assert identity.restricting_names == ("search",)
 
 
 class TestDiscovery:

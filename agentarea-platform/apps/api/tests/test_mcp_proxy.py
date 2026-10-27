@@ -625,3 +625,31 @@ async def test_an_events_poll_name_header_is_held_to_the_body():
             instance_id=_INSTANCE,
             headers={"Mcp-Method": "events/poll", "Mcp-Name": "other.event"},
         )
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_the_bare_tool_does_not_admit_it_at_the_proxy(monkeypatch):
+    # The server picks its tools' names, so a bare name in an allowlist would
+    # admit every server that advertises a tool by that name.
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(allowed=["github.create_issue"])))
+
+    with pytest.raises(HTTPException) as exc:
+        await _authorize_mcp_tool_calls(
+            _CALL,
+            SimpleNamespace(user_id="u1", workspace_id="ws1"),
+            object(),
+            instance_id=_INSTANCE,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_an_allowlist_naming_the_tool_through_its_server_admits_it_at_the_proxy(
+    monkeypatch,
+):
+    target = f"mcp:{_INSTANCE}:github.create_issue"
+    _install_policy(monkeypatch, EffectivePolicy(tools=ToolsPolicy(allowed=[target])))
+
+    await _authorize_mcp_tool_calls(
+        _CALL, SimpleNamespace(user_id="u1", workspace_id="ws1"), object(), instance_id=_INSTANCE
+    )

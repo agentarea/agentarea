@@ -258,8 +258,9 @@ async def authorize_mcp_tool_call(
 ) -> None:
     """Deny one MCP tool call when the workspace policy does not permit it.
 
-    ``tool_name`` is the raw name the server advertises; a rule may also name the
-    tool through its server as ``mcp:<instance id>:<tool>``.
+    ``tool_name`` is the raw name the server advertises. Only the tool named
+    through its server, ``mcp:<instance id>:<tool>``, may satisfy an allowlist;
+    the raw name still reaches it through a deny or approval rule.
     """
     if policy is None:
         resolver = GovernancePolicyResolver(RepositoryFactory(session, user_context))
@@ -270,7 +271,9 @@ async def authorize_mcp_tool_call(
         policy = snapshot.to_json_dict()
 
     decision = decide_tool_policy(
-        policy, tool_name, aliases=(mcp_tool_target(str(instance_id), tool_name),)
+        policy,
+        mcp_tool_target(str(instance_id), tool_name),
+        restricting_aliases=(tool_name,),
     )
     if not decision.allowed:
         raise HTTPException(

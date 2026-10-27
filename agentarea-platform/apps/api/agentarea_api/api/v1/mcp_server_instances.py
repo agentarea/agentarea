@@ -5,6 +5,7 @@ from uuid import UUID
 from agentarea_agents_sdk.tools.mcp_tool_identity import (
     mcp_tool_policy_aliases,
     mcp_tool_rule_target,
+    mcp_tool_target,
 )
 from agentarea_api.api.deps.services import AgentServiceDep, get_mcp_server_instance_service
 from agentarea_api.api.v1._approval_policy_sync import (
@@ -622,8 +623,9 @@ def tool_policies_for_instance(
         default = _default_verdict(workspace_rules, mcp_tool_rule_target(instance_id, name))
         decision = decide_tool_policy(
             workspace_policy,
-            name,
+            mcp_tool_target(instance_id, name),
             aliases=mcp_tool_policy_aliases(instance_id, instance_name, name),
+            restricting_aliases=(name,),
         )
         effective = _VERDICTS[decision.action]
         stricter = _STRICTNESS[effective] > _STRICTNESS[default]

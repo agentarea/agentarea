@@ -90,14 +90,23 @@ class McpToolIdentity:
         """Names besides the model-facing one that a policy rule may target.
 
         An agent's approval rule names the tool through the agent's attachment,
-        which may reference the server by name rather than id. The raw name keeps
-        rules written before tools were qualified in force; a rule that named
-        ``search`` still applies to every server's ``search``.
+        which may reference the server by name rather than id.
         """
         via_attachment = mcp_tool_target(self.attachment_ref, self.raw_name)
         if via_attachment == self.canonical:
-            return (self.canonical, self.raw_name)
-        return (self.canonical, via_attachment, self.raw_name)
+            return (self.canonical,)
+        return (self.canonical, via_attachment)
+
+    @property
+    def restricting_names(self) -> tuple[str, ...]:
+        """Names that may deny the tool or hold it for approval, never allow it.
+
+        The raw name is whatever the server advertises, so it cannot satisfy an
+        allowlist: ``allowed: ["search"]`` would admit every attached server that
+        calls a tool ``search``. A deny or approval rule naming ``search`` still
+        reaches every server's ``search``.
+        """
+        return (self.raw_name,)
 
 
 def mcp_tool_target(server_ref: str, raw_name: str) -> str:
@@ -117,11 +126,11 @@ def mcp_tool_rule_target(instance_id: str, raw_name: str) -> str:
 def mcp_tool_policy_aliases(
     instance_id: str, instance_name: str | None, raw_name: str
 ) -> tuple[str, ...]:
-    """Every name a policy rule may give one tool of one MCP instance.
+    """The names a policy rule may give one tool of one MCP instance to allow it.
 
-    The canonical ``mcp:<instance id>:<raw>``, the server referenced by name, the
-    ``mcp__<server>__<raw>`` an agent calls it by, and the raw name the server
-    advertises — so a rule written against any of them governs the tool.
+    The canonical ``mcp:<instance id>:<raw>``, the server referenced by name and
+    the ``mcp__<server>__<raw>`` an agent calls it by. The raw name only narrows:
+    see ``McpToolIdentity.restricting_names``.
     """
     names = [mcp_tool_target(instance_id, raw_name)]
     if instance_name:
@@ -129,5 +138,4 @@ def mcp_tool_policy_aliases(
             mcp_tool_target(instance_name, raw_name),
             qualify_mcp_tool_name(instance_name, raw_name),
         ]
-    names.append(raw_name)
     return tuple(names)

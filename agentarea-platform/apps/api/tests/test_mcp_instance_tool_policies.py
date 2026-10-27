@@ -191,3 +191,12 @@ async def test_a_member_who_does_not_administer_the_workspace_may_read_it(sessio
         tools = _by_name(await _tool_policies(session))
 
     assert tools["send"]["default"] == "approval"
+
+
+async def test_a_bare_name_allow_does_not_admit_this_servers_tool(session_factory):
+    async with session_factory() as session:
+        await _seed(session, ("tool:send", PolicyEffect.ALLOW, {}))
+        tools = _by_name(await _tool_policies(session))
+
+    assert tools["send"]["effective"] == "deny"
+    assert "allowlist" in tools["send"]["reason"]

@@ -487,9 +487,9 @@ def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
 
     The same names an agent's call to that tool answers to (see
     ``McpToolIdentity.policy_names``): the canonical ``mcp:<instance id>:<raw>``,
-    the server referenced by name, the ``mcp__<server>__<raw>`` an agent calls it
-    by, and the raw name the server advertises — so a rule written against an
-    agent's use of the tool governs the client's use of it too.
+    the server referenced by name and the ``mcp__<server>__<raw>`` an agent calls
+    it by — so a rule written against an agent's use of the tool governs the
+    client's use of it too.
     """
     if tool_name in scope.platform_tools:
         return ()
@@ -506,11 +506,20 @@ def _policy_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
 
 
 def _restricting_aliases(scope: ClientScope, tool_name: str) -> tuple[str, ...]:
-    """Names an OpenAPI operation answers to that may only narrow, as for an agent."""
+    """Names that may only narrow, as for an agent.
+
+    An OpenAPI operation's names, or the raw name an instance tool's server advertises.
+    """
     operation = (scope.openapi or {}).get(tool_name)
-    if operation is None:
+    if operation is not None:
+        return (operation.operation, operation.connection_name, operation.connection_id)
+    if tool_name in scope.platform_tools:
         return ()
-    return (operation.operation, operation.connection_name, operation.connection_id)
+    owner = scope.proxy.owner_of(tool_name)
+    if owner is None:
+        return ()
+    _member, raw_name = owner
+    return (raw_name,)
 
 
 def _client_tool_decision(scope: ClientScope, tool_name: str) -> ToolAuthorizationDecision:
@@ -626,7 +635,9 @@ def _held_call(
         arguments=arguments,
         reason=decision.reason,
         approvers=approvers_for_tool(
-            scope.tool_policy, tool_name, aliases=_policy_aliases(scope, tool_name)
+            scope.tool_policy,
+            tool_name,
+            aliases=(*_policy_aliases(scope, tool_name), *_restricting_aliases(scope, tool_name)),
         ),
         client_id=scope.client_id,
         client_name=scope.client_name,
@@ -789,7 +800,9 @@ async def _governed_call(
             workspace_id=user_ctx.workspace_id,
             effective_policy=scope.tool_policy,
             aliases=_policy_aliases(scope, tool_name),
-            restricting_aliases=restricting_aliases,
+            restricting_aliases=tuple(
+                dict.fromkeys((*restricting_aliases, *_restricting_aliases(scope, tool_name)))
+            ),
         ),
         call_id=str(uuid4()),
         agent_id=None,

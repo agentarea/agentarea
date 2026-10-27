@@ -8,12 +8,16 @@ replaces the old deny-by-default, where every built-in tool needed a hand-typed
 allow row just to run.
 """
 
-from agentarea_execution.models import MCPToolRequest
+from uuid import uuid4
+
+from agentarea_execution.models import McpToolRoute, MCPToolRequest
 from agentarea_execution.workflows.helpers import (
     ToolAction,
     decide_tool_action,
     filter_disclosed_tools,
+    mcp_tool_restricting_aliases,
     tool_config_aliases,
+    tool_policy_aliases,
 )
 
 
@@ -226,3 +230,32 @@ def test_connection_name_does_not_satisfy_an_allowlist():
     aliases = tool_config_aliases("list_items", configs)
 
     assert decide_tool_action(policy, "list_items", restricting_aliases=aliases) is ToolAction.DENY
+
+
+def _mcp_decision(policy: dict, instance_id: str, raw_name: str = "search") -> ToolAction:
+    model_name = f"mcp__server_{instance_id[:8]}__{raw_name}"
+    route = McpToolRoute(instance_id=instance_id, raw_name=raw_name, attachment_ref=instance_id)
+    return decide_tool_action(
+        policy,
+        model_name,
+        tool_policy_aliases(route, model_name),
+        restricting_aliases=mcp_tool_restricting_aliases(route, model_name),
+    )
+
+
+def test_a_server_cannot_join_an_allowlist_by_naming_its_tool_after_an_allowed_one():
+    # The raw name is whatever the server advertises. Letting it satisfy an
+    # allowlist meant `allowed: ["search"]`, written for one server, admitted
+    # every attached server that called a tool `search`.
+    trusted, other = str(uuid4()), str(uuid4())
+    assert _mcp_decision({"tools": {"allowed": ["search"]}}, other) is ToolAction.DENY
+    pinned = {"tools": {"allowed": [f"mcp:{trusted}:search"]}}
+    assert _mcp_decision(pinned, trusted) is ToolAction.ALLOW
+    assert _mcp_decision(pinned, other) is ToolAction.DENY
+
+
+def test_a_bare_name_still_denies_and_escalates_every_servers_tool():
+    instance_id = str(uuid4())
+    assert _mcp_decision({"tools": {"denied": ["search"]}}, instance_id) is ToolAction.DENY
+    escalated = {"approval": {"escalation_rules": ["search"]}}
+    assert _mcp_decision(escalated, instance_id) is ToolAction.REQUIRE_APPROVAL

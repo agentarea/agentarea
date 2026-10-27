@@ -535,9 +535,14 @@ class McpToolRoute(BaseModel):
 
     def policy_names(self, model_name: str) -> tuple[str, ...]:
         """The names besides ``model_name`` a policy rule may use for this tool."""
-        return McpToolIdentity(
-            model_name, self.instance_id, self.raw_name, self.attachment_ref
-        ).policy_names
+        return self._identity(model_name).policy_names
+
+    def restricting_names(self, model_name: str) -> tuple[str, ...]:
+        """The names that may deny this tool or hold it for approval, never allow it."""
+        return self._identity(model_name).restricting_names
+
+    def _identity(self, model_name: str) -> McpToolIdentity:
+        return McpToolIdentity(model_name, self.instance_id, self.raw_name, self.attachment_ref)
 
 
 class ToolDiscoveryResult(BaseModel):
