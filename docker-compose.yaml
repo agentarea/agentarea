@@ -60,6 +60,8 @@ services:
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
       # Currency spend caps count and tool costs are declared in (ISO 4217).
       - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
+      # Anonymous usage analytics to AgentArea; false sends nothing.
+      - AGENTAREA_ANALYTICS_ENABLED=${AGENTAREA_ANALYTICS_ENABLED:-true}
       # Access control: the authorization graph lives in OpenFGA. Bootstrap
       # finds or creates the store and applies the bundled model on start, so
       # a fresh install needs no ids up front.
@@ -534,6 +536,8 @@ services:
       - AGENTAREA_HTTP_EXTRA_CA_CERTS=${AGENTAREA_HTTP_EXTRA_CA_CERTS:-}
       # Currency spend caps count and tool costs are declared in (ISO 4217).
       - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
+      # Anonymous usage analytics to AgentArea; false sends nothing.
+      - AGENTAREA_ANALYTICS_ENABLED=${AGENTAREA_ANALYTICS_ENABLED:-true}
 
       # Temporal
       - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}

@@ -43,6 +43,8 @@ services:
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       # Currency spend caps count and tool costs are declared in (ISO 4217).
       - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
+      # Anonymous usage analytics to AgentArea; off in dev, true sends it.
+      - AGENTAREA_ANALYTICS_ENABLED=${AGENTAREA_ANALYTICS_ENABLED:-false}
       # Hydra OAuth2 AS
       - AGENTAREA_AUTH_HYDRA_URL=http://hydra:4444
       - AGENTAREA_AUTH_HYDRA_ADMIN_URL=http://hydra:4445
@@ -627,6 +629,8 @@ services:
       - AGENTAREA_HTTP_PRIVATE_ALLOWLIST=${AGENTAREA_HTTP_PRIVATE_ALLOWLIST:-localhost,host.docker.internal}
       # Currency spend caps count and tool costs are declared in (ISO 4217).
       - AGENTAREA_SPEND_CURRENCY=${AGENTAREA_SPEND_CURRENCY:-USD}
+      # Anonymous usage analytics to AgentArea; off in dev, true sends it.
+      - AGENTAREA_ANALYTICS_ENABLED=${AGENTAREA_ANALYTICS_ENABLED:-false}
 
       # S3 / RustFS (file tool artifacts land here, keyed by workspace+task)
       - AGENTAREA_S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}

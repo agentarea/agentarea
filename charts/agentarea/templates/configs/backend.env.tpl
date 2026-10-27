@@ -12,6 +12,7 @@ AGENTAREA_API_URL: "{{ include "agentarea.backend.apiUrl" . }}"
 AGENTAREA_S3_PUBLIC_ENDPOINT: "{{ .Values.global.storage.publicEndpoint }}"
 AGENTAREA_METRICS_ENABLED: "{{ .Values.global.monitoring.prometheus.enabled }}"
 AGENTAREA_METRICS_PORT: "{{ .Values.global.monitoring.prometheus.port }}"
+AGENTAREA_ANALYTICS_ENABLED: "{{ .Values.global.analytics.enabled }}"
 AGENTAREA_AUTH_ISSUER: "{{ .Values.kratos.jwt.issuer }}"
 AGENTAREA_AUTH_AUDIENCE: "{{ .Values.kratos.jwt.audience }}"
 AGENTAREA_AUTH_KRATOS_ADMIN_URL: "{{ include "agentarea.kratosAdminUrl" . }}"
@@ -62,6 +63,11 @@ SMTP_FROM_NAME: "{{ .Values.kratos.smtp.from_name }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-backend
       key: AGENTAREA_METRICS_PORT
+- name: AGENTAREA_ANALYTICS_ENABLED
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-backend
+      key: AGENTAREA_ANALYTICS_ENABLED
 - name: AGENTAREA_AUTH_ISSUER
   valueFrom:
     configMapKeyRef:

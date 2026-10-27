@@ -130,6 +130,16 @@ export const zAgentToolConfig = z.object({
 });
 
 /**
+ * AnalyticsResponse
+ */
+export const zAnalyticsResponse = z.object({
+  collector_url: z.string().nullable(),
+  edition: z.string().nullable(),
+  enabled: z.boolean(),
+  install_id: z.string().nullable(),
+});
+
+/**
  * AnalyzeRequest
  *
  * Analyze a bundle into an import preview.
@@ -4745,6 +4755,11 @@ export const zHandleAgentJsonrpcV1AgentsAgentIdA2aRpcPostPath = z.object({
 export const zGetAgentWellKnownV1AgentsAgentIdA2aWellKnownGetPath = z.object({
   agent_id: z.string(),
 });
+
+/**
+ * Successful Response
+ */
+export const zGetAnalyticsV1AnalyticsGetResponse = zAnalyticsResponse;
 
 export const zAcceptInvitationV1InvitationsAcceptPostBody =
   zAcceptInvitationBody;

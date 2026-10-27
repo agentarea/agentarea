@@ -161,6 +161,7 @@ The following table lists configurable parameters of the chart and their default
 | global.monitoring.health.enabled | bool | `true` |  |
 | global.monitoring.health.port | int | `8001` |  |
 | global.monitoring.health.path | string | `"/health"` |  |
+| global.analytics.enabled | bool | `true` | Send AgentArea anonymous usage statistics from the backend and worker: a daily count of agents, runs and connectors, never names, prompts, output or secrets. Not OpenTelemetry. false sends nothing. Field list: https://docs.agentarea.ai/self-host/analytics |
 | global.http.extraCaCerts | string | `""` | PEM text of CA certificates to trust on outbound TLS in addition to the public roots, for hosts whose chain those roots leave out (the Russian Trusted Root CA, a corporate CA). Rendered into a ConfigMap, mounted into the backend and worker, and named by AGENTAREA_HTTP_EXTRA_CA_CERTS. Empty: public roots only. |
 | global.security.podSecurityContext.fsGroup | int | `1000` |  |
 | global.security.podSecurityContext.runAsUser | int | `1000` |  |
