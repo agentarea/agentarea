@@ -24,7 +24,7 @@ import {
 const zInstanceId =
   zGetMcpServerInstanceV1McpServerInstancesInstanceIdGetPath.shape.instance_id;
 
-const zToolArguments = z.record(z.unknown());
+const zToolArguments = z.record(z.string(), z.unknown());
 
 const zAppToolCall = z.object({
   instanceId: zInstanceId,
@@ -35,7 +35,7 @@ const zAppToolCall = z.object({
 const zAppLink = z.object({
   instanceId: zInstanceId,
   toolName: z.string().min(1),
-  params: z.record(z.string()),
+  params: z.record(z.string(), z.string()),
 });
 
 async function loadInstance(instanceId: string) {
