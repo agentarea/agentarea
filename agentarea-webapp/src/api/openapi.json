@@ -19015,7 +19015,7 @@
   "info": {
     "description": "Modular and extensible framework for building AI agents. This API requires JWT Bearer token authentication for most endpoints. Include your JWT token in the Authorization header. Public endpoints include /, /health, /docs, /redoc, and /openapi.json.",
     "title": "AgentArea API",
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "openapi": "3.1.0",
   "paths": {
