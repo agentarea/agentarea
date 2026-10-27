@@ -1,4 +1,3 @@
-import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Globe, Pencil, Wrench } from "lucide-react";
@@ -12,21 +11,21 @@ import {
   UseFormSetValue,
   useWatch,
 } from "react-hook-form";
+import type { McpServerResponse, ToolResponse } from "@/api/client/types.gen";
+import type { OpenAPIConnection } from "@/app/w/[workspace]/(main)/connections/types";
+import AccordionControl from "@/components/AccordionControl";
+import ConfigSheet from "@/components/ConfigSheet";
 import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { MCPInstanceConfigForm } from "@/components/MCPInstanceConfigForm";
+import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
+import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
-import {
-  checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
-  createMCPServerInstanceAction as createMCPServerInstance,
-  getMCPServerInstanceAction as getMCPServerInstance,
-  updateMCPServerInstanceAction as updateMCPServerInstance,
-} from "@/lib/server-actions";
-import { listOpenAPIConnectionsAction as listOpenAPIConnections } from "@/lib/server-actions";
 import { apiErrorMessage, formatApiError } from "@/lib/api-errors";
 import { getMCPConnectionIconSrc } from "@/lib/entity-identity";
 import {
@@ -34,18 +33,16 @@ import {
   McpInstance,
   resolveMcpRef,
 } from "@/lib/mcp/resolveMcpRef";
-import type { OpenAPIConnection } from "@/app/w/[workspace]/(main)/connections/types";
+import {
+  checkMCPServerInstanceConfigurationAction as checkMCPServerInstanceConfiguration,
+  createMCPServerInstanceAction as createMCPServerInstance,
+  getMCPServerInstanceAction as getMCPServerInstance,
+  listOpenAPIConnectionsAction as listOpenAPIConnections,
+  updateMCPServerInstanceAction as updateMCPServerInstance,
+} from "@/lib/server-actions";
 import type { AgentFormValues, MCPToolConfig } from "../types";
 import { getBuiltinToolDisplayInfo } from "../utils/builtinToolUtils";
 import { getNestedErrorMessage } from "../utils/formUtils";
-import AccordionControl from "@/components/AccordionControl";
-import ConfigSheet from "@/components/ConfigSheet";
-import { MethodsList } from "./MethodsList";
-import type { Method } from "./MethodsList";
-import { PickerPanel } from "@/components/ResourcePicker/PickerPanel";
-import { ResourcePickerList } from "@/components/ResourcePicker/ResourcePicker";
-import { CountSegmentedControl } from "@/components/ui/count-segmented-control";
-import { McpToolsTab } from "./McpToolsTab";
 import {
   CodeToolModelSettings,
   hasCodeToolModelSettings,
@@ -55,6 +52,9 @@ import {
   McpToolSettings,
   type McpToolState,
 } from "./McpToolSettings";
+import { McpToolsTab } from "./McpToolsTab";
+import { MethodsList } from "./MethodsList";
+import type { Method } from "./MethodsList";
 import { SelectedItemRow, SelectedItems } from "./SelectedItemRow";
 
 type MCPServer = McpServerResponse;
@@ -168,13 +168,19 @@ const ToolConfig = ({
     "builtin"
   );
   const [toolQuery, setToolQuery] = useState("");
-  const [selectedMethods, setSelectedMethods] = useState<
+  // Methods unticked on a toolset not added yet; an added one keeps them in
+  // its own disabled_methods.
+  const [draftDisabledMethods, setDraftDisabledMethods] = useState<
     Record<string, Record<string, boolean>>
   >({});
   const t = useTranslations("AgentsPage");
   const watchedOpenapiConfigs = useWatch({
     control,
     name: "tools_config.openapi_configs",
+  });
+  const watchedBuiltinTools = useWatch({
+    control,
+    name: "tools_config.builtin_tools",
   });
   const watchedMcpConfigs = useWatch({
     control,
@@ -220,8 +226,11 @@ const ToolConfig = ({
   }, [JSON.stringify(mcpInstanceList)]);
 
   // OpenAPI connections state
-  const [openapiConnections, setOpenapiConnections] = useState<OpenAPIConnection[]>([]);
-  const [loadingOpenapiConnections, setLoadingOpenapiConnections] = useState(false);
+  const [openapiConnections, setOpenapiConnections] = useState<
+    OpenAPIConnection[]
+  >([]);
+  const [loadingOpenapiConnections, setLoadingOpenapiConnections] =
+    useState(false);
   const [openapiLoadError, setOpenapiLoadError] = useState<string | null>(null);
 
   const loadOpenapiConnections = useCallback(() => {
@@ -253,28 +262,22 @@ const ToolConfig = ({
     loadOpenapiConnections();
   }, [loadOpenapiConnections]);
 
-  // Initialize selectedMethods for sheet (all methods selected by default)
-  useEffect(() => {
-    if (!builtinTools?.length) return;
-
-    const toolsMethods = builtinTools.reduce(
-      (acc, tool) => {
-        if (tool.available_methods) {
-          acc[tool.name] = tool.available_methods.reduce(
-            (methods: Record<string, boolean>, method: Method) => {
-              methods[method.name] = true;
-              return methods;
-            },
-            {} as Record<string, boolean>
-          );
-        }
-        return acc;
-      },
-      {} as Record<string, Record<string, boolean>>
+  // Which of a toolset's methods the agent gets: an added toolset reads its
+  // saved disabled_methods, one still in the sheet its draft.
+  const methodsSelection = (tool: BuiltinTool): Record<string, boolean> => {
+    const added = watchedBuiltinTools?.find(
+      (field) => field.tool_name === tool.name
     );
-
-    setSelectedMethods(toolsMethods);
-  }, [builtinTools]);
+    const disabled = added
+      ? (added.disabled_methods ?? {})
+      : (draftDisabledMethods[tool.name] ?? {});
+    return Object.fromEntries(
+      (tool.available_methods ?? []).map((method) => [
+        method.name,
+        !(method.name in disabled),
+      ])
+    );
+  };
 
   const handleAddBuiltinTool = (toolName: string) => {
     if (
@@ -282,45 +285,12 @@ const ToolConfig = ({
       builtinToolFields?.some((field) => field.tool_name === toolName)
     )
       return;
-
-    const currentState = selectedMethods[toolName];
-    const tool = builtinTools.find((t) => t.name === toolName);
-
-    if (currentState && tool?.available_methods) {
-      const disabledMethods = tool.available_methods
-        .filter((method: Method) => currentState[method.name] === false)
-        .reduce(
-          (acc: Record<string, boolean>, method: Method) => {
-            acc[method.name] = false;
-            return acc;
-          },
-          {} as Record<string, boolean>
-        );
-
-      appendBuiltinTool({
-        tool_name: toolName,
-        disabled_methods:
-          Object.keys(disabledMethods).length > 0 ? disabledMethods : undefined,
-      });
-    } else {
-      // Initialize selectedMethods for this tool if not already set
-      if (tool?.available_methods && !currentState) {
-        const initialMethods = tool.available_methods.reduce(
-          (acc: Record<string, boolean>, method: Method) => {
-            acc[method.name] = true;
-            return acc;
-          },
-          {} as Record<string, boolean>
-        );
-
-        setSelectedMethods((prev) => ({
-          ...prev,
-          [toolName]: initialMethods,
-        }));
-      }
-
-      appendBuiltinTool({ tool_name: toolName });
-    }
+    const disabled = draftDisabledMethods[toolName];
+    appendBuiltinTool({
+      tool_name: toolName,
+      disabled_methods:
+        disabled && Object.keys(disabled).length ? disabled : undefined,
+    });
   };
 
   const handleRemoveBuiltinTool = (toolName: string) => {
@@ -346,7 +316,9 @@ const ToolConfig = ({
           !builtinToolFields?.some((field) => field.tool_name === member.name)
       );
       if (missing.length) {
-        appendBuiltinTool?.(missing.map((member) => ({ tool_name: member.name })));
+        appendBuiltinTool?.(
+          missing.map((member) => ({ tool_name: member.name }))
+        );
       }
       return;
     }
@@ -425,10 +397,7 @@ const ToolConfig = ({
       updated = current.filter((t) => t !== toolName);
     }
 
-    setValue(
-      `tools_config.openapi_configs.${index}.allowed_tools`,
-      updated
-    );
+    setValue(`tools_config.openapi_configs.${index}.allowed_tools`, updated);
   };
 
   const handleOpenapiAllTools = (index: number, all: boolean) => {
@@ -447,40 +416,33 @@ const ToolConfig = ({
     methodName: string,
     checked: boolean
   ) => {
-    setSelectedMethods((prev) => ({
-      ...prev,
-      [toolName]: {
-        ...prev[toolName],
-        [methodName]: checked,
-      },
-    }));
+    const withToggle = (disabled: Record<string, boolean> = {}) => {
+      const next = { ...disabled };
+      if (checked) delete next[methodName];
+      else next[methodName] = false;
+      return next;
+    };
 
-    const currentIndex = builtinToolFields?.findIndex(
+    // Read through getValues, not the field array: its entries keep the
+    // values they were appended with, so a second toggle would undo the first.
+    const index = (getValues("tools_config.builtin_tools") ?? []).findIndex(
       (field) => field.tool_name === toolName
     );
-    if (
-      currentIndex === undefined ||
-      currentIndex === -1 ||
-      !builtinToolFields ||
-      !setValue
-    )
+    if (index === -1) {
+      setDraftDisabledMethods((prev) => ({
+        ...prev,
+        [toolName]: withToggle(prev[toolName]),
+      }));
       return;
-
-    const field = builtinToolFields[currentIndex];
-    const newDisabledMethods = { ...(field.disabled_methods || {}) };
-
-    if (checked) {
-      delete newDisabledMethods[methodName];
-    } else {
-      newDisabledMethods[methodName] = false;
     }
-
-    // Update the existing field instead of removing and adding
+    const next = withToggle(
+      getValues(`tools_config.builtin_tools.${index}.disabled_methods`) ??
+        undefined
+    );
     setValue(
-      `tools_config.builtin_tools.${currentIndex}.disabled_methods`,
-      Object.keys(newDisabledMethods).length > 0
-        ? newDisabledMethods
-        : undefined
+      `tools_config.builtin_tools.${index}.disabled_methods`,
+      Object.keys(next).length ? next : undefined,
+      { shouldDirty: true }
     );
   };
 
@@ -566,7 +528,7 @@ const ToolConfig = ({
       <MethodsList
         wide={wide}
         methods={tool.available_methods}
-        selectedMethods={selectedMethods[tool.name] || {}}
+        selectedMethods={methodsSelection(tool)}
         onMethodToggle={(methodName, checked) =>
           handleMethodToggle(tool.name, methodName, checked)
         }
@@ -638,7 +600,10 @@ const ToolConfig = ({
             )
           : [
               ...current,
-              { tool_name: toolName, requires_user_confirmation: requiresApproval },
+              {
+                tool_name: toolName,
+                requires_user_confirmation: requiresApproval,
+              },
             ];
     setValue(`tools_config.mcp_server_configs.${index}.allowed_tools`, next);
   };
@@ -937,8 +902,9 @@ const ToolConfig = ({
               const { IconComponent, displayName, description } =
                 getBuiltinToolDisplayInfo(builtinTool);
               const methods = builtinTool.available_methods ?? [];
+              const selection = methodsSelection(builtinTool);
               const picked = methods.filter(
-                (method) => selectedMethods[builtinTool.name]?.[method.name]
+                (method) => selection[method.name]
               ).length;
               const key = `builtin-${builtinTool.name}`;
               const hasSettings =
@@ -981,8 +947,7 @@ const ToolConfig = ({
 
             {toolFields.map((item, index) => {
               const trigger = resolveInstanceTrigger(item.mcp_server_id);
-              const allowed =
-                watchedMcpConfigs?.[index]?.allowed_tools ?? null;
+              const allowed = watchedMcpConfigs?.[index]?.allowed_tools ?? null;
               const tools = trigger.available_tools;
               const key = `mcp-${item.mcp_server_id}`;
               return (
@@ -1009,7 +974,10 @@ const ToolConfig = ({
                   subtitle={trigger.description}
                   end={
                     tools.length > 0 &&
-                    countLabel(enabledMcpToolCount(tools, allowed), tools.length)
+                    countLabel(
+                      enabledMcpToolCount(tools, allowed),
+                      tools.length
+                    )
                   }
                   actionCount={1}
                   actions={
@@ -1118,7 +1086,9 @@ const ToolConfig = ({
                       id={`${key}-all-tools`}
                       size="xs"
                       checked={allowedTools === null}
-                      onCheckedChange={(all) => handleOpenapiAllTools(index, all)}
+                      onCheckedChange={(all) =>
+                        handleOpenapiAllTools(index, all)
+                      }
                     />
                     <label
                       htmlFor={`${key}-all-tools`}
