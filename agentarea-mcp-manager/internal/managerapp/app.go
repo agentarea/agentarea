@@ -45,7 +45,7 @@ import (
 	"github.com/agentarea/mcp-manager/internal/workspace"
 )
 
-const Version = "0.1.1"
+const Version = "0.1.2"
 
 // Options holds the optional extension factories of a distribution. The zero
 // value runs the manager without extensions.

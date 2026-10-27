@@ -9,7 +9,7 @@ type: application
 version: 0.2.9
 # The mcp-manager release this chart runs. Keep it equal to the control plane's:
 # both halves of the data-plane API are one build.
-appVersion: "0.1.1"
+appVersion: "0.1.2"
 kubeVersion: ">=1.30.0-0"
 home: https://github.com/agentarea/agentarea
 icon: https://raw.githubusercontent.com/agentarea/agentarea/main/agentarea-webapp/public/Icon.png
@@ -27,9 +27,9 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/images: |
     - name: agentarea/agentarea-mcp-base
-      image: agentarea/agentarea-mcp-base:0.1.1
+      image: agentarea/agentarea-mcp-base:0.1.2
     - name: agentarea/agentarea-mcp-manager
-      image: agentarea/agentarea-mcp-manager:0.1.1
+      image: agentarea/agentarea-mcp-manager:0.1.2
     - name: opensandbox/controller
       image: opensandbox/controller:release-1.1.1@sha256:aca5cda09a0fbc5867e6028f8b6aaa60fdcd78ebee634f71a263d45d5f6c2bab
     - name: opensandbox/execd
