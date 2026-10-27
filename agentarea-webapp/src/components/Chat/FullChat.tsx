@@ -42,7 +42,7 @@ import type { BadgeSuggestion } from "./componets/BadgeSuggestions";
 import { ChatInputArea } from "./componets/ChatInputArea";
 import { ScrollToBottomButton } from "./componets/ScrollToBottomButton";
 import { UserMessage as UserMessageComponent } from "./componets/UserMessage";
-import { parseSSEStream } from "./handlers/sseParser";
+import { parseSSEStream, type SSEEvent } from "./handlers/sseParser";
 import { useA2UIActions } from "./hooks/useA2UIActions";
 import { useFileUpload } from "./hooks/useFileUpload";
 // Import hooks
@@ -482,10 +482,8 @@ export default function FullChat({
   const lastEventIdRef = React.useRef<string | null>(null);
 
   const handleSSEMessage = React.useCallback(
-    (event: { type: string; data: Record<string, unknown> }) => {
-      if (typeof event.data?.event_id === "string" && event.data.event_id) {
-        lastEventIdRef.current = event.data.event_id;
-      }
+    (event: SSEEvent) => {
+      if (event.id) lastEventIdRef.current = event.id;
       const rawType =
         (typeof event.data?.event_type === "string" && event.data.event_type) ||
         (typeof event.data?.original_event_type === "string" &&

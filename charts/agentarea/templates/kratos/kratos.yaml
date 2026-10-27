@@ -72,6 +72,7 @@ data:
 {{- if not (hasKey $flowRegistration "ui_url") -}}{{- $_ = set $flowRegistration "ui_url" (printf "%s/auth/registration" $frontendUrl) -}}{{- end -}}
 {{- $regAfter := get $flowRegistration "after" | default dict -}}
 {{- if not (hasKey $regAfter "default_browser_return_url") -}}{{- $_ = set $regAfter "default_browser_return_url" (printf "%s/workplace" $frontendUrl) -}}{{- end -}}
+{{- if not (hasKey $regAfter "password") -}}{{- $_ = set $regAfter "password" (dict "hooks" (list (dict "hook" "session") (dict "hook" "show_verification_ui"))) -}}{{- end -}}
 {{- $_ = set $flowRegistration "after" $regAfter -}}
 {{- $_ = set $flows "registration" $flowRegistration -}}
 {{- $_ = set $self "flows" $flows -}}
