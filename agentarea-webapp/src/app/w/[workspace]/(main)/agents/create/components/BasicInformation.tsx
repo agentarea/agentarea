@@ -1,28 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  Bot,
-  Cpu,
-  FileText,
-  Languages,
-  LayoutTemplate,
-  MessageSquare,
-  ShieldCheck,
-} from "lucide-react";
+import { Bot, Cpu, FileText, MessageSquare } from "lucide-react";
 import {
   Control,
   Controller,
   FieldErrors,
   UseFormRegister,
   UseFormSetValue,
-  useWatch,
 } from "react-hook-form";
 import type { ModelInstanceResponse } from "@/api/client/types.gen";
 import ConfigSheet from "@/components/ConfigSheet";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { MarkdownTextarea } from "@/components/ui/markdown-textarea";
 import { ProviderModelSelector } from "@/components/ui/provider-model-selector";
@@ -55,7 +45,6 @@ const BasicInformation = ({
   const [configSheetOpen, setConfigSheetOpen] = useState(false);
   const configSheetTriggerRef = useRef<HTMLButtonElement>(null);
   const t = useTranslations("AgentsPage.create");
-  const answerCheckOn = useWatch({ control, name: "answer_check.enabled" });
   const [nameReady, setNameReady] = useState(!suggestedName);
   useEffect(() => {
     if (suggestedName) setNameReady(true);
@@ -202,74 +191,6 @@ const BasicInformation = ({
             <p className="form-error">
               {getNestedErrorMessage(errors, "instruction")}
             </p>
-          )}
-        </div>
-        <div className="flex items-start gap-3">
-          <Controller
-            name="a2ui_enabled"
-            control={control}
-            render={({ field }) => (
-              <Checkbox
-                id="a2ui_enabled"
-                className="mt-0.5 shrink-0"
-                checked={!!field.value}
-                onCheckedChange={(checked) => field.onChange(checked === true)}
-              />
-            )}
-          />
-          <div className="grid gap-1">
-            <FormLabel htmlFor="a2ui_enabled" icon={LayoutTemplate}>
-              {t("a2ui")}
-            </FormLabel>
-            <p className="text-xs text-muted-foreground">
-              {t("a2uiDescription")}
-            </p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <div className="flex items-start gap-3">
-            <Controller
-              name="answer_check.enabled"
-              control={control}
-              render={({ field }) => (
-                <Checkbox
-                  id="answer_check_enabled"
-                  className="mt-0.5 shrink-0"
-                  checked={!!field.value}
-                  onCheckedChange={(checked) =>
-                    field.onChange(checked === true)
-                  }
-                />
-              )}
-            />
-            <div className="grid gap-1">
-              <FormLabel htmlFor="answer_check_enabled" icon={ShieldCheck}>
-                {t("answerCheck")}
-              </FormLabel>
-              <p className="text-xs text-muted-foreground">
-                {t("answerCheckDescription")}
-              </p>
-            </div>
-          </div>
-          {answerCheckOn && (
-            <div className="space-y-2 pl-7 md:max-w-sm">
-              <FormLabel htmlFor="answer_check_language" icon={Languages}>
-                {t("answerCheckLanguage")}
-              </FormLabel>
-              <Input
-                id="answer_check_language"
-                {...register("answer_check.language")}
-                placeholder={t("answerCheckLanguagePlaceholder")}
-                aria-invalid={
-                  !!getNestedErrorMessage(errors, "answer_check.language")
-                }
-              />
-              {getNestedErrorMessage(errors, "answer_check.language") && (
-                <p className="form-error">
-                  {getNestedErrorMessage(errors, "answer_check.language")}
-                </p>
-              )}
-            </div>
           )}
         </div>
       </div>

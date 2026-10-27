@@ -45,6 +45,7 @@ export function SelectedItemRow({
   actionCount = 0,
   open = false,
   onOpenChange,
+  stacked = false,
   children,
 }: {
   /** A 24px tile or avatar. */
@@ -64,6 +65,8 @@ export function SelectedItemRow({
   actionCount?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** The muted line under the name, in full, for a setting that needs its why. */
+  stacked?: boolean;
   children?: ReactNode;
 }) {
   const expandable = Boolean(children) && Boolean(onOpenChange);
@@ -75,7 +78,7 @@ export function SelectedItemRow({
       // tint, apart from the rows around it.
       className={cn(
         "border-b last:border-b-0",
-        open && "bg-muted/40 dark:bg-zinc-700/20"
+        open && children && "bg-muted/40 dark:bg-zinc-700/20"
       )}
     >
       <InteractiveListRow
@@ -121,17 +124,31 @@ export function SelectedItemRow({
           ) : undefined
         }
       >
-        <div className="flex min-w-0 flex-1 items-baseline gap-2">
-          <span className="shrink-0 text-[13px] font-medium leading-5">
-            {title}
-          </span>
-          {badge}
-          {subtitle ? (
-            <span className="truncate text-xs text-muted-foreground">
-              {subtitle}
+        {stacked ? (
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[13px] font-medium leading-5">{title}</span>
+              {badge}
+            </div>
+            {subtitle ? (
+              <p className="text-xs leading-4 text-muted-foreground">
+                {subtitle}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+            <span className="shrink-0 text-[13px] font-medium leading-5">
+              {title}
             </span>
-          ) : null}
-        </div>
+            {badge}
+            {subtitle ? (
+              <span className="truncate text-xs text-muted-foreground">
+                {subtitle}
+              </span>
+            ) : null}
+          </div>
+        )}
       </InteractiveListRow>
       {expandable && open && (
         // Under the name, past the avatar (12px pad + 24px + 12px gap).

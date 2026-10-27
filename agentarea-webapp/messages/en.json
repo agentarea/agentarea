@@ -712,6 +712,10 @@
         "searchable": "Searchable",
         "explicitHint": "Every operation's schema goes into every LLM call: simplest, but the context grows with the spec.",
         "searchableHint": "Only names and descriptions go into the prompt; the agent loads the schemas it needs. Keeps cost flat for a large spec."
+      },
+      "behavior": {
+        "title": "Behavior",
+        "note": "How the agent answers: rich UI in the chat, and a check of its answer before it is sent."
       }
     },
     "browseCatalog": "Browse the catalog",

@@ -49,6 +49,7 @@ import type { AddAgentFormState } from "../create/actions";
 import {
   AgentTriggersLink,
   BasicInformation,
+  BehaviorConfig,
   DelegationConfig,
   PresetPicker,
   SkillsConfig,
@@ -461,6 +462,12 @@ export default function AgentForm({
               suggestedName={create ? initialData?.name : undefined}
               onOpenConfigSheet={() => {}}
               onRefreshModels={() => router.refresh()}
+            />
+            <Divider />
+            <BehaviorConfig
+              register={register}
+              control={control}
+              errors={errors}
             />
             <Divider />
             {create ? (
