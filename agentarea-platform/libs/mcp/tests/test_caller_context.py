@@ -30,7 +30,7 @@ def test_the_derived_key_matches_the_managers():
     # The value agentarea-mcp-manager/internal/mcpcontext's test pins for the same inputs.
     assert (
         derived_context_key(GATEWAY_SECRET, INSTANCE_ID)
-        == "4896aeffbc037762218722536c6b3909507c657b401b1dfd840e39b056c940f8"
+        == "4896aeffbc037762218722536c6b3909507c657b401b1dfd840e39b056c940f8"  # pragma: allowlist secret
     )
 
 

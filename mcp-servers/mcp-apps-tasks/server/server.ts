@@ -74,17 +74,18 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
   }
   const { data } = current;
   const { caller } = identity;
-  // A read names the caller when they are on the board; a write adds them first.
+  // A read names the caller when they are on the board; a write adds them first,
+  // except linking, which is how someone already on the board becomes the caller.
   const read = <T>(fn: (store: TasksStore) => T) =>
     app.read((db) => {
       const store = TasksStore.load(db);
       if (caller) store.identify(caller, false);
       return fn(store);
     });
-  const write = <T>(fn: (store: TasksStore) => T) =>
+  const write = <T>(fn: (store: TasksStore) => T, join = true) =>
     app.transact((db) => {
       const store = TasksStore.load(db);
-      if (caller) store.identify(caller, true);
+      if (caller) store.identify(caller, join);
       else if (identity.required) throw new Error(NO_CALLER);
       const result = fn(store);
       store.save(db);
@@ -347,7 +348,7 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
       write((store) => {
         const person = store.linkPerson(ref, platformId);
         return { content: [{ type: "text" as const, text: `@${person.handle} is ${person.platformId}.` }] };
-      }),
+      }, false),
   );
 
   server.registerTool(

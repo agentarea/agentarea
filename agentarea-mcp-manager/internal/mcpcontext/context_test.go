@@ -17,7 +17,7 @@ func TestOptedInInstanceGetsItsDerivedKey(t *testing.T) {
 		t.Fatalf("Environment: %v", err)
 	}
 	// The same value agentarea_mcp.tool_context.derived_context_key returns for these inputs.
-	const want = "4896aeffbc037762218722536c6b3909507c657b401b1dfd840e39b056c940f8"
+	const want = "4896aeffbc037762218722536c6b3909507c657b401b1dfd840e39b056c940f8" // pragma: allowlist secret
 	if got := env[KeyEnv]; got != want {
 		t.Fatalf("key = %q, want %q", got, want)
 	}
