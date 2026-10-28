@@ -72,6 +72,7 @@ selfservice:
         default_browser_return_url: http://localhost:3000/workplace
         password:
           hooks:
+            - hook: session
             - hook: show_verification_ui
         oidc:
           hooks:

@@ -5,6 +5,8 @@
 
 export interface SSEEvent {
   type: string;
+  /** The SSE `id` field: the position a reopened stream resumes after. */
+  id?: string;
   data: Record<string, unknown>;
 }
 
@@ -67,17 +69,21 @@ async function parseBufferedSSE(
   const decoder = new TextDecoder();
   let textBuffer = "";
   let currentEventType: string | null = null;
+  let currentId: string | null = null;
   let currentDataLines: string[] = [];
 
   const processEvent = () => {
     if (currentDataLines.length === 0 && !currentEventType) {
+      currentId = null;
       return;
     }
 
     const dataStr = currentDataLines.join("\n").trim();
+    const id = currentId ? { id: currentId } : {};
     if (dataStr === "") {
       currentDataLines = [];
       currentEventType = null;
+      currentId = null;
       return;
     }
 
@@ -85,7 +91,7 @@ async function parseBufferedSSE(
       const parsed = JSON.parse(dataStr);
       const type = currentEventType || parsed.type || "message";
       const data = parsed.data ?? parsed;
-      onEvent({ type, data });
+      onEvent({ type, ...id, data });
     } catch (_err) {
       // Non-JSON payloads (e.g., heartbeats or [DONE])
       if (dataStr === "[DONE]" || dataStr.toLowerCase().includes("ping")) {
@@ -93,12 +99,14 @@ async function parseBufferedSSE(
       } else {
         onEvent({
           type: currentEventType || "message",
+          ...id,
           data: { message: dataStr },
         });
       }
     }
 
     currentEventType = null;
+    currentId = null;
     currentDataLines = [];
   };
 
@@ -139,8 +147,10 @@ async function parseBufferedSSE(
           continue;
         }
 
-        // Fallback: treat as data continuation
-        currentDataLines.push(line);
+        if (line.startsWith("id:")) {
+          currentId = line.slice(3).trimStart();
+        }
+        // Any other field (retry, unknown) is ignored, as the SSE spec says.
       }
     }
 

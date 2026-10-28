@@ -10,6 +10,16 @@ import config from "@/ory.config";
 const ORY_LOCALES = ["en", "ru"] as const;
 
 /**
+ * Upstream shows the verification subtitle on both the "enter your email" step
+ * and the "you are verified" step, where "Enter the email address…" reads as a
+ * leftover instruction. This wording holds for both.
+ */
+const ORY_CUSTOM_TRANSLATIONS = {
+  en: { "verification.subtitle": "Confirm the email address of your account" },
+  ru: { "verification.subtitle": "Подтвердите адрес почты вашего аккаунта" },
+};
+
+/**
  * Returns Ory config with sdk.url set to the browser-accessible Kratos URL and
  * the UI locale matched to the one next-intl resolved for this request.
  *
@@ -31,7 +41,7 @@ export async function getOryBrowserConfig(): Promise<OryClientConfiguration> {
       ...config.sdk,
       url: browserUrl,
     },
-    intl: { locale },
+    intl: { locale, customTranslations: ORY_CUSTOM_TRANSLATIONS },
     project: {
       ...config.project,
       default_locale: locale,
