@@ -307,6 +307,11 @@ global:
     # secrets. Not OpenTelemetry. false sends nothing. Field list:
     # https://docs.agentarea.ai/self-host/analytics
     enabled: true
+    # -- Existing Secret whose key `signup-hook-key` the backend reads as
+    # AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY: the key an Ory Kratos after-registration
+    # hook presents to /internal/analytics/signups to record each sign-up's channel.
+    # Empty, that endpoint answers 404.
+    signupHookSecret: ""
 
   # Outbound HTTP from the backend and worker
   http:
