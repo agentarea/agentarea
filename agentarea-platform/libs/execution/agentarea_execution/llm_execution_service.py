@@ -7,7 +7,6 @@ from contextlib import AbstractAsyncContextManager, aclosing
 from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
-import litellm
 from agentarea_agents_sdk import LLMModel, LLMRequest, LLMResponse
 from agentarea_common.auth.context import UserContext
 from agentarea_common.model_charges import (
@@ -75,6 +74,8 @@ def model_reads_images(provider_type: str, model_name: str, spec_flag: bool | No
     """
     if spec_flag:
         return True
+    import litellm
+
     return bool(litellm.supports_vision(model=f"{provider_type}/{model_name}"))
 
 

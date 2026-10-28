@@ -129,7 +129,7 @@ async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
         captured.update(params)
         return _LiteLLMStream()
 
-    monkeypatch.setattr(module.litellm, "acompletion", fake_acompletion)
+    monkeypatch.setattr(module._litellm(), "acompletion", fake_acompletion)
     model = LLMModel(
         provider_type="openrouter",
         model_name="vendor/new-model",
@@ -162,7 +162,7 @@ async def test_completion_preserves_reasoning_tools_and_accounting(monkeypatch):
     }
 
     async def complete_at_transport(**_params):
-        return module.litellm.ModelResponse(
+        return module._litellm().ModelResponse(
             model="test-model",
             choices=[
                 {

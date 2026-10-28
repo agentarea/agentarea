@@ -9,11 +9,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-import litellm
-from litellm import (
-    ModelResponse,
-    acompletion,
-)
 
 from .messages import (
     AssistantMessage as SDKAssistantMessage,
@@ -29,7 +24,10 @@ from .messages import (
 )
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from agentarea_common.utils.url_safety import OutboundPolicy
+    from litellm import ModelResponse
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +36,31 @@ logger = logging.getLogger(__name__)
 # internal names exist; that detail goes to the log only.
 ENDPOINT_REFUSED = "the endpoint URL points to an address this deployment does not call"
 
-# Configure LiteLLM callbacks via env to avoid noisy defaults during tests
-import os as _os  # noqa: E402
+_litellm_module: ModuleType | None = None
 
-_callbacks_env = _os.getenv("LITELLM_CALLBACKS")
-if _callbacks_env is not None:
-    try:
-        litellm.callbacks = [cb.strip() for cb in _callbacks_env.split(",") if cb.strip()]
-    except Exception:
-        litellm.callbacks = []
-else:
-    # Default to no callbacks unless explicitly configured
-    litellm.callbacks = []
+
+def _litellm() -> ModuleType:
+    """Import litellm on first use: it costs ~240 MB and ~2 s, and most importers never call a model."""
+    global _litellm_module
+    if _litellm_module is None:
+        import os
+
+        import litellm
+
+        callbacks_env = os.getenv("LITELLM_CALLBACKS")
+        if callbacks_env is not None:
+            try:
+                litellm.callbacks = [cb.strip() for cb in callbacks_env.split(",") if cb.strip()]
+            except Exception:
+                litellm.callbacks = []
+        else:
+            litellm.callbacks = []
+        _litellm_module = litellm
+    return _litellm_module
+
+
+async def acompletion(**params: Any) -> Any:
+    return await _litellm().acompletion(**params)
 
 
 class LLMProviderHTTPError(RuntimeError):
@@ -729,7 +740,7 @@ class LLMModel:
             logger.info(f"Calling LLM with model {params['model']}")
 
             # Make the LLM call
-            typed_response = cast(ModelResponse, await acompletion(**params))
+            typed_response = cast("ModelResponse", await acompletion(**params))
 
             # Parse and return response
             result = self._parse_response(typed_response)
@@ -934,7 +945,7 @@ class LLMModel:
                 self.input_cost_per_token is None or self.output_cost_per_token is None
             ):
                 try:
-                    import litellm
+                    litellm = _litellm()
 
                     model_str = (
                         f"{self.provider_type}/{self.model_name}"
@@ -1049,7 +1060,7 @@ class LLMModel:
 
             # Make the streaming LLM call
             # LiteLLM's stream overload does not describe its chunk shape.
-            response_stream = cast(AsyncIterator[Any], await litellm.acompletion(**params))
+            response_stream = cast(AsyncIterator[Any], await _litellm().acompletion(**params))
 
             # Process streaming response
             complete_content = ""  # Keep track for tool calls and final usage
@@ -1251,7 +1262,7 @@ class LLMModel:
                     )
                     cost = Decimal(
                         str(
-                            litellm.completion_cost(
+                            _litellm().completion_cost(
                                 model=model_str,
                                 prompt=prompt_str,
                                 completion=complete_content,

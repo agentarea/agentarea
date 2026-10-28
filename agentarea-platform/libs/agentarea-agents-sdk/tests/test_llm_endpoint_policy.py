@@ -40,7 +40,7 @@ def litellm_reached(monkeypatch):
         raise _Reached
 
     monkeypatch.setattr(module, "acompletion", fake_acompletion)
-    monkeypatch.setattr(module.litellm, "acompletion", fake_acompletion)
+    monkeypatch.setattr(module._litellm(), "acompletion", fake_acompletion)
 
 
 @pytest.mark.asyncio
