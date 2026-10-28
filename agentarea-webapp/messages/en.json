@@ -694,9 +694,17 @@
       "presets": {
         "title": "Start from",
         "empty": "Empty",
-        "emptyDescription": "No tools, skills or triggers",
+        "emptyDescription": "Start from scratch",
         "loadFailed": "Could not load agent presets. Refresh the page or try again later.",
-        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}"
+        "unavailableSkills": "This preset expects skills the catalog does not have: {skills}",
+        "hint": "A preset fills in the instruction, tools, skills and triggers; you can change all of it.",
+        "filledInstruction": "the instruction",
+        "filled": {
+          "tools": "{count, plural, one {# tool} other {# tools}}",
+          "skills": "{count, plural, one {# skill} other {# skills}}",
+          "triggers": "{count, plural, one {# trigger} other {# triggers}}"
+        },
+        "filledLine": "The preset filled in {items}."
       },
       "toolGroups": {
         "sandbox": {

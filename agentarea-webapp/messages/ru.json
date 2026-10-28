@@ -694,9 +694,17 @@
       "presets": {
         "title": "Начать с",
         "empty": "Пустой",
-        "emptyDescription": "Без инструментов, навыков и триггеров",
+        "emptyDescription": "С чистого листа",
         "loadFailed": "Не удалось загрузить пресеты агентов. Обновите страницу или попробуйте позже.",
-        "unavailableSkills": "Этот пресет ожидает навыки, которых нет в каталоге: {skills}"
+        "unavailableSkills": "Этот пресет ожидает навыки, которых нет в каталоге: {skills}",
+        "hint": "Пресет заполнит инструкцию, инструменты, навыки и триггеры, всё можно изменить.",
+        "filledInstruction": "инструкцию",
+        "filled": {
+          "tools": "{count, plural, one {# инструмент} few {# инструмента} many {# инструментов} other {# инструмента}}",
+          "skills": "{count, plural, one {# навык} few {# навыка} many {# навыков} other {# навыка}}",
+          "triggers": "{count, plural, one {# триггер} few {# триггера} many {# триггеров} other {# триггера}}"
+        },
+        "filledLine": "Пресет заполнил: {items}."
       },
       "toolGroups": {
         "sandbox": {
