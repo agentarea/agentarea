@@ -74,14 +74,14 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
     id: string | null,
     title: string,
     icon: React.ReactNode,
-    description: React.ReactNode,
-    hint?: string | null
+    description: string | null | undefined,
+    contents?: React.ReactNode
   ) => {
     const isSelected = id === selectedId;
     return (
       <ChoiceTile
         key={id ?? "empty"}
-        className="items-center py-2"
+        className="h-full py-2.5"
         title={
           <span className="flex items-center gap-1.5">
             <span className="truncate">{title}</span>
@@ -90,11 +90,14 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
             )}
           </span>
         }
+        // The description cut at two lines, whole on hover; what the preset
+        // brings on a line of its own, so the name keeps its width.
         description={
-          <span className="block truncate" title={hint ?? undefined}>
-            {description}
-          </span>
+          description ? (
+            <span title={description}>{description}</span>
+          ) : undefined
         }
+        footer={contents}
         icon={icon}
         selected={isSelected}
         onClick={() => onSelect(presets.find((p) => p.id === id) ?? null)}
@@ -132,8 +135,8 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
               icon={<LayoutTemplate strokeWidth={1.85} />}
               aria-hidden
             />,
-            <PresetContents preset={preset} />,
-            preset.description
+            preset.description,
+            <PresetContents preset={preset} />
           )
         )}
       </div>
