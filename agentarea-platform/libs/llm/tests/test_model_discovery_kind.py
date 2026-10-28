@@ -120,3 +120,17 @@ async def test_other_providers_keep_their_plain_listing():
     await ModelDiscoveryService(transport=httpx.MockTransport(handler)).discover("openai", "sk")
 
     assert [str(url) for url in seen] == ["https://api.openai.com/v1/models"]
+
+
+def test_image_input_marks_the_model_as_reading_images():
+    seeing = _openrouter_model("seeing", ["text"])
+    seeing["architecture"]["input_modalities"] = ["text", "image"]
+    models = ModelDiscoveryService()._parse_response(
+        "openrouter", {"data": [seeing, _openrouter_model("blind", ["text"]), {"id": "bare"}]}
+    )
+
+    assert {m.model_name: m.supports_vision for m in models} == {
+        "seeing": True,
+        "blind": False,
+        "bare": False,
+    }

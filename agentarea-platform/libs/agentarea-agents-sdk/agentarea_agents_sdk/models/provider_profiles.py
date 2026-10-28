@@ -37,6 +37,15 @@ class AuthStyle(StrEnum):
     """No credential: the endpoint is reached over the network the user controls."""
 
 
+class Transport(StrEnum):
+    """The wire protocol the platform speaks to a provider's chat API."""
+
+    OPENAI = "openai"
+    """``/chat/completions`` with SSE streaming: OpenAI and everyone compatible with it."""
+    ANTHROPIC = "anthropic"
+    """Anthropic's native Messages API, ``/messages``."""
+
+
 class ModelListShape(StrEnum):
     """The payload shape a provider's model-list endpoint returns."""
 
@@ -58,8 +67,12 @@ class ProviderProfile:
             already ends in ``/v1``, otherwise ``/v1/models``.
         auth: How to present the key.
         list_shape: How to read the model list back.
-        aliases: Other identifiers the same provider answers to — notably the
-            LiteLLM ``provider_type`` (``ollama_chat``) next to the catalog's
+        transport: The protocol its chat API speaks.
+        api_prefix: Inserted between ``base_url`` and an API path such as
+            ``/chat/completions`` unless the base already ends in ``/v1``. Empty
+            for providers whose base is already the versioned API root.
+        aliases: Other identifiers the same provider answers to, such as a
+            ``provider_type`` (``ollama_chat``) next to the catalog's
             ``provider_key`` (``ollama``). Callers hold one or the other
             depending on where they sit, and neither should have to convert.
         models_query: Query string for the model list. OpenRouter's lists only
@@ -71,6 +84,8 @@ class ProviderProfile:
     models_path: str | None = None
     auth: AuthStyle = AuthStyle.BEARER
     list_shape: ModelListShape = ModelListShape.DATA_ID
+    transport: Transport = Transport.OPENAI
+    api_prefix: str = "/v1"
     aliases: tuple[str, ...] = field(default_factory=tuple)
     models_query: str | None = None
 
@@ -96,11 +111,13 @@ class ProviderProfile:
         return f"{url}?{self.models_query}" if self.models_query else url
 
     def resolve_api_url(self, endpoint_url: str | None, path: str) -> str | None:
-        """Full URL of an OpenAI-style ``/v1`` endpoint, or None when there is no base."""
+        """Full URL of an API path such as ``/chat/completions``, or None when there is no base."""
         base = (endpoint_url or self.base_url or "").rstrip("/")
         if not base:
             return None
-        return f"{base}{path}" if base.endswith("/v1") else f"{base}/v1{path}"
+        if not base.startswith(("http://", "https://")):
+            base = f"http://{base}"
+        return f"{base}{path}" if base.endswith("/v1") else f"{base}{self.api_prefix}{path}"
 
     def build_headers(self, api_key: str | None) -> dict[str, str]:
         """Auth headers for this provider, empty when there is nothing to send."""
@@ -123,17 +140,23 @@ PROVIDER_PROFILES: dict[str, ProviderProfile] = {
         base_url="https://openrouter.ai/api", models_query="output_modalities=all"
     ),
     "anthropic": ProviderProfile(
-        base_url="https://api.anthropic.com", auth=AuthStyle.API_KEY_HEADER
+        base_url="https://api.anthropic.com",
+        auth=AuthStyle.API_KEY_HEADER,
+        transport=Transport.ANTHROPIC,
     ),
     "mistral": ProviderProfile(base_url="https://api.mistral.ai"),
     "groq": ProviderProfile(base_url="https://api.groq.com/openai"),
-    "together": ProviderProfile(base_url="https://api.together.xyz"),
-    "fireworks": ProviderProfile(base_url="https://api.fireworks.ai/inference"),
+    "together": ProviderProfile(base_url="https://api.together.xyz", aliases=("together_ai",)),
+    "fireworks": ProviderProfile(
+        base_url="https://api.fireworks.ai/inference", aliases=("fireworks_ai",)
+    ),
     "deepseek": ProviderProfile(base_url="https://api.deepseek.com"),
-    "perplexity": ProviderProfile(base_url="https://api.perplexity.ai"),
+    "perplexity": ProviderProfile(base_url="https://api.perplexity.ai", api_prefix=""),
     "cerebras": ProviderProfile(base_url="https://api.cerebras.ai"),
     "xai": ProviderProfile(base_url="https://api.x.ai"),
-    "zai": ProviderProfile(base_url="https://api.z.ai/api/paas/v4", models_path="/models"),
+    "zai": ProviderProfile(
+        base_url="https://api.z.ai/api/paas/v4", models_path="/models", api_prefix=""
+    ),
     "ollama": ProviderProfile(
         base_url=None,
         models_path="/api/tags",
@@ -151,7 +174,7 @@ _BY_IDENTIFIER: dict[str, ProviderProfile] = {
 
 
 def profile_for(provider: str | None) -> ProviderProfile:
-    """Profile for a ``provider_key`` or a LiteLLM ``provider_type``.
+    """Profile for a ``provider_key`` or a ``provider_type``.
 
     Unknown providers fall back to the OpenAI-compatible default rather than
     raising: a provider added to the catalog before this table must still be

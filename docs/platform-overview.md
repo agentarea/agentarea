@@ -95,7 +95,7 @@ agentarea-platform/
     ├── common/        # Base classes, auth, events, DI
     ├── agents/        # Agent domain
     ├── tasks/         # Task orchestration
-    ├── llm/           # LLM providers (LiteLLM)
+    ├── llm/           # LLM providers and model catalog
     ├── mcp/           # MCP protocol
     ├── execution/     # Temporal workflows
     ├── triggers/      # Event triggers

@@ -16,6 +16,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
+from agentarea_agents_sdk.models.provider_profiles import profile_for
 from agentarea_common.auth.context import UserContext
 from agentarea_common.infrastructure.secret_manager import BaseSecretManager
 from agentarea_common.model_charges import (
@@ -35,7 +36,6 @@ from agentarea_llm.application.model_instance_service import ModelInstanceServic
 from agentarea_llm.application.model_service import ModelService
 from agentarea_llm.domain.media import DecisionQuestionType
 from agentarea_llm.domain.model_kind import ModelKind
-from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_secrets.secret_manager_factory import SecretManagerFactory
 from agentarea_streams.domain import value_at
 from agentarea_tasks.domain.costs import CostCategory, CostEntry, CostSource, CostSubjectType

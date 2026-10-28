@@ -2,7 +2,6 @@
 
 import json
 from decimal import Decimal
-from types import SimpleNamespace
 
 import pytest
 
@@ -89,52 +88,44 @@ async def test_usage_only_final_chunk_is_not_dropped(monkeypatch):
     assert _Client.last_json["stream_options"] == {"include_usage": True}
 
 
-class _LiteLLMStream:
-    def __init__(self):
-        self._chunks = iter(
-            [
-                SimpleNamespace(
-                    choices=[SimpleNamespace(delta=SimpleNamespace(content="hello"))],
-                    _hidden_params={},
-                ),
-                SimpleNamespace(
-                    choices=[],
-                    usage=SimpleNamespace(
-                        prompt_tokens=10,
-                        completion_tokens=5,
-                        total_tokens=15,
-                    ),
-                    _hidden_params={},
-                ),
-            ]
-        )
+def _serve_sse(monkeypatch, model, events, captured, status=200, body=None):
+    """Point the model's HTTP client at a fake server answering with these SSE events."""
+    from agentarea_agents_sdk.models import llm_model as module
 
-    def __aiter__(self):
-        return self
+    def handle(request):
+        captured["url"] = str(request.url)
+        captured["headers"] = dict(request.headers)
+        captured["json"] = json.loads(request.content)
+        if status >= 400:
+            return module.httpx.Response(status, json=body or {})
+        text = "".join(f"data: {json.dumps(event)}\n\n" for event in events)
+        return module.httpx.Response(200, text=text + "data: [DONE]\n\n")
 
-    async def __anext__(self):
-        try:
-            return next(self._chunks)
-        except StopIteration as exc:
-            raise StopAsyncIteration from exc
+    monkeypatch.setattr(
+        model,
+        "_http_client",
+        lambda timeout: module.httpx.AsyncClient(transport=module.httpx.MockTransport(handle)),
+    )
 
 
 @pytest.mark.asyncio
-async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
-    from agentarea_agents_sdk.models import llm_model as module
-
-    captured = {}
-
-    async def fake_acompletion(**params):
-        captured.update(params)
-        return _LiteLLMStream()
-
-    monkeypatch.setattr(module._litellm(), "acompletion", fake_acompletion)
+async def test_a_provider_without_endpoint_url_is_called_at_its_public_address(monkeypatch):
     model = LLMModel(
         provider_type="openrouter",
         model_name="vendor/new-model",
+        api_key="k",
         input_cost_per_token=0.001,
         output_cost_per_token=0.002,
+    )
+    captured: dict = {}
+    _serve_sse(
+        monkeypatch,
+        model,
+        [
+            {"choices": [{"delta": {"content": "hello"}}]},
+            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 5}},
+        ],
+        captured,
     )
 
     chunks = [
@@ -144,7 +135,9 @@ async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
         )
     ]
 
-    assert captured["stream_options"] == {"include_usage": True}
+    assert captured["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert captured["headers"]["authorization"] == "Bearer k"
+    assert captured["json"]["stream_options"] == {"include_usage": True}
     assert chunks[0].content == "hello"
     assert chunks[-1].usage is not None
     assert chunks[-1].usage.total_tokens == 15
@@ -153,48 +146,74 @@ async def test_litellm_stream_requests_and_preserves_usage(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_completion_preserves_reasoning_tools_and_accounting(monkeypatch):
-    from agentarea_agents_sdk.models import llm_model as module
-
-    tool_call = {
-        "id": "call-1",
-        "type": "function",
-        "function": {"name": "lookup", "arguments": '{"x":1}'},
-    }
-
-    async def complete_at_transport(**_params):
-        return module._litellm().ModelResponse(
-            model="test-model",
-            choices=[
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": "hello",
-                        "reasoning_content": "why",
-                        "reasoning": "lower-priority reasoning",
-                        "thinking": "lower-priority thinking",
-                        "tool_calls": [tool_call],
-                    },
-                    "finish_reason": "tool_calls",
-                }
-            ],
-            usage={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-        )
-
-    monkeypatch.setattr(module, "acompletion", complete_at_transport)
     model = LLMModel(
         provider_type="openai",
         model_name="test-model",
         input_cost_per_token=0.001,
         output_cost_per_token=0.002,
     )
+    captured: dict = {}
+    _serve_sse(
+        monkeypatch,
+        model,
+        [
+            {"choices": [{"delta": {"reasoning_content": "why"}}]},
+            {"choices": [{"delta": {"content": "hello"}}]},
+            {
+                "choices": [
+                    {
+                        "delta": {
+                            "tool_calls": [
+                                {
+                                    "index": 0,
+                                    "id": "call-1",
+                                    "function": {"name": "lookup", "arguments": '{"x":'},
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": "1}"}}]}}]},
+            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 5}},
+        ],
+        captured,
+    )
 
     response = await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
 
     assert response.reasoning_content == "why"
     assert response.content == "hello"
-    assert response.tool_calls == [tool_call]
+    assert response.tool_calls == [
+        {"id": "call-1", "type": "function", "function": {"name": "lookup", "arguments": '{"x":1}'}}
+    ]
     assert response.usage is not None
     assert (response.usage.prompt_tokens, response.usage.completion_tokens) == (10, 5)
-    assert response.usage.total_tokens == 15
     assert response.cost == Decimal("0.02")
+
+
+@pytest.mark.asyncio
+async def test_an_error_status_carries_the_provider_message(monkeypatch):
+    from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+
+    model = LLMModel(provider_type="openai", model_name="m", api_key="k")
+    _serve_sse(
+        monkeypatch,
+        model,
+        [],
+        {},
+        status=429,
+        body={"error": {"message": "slow down"}},
+    )
+
+    with pytest.raises(LLMProviderHTTPError) as raised:
+        await model.complete(LLMRequest(messages=[{"role": "user", "content": "hi"}]))
+    assert raised.value.status_code == 429
+    assert raised.value.provider_message == "slow down"
+
+
+def test_a_provider_with_no_address_and_no_endpoint_is_refused():
+    model = LLMModel(provider_type="ollama", model_name="llama3")
+
+    with pytest.raises(ValueError, match="no public address"):
+        model._api_url("/chat/completions")

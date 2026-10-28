@@ -11,6 +11,8 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from agentarea_agents_sdk.models.llm_model import LLMProviderHTTPError
+from agentarea_common.utils.url_safety import UnsafeUrlError
 from agentarea_llm.infrastructure.model_clients import (
     ModelCallError,
     ModelProviderUnavailableError,
@@ -120,6 +122,12 @@ async def test_a_skipped_verdict_is_unchanged_by_the_stream_path():
         TimeoutError(),
         OperationalError("SELECT 1", {}, Exception("server closed the connection")),
         httpx.ReadTimeout("slow"),
+        httpx.ConnectError("refused"),
+        LLMProviderHTTPError(408, "Request Timeout"),
+        LLMProviderHTTPError(429, "Too many requests"),
+        LLMProviderHTTPError(500, "Internal server error"),
+        LLMProviderHTTPError(503, "Service Unavailable"),
+        LLMProviderHTTPError(529, "Overloaded"),
         RPCError("unavailable", RPCStatusCode.UNAVAILABLE, b""),
         _caused(ValueError("wrapped"), ConnectionResetError("reset")),
     ],
@@ -135,6 +143,8 @@ def test_infrastructure_trouble_is_transient(error):
         TriggerConditionError("no model_id"),
         LLMConditionEvaluationError("Unknown operator: ~"),
         ValueError("user_id is required to execute a task"),
+        ValueError("No base URL configured for direct HTTP completion call"),
+        UnsafeUrlError("the endpoint URL points to an address this deployment does not call"),
     ],
 )
 def test_a_failure_that_repeats_on_every_retry_is_permanent(error):
@@ -147,6 +157,9 @@ def test_a_failure_that_repeats_on_every_retry_is_permanent(error):
         RPCError("bad", RPCStatusCode.INVALID_ARGUMENT, b""),
         IntegrityError("INSERT INTO tasks", {}, Exception("duplicate key")),
         RuntimeError("a bug"),
+        LLMProviderHTTPError(400, "Invalid value for 'tools[0].name'"),
+        LLMProviderHTTPError(401, "Incorrect API key provided"),
+        LLMProviderHTTPError(404, "The model does not exist"),
     ],
 )
 def test_an_unclassified_failure_is_neither_so_the_stream_path_retries_it(error):
@@ -228,6 +241,29 @@ def test_a_decision_provider_outage_behind_a_condition_error_is_transient():
     )
     assert is_transient(chain)
     assert not is_permanent(chain)
+
+
+def test_an_overloaded_provider_behind_a_condition_error_is_transient():
+    chain = _caused(
+        TriggerConditionError("Trigger conditions could not be evaluated"),
+        _caused(
+            LLMConditionEvaluationError("Condition evaluation failed"),
+            LLMProviderHTTPError(529, "Overloaded"),
+        ),
+    )
+    assert is_transient(chain)
+    assert not is_permanent(chain)
+
+
+def test_a_model_call_the_provider_refused_behind_a_condition_error_is_permanent():
+    chain = _caused(
+        TriggerConditionError("Trigger conditions could not be evaluated"),
+        _caused(
+            LLMConditionEvaluationError("Condition evaluation failed"),
+            LLMProviderHTTPError(400, "Invalid value for 'tools[0].name'"),
+        ),
+    )
+    assert is_permanent(chain)
 
 
 def test_a_decision_the_provider_refused_behind_a_condition_error_is_permanent():

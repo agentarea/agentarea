@@ -1634,6 +1634,8 @@ class RegistryService:
                 spec.get("cache_creation_input_cost_per_token")
             ),
             supports_function_calling=spec.get("supports_function_calling", False),
+            supports_vision=spec.get("supports_vision", False),
+            supports_reasoning=spec.get("supports_reasoning", False),
             is_active=spec.get("is_active", True),
         )
         return str(model.id)
@@ -2186,6 +2188,8 @@ class RegistryService:
                             "cache_creation_input_cost_per_token"
                         ),
                         "supports_function_calling": entry.get("supports_function_calling", False),
+                        "supports_vision": entry.get("supports_vision", False),
+                        "supports_reasoning": entry.get("supports_reasoning", False),
                         "is_active": entry.get("is_active", True),
                     },
                     "tags": entry.get("tags", []),

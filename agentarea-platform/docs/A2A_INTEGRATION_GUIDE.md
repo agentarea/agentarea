@@ -51,7 +51,7 @@ dependencies = [
 │                     │   (Official SDK)    │   (Enhanced)        │
 ├─────────────────────┼─────────────────────┼─────────────────────┤
 │ • Google ADK        │ • Agent Discovery   │ • Remote Agents     │
-│ • LiteLLM Models    │ • Task Handling     │ • Protocol Bridge   │
+│ • LLM Transports    │ • Task Handling     │ • Protocol Bridge   │
 │ • Custom Tools      │ • JSON-RPC/REST     │ • Multiple Fallbacks│
 └─────────────────────┴─────────────────────┴─────────────────────┘
                               │

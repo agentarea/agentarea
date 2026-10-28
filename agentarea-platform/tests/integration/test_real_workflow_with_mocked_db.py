@@ -308,7 +308,7 @@ async def test_real_workflow_with_mocked_infrastructure():
                 logger.error("The issue is confirmed to be in the LLM response processing chain")
                 logger.error("This proves the malformed responses are coming from:")
                 logger.error("- Ollama/qwen2.5 model behavior")
-                logger.error("- litellm processing")
+                logger.error("- the provider transport")
                 logger.error("- Our agents SDK streaming")
                 logger.error("- Or the workflow tool call extraction")
             else:

@@ -61,6 +61,8 @@ def _project_catalog_model_spec(item: CatalogModelSpecItem) -> ModelSpec:
             spec.get("cache_creation_input_cost_per_token")
         ),
         supports_function_calling=spec.get("supports_function_calling", False),
+        supports_vision=spec.get("supports_vision", False),
+        supports_reasoning=spec.get("supports_reasoning", False),
         is_active=spec.get("is_active", True),
     )
     model.id = UUID(item.id)
@@ -302,6 +304,8 @@ class ModelSpecRepository(WorkspaceScopedRepository[ModelSpec]):
                 cached_input_cost_per_token=preferred.cached_input_cost_per_token,
                 cache_creation_input_cost_per_token=preferred.cache_creation_input_cost_per_token,
                 supports_function_calling=preferred.supports_function_calling,
+                supports_vision=preferred.supports_vision,
+                supports_reasoning=preferred.supports_reasoning,
                 is_active=preferred.is_active,
             )
             .on_conflict_do_nothing(constraint="uq_model_specs_workspace_provider_model")

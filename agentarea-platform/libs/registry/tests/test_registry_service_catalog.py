@@ -499,6 +499,28 @@ class TestParseLLMModels:
         assert spec["max_output_tokens"] == 8192
         assert spec["supports_function_calling"] is True
 
+    def test_carries_the_capability_flags(self):
+        data = {
+            "models": [
+                {
+                    "provider_key": "openai",
+                    "model_name": "gpt-4o",
+                    "supports_vision": True,
+                    "supports_reasoning": True,
+                }
+            ]
+        }
+        spec = RegistryService._parse_llm_models(data)[0]["spec"]
+        assert spec["supports_vision"] is True
+        assert spec["supports_reasoning"] is True
+
+    def test_capability_flags_default_to_false(self):
+        spec = RegistryService._parse_llm_models(
+            {"models": [{"provider_key": "p", "model_name": "m"}]}
+        )[0]["spec"]
+        assert spec["supports_vision"] is False
+        assert spec["supports_reasoning"] is False
+
     def test_display_name_defaults_to_model_name(self):
         data = {"models": [{"provider_key": "p", "model_name": "m"}]}
         items = RegistryService._parse_llm_models(data)

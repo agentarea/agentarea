@@ -26,9 +26,30 @@ _OUT_OF_CREDITS_PHRASES = (
     "no resource package",
     "please recharge",
 )
+_CONTEXT_WINDOW_PHRASES = (
+    "context_length_exceeded",
+    "maximum context length",
+    "maximum context limit",
+    "longer than the model's context length",
+    "exceed context limit",
+    "exceeds the available context size",
+    "exceeds the maximum number of tokens allowed",
+    "input tokens exceed the configured limit",
+    "prompt is too long",
+    "input is too long",
+    "too many tokens",
+)
+_CONTENT_POLICY_PHRASES = (
+    "content_policy_violation",
+    "responsibleaipolicyviolation",
+    "content management policy",
+    "content_filter",
+    "as a result of our safety system",
+)
+_REJECTED_REQUEST_STATUSES = (400, 413, 422)
 _JSON_MESSAGE = re.compile(r'"message"\s*:\s*("(?:[^"\\]|\\.)*")')
 _JSON_CODE_402 = re.compile(r'"code"\s*:\s*"?402\b')
-_EXCEPTION_PREFIX = re.compile(r"^(?:litellm\.)?\w+(?:Error|Exception)?:\s*|^\w+Exception\s*-\s*")
+_EXCEPTION_PREFIX = re.compile(r"^\w+(?:Error|Exception)?:\s*")
 
 
 @dataclass(frozen=True)
@@ -90,12 +111,20 @@ def _provider_message(errors: list[BaseException]) -> str:
     return text[:_PROVIDER_MESSAGE_LIMIT]
 
 
-def _named(errors: list[BaseException], *names: str) -> bool:
-    return any(type(error).__name__ in names for error in errors)
+def _raised(errors: list[BaseException], *types: type[BaseException]) -> bool:
+    return any(isinstance(error, types) for error in errors)
+
+
+def _says(text: str, phrases: tuple[str, ...]) -> bool:
+    return any(phrase in text for phrase in phrases)
 
 
 def classify_llm_failure(error: BaseException) -> LLMFailure | None:
     """The cause of a failed model call, or None when it is not one we recognise."""
+    # The workflow sandbox imports this module for LLM_FAILURE_DETAIL and refuses httpx;
+    # only the activity classifies.
+    import httpx
+
     errors = _chain(error)
     text = " ".join(f"{type(e).__name__} {e}" for e in errors).lower()
     status = _status_code(errors)
@@ -134,7 +163,8 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "ConfigurationError",
             retryable=False,
         )
-    if _named(errors, "ContextWindowExceededError") or "maximum context length" in text:
+    request_rejected = status is None or status in _REJECTED_REQUEST_STATUSES
+    if request_rejected and _says(text, _CONTEXT_WINDOW_PHRASES):
         return LLMFailure(
             "context_window_exceeded",
             "The conversation no longer fits the model's context window. "
@@ -142,11 +172,7 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "ContextWindowExceeded",
             retryable=False,
         )
-    if (
-        status == 402
-        or _JSON_CODE_402.search(text)
-        or any(phrase in text for phrase in _OUT_OF_CREDITS_PHRASES)
-    ):
+    if status == 402 or _JSON_CODE_402.search(text) or _says(text, _OUT_OF_CREDITS_PHRASES):
         return LLMFailure(
             "provider_out_of_credits",
             "The model provider's account is out of credits or quota, so it refused the call. "
@@ -156,7 +182,6 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
         )
     if (
         status in (401, 403)
-        or _named(errors, "AuthenticationError", "PermissionDeniedError")
         or "invalid api key" in text
         or "incorrect api key" in text
         or "unauthorized" in text
@@ -167,12 +192,7 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "AuthenticationError",
             retryable=False,
         )
-    if (
-        status == 429
-        or _named(errors, "RateLimitError", "RouterRateLimitError")
-        or "rate limit" in text
-        or "too many requests" in text
-    ):
+    if status == 429 or "rate limit" in text or "too many requests" in text:
         return LLMFailure(
             "rate_limited",
             "The model provider is rate-limiting requests. Please try again in a moment.",
@@ -195,7 +215,7 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "ModelDeprecated",
             retryable=False,
         )
-    if status == 404 or _named(errors, "NotFoundError"):
+    if status == 404:
         return LLMFailure(
             "model_not_found",
             "The configured model was not found. "
@@ -203,15 +223,17 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "ModelNotFound",
             retryable=False,
         )
-    if _named(errors, "ContentPolicyViolationError"):
+    if request_rejected and _says(text, _CONTENT_POLICY_PHRASES):
         return LLMFailure(
             "provider_content_policy",
             "The model provider refused the request under its content policy.",
             "ContentPolicyViolation",
             retryable=False,
         )
-    if _named(errors, "Timeout", "TimeoutError", "ReadTimeout", "ConnectTimeout") or (
-        "timed out" in text
+    if (
+        status == 408
+        or _raised(errors, httpx.TimeoutException, TimeoutError)
+        or "timed out" in text
     ):
         return LLMFailure(
             "timeout",
@@ -219,23 +241,14 @@ def classify_llm_failure(error: BaseException) -> LLMFailure | None:
             "TimeoutError",
             retryable=True,
         )
-    if status in (400, 413, 422) or _named(
-        errors, "BadRequestError", "UnprocessableEntityError", "InvalidRequestError"
-    ):
+    if status is not None and 400 <= status < 500:
         return LLMFailure(
             "provider_bad_request",
             f"The model provider rejected the request: {_provider_message(errors)}",
             "ProviderBadRequest",
             retryable=False,
         )
-    if (status is not None and status >= 500) or _named(
-        errors,
-        "ServiceUnavailableError",
-        "InternalServerError",
-        "BadGatewayError",
-        "APIConnectionError",
-        "ConnectError",
-    ):
+    if (status is not None and status >= 500) or _raised(errors, httpx.TransportError):
         return LLMFailure(
             "provider_unavailable",
             "The model provider is unavailable right now. Please try again later.",

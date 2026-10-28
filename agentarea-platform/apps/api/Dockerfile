@@ -56,8 +56,6 @@ RUN chmod 755 /app/docker-entrypoint.sh && \
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# LiteLLM prices from the map in its own package, never fetched from GitHub at import.
-ENV LITELLM_LOCAL_MODEL_COST_MAP=True
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Switch to non-root user

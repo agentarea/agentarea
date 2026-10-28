@@ -34,15 +34,6 @@ def _model(endpoint_url: str, policy: OutboundPolicy | None) -> LLMModel:
     )
 
 
-@pytest.fixture
-def litellm_reached(monkeypatch):
-    async def fake_acompletion(**_params):
-        raise _Reached
-
-    monkeypatch.setattr(module, "acompletion", fake_acompletion)
-    monkeypatch.setattr(module._litellm(), "acompletion", fake_acompletion)
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "endpoint_url",
@@ -53,9 +44,7 @@ def litellm_reached(monkeypatch):
         "http://localhost:4434",
     ],
 )
-async def test_complete_refuses_a_member_endpoint_on_a_private_address(
-    litellm_reached, endpoint_url
-):
+async def test_complete_refuses_a_member_endpoint_on_a_private_address(endpoint_url):
     with pytest.raises(UnsafeUrlError):
         await _model(endpoint_url, OutboundPolicy()).complete(_request())
 
@@ -79,21 +68,13 @@ async def test_direct_stream_pins_a_member_endpoint_and_not_an_operator_one():
 
 
 @pytest.mark.asyncio
-async def test_an_allowlisted_private_endpoint_is_called(litellm_reached):
+async def test_an_allowlisted_private_endpoint_is_called():
     # Past the policy, the pinned client connects; port 9 (discard) has nothing
     # listening, so getting a connection error is getting through.
     policy = OutboundPolicy(private_allowlist=("127.0.0.1/32",))
 
     with pytest.raises(module.httpx.ConnectError):
         await _model("http://127.0.0.1:9/v1", policy).complete(_request())
-
-
-@pytest.mark.asyncio
-async def test_complete_pins_a_member_endpoint_instead_of_using_litellm(litellm_reached):
-    # LiteLLM follows redirects, so a public address answering 307 to an internal
-    # one would pass a pre-check; a member endpoint never reaches LiteLLM.
-    with pytest.raises(UnsafeUrlError):
-        await _model("http://10.0.0.5:8080/v1", OutboundPolicy()).complete(_request())
 
 
 @pytest.mark.asyncio
@@ -119,15 +100,27 @@ async def test_a_refusal_does_not_name_the_resolved_address():
 
 
 @pytest.mark.asyncio
-async def test_an_operator_endpoint_is_called_as_given(litellm_reached):
+async def test_an_operator_endpoint_is_called_as_given(monkeypatch):
+    called: list[str] = []
+
+    def reach(request):
+        called.append(str(request.url))
+        raise _Reached
+
+    model = _model("http://10.0.0.5:8080/v1", None)
+    monkeypatch.setattr(
+        model,
+        "_http_client",
+        lambda timeout: module.httpx.AsyncClient(transport=module.httpx.MockTransport(reach)),
+    )
+
     with pytest.raises(_Reached):
-        await _model("http://10.0.0.5:8080/v1", None).complete(_request())
+        await model.complete(_request())
+    assert called == ["http://10.0.0.5:8080/v1/chat/completions"]
 
 
 @pytest.mark.asyncio
-async def test_streaming_with_events_pins_a_member_endpoint_instead_of_using_litellm(
-    litellm_reached,
-):
+async def test_streaming_with_events_refuses_a_member_endpoint_on_a_private_address():
     async def publish(content, index, final):
         return None
 

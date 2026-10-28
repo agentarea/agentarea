@@ -3,11 +3,11 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal, InvalidOperation
 
 import httpx
+from agentarea_agents_sdk.models.provider_profiles import ModelListShape, profile_for
 from agentarea_common.utils.outbound_tls import outbound_ssl_context
 from agentarea_common.utils.url_safety import OutboundPolicy, UnsafeUrlError, safe_async_client
 
 from ..domain.model_kind import ModelKind
-from ..domain.provider_profiles import ModelListShape, profile_for
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,13 @@ def _kind_from_listing(entry: dict) -> ModelKind | None:
         if modality in outputs:
             return kind
     return None
+
+
+def _reads_images(entry: dict) -> bool:
+    """Whether a listing entry declares image input (OpenRouter's ``architecture``)."""
+    architecture = entry.get("architecture")
+    inputs = architecture.get("input_modalities") if isinstance(architecture, dict) else None
+    return isinstance(inputs, list) and "image" in inputs
 
 
 @dataclass
@@ -142,6 +149,7 @@ class ModelDiscoveryService:
                         pricing.get("input_cache_write")
                     ),
                     description=m.get("description", ""),
+                    supports_vision=_reads_images(m),
                     kind=_kind_from_listing(m),
                 )
             )

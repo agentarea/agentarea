@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from litellm import ModelResponse
+from agentarea_agents_sdk.models.llm_model import LLMResponse
 from agentarea_common.auth.context import UserContext
 from agentarea_llm.infrastructure.model_clients import ModelEndpoint, ModelTarget
 from agentarea_triggers.domain.models import ConditionVerdict
@@ -43,10 +43,10 @@ def _evaluator() -> LLMConditionEvaluator:
 
 
 def _reply(content: str):
-    response = ModelResponse(choices=[{"message": {"role": "assistant", "content": content}}])
     return patch(
-        "agentarea_agents_sdk.models.llm_model.acompletion",
-        new=AsyncMock(return_value=response),
+        "agentarea_agents_sdk.models.llm_model.LLMModel.complete",
+        autospec=True,
+        return_value=LLMResponse(content=content, role="assistant"),
     )
 
 

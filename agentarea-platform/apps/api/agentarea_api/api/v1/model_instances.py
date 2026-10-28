@@ -3,6 +3,7 @@ from typing import Literal
 from uuid import UUID
 
 from agentarea_agents_sdk.models import LLMModel, LLMRequest
+from agentarea_agents_sdk.models.provider_profiles import profile_for
 
 # Import LLM testing components
 from agentarea_api.api.deps.services import get_provider_service
@@ -18,7 +19,6 @@ from agentarea_common.utils.types import UtcDatetime
 from agentarea_common.utils.url_safety import UnsafeUrlError, endpoint_policy_for
 from agentarea_llm.application.provider_service import ProviderService
 from agentarea_llm.domain.models import ModelInstance, ModelKind
-from agentarea_llm.domain.provider_profiles import profile_for
 from agentarea_llm.infrastructure.model_spec_repository import ModelPricingNotConfiguredError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field

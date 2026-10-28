@@ -1031,3 +1031,8 @@ async def test_a_compaction_past_a_monthly_llm_cap_is_refused_as_a_spend_cap_sto
     assert llm_cap_reached == [([to_money("2")], CAPPED_AGENT)]
     assert billing.authorizations == []
     provider.constructor.assert_not_called()
+
+
+@pytest.mark.parametrize(("spec_flag", "reads"), [(True, True), (False, False), (None, False)])
+async def test_only_the_spec_flag_says_a_model_reads_images(spec_flag, reads):
+    assert llm_execution_service.model_reads_images(spec_flag) is reads

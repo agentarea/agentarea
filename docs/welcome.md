@@ -52,7 +52,7 @@ Unlike single-agent frameworks, AgentArea provides:
   </Card>
   
   <Card title="🏗️ Production Ready" icon="server" href="/deployment">
-    Temporal for durable execution. Kubernetes-native. Multi-LLM via LiteLLM. Multiple secret backends.
+    Temporal for durable execution. Kubernetes-native. Any OpenAI-compatible or Anthropic model provider. Multiple secret backends.
   </Card>
 </CardGroup>
 

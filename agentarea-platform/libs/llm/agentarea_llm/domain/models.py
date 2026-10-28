@@ -73,7 +73,7 @@ class ProviderSpec(BaseModel, WorkspaceScopedMixin):
     )  # openai, anthropic
     name: Mapped[str] = mapped_column(String, nullable=False)  # OpenAI, Anthropic
     description: Mapped[str | None] = mapped_column(String, nullable=True)
-    provider_type: Mapped[str] = mapped_column(String, nullable=False)  # for LiteLLM compatibility
+    provider_type: Mapped[str] = mapped_column(String, nullable=False)
     icon: Mapped[str | None] = mapped_column(String, nullable=True)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Whether this provider type authenticates at all. False for the local ones

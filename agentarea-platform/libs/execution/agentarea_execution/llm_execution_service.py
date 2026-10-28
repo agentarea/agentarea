@@ -66,17 +66,9 @@ def resolve_llm_max_tokens(
     return min(candidates)
 
 
-def model_reads_images(provider_type: str, model_name: str, spec_flag: bool | None) -> bool:
-    """The model spec's word when it says yes; otherwise litellm's model map.
-
-    Discovery leaves the spec flag unset for most models, so a ``False`` there
-    is no evidence the model is blind.
-    """
-    if spec_flag:
-        return True
-    import litellm
-
-    return bool(litellm.supports_vision(model=f"{provider_type}/{model_name}"))
+def model_reads_images(spec_flag: bool | None) -> bool:
+    """The model spec's ``supports_vision``, which the catalog sets; unset reads as no."""
+    return spec_flag is True
 
 
 async def _with_tool_images(
@@ -208,7 +200,7 @@ class LLMExecutionService:
                 messages=await _with_tool_images(
                     request,
                     user_context,
-                    vision=model_reads_images(str(provider_type), str(model_name), supports_vision),
+                    vision=model_reads_images(supports_vision),
                 ),
                 tools=request.tools,
                 temperature=request.temperature,

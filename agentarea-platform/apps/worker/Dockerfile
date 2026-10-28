@@ -20,6 +20,9 @@ COPY apps/ ./apps/
 # --all-packages ensures workspace packages and their dependencies are installed
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-dev --no-group test --all-packages --compile-bytecode
 
+# The token counter's encoding ships in the image, never fetched at run time.
+RUN TIKTOKEN_CACHE_DIR=/app/.tiktoken /app/.venv/bin/python -c "import tiktoken; tiktoken.get_encoding('o200k_base')"
+
 # Runtime stage
 FROM python:3.14.8-slim-trixie
 
@@ -36,6 +39,7 @@ RUN apt-get update && \
 
 # Copy virtual environment from builder
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+COPY --from=builder --chown=appuser:appuser /app/.tiktoken /app/.tiktoken
 
 # Copy project files with correct ownership
 COPY --chown=appuser:appuser libs ./libs
@@ -52,8 +56,7 @@ RUN chmod 755 /app/docker-entrypoint.sh && \
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# LiteLLM prices from the map in its own package, never fetched from GitHub at import.
-ENV LITELLM_LOCAL_MODEL_COST_MAP=True
+ENV TIKTOKEN_CACHE_DIR=/app/.tiktoken
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Switch to non-root user

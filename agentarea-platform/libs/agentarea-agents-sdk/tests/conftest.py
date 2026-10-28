@@ -77,7 +77,7 @@ def echo_tool_cls():
 
 @pytest.fixture
 def test_model():
-    """Model under test as a litellm ``provider/model`` string.
+    """Model under test as a ``provider/model`` string.
 
     Deliberately no default. These tests need *a* model, not a particular
     vendor's, and the default here silently decided which one: the gate probed
