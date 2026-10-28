@@ -21,6 +21,17 @@ function inAppDestination(anchor: HTMLAnchorElement): string | null {
   return url.pathname + url.search + url.hash;
 }
 
+/** The mounted guard: takes a navigation over when there is something to lose. */
+let activeGuard: ((go: () => void) => boolean) | null = null;
+
+/**
+ * Runs `go` now, or once the person agrees to leave unsaved edits. For a
+ * navigation that is not a link, e.g. a tab that calls `router.push`.
+ */
+export function guardNavigation(go: () => void) {
+  if (!activeGuard?.(go)) go();
+}
+
 /**
  * Asks before the page is left with edits unsaved: an in-app link opens our
  * dialog, closing or reloading the tab gets the browser's own question.
@@ -33,7 +44,8 @@ export default function UnsavedChangesGuard({
 }) {
   const t = useTranslations("Common.unsavedChanges");
   const router = useRouter();
-  const [destination, setDestination] = useState<string | null>(null);
+  // The navigation waiting on the answer.
+  const [pending, setPending] = useState<(() => void) | null>(null);
   // The latest check, so the listeners below are added once.
   const isDirtyRef = useRef(isDirty);
   isDirtyRef.current = isDirty;
@@ -56,20 +68,27 @@ export default function UnsavedChangesGuard({
       // Ahead of next/link's own handler, which skips a prevented click.
       event.preventDefault();
       event.stopPropagation();
-      setDestination(href);
+      setPending(() => () => router.push(href));
     };
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!isDirtyRef.current()) return;
       event.preventDefault();
       event.returnValue = "";
     };
+    const guard = (go: () => void) => {
+      if (!isDirtyRef.current()) return false;
+      setPending(() => go);
+      return true;
+    };
+    activeGuard = guard;
     document.addEventListener("click", onClick, true);
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       document.removeEventListener("click", onClick, true);
       window.removeEventListener("beforeunload", onBeforeUnload);
+      if (activeGuard === guard) activeGuard = null;
     };
-  }, []);
+  }, [router]);
 
   return (
     <BaseModal
@@ -78,13 +97,11 @@ export default function UnsavedChangesGuard({
       title={t("title")}
       description={t("description")}
       confirmLabel={t("leave")}
-      open={destination !== null}
+      open={pending !== null}
       onOpenChange={(open) => {
-        if (!open) setDestination(null);
+        if (!open) setPending(null);
       }}
-      onConfirm={() => {
-        if (destination) router.push(destination);
-      }}
+      onConfirm={() => pending?.()}
     />
   );
 }

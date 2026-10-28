@@ -1,1 +1,1 @@
-export { default } from "./UnsavedChangesGuard";
+export { default, guardNavigation } from "./UnsavedChangesGuard";
