@@ -148,7 +148,12 @@
     "hidePassword": "Hide password",
     "previousMonth": "Previous month",
     "nextMonth": "Next month",
-    "newValue": "new"
+    "newValue": "new",
+    "unsavedChanges": {
+      "title": "Leave without saving?",
+      "description": "The changes on this page are not saved yet. If you leave, they are lost.",
+      "leave": "Leave"
+    }
   },
   "admin": {
     "title": "Admin Dashboard",

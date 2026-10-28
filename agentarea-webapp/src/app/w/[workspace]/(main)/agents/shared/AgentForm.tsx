@@ -36,6 +36,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import UnsavedChangesGuard from "@/components/UnsavedChangesGuard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkspaceRouter } from "@/hooks/useWorkspaceNavigation";
 import { formatApiError } from "@/lib/api-errors";
@@ -261,6 +262,29 @@ export default function AgentForm({
   const revealFirstError = () => setRevealRequest((request) => request + 1);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
 
+  // What the form holds, fields, skills and triggers alike, to tell an edit
+  // from what was last saved when someone leaves the page.
+  const snapshot = () =>
+    JSON.stringify([
+      getValues(),
+      selectedSkills.map((skill) => skill.id),
+      triggerDrafts.map((draft) => draft.spec),
+    ]);
+  const snapshotRef = useRef(snapshot);
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  });
+  const savedSnapshot = useRef<string | null>(null);
+  useEffect(() => {
+    // After the first render's own setValue calls have settled.
+    const timer = setTimeout(() => {
+      savedSnapshot.current = snapshotRef.current();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+  const isDirty = () =>
+    savedSnapshot.current !== null && snapshot() !== savedSnapshot.current;
+
   const selectModel = (next: ModelSelection) => {
     modelSource.current = next.source;
     if (next.modelId !== getValues("model_id")) {
@@ -355,6 +379,7 @@ export default function AgentForm({
 
         if (result.ok) {
           if (!create) setSaved(true);
+          savedSnapshot.current = snapshotRef.current();
 
           if (onSuccess) {
             // Check if this is a creation (has id in result) - keep submitting state until navigation
@@ -443,6 +468,7 @@ export default function AgentForm({
 
   return (
     <>
+      <UnsavedChangesGuard isDirty={isDirty} />
       <ResizablePanelGroup
         direction="horizontal"
         className={cn("h-full w-full", className)}
