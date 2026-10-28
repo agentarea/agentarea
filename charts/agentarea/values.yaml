@@ -151,11 +151,19 @@ global:
     # and changing it moves streams between partitions: drain the bus first.
     partitions: 16
 
-  # Storage configuration - S3/RustFS compatible
+  # Object storage, S3-compatible. The bundled RustFS by default; to use your own
+  # store (AWS S3, R2, MinIO, Yandex Object Storage) set rustfs.enabled=false,
+  # endpoint and existingSecret.
   storage:
-    # Storage type (s3, rustfs, gcs)
-    type: "rustfs"
-    endpoint: ""  # Auto-set from rustfs service if empty
+    # S3 API URL of the external store, e.g. https://storage.yandexcloud.net.
+    # Must be empty while rustfs.enabled is true.
+    endpoint: ""
+    # Secret in the release namespace holding the external store's access key
+    # pair under accessKeyKey and secretKeyKey. Must be empty while
+    # rustfs.enabled is true; RustFS's own Secret is global.secrets.rustfs.
+    existingSecret: ""
+    accessKeyKey: "access-key-id"
+    secretKeyKey: "secret-access-key"
     # Client-reachable endpoint used to sign presigned URLs for browser-direct
     # uploads/downloads. Leave empty to fall back to the internal endpoint
     # (works only when the object store is itself reachable from the browser,
@@ -164,22 +172,9 @@ global:
     publicEndpoint: ""
     bucket: "agentarea-documents"
     region: "us-east-1"
-    # S3 settings
-    s3:
-      accessKeyId: ""
-      secretAccessKey: ""
-      sessionToken: ""
-    # GCS settings
-    gcs:
-      projectId: ""
-      credentials: ""
-    # RustFS settings
-    rustfs:
-      accessKey: ""
-      secretKey: ""
-    # CORS rule applied to the artifacts bucket during bootstrap, required for
-    # browser-direct presigned uploads. Leave allowedOrigins empty to skip
-    # (no-op) -- e.g. when the object store is not browser-reachable.
+    # CORS rule the bundled RustFS's bucket-init hook applies to the bucket,
+    # required for browser-direct presigned uploads. Leave allowedOrigins empty
+    # to skip. An external store's CORS is configured on the bucket itself.
     cors:
       allowedOrigins: []
 
