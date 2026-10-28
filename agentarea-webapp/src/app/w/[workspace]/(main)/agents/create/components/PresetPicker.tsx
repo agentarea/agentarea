@@ -174,10 +174,18 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
           )}
         </div>
       </div>
-      {filled.length > 0 && (
-        <p className="note" role="status">
-          {t("filledLine", { items: filled.join(", ") })}
-        </p>
+      {selected && (selected.description || filled.length > 0) && (
+        // The picked preset in full: what it is for, then what it put in.
+        <div className="space-y-0.5" role="status">
+          {selected.description && (
+            <p className="text-xs text-foreground/80">{selected.description}</p>
+          )}
+          {filled.length > 0 && (
+            <p className="note">
+              {t("filledLine", { items: filled.join(", ") })}
+            </p>
+          )}
+        </div>
       )}
       {!!selected?.unavailable_skills?.length && (
         <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
