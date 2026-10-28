@@ -11,8 +11,15 @@ import type { AgentPresetResponse } from "@/api/client/types.gen";
 import { ChoiceTile } from "@/components/ChoiceTile";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
+import { cn } from "@/lib/utils";
 
 type PresetPickerProps = {
   /** `null` when the presets could not be loaded. */
@@ -117,30 +124,38 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
         <span className="note">{t("hint")}</span>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
-        {/* Empty is no preset at all: a narrow tile at the head of the row,
-            picked while nothing else is. */}
-        <ChoiceTile
-          className="items-center py-2 sm:shrink-0"
-          icon={
-            <EntityAvatar
-              variant="soft"
-              size={24}
-              iconScale={0.5}
-              icon={<FilePlus2 strokeWidth={1.85} />}
-              aria-hidden
-            />
-          }
-          title={
-            <span className="flex items-center gap-1.5">
-              <span className="whitespace-nowrap">{t("reset")}</span>
-              {!selected && (
-                <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-              )}
-            </span>
-          }
-          selected={!selected}
-          onClick={() => onSelect(null)}
-        />
+        {/* Empty is no preset at all: a square at the head of the row,
+            picked while nothing else is; named in full on a phone, where the
+            tiles stack, and on hover elsewhere. */}
+        <TooltipProvider>
+          <Tooltip delayDuration={300}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-pressed={!selected}
+                aria-label={t("reset")}
+                onClick={() => onSelect(null)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:shrink-0 sm:justify-center sm:px-0 sm:py-0 sm:w-12",
+                  !selected
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted/50"
+                )}
+              >
+                <EntityAvatar
+                  variant="soft"
+                  size={24}
+                  iconScale={0.5}
+                  color={!selected ? "hsl(var(--primary))" : undefined}
+                  icon={<FilePlus2 strokeWidth={1.85} />}
+                  aria-hidden
+                />
+                <span className="sm:hidden">{t("reset")}</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{t("reset")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {presets.map((preset) =>
             tile(
