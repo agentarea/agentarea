@@ -143,7 +143,7 @@ jobs:
         run: scripts/test-no-duplicate-env-helm.sh
 
       - name: Render chart against an external object store
-        run: |
+        run: |  # pragma: allowlist secret
           helm template release-name charts/agentarea \
             --set rustfs.enabled=false \
             --set global.storage.endpoint=https://s3.example.com \
