@@ -108,6 +108,15 @@ jobs:
 
           This PR contains version bumps for release ${{ needs.prepare-and-bump.outputs.version }}.
 
+          ## Highlights:
+          <!-- Fill in before merging. Title after the colon, then one line per change people
+               will notice. This and the Russian section below go to the top of the GitHub
+               Release and onto agentarea.ai/changelog. An unfilled section is left out. -->
+
+          ## Главное:
+          <!-- То же по-русски: заголовок после двоеточия, затем по строке на изменение. -->
+
+          ### Checks
           **✅ All CI checks passed before release branch creation**
           - Current state validated before version bump
           - Linting: Platform, Webapp, MCP Manager
@@ -133,7 +142,7 @@ jobs:
           ### Checklist
           - [ ] Review version changes
           - [ ] Verify all package versions are updated correctly
-          - [ ] Add release notes to CHANGELOG (if applicable)
+          - [ ] Fill in Highlights and Главное above (release notes and agentarea.ai/changelog)
           - [ ] If chart configs changed, bump chart version independently
           - [ ] Merge this PR — ci.yml will build `<version>-<sha>` Docker images
           - [ ] After ci.yml is green, run `./scripts/release.sh` locally to tag the release
