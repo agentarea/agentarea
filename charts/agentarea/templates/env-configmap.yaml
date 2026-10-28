@@ -28,7 +28,6 @@ metadata:
 data:
   {{- include "agentarea.redis.configVars" . | nindent 2 }}
 ---
-{{- if .Values.rustfs.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -37,7 +36,6 @@ metadata:
     {{- include "agentarea.labels" . | nindent 4 }}
 data:
   {{- include "agentarea.storage.configVars" . | nindent 2 }}
-{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap

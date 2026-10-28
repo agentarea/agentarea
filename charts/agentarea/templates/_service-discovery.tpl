@@ -25,14 +25,34 @@ Valkey (Redis-compatible) host helper
 {{- end -}}
 
 {{/*
-RustFS host helper
+Object store: the bundled RustFS, or the external store named by
+global.storage.endpoint and global.storage.existingSecret. Never both.
 */}}
-{{- define "agentarea.rustfs.host" -}}
-{{- if .Values.global.storage.endpoint -}}
-{{ .Values.global.storage.endpoint }}
-{{- else -}}
-{{ .Release.Name }}-rustfs
+{{- define "agentarea.storage.endpoint" -}}
+{{- if .Values.rustfs.enabled -}}
+{{- if or .Values.global.storage.endpoint .Values.global.storage.existingSecret -}}
+{{- fail "global.storage.endpoint and global.storage.existingSecret name an external object store; set rustfs.enabled=false to use it" -}}
 {{- end -}}
+http://{{ .Release.Name }}-rustfs:9000
+{{- else -}}
+{{- required "global.storage.endpoint is required when rustfs.enabled=false" .Values.global.storage.endpoint -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "agentarea.storage.credentialsSecret" -}}
+{{- if .Values.rustfs.enabled -}}
+{{ .Values.global.secrets.rustfs }}
+{{- else -}}
+{{- required "global.storage.existingSecret is required when rustfs.enabled=false" .Values.global.storage.existingSecret -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "agentarea.storage.accessKeyKey" -}}
+{{- if .Values.rustfs.enabled -}}root-user{{- else -}}{{ .Values.global.storage.accessKeyKey }}{{- end -}}
+{{- end -}}
+
+{{- define "agentarea.storage.secretKeyKey" -}}
+{{- if .Values.rustfs.enabled -}}root-password{{- else -}}{{ .Values.global.storage.secretKeyKey }}{{- end -}}
 {{- end -}}
 
 {{/*

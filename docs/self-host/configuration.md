@@ -129,16 +129,19 @@ present in `values.yaml` but are not rendered into environment variables.
 
 ### Object storage (group `storage`)
 
-Rendered only when `rustfs.enabled` is true.
+The bundled RustFS by default. With `rustfs.enabled=false` the same variables
+name your own store, and `global.storage.endpoint` and
+`global.storage.existingSecret` are required; the chart refuses to render
+without them, and refuses them while RustFS is enabled.
 
 | Variable | Helm value | Default |
 |---|---|---|
 | `AGENTAREA_S3_REGION` | `global.storage.region` | `us-east-1` |
 | `AGENTAREA_S3_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
 | `AGENTAREA_S3_ARTIFACTS_BUCKET` | `global.storage.bucket` | `agentarea-documents` |
-| `AGENTAREA_S3_ENDPOINT` | the RustFS service host, port 9000 | derived |
-| `AWS_ACCESS_KEY_ID` | Secret `global.secrets.rustfs`, key `root-user` | generated |
-| `AWS_SECRET_ACCESS_KEY` | Secret `global.secrets.rustfs`, key `root-password` | generated |
+| `AGENTAREA_S3_ENDPOINT` | `global.storage.endpoint`; with RustFS, the RustFS service, port 9000 | derived |
+| `AGENTAREA_S3_ACCESS_KEY` | Secret `global.storage.existingSecret`, key `global.storage.accessKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-user` | generated |
+| `AGENTAREA_S3_SECRET_KEY` | Secret `global.storage.existingSecret`, key `global.storage.secretKeyKey`; with RustFS, Secret `global.secrets.rustfs`, key `root-password` | generated |
 
 `global.storage.publicEndpoint` is rendered in the `backend` group as
 `AGENTAREA_S3_PUBLIC_ENDPOINT`, not here.

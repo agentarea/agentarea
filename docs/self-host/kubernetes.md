@@ -78,12 +78,16 @@ you install, not after.
       redis:
         existingSecret: agentarea-redis-url    # key `url`, holds the full AGENTAREA_REDIS_URL
       storage:
-        type: s3
         endpoint: https://s3.us-east-1.amazonaws.com
         publicEndpoint: https://s3.us-east-1.amazonaws.com
         bucket: agentarea-documents
         region: us-east-1
+        existingSecret: agentarea-object-store   # keys `access-key-id`, `secret-access-key`
     ```
+
+    The bucket must exist, and its CORS rule must allow `GET`, `PUT` and `HEAD`
+    from your frontend origin: `global.storage.cors` is applied only to the
+    bundled RustFS.
 
     Disabling `postgresql` does not create the auxiliary databases for you. Temporal,
     Kratos, and OpenFGA each need their own database on the external instance; the

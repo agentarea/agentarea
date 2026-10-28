@@ -21,6 +21,7 @@ on:
       - "scripts/test-mcp-egress-label-helm.sh"
       - "scripts/test-platform-egress-helm.sh"
       - "scripts/test-artifacthub-images-helm.sh"
+      - "scripts/test-external-storage-helm.sh"
       - ".github/workflows/validate-helm.yml"
   pull_request:
     branches: ["main"]
@@ -32,6 +33,7 @@ on:
       - "scripts/test-mcp-egress-label-helm.sh"
       - "scripts/test-platform-egress-helm.sh"
       - "scripts/test-artifacthub-images-helm.sh"
+      - "scripts/test-external-storage-helm.sh"
       - ".github/workflows/validate-helm.yml"
   workflow_call: {}
 
@@ -141,6 +143,9 @@ jobs:
 
       - name: Verify no container declares a duplicate env name
         run: scripts/test-no-duplicate-env-helm.sh
+
+      - name: Verify object storage wiring, bundled and external
+        run: scripts/test-external-storage-helm.sh
 
       - name: Lint data-plane chart
         run: helm lint charts/agentarea-dataplane --set dataPlane.id=ci --set dataPlane.auth.existingSecret=ci  # pragma: allowlist secret
