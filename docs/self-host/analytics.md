@@ -9,7 +9,7 @@ related:
   - /self-host/configuration
   - /self-host/docker-compose
   - /self-host/kubernetes
-last_updated: 2026-10-14
+last_updated: 2026-10-28
 ---
 
 Every AgentArea installation sends anonymous usage statistics to AgentArea, and
@@ -24,13 +24,15 @@ AgentArea, at `https://analytics.agentarea.ai`, and answers product questions:
 how many installations reach a first successful run, which connectors fail to
 connect, which features are used.
 
-Three sources send it. None of them sends an event per action.
+Four sources send it. Only sign-ups send an event per action, and only where the
+operator wired them up.
 
 | Source | Runs in | What | Cadence |
 |---|---|---|---|
 | Pulse | worker | counts computed from the database | once a day per installation |
 | Failure counters | API and worker, in memory | attempts that leave no row: OAuth connects, connector checks, refused runs | sent hourly |
 | Page views | webapp, server side | the route pattern of each page rendered | sent hourly |
+| Sign-ups | API, called by Kratos | the channel each new identity came from | sent hourly, one event per identity |
 
 The API and the worker each log one line at start while analytics is on:
 
@@ -55,6 +57,7 @@ recovery once.
 | Variable | Helm value | Default | Description |
 |---|---|---|---|
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` | `false` sends nothing from the API, the worker or the webapp |
+| `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset | the key Kratos's after-registration hook presents; unset, no sign-up is recorded or sent |
 
 Set it on the backend and the worker. The chart and `docker-compose.yaml` set both
 from the one value. `docker-compose.dev.yaml` defaults it to `false`, and the CI
@@ -190,6 +193,36 @@ because billing could not answer is not counted.
 
 Prefetches are not counted, and the same person on the same path counts once per
 30 minutes.
+
+### Sign-ups: event `sign_up`
+
+Sent only when `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` is set and Ory Kratos is
+configured with an after-registration web hook that calls
+`POST /internal/analytics/signups?method=<password|oidc|code>` with that key as its
+`Authorization` header and the body
+`{identity_id, created_at, request_url}`. AgentArea's own cloud does this;
+an installation that does not configure it sends no `sign_up`.
+
+The API reads the landing page's parameters out of the registration flow's
+`request_url` (`aa_ch`, `aa_ref`, `aa_lh`, `aa_lp`, `utm_source`, `utm_medium`,
+`utm_campaign`), stores one row per identity in `signup_attributions`, and sends
+one event the first time it stores it. A repeated hook for the same identity sends
+nothing.
+
+| Field | Value |
+|---|---|
+| `user_id` | the new person's pseudonym, as described in [Identifiers](#identifiers) |
+| `properties.channel` | `campaign`, `search`, `social`, `referral`, `skills_catalog` or `direct` |
+| `properties.method` | `password`, `oidc`, `code`, or null |
+| `properties.landing_host` | the landing site's host name |
+| `properties.landing_path` | the landing page: `/skills/*`, `/blog/*` (and their `/ru` forms), otherwise the literal path |
+| `properties.referrer_host` | the host name of the site that referred the visit; never its path |
+| `properties.utm_source`, `utm_medium`, `utm_campaign` | the visit's campaign tags |
+
+Each text value is cut to 64 characters, and a missing one is null. The channel is
+`campaign` when `utm_source` is present, `search`, `social` or `referral` by the
+referring host, `skills_catalog` for a visit with no referrer that entered on a
+skill page, and `direct` otherwise.
 
 ## Never sent
 

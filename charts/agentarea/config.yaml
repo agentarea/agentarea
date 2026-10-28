@@ -102,6 +102,10 @@ groups:
         conditional: '{{ .Values.kratos.enabled }}'
         secretName: '{{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}'
         key: jwks_b64
+      - name: AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY
+        conditional: '{{ .Values.global.analytics.signupHookSecret }}'
+        secretName: '{{ .Values.global.analytics.signupHookSecret }}'
+        key: signup-hook-key
 
   mcpManager:
     configVars:

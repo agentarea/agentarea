@@ -12,6 +12,7 @@ from .pulse import InstallationPulse
 from .repository import get_or_create_installation
 from .runtime import current_sender, start_analytics, stop_analytics
 from .sender import MAX_BATCH, AnalyticsSender
+from .signup_models import SignupAttribution
 
 __all__ = [
     "COLLECTOR_URL",
@@ -21,6 +22,7 @@ __all__ = [
     "AnalyticsSender",
     "Installation",
     "InstallationPulse",
+    "SignupAttribution",
     "count",
     "count_run_refused",
     "current_sender",

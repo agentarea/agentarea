@@ -113,4 +113,11 @@ SMTP_FROM_NAME: "{{ .Values.kratos.smtp.from_name }}"
       name: {{ default (printf "%s-kratos-jwks" .Release.Name) .Values.kratos.secretName | quote }}
       key: jwks_b64
 {{- end }}
+{{- if .Values.global.analytics.signupHookSecret }}
+- name: AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY
+  valueFrom:
+    secretKeyRef:
+      name: "{{ .Values.global.analytics.signupHookSecret }}"
+      key: signup-hook-key
+{{- end }}
 {{- end }}

@@ -16,3 +16,6 @@ class AnalyticsSettings(BaseAppSettings):
     model_config = SettingsConfigDict(env_prefix="AGENTAREA_ANALYTICS_")
 
     ENABLED: bool = True
+    #: The key Kratos's after-registration hook presents on /internal/analytics/signups
+    #: (ADR-0047). Unset, that endpoint does not exist.
+    SIGNUP_HOOK_KEY: str | None = None

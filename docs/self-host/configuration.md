@@ -156,6 +156,7 @@ Rendered only when `rustfs.enabled` is true.
 | `AGENTAREA_METRICS_ENABLED` | `global.monitoring.prometheus.enabled` | `true` |
 | `AGENTAREA_METRICS_PORT` | `global.monitoring.prometheus.port` | `9090` |
 | `AGENTAREA_ANALYTICS_ENABLED` | `global.analytics.enabled` | `true` |
+| `AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` | Secret `global.analytics.signupHookSecret`, key `signup-hook-key` | unset (no sign-up hook) |
 | `AGENTAREA_AUTH_ISSUER` | `kratos.jwt.issuer` | `https://agentarea.dev` |
 | `AGENTAREA_AUTH_AUDIENCE` | `kratos.jwt.audience` | `agentarea-api` |
 | `AGENTAREA_AUTH_JWKS_B64` | Secret `<release>-kratos-jwks` or `kratos.secretName`, key `jwks_b64` | generated |
@@ -172,6 +173,12 @@ port. The API serves `/health` on its normal port unconditionally; see
 `AGENTAREA_ANALYTICS_ENABLED` sends anonymous usage statistics to AgentArea from the
 backend and the worker; `false` sends nothing. It is not OpenTelemetry. The fields
 sent are listed in [usage analytics](/self-host/analytics).
+
+`AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY` is the key an Ory Kratos after-registration
+web hook presents, as its `Authorization` header, to
+`POST /internal/analytics/signups`. The backend then records which channel brought
+each sign-up (see [usage analytics](/self-host/analytics)). Unset, the
+endpoint answers 404.
 
 `AGENTAREA_API_URL` is the URL the backend advertises for itself — provider icon URLs,
 OAuth protected-resource metadata, and the MCP `WWW-Authenticate` header. It must

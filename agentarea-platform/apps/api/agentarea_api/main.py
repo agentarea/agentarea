@@ -454,6 +454,11 @@ def create_app() -> FastAPI:
 
     app.include_router(webhooks_module.router, tags=["webhooks"])
 
+    # Kratos's after-registration hook, keyed by AGENTAREA_ANALYTICS_SIGNUP_HOOK_KEY
+    from agentarea_api.api.internal import analytics_signups
+
+    app.include_router(analytics_signups.router)
+
     # Each agent's own A2A host, matched before any path so that host serves
     # nothing but the agent.
     from agentarea_api.api.v1.agents_a2a import agent_host_route
