@@ -454,7 +454,8 @@ images from your working tree. [CONTRIBUTING.md](CONTRIBUTING.md) covers the res
 
 ## Community and license
 
-- [Discord](https://discord.gg/5tduPwheYQ) for questions
+- [Discord](https://discord.gg/5tduPwheYQ) to chat with the team and other users
+- [Discussions](https://github.com/agentarea/agentarea/discussions) for questions, ideas and show-and-tell
 - [Issues](https://github.com/agentarea/agentarea/issues) for bugs and feature requests
 - [SECURITY.md](SECURITY.md) for reporting vulnerabilities privately
 - [Code of Conduct](CODE_OF_CONDUCT.md)
