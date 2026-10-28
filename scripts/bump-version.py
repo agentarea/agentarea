@@ -168,9 +168,9 @@ def main():
             )
             print("✅ Updated agentarea-platform/uv.lock")
         except FileNotFoundError:
-            print("⚠️  Warning: uv not found; uv.lock left stale")
+            sys.exit("❌ uv not found: agentarea-platform/uv.lock cannot follow the bump")
         except subprocess.CalledProcessError as e:
-            print(f"⚠️  Warning: Failed to refresh uv.lock: {e.stderr}")
+            sys.exit(f"❌ Failed to refresh agentarea-platform/uv.lock: {e.stderr}")
 
     print(f"\n✅ All versions bumped to {new_version}")
 
