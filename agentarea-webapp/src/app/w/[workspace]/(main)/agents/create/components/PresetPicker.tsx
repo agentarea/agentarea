@@ -10,7 +10,6 @@ import {
 import type { AgentPresetResponse } from "@/api/client/types.gen";
 import { ChoiceTile } from "@/components/ChoiceTile";
 import FormLabel from "@/components/FormLabel/FormLabel";
-import { Button } from "@/components/ui/button";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
@@ -116,36 +115,49 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <FormLabel icon={LayoutTemplate}>{t("title")}</FormLabel>
         <span className="note">{t("hint")}</span>
-        {selected && (
-          // Empty is no preset at all: a way back, not a tile beside them.
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            className="ml-auto px-2 text-muted-foreground hover:text-foreground"
-            onClick={() => onSelect(null)}
-          >
-            <FilePlus2 />
-            {t("reset")}
-          </Button>
-        )}
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {presets.map((preset) =>
-          tile(
-            preset.id,
-            preset.name,
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {/* Empty is no preset at all: a narrow tile at the head of the row,
+            picked while nothing else is. */}
+        <ChoiceTile
+          className="items-center py-2 sm:shrink-0"
+          icon={
             <EntityAvatar
-              hue={deterministicHue(preset.id)}
+              variant="soft"
               size={24}
               iconScale={0.5}
-              icon={<LayoutTemplate strokeWidth={1.85} />}
+              icon={<FilePlus2 strokeWidth={1.85} />}
               aria-hidden
-            />,
-            preset.description,
-            <PresetContents preset={preset} />
-          )
-        )}
+            />
+          }
+          title={
+            <span className="flex items-center gap-1.5">
+              <span className="whitespace-nowrap">{t("reset")}</span>
+              {!selected && (
+                <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+              )}
+            </span>
+          }
+          selected={!selected}
+          onClick={() => onSelect(null)}
+        />
+        <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {presets.map((preset) =>
+            tile(
+              preset.id,
+              preset.name,
+              <EntityAvatar
+                hue={deterministicHue(preset.id)}
+                size={24}
+                iconScale={0.5}
+                icon={<LayoutTemplate strokeWidth={1.85} />}
+                aria-hidden
+              />,
+              preset.description,
+              <PresetContents preset={preset} />
+            )
+          )}
+        </div>
       </div>
       {filled.length > 0 && (
         <p className="note" role="status">
