@@ -10,6 +10,7 @@ import {
 import type { AgentPresetResponse } from "@/api/client/types.gen";
 import { ChoiceTile } from "@/components/ChoiceTile";
 import FormLabel from "@/components/FormLabel/FormLabel";
+import { Button } from "@/components/ui/button";
 import { EntityAvatar } from "@/components/ui/entity-avatar";
 import { deterministicHue } from "@/lib/avatar-hue";
 import { ENTITY_ICONS } from "@/lib/entity-icons";
@@ -71,7 +72,7 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
     : [];
 
   const tile = (
-    id: string | null,
+    id: string,
     title: string,
     icon: React.ReactNode,
     description: string | null | undefined,
@@ -80,8 +81,8 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
     const isSelected = id === selectedId;
     return (
       <ChoiceTile
-        key={id ?? "empty"}
-        className="h-full py-2.5"
+        key={id}
+        className="items-center py-2"
         title={
           <span className="flex items-center gap-1.5">
             <span className="truncate">{title}</span>
@@ -90,14 +91,19 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
             )}
           </span>
         }
-        // The description cut at two lines, whole on hover; what the preset
-        // brings on a line of its own, so the name keeps its width.
+        // One line under the name: the description, whole on hover, and what
+        // the preset brings at its end.
         description={
-          description ? (
-            <span title={description}>{description}</span>
-          ) : undefined
+          <span className="flex items-center gap-2">
+            <span
+              className="min-w-0 flex-1 truncate"
+              title={description ?? undefined}
+            >
+              {description}
+            </span>
+            {contents && <span className="shrink-0">{contents}</span>}
+          </span>
         }
-        footer={contents}
         icon={icon}
         selected={isSelected}
         onClick={() => onSelect(presets.find((p) => p.id === id) ?? null)}
@@ -110,27 +116,28 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
         <FormLabel icon={LayoutTemplate}>{t("title")}</FormLabel>
         <span className="note">{t("hint")}</span>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {tile(
-          null,
-          t("empty"),
-          <EntityAvatar
-            variant="soft"
-            size={28}
-            iconScale={0.5}
-            icon={<FilePlus2 strokeWidth={1.85} />}
-            aria-hidden
-          />,
-          t("emptyDescription")
+        {selected && (
+          // Empty is no preset at all: a way back, not a tile beside them.
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="ml-auto px-2 text-muted-foreground hover:text-foreground"
+            onClick={() => onSelect(null)}
+          >
+            <FilePlus2 />
+            {t("reset")}
+          </Button>
         )}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {presets.map((preset) =>
           tile(
             preset.id,
             preset.name,
             <EntityAvatar
               hue={deterministicHue(preset.id)}
-              size={28}
+              size={24}
               iconScale={0.5}
               icon={<LayoutTemplate strokeWidth={1.85} />}
               aria-hidden

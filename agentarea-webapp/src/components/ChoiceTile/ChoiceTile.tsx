@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 export function ChoiceTile({
   title,
   description,
-  footer,
   icon,
   selected = false,
   disabled = false,
@@ -18,8 +17,6 @@ export function ChoiceTile({
 }: {
   title: ReactNode;
   description?: ReactNode;
-  /** A line under the description, outside its two-line cut. */
-  footer?: ReactNode;
   icon?: ReactNode;
   selected?: boolean;
   /** Shown but fixed, e.g. a choice an edit cannot change. */
@@ -46,11 +43,6 @@ export function ChoiceTile({
         {description && (
           <span className="line-clamp-2 text-xs text-muted-foreground">
             {description}
-          </span>
-        )}
-        {footer && (
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {footer}
           </span>
         )}
       </span>
