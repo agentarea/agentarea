@@ -145,6 +145,8 @@ DSN="${AGENTAREA_DB_USER}:${AGENTAREA_DB_PASSWORD}@${AGENTAREA_DB_HOST}:${AGENTA
 #     up with one row, which only the single-row unique index decides.
 #     The daily pulse names other libraries' tables and columns by hand; only the
 #     migrated schema shows they exist. One replica sends it, by a real advisory lock.
+#   sign-up attributions: a replayed registration hook keeps the first row, which
+#     only the primary key on identity_id decides.
 #   catalog migration rerun: the ADR-0044 revisions run by the real alembic
 #     environment, refused a lock and killed mid index swap, then rerun to head.
 #     Last: it downgrades and upgrades the shared database.
@@ -219,6 +221,7 @@ PY_SUITES=(
   apps/api/tests/test_owned_auth_configs_db.py
   libs/common/tests/test_analytics_installation_db.py
   libs/common/tests/test_analytics_pulse_db.py
+  libs/common/tests/test_analytics_signups_db.py
   apps/api/tests/test_registry_migration_rerun_db.py
 )
 
