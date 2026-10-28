@@ -12,16 +12,19 @@ interface AgentEditContentProps {
 export default async function AgentEditContent({
   agentId,
 }: AgentEditContentProps) {
-  const [agentData, delegation, agentKeys] = await Promise.all([
+  const [agentData, delegation] = await Promise.all([
     loadAgentEditData(agentId),
     loadDelegationData(),
-    loadAgentKeys(agentId),
   ]);
+  // The page is addressed by the agent's slug; the API keys, the save and the
+  // delegate list all go by its id.
+  const { id } = agentData.agent;
+  const agentKeys = await loadAgentKeys(id);
   const a2aAddress = agentData.agent.a2a_url;
 
   return (
     <AgentEditClient
-      agentId={agentId}
+      agentId={id}
       agentName={agentData.agent.name}
       mcpServers={agentData.mcpServers}
       llmModelInstances={agentData.llmModelInstances}
