@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
 import BaseModal from "@/components/BaseModal/BaseModal";
 
 /** Where a click on this anchor would take the app, or null if it stays put or leaves it. */
@@ -72,7 +73,8 @@ export default function UnsavedChangesGuard({
 
   return (
     <BaseModal
-      type="delete"
+      type="confirm"
+      icon={LogOut}
       title={t("title")}
       description={t("description")}
       confirmLabel={t("leave")}
