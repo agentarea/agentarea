@@ -8,6 +8,7 @@ AGENTAREA_S3_REGION: "{{ .Values.global.storage.region }}"
 AGENTAREA_S3_BUCKET: "{{ .Values.global.storage.bucket }}"
 AGENTAREA_S3_ARTIFACTS_BUCKET: "{{ .Values.global.storage.bucket }}"
 AGENTAREA_S3_ENDPOINT: "{{ include "agentarea.storage.endpoint" . }}"
+AGENTAREA_S3_CONDITIONAL_WRITES: "{{ .Values.global.storage.conditionalWrites }}"
 {{- end }}
 
 {{- define "agentarea.storage.envs" }}
@@ -31,6 +32,11 @@ AGENTAREA_S3_ENDPOINT: "{{ include "agentarea.storage.endpoint" . }}"
     configMapKeyRef:
       name: {{ include "agentarea.fullname" . }}-env-storage
       key: AGENTAREA_S3_ENDPOINT
+- name: AGENTAREA_S3_CONDITIONAL_WRITES
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "agentarea.fullname" . }}-env-storage
+      key: AGENTAREA_S3_CONDITIONAL_WRITES
 {{- end }}
 
 {{- define "agentarea.storage.secrets.envs" }}

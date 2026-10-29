@@ -312,7 +312,11 @@ func mountStorage(ctx context.Context, router *gin.Engine, secret []byte, worksp
 	if err != nil {
 		return failed(logger, "Failed to configure MCP storage", err)
 	}
-	handler, err := mcpstorage.NewHandler(secret, workspaceConfig.Bucket, store, storageInstances{repository: repository}, logger)
+	writes, err := mcpstorage.ConditionalWritesFromEnv()
+	if err != nil {
+		return failed(logger, "Failed to configure MCP storage", err)
+	}
+	handler, err := mcpstorage.NewHandler(secret, workspaceConfig.Bucket, store, storageInstances{repository: repository}, writes, logger)
 	if err != nil {
 		return failed(logger, "Failed to configure MCP storage", err)
 	}

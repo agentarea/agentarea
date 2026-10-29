@@ -105,6 +105,7 @@ The following table lists configurable parameters of the chart and their default
 | global.storage.existingSecret | string | `""` |  |
 | global.storage.accessKeyKey | string | `"access-key-id"` |  |
 | global.storage.secretKeyKey | string | `"secret-access-key"` |  |
+| global.storage.conditionalWrites | string | `"native"` | Who enforces If-Match / If-None-Match on MCP app storage writes: "native" (the store: AWS S3, MinIO, RustFS) or "emulated" (mcp-manager, under a per-object lock) for a store without conditional writes, such as Timeweb S3. Emulated is safe only with a single mcp-manager replica. |
 | global.storage.publicEndpoint | string | `""` |  |
 | global.storage.bucket | string | `"agentarea-documents"` |  |
 | global.storage.region | string | `"us-east-1"` |  |

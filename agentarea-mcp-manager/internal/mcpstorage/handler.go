@@ -14,9 +14,11 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -34,6 +36,35 @@ import (
 const Route = "/mcp/:instance_id/storage/*path"
 
 const maxPathBytes = 512
+
+// ConditionalWritesEnv says who enforces If-Match / If-None-Match on writes.
+const ConditionalWritesEnv = "AGENTAREA_S3_CONDITIONAL_WRITES"
+
+// ConditionalWrites is who enforces a write's precondition.
+type ConditionalWrites string
+
+const (
+	// NativeConditionalWrites hands the precondition to the object store (AWS
+	// S3, MinIO, RustFS), which checks it atomically with the write.
+	NativeConditionalWrites ConditionalWrites = "native"
+	// EmulatedConditionalWrites checks it in the manager, under a per-object
+	// lock, for a store that refuses or ignores conditional writes (Timeweb S3
+	// answers every If-Match with 412 and ignores If-None-Match). Safe only
+	// while this manager is the store's single writer for app objects.
+	EmulatedConditionalWrites ConditionalWrites = "emulated"
+)
+
+// ConditionalWritesFromEnv reads ConditionalWritesEnv; unset is native.
+func ConditionalWritesFromEnv() (ConditionalWrites, error) {
+	switch value := ConditionalWrites(strings.TrimSpace(os.Getenv(ConditionalWritesEnv))); value {
+	case "", NativeConditionalWrites:
+		return NativeConditionalWrites, nil
+	case EmulatedConditionalWrites:
+		return EmulatedConditionalWrites, nil
+	default:
+		return "", fmt.Errorf("%s must be native or emulated, got %q", ConditionalWritesEnv, value)
+	}
+}
 
 // ErrInstanceNotFound is what Instances returns for an instance that no longer
 // exists; its token is then refused.
@@ -81,17 +112,47 @@ type Handler struct {
 	instances Instances
 	logger    *slog.Logger
 	now       func() time.Time
+	// emulate checks preconditions here instead of in the store; locks
+	// serializes the check and the write per object key.
+	emulate bool
+	locks   sync.Map
 }
 
 // NewHandler returns the API over bucket. Keys are
 // workspaces/{workspace_id}/apps/{instance_id}/{path}: the layout the
 // platform's workspace files use, so app objects show in Context. Tokens are
 // checked against secret, the manager's gateway secret.
-func NewHandler(secret []byte, bucket string, store ObjectStore, instances Instances, logger *slog.Logger) (*Handler, error) {
+func NewHandler(secret []byte, bucket string, store ObjectStore, instances Instances, writes ConditionalWrites, logger *slog.Logger) (*Handler, error) {
 	if len(secret) < 32 || bucket == "" || store == nil || instances == nil || logger == nil {
 		return nil, errors.New("MCP storage handler requires a signing secret of at least 32 bytes, bucket, object store, instance lookup and logger")
 	}
-	return &Handler{secret: secret, maxSize: MaxObjectBytes, bucket: bucket, store: store, instances: instances, logger: logger, now: time.Now}, nil
+	if writes != NativeConditionalWrites && writes != EmulatedConditionalWrites {
+		return nil, fmt.Errorf("MCP storage conditional writes must be native or emulated, got %q", writes)
+	}
+	return &Handler{
+		secret: secret, maxSize: MaxObjectBytes, bucket: bucket, store: store, instances: instances, logger: logger, now: time.Now,
+		emulate: writes == EmulatedConditionalWrites,
+	}, nil
+}
+
+// lock holds the object's lock until the returned func is called.
+func (h *Handler) lock(key string) func() {
+	mu, _ := h.locks.LoadOrStore(key, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	return mu.(*sync.Mutex).Unlock
+}
+
+// precondition checks If-Match (ifMatch set) or If-None-Match: * against the
+// object as it is now, for a store that does not check it itself.
+func (h *Handler) precondition(ctx context.Context, key, ifMatch string) error {
+	head, err := h.store.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(h.bucket), Key: aws.String(key)})
+	switch {
+	case err != nil && !isNotFound(err):
+		return fmt.Errorf("head MCP storage object: %w", err)
+	case ifMatch == "" && err == nil, ifMatch != "" && err != nil, ifMatch != "" && quoteETag(aws.ToString(head.ETag)) != ifMatch:
+		return fail(http.StatusPreconditionFailed, "the object changed; read it again and retry")
+	}
+	return nil
 }
 
 type apiError struct {
@@ -302,9 +363,15 @@ func (h *Handler) put(w http.ResponseWriter, r *http.Request, key, relative stri
 		ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(digest[:])),
 		Metadata:       map[string]string{"sha256": hex.EncodeToString(digest[:])},
 	}
-	if ifMatch != "" {
+	switch {
+	case h.emulate:
+		defer h.lock(key)()
+		if err := h.precondition(r.Context(), key, quoteETag(ifMatch)); err != nil {
+			return err
+		}
+	case ifMatch != "":
 		input.IfMatch = aws.String(quoteETag(ifMatch))
-	} else {
+	default:
 		input.IfNoneMatch = aws.String("*")
 	}
 	out, err := h.store.PutObject(r.Context(), input)
@@ -327,6 +394,9 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request, key string) err
 		return fail(http.StatusPreconditionRequired, "a delete requires If-Match: <etag>")
 	}
 	ifMatch = quoteETag(ifMatch)
+	if h.emulate {
+		defer h.lock(key)()
+	}
 	// Object stores that ignore If-Match on DELETE would turn a stale delete
 	// into a lost update, so the ETag is checked here as well; the store's own
 	// check closes the window between the two where it is supported.
@@ -340,7 +410,11 @@ func (h *Handler) delete(w http.ResponseWriter, r *http.Request, key string) err
 	if quoteETag(aws.ToString(head.ETag)) != ifMatch {
 		return fail(http.StatusPreconditionFailed, "the object changed; read it again and retry")
 	}
-	_, err = h.store.DeleteObject(r.Context(), &s3.DeleteObjectInput{Bucket: aws.String(h.bucket), Key: aws.String(key), IfMatch: aws.String(ifMatch)})
+	input := &s3.DeleteObjectInput{Bucket: aws.String(h.bucket), Key: aws.String(key)}
+	if !h.emulate {
+		input.IfMatch = aws.String(ifMatch)
+	}
+	_, err = h.store.DeleteObject(r.Context(), input)
 	if err != nil {
 		if isPreconditionFailed(err) {
 			return fail(http.StatusPreconditionFailed, "the object changed; read it again and retry")

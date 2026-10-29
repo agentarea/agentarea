@@ -36,6 +36,7 @@ groups:
       AGENTAREA_S3_BUCKET: '{{ .Values.global.storage.bucket }}'
       AGENTAREA_S3_ARTIFACTS_BUCKET: '{{ .Values.global.storage.bucket }}'
       AGENTAREA_S3_ENDPOINT: '{{ include "agentarea.storage.endpoint" . }}'
+      AGENTAREA_S3_CONDITIONAL_WRITES: '{{ .Values.global.storage.conditionalWrites }}'
     secrets:
       - name: AGENTAREA_S3_ACCESS_KEY
         secretName: '{{ include "agentarea.storage.credentialsSecret" . }}'
