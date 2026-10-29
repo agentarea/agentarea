@@ -1,4 +1,4 @@
-import { HelpCircle, Plus } from "lucide-react";
+import { ChevronRight, HelpCircle, Plus } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -82,7 +82,8 @@ export default function AccordionControl({
         <AccordionItem value={id} className={cn(itemClassName)}>
           <AccordionTrigger
             className={cn("label justify-start py-0", triggerClassName)}
-            chevron={chevron}
+            // Drawn below, right after the title, so a count reads apart from it.
+            chevron={null}
             controls={
               <div className="flex flex-row items-center gap-2">
                 {note && !noteInline && (
@@ -134,8 +135,11 @@ export default function AccordionControl({
             }
           >
             {title}
+            {chevron ?? (
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-90" />
+            )}
             {!!count && (
-              <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
+              <span className="rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 tabular-nums text-muted-foreground no-underline dark:bg-zinc-800">
                 {count}
               </span>
             )}

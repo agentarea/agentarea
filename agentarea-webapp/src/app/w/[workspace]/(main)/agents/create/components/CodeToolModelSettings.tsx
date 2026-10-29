@@ -4,7 +4,6 @@ import { ImageIcon, Video, X, type LucideIcon } from "lucide-react";
 import { Control, UseFormSetValue, useWatch } from "react-hook-form";
 import type { ModelInstanceResponse, ModelKind } from "@/api/client/types.gen";
 import ConfigSheet from "@/components/ConfigSheet";
-import FormError from "@/components/FormError";
 import FormLabel from "@/components/FormLabel/FormLabel";
 import ProviderConfigForm from "@/components/ProviderConfigForm/ProviderConfigForm";
 import { Button } from "@/components/ui/button";
@@ -90,12 +89,22 @@ function KindModelSelect({
         {label}
       </FormLabel>
       {error ? (
-        <div className="flex flex-col items-start gap-2">
-          <FormError className="w-full">{error}</FormError>
-          <Button type="button" variant="outline" size="sm" onClick={load}>
+        // One line in the field's place; the server's own words on hover.
+        <p
+          className="form-error flex flex-wrap items-center gap-x-1.5"
+          title={error}
+        >
+          {t("loadFailed")}
+          <Button
+            type="button"
+            variant="link"
+            size="xs"
+            className="h-auto p-0 text-xs"
+            onClick={load}
+          >
             {tCommon("retry")}
           </Button>
-        </div>
+        </p>
       ) : (
         <div className="flex items-center gap-2">
           <ProviderModelSelector
