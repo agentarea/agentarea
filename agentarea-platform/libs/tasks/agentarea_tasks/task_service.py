@@ -1071,6 +1071,16 @@ class TaskService(BaseTaskService):
             payload["additional_budget_usd"] = serialize_money(additional_budget_usd)
         return await self.workflow_service.continue_execution(task.execution_id, payload)
 
+    async def latest_in_a2a_context(self, agent_id: UUID, context_id: str) -> AgentTask | None:
+        """The newest task of ``agent_id`` an A2A client started in ``context_id``."""
+        task = await self.task_repository.latest_in_a2a_context(agent_id, context_id)
+        return self._task_to_agent_task(task) if task is not None else None
+
+    async def log_end(self, task_id: UUID) -> int:
+        """The last position of the task's log; -1 while it is empty."""
+        conversation = self.repository_factory.create_repository(TaskConversationRepository)
+        return await conversation.next_seq(task_id) - 1
+
     async def queue_follow_up(self, task_id: UUID, message: str) -> bool:
         """Deliver a user message to a task's conversation.
 

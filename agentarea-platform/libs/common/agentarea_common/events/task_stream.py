@@ -245,6 +245,7 @@ async def iter_task_event_feed(
     exclude_types: frozenset[str] = frozenset(),
     follow_execution: bool = False,
     resume_after: TaskEventEnvelope | None = None,
+    after_seq: int | None = None,
     run_open: Callable[[], Awaitable[bool]] | None = None,
     max_wall_time_seconds: float = 30 * 60,
     live_view: Callable[[TaskEventEnvelope], Awaitable[TaskEventEnvelope]] | None = None,
@@ -264,11 +265,17 @@ async def iter_task_event_feed(
     ``task.started`` opened a new run. ``run_open`` says whether a run that has
     not reported yet was started since; the feed then tails it. ``live_view``
     turns a live entry, as the broker carries it, into what this caller sees.
+
+    ``after_seq`` starts the feed after that log position whatever came before
+    it, and tails live until the next terminal event: a caller that has just
+    handed the task a message follows only the turn that answers it.
     """
     terminal = frozenset(canonical_type(t) for t in terminal_types)
     excluded = frozenset(canonical_type(t) for t in exclude_types)
     closed = resume_after is not None and _ends_feed(resume_after, terminal, follow_execution)
     last_seq = resume_after.seq if resume_after is not None and resume_after.seq is not None else -1
+    if after_seq is not None:
+        last_seq = max(last_seq, after_seq)
     async with hub.subscribe(task_id) as live:
         async for env in snapshot():
             if env.seq is not None:
