@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { ChevronDown, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InteractiveListRow } from "@/components/ui/interactive-list-row";
-import Note from "@/components/ui/note";
 import { cn } from "@/lib/utils";
 
 /** The rows a form section has picked, in one bordered block, or its note. */
@@ -20,9 +19,11 @@ export function SelectedItems({
 }) {
   if (!count) {
     return (
-      <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground dark:border-zinc-700">
-        <p>{empty}</p>
-      </Note>
+      // A dashed line in the list's place, like an empty list in the policy
+      // editor: it says nothing is here without standing in for a card.
+      <p className="rounded-md border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground dark:border-zinc-700">
+        {empty}
+      </p>
     );
   }
   return (
