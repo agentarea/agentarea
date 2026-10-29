@@ -5,6 +5,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/server";
 import type { Caller } from "@kit/context/caller.ts";
 import { installEvents } from "@kit/events/install.ts";
+import type { EventDispatcher } from "@kit/events/subscriptions.ts";
 import type { AppStore } from "@kit/store/store.ts";
 import { McpServer, ProtocolError, type ReadResourceResult } from "@modelcontextprotocol/server";
 import fs from "node:fs/promises";
@@ -65,9 +66,15 @@ export const NO_CALLER =
  * one transaction there. `current` is the tracker as of this request, for the
  * people and projects the tool descriptions name.
  */
-export function createServer(app: AppStore, appDir: string, current: TasksStore | null, identity: Identity): McpServer {
+export function createServer(
+  app: AppStore,
+  appDir: string,
+  current: TasksStore | null,
+  identity: Identity,
+  dispatcher: EventDispatcher,
+): McpServer {
   const server = new McpServer({ name: "Tasks MCP App", version: "0.1.0" });
-  installEvents(server, { app, types: EVENT_TYPES, ProtocolError });
+  installEvents(server, { app, types: EVENT_TYPES, ProtocolError, dispatcher });
   if (!current) {
     registerSetup(server, app, identity);
     return server;
@@ -82,8 +89,9 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
       if (caller) store.identify(caller, false);
       return fn(store);
     });
-  const write = <T>(fn: (store: TasksStore) => T, join = true) =>
-    app.transact((db) => {
+  // Every change may have logged an event, so subscribers are posted it as soon as it is stored.
+  const write = async <T>(fn: (store: TasksStore) => T, join = true) => {
+    const result = await app.transact((db) => {
       const store = TasksStore.load(db);
       if (caller) store.identify(caller, join);
       else if (identity.required) throw new Error(NO_CALLER);
@@ -91,6 +99,9 @@ export function createServer(app: AppStore, appDir: string, current: TasksStore 
       store.save(db);
       return result;
     });
+    dispatcher.kick();
+    return result;
+  };
   const projectKeys = data.projects.map((p) => `${p.key} (${p.name})`).join(", ");
   const handles = data.people.map((p) => `${p.handle}${p.kind === "agent" ? " (agent)" : ""}`).join(", ");
   const me = caller

@@ -1,4 +1,5 @@
 import { CallerContextError, callerFromHeaders, contextOptionsFromEnv, verifyContextToken } from "@kit/context/caller.ts";
+import { EventDispatcher } from "@kit/events/subscriptions.ts";
 import { openAppStore } from "@kit/store/store.ts";
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import { toNodeHandler } from "@modelcontextprotocol/node";
@@ -7,6 +8,7 @@ import cors from "cors";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { DB_FILE, MIGRATIONS, seedDemo } from "./db.ts";
+import { EVENT_TYPES } from "./events.ts";
 import { createServer, VIEW_FILES } from "./server.ts";
 import { TasksStore } from "./store.ts";
 
@@ -34,6 +36,10 @@ const store = await openAppStore({ file: DB_FILE, migrations: MIGRATIONS, seed: 
 if (!(await store.read(TasksStore.loadIfSetUp))) {
   console.log("The tracker is empty: until setup_tracker writes it, the server offers only that tool.");
 }
+// Posts task events to webhook subscribers: right after each change, and failed POSTs again on a timer.
+const dispatcher = new EventDispatcher({ app: store, types: EVENT_TYPES });
+dispatcher.start();
+dispatcher.kick();
 
 // Host header validation follows the bind address: on for loopback, off for
 // 0.0.0.0 unless MCP_ALLOWED_HOSTS narrows it.
@@ -50,7 +56,7 @@ const mcp = toNodeHandler(
       return createServer(store, appDir, await store.read(TasksStore.loadIfSetUp), {
         caller,
         required: contextOptions !== null,
-      });
+      }, dispatcher);
     },
     {
       legacy: "stateless",

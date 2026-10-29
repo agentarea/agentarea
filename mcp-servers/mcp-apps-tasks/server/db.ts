@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { insertRows, type Row, type Rows, type Table } from "@kit/store/rows.ts";
 import { EVENT_LOG_MIGRATION } from "@kit/events/log.ts";
+import { EVENT_SUBSCRIPTIONS_MIGRATION } from "@kit/events/subscriptions.ts";
 import type { Migration } from "@kit/store/store.ts";
 import demo from "../data/tasks.json" with { type: "json" };
 import type { Activity, ActivityKind, Issue, LabelColor, PersonKind, Priority, Status, TasksData } from "../shared/tasks.ts";
@@ -90,6 +91,8 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE people ADD COLUMN platform_id TEXT;
       CREATE UNIQUE INDEX people_platform_id ON people (platform_id) WHERE platform_id IS NOT NULL;
     `),
+  // Webhook subscriptions to those events (events/subscribe).
+  EVENT_SUBSCRIPTIONS_MIGRATION,
 ];
 
 export const TABLES: Table[] = [
