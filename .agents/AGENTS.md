@@ -54,8 +54,6 @@ interface:
 
 ## Notes
 
-New decision records go to the wiki (`agentarea-wiki`, see `skills/aa-wiki/SKILL.md`), not here. The notes below were written before that and stay as they are.
-
 Notes are decision records: what was decided, what was rejected, and why. They
 capture the rationale that the diff cannot — an implementation shows what the
 code does, never which alternatives were weighed.
