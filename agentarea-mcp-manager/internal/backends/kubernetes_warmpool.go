@@ -164,6 +164,7 @@ func (k *KubernetesBackend) EnsureWorkspaceHydrated(
 	ctx context.Context,
 	workspaceID, taskID, revision string,
 	hydrate func(context.Context) error,
+	_ func(context.Context, string) error,
 ) error {
 	client := k.GetWarmPoolClient()
 	if client == nil {

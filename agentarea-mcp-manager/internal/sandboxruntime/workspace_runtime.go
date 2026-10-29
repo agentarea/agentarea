@@ -260,8 +260,9 @@ func (r *WorkspaceRuntime) EnsureWorkspaceHydrated(
 	ctx context.Context,
 	workspaceID, taskID, revision string,
 	hydrate func(context.Context) error,
+	advance func(context.Context, string) error,
 ) error {
-	return r.base.EnsureWorkspaceHydrated(ctx, workspaceID, taskID, revision, hydrate)
+	return r.base.EnsureWorkspaceHydrated(ctx, workspaceID, taskID, revision, hydrate, advance)
 }
 
 func (r *WorkspaceRuntime) EnsureWorkspace(ctx context.Context, workspaceID, taskID string) error {
@@ -289,12 +290,47 @@ func (r *WorkspaceRuntime) EnsureWorkspace(ctx context.Context, workspaceID, tas
 		return fmt.Errorf("workspace provider returned an invalid hydration revision")
 	}
 	return r.base.EnsureWorkspaceHydrated(ctx, workspaceID, taskID, mount.RevisionSHA256, func(hydrationCtx context.Context) error {
-		return r.materializeInputs(hydrationCtx, workspaceID, taskID, mount)
+		return r.materializeInputs(hydrationCtx, workspaceID, taskID, mount.Hydration.Downloads)
+	}, func(hydrationCtx context.Context, fromRevision string) error {
+		return r.materializeAddedAttachments(hydrationCtx, workspaceID, taskID, fromRevision, mount)
 	})
 }
 
-func (r *WorkspaceRuntime) materializeInputs(ctx context.Context, workspaceID, taskID string, mount *sandboxworkspace.Mount) error {
-	for _, input := range mount.Hydration.Downloads {
+// materializeAddedAttachments brings a live binding from fromRevision to the
+// mount's revision by copying in only the attachment files the data plane
+// proves were added. Each one must match the signed hydration plan exactly.
+func (r *WorkspaceRuntime) materializeAddedAttachments(
+	ctx context.Context,
+	workspaceID, taskID, fromRevision string,
+	mount *sandboxworkspace.Mount,
+) error {
+	additions, err := r.workspaces.HydrationAdditions(ctx, workspaceID, taskID, fromRevision, mount.RevisionSHA256)
+	if err != nil {
+		return err
+	}
+	if len(additions) == 0 {
+		return fmt.Errorf("workspace provider reported no added inputs between distinct revisions")
+	}
+	planned := make(map[string]workspace.Download, len(mount.Hydration.Downloads))
+	for _, download := range mount.Hydration.Downloads {
+		planned[download.RelativePath] = download
+	}
+	downloads := make([]workspace.Download, 0, len(additions))
+	for _, entry := range additions {
+		if !workspace.IsAttachmentInputPath(entry.RelativePath) {
+			return fmt.Errorf("workspace provider attempted to add non-attachment input %q", entry.RelativePath)
+		}
+		download, ok := planned[entry.RelativePath]
+		if !ok || download.SHA256 != entry.SHA256 || download.Size != entry.Size || download.Mode != entry.Mode {
+			return fmt.Errorf("added input %q does not match the hydration plan", entry.RelativePath)
+		}
+		downloads = append(downloads, download)
+	}
+	return r.materializeInputs(ctx, workspaceID, taskID, downloads)
+}
+
+func (r *WorkspaceRuntime) materializeInputs(ctx context.Context, workspaceID, taskID string, downloads []workspace.Download) error {
+	for _, input := range downloads {
 		normalized, normalizeErr := workspace.NormalizeRelativePath(input.RelativePath)
 		if normalizeErr != nil || normalized != input.RelativePath || !strings.HasPrefix(normalized, "inputs/") {
 			return fmt.Errorf("workspace provider attempted to hydrate non-input path %q", input.RelativePath)
