@@ -39,6 +39,8 @@ type Config struct {
 	PackageImages PackageImageConfig `json:"package_images"`
 	// Outbound URL policy for member-chosen hosts
 	Egress EgressConfig `json:"egress"`
+	// OTelEnabled gates OpenTelemetry traces and metrics (ADR-0048)
+	OTelEnabled bool `json:"otel_enabled"`
 }
 
 // EgressConfig is the platform's outbound URL policy, applied to the URL MCP
@@ -186,6 +188,7 @@ func Load() *Config {
 			AllowPrivate:     getEnvBool("AGENTAREA_HTTP_ALLOW_PRIVATE", false),
 			PrivateAllowlist: nonEmpty(getEnvStringSlice("AGENTAREA_HTTP_PRIVATE_ALLOWLIST", nil)),
 		},
+		OTelEnabled: getEnvBool("AGENTAREA_OTEL_ENABLED", false),
 	}
 	if config.Server.Port <= 0 || config.Server.ReadTimeout <= 0 || config.Server.WriteTimeout <= 0 {
 		panic("server port and timeouts must be positive")
@@ -311,11 +314,6 @@ func loadKubernetesConfig() KubernetesConfig {
 			panic(fmt.Sprintf("AGENTAREA_K8S_INSTANCE_POD must be valid JSON: %v", err))
 		}
 	}
-
-	// Monitoring
-	config.Monitoring.Enabled = getEnvBool("AGENTAREA_K8S_MONITORING", config.Monitoring.Enabled)
-	config.Monitoring.PrometheusEnabled = getEnvBool("AGENTAREA_K8S_PROMETHEUS", config.Monitoring.PrometheusEnabled)
-	config.Monitoring.ServiceMonitor.Enabled = getEnvBool("AGENTAREA_K8S_SERVICE_MONITOR", config.Monitoring.ServiceMonitor.Enabled)
 
 	// TLS
 	config.TLS.Enabled = getEnvBool("AGENTAREA_K8S_TLS", config.TLS.Enabled)

@@ -586,6 +586,25 @@ ON CONFLICT (instance_id) DO UPDATE SET state='reaping', updated_at=now()
 	})
 }
 
+// CountByState counts runtime instances by lifecycle state.
+func (r *SQLRepository) CountByState(ctx context.Context) (map[string]int64, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT state, count(*) FROM mcp_runtime_instances GROUP BY state`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int64)
+	for rows.Next() {
+		var state string
+		var count int64
+		if err := rows.Scan(&state, &count); err != nil {
+			return nil, err
+		}
+		counts[state] = count
+	}
+	return counts, rows.Err()
+}
+
 func (r *SQLRepository) setLifecycleState(ctx context.Context, instanceID, state string, transition Transition, reason, lastError string) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

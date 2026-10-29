@@ -226,21 +226,26 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 		}
 		statusErr = backends.ErrInstanceNotFound
 	}
+	report := coldStartFrom(ctx)
 	operationID := ""
 	activating := false
 	if errors.Is(statusErr, backends.ErrInstanceNotFound) {
 		activating = true
+		report.begin()
 		operationID = r.newOperationID()
 		if err := r.observeOperation(ctx, instance, operationID, OperationCreation, OperationStarted); err != nil {
+			report.fail(stepObserver)
 			return "", err
 		}
 		if err := provider.CreateInstance(ctx, instance); err != nil {
+			report.fail(stepCreate)
 			failure := r.recordStartFailure(instance.InstanceID, err, "workload failed during startup")
 			observeErr := r.observeOperation(context.WithoutCancel(ctx), instance, operationID, OperationCreation, OperationFailed)
 			boundaryErr := r.observeBoundary(context.WithoutCancel(ctx), instance, operationID, BoundaryCreationFailed)
 			return "", errors.Join(failure, observeErr, boundaryErr)
 		}
 		if err := r.observeOperation(ctx, instance, operationID, OperationCreation, OperationCompleted); err != nil {
+			report.fail(stepObserver)
 			return "", r.cleanupFailedStart(instance, err)
 		}
 	}
@@ -248,16 +253,23 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 	if statusErr != nil || !runtimeStatusReady(status.Status) {
 		if !activating {
 			activating = true
+			report.begin()
 			operationID = r.newOperationID()
 		}
-		if status, err = r.awaitRunning(ctx, instance); err != nil {
+		began := time.Now()
+		status, err = r.awaitRunning(ctx, instance)
+		report.phase(stepRunning, began, err)
+		if err != nil {
 			return "", r.recordStartFailure(instance.InstanceID, err, "workload did not become ready during startup")
 		}
 	}
 	// A running container may not have bound the bridge port while its package
 	// installs or its stdio server initializes.
 	if activating && r.remote == nil && status != nil && status.InternalURL != "" {
-		if err := r.awaitListening(ctx, instance, status.InternalURL, startDeadline); err != nil {
+		began := time.Now()
+		err := r.awaitListening(ctx, instance, status.InternalURL, startDeadline)
+		report.phase(stepListening, began, err)
+		if err != nil {
 			port := status.Port
 			if port <= 0 {
 				port, _ = instancePort(instance, instanceType)
@@ -272,6 +284,7 @@ func (r *ProviderRuntime) EnsureReady(ctx context.Context, instance *models.MCPS
 	}
 	if activating {
 		if err := r.observeBoundary(context.WithoutCancel(ctx), instance, operationID, BoundaryActivation); err != nil {
+			report.fail(stepObserver)
 			return "", r.cleanupFailedStart(instance, err)
 		}
 	}
@@ -315,7 +328,7 @@ func (r *ProviderRuntime) awaitRunning(ctx context.Context, instance *models.MCP
 		case <-deadline.C:
 			cause := &StartupFailureError{
 				reason: startupReadinessFailureReason(r.startupTimeout, lastState),
-				cause:  errors.New("startup deadline expired"),
+				cause:  errStartupDeadline,
 			}
 			return nil, r.cleanupFailedStart(instance, cause)
 		case <-ticker.C:
