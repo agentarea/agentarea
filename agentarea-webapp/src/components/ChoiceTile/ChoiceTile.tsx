@@ -32,7 +32,9 @@ export function ChoiceTile({
       onClick={onClick}
       className={cn(
         "flex min-w-0 items-start gap-2.5 rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected ? "border-primary bg-primary/5" : "hover:bg-muted/50",
+        selected
+          ? "border-primary bg-primary/5"
+          : "hover:bg-muted/50 dark:border-zinc-700",
         disabled && "cursor-default",
         className
       )}

@@ -20,12 +20,16 @@ export function SelectedItems({
 }) {
   if (!count) {
     return (
-      <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground">
+      <Note className="mt-2 cursor-default items-center gap-2 rounded-md border p-3 text-center text-xs text-muted-foreground dark:border-zinc-700">
         <p>{empty}</p>
       </Note>
     );
   }
-  return <div className="overflow-hidden rounded-md border">{children}</div>;
+  return (
+    <div className="overflow-hidden rounded-md border dark:border-zinc-700">
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -77,7 +81,7 @@ export function SelectedItemRow({
       // An open row reads as one block: the row and what it shows share a
       // tint, apart from the rows around it.
       className={cn(
-        "border-b last:border-b-0",
+        "border-b last:border-b-0 dark:border-zinc-700",
         open && children && "bg-muted/40 dark:bg-zinc-700/20"
       )}
     >

@@ -139,7 +139,7 @@ export default function AccordionControl({
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-90" />
             )}
             {!!count && (
-              <span className="rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 tabular-nums text-muted-foreground no-underline dark:bg-zinc-800">
+              <span className="rounded-full bg-muted px-1.5 text-[11px] font-medium leading-4 tabular-nums text-muted-foreground no-underline dark:bg-zinc-700 dark:text-zinc-300">
                 {count}
               </span>
             )}

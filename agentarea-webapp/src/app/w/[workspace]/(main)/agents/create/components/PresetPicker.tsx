@@ -175,7 +175,7 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
                   "hidden h-[54px] w-12 shrink-0 items-center justify-center self-start rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex",
                   !selected
                     ? "border-primary bg-primary/5"
-                    : "hover:bg-muted/50"
+                    : "hover:bg-muted/50 dark:border-zinc-700"
                 )}
               >
                 <EntityAvatar
