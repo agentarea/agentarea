@@ -174,25 +174,23 @@ const PresetPicker = ({ presets, selectedId, onSelect }: PresetPickerProps) => {
           )}
         </div>
       </div>
-      {selected && (selected.description || filled.length > 0) && (
-        // The picked preset in full: what it is for, then what it put in.
-        <div className="space-y-0.5" role="status">
+      {selected && (
+        // The picked preset in one run of text: what it is for, what it put
+        // in, and any skill the catalog lacks.
+        <p className="text-xs leading-5 text-muted-foreground" role="status">
           {selected.description && (
-            <p className="text-xs text-foreground/80">{selected.description}</p>
+            <span className="text-foreground/80">{selected.description}</span>
           )}
-          {filled.length > 0 && (
-            <p className="note">
-              {t("filledLine", { items: filled.join(", ") })}
-            </p>
+          {selected.description && filled.length > 0 && " · "}
+          {filled.length > 0 && t("filledLine", { items: filled.join(", ") })}
+          {!!selected.unavailable_skills?.length && (
+            <span className="ml-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-500">
+              <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+              {t("unavailableSkills", {
+                skills: selected.unavailable_skills.join(", "),
+              })}
+            </span>
           )}
-        </div>
-      )}
-      {!!selected?.unavailable_skills?.length && (
-        <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {t("unavailableSkills", {
-            skills: selected.unavailable_skills.join(", "),
-          })}
         </p>
       )}
     </div>
