@@ -90,11 +90,11 @@ class AppSettings(BaseAppSettings):
     # When unset, search attempts fail explicitly; URL fetching remains usable.
     TOOL_SEARCH_URL: str | None = None
 
-    # Comma-separated browser origins allowed to make credentialed CORS requests.
-    # Defaults to the local frontend. NEVER "*": with allow_credentials=True a
-    # wildcard reflects any origin for credentialed reads. In prod set e.g.:
-    #   AGENTAREA_CORS_ORIGINS=https://app.agentarea.dev,https://admin.agentarea.dev
-    CORS_ORIGINS: str = "http://localhost:3000"
+    # Comma-separated browser origins allowed to call the API. The API never
+    # reads cookies (every caller sends a bearer token), so CORS protects nothing
+    # here and any origin may call it. Narrow it only if a deployment wants to.
+    # If the API ever authenticates by cookie, this must become an allowlist.
+    CORS_ORIGINS: str = "*"
 
     # Optional regex matching additional allowed origins — for preview/staging
     # subdomains that can't be enumerated (e.g. r"https://.*\.agentarea\.dev",
@@ -102,7 +102,6 @@ class AppSettings(BaseAppSettings):
     CORS_ORIGIN_REGEX: str | None = None
 
     # Remaining CORS knobs, all overridable for self-hosted/enterprise needs.
-    CORS_CREDENTIALS: bool = True
     CORS_METHODS: str = "*"  # comma-separated, or "*"
     CORS_HEADERS: str = "*"  # comma-separated, or "*"
     CORS_MAX_AGE: int = 3600  # preflight cache seconds
@@ -121,24 +120,6 @@ class AppSettings(BaseAppSettings):
     def cors_allowed_headers(self) -> list[str]:
         """Parsed list of allowed CORS request headers (comma-separated)."""
         return [h.strip() for h in self.CORS_HEADERS.split(",") if h.strip()]
-
-    @model_validator(mode="after")
-    def _reject_wildcard_origin_with_credentials(self) -> AppSettings:
-        """Fail fast on the one CORS combo that is always a CSRF hole.
-
-        ``allow_origins=["*"]`` together with ``allow_credentials=True`` makes
-        the gateway reflect any origin for credentialed reads. The CORS spec
-        forbids it; Starlette silently reflects instead. Operators who really
-        want a wildcard must disable credentials.
-        """
-        if self.CORS_CREDENTIALS and "*" in self.cors_allowed_origins:
-            raise ValueError(
-                "CORS misconfiguration: AGENTAREA_CORS_ORIGINS='*' with "
-                "AGENTAREA_CORS_CREDENTIALS=true reflects any origin for credentialed "
-                "requests (CSRF risk). Set explicit origins (or a regex), or set "
-                "CORS_CREDENTIALS=false."
-            )
-        return self
 
     @model_validator(mode="after")
     def _check_a2a_agent_url(self) -> AppSettings:
