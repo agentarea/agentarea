@@ -73,6 +73,16 @@ configured. Delete them; there is no replacement.
 | `LITELLM_CALLBACKS`, `LITELLM_LOCAL_MODEL_COST_MAP` | The platform no longer uses the LiteLLM SDK; it calls models over its own OpenAI-compatible and Anthropic transports. |
 | `AGENTAREA_K8S_MONITORING`, `AGENTAREA_K8S_PROMETHEUS`, `AGENTAREA_K8S_SERVICE_MONITOR` | They promised Prometheus metrics no MCP workload served; the first only added an unused `metrics` port to each instance Service. The mcp-manager pushes its own metrics over OTLP behind `AGENTAREA_OTEL_ENABLED`. |
 
+## Changed defaults
+
+Same name, different behaviour when the variable is unset. Set it explicitly to
+keep the old behaviour.
+
+| Variable | Service | Was | Is |
+|---|---|---|---|
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | event-service | `grpc` | `http/protobuf`, the OpenTelemetry SDK default (port 4318). An endpoint on the gRPC port 4317 with no protocol set now loses every span and metric without an error; set `grpc` to keep it. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | event-service | optional; the SDK fell back to `localhost` | required while `AGENTAREA_OTEL_ENABLED` is true, unless every OTLP signal has its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. The service refuses to start without one. The mcp-manager, which exports for the first time, applies the same rule. |
+
 ## Renamed
 
 ### Database

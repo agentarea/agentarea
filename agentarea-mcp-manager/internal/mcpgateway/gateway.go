@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -216,9 +217,11 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
+				g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusRequestEntityTooLarge)
 				http.Error(response, "MCP request body is too large", http.StatusRequestEntityTooLarge)
 				return
 			}
+			g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusBadRequest)
 			http.Error(response, "MCP request body could not be read", http.StatusBadRequest)
 			return
 		}
@@ -236,6 +239,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 	}
 	loaded, err := g.repository.LoadTarget(request.Context(), instanceID)
 	if err != nil {
+		g.telemetry.rejected(request.Context(), headerValue(request, "Mcp-Method"), http.StatusBadGateway)
 		http.Error(response, "MCP instance is unavailable", http.StatusBadGateway)
 		return
 	}
@@ -247,6 +251,7 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		}
 		if err := g.requests.Started(request.Context(), started); err != nil {
 			g.logRequestObserverFailure("started", started, err)
+			g.telemetry.rejected(request.Context(), started.MCPMethod, http.StatusServiceUnavailable)
 			http.Error(response, "MCP request processing unavailable", http.StatusServiceUnavailable)
 			return
 		}
@@ -254,8 +259,10 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 		response = observed
 		defer func() {
 			// A proxy panic (including a failed stream copy) is not a known
-			// completion. Keep the start visible rather than fabricate an end.
+			// completion. Keep the start visible to the observers rather than
+			// fabricate an end; only the gateway's own metrics close it.
 			if value := recover(); value != nil {
+				g.telemetry.aborted(context.WithoutCancel(request.Context()), started, coldStart != nil)
 				panic(value)
 			}
 			if endedAt.IsZero() {
@@ -401,14 +408,17 @@ func (g *Gateway) ServeHTTP(response http.ResponseWriter, request *http.Request)
 
 }
 
-// refusedBodyLimit bounds the response body a refused first request logs.
-const refusedBodyLimit = 2048
+// refusedBodyLimit bounds the response body a refused first request reads;
+// refusedLogLimit bounds what of it reaches the log.
+const (
+	refusedBodyLimit = 2048
+	refusedLogLimit  = 256
+)
 
 // observeUpstream counts a workload response and warns when a workload
-// answers the request that started it with a 4xx, logging a bounded body
-// snippet: a fresh workload that refuses a request the previous one accepted
-// is otherwise invisible. The snippet is put back so the caller still
-// receives the whole body.
+// answers the request that started it with a 4xx: a fresh workload that
+// refuses a request the previous one accepted is otherwise invisible. The
+// body read is put back so the caller still receives all of it.
 func (g *Gateway) observeUpstream(response *http.Response, cold bool, instanceID, requestID string) {
 	g.telemetry.upstreamAnswered(response.Request.Context(), response.StatusCode)
 	if !cold || response.StatusCode < 400 || response.StatusCode > 499 {
@@ -419,15 +429,41 @@ func (g *Gateway) observeUpstream(response *http.Response, cold bool, instanceID
 		io.Reader
 		io.Closer
 	}{io.MultiReader(bytes.NewReader(snippet), response.Body), response.Body}
-	attrs := []any{
+	attrs := append([]any{
 		slog.String("instance_id", instanceID), slog.String("request_id", requestID),
 		slog.Int("status", response.StatusCode), slog.String("mcp_method", response.Request.Header.Get("Mcp-Method")),
-		slog.String("body", string(snippet)),
-	}
+	}, refusalDetail(snippet)...)
 	if err != nil {
 		attrs = append(attrs, slog.String("body_error", err.Error()))
 	}
 	g.logger.Warn("MCP workload refused the first request after its cold start", attrs...)
+}
+
+// refusalDetail is what a refused request logs of the response body: the
+// JSON-RPC error code and message when the body is a JSON-RPC error, else its
+// first bytes. Error bodies echo tool arguments, so neither is logged whole.
+func refusalDetail(body []byte) []any {
+	var message struct {
+		JSONRPC string `json:"jsonrpc"`
+		Error   *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &message) == nil && message.JSONRPC == "2.0" && message.Error != nil {
+		return []any{
+			slog.Int("rpc_error_code", message.Error.Code),
+			slog.String("rpc_error_message", truncate(message.Error.Message, refusedLogLimit)),
+		}
+	}
+	return []any{slog.String("body", truncate(string(body), refusedLogLimit))}
+}
+
+func truncate(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return strings.ToValidUTF8(value[:limit], "")
 }
 
 func (g *Gateway) writeDemandFailure(response http.ResponseWriter, instanceID string, err error) {

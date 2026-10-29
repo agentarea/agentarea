@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
@@ -55,6 +57,10 @@ type Telemetry struct {
 // NewTelemetry creates the gateway's instruments on the global meter
 // provider. remote reports whether workloads run on a separate data plane.
 func NewTelemetry(remote bool, states InstanceStates) (*Telemetry, error) {
+	return newTelemetry(telemetry.Meter(), remote, states)
+}
+
+func newTelemetry(meter metric.Meter, remote bool, states InstanceStates) (*Telemetry, error) {
 	plane := "local"
 	if remote {
 		plane = "remote"
@@ -64,7 +70,6 @@ func NewTelemetry(remote bool, states InstanceStates) (*Telemetry, error) {
 		started:  make(map[string]time.Time),
 		creating: make(map[string]time.Time),
 	}
-	meter := telemetry.Meter()
 	var errs [9]error
 	t.coldStartDuration, errs[0] = meter.Float64Histogram(telemetry.MCPColdStartDuration, metric.WithUnit("s"),
 		metric.WithDescription("Duration of one phase of an MCP workload cold start."))
@@ -92,30 +97,60 @@ func NewTelemetry(remote bool, states InstanceStates) (*Telemetry, error) {
 	return t, nil
 }
 
+// Started counts the request in flight. A GET is a standing MCP stream that
+// lives as long as its session, so only other methods age toward a hang.
 func (t *Telemetry) Started(ctx context.Context, request RequestStarted) error {
-	t.mu.Lock()
-	t.started[request.RequestID] = request.StartedAt
-	t.mu.Unlock()
+	if request.Method != http.MethodGet {
+		t.mu.Lock()
+		t.started[request.RequestID] = request.StartedAt
+		t.mu.Unlock()
+	}
 	t.inFlight.Add(ctx, 1)
 	return nil
 }
 
 func (t *Telemetry) Completed(ctx context.Context, request RequestCompleted) error {
-	t.mu.Lock()
-	delete(t.started, request.RequestID)
-	t.mu.Unlock()
-	t.inFlight.Add(ctx, -1)
-	attrs := metric.WithAttributes(
-		telemetry.AttrMCPMethod.String(mcpMethodName(request.MCPMethod)),
-		telemetry.AttrStatus.String(gatewayStatus(request.StatusCode, request.Answer, request.Canceled)),
-		telemetry.AttrCold.Bool(request.ColdStart != nil),
-	)
+	t.end(ctx, request.RequestID)
+	attrs := requestAttributes(request.MCPMethod,
+		gatewayStatus(request.StatusCode, request.Answer, request.Canceled), request.ColdStart != nil)
 	t.requests.Add(ctx, 1, attrs)
 	t.requestDuration.Record(ctx, request.EndedAt.Sub(request.StartedAt).Seconds(), attrs)
 	if request.ColdStart != nil {
 		t.recordColdStart(ctx, request.ColdStart)
 	}
 	return nil
+}
+
+// aborted ends a request whose proxy panicked, which reports no completion to
+// the request observers.
+func (t *Telemetry) aborted(ctx context.Context, request RequestStarted, cold bool) {
+	if t == nil {
+		return
+	}
+	t.end(ctx, request.RequestID)
+	t.requests.Add(ctx, 1, requestAttributes(request.MCPMethod, "aborted", cold))
+}
+
+// rejected counts a request the gateway answered before it was observed.
+func (t *Telemetry) rejected(ctx context.Context, mcpMethod *string, status int) {
+	if t != nil {
+		t.requests.Add(ctx, 1, requestAttributes(mcpMethod, statusClass(status), false))
+	}
+}
+
+func (t *Telemetry) end(ctx context.Context, requestID string) {
+	t.mu.Lock()
+	delete(t.started, requestID)
+	t.mu.Unlock()
+	t.inFlight.Add(ctx, -1)
+}
+
+func requestAttributes(mcpMethod *string, status string, cold bool) metric.MeasurementOption {
+	return metric.WithAttributes(
+		telemetry.AttrMCPMethod.String(mcpMethodName(mcpMethod)),
+		telemetry.AttrStatus.String(status),
+		telemetry.AttrCold.Bool(cold),
+	)
 }
 
 func (t *Telemetry) recordColdStart(ctx context.Context, start *ColdStart) {
@@ -210,7 +245,9 @@ func observeInstances(states InstanceStates) metric.Int64Callback {
 		defer cancel()
 		counts, err := states(ctx)
 		if err != nil {
-			return fmt.Errorf("count MCP runtime instances: %w", err)
+			// A callback error drops the whole collection, heartbeat included.
+			otel.Handle(fmt.Errorf("count MCP runtime instances: %w", err))
+			return nil
 		}
 		var other int64
 		for _, count := range counts {

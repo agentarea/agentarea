@@ -1,20 +1,22 @@
 ---
 title: Collect logs and traces
 type: guide
-description: "Read AgentArea's structured JSON logs, enable OpenTelemetry tracing, and understand which parts of the monitoring surface do not exist yet."
+description: "Read AgentArea's structured JSON logs, enable OpenTelemetry tracing and the Go services' OTLP metrics, and understand which parts of the monitoring surface do not exist yet."
 prerequisites:
   - /self-host/configuration
 related:
   - /self-host/troubleshooting
   - /self-host/configuration
   - /self-host/kubernetes
-last_updated: 2026-07-29
+last_updated: 2026-10-29
 ---
 
 AgentArea emits structured JSON logs on stdout from every Python service, and
 optional OpenTelemetry traces over OTLP. Both are real and configurable.
 
-Metrics are limited to the API. While `global.monitoring.prometheus.enabled` is
+The API serves Prometheus metrics; the MCP Manager and the event service push
+OpenTelemetry metrics over OTLP (see the MCP Manager and event service step
+below). While `global.monitoring.prometheus.enabled` is
 set (the chart default), the API serves Prometheus metrics at `/metrics` on
 `global.monitoring.prometheus.port` (9090), a port of its own that the public
 API port never answers for. Outside the chart, set `METRICS_ENABLED=true`
@@ -29,8 +31,7 @@ API port never answers for. Outside the chart, set `METRICS_ENABLED=true`
   `openfga_write`.
 
 The metrics port needs `backend.workers: 1`; the API refuses to start with more
-worker processes while metrics are on. The worker and the MCP Manager expose no
-metrics. Read the section below before wiring a scrape config against them.
+worker processes while metrics are on. The worker exposes no metrics.
 
 ## Prerequisites
 
@@ -167,6 +168,57 @@ metrics. Read the section below before wiring a scrape config against them.
     fields.
   </Step>
 
+  <Step title="Enable MCP Manager and event service telemetry">
+    The two Go services read the same `AGENTAREA_OTEL_ENABLED` gate, and it turns
+    on traces and metrics together. Set it through `mcpManager.extraEnv` and
+    `eventService.extraEnv`:
+
+    ```yaml
+    mcpManager:
+      extraEnv:
+        - name: AGENTAREA_OTEL_ENABLED
+          value: "true"
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.observability:4318
+    ```
+
+    Their defaults differ from the API's and the worker's:
+
+    | Variable | Default | Meaning |
+    |---|---|---|
+    | `OTEL_EXPORTER_OTLP_ENDPOINT` | required | The service refuses to start while the gate is on and a signal exported over OTLP has neither this nor its own `OTEL_EXPORTER_OTLP_{TRACES,METRICS}_ENDPOINT`. |
+    | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | The SDK default, port 4318. Set `grpc` for a collector on 4317. The event service defaulted to `grpc` before; see [Changed defaults](/self-host/env-migration#changed-defaults). |
+    | `OTEL_METRICS_EXPORTER` | `otlp` | `prometheus` or `none` hand metrics to the SDK's own exporter instead. |
+    | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | Push interval in milliseconds. |
+
+    Both services export `agentarea.process.uptime`; a series that stops while
+    the pod runs means the exporter is failing, not that the service is idle.
+
+    MCP Manager:
+
+    - `agentarea.mcp.gateway.requests{mcp.method.name, status, cold}` and
+      `agentarea.mcp.gateway.request.duration` — requests through the gateway,
+      cold start included. `status` is the class (`2xx`, `4xx`, `5xx`), or
+      `503_starting`, `502_start_failed`, `503_start_failed`, `canceled`, or
+      `aborted` when the proxied stream broke mid-copy.
+    - `agentarea.mcp.gateway.in_flight` and `agentarea.mcp.gateway.oldest_in_flight`
+      — requests served now, and the age of the oldest. A `GET` is a standing
+      MCP stream, so it counts in flight but never ages the oldest.
+    - `agentarea.mcp.cold_starts{outcome, reason, plane}` and
+      `agentarea.mcp.cold_start.duration{phase, outcome, plane}`.
+    - `agentarea.mcp.upstream.responses{status}` and `agentarea.mcp.idle_reaps`.
+    - `agentarea.mcp.instances{state}` — instances by lifecycle state, counted
+      in the database. Every replica reports the same global count, so aggregate
+      it across replicas with `max`, never `sum`.
+    - `http.server.request.duration` for the HTTP API, plus the Go runtime
+      metrics.
+
+    Event service: `agentarea.event.polls{transport, outcome}`,
+    `agentarea.event.poll.duration{transport}`,
+    `agentarea.event.items_published{transport}`, `agentarea.event.pollers{state}`,
+    and the Go runtime metrics.
+  </Step>
+
   <Step title="Use the health endpoints">
     | Service | Path | Port |
     |---|---|---|
@@ -235,9 +287,8 @@ metrics. Read the section below before wiring a scrape config against them.
   <Step title="What does not exist">
     State this plainly before building on it:
 
-    - **No Prometheus metrics outside the API.** The worker and the MCP Manager expose no `/metrics`.
+    - **No Prometheus endpoint outside the API by default.** The worker exports no metrics; the MCP Manager and the event service push OTLP unless `OTEL_METRICS_EXPORTER` says otherwise.
     - **Two Prometheus counters are defined but not exported.** `mcp_last_dispatch_dropped_total` and `mcp_dispatch_failed_total` (labelled by `reason`) are declared in the execution library and incremented at runtime, but no process serves the `prometheus_client` registry over HTTP. They are unreachable without adding an exposition endpoint yourself.
-    - **No first-party Go metrics.** `prometheus/client_golang` is an indirect dependency of the MCP Manager. There is no `promhttp` handler.
     - **No bundled Grafana, Prometheus, Alertmanager, or Jaeger.** The chart deploys none of these and has no `monitoring.enabled` switch that does.
     - **No shipped dashboards or alert rules.**
 
@@ -305,7 +356,8 @@ curl -s http://localhost:8000/health | jq .
     failing: the endpoint comes from `OTEL_EXPORTER_OTLP_ENDPOINT` , which the
     SDK reads directly, and a mismatch between `OTEL_EXPORTER_OTLP_PROTOCOL` and
     your collector's port is the usual cause — 4317 for gRPC, 4318 for
-    `http/protobuf` .
+    `http/protobuf` . The API and the worker default to gRPC; the MCP Manager
+    and the event service default to `http/protobuf` .
   </Accordion>
   <Accordion title="Traces stop at the workflow boundary">
     The worker does not have `AGENTAREA_OTEL_ENABLED` set. Context propagation across
